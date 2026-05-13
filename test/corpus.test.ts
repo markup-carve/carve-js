@@ -2,13 +2,12 @@
  * Spec-corpus test runner.
  *
  * Walks spec/tests/corpus/, pairs every NN-slug.crv with its
- * NN-slug.html, feeds the .crv through the parser + renderer, and
- * asserts byte-identical match against the .html.
+ * NN-slug.html, feeds the .crv through parse + renderHtml, and asserts
+ * byte-identical match against the .html (after trimming).
  *
- * Until the parser is implemented, every test is marked .todo so the
- * runner reports the work that remains without blocking CI. As each
- * construct goes from todo → it, we remove `.todo` and watch the test
- * go green (or red).
+ * Pairs in IMPLEMENTED are run as real tests; everything else is marked
+ * .todo. As each construct lands, add its slug here and the test goes
+ * from todo → passing.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -28,6 +27,11 @@ if (!existsSync(corpusDir)) {
   )
 }
 
+/** Pairs that the parser + renderer can handle. Grows with each PR. */
+const IMPLEMENTED = new Set([
+  '02-headings',
+])
+
 const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
@@ -46,11 +50,13 @@ describe('spec corpus', () => {
     const source = readFileSync(crvPath, 'utf8')
     const expected = readFileSync(htmlPath, 'utf8')
 
-    // Marked .todo until parser + renderer land. When implementing a
-    // construct, drop .todo and watch it pass.
-    it.todo(`${name}`, () => {
-      const actual = carveToHtml(source)
-      expect(actual.trim()).toBe(expected.trim())
-    })
+    if (IMPLEMENTED.has(name)) {
+      it(`${name}`, () => {
+        const actual = carveToHtml(source)
+        expect(actual.trim()).toBe(expected.trim())
+      })
+    } else {
+      it.todo(`${name}`)
+    }
   }
 })
