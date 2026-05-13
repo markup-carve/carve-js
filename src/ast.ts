@@ -140,6 +140,7 @@ export type BlockNode =
   | Table
   | Admonition
   | Figure
+  | Image
   | AbbreviationDef
   | RawBlock
   | Comment

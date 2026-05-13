@@ -29,7 +29,24 @@ if (!existsSync(corpusDir)) {
 
 /** Pairs that the parser + renderer can handle. Grows with each PR. */
 const IMPLEMENTED = new Set([
+  '01-emphasis',
   '02-headings',
+  '03-links',
+  '04-images',
+  '05-lists',
+  '06-task-lists',
+  '07-blockquote-with-attribution',
+  '08-image-with-caption',
+  '09-tables',
+  '10-tables-with-rowspan-and-colspan',
+  '11-fenced-code',
+  '12-inline-code',
+  '13-admonitions',
+  '14-abbreviations',
+  '15-mentions-and-tags',
+  '16-inline-extensions',
+  '17-attributes',
+  '18-frontmatter',
 ])
 
 const pairs = readdirSync(corpusDir)
