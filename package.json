@@ -1,0 +1,37 @@
+{
+  "name": "@markup-carve/carve",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference TypeScript implementation of the Carve markup language",
+  "license": "MIT",
+  "author": "Mark Scherer",
+  "homepage": "https://markup-carve.github.io/carve/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/markup-carve/carve-js.git"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
