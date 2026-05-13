@@ -36,9 +36,11 @@ export interface Document extends BaseNode {
   children: BlockNode[]
 }
 
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
+
 export interface Heading extends BaseNode {
   type: 'heading'
-  level: 1 | 2 | 3 | 4 | 5 | 6
+  level: HeadingLevel
   children: InlineNode[]
 }
 
