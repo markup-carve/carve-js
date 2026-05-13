@@ -1,47 +1,361 @@
 /*
- * HTML renderer — emits the canonical output defined by the spec corpus.
+ * HTML renderer — emits the canonical output the spec corpus expects.
  *
- * Each block / inline node type gets a case in the appropriate switch.
- * Unimplemented types throw so the corpus runner reports exactly what
- * is missing.
+ * Output style: minimal indentation, block elements on their own line,
+ * inline content stays flat within block element. Nested block
+ * structures (table, blockquote, figure, admonition) get two-space
+ * indented children for readability.
  */
 
-import type { BlockNode, Document, InlineNode } from './ast.js'
+import type {
+  Admonition,
+  Attrs,
+  BlockNode,
+  BlockQuote,
+  Document,
+  Figure,
+  Image,
+  InlineNode,
+  List,
+  ListItem,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+} from './ast.js'
 
 export interface RenderOptions {
-  /** Template for @mention href; `{user}` replaced. Default: no link. */
   mentionUrl?: string
-  /** Template for #tag href; `{name}` replaced. Default: no link. */
   tagUrl?: string
 }
 
-export function renderHtml(ast: Document, _opts: RenderOptions = {}): string {
-  return ast.children.map(renderBlock).join('\n')
+export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
+  const blocks = ast.children
+    .filter((n) => n.type !== 'abbreviation-def')
+    .map((n) => renderBlock(n, opts, 0))
+    .filter((s) => s !== '')
+  return blocks.join('\n')
 }
 
-function renderBlock(node: BlockNode): string {
+function indent(level: number): string {
+  return '  '.repeat(level)
+}
+
+function renderAttrs(attrs?: Attrs): string {
+  if (!attrs) return ''
+  const parts: string[] = []
+  if (attrs.classes && attrs.classes.length) {
+    parts.push(`class="${attrs.classes.join(' ')}"`)
+  }
+  if (attrs.id) parts.push(`id="${attrs.id}"`)
+  if (attrs.keyValues) {
+    for (const [k, v] of Object.entries(attrs.keyValues)) {
+      parts.push(`${k}="${escapeAttr(v)}"`)
+    }
+  }
+  return parts.length ? ' ' + parts.join(' ') : ''
+}
+
+function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
   switch (node.type) {
     case 'heading': {
-      const inner = node.children.map(renderInline).join('')
-      return `<h${node.level}>${inner}</h${node.level}>`
+      const inner = renderInlines(node.children, opts)
+      return `${pad}<h${node.level}${renderAttrs(node.attrs)}>${inner}</h${node.level}>`
     }
-    default:
-      throw new Error(`renderHtml: block type "${node.type}" not yet supported`)
+    case 'paragraph': {
+      const inner = renderInlines(node.children, opts)
+      return `${pad}<p${renderAttrs(node.attrs)}>${inner}</p>`
+    }
+    case 'thematic-break':
+      return `${pad}<hr>`
+    case 'code-block': {
+      const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
+      const escaped = escapeHtml(node.content)
+      return `${pad}<pre><code${langAttr}>${escaped}\n</code></pre>`
+    }
+    case 'blockquote':
+      return renderBlockQuote(node, opts, level)
+    case 'list':
+      return renderList(node, opts, level)
+    case 'image':
+      return `${pad}${renderImage(node, opts)}`
+    case 'table':
+      return renderTable(node, opts, level)
+    case 'admonition':
+      return renderAdmonition(node, opts, level)
+    case 'figure':
+      return renderFigure(node, opts, level)
+    case 'abbreviation-def':
+      return ''
+    case 'raw-block':
+      return node.format === 'html' ? node.content : ''
+    case 'comment':
+      return `${pad}<!-- ${node.content} -->`
+    default: {
+      const t: never = node
+      throw new Error(`renderHtml: unknown block ${(t as { type: string }).type}`)
+    }
   }
 }
 
-function renderInline(node: InlineNode): string {
+function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  if (node.children.length === 1 && node.children[0]!.type === 'paragraph') {
+    const inner = renderInlines((node.children[0] as Paragraph).children, opts)
+    return `${pad}<blockquote><p>${inner}</p></blockquote>`
+  }
+  const inner = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+  return `${pad}<blockquote>\n${inner}\n${pad}</blockquote>`
+}
+
+function renderList(node: List, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  const tag = node.ordered ? 'ol' : 'ul'
+  const items = node.items
+    .map((it) => renderListItem(it, opts, level + 1))
+    .join('\n')
+  return `${pad}<${tag}>\n${items}\n${pad}</${tag}>`
+}
+
+function renderListItem(item: ListItem, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  // Single-paragraph item: render inline content directly inside <li>
+  const checkbox =
+    item.checked === undefined
+      ? ''
+      : item.checked
+        ? '<input type="checkbox" checked disabled> '
+        : '<input type="checkbox" disabled> '
+  if (item.children.length === 1 && item.children[0]!.type === 'paragraph') {
+    const inner = renderInlines((item.children[0] as Paragraph).children, opts)
+    return `${pad}<li>${checkbox}${inner}</li>`
+  }
+  const inner = item.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+  return `${pad}<li>\n${checkbox}${inner}\n${pad}</li>`
+}
+
+function renderTable(node: Table, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  const lines: string[] = [`${pad}<table>`]
+  if (node.caption) {
+    lines.push(`${pad}  <caption>${renderInlines(node.caption, opts)}</caption>`)
+  }
+
+  // Build effective rowspan/colspan by walking rows.
+  // For each cell, compute span counts: a '^' cell extends the cell above;
+  // a '<' cell extends the cell to its left.
+  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean }>> = []
+  for (let r = 0; r < node.rows.length; r++) {
+    const row = node.rows[r]!
+    const gridRow: typeof grid[number] = []
+    for (let c = 0; c < row.cells.length; c++) {
+      const cell = row.cells[c]!
+      gridRow.push({ row, cell, rowspan: 1, colspan: 1, skip: false })
+    }
+    grid.push(gridRow)
+  }
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r]!.length; c++) {
+      const entry = grid[r]![c]!
+      if (entry.skip) continue
+      if (entry.cell.span === 'rowspan' && r > 0) {
+        // Find the source cell above (handling possibly stacked '^')
+        let up = r - 1
+        while (up >= 0 && grid[up]![c] && grid[up]![c]!.skip) up--
+        const src = grid[up]?.[c]
+        if (src) {
+          src.rowspan++
+          entry.skip = true
+        }
+      } else if (entry.cell.span === 'colspan' && c > 0) {
+        let left = c - 1
+        while (left >= 0 && grid[r]![left]!.skip) left--
+        const src = grid[r]![left]
+        if (src) {
+          src.colspan++
+          entry.skip = true
+        }
+      }
+    }
+  }
+
+  // Detect header section: leading consecutive rows where all cells are headers
+  let headerEnd = 0
+  while (
+    headerEnd < grid.length &&
+    grid[headerEnd]!.every((e) => e.cell.header || e.skip)
+  ) {
+    headerEnd++
+  }
+  if (headerEnd > 0) {
+    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts))
+    lines.push(`${pad}  <thead>${rows.join('')}</thead>`)
+  }
+  if (headerEnd < grid.length) {
+    lines.push(`${pad}  <tbody>`)
+    for (let r = headerEnd; r < grid.length; r++) {
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts)}`)
+    }
+    lines.push(`${pad}  </tbody>`)
+  }
+  lines.push(`${pad}</table>`)
+  return lines.join('\n')
+}
+
+function renderTableRowFlat(
+  cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean }>,
+  opts: RenderOptions,
+): string {
+  const parts: string[] = ['<tr>']
+  for (const entry of cells) {
+    if (entry.skip) continue
+    const tag = entry.cell.header ? 'th' : 'td'
+    const attrs: string[] = []
+    if (entry.rowspan > 1) attrs.push(`rowspan="${entry.rowspan}"`)
+    if (entry.colspan > 1) attrs.push(`colspan="${entry.colspan}"`)
+    const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+    parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
+  }
+  parts.push('</tr>')
+  return parts.join('')
+}
+
+function renderAdmonition(node: Admonition, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  const cls = `admonition ${node.kind}`
+  const titleLine = node.title
+    ? `${pad}  <p class="admonition-title">${renderInlines(node.title, opts)}</p>\n`
+    : ''
+  const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+  return `${pad}<aside class="${cls}">\n${titleLine}${body}\n${pad}</aside>`
+}
+
+function renderFigure(node: Figure, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  let inner: string
+  if (node.target.type === 'image') {
+    inner = `${pad}  ${renderImage(node.target, opts)}`
+  } else if (node.target.type === 'blockquote') {
+    const bq = renderBlockQuote(node.target, opts, level + 1)
+    inner = bq
+  } else {
+    inner = renderTable(node.target, opts, level + 1)
+  }
+  return `${pad}<figure>\n${inner}\n${pad}  <figcaption>${renderInlines(
+    node.caption,
+    opts,
+  )}</figcaption>\n${pad}</figure>`
+}
+
+function renderImage(img: Image, _opts: RenderOptions): string {
+  const titleAttr = img.title ? ` title="${escapeAttr(img.title)}"` : ''
+  return `<img src="${escapeAttr(img.src)}" alt="${escapeAttr(img.alt)}"${titleAttr}${renderAttrs(img.attrs)}>`
+}
+
+// ============================================================================
+// Inline rendering
+// ============================================================================
+
+function renderInlines(nodes: InlineNode[], opts: RenderOptions): string {
+  return nodes.map((n) => renderInline(n, opts)).join('')
+}
+
+function renderInline(node: InlineNode, opts: RenderOptions): string {
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value)
-    default:
-      throw new Error(`renderHtml: inline type "${node.type}" not yet supported`)
+    case 'italic':
+      return `<em>${renderInlines(node.children, opts)}</em>`
+    case 'strong':
+      return `<strong>${renderInlines(node.children, opts)}</strong>`
+    case 'underline':
+      return `<u>${renderInlines(node.children, opts)}</u>`
+    case 'strike':
+      return `<s>${renderInlines(node.children, opts)}</s>`
+    case 'super':
+      return `<sup>${renderInlines(node.children, opts)}</sup>`
+    case 'sub':
+      return `<sub>${renderInlines(node.children, opts)}</sub>`
+    case 'highlight':
+      return `<mark>${renderInlines(node.children, opts)}</mark>`
+    case 'bold-italic':
+      return `<strong><em>${renderInlines(node.children, opts)}</em></strong>`
+    case 'code':
+      return `<code>${escapeHtml(node.value)}</code>`
+    case 'link': {
+      const titleAttr = node.title ? ` title="${escapeAttr(node.title)}"` : ''
+      return `<a href="${escapeAttr(node.href)}"${titleAttr}${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</a>`
+    }
+    case 'image':
+      return renderImage(node, opts)
+    case 'autolink': {
+      const display = node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
+      return `<a href="${escapeAttr(node.href)}">${escapeHtml(display)}</a>`
+    }
+    case 'mention': {
+      const href = opts.mentionUrl
+        ? opts.mentionUrl.replace('{user}', node.user)
+        : `/users/${node.user}`
+      return `<a class="mention" href="${escapeAttr(href)}">@${escapeHtml(node.user)}</a>`
+    }
+    case 'tag': {
+      const href = opts.tagUrl ? opts.tagUrl.replace('{name}', node.name) : `/tags/${node.name}`
+      return `<a class="tag" href="${escapeAttr(href)}">#${escapeHtml(node.name)}</a>`
+    }
+    case 'extension':
+      return renderExtension(node.name, node.content, opts)
+    case 'abbreviation':
+      return `<abbr title="${escapeAttr(node.expansion)}">${escapeHtml(node.abbr)}</abbr>`
+    case 'footnote':
+      return node.id
+        ? `<sup class="footnote-ref"><a href="#fn-${node.id}">${escapeHtml(node.id)}</a></sup>`
+        : ''
+    case 'soft-break':
+      return '\n'
+    case 'hard-break':
+      return '<br>\n'
+    case 'critic-insert':
+      return `<ins>${renderInlines(node.children, opts)}</ins>`
+    case 'critic-delete':
+      return `<del>${renderInlines(node.children, opts)}</del>`
+    case 'critic-substitute':
+      return `<del>${escapeHtml(node.oldText)}</del><ins>${escapeHtml(node.newText)}</ins>`
+    case 'critic-highlight':
+      return `<mark>${renderInlines(node.children, opts)}</mark>`
+    case 'critic-comment':
+      return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
+    default: {
+      const t: never = node
+      throw new Error(`renderHtml: unknown inline ${(t as { type: string }).type}`)
+    }
   }
 }
 
+function renderExtension(name: string, content: InlineNode[], opts: RenderOptions): string {
+  const inner = renderInlines(content, opts)
+  // Handle common semantic shorthands
+  const semanticTags = new Set(['kbd', 'dfn', 'abbr', 'cite', 'samp', 'var', 'code', 'mark', 'time'])
+  if (semanticTags.has(name)) {
+    return `<${name}>${inner}</${name}>`
+  }
+  return `<span class="ext-${name}">${inner}</span>`
+}
+
+// ============================================================================
+// Escaping
+// ============================================================================
+
+const HTML_ESCAPE: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+}
+
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  return s.replace(/[&<>]/g, (c) => HTML_ESCAPE[c]!)
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => (c === '"' ? '&quot;' : HTML_ESCAPE[c]!))
 }
