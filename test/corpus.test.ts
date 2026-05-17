@@ -58,11 +58,7 @@ const IMPLEMENTED = new Set([
  * a specific construct is not yet supported. Move out of this set as
  * implementation lands.
  */
-const KNOWN_GAPS = new Set([
-  '05-lists-3', // nested unordered lists
-  '05-lists-4', // mixed ordered/unordered nesting
-  '05-lists-5', // loose-list paragraph wrapping
-])
+const KNOWN_GAPS = new Set<string>([])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
