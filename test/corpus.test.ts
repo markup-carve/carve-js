@@ -27,7 +27,11 @@ if (!existsSync(corpusDir)) {
   )
 }
 
-/** Pairs that the parser + renderer can handle. Grows with each PR. */
+/**
+ * Category prefixes the parser + renderer can handle. Every sub-example
+ * with a matching prefix runs as a real test (e.g. '01-emphasis' covers
+ * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
+ */
 const IMPLEMENTED = new Set([
   '01-emphasis',
   '02-headings',
@@ -49,6 +53,19 @@ const IMPLEMENTED = new Set([
   '18-frontmatter',
 ])
 
+/**
+ * Sub-examples in IMPLEMENTED categories that are known to fail because
+ * a specific construct is not yet supported. Move out of this set as
+ * implementation lands.
+ */
+const KNOWN_GAPS = new Set([
+  '05-lists-3', // nested unordered lists
+  '05-lists-4', // mixed ordered/unordered nesting
+  '05-lists-5', // loose-list paragraph wrapping
+])
+
+const baseSlug = (name: string) => name.replace(/-\d+$/, '')
+
 const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
@@ -66,8 +83,9 @@ describe('spec corpus', () => {
 
     const source = readFileSync(crvPath, 'utf8')
     const expected = readFileSync(htmlPath, 'utf8')
+    const allowlisted = IMPLEMENTED.has(name) || IMPLEMENTED.has(baseSlug(name))
 
-    if (IMPLEMENTED.has(name)) {
+    if (allowlisted && !KNOWN_GAPS.has(name)) {
       it(`${name}`, () => {
         const actual = carveToHtml(source)
         expect(actual.trim()).toBe(expected.trim())
