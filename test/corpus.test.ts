@@ -51,6 +51,7 @@ const IMPLEMENTED = new Set([
   '16-inline-extensions',
   '17-attributes',
   '18-frontmatter',
+  '19-heading-ids',
 ])
 
 /**
