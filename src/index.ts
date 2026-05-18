@@ -6,10 +6,15 @@
  *   - Paragraphs, lists, blockquotes, fences, tables, frontmatter, hr,
  *     admonitions, captions — to come in M1
  *   - All inline constructs — to come in M2
+ *
+ * Processing pipeline: parse -> resolve -> renderHtml.
+ * Callers using parse() + renderHtml() directly must call resolve() in between
+ * to enable heading id assignment and </#id> cross-reference resolution.
  */
 
 import type { Document } from './ast.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
+import { resolveHeadingIds } from './heading-ids.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
 
 export * from './ast.js'
@@ -26,10 +31,15 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   return renderHtmlImpl(ast, opts)
 }
 
-/** Convenience: parse + render in one call. */
+/** Resolve heading ids and </#id> cross-references (post-parse semantic pass). */
+export function resolve(doc: Document): Document {
+  return resolveHeadingIds(doc)
+}
+
+/** Convenience: parse + resolve + render in one call. */
 export function carveToHtml(
   source: string,
   opts: ParseOptions & RenderOptions = {},
 ): string {
-  return renderHtml(parse(source, opts), opts)
+  return renderHtml(resolve(parse(source, opts)), opts)
 }

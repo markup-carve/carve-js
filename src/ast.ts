@@ -198,6 +198,12 @@ export interface AutoLink extends BaseNode {
   href: string
 }
 
+export interface CrossRef extends BaseNode {
+  type: 'crossref'
+  /** Raw id between `</#` and `>`. */
+  target: string
+}
+
 export interface Mention extends BaseNode {
   type: 'mention'
   user: string
@@ -268,6 +274,7 @@ export type InlineNode =
   | Link
   | Image
   | AutoLink
+  | CrossRef
   | Mention
   | Tag
   | Extension

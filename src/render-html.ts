@@ -350,6 +350,8 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       return `<mark>${renderInlines(node.children, opts)}</mark>`
     case 'critic-comment':
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
+    case 'crossref':
+      return `&lt;/#${escapeHtml(node.target)}&gt;`
     default: {
       const t: never = node
       throw new Error(`renderHtml: unknown inline ${(t as { type: string }).type}`)
