@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { slugify, inlineText } from '../src/heading-ids.js'
-import { parse } from '../src/index.js'
+import { slugify, inlineText, resolveHeadingIds } from '../src/heading-ids.js'
+import { parse, carveToHtml } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
 
 describe('slugify', () => {
@@ -64,5 +64,53 @@ describe('crossref parsing', () => {
       target: string
     }
     expect(cr.target).toBe('intro')
+  })
+})
+
+describe('resolveHeadingIds', () => {
+  it('assigns an auto id to a plain heading', () => {
+    const doc = parse('# Getting Started')
+    resolveHeadingIds(doc)
+    expect((doc.children[0] as { attrs?: { id?: string } }).attrs?.id).toBe(
+      'getting-started',
+    )
+  })
+  it('keeps an explicit id verbatim and never suffixes it', () => {
+    const doc = parse('# A {#Keep_This}\n\n# A {#Keep_This}')
+    resolveHeadingIds(doc)
+    const ids = doc.children
+      .filter((b) => b.type === 'heading')
+      .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
+    expect(ids).toEqual(['Keep_This', 'Keep_This'])
+  })
+  it('suffixes duplicate auto ids 1-based in document order', () => {
+    const doc = parse('# Setup\n\n# Notes\n\n# Setup\n\n# Setup')
+    resolveHeadingIds(doc)
+    const ids = doc.children
+      .filter((b) => b.type === 'heading')
+      .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
+    expect(ids).toEqual(['setup', 'notes', 'setup-2', 'setup-3'])
+  })
+  it('shares the namespace: auto collides with earlier explicit', () => {
+    const doc = parse('# Intro {#intro}\n\n# Intro')
+    resolveHeadingIds(doc)
+    const ids = doc.children
+      .filter((b) => b.type === 'heading')
+      .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
+    expect(ids).toEqual(['intro', 'intro-2'])
+  })
+  it('resolves </#id> to a link with cloned target text', () => {
+    const html = carveToHtml('# Getting Started\n\nSee </#getting-started>.')
+    expect(html).toContain('<h1 id="getting-started">Getting Started</h1>')
+    expect(html).toContain('<a href="#getting-started">Getting Started</a>')
+  })
+  it('renders an unresolved </#id> as literal text', () => {
+    const html = carveToHtml('See </#nope>.')
+    expect(html).toContain('&lt;/#nope&gt;')
+    expect(html).not.toContain('<a href="#nope"')
+  })
+  it('ambiguous bare ref resolves to the first occurrence', () => {
+    const html = carveToHtml('# Setup\n\n# Setup\n\nGo </#setup>.')
+    expect(html).toContain('<a href="#setup">Setup</a>')
   })
 })
