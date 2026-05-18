@@ -116,6 +116,9 @@ export function resolveHeadingIds(doc: Document): Document {
           const link: Link = {
             type: 'link',
             href: `#${n.target}`,
+            // structuredClone would need DOM/Node lib typings absent from this
+            // tsconfig; InlineNode is plain JSON-serializable data so a
+            // stringify/parse round-trip is a safe deep clone here.
             children: JSON.parse(JSON.stringify(tgt)) as InlineNode[],
           }
           nodes[i] = link
