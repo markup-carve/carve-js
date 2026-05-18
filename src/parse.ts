@@ -622,7 +622,8 @@ function scanInline(text: string): InlineNode[] {
       const cr = RE_CROSSREF.exec(rest)
       if (cr) {
         flush()
-        out.push({ type: 'crossref', target: cr[1]! } as CrossRef)
+        const cref: CrossRef = { type: 'crossref', target: cr[1]! }
+        out.push(cref)
         i += cr[0].length
         continue
       }
