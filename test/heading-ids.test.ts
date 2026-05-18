@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { slugify, inlineText } from '../src/heading-ids.js'
+import { parse } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
 
 describe('slugify', () => {
@@ -48,5 +49,20 @@ describe('inlineText', () => {
       { type: 'text', value: ' field' },
     ]
     expect(inlineText(nodes)).toBe('The id field')
+  })
+})
+
+describe('crossref parsing', () => {
+  it('parses </#id> into a crossref inline node', () => {
+    const doc = parse('See </#intro> now.')
+    const para = doc.children[0]
+    expect(para.type).toBe('paragraph')
+    const kids = (para as { children: InlineNode[] }).children
+    expect(kids.map((n) => n.type)).toContain('crossref')
+    const cr = kids.find((n) => n.type === 'crossref') as {
+      type: 'crossref'
+      target: string
+    }
+    expect(cr.target).toBe('intro')
   })
 })

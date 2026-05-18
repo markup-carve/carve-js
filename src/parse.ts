@@ -19,6 +19,7 @@ import type {
   CriticHighlight,
   CriticInsert,
   CriticSubstitute,
+  CrossRef,
   Document,
   Emphasis,
   Extension,
@@ -505,6 +506,7 @@ const RE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]+)\})?/
 const RE_REF_LINK = /^\[([^\]]+)\]\[([^\]]*)\]/
 const RE_EXTENSION = /^:([a-zA-Z][\w-]*)\[([^\]]*)\](?:\{([^}]+)\})?/
 const RE_AUTOLINK = /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s]+|[^\s>@]+@[^\s>]+)>/
+const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{([^}\n]+)\}/
 const RE_CRITIC_INS = /^\{\+([^}]*)\+\}/
 const RE_CRITIC_DEL = /^\{-([^}]*)-\}/
@@ -617,6 +619,13 @@ function scanInline(text: string): InlineNode[] {
 
     // Autolink <url>
     if (c === '<') {
+      const cr = RE_CROSSREF.exec(rest)
+      if (cr) {
+        flush()
+        out.push({ type: 'crossref', target: cr[1]! } as CrossRef)
+        i += cr[0].length
+        continue
+      }
       const m = RE_AUTOLINK.exec(rest)
       if (m) {
         flush()
