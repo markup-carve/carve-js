@@ -415,13 +415,20 @@ function parseCellMarkers(src: string): {
     header = true
     i++
   }
-  // Exactly one optional alignment marker is recognized. A *repeated*
-  // marker character (`|=<<`, `|>>`) is not a marker — the whole run is
-  // content (spec: docs/case-study/syntax.md, "Disambiguation").
+  // A `<`/`>`/`~` immediately after `|` or `|=` IS an alignment marker
+  // (spec: docs/case-study/syntax.md, "Disambiguation"). Exactly one is
+  // recognized; a *repeated* character is the start of content, so for
+  // `|=<<` the first `<` aligns and the second `<` is content.
   let align: 'left' | 'right' | 'center' | undefined
   const a = src[i]
-  if (a !== undefined && (a === '>' || a === '<' || a === '~') && src[i + 1] !== a) {
-    align = a === '>' ? 'right' : a === '<' ? 'left' : 'center'
+  if (a === '>') {
+    align = 'right'
+    i++
+  } else if (a === '<') {
+    align = 'left'
+    i++
+  } else if (a === '~') {
+    align = 'center'
     i++
   }
 
