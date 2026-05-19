@@ -65,6 +65,13 @@ class Lexer {
   pos = 0
   frontmatter?: Record<string, unknown>
   abbrDefs: Map<string, string> = new Map()
+  // True for sub-lexers over already-nested block content (list item /
+  // blockquote / admonition bodies). The lone-marker paragraph-interruption
+  // guard applies only at the document top level; inside nested content a
+  // marker interrupts as before, so `- a\n  - b` (single nested child) still
+  // nests. Mirrors djot-php #180's scoping (guard only on the top-level
+  // paragraph path).
+  nested = false
 
   constructor(source: string) {
     this.lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -214,6 +221,7 @@ function parseAdmonition(lexer: Lexer): Admonition {
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
   if (titleText) node.title = parseInline(titleText, lexer.abbrDefs)
@@ -240,6 +248,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'blockquote', children }
   // Optional caption with ^
@@ -377,6 +386,7 @@ function parseList(lexer: Lexer): List {
     // becoming a stray second block.
     const sub = new Lexer([content, ...nested].join('\n'))
     sub.abbrDefs = lexer.abbrDefs
+    sub.nested = true
     const children = parseBlocks(sub, 0)
 
     const item: ListItem = { type: 'list-item', children }
@@ -387,6 +397,65 @@ function parseList(lexer: Lexer): List {
   return { type: 'list', ordered: isOrdered, tight: !loose, items }
 }
 
+/**
+ * Parse a table cell's leading markers from its raw between-pipe text.
+ *
+ * Disambiguation follows the spec's writing convention: markers are
+ * written *tight* against the pipe (`|=`, `|=>`, `|>`, `|<`, `|~`) with
+ * no separating space, so they are only recognized at index 0 of the
+ * raw cell text. A normal cell always has a space after the pipe
+ * (`| Alice`, `| <https://x>`, `| >10`), so content that merely begins
+ * with `<`/`>`/`~`/`=` is preserved verbatim.
+ *
+ * A cell whose trimmed content is exactly `^` or `<` (always written
+ * spaced, e.g. `| ^ |`, `| < |`) is a rowspan/colspan marker. The tight
+ * prefix is an optional `=` (header) followed by an optional alignment
+ * marker (`>` right, `<` left, `~` center).
+ */
+function parseCellMarkers(src: string): {
+  header: boolean
+  span?: 'rowspan' | 'colspan'
+  align?: 'left' | 'right' | 'center'
+  content: string
+} {
+  // Tight prefix only: the marker must sit at index 0 of the raw text.
+  let i = 0
+  let header = false
+  if (src[i] === '=') {
+    header = true
+    i++
+  }
+  // A `<`/`>`/`~` immediately after `|` or `|=` IS an alignment marker
+  // (spec: docs/case-study/syntax.md, "Disambiguation"). Exactly one is
+  // recognized; a *repeated* character is the start of content, so for
+  // `|=<<` the first `<` aligns and the second `<` is content.
+  let align: 'left' | 'right' | 'center' | undefined
+  const a = src[i]
+  if (a === '>') {
+    align = 'right'
+    i++
+  } else if (a === '<') {
+    align = 'left'
+    i++
+  } else if (a === '~') {
+    align = 'center'
+    i++
+  }
+
+  if (i > 0) {
+    // A tight marker prefix was consumed; the rest is content.
+    const content = src.slice(i).trim()
+    return align ? { header, align, content } : { header, content }
+  }
+
+  // No tight prefix: a lone `^`/`<` (always spaced) is a span marker;
+  // otherwise the whole trimmed text is content.
+  const trimmed = src.trim()
+  if (trimmed === '^') return { header: false, span: 'rowspan', content: '' }
+  if (trimmed === '<') return { header: false, span: 'colspan', content: '' }
+  return { header: false, content: trimmed }
+}
+
 function parseTable(lexer: Lexer): Table | Figure {
   const rows: TableRow[] = []
   while (!lexer.eof() && RE_TABLE_ROW.test(lexer.peek()!)) {
@@ -395,23 +464,14 @@ function parseTable(lexer: Lexer): Table | Figure {
     const row: TableRow = {
       type: 'table-row',
       cells: cells.map((src) => {
-        const trimmed = src.trim()
-        let header = false
-        let span: 'rowspan' | 'colspan' | undefined
-        let content = src
-        if (trimmed.startsWith('=')) {
-          header = true
-          content = src.replace(/^(\s*)=/, '$1')
-        }
-        const sole = content.trim()
-        if (sole === '^') span = 'rowspan'
-        else if (sole === '<') span = 'colspan'
+        const { header, span, align, content } = parseCellMarkers(src)
         const cell: TableCell = {
           type: 'table-cell',
           header,
-          children: span ? [] : parseInline(content.trim(), lexer.abbrDefs),
+          children: span ? [] : parseInline(content, lexer.abbrDefs),
         }
         if (span) cell.span = span
+        if (align) cell.align = align
         return cell
       }),
     }
@@ -465,7 +525,11 @@ function parseParagraph(lexer: Lexer): Paragraph {
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     if (ln.trim() === '') break
-    if (isBlockStart(ln)) break
+    if (
+      isBlockStart(ln) &&
+      (lexer.nested || interruptsParagraph(lexer, ln))
+    )
+      break
     lexer.consume()
     lines.push(ln)
   }
@@ -473,6 +537,36 @@ function parseParagraph(lexer: Lexer): Paragraph {
     type: 'paragraph',
     children: parseInline(lines.join('\n'), lexer.abbrDefs),
   }
+}
+
+// Hard-wrap friendliness (Design Principle 7): a hard-wrapped prose line that
+// happens to begin with an operator/marker (`* 3`, `- 3`, `> 5`, `| x`) must
+// not silently become a list/quote/table. An ambiguous marker line only
+// interrupts a paragraph when it forms a *real* block: 2+ consecutive markers
+// of the same kind, or an indented continuation (multi-line first item). The
+// blank-line-preceded case never reaches here — a blank line ends the
+// paragraph earlier, and the block is then parsed fresh. Unambiguous starts
+// (heading, fence, hr, admonition, image, abbr def, ordered list) always
+// interrupt. Mirrors djot-php #180.
+function interruptsParagraph(lexer: Lexer, ln: string): boolean {
+  const isBullet = RE_UNORDERED.test(ln) || RE_TASK.test(ln)
+  const isQuote = RE_BLOCKQUOTE.test(ln)
+  const isTable = RE_TABLE_ROW.test(ln)
+  if (!isBullet && !isQuote && !isTable) return true // unambiguous block
+
+  const next = lexer.peek(1)
+  if (next === undefined || next.trim() === '') return false
+
+  if (isBullet) {
+    if (RE_UNORDERED.test(next) || RE_TASK.test(next)) return true // 2+ markers
+    if (leadingWhitespace(next) > 0) return true // indented continuation
+    return false
+  }
+  // A following caption line (`^ ...`) is also a real-block signal: a
+  // single-line quote/table directly under prose can still be a captioned
+  // figure (parseBlockQuote/parseTable support `> q` / `|= h |` + `^ cap`).
+  if (isQuote) return RE_BLOCKQUOTE.test(next) || RE_CAPTION.test(next)
+  return RE_TABLE_ROW.test(next) || RE_CAPTION.test(next)
 }
 
 function isBlockStart(line: string): boolean {
