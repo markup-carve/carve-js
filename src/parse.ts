@@ -704,7 +704,12 @@ function interruptsParagraph(lexer: Lexer, ln: string): boolean {
   if (next === undefined || next.trim() === '') return false
 
   if (isBullet) {
-    if (RE_UNORDERED.test(next) || RE_TASK.test(next)) return true // 2+ markers
+    // parseList only merges same-kind bullets, so only a *same-kind*
+    // next marker is real "2+ markers" evidence. A task line followed
+    // by a plain bullet (or vice-versa) is two single markers, which
+    // stays prose (each would otherwise split into its own list).
+    const nextBullet = RE_UNORDERED.test(next) || RE_TASK.test(next)
+    if (nextBullet && RE_TASK.test(ln) === RE_TASK.test(next)) return true
     if (leadingWhitespace(next) > 0) return true // indented continuation
     return false
   }
@@ -750,7 +755,7 @@ function leadingWhitespace(line: string): number {
 
 const RE_LINK = /^(\[)([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]+)\})?/
 const RE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]+)\})?/
-const RE_REF_LINK = /^\[([^\]]+)\]\[([^\]]*)\]/
+const RE_REF_LINK = /^\[([^\]]+)\]\[([^\]]*)\](?:\{([^}\n]+)\})?/
 const RE_EXTENSION = /^:([a-zA-Z][\w-]*)\[([^\]]*)\](?:\{([^}]+)\})?/
 const RE_AUTOLINK = /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s]+|[^\s>@]+@[^\s>]+)>/
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
@@ -822,7 +827,10 @@ function smartToken(
     return { out: isQuoteOpenContext(prev) ? '“' : '”', len: 1 }
   }
   if (c === "'") {
-    // After an alphanumeric it is an apostrophe / closing quote.
+    // Spec §4.18 defines only the paired `'text'` -> ‘text’ form; it
+    // does not mandate decade-elision (`'90s`). The contextual rule
+    // (apostrophe/closing after a word, opening otherwise) is faithful
+    // and avoids regressing genuinely quoted numbers like `'24'`.
     return { out: isAlnum(prev) || !isQuoteOpenContext(prev) ? '’' : '‘', len: 1 }
   }
   return null
@@ -932,13 +940,17 @@ function scanInline(text: string): InlineNode[] {
         flush()
         // Collapsed `[text][]` uses the text as the label.
         const label = mr[2]! !== '' ? mr[2]! : mr[1]!
-        out.push({
+        const refLink: Link = {
           type: 'link',
           href: '',
           children: scanInline(mr[1]!),
           ref: label,
+          // rawRef includes any trailing {attrs} so the literal
+          // fallback for an unresolved ref preserves the full source.
           rawRef: mr[0]!,
-        })
+        }
+        if (mr[3]) refLink.attrs = parseAttrs(mr[3])
+        out.push(refLink)
         i += mr[0].length
         continue
       }
