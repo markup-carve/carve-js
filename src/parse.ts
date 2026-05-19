@@ -64,6 +64,11 @@ const RE_LINK_DEF =
   /^\s*\[([^\]]+)\]:\s+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*$/
 const RE_CAPTION = /^\^\s+(.+)$/
 const RE_TABLE_ROW = /^\|/
+// A `+`-prefixed continuation row (multi-line cell). Like the grammar's
+// continuation_row it ends with `|`; that trailing pipe distinguishes
+// it from a `+ ` list item (which never ends with `|`). Only consumed
+// inside parseTable, after a standard `|` row has opened the table.
+const RE_TABLE_CONT = /^\+.*\|\s*$/
 const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*(?:\{([^}]+)\})?\s*$/
 const RE_FRONTMATTER_FENCE = /^---\s*$/
 
@@ -556,27 +561,66 @@ function parseCellMarkers(src: string): {
   return { header: false, content: trimmed }
 }
 
+interface RawCell {
+  header: boolean
+  span?: 'rowspan' | 'colspan'
+  align?: 'left' | 'right' | 'center'
+  raw: string
+}
+
 function parseTable(lexer: Lexer): Table | Figure {
-  const rows: TableRow[] = []
-  while (!lexer.eof() && RE_TABLE_ROW.test(lexer.peek()!)) {
-    const line = lexer.consume()
-    const cells = splitTableRow(line)
-    const row: TableRow = {
-      type: 'table-row',
-      cells: cells.map((src) => {
-        const { header, span, align, content } = parseCellMarkers(src)
-        const cell: TableCell = {
-          type: 'table-cell',
-          header,
-          children: span ? [] : parseInline(content, lexer.abbrDefs, lexer.linkDefs),
-        }
-        if (span) cell.span = span
-        if (align) cell.align = align
-        return cell
-      }),
+  // Collect raw cell source first; a `+` continuation row appends its
+  // non-empty fragments to the previous row's *source* so an inline
+  // construct spanning the line boundary is one logical cell. Inline
+  // parsing happens once, after merging.
+  const rawRows: RawCell[][] = []
+  let lastRaw: RawCell[] | null = null
+  while (
+    !lexer.eof() &&
+    (RE_TABLE_ROW.test(lexer.peek()!) || RE_TABLE_CONT.test(lexer.peek()!))
+  ) {
+    const line = lexer.peek()!
+    if (RE_TABLE_CONT.test(line)) {
+      if (!lastRaw) break // a continuation with no row to extend
+      lexer.consume()
+      splitTableRow(line).forEach((src, idx) => {
+        const frag = src.trim()
+        const target = lastRaw![idx]
+        // A fragment on a span (`^`/`<`) column is skipped: the spec's
+        // "Combined: Rowspan + Multi-line" example always places the `+`
+        // rows *before* the `^` row, so they extend the real origin cell
+        // (verified). A `+` after the span row is not a spec'd ordering.
+        if (!frag || !target || target.span) return
+        target.raw = target.raw ? `${target.raw} ${frag}` : frag
+      })
+      continue
     }
-    rows.push(row)
+    lexer.consume()
+    const raw: RawCell[] = splitTableRow(line).map((src) => {
+      const { header, span, align, content } = parseCellMarkers(src)
+      const c: RawCell = { header, raw: content }
+      if (span) c.span = span
+      if (align) c.align = align
+      return c
+    })
+    rawRows.push(raw)
+    lastRaw = raw
   }
+  const rows: TableRow[] = rawRows.map((rc) => ({
+    type: 'table-row',
+    cells: rc.map((c) => {
+      const cell: TableCell = {
+        type: 'table-cell',
+        header: c.header,
+        children: c.span
+          ? []
+          : parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs),
+      }
+      if (c.span) cell.span = c.span
+      if (c.align) cell.align = c.align
+      return cell
+    }),
+  }))
   const table: Table = { type: 'table', rows }
   // Optional caption ^ ...
   let lookahead = 0
@@ -600,8 +644,8 @@ function splitTableRow(line: string): string[] {
   let buf = ''
   let inCode = false
   let i = 0
-  // Skip leading pipe
-  if (line[0] === '|') i = 1
+  // Skip the leading row marker: `|` (standard) or `+` (continuation)
+  if (line[0] === '|' || line[0] === '+') i = 1
   for (; i < line.length; i++) {
     const ch = line[i]!
     if (ch === '`') inCode = !inCode
@@ -668,7 +712,13 @@ function interruptsParagraph(lexer: Lexer, ln: string): boolean {
   // single-line quote/table directly under prose can still be a captioned
   // figure (parseBlockQuote/parseTable support `> q` / `|= h |` + `^ cap`).
   if (isQuote) return RE_BLOCKQUOTE.test(next) || RE_CAPTION.test(next)
-  return RE_TABLE_ROW.test(next) || RE_CAPTION.test(next)
+  // A second `|` row, a `+` continuation row, or a caption all confirm
+  // the ambiguous `| … |` line really opens a table.
+  return (
+    RE_TABLE_ROW.test(next) ||
+    RE_TABLE_CONT.test(next) ||
+    RE_CAPTION.test(next)
+  )
 }
 
 function isBlockStart(line: string): boolean {
