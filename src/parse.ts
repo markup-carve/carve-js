@@ -258,7 +258,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
-    if (cap) {
+    // §4: a caption attaches only when it immediately follows the block
+    // or is separated by at most ONE blank line.
+    if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
       return {
         type: 'figure',
@@ -282,7 +284,9 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
-    if (cap) {
+    // §4: a caption attaches only when it immediately follows the block
+    // or is separated by at most ONE blank line.
+    if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
       return {
         type: 'figure',
@@ -484,7 +488,9 @@ function parseTable(lexer: Lexer): Table | Figure {
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
-    if (cap) {
+    // §4: a caption attaches only when it immediately follows the block
+    // or is separated by at most ONE blank line.
+    if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
       table.caption = parseInline(cap[1]!, lexer.abbrDefs)
     }
