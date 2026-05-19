@@ -55,6 +55,13 @@ const RE_BLOCKQUOTE = /^>\s?(.*)$/
 const RE_ADMONITION_OPEN = /^:::\s*([a-zA-Z][\w-]*)\s*(.*)$/
 const RE_ADMONITION_CLOSE = /^:::\s*$/
 const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
+// Block-level reference-link definition: `[label]: url "title"` or
+// `[label]: url 'title'` (grammar.ebnf link_title allows both quote
+// styles). The destination is a bare token; an angle-bracketed `<url>`
+// is the separate `autolink` production, not a ref-def destination
+// (grammar.ebnf:243,251), so it is intentionally not accepted here.
+const RE_LINK_DEF =
+  /^\s*\[([^\]]+)\]:\s+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*$/
 const RE_CAPTION = /^\^\s+(.+)$/
 const RE_TABLE_ROW = /^\|/
 const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*(?:\{([^}]+)\})?\s*$/
@@ -65,6 +72,7 @@ class Lexer {
   pos = 0
   frontmatter?: Record<string, unknown>
   abbrDefs: Map<string, string> = new Map()
+  linkDefs: Map<string, { href: string; title?: string }> = new Map()
   // True for sub-lexers over already-nested block content (list item /
   // blockquote / admonition bodies). The lone-marker paragraph-interruption
   // guard applies only at the document top level; inside nested content a
@@ -110,8 +118,10 @@ class Lexer {
 
 export function parse(source: string, _opts: ParseOptions = {}): Document {
   const lexer = new Lexer(source)
-  // First pass: collect abbreviation definitions so they can be applied to inline text
+  // First pass: collect abbreviation and reference-link definitions so
+  // they can be resolved regardless of document order (grammar §6).
   collectAbbrDefs(lexer)
+  collectLinkDefs(lexer)
   const children = parseBlocks(lexer, 0)
   const doc: Document = { type: 'document', children }
   if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
@@ -122,6 +132,83 @@ function collectAbbrDefs(lexer: Lexer) {
   for (const line of lexer.lines) {
     const m = RE_ABBR_DEF.exec(line)
     if (m) lexer.abbrDefs.set(m[1]!, m[2]!)
+  }
+}
+
+/** Reference labels are matched case-insensitively, whitespace-collapsed. */
+export function normalizeRefLabel(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+/**
+ * One top-level pass over the whole source collects every reference
+ * definition, so resolution is order-independent (grammar §6).
+ * Blockquote markers are stripped first, so a quoted def (`> [r]: /u`)
+ * is found here too — and fence tracking runs on the *stripped* line so
+ * a definition shown inside a quoted code block stays a literal sample.
+ * Admonition bodies and indented list defs already match the
+ * whitespace-tolerant RE_LINK_DEF. Because this single pass is complete,
+ * sub-lexers must NOT re-collect (that would overwrite a later
+ * document-wide definition with a stale nested one).
+ *
+ * Deliberate limitation: this flat pre-pass is the price of
+ * order-independent resolution (§6) without a second structural parse.
+ * A definition jammed into a hard-wrapped paragraph with no surrounding
+ * blank line (e.g. `Intro\n- [r]: /u`) is still collected here even
+ * though parseParagraph keeps that line as prose. Reference definitions
+ * are conventionally blank-line-separated; the jammed-in form is
+ * pathological and intentionally not special-cased.
+ */
+/**
+ * Strip leading block-container prefixes (blockquote `>`, list/task
+ * markers, indentation) so a definition or fence nested at any depth is
+ * seen by the single first pass. RE_LINK_DEF is specific enough that
+ * stripping a list marker off ordinary prose cannot fabricate a def.
+ */
+function stripContainerPrefixes(raw: string): string {
+  let line = raw
+  let prev: string
+  do {
+    prev = line
+    line = line
+      .replace(/^\s*>\s?/, '') // blockquote
+      .replace(/^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?/, '') // list/task
+  } while (line !== prev)
+  return line.replace(/^\s+/, '') // residual indentation
+}
+
+function collectLinkDefs(lexer: Lexer) {
+  let fence: { ch: string; len: number } | null = null
+  // Skip leading YAML frontmatter — it is opaque metadata, never
+  // document content, so a `[ref]: ...` line there is not a definition.
+  let inFront =
+    lexer.lines.length > 0 && RE_FRONTMATTER_FENCE.test(lexer.lines[0]!)
+  for (let idx = 0; idx < lexer.lines.length; idx++) {
+    const raw = lexer.lines[idx]!
+    if (inFront) {
+      if (idx > 0 && RE_FRONTMATTER_FENCE.test(raw)) inFront = false
+      continue
+    }
+    const line = stripContainerPrefixes(raw)
+    if (fence) {
+      const close = line.match(/^ {0,3}([`~]{3,})\s*$/)
+      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
+        fence = null
+      continue // definitions inside fenced code are literal samples
+    }
+    const open = RE_FENCE.exec(line)
+    if (open) {
+      fence = { ch: open[2]![0]!, len: open[2]!.length }
+      continue
+    }
+    // An abbreviation def (`*[ABBR]: ...`) is not a link def.
+    if (RE_ABBR_DEF.test(line)) continue
+    const m = RE_LINK_DEF.exec(line)
+    if (!m) continue
+    const def: { href: string; title?: string } = { href: m[2]! }
+    const title = m[3] ?? m[4]
+    if (title !== undefined) def.title = title
+    lexer.linkDefs.set(normalizeRefLabel(m[1]!), def)
   }
 }
 
@@ -153,6 +240,12 @@ function parseBlock(lexer: Lexer): BlockNode | null {
   if (RE_ABBR_DEF.test(line)) {
     return parseAbbrDef(lexer)
   }
+  // Reference-link definitions were collected in the first pass; the
+  // line itself produces no block (consume it so it is not a paragraph).
+  if (RE_LINK_DEF.test(line)) {
+    lexer.consume()
+    return null
+  }
   if (RE_HR.test(line.trim())) {
     lexer.consume()
     return { type: 'thematic-break' } as ThematicBreak
@@ -175,7 +268,7 @@ function parseHeading(lexer: Lexer): Heading {
   const node: Heading = {
     type: 'heading',
     level,
-    children: parseInline(text, lexer.abbrDefs),
+    children: parseInline(text, lexer.abbrDefs, lexer.linkDefs),
   }
   if (attrSrc) node.attrs = parseAttrs(attrSrc)
   return node
@@ -221,10 +314,11 @@ function parseAdmonition(lexer: Lexer): Admonition {
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.linkDefs = lexer.linkDefs
   subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
-  if (titleText) node.title = parseInline(titleText, lexer.abbrDefs)
+  if (titleText) node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
   return node
 }
 
@@ -248,6 +342,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.linkDefs = lexer.linkDefs
   subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'blockquote', children }
@@ -265,7 +360,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       return {
         type: 'figure',
         target: bq,
-        caption: parseInline(cap[1]!, lexer.abbrDefs),
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs),
       } as Figure
     }
   }
@@ -291,7 +386,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
       return {
         type: 'figure',
         target: img,
-        caption: parseInline(cap[1]!, lexer.abbrDefs),
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs),
       } as Figure
     }
   }
@@ -390,6 +485,7 @@ function parseList(lexer: Lexer): List {
     // becoming a stray second block.
     const sub = new Lexer([content, ...nested].join('\n'))
     sub.abbrDefs = lexer.abbrDefs
+    sub.linkDefs = lexer.linkDefs
     sub.nested = true
     const children = parseBlocks(sub, 0)
 
@@ -472,7 +568,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         const cell: TableCell = {
           type: 'table-cell',
           header,
-          children: span ? [] : parseInline(content, lexer.abbrDefs),
+          children: span ? [] : parseInline(content, lexer.abbrDefs, lexer.linkDefs),
         }
         if (span) cell.span = span
         if (align) cell.align = align
@@ -492,7 +588,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = parseInline(cap[1]!, lexer.abbrDefs)
+      table.caption = parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs)
     }
   }
   return table
@@ -541,7 +637,7 @@ function parseParagraph(lexer: Lexer): Paragraph {
   }
   return {
     type: 'paragraph',
-    children: parseInline(lines.join('\n'), lexer.abbrDefs),
+    children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs),
   }
 }
 
@@ -587,7 +683,8 @@ function isBlockStart(line: string): boolean {
     RE_TABLE_ROW.test(line) ||
     RE_ADMONITION_OPEN.test(line) ||
     RE_BARE_IMAGE.test(line) ||
-    RE_ABBR_DEF.test(line)
+    RE_ABBR_DEF.test(line) ||
+    RE_LINK_DEF.test(line)
   )
 }
 
@@ -618,9 +715,13 @@ const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
 const RE_MENTION = /^@([a-zA-Z][\w-]*(?:\.\w+)*)/
 const RE_TAG = /^#([a-zA-Z][\w-]*(?:\.\w+)*)/
 
-function parseInline(text: string, abbrDefs: Map<string, string>): InlineNode[] {
-  const nodes = scanInline(text)
-  return applyAbbreviations(nodes, abbrDefs)
+function parseInline(
+  text: string,
+  abbrDefs: Map<string, string>,
+  linkDefs: Map<string, { href: string; title?: string }> = new Map(),
+): InlineNode[] {
+  const nodes = applyAbbreviations(scanInline(text), abbrDefs)
+  return applyLinkDefs(nodes, linkDefs)
 }
 
 function scanInline(text: string): InlineNode[] {
@@ -694,7 +795,15 @@ function scanInline(text: string): InlineNode[] {
       const mr = RE_REF_LINK.exec(rest)
       if (mr) {
         flush()
-        out.push({ type: 'link', href: '', children: scanInline(mr[1]!) })
+        // Collapsed `[text][]` uses the text as the label.
+        const label = mr[2]! !== '' ? mr[2]! : mr[1]!
+        out.push({
+          type: 'link',
+          href: '',
+          children: scanInline(mr[1]!),
+          ref: label,
+          rawRef: mr[0]!,
+        })
         i += mr[0].length
         continue
       }
@@ -998,6 +1107,44 @@ function applyAbbreviations(
     } else if (last === 0) {
       out.push(node)
     }
+  }
+  return out
+}
+
+/**
+ * Resolve reference-link placeholders against the collected definitions.
+ * A resolved ref becomes a normal Link; an unresolved one falls back to
+ * its literal `[text][ref]` text (Djot behavior). Order-independent: the
+ * definition may appear anywhere in the document (grammar §6).
+ */
+function applyLinkDefs(
+  nodes: InlineNode[],
+  defs: Map<string, { href: string; title?: string }>,
+): InlineNode[] {
+  const out: InlineNode[] = []
+  for (const node of nodes) {
+    const anyChildren = (node as unknown as { children?: InlineNode[] }).children
+    if (Array.isArray(anyChildren)) {
+      ;(node as unknown as { children: InlineNode[] }).children = applyLinkDefs(
+        anyChildren,
+        defs,
+      )
+    }
+    if (node.type === 'link' && node.ref !== undefined) {
+      const def = defs.get(normalizeRefLabel(node.ref))
+      if (def) {
+        node.href = def.href
+        if (def.title !== undefined) node.title = def.title
+        delete node.ref
+        delete node.rawRef
+        out.push(node)
+      } else {
+        // Unresolved reference renders as its literal source text.
+        out.push({ type: 'text', value: node.rawRef ?? '' } as Text)
+      }
+      continue
+    }
+    out.push(node)
   }
   return out
 }
