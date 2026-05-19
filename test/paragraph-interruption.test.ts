@@ -66,3 +66,39 @@ describe('paragraph interruption — real blocks still interrupt', () => {
     expect(html).not.toContain('<ul>')
   })
 })
+
+// The guard is scoped to the document top level (Lexer.nested). Inside
+// already-nested block content a single marker must still start a block —
+// otherwise `- a\n  - b` regresses. (Codex review P1/P2.)
+describe('guard is top-level only — nested content unaffected', () => {
+  it('single nested child still nests', () => {
+    const html = carveToHtml('- parent\n  - child')
+    expect(html).toContain('<ul>')
+    expect(html).toContain('<li>child</li>')
+  })
+
+  it('single bullet inside a blockquote still nests', () => {
+    const html = carveToHtml('> intro\n> - child')
+    expect(html).toContain('<blockquote>')
+    expect(html).toContain('<li>child</li>')
+  })
+
+  it('lead text + single nested child in one item', () => {
+    const html = carveToHtml('- parent text\n  - child')
+    expect(html).toContain('<li>child</li>')
+  })
+
+  it('captioned one-line quote after prose is a figure', () => {
+    const html = carveToHtml('Intro\n> Stay hungry\n^ Steve Jobs')
+    expect(html).toContain('<figure>')
+    expect(html).toContain('<blockquote>')
+    expect(html).toContain('<figcaption>Steve Jobs</figcaption>')
+  })
+
+  it('captioned one-row table after prose interrupts (table caption)', () => {
+    const html = carveToHtml('Intro\n|= A |\n^ caption')
+    expect(html).toContain('<p>Intro</p>')
+    expect(html).toContain('<table>')
+    expect(html).toContain('<caption>caption</caption>')
+  })
+})

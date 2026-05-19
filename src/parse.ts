@@ -65,6 +65,13 @@ class Lexer {
   pos = 0
   frontmatter?: Record<string, unknown>
   abbrDefs: Map<string, string> = new Map()
+  // True for sub-lexers over already-nested block content (list item /
+  // blockquote / admonition bodies). The lone-marker paragraph-interruption
+  // guard applies only at the document top level; inside nested content a
+  // marker interrupts as before, so `- a\n  - b` (single nested child) still
+  // nests. Mirrors djot-php #180's scoping (guard only on the top-level
+  // paragraph path).
+  nested = false
 
   constructor(source: string) {
     this.lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -214,6 +221,7 @@ function parseAdmonition(lexer: Lexer): Admonition {
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
   if (titleText) node.title = parseInline(titleText, lexer.abbrDefs)
@@ -240,6 +248,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'blockquote', children }
   // Optional caption with ^
@@ -377,6 +386,7 @@ function parseList(lexer: Lexer): List {
     // becoming a stray second block.
     const sub = new Lexer([content, ...nested].join('\n'))
     sub.abbrDefs = lexer.abbrDefs
+    sub.nested = true
     const children = parseBlocks(sub, 0)
 
     const item: ListItem = { type: 'list-item', children }
@@ -515,7 +525,11 @@ function parseParagraph(lexer: Lexer): Paragraph {
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     if (ln.trim() === '') break
-    if (isBlockStart(ln) && interruptsParagraph(lexer, ln)) break
+    if (
+      isBlockStart(ln) &&
+      (lexer.nested || interruptsParagraph(lexer, ln))
+    )
+      break
     lexer.consume()
     lines.push(ln)
   }
@@ -548,8 +562,11 @@ function interruptsParagraph(lexer: Lexer, ln: string): boolean {
     if (leadingWhitespace(next) > 0) return true // indented continuation
     return false
   }
-  if (isQuote) return RE_BLOCKQUOTE.test(next) // 2+ quote lines
-  return RE_TABLE_ROW.test(next) // 2+ table rows
+  // A following caption line (`^ ...`) is also a real-block signal: a
+  // single-line quote/table directly under prose can still be a captioned
+  // figure (parseBlockQuote/parseTable support `> q` / `|= h |` + `^ cap`).
+  if (isQuote) return RE_BLOCKQUOTE.test(next) || RE_CAPTION.test(next)
+  return RE_TABLE_ROW.test(next) || RE_CAPTION.test(next)
 }
 
 function isBlockStart(line: string): boolean {
