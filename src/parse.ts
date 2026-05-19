@@ -387,6 +387,58 @@ function parseList(lexer: Lexer): List {
   return { type: 'list', ordered: isOrdered, tight: !loose, items }
 }
 
+/**
+ * Parse a table cell's leading markers from its raw between-pipe text.
+ *
+ * Disambiguation follows the spec's writing convention: markers are
+ * written *tight* against the pipe (`|=`, `|=>`, `|>`, `|<`, `|~`) with
+ * no separating space, so they are only recognized at index 0 of the
+ * raw cell text. A normal cell always has a space after the pipe
+ * (`| Alice`, `| <https://x>`, `| >10`), so content that merely begins
+ * with `<`/`>`/`~`/`=` is preserved verbatim.
+ *
+ * A cell whose trimmed content is exactly `^` or `<` (always written
+ * spaced, e.g. `| ^ |`, `| < |`) is a rowspan/colspan marker. The tight
+ * prefix is an optional `=` (header) followed by an optional alignment
+ * marker (`>` right, `<` left, `~` center).
+ */
+function parseCellMarkers(src: string): {
+  header: boolean
+  span?: 'rowspan' | 'colspan'
+  align?: 'left' | 'right' | 'center'
+  content: string
+} {
+  // Tight prefix only: the marker must sit at index 0 of the raw text.
+  let i = 0
+  let header = false
+  if (src[i] === '=') {
+    header = true
+    i++
+  }
+  // Exactly one optional alignment marker is recognized. A *repeated*
+  // marker character (`|=<<`, `|>>`) is not a marker — the whole run is
+  // content (spec: docs/case-study/syntax.md, "Disambiguation").
+  let align: 'left' | 'right' | 'center' | undefined
+  const a = src[i]
+  if (a !== undefined && (a === '>' || a === '<' || a === '~') && src[i + 1] !== a) {
+    align = a === '>' ? 'right' : a === '<' ? 'left' : 'center'
+    i++
+  }
+
+  if (i > 0) {
+    // A tight marker prefix was consumed; the rest is content.
+    const content = src.slice(i).trim()
+    return align ? { header, align, content } : { header, content }
+  }
+
+  // No tight prefix: a lone `^`/`<` (always spaced) is a span marker;
+  // otherwise the whole trimmed text is content.
+  const trimmed = src.trim()
+  if (trimmed === '^') return { header: false, span: 'rowspan', content: '' }
+  if (trimmed === '<') return { header: false, span: 'colspan', content: '' }
+  return { header: false, content: trimmed }
+}
+
 function parseTable(lexer: Lexer): Table | Figure {
   const rows: TableRow[] = []
   while (!lexer.eof() && RE_TABLE_ROW.test(lexer.peek()!)) {
@@ -395,23 +447,14 @@ function parseTable(lexer: Lexer): Table | Figure {
     const row: TableRow = {
       type: 'table-row',
       cells: cells.map((src) => {
-        const trimmed = src.trim()
-        let header = false
-        let span: 'rowspan' | 'colspan' | undefined
-        let content = src
-        if (trimmed.startsWith('=')) {
-          header = true
-          content = src.replace(/^(\s*)=/, '$1')
-        }
-        const sole = content.trim()
-        if (sole === '^') span = 'rowspan'
-        else if (sole === '<') span = 'colspan'
+        const { header, span, align, content } = parseCellMarkers(src)
         const cell: TableCell = {
           type: 'table-cell',
           header,
-          children: span ? [] : parseInline(content.trim(), lexer.abbrDefs),
+          children: span ? [] : parseInline(content, lexer.abbrDefs),
         }
         if (span) cell.span = span
+        if (align) cell.align = align
         return cell
       }),
     }
