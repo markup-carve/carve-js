@@ -170,7 +170,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   // Build effective rowspan/colspan by walking rows.
   // For each cell, compute span counts: a '^' cell extends the cell above;
   // a '<' cell extends the cell to its left.
-  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean }>> = []
+  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>> = []
   for (let r = 0; r < node.rows.length; r++) {
     const row = node.rows[r]!
     const gridRow: typeof grid[number] = []
@@ -213,6 +213,28 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   ) {
     headerEnd++
   }
+
+  // Column defaults come from the header section. With multiple header
+  // rows the last row that specifies an alignment for a column wins;
+  // omission does not reset (so we only overwrite on an explicit marker).
+  // A header colspan seeds every column it covers. Headerless tables
+  // (headerEnd === 0) have no column default — body markers are the only
+  // alignment available.
+  const columnAlign: Array<'left' | 'right' | 'center' | undefined> = []
+  for (let r = 0; r < headerEnd; r++) {
+    const hr = grid[r]!
+    for (let c = 0; c < hr.length; c++) {
+      const entry = hr[c]!
+      if (entry.skip || !entry.cell.align) continue
+      for (let k = c; k < c + entry.colspan; k++) columnAlign[k] = entry.cell.align
+    }
+  }
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r]!.length; c++) {
+      const a = grid[r]![c]!.cell.align ?? columnAlign[c]
+      if (a) grid[r]![c]!.align = a
+    }
+  }
   if (headerEnd > 0) {
     const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts))
     lines.push(`${pad}  <thead>${rows.join('')}</thead>`)
@@ -229,7 +251,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
 }
 
 function renderTableRowFlat(
-  cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean }>,
+  cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
   opts: RenderOptions,
 ): string {
   const parts: string[] = ['<tr>']
@@ -239,6 +261,7 @@ function renderTableRowFlat(
     const attrs: string[] = []
     if (entry.rowspan > 1) attrs.push(`rowspan="${entry.rowspan}"`)
     if (entry.colspan > 1) attrs.push(`colspan="${entry.colspan}"`)
+    if (entry.align) attrs.push(`style="text-align: ${entry.align};"`)
     const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
   }

@@ -52,6 +52,11 @@ const IMPLEMENTED = new Set([
   '17-attributes',
   '18-frontmatter',
   '19-heading-ids',
+  '20-table-column-alignment',
+  '21-table-per-cell-alignment-override',
+  '22-headerless-table-alignment',
+  '23-table-without-alignment',
+  '24-table-alignment-with-colspan',
 ])
 
 /**
