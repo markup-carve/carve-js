@@ -7,9 +7,15 @@ describe('slugify', () => {
   it('lowercases and dashes spaces', () => {
     expect(slugify('Getting Started')).toBe('getting-started')
   })
-  it('preserves Unicode letters, dashes separators', () => {
-    expect(slugify('Café & Crème')).toBe('café-crème')
-    expect(slugify('Über uns')).toBe('über-uns')
+  it('transliterates Latin Unicode to ASCII; unmapped scripts pass through', () => {
+    // Latin diacritics go through the baked Unicode->ASCII map for
+    // share-safety (auto-linkers routinely mangle non-ASCII fragments).
+    expect(slugify('Café & Crème')).toBe('cafe-creme')
+    expect(slugify('Über uns')).toBe('uber-uns')
+    expect(slugify('Привет мир')).toBe('privet-mir')
+    // Scripts the deterministic map does not cover (CJK, Arabic, ...)
+    // pass through. Authors can attach an explicit `{#id}` for a
+    // share-safe slug.
     expect(slugify('日本語の見出し')).toBe('日本語の見出し')
   })
   it('deletes CSS-unsafe punctuation before dashing', () => {
