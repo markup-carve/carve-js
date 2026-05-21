@@ -54,7 +54,9 @@ const RE_HR = /^-{3,}\s*$/
 const RE_FENCE = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_-]*)\s*$/
 const RE_UNORDERED = /^(\s*)[-*+]\s+(.*)$/
 const RE_ORDERED = /^(\s*)(\d+)\.\s+(.*)$/
-const RE_TASK = /^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/
+// Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
+// `>`, `?` are all accepted and render as an unchecked checkbox.
+const RE_TASK = /^(\s*)[-*+]\s+\[([ xX\-_>?])\]\s+(.*)$/
 const RE_BLOCKQUOTE = /^>\s?(.*)$/
 const RE_ADMONITION_OPEN = /^:::\s*([a-zA-Z][\w-]*)\s*(.*)$/
 const RE_ADMONITION_CLOSE = /^:::\s*$/
@@ -179,7 +181,7 @@ function stripContainerPrefixes(raw: string): string {
     prev = line
     line = line
       .replace(/^\s*>\s?/, '') // blockquote
-      .replace(/^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s+)?/, '') // list/task
+      .replace(/^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
   } while (line !== prev)
   return line.replace(/^\s+/, '') // residual indentation
 }
