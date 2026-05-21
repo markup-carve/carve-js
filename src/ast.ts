@@ -43,6 +43,12 @@ export interface Document extends BaseNode {
   type: 'document'
   frontmatter?: Record<string, unknown>
   children: BlockNode[]
+  /**
+   * Footnote definitions collected during parsing, keyed by raw label
+   * (`[^label]: …`). The renderer numbers them by reference order and
+   * emits the endnotes section; an unreferenced definition is dropped.
+   */
+  footnoteDefs?: Record<string, BlockNode[]>
 }
 
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
@@ -121,6 +127,17 @@ export interface Admonition extends BaseNode {
   children: BlockNode[]
 }
 
+/**
+ * Generic fenced div — djot's generic container. A `:::` opener with NO
+ * type word (bare `:::` or an attributes-only `::: {.class}`) is a Div;
+ * a typed `::: word` is an Admonition (two-tier rule, PART 9 §12).
+ * Renders to a plain `<div>` carrying its `attrs` (no class added).
+ */
+export interface Div extends BaseNode {
+  type: 'div'
+  children: BlockNode[]
+}
+
 export interface Figure extends BaseNode {
   type: 'figure'
   target: Image | BlockQuote | Table
@@ -154,6 +171,7 @@ export type BlockNode =
   | ThematicBreak
   | Table
   | Admonition
+  | Div
   | Figure
   | Image
   | AbbreviationDef
@@ -239,6 +257,17 @@ export interface Span extends BaseNode {
   children: InlineNode[]
 }
 
+/**
+ * Math, djot form: inline `` $`x` `` and display `` $$`x` ``. `content`
+ * is verbatim LaTeX from the backtick span; rendering wraps it in
+ * `\(…\)` (inline) or `\[…\]` (display) inside `<span class="math …">`.
+ */
+export interface Math extends BaseNode {
+  type: 'math'
+  display: boolean
+  content: string
+}
+
 export interface AutoLink extends BaseNode {
   type: 'autolink'
   href: string
@@ -274,9 +303,13 @@ export interface Abbreviation extends BaseNode {
 
 export interface Footnote extends BaseNode {
   type: 'footnote'
-  /** Either a reference id (defined elsewhere) or inline content */
+  /** Reference label (`[^label]`); resolved against Document.footnoteDefs. */
   id?: string
   inline?: InlineNode[]
+  /** Renderer-assigned 1-based number, by document reference order. */
+  number?: number
+  /** Renderer-assigned unique id for this reference (a backlink target). */
+  refId?: string
 }
 
 export interface SoftBreak extends BaseNode {
@@ -320,6 +353,7 @@ export type InlineNode =
   | Link
   | Image
   | Span
+  | Math
   | AutoLink
   | CrossRef
   | Mention
