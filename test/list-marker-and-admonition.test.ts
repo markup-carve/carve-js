@@ -111,13 +111,33 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('renders a custom type to the same shape', () => {
+  it('renders a custom (Tier-2) type as a generic div with the title', () => {
+    // §12 Tier 2: a non-canonical type renders as <div class="{type}">,
+    // the fenced-div primitive extensions build on. The title element
+    // and the quote-stripping rule still apply.
     expect(h('::: hint "Tip"\nBody.\n:::')).toBe(
       [
-        '<aside class="admonition hint">',
+        '<div class="hint">',
         '  <p class="admonition-title">Tip</p>',
         '  <p>Body.</p>',
-        '</aside>',
+        '</div>',
+      ].join('\n'),
+    )
+  })
+
+  it('renders a custom type with no title as a bare div', () => {
+    expect(h('::: glossary\nBody.\n:::')).toBe(
+      '<div class="glossary">\n  <p>Body.</p>\n</div>',
+    )
+  })
+
+  it('renders details as a Tier-2 div (not specially)', () => {
+    expect(h('::: details "More"\nHidden.\n:::')).toBe(
+      [
+        '<div class="details">',
+        '  <p class="admonition-title">More</p>',
+        '  <p>Hidden.</p>',
+        '</div>',
       ].join('\n'),
     )
   })
