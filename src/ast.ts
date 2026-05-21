@@ -224,6 +224,12 @@ export interface Image extends BaseNode {
   title?: string
 }
 
+/** Inline span: `[text]{attrs}` -> <span {attrs}>text</span> (PART 9 §14). */
+export interface Span extends BaseNode {
+  type: 'span'
+  children: InlineNode[]
+}
+
 export interface AutoLink extends BaseNode {
   type: 'autolink'
   href: string
@@ -304,6 +310,7 @@ export type InlineNode =
   | InlineCode
   | Link
   | Image
+  | Span
   | AutoLink
   | CrossRef
   | Mention

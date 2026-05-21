@@ -81,6 +81,7 @@ export function inlineText(nodes: InlineNode[]): string {
       case 'highlight':
       case 'bold-italic':
       case 'link':
+      case 'span':
       case 'critic-insert':
       case 'critic-delete':
       case 'critic-highlight':
@@ -188,6 +189,7 @@ export function resolveHeadingIds(doc: Document): Document {
         case 'highlight':
         case 'bold-italic':
         case 'link':
+        case 'span':
         case 'critic-insert':
         case 'critic-delete':
         case 'critic-highlight':
@@ -234,6 +236,7 @@ export function resolveHeadingIds(doc: Document): Document {
         case 'highlight':
         case 'bold-italic':
         case 'link':
+        case 'span':
         case 'critic-insert':
         case 'critic-delete':
         case 'critic-highlight':
