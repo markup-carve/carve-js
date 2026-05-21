@@ -107,7 +107,9 @@ describe('resolveHeadingIds', () => {
   })
   it('resolves </#id> to a link with cloned target text', () => {
     const html = carveToHtml('# Getting Started\n\nSee </#getting-started>.')
-    expect(html).toContain('<h1 id="getting-started">Getting Started</h1>')
+    // The id lives on the <section>, not the <h1> (PART 9 §13).
+    expect(html).toContain('<section id="getting-started">')
+    expect(html).toContain('<h1>Getting Started</h1>')
     expect(html).toContain('<a href="#getting-started">Getting Started</a>')
   })
   it('renders an unresolved </#id> as literal text', () => {

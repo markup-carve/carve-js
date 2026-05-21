@@ -77,11 +77,23 @@ const IMPLEMENTED = new Set([
 ])
 
 /**
- * Sub-examples in IMPLEMENTED categories that are known to fail because
- * a specific construct is not yet supported. Move out of this set as
- * implementation lands.
+ * Sub-examples in IMPLEMENTED categories that are temporarily skipped.
+ *
+ * These heading fixtures still show the pre-§13 bare `<h* id="…">` shape.
+ * The renderer now emits the `<section id="…"><h*>…</h*></section>`
+ * wrapping (grammar PART 9 §13), so the impl is AHEAD of the vendored
+ * spec corpus. Re-add each entry once the carve repo re-vendors carve-lib
+ * and rewrites these fixtures to the section-wrapped shape, then bumps the
+ * spec submodule here. Same coordination pattern as the ASCII-slug change.
  */
-const KNOWN_GAPS = new Set<string>([])
+const KNOWN_GAPS = new Set<string>([
+  '02-headings',
+  '02-headings-2',
+  '02-headings-3',
+  '02-headings-4',
+  '17-attributes',
+  '19-heading-ids',
+])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
