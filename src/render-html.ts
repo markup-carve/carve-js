@@ -108,11 +108,11 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       return `${pad}<p${renderAttrs(node.attrs)}>${inner}</p>`
     }
     case 'thematic-break':
-      return `${pad}<hr>`
+      return `${pad}<hr${renderAttrs(node.attrs)}>`
     case 'code-block': {
       const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
       const escaped = escapeHtml(node.content)
-      return `${pad}<pre><code${langAttr}>${escaped}\n</code></pre>`
+      return `${pad}<pre${renderAttrs(node.attrs)}><code${langAttr}>${escaped}\n</code></pre>`
     }
     case 'blockquote':
       return renderBlockQuote(node, opts, level)
@@ -141,12 +141,14 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
 
 function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  const attrs = renderAttrs(node.attrs)
   if (node.children.length === 1 && node.children[0]!.type === 'paragraph') {
-    const inner = renderInlines((node.children[0] as Paragraph).children, opts)
-    return `${pad}<blockquote><p>${inner}</p></blockquote>`
+    const para = node.children[0] as Paragraph
+    const inner = renderInlines(para.children, opts)
+    return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}>${inner}</p></blockquote>`
   }
   const inner = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
-  return `${pad}<blockquote>\n${inner}\n${pad}</blockquote>`
+  return `${pad}<blockquote${attrs}>\n${inner}\n${pad}</blockquote>`
 }
 
 function renderList(node: List, opts: RenderOptions, level: number): string {
@@ -155,7 +157,7 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
-  return `${pad}<${tag}>\n${items}\n${pad}</${tag}>`
+  return `${pad}<${tag}${renderAttrs(node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(
@@ -174,7 +176,11 @@ function renderListItem(
 
   const wrapPara = (p: Paragraph) => {
     const inner = renderInlines(p.children, opts)
-    return tight ? inner : `<p>${inner}</p>`
+    // Tight items normally omit the <p>, but a paragraph carrying its
+    // own attributes (e.g. a leading block-attribute line, §15) must
+    // keep the <p> so the attributes survive.
+    if (tight && !p.attrs) return inner
+    return `<p${renderAttrs(p.attrs)}>${inner}</p>`
   }
 
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
@@ -202,7 +208,7 @@ function renderListItem(
 
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
-  const lines: string[] = [`${pad}<table>`]
+  const lines: string[] = [`${pad}<table${renderAttrs(node.attrs)}>`]
   if (node.caption) {
     lines.push(`${pad}  <caption>${renderInlines(node.caption, opts)}</caption>`)
   }
@@ -334,11 +340,19 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
       ? `${pad}  <p class="admonition-title">${renderInlines(node.title, opts)}</p>\n`
       : ''
   const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
-  if (CANONICAL_ADMONITIONS.has(node.kind)) {
-    return `${pad}<aside class="admonition ${node.kind}">\n${titleLine}${body}\n${pad}</aside>`
-  }
-  // Tier 2: custom type -> generic <div class="{type}">.
-  return `${pad}<div class="${node.kind}">\n${titleLine}${body}\n${pad}</div>`
+  // Leading block attributes (§15) merge with the admonition's own
+  // wrapper class: extra classes append, id/key attach to the wrapper.
+  const canonical = CANONICAL_ADMONITIONS.has(node.kind)
+  const baseClass = canonical ? `admonition ${node.kind}` : node.kind
+  const extraClasses = node.attrs?.classes?.length
+    ? ' ' + node.attrs.classes.join(' ')
+    : ''
+  const restAttrs: Attrs = {}
+  if (node.attrs?.id !== undefined) restAttrs.id = node.attrs.id
+  if (node.attrs?.keyValues) restAttrs.keyValues = node.attrs.keyValues
+  const rest = renderAttrs(restAttrs)
+  const tag = canonical ? 'aside' : 'div'
+  return `${pad}<${tag} class="${baseClass}${extraClasses}"${rest}>\n${titleLine}${body}\n${pad}</${tag}>`
 }
 
 function renderFigure(node: Figure, opts: RenderOptions, level: number): string {
@@ -352,7 +366,7 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   } else {
     inner = renderTable(node.target, opts, level + 1)
   }
-  return `${pad}<figure>\n${inner}\n${pad}  <figcaption>${renderInlines(
+  return `${pad}<figure${renderAttrs(node.attrs)}>\n${inner}\n${pad}  <figcaption>${renderInlines(
     node.caption,
     opts,
   )}</figcaption>\n${pad}</figure>`
