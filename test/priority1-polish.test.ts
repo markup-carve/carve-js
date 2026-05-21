@@ -4,11 +4,14 @@ import { carveToHtml } from '../src/index.js'
 const h = (s: string) => carveToHtml(s)
 
 describe('priority-1 polish fixes', () => {
-  it('uses the spec contextual quote rule (no special decade case)', () => {
-    // Paired form: opening then closing.
+  it('uses the contextual single-quote rule (matches djot)', () => {
+    // Opening before a letter in an open context; closing after a word.
     expect(h("a 'word' here")).toBe('<p>a ‘word’ here</p>')
-    // A genuinely quoted number opens correctly (no regression).
-    expect(h("see '24' now")).toBe('<p>see ‘24’ now</p>')
+    // A single quote before a digit is an apostrophe (decade elision),
+    // so a digit-quote pair becomes apostrophes on both sides — as djot
+    // renders it: '24' -> ’24’, '70s -> ’70s.
+    expect(h("see '24' now")).toBe('<p>see ’24’ now</p>')
+    expect(h("the '70s")).toBe('<p>the ’70s</p>')
     // Apostrophe after a word stays a closing/elision mark.
     expect(h("it's fine")).toBe('<p>it’s fine</p>')
   })
