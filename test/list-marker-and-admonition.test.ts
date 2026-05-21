@@ -60,6 +60,20 @@ describe('list marker change starts a new list (§11)', () => {
       '<p>para</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
     )
   })
+
+  it('does not loosen a list when a blank precedes a different marker', () => {
+    // `- a\n\n+ b` is two distinct lists (§11); the blank line sits
+    // BETWEEN them, so the first list stays tight (no <p> wrapper).
+    expect(h('- a\n\n+ b')).toBe(
+      '<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
+    )
+  })
+
+  it('still loosens a list when a blank precedes the same marker', () => {
+    expect(h('- a\n\n- b')).toBe(
+      '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>',
+    )
+  })
 })
 
 /**
