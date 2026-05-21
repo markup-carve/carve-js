@@ -501,11 +501,16 @@ function parseList(lexer: Lexer): List {
     }
 
     // Blank line(s) before the next sibling marker make the list loose.
+    // The next marker must be a real sibling of THIS list: same kind and
+    // (for unordered) same marker character. A blank line before a
+    // different marker (`- a\n\n+ b`) separates two distinct lists
+    // (§11), so it must not loosen this one.
     if (pendingBlanks > 0 && !lexer.eof()) {
       const nextLine = lexer.peek()!
       if (
         leadingWhitespace(nextLine) === baseIndent &&
-        matchListMarker(nextLine, isTask, isOrdered)
+        matchListMarker(nextLine, isTask, isOrdered) &&
+        (isOrdered || unorderedMarkerChar(nextLine) === firstMarkerChar)
       ) {
         loose = true
       }
