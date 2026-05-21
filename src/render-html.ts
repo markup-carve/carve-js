@@ -98,6 +98,9 @@ function walkBlockInlines(node: BlockNode, visit: (xs: InlineNode[]) => void): v
       if (node.title) visit(node.title)
       node.children.forEach((c) => walkBlockInlines(c, visit))
       break
+    case 'div':
+      node.children.forEach((c) => walkBlockInlines(c, visit))
+      break
     case 'table':
       if (node.caption) visit(node.caption)
       for (const row of node.rows) for (const cell of row.cells) visit(cell.children)
@@ -287,6 +290,12 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       return renderTable(node, opts, level)
     case 'admonition':
       return renderAdmonition(node, opts, level)
+    case 'div': {
+      const open = `${pad}<div${renderAttrs(node.attrs)}>`
+      if (node.children.length === 0) return `${open}\n${pad}</div>`
+      const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+      return `${open}\n${body}\n${pad}</div>`
+    }
     case 'figure':
       return renderFigure(node, opts, level)
     case 'abbreviation-def':

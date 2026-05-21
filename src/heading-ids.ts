@@ -272,6 +272,9 @@ export function resolveHeadingIds(doc: Document): Document {
         if (b.title) fn(b.title)
         b.children.forEach((c) => walkBlock(c, fn))
         break
+      case 'div':
+        b.children.forEach((c) => walkBlock(c, fn))
+        break
       case 'table':
         if (b.caption) fn(b.caption)
         for (const row of b.rows)
