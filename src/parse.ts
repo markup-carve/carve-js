@@ -314,7 +314,15 @@ function parseAdmonition(lexer: Lexer): Admonition {
   const open = lexer.consume()
   const m = RE_ADMONITION_OPEN.exec(open)!
   const kind = m[1]!
-  const titleText = m[2]?.trim()
+  // A title is recognized ONLY when the tail after the type opens with a
+  // double-quoted string (grammar quoted_title; PART 9 §12), optionally
+  // followed by an attribute block. The quotes are delimiters and are
+  // stripped — not part of the rendered title text. An explicitly empty
+  // `""` still counts as a supplied (empty) title. Unquoted trailing
+  // text is ignored (not a title).
+  const tail = m[2]?.trim() ?? ''
+  const quoted = /^"([^"]*)"\s*(?:\{[^}]*\})?$/.exec(tail)
+  const titleText = quoted ? quoted[1]! : undefined
   const inner: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -331,7 +339,11 @@ function parseAdmonition(lexer: Lexer): Admonition {
   subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
-  if (titleText) node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
+  // `!== undefined` (not truthiness): an explicitly empty quoted title
+  // `""` still emits a (empty) <p class="admonition-title"> per §12.
+  if (titleText !== undefined) {
+    node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
+  }
   return node
 }
 
@@ -406,6 +418,11 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
   return img
 }
 
+/** The unordered/task bullet character (`-`, `*`, or `+`) of a line. */
+function unorderedMarkerChar(line: string): string {
+  return line.replace(/^\s*/, '').charAt(0)
+}
+
 function matchListMarker(
   line: string,
   isTask: boolean,
@@ -427,6 +444,11 @@ function parseList(lexer: Lexer): List {
   const baseIndent = leadingWhitespace(first)
   const isTask = RE_TASK.test(first)
   const isOrdered = !isTask && RE_ORDERED.test(first)
+  // A change of unordered marker character (`-` vs `*` vs `+`) starts a
+  // new list (grammar PART 9 §11). Capture the first item's marker so a
+  // differing sibling marker terminates this list instead of merging.
+  // Ordered lists only have the digit `.` dialect here, so no split.
+  const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(first)
   const items: ListItem[] = []
   let loose = false
 
@@ -440,6 +462,8 @@ function parseList(lexer: Lexer): List {
     if (leadingWhitespace(line) !== baseIndent) break
     const m = matchListMarker(line, isTask, isOrdered)
     if (!m) break
+    // §11: a sibling with a different marker character is a new list.
+    if (!isOrdered && unorderedMarkerChar(line) !== firstMarkerChar) break
 
     let content: string
     let checked: boolean | undefined
@@ -712,12 +736,16 @@ function interruptsParagraph(lexer: Lexer, ln: string): boolean {
   if (next === undefined || next.trim() === '') return false
 
   if (isBullet) {
-    // parseList only merges same-kind bullets, so only a *same-kind*
-    // next marker is real "2+ markers" evidence. A task line followed
-    // by a plain bullet (or vice-versa) is two single markers, which
-    // stays prose (each would otherwise split into its own list).
+    // parseList merges adjacent items only when BOTH the marker
+    // character (§11: `-`/`*`/`+`) and the task-vs-plain kind match, so
+    // only such a next marker is real "2+ markers" evidence. A task line
+    // followed by a plain bullet, or `-` followed by `+`, is two single
+    // markers — each would split into its own one-item list — so it
+    // stays prose.
     const nextBullet = RE_UNORDERED.test(next) || RE_TASK.test(next)
-    if (nextBullet && RE_TASK.test(ln) === RE_TASK.test(next)) return true
+    const sameKind = RE_TASK.test(ln) === RE_TASK.test(next)
+    const sameChar = unorderedMarkerChar(ln) === unorderedMarkerChar(next)
+    if (nextBullet && sameKind && sameChar) return true
     if (leadingWhitespace(next) > 0) return true // indented continuation
     return false
   }
