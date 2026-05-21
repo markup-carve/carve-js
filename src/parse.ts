@@ -99,6 +99,12 @@ class Lexer {
   // nests. Mirrors djot-php #180's scoping (guard only on the top-level
   // paragraph path).
   nested = false
+  // Memo for divHasCloser: the smallest line index from which NO bare
+  // `:::` closer exists onward. Once a scan proves there is no closer
+  // beyond some point, every later opener (pos only advances) is O(1).
+  // Keeps generic-div detection linear on pathological input (many
+  // attrs-only `::: {…}` openers that never match the bare-`:::` closer).
+  divNoCloserFrom = Infinity
 
   constructor(source: string) {
     this.lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -339,8 +345,12 @@ function parseBlock(lexer: Lexer): BlockNode | null {
   if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
     return parseAdmonition(lexer)
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
-  // admonition branch above already claimed the `::: word` form).
-  if (RE_DIV_OPEN.test(line)) return parseDiv(lexer)
+  // admonition branch above already claimed the `::: word` form) — but
+  // ONLY when a matching closing `:::` exists ahead. A lone, unclosed
+  // `:::` is literal text (matches djot + carve-php + the grammar, which
+  // requires a closer); without this guard it would swallow the rest of
+  // the document into a div.
+  if (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) return parseDiv(lexer)
   if (RE_ABBR_DEF.test(line)) {
     return parseAbbrDef(lexer)
   }
@@ -487,6 +497,23 @@ function parseAdmonition(lexer: Lexer): Admonition {
 // Generic div: same body collection as an admonition, but emits a plain
 // <div> carrying the opener's attributes (no class added). Like
 // admonitions it closes at the first bare `:::` (no length-based nesting).
+/**
+ * From a `:::` opener at peek(0), is there a matching closing `:::`
+ * line ahead? A flat scan (first bare `:::` closes), mirroring parseDiv.
+ * Used to reject a lone, unclosed `:::` as a div opener (PART 9 §12 /
+ * grammar: a div requires a closer).
+ */
+function divHasCloser(lexer: Lexer): boolean {
+  const start = lexer.pos + 1
+  if (start >= lexer.divNoCloserFrom) return false // memoized: none ahead
+  for (let i = start; i < lexer.lines.length; i++) {
+    if (RE_ADMONITION_CLOSE.test(lexer.lines[i]!)) return true
+  }
+  // No closer from `start` onward; pos only advances, so cache it.
+  lexer.divNoCloserFrom = start
+  return false
+}
+
 function parseDiv(lexer: Lexer): Div {
   const attrSrc = RE_DIV_OPEN.exec(lexer.consume())![1]
   const inner: string[] = []
@@ -872,7 +899,14 @@ function parseParagraph(lexer: Lexer): Paragraph {
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     if (ln.trim() === '') break
+    // A bare/attrs-only `:::` (generic div opener) never interrupts a
+    // paragraph: djot opens a fenced div only after a blank line / at a
+    // block start, so a `:::` reached mid-paragraph is literal text.
+    // (This also avoids a non-terminating retry on an unclosed `:::`,
+    // which has no parseBlock handler once divHasCloser is false.)
+    const isDivOpener = RE_DIV_OPEN.test(ln) && !RE_ADMONITION_OPEN.test(ln)
     if (
+      !isDivOpener &&
       isBlockStart(ln) &&
       (lexer.nested || interruptsParagraph(lexer, ln))
     )
