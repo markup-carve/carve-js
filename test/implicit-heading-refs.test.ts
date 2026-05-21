@@ -179,8 +179,11 @@ describe('implicit heading references ([Heading][])', () => {
     // resolves to first-occurrence -> heading 1 (`#api`). The link inside
     // heading 1 self-resolves to "#api". Matches carve-php.
     const html = h('# [API][]\n\n# API\n\n[API][]')
-    expect(html).toContain('<h1 id="api"><a href="#api">API</a></h1>')
-    expect(html).toContain('<h1 id="api-2">API</h1>')
+    // ids live on <section>, headings carry no id (PART 9 §13).
+    expect(html).toContain('<section id="api">')
+    expect(html).toContain('<h1><a href="#api">API</a></h1>')
+    expect(html).toContain('<section id="api-2">')
+    expect(html).toContain('<h1>API</h1>')
     expect(html).toContain('<p><a href="#api">API</a></p>')
   })
 })
