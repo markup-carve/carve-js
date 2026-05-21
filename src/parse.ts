@@ -1057,11 +1057,14 @@ function smartToken(
     return { out: isQuoteOpenContext(prev) ? '“' : '”', len: 1 }
   }
   if (c === "'") {
-    // Spec §4.18 defines only the paired `'text'` -> ‘text’ form; it
-    // does not mandate decade-elision (`'90s`). The contextual rule
-    // (apostrophe/closing after a word, opening otherwise) is faithful
-    // and avoids regressing genuinely quoted numbers like `'24'`.
-    return { out: isAlnum(prev) || !isQuoteOpenContext(prev) ? '’' : '‘', len: 1 }
+    // Contextual single quote (matches djot): an apostrophe / closing
+    // quote `’` when the previous char is alphanumeric (`it's`,
+    // `John's`) OR the next char is a digit (decade elision `'70s`, and
+    // `'24'` -> `’24’` as djot does); an opening quote `‘` in an open
+    // context (`'word'`, `rock 'n' roll`); otherwise `’`.
+    const next = text[i + 1] ?? ''
+    const apostrophe = isAlnum(prev) || /[0-9]/.test(next) || !isQuoteOpenContext(prev)
+    return { out: apostrophe ? '’' : '‘', len: 1 }
   }
   return null
 }
