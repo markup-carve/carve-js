@@ -275,6 +275,12 @@ export function resolveHeadingIds(doc: Document): Document {
       case 'div':
         b.children.forEach((c) => walkBlock(c, fn))
         break
+      case 'definition-list':
+        for (const it of b.items) {
+          for (const t of it.terms) fn(t)
+          for (const d of it.definitions) d.forEach((c) => walkBlock(c, fn))
+        }
+        break
       case 'table':
         if (b.caption) fn(b.caption)
         for (const row of b.rows)
