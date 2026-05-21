@@ -325,7 +325,8 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
     case 'raw-block':
       return node.format === 'html' ? node.content : ''
     case 'comment':
-      return `${pad}<!-- ${node.content} -->`
+      // Comments are not rendered (§4.13).
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderHtml: unknown block ${(t as { type: string }).type}`)

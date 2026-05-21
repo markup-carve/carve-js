@@ -20,6 +20,7 @@ import type {
   CriticInsert,
   CriticSubstitute,
   CrossRef,
+  Comment,
   DefinitionItem,
   DefinitionList,
   Div,
@@ -38,6 +39,7 @@ import type {
   Math,
   Mention,
   Paragraph,
+  RawBlock,
   Span,
   Table,
   TableCell,
@@ -91,6 +93,14 @@ const RE_TABLE_ROW = /^\|/
 const RE_TABLE_CONT = /^\+.*\|\s*$/
 const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*(?:\{([^}]+)\})?\s*$/
 const RE_FRONTMATTER_FENCE = /^---\s*$/
+// Raw passthrough block: ```raw FORMAT … ``` (§4.15). The info string has
+// two tokens ("raw FORMAT"), so this never collides with RE_FENCE (which
+// allows only a single info token).
+const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*raw\s+([a-zA-Z][\w-]*)\s*$/
+// Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
+// by length); a `%%` line is a line comment. Neither is rendered.
+const RE_COMMENT_BLOCK = /^%{3,}\s*$/
+const RE_COMMENT_LINE = /^%%/
 
 class Lexer {
   lines: string[]
@@ -350,7 +360,14 @@ function parseBlock(lexer: Lexer): BlockNode | null {
   const line = lexer.peek()!
 
   // Block-level constructs in priority order
+  if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
   if (RE_FENCE.test(line)) return parseFence(lexer)
+  // Comments (not rendered). Block (`%%%`) before line (`%%`).
+  if (RE_COMMENT_BLOCK.test(line)) return parseCommentBlock(lexer)
+  if (RE_COMMENT_LINE.test(line)) {
+    const l = lexer.consume()
+    return { type: 'comment', block: false, content: l.slice(2).replace(/^\s/, '') }
+  }
   if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
     return parseAdmonition(lexer)
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
@@ -423,6 +440,43 @@ function parseFence(lexer: Lexer): CodeBlock {
   const cb: CodeBlock = { type: 'code-block', content: lines.join('\n') }
   if (lang) cb.lang = lang
   return cb
+}
+
+// Raw passthrough block: ```raw FORMAT … ``` . Content is verbatim; the
+// renderer emits it only when FORMAT matches the output (html).
+function parseRawBlock(lexer: Lexer): RawBlock {
+  const m = RE_RAW_FENCE.exec(lexer.consume())!
+  const marker = m[1]!
+  const format = m[2]!
+  const closeRe = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+  const lines: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    if (closeRe.test(ln)) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    lines.push(ln)
+  }
+  return { type: 'raw-block', format, content: lines.join('\n') }
+}
+
+// Block comment: a `%%%`+ opener, closed by a line of the SAME length
+// (more `%` nest). Not rendered.
+function parseCommentBlock(lexer: Lexer): Comment {
+  const open = lexer.consume().trim()
+  const lines: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    if (ln.trim() === open) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    lines.push(ln)
+  }
+  return { type: 'comment', block: true, content: lines.join('\n') }
 }
 
 // Footnote definition. The def line's trailing text plus following lines
@@ -1030,6 +1084,9 @@ function isBlockStart(line: string): boolean {
   return (
     RE_HEADING.test(line) ||
     RE_FENCE.test(line) ||
+    RE_RAW_FENCE.test(line) ||
+    RE_COMMENT_BLOCK.test(line) ||
+    RE_COMMENT_LINE.test(line) ||
     RE_HR.test(line.trim()) ||
     RE_BLOCKQUOTE.test(line) ||
     RE_TASK.test(line) ||
@@ -1155,6 +1212,14 @@ function scanInline(text: string): InlineNode[] {
   while (i < text.length) {
     const c = text[i]!
     const rest = text.slice(i)
+
+    // Hard line break: a backslash at end of line (before a newline).
+    if (c === '\\' && text[i + 1] === '\n') {
+      flush()
+      out.push({ type: 'hard-break' })
+      i += 2
+      continue
+    }
 
     // Escape
     if (c === '\\' && i + 1 < text.length) {
