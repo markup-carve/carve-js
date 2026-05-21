@@ -72,6 +72,9 @@ export function inlineText(nodes: InlineNode[]): string {
       case 'code':
         out += n.value
         break
+      case 'math':
+        out += n.content
+        break
       case 'italic':
       case 'strong':
       case 'underline':
@@ -284,7 +287,14 @@ export function resolveHeadingIds(doc: Document): Document {
     }
   }
 
+  // Footnote definition bodies live on doc.footnoteDefs, not in
+  // doc.children, so they need the same two passes — otherwise a
+  // `[Heading][]` or `</#id>` inside a note renders literally. All refs
+  // finalize before any crossref cloning (same invariant as above).
+  const footnoteBodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
   for (const block of doc.children) walkBlock(block, resolveRefs)
+  for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
   for (const block of doc.children) walkBlock(block, resolveCrossrefs)
+  for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
   return doc
 }

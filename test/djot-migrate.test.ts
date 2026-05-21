@@ -34,8 +34,10 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.suggestion).toBe('==note==')
   })
 
-  it('flags Djot reference-style links', () => {
-    expect(rules('see [the docs][ref] now')).toEqual(['djot-reference-link'])
+  it('does not flag full reference-style links (resolve identically)', () => {
+    // Carve resolves `[text][ref]` against a `[ref]: url` def exactly like
+    // djot (corpus 34-reference-link), so there is no mis-render to warn on.
+    expect(rules('see [the docs][ref] now')).toEqual([])
   })
 
   it('does not warn on Carve-native syntax', () => {
@@ -77,10 +79,9 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.column).toBeLessThan(w[1]!.column)
   })
 
-  it('does not flag the collapsed reference form [text][]', () => {
+  it('does not flag either reference form (collapsed or full)', () => {
     expect(djotMigrationWarnings('see [the docs][] now')).toEqual([])
-    // but the full form is still flagged
-    expect(rules('see [the docs][ref] now')).toEqual(['djot-reference-link'])
+    expect(djotMigrationWarnings('see [the docs][ref] now')).toEqual([])
   })
 
   it('does not flag backslash-escaped delimiters (literal in both)', () => {
