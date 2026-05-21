@@ -228,9 +228,14 @@ function collectLinkDefs(lexer: Lexer) {
 
 function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
   const out: BlockNode[] = []
+  // Leading block-attribute lines (grammar PART 9 §15) accumulate here
+  // and attach to the next block. They float across blank lines; a
+  // dangling run with no following block is dropped.
+  let pending: Attrs | null = null
   while (!lexer.eof()) {
     const line = lexer.peek()!
     if (line.trim() === '') {
+      // Blank lines do NOT reset pending block attributes (§15 reach).
       lexer.consume()
       continue
     }
@@ -238,10 +243,75 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
     const indent = leadingWhitespace(line)
     if (indent < baseIndent) break
 
+    const ba = tryCollectBlockAttributes(lexer)
+    if (ba) {
+      pending = pending ? mergeAttrs(pending, ba) : ba
+      continue
+    }
+
     const node = parseBlock(lexer)
-    if (node) out.push(node)
+    if (node) {
+      if (pending) {
+        // Leading attrs are earlier in source; the block's own trailing
+        // attrs win on conflict (id/key last), classes accumulate (§15).
+        node.attrs = mergeAttrs(pending, node.attrs ?? {})
+      }
+      out.push(node)
+    }
+    // The block absorbs any pending attrs -- including a non-rendering
+    // block such as a consumed reference/abbreviation definition (which
+    // returns no node). So `{.x}\n[ref]: /u\nText` drops `.x` rather
+    // than leaking it onto `Text`, matching djot and carve-php.
+    pending = null
   }
+  // A dangling pending run (no following block) is dropped.
   return out
+}
+
+/**
+ * If the lexer is positioned on a standalone block-attribute line
+ * (`{...}`, possibly spanning multiple indented lines until the closing
+ * `}`), consume it and return the parsed attributes. Otherwise consume
+ * nothing and return null. A block whose content yields no recognized
+ * attribute is not a block-attribute line — it falls through to normal
+ * block parsing (literal text). Grammar PART 9 §15.
+ */
+function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
+  if (!/^\s*\{/.test(lexer.peek()!)) return null
+  let collected = ''
+  let n = 0
+  let closed = false
+  // Multi-line collection stops at the first line containing `}`. A
+  // quoted attribute value containing a literal `}` that also spans
+  // lines (`{key="a}\nb"}`) is not supported across lines -- a
+  // pathological case; single-line quoted values are handled by the
+  // greedy `{...}` match below.
+  for (;;) {
+    const ln = lexer.peek(n)
+    if (ln === undefined) break
+    if (n > 0 && ln.trim() === '') break // blank line inside an open brace: not a block
+    collected += (n === 0 ? '' : '\n') + ln
+    n++
+    if (ln.includes('}')) {
+      closed = true
+      break
+    }
+  }
+  if (!closed) return null
+  // The whole run must be exactly `{ … }` with nothing after the close.
+  const m = /^\s*\{([\s\S]*)\}\s*$/.exec(collected)
+  if (!m) return null
+  // The ENTIRE payload must be valid attribute syntax (attributes +
+  // whitespace, nothing else). A line like `{.note junk}` or `{#todo#}`
+  // has leftover content -> it is NOT a block-attribute line and falls
+  // through to literal text (otherwise the junk would be silently
+  // dropped and the recognized tokens wrongly hoisted onto the next
+  // block).
+  if (!isValidAttrPayload(m[1]!)) return null
+  const attrs = parseAttrs(m[1]!)
+  if (isEmptyAttrs(attrs)) return null
+  for (let k = 0; k < n; k++) lexer.consume()
+  return attrs
 }
 
 function parseBlock(lexer: Lexer): BlockNode | null {
@@ -1363,6 +1433,21 @@ function applyLinkDefs(
 // ============================================================================
 // Attribute block parsing — {#id .class key=value key="value with spaces"}
 // ============================================================================
+
+/**
+ * True when `inner` (the text between an attribute block's braces) is
+ * ENTIRELY valid attribute syntax: a sequence of `#id`, `.class`, or
+ * `key=value` tokens separated by whitespace/newlines, with nothing
+ * left over. Used to decide whether a standalone `{...}` line is a
+ * block-attribute line or literal text (PART 9 §15).
+ */
+function isValidAttrPayload(inner: string): boolean {
+  const stripped = inner.replace(
+    /(?:#[\w-]+)|(?:\.[\w-]+)|(?:[\w-]+=(?:"[^"]*"|\S+))|\s+/g,
+    '',
+  )
+  return stripped === ''
+}
 
 /** True when an attribute block parsed to no id, classes, or key=values. */
 function isEmptyAttrs(attrs: Attrs): boolean {
