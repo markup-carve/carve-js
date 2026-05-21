@@ -32,8 +32,10 @@ describe('priority-1 polish fixes', () => {
   })
 
   it('attaches an attribute block to a resolved reference', () => {
+    // Attributes render in source order (`#x` then `.c`), matching djot
+    // and carve-php.
     expect(h('[t][r]{#x .c}\n\n[r]: /u')).toBe(
-      '<p><a href="/u" class="c" id="x">t</a></p>',
+      '<p><a href="/u" id="x" class="c">t</a></p>',
     )
   })
 })

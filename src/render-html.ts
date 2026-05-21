@@ -84,13 +84,40 @@ function indent(level: number): string {
 function renderAttrs(attrs?: Attrs): string {
   if (!attrs) return ''
   const parts: string[] = []
-  if (attrs.classes && attrs.classes.length) {
-    parts.push(`class="${attrs.classes.join(' ')}"`)
+  const classAttr = () =>
+    attrs.classes && attrs.classes.length
+      ? `class="${attrs.classes.join(' ')}"`
+      : ''
+  const idAttr = () => (attrs.id ? `id="${attrs.id}"` : '')
+  const kvAttr = (k: string) => {
+    const v = attrs.keyValues?.[k]
+    return v !== undefined ? `${k}="${escapeAttr(v)}"` : ''
   }
-  if (attrs.id) parts.push(`id="${attrs.id}"`)
+  // Emit the recorded source order first (matches djot + carve-php),
+  // then append any populated slot not covered by `order` -- so an attr
+  // added programmatically after parse() (with stale/no `order`) still
+  // renders rather than being silently dropped.
+  const seen = new Set(attrs.order ?? [])
+  if (attrs.order) {
+    for (const slot of attrs.order) {
+      const p = slot === '.class' ? classAttr() : slot === '#id' ? idAttr() : kvAttr(slot)
+      if (p) parts.push(p)
+    }
+  }
+  if (!seen.has('.class')) {
+    const c = classAttr()
+    if (c) parts.push(c)
+  }
+  if (!seen.has('#id')) {
+    const i = idAttr()
+    if (i) parts.push(i)
+  }
   if (attrs.keyValues) {
-    for (const [k, v] of Object.entries(attrs.keyValues)) {
-      parts.push(`${k}="${escapeAttr(v)}"`)
+    for (const k of Object.keys(attrs.keyValues)) {
+      if (!seen.has(k)) {
+        const p = kvAttr(k)
+        if (p) parts.push(p)
+      }
     }
   }
   return parts.length ? ' ' + parts.join(' ') : ''
@@ -350,6 +377,9 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   const restAttrs: Attrs = {}
   if (node.attrs?.id !== undefined) restAttrs.id = node.attrs.id
   if (node.attrs?.keyValues) restAttrs.keyValues = node.attrs.keyValues
+  // The class is structurally first (`admonition {type}`); the id/key
+  // attrs after it keep their source order (order minus the class slot).
+  if (node.attrs?.order) restAttrs.order = node.attrs.order.filter((s) => s !== '.class')
   const rest = renderAttrs(restAttrs)
   const tag = canonical ? 'aside' : 'div'
   return `${pad}<${tag} class="${baseClass}${extraClasses}"${rest}>\n${titleLine}${body}\n${pad}</${tag}>`

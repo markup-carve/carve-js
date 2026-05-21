@@ -1460,18 +1460,26 @@ function isEmptyAttrs(attrs: Attrs): boolean {
 
 export function parseAttrs(src: string): Attrs {
   const attrs: Attrs = {}
+  const order: string[] = []
+  const note = (slot: string) => {
+    if (!order.includes(slot)) order.push(slot)
+  }
   const re = /(?:#([\w-]+))|(?:\.([\w-]+))|(?:([\w-]+)=(?:"([^"]*)"|(\S+)))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
       attrs.id = m[1]
+      note('#id')
     } else if (m[2]) {
       attrs.classes = [...(attrs.classes ?? []), m[2]]
+      note('.class')
     } else if (m[3]) {
       const val = m[4] ?? m[5] ?? ''
       attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
+      note(m[3])
     }
   }
+  if (order.length) attrs.order = order
   return attrs
 }
 
@@ -1481,7 +1489,23 @@ function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   if (b.id) out.id = b.id
   if (b.classes) out.classes = [...(out.classes ?? []), ...b.classes]
   if (b.keyValues) out.keyValues = { ...(out.keyValues ?? {}), ...b.keyValues }
+  // Merge source order: keep `a`'s order, append `b`'s new slots (a slot
+  // already present keeps its earlier position; values are last-wins via
+  // the merges above). §15 + source-order rendering.
+  const order = [...attrOrder(a)]
+  for (const slot of attrOrder(b)) if (!order.includes(slot)) order.push(slot)
+  if (order.length) out.order = order
   return out
+}
+
+/** The attribute slots of `a` in order (its `order`, or a derived default). */
+function attrOrder(a: Attrs): string[] {
+  if (a.order) return a.order
+  const o: string[] = []
+  if (a.classes?.length) o.push('.class')
+  if (a.id !== undefined) o.push('#id')
+  if (a.keyValues) for (const k of Object.keys(a.keyValues)) o.push(k)
+  return o
 }
 
 // ============================================================================
