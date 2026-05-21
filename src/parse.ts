@@ -20,10 +20,12 @@ import type {
   CriticInsert,
   CriticSubstitute,
   CrossRef,
+  Div,
   Document,
   Emphasis,
   Extension,
   Figure,
+  Footnote,
   Heading,
   HeadingLevel,
   Image,
@@ -31,6 +33,7 @@ import type {
   Link,
   List,
   ListItem,
+  Math,
   Mention,
   Paragraph,
   Span,
@@ -55,6 +58,10 @@ const RE_TASK = /^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/
 const RE_BLOCKQUOTE = /^>\s?(.*)$/
 const RE_ADMONITION_OPEN = /^:::\s*([a-zA-Z][\w-]*)\s*(.*)$/
 const RE_ADMONITION_CLOSE = /^:::\s*$/
+// Generic fenced div: a `:::` opener with NO type word -- bare `:::` or
+// an attributes-only `::: {.class}` (djot's generic container). A typed
+// `::: word` routes to parseAdmonition instead. Shares the `:::` closer.
+const RE_DIV_OPEN = /^:::\s*(?:\{([^}\n]+)\})?\s*$/
 const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
@@ -63,6 +70,9 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // (grammar.ebnf:243,251), so it is intentionally not accepted here.
 const RE_LINK_DEF =
   /^\s*\[([^\]]+)\]:\s+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*$/
+// Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
+// would otherwise capture `^label` as a link reference label.
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
 const RE_CAPTION = /^\^\s+(.+)$/
 const RE_TABLE_ROW = /^\|/
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
@@ -79,6 +89,9 @@ class Lexer {
   frontmatter?: Record<string, unknown>
   abbrDefs: Map<string, string> = new Map()
   linkDefs: Map<string, { href: string; title?: string }> = new Map()
+  // Footnote definitions keyed by raw label; value is the parsed note
+  // body (def line + indented continuation), set by parseFootnoteDef.
+  footnoteDefs: Map<string, BlockNode[]> = new Map()
   // True for sub-lexers over already-nested block content (list item /
   // blockquote / admonition bodies). The lone-marker paragraph-interruption
   // guard applies only at the document top level; inside nested content a
@@ -131,6 +144,7 @@ export function parse(source: string, _opts: ParseOptions = {}): Document {
   const children = parseBlocks(lexer, 0)
   const doc: Document = { type: 'document', children }
   if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
+  if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
   return doc
 }
 
@@ -215,6 +229,9 @@ function collectLinkDefs(lexer: Lexer) {
     }
     // An abbreviation def (`*[ABBR]: ...`) is not a link def.
     if (RE_ABBR_DEF.test(line)) continue
+    // A footnote def (`[^label]: body`) is parsed as a block in
+    // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
+    if (RE_FOOTNOTE_DEF.test(line)) continue
     const m = RE_LINK_DEF.exec(line)
     if (m) {
       const def: { href: string; title?: string } = { href: m[2]! }
@@ -321,9 +338,15 @@ function parseBlock(lexer: Lexer): BlockNode | null {
   if (RE_FENCE.test(line)) return parseFence(lexer)
   if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
     return parseAdmonition(lexer)
+  // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
+  // admonition branch above already claimed the `::: word` form).
+  if (RE_DIV_OPEN.test(line)) return parseDiv(lexer)
   if (RE_ABBR_DEF.test(line)) {
     return parseAbbrDef(lexer)
   }
+  // Footnote definition: consume the def line + indented continuation
+  // and stash the parsed body (tested before RE_LINK_DEF).
+  if (RE_FOOTNOTE_DEF.test(line)) return parseFootnoteDef(lexer)
   // Reference-link definitions were collected in the first pass; the
   // line itself produces no block (consume it so it is not a paragraph).
   if (RE_LINK_DEF.test(line)) {
@@ -381,6 +404,48 @@ function parseFence(lexer: Lexer): CodeBlock {
   return cb
 }
 
+// Footnote definition. The def line's trailing text plus following lines
+// indented by >= 2 spaces (single blank lines allowed between chunks)
+// form the note body, parsed as blocks. First definition for a label
+// wins. Emits no block — the body is stashed on lexer.footnoteDefs and
+// rendered in the endnotes section.
+function parseFootnoteDef(lexer: Lexer): null {
+  const m = RE_FOOTNOTE_DEF.exec(lexer.consume())!
+  const label = m[1]!.trim()
+  const bodyLines = [m[2]!]
+  let pendingBlanks = 0
+  let contentCol = -1
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    if (ln.trim() === '') {
+      pendingBlanks++
+      lexer.consume()
+      continue
+    }
+    const ws = leadingWhitespace(ln)
+    if (ws >= 2) {
+      // Dedent by the FIRST continuation line's indent (not strip-all),
+      // so deeper-indented nested structure inside the note is preserved.
+      if (contentCol === -1) contentCol = ws
+      for (let k = 0; k < pendingBlanks; k++) bodyLines.push('')
+      pendingBlanks = 0
+      bodyLines.push(ln.slice(Math.min(contentCol, ws)))
+      lexer.consume()
+    } else {
+      break
+    }
+  }
+  if (!lexer.footnoteDefs.has(label)) {
+    const sub = new Lexer(bodyLines.join('\n'))
+    sub.abbrDefs = lexer.abbrDefs
+    sub.linkDefs = lexer.linkDefs
+    sub.footnoteDefs = lexer.footnoteDefs
+    sub.nested = true
+    lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
+  }
+  return null
+}
+
 function parseAdmonition(lexer: Lexer): Admonition {
   const open = lexer.consume()
   const m = RE_ADMONITION_OPEN.exec(open)!
@@ -407,6 +472,7 @@ function parseAdmonition(lexer: Lexer): Admonition {
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
   subLexer.linkDefs = lexer.linkDefs
+  subLexer.footnoteDefs = lexer.footnoteDefs
   subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
@@ -415,6 +481,31 @@ function parseAdmonition(lexer: Lexer): Admonition {
   if (titleText !== undefined) {
     node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
   }
+  return node
+}
+
+// Generic div: same body collection as an admonition, but emits a plain
+// <div> carrying the opener's attributes (no class added). Like
+// admonitions it closes at the first bare `:::` (no length-based nesting).
+function parseDiv(lexer: Lexer): Div {
+  const attrSrc = RE_DIV_OPEN.exec(lexer.consume())![1]
+  const inner: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    if (RE_ADMONITION_CLOSE.test(ln)) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    inner.push(ln)
+  }
+  const subLexer = new Lexer(inner.join('\n'))
+  subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.linkDefs = lexer.linkDefs
+  subLexer.footnoteDefs = lexer.footnoteDefs
+  subLexer.nested = true
+  const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
+  if (attrSrc) node.attrs = parseAttrs(attrSrc)
   return node
 }
 
@@ -439,6 +530,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
   subLexer.linkDefs = lexer.linkDefs
+  subLexer.footnoteDefs = lexer.footnoteDefs
   subLexer.nested = true
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'blockquote', children }
@@ -599,6 +691,7 @@ function parseList(lexer: Lexer): List {
     const sub = new Lexer([content, ...nested].join('\n'))
     sub.abbrDefs = lexer.abbrDefs
     sub.linkDefs = lexer.linkDefs
+    sub.footnoteDefs = lexer.footnoteDefs
     sub.nested = true
     const children = parseBlocks(sub, 0)
 
@@ -849,8 +942,10 @@ function isBlockStart(line: string): boolean {
     RE_ORDERED.test(line) ||
     RE_TABLE_ROW.test(line) ||
     RE_ADMONITION_OPEN.test(line) ||
+    RE_DIV_OPEN.test(line) ||
     RE_BARE_IMAGE.test(line) ||
     RE_ABBR_DEF.test(line) ||
+    RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line)
   )
 }
@@ -872,6 +967,8 @@ const RE_REF_LINK = /^\[([^\]]+)\]\[([^\]]*)\](?:\{([^}\n]+)\})?/
 // (PART 9 §14). The `{` must abut `]`; an empty `{}` is not a valid
 // attribute block, so the inner group requires at least one character.
 const RE_SPAN = /^\[([^\]]*)\]\{([^}\n]+)\}/
+// Footnote reference `[^label]` (no `]` in the label).
+const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
 const RE_EXTENSION = /^:([a-zA-Z][\w-]*)\[([^\]]*)\](?:\{([^}]+)\})?/
 const RE_AUTOLINK = /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s]+|[^\s>@]+@[^\s>]+)>/
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
@@ -904,13 +1001,6 @@ const SMART_TOKENS: Array<[string, string]> = [
   ['(c)', '©'],
   ['(r)', '®'],
 ]
-const SMART_FRACTIONS: Record<string, string> = {
-  '1/2': '½',
-  '1/4': '¼',
-  '3/4': '¾',
-  '1/3': '⅓',
-  '2/3': '⅔',
-}
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
 const isQuoteOpenContext = (prev: string) =>
   prev === '' || /[\s([{\-–—/]/.test(prev) || prev === '“' || prev === '‘'
@@ -927,16 +1017,6 @@ function smartToken(
 ): { out: string; len: number } | null {
   for (const [tok, out] of SMART_TOKENS) {
     if (text.startsWith(tok, i)) return { out, len: tok.length }
-  }
-  // Fractions: only when not glued to surrounding digits (so `1/2` but
-  // not `21/2` or `1/24`).
-  const frac = text.slice(i, i + 3)
-  if (
-    SMART_FRACTIONS[frac] &&
-    !isAlnum(prev) &&
-    !/[0-9]/.test(text[i + 3] ?? '')
-  ) {
-    return { out: SMART_FRACTIONS[frac]!, len: 3 }
   }
   const c = text[i]!
   if (c === '"') {
@@ -980,7 +1060,7 @@ function scanInline(text: string): InlineNode[] {
     // Escape
     if (c === '\\' && i + 1 < text.length) {
       const nxt = text[i + 1]!
-      if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"']/.test(nxt)) {
+      if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$]/.test(nxt)) {
         buf += nxt
         i += 2
         continue
@@ -1018,6 +1098,23 @@ function scanInline(text: string): InlineNode[] {
         out.push({ type: 'code', value: inner })
         i += m[0].length
         continue
+      }
+    }
+
+    // Math (djot form): inline $`x`, display $$`x`. A bare `$` not
+    // followed by a backtick run (e.g. currency `$5`) stays literal.
+    if (c === '$') {
+      const display = text[i + 1] === '$'
+      const dollarLen = display ? 2 : 1
+      if (text[i + dollarLen] === '`') {
+        const mm = /^(`+)([\s\S]*?[^`])(\1)(?!`)/.exec(text.slice(i + dollarLen))
+        if (mm) {
+          flush()
+          const content = mm[2]!.replace(/^ (.*) $/, '$1')
+          out.push({ type: 'math', display, content } as Math)
+          i += dollarLen + mm[0].length
+          continue
+        }
       }
     }
 
@@ -1068,6 +1165,16 @@ function scanInline(text: string): InlineNode[] {
         if (mr[3]) refLink.attrs = parseAttrs(mr[3])
         out.push(refLink)
         i += mr[0].length
+        continue
+      }
+      // Footnote reference [^label] — before span, so `[^x]{.c}` stays a
+      // footnote ref (the `{.c}` then attaches via the inline-attr pass)
+      // rather than becoming a <span> of `^x`.
+      const mfn = RE_FOOTNOTE_REF.exec(rest)
+      if (mfn) {
+        flush()
+        out.push({ type: 'footnote', id: mfn[1]!.trim() } as Footnote)
+        i += mfn[0].length
         continue
       }
       // Inline span `[text]{attrs}` (PART 9 §14). Checked after links so

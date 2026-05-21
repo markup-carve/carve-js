@@ -81,7 +81,13 @@ const IMPLEMENTED = new Set([
  * a specific construct is not yet supported. Move out of this set as
  * implementation lands.
  */
-const KNOWN_GAPS = new Set<string>([])
+const KNOWN_GAPS = new Set<string>([
+  // This branch drops smart fractions (1/2 -> ½ etc.) for djot parity,
+  // but the vendored spec fixture still expects the converted glyphs.
+  // Skip until the carve spec drops fractions from the 38 example and
+  // we re-vendor + bump the submodule, then un-skip.
+  '38-smart-typography-arrows-and-symbols',
+])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 

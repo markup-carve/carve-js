@@ -14,14 +14,14 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
     )
   })
 
-  it('converts symbols and standalone fractions', () => {
-    expect(h('(c) (r) (tm) 1/2 1/4 3/4 1/3 2/3')).toBe(
-      '<p>© ® ™ ½ ¼ ¾ ⅓ ⅔</p>',
-    )
+  it('converts symbols', () => {
+    expect(h('(c) (r) (tm)')).toBe('<p>© ® ™</p>')
   })
 
-  it('does not convert a fraction glued to other digits', () => {
-    expect(h('21/2 and 1/24')).toBe('<p>21/2 and 1/24</p>')
+  it('does not convert fractions (removed: they collide with dates/paths)', () => {
+    expect(h('1/2 1/4 3/4 1/3 2/3 and a date 1/2/2024')).toBe(
+      '<p>1/2 1/4 3/4 1/3 2/3 and a date 1/2/2024</p>',
+    )
   })
 
   it('makes contextual double quotes', () => {
