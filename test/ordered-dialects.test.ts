@@ -51,8 +51,10 @@ describe('ordered dialects vs paragraphs (§10)', () => {
       '<p>Pick option a. it is best.\nMore prose.</p>',
     )
   })
-  it('two markers after prose start a list', () => {
-    expect(h('Choices:\na. first\nb. second')).toContain('<ol type="a">')
+  it('alpha markers after prose stay prose (need a blank line, §10)', () => {
+    expect(h('Choices:\na. first\nb. second')).toBe(
+      '<p>Choices:\na. first\nb. second</p>',
+    )
   })
   it('a single a. at block start is a list (blank-line gate)', () => {
     expect(ol('a. only one')).toBe('<ol type="a">')

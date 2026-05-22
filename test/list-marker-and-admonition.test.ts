@@ -55,10 +55,8 @@ describe('list marker change starts a new list (§11)', () => {
     expect(h('para\n- a\n+ b')).toBe('<p>para\n- a\n+ b</p>')
   })
 
-  it('still interrupts a paragraph with two same-marker lines', () => {
-    expect(h('para\n- a\n- b')).toBe(
-      '<p>para</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
-    )
+  it('two same-marker lines after prose stay prose (need a blank line, §10)', () => {
+    expect(h('para\n- a\n- b')).toBe('<p>para\n- a\n- b</p>')
   })
 
   it('does not loosen a list when a blank precedes a different marker', () => {
