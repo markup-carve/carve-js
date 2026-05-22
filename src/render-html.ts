@@ -351,10 +351,15 @@ function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number):
 function renderList(node: List, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const tag = node.ordered ? 'ol' : 'ul'
+  // An ordered list starting at n != 1 emits `start="n"` (the `)` vs `.`
+  // delimiter affects list-splitting, not the rendered <ol>).
+  const startAttr = node.ordered && node.start !== undefined && node.start !== 1
+    ? ` start="${node.start}"`
+    : ''
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
-  return `${pad}<${tag}${renderAttrs(node.attrs)}>\n${items}\n${pad}</${tag}>`
+  return `${pad}<${tag}${startAttr}${renderAttrs(node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(

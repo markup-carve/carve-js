@@ -59,7 +59,7 @@ const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{([^}\n]+)\})?\s*$/
 const RE_HR = /^-{3,}\s*$/
 const RE_FENCE = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_-]*)\s*$/
 const RE_UNORDERED = /^(\s*)[-*+]\s+(.*)$/
-const RE_ORDERED = /^(\s*)(\d+)\.\s+(.*)$/
+const RE_ORDERED = /^(\s*)(\d+)([.)])\s+(.*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^(\s*)[-*+]\s+\[([ xX\-_>?])\]\s+(.*)$/
@@ -200,7 +200,7 @@ function stripContainerPrefixes(raw: string): string {
     prev = line
     line = line
       .replace(/^\s*>\s?/, '') // blockquote
-      .replace(/^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
+      .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
   } while (line !== prev)
   return line.replace(/^\s+/, '') // residual indentation
 }
@@ -751,11 +751,15 @@ function parseList(lexer: Lexer): List {
   const baseIndent = leadingWhitespace(first)
   const isTask = RE_TASK.test(first)
   const isOrdered = !isTask && RE_ORDERED.test(first)
-  // A change of unordered marker character (`-` vs `*` vs `+`) starts a
-  // new list (grammar PART 9 §11). Capture the first item's marker so a
-  // differing sibling marker terminates this list instead of merging.
-  // Ordered lists only have the digit `.` dialect here, so no split.
+  // A change of unordered marker character (`-` vs `*` vs `+`), or of
+  // ordered delimiter (`.` vs `)`), starts a new list (grammar PART 9
+  // §11). Capture the first item's marker so a differing sibling marker
+  // terminates this list instead of merging. (Letter/roman ordered
+  // dialects are a known gap; ordered markers are decimal only here.)
   const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(first)
+  const firstOrdered = isOrdered ? RE_ORDERED.exec(first)! : null
+  const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
+  const orderedStart = firstOrdered ? parseInt(firstOrdered[2]!, 10) : 1
   const items: ListItem[] = []
   let loose = false
 
@@ -769,8 +773,10 @@ function parseList(lexer: Lexer): List {
     if (leadingWhitespace(line) !== baseIndent) break
     const m = matchListMarker(line, isTask, isOrdered)
     if (!m) break
-    // §11: a sibling with a different marker character is a new list.
+    // §11: a sibling with a different marker character (unordered) or a
+    // different delimiter (ordered) is a new list.
     if (!isOrdered && unorderedMarkerChar(line) !== firstMarkerChar) break
+    if (isOrdered && RE_ORDERED.exec(line)![3] !== orderedDelim) break
 
     let content: string
     let checked: boolean | undefined
@@ -778,7 +784,7 @@ function parseList(lexer: Lexer): List {
       checked = m[2]!.toLowerCase() === 'x'
       content = m[3]!
     } else if (isOrdered) {
-      content = m[3]!
+      content = m[4]!
     } else {
       content = m[2]!
     }
@@ -817,7 +823,9 @@ function parseList(lexer: Lexer): List {
       if (
         leadingWhitespace(nextLine) === baseIndent &&
         matchListMarker(nextLine, isTask, isOrdered) &&
-        (isOrdered || unorderedMarkerChar(nextLine) === firstMarkerChar)
+        (isOrdered
+          ? RE_ORDERED.exec(nextLine)![3] === orderedDelim
+          : unorderedMarkerChar(nextLine) === firstMarkerChar)
       ) {
         loose = true
       }
@@ -844,7 +852,9 @@ function parseList(lexer: Lexer): List {
     items.push(item)
   }
 
-  return { type: 'list', ordered: isOrdered, tight: !loose, items }
+  const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
+  if (isOrdered && orderedStart !== 1) list.start = orderedStart
+  return list
 }
 
 /**
