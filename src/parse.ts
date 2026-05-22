@@ -20,8 +20,12 @@ import type {
   CriticInsert,
   CriticSubstitute,
   CrossRef,
+  Comment,
+  DefinitionItem,
+  DefinitionList,
   Div,
   Document,
+  Emoji,
   Emphasis,
   Extension,
   Figure,
@@ -36,6 +40,8 @@ import type {
   Math,
   Mention,
   Paragraph,
+  RawBlock,
+  RawInline,
   Span,
   Table,
   TableCell,
@@ -50,10 +56,12 @@ export interface ParseOptions {
 }
 
 const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{([^}\n]+)\})?\s*$/
-const RE_HR = /^-{3,}\s*$/
+// Thematic break: a line of 3+ of the same `-`, `*`, or `_` (grammar
+// thematic_break). A run alone on a line can't be emphasis (no content).
+const RE_HR = /^(?:-{3,}|\*{3,}|_{3,})\s*$/
 const RE_FENCE = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_-]*)\s*$/
 const RE_UNORDERED = /^(\s*)[-*+]\s+(.*)$/
-const RE_ORDERED = /^(\s*)(\d+)\.\s+(.*)$/
+const RE_ORDERED = /^(\s*)(\d+)([.)])\s+(.*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^(\s*)[-*+]\s+\[([ xX\-_>?])\]\s+(.*)$/
@@ -64,6 +72,11 @@ const RE_ADMONITION_CLOSE = /^:::\s*$/
 // an attributes-only `::: {.class}` (djot's generic container). A typed
 // `::: word` routes to parseAdmonition instead. Shares the `:::` closer.
 const RE_DIV_OPEN = /^:::\s*(?:\{([^}\n]+)\})?\s*$/
+// Definition list (§4.5). A TERM line is exactly two colons + space(s)
+// + text — the `(?!:)` keeps it distinct from a `:::` div/admonition. A
+// DEFINITION line is a colon + two-or-more spaces + text.
+const RE_DEFLIST_TERM = /^::(?!:)\s+(.+)$/
+const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
@@ -84,6 +97,14 @@ const RE_TABLE_ROW = /^\|/
 const RE_TABLE_CONT = /^\+.*\|\s*$/
 const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*(?:\{([^}]+)\})?\s*$/
 const RE_FRONTMATTER_FENCE = /^---\s*$/
+// Raw passthrough block: ```raw FORMAT … ``` (§4.15). The info string has
+// two tokens ("raw FORMAT"), so this never collides with RE_FENCE (which
+// allows only a single info token).
+const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*raw\s+([a-zA-Z][\w-]*)\s*$/
+// Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
+// by length); a `%%` line is a line comment. Neither is rendered.
+const RE_COMMENT_BLOCK = /^%{3,}\s*$/
+const RE_COMMENT_LINE = /^%%/
 
 class Lexer {
   lines: string[]
@@ -181,7 +202,7 @@ function stripContainerPrefixes(raw: string): string {
     prev = line
     line = line
       .replace(/^\s*>\s?/, '') // blockquote
-      .replace(/^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
+      .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
   } while (line !== prev)
   return line.replace(/^\s+/, '') // residual indentation
 }
@@ -343,7 +364,14 @@ function parseBlock(lexer: Lexer): BlockNode | null {
   const line = lexer.peek()!
 
   // Block-level constructs in priority order
+  if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
   if (RE_FENCE.test(line)) return parseFence(lexer)
+  // Comments (not rendered). Block (`%%%`) before line (`%%`).
+  if (RE_COMMENT_BLOCK.test(line)) return parseCommentBlock(lexer)
+  if (RE_COMMENT_LINE.test(line)) {
+    const l = lexer.consume()
+    return { type: 'comment', block: false, content: l.slice(2).replace(/^\s/, '') }
+  }
   if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
     return parseAdmonition(lexer)
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
@@ -370,6 +398,8 @@ function parseBlock(lexer: Lexer): BlockNode | null {
     return { type: 'thematic-break' } as ThematicBreak
   }
   if (RE_HEADING.test(line)) return parseHeading(lexer)
+  // Definition list starts on a `:: term` line (two colons, not three).
+  if (RE_DEFLIST_TERM.test(line)) return parseDefinitionList(lexer)
   if (RE_BLOCKQUOTE.test(line)) return parseBlockQuote(lexer)
   if (RE_TASK.test(line) || RE_UNORDERED.test(line) || RE_ORDERED.test(line))
     return parseList(lexer)
@@ -414,6 +444,43 @@ function parseFence(lexer: Lexer): CodeBlock {
   const cb: CodeBlock = { type: 'code-block', content: lines.join('\n') }
   if (lang) cb.lang = lang
   return cb
+}
+
+// Raw passthrough block: ```raw FORMAT … ``` . Content is verbatim; the
+// renderer emits it only when FORMAT matches the output (html).
+function parseRawBlock(lexer: Lexer): RawBlock {
+  const m = RE_RAW_FENCE.exec(lexer.consume())!
+  const marker = m[1]!
+  const format = m[2]!
+  const closeRe = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+  const lines: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    if (closeRe.test(ln)) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    lines.push(ln)
+  }
+  return { type: 'raw-block', format, content: lines.join('\n') }
+}
+
+// Block comment: a `%%%`+ opener, closed by a line of the SAME length
+// (more `%` nest). Not rendered.
+function parseCommentBlock(lexer: Lexer): Comment {
+  const open = lexer.consume().trim()
+  const lines: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    if (ln.trim() === open) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    lines.push(ln)
+  }
+  return { type: 'comment', block: true, content: lines.join('\n') }
 }
 
 // Footnote definition. The def line's trailing text plus following lines
@@ -538,6 +605,56 @@ function parseDiv(lexer: Lexer): Div {
   return node
 }
 
+// Definition list (§4.5). An entry is 1+ `:: term` lines followed by 1+
+// `:  definition` lines; a definition continues on lines indented >= 3
+// spaces. A `:: term` after a definition starts a new entry; a single
+// blank line between entries is allowed, anything else ends the list.
+function parseDefinitionList(lexer: Lexer): DefinitionList {
+  const items: DefinitionItem[] = []
+  const parseDefBody = (first: string): BlockNode[] => {
+    const bodyLines = [first]
+    while (!lexer.eof()) {
+      const ln = lexer.peek()!
+      if (ln.trim() !== '' && leadingWhitespace(ln) >= 3) {
+        bodyLines.push(ln.replace(/^\s+/, ''))
+        lexer.consume()
+      } else break
+    }
+    const sub = new Lexer(bodyLines.join('\n'))
+    sub.abbrDefs = lexer.abbrDefs
+    sub.linkDefs = lexer.linkDefs
+    sub.footnoteDefs = lexer.footnoteDefs
+    sub.nested = true
+    return parseBlocks(sub, 0)
+  }
+  while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
+    const terms: InlineNode[][] = []
+    const definitions: BlockNode[][] = []
+    while (!lexer.eof()) {
+      const t = RE_DEFLIST_TERM.exec(lexer.peek()!)
+      if (!t) break
+      lexer.consume()
+      terms.push(parseInline(t[1]!, lexer.abbrDefs, lexer.linkDefs))
+    }
+    while (!lexer.eof()) {
+      const d = RE_DEFLIST_DEF.exec(lexer.peek()!)
+      if (!d) break
+      lexer.consume()
+      definitions.push(parseDefBody(d[1]!))
+    }
+    items.push({ terms, definitions })
+    // Allow a single blank line before the next entry's `:: term`.
+    if (!lexer.eof() && lexer.peek()!.trim() === '') {
+      let look = 1
+      while (lexer.peek(look)?.trim() === '') look++
+      const next = lexer.peek(look)
+      if (next && RE_DEFLIST_TERM.test(next)) for (let k = 0; k < look; k++) lexer.consume()
+      else break
+    }
+  }
+  return { type: 'definition-list', items }
+}
+
 function parseAbbrDef(lexer: Lexer): AbbreviationDef {
   const line = lexer.consume()
   const m = RE_ABBR_DEF.exec(line)!
@@ -636,11 +753,15 @@ function parseList(lexer: Lexer): List {
   const baseIndent = leadingWhitespace(first)
   const isTask = RE_TASK.test(first)
   const isOrdered = !isTask && RE_ORDERED.test(first)
-  // A change of unordered marker character (`-` vs `*` vs `+`) starts a
-  // new list (grammar PART 9 §11). Capture the first item's marker so a
-  // differing sibling marker terminates this list instead of merging.
-  // Ordered lists only have the digit `.` dialect here, so no split.
+  // A change of unordered marker character (`-` vs `*` vs `+`), or of
+  // ordered delimiter (`.` vs `)`), starts a new list (grammar PART 9
+  // §11). Capture the first item's marker so a differing sibling marker
+  // terminates this list instead of merging. (Letter/roman ordered
+  // dialects are a known gap; ordered markers are decimal only here.)
   const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(first)
+  const firstOrdered = isOrdered ? RE_ORDERED.exec(first)! : null
+  const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
+  const orderedStart = firstOrdered ? parseInt(firstOrdered[2]!, 10) : 1
   const items: ListItem[] = []
   let loose = false
 
@@ -654,8 +775,10 @@ function parseList(lexer: Lexer): List {
     if (leadingWhitespace(line) !== baseIndent) break
     const m = matchListMarker(line, isTask, isOrdered)
     if (!m) break
-    // §11: a sibling with a different marker character is a new list.
+    // §11: a sibling with a different marker character (unordered) or a
+    // different delimiter (ordered) is a new list.
     if (!isOrdered && unorderedMarkerChar(line) !== firstMarkerChar) break
+    if (isOrdered && RE_ORDERED.exec(line)![3] !== orderedDelim) break
 
     let content: string
     let checked: boolean | undefined
@@ -663,7 +786,7 @@ function parseList(lexer: Lexer): List {
       checked = m[2]!.toLowerCase() === 'x'
       content = m[3]!
     } else if (isOrdered) {
-      content = m[3]!
+      content = m[4]!
     } else {
       content = m[2]!
     }
@@ -702,7 +825,9 @@ function parseList(lexer: Lexer): List {
       if (
         leadingWhitespace(nextLine) === baseIndent &&
         matchListMarker(nextLine, isTask, isOrdered) &&
-        (isOrdered || unorderedMarkerChar(nextLine) === firstMarkerChar)
+        (isOrdered
+          ? RE_ORDERED.exec(nextLine)![3] === orderedDelim
+          : unorderedMarkerChar(nextLine) === firstMarkerChar)
       ) {
         loose = true
       }
@@ -729,7 +854,9 @@ function parseList(lexer: Lexer): List {
     items.push(item)
   }
 
-  return { type: 'list', ordered: isOrdered, tight: !loose, items }
+  const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
+  if (isOrdered && orderedStart !== 1) list.start = orderedStart
+  return list
 }
 
 /**
@@ -971,6 +1098,9 @@ function isBlockStart(line: string): boolean {
   return (
     RE_HEADING.test(line) ||
     RE_FENCE.test(line) ||
+    RE_RAW_FENCE.test(line) ||
+    RE_COMMENT_BLOCK.test(line) ||
+    RE_COMMENT_LINE.test(line) ||
     RE_HR.test(line.trim()) ||
     RE_BLOCKQUOTE.test(line) ||
     RE_TASK.test(line) ||
@@ -979,6 +1109,7 @@ function isBlockStart(line: string): boolean {
     RE_TABLE_ROW.test(line) ||
     RE_ADMONITION_OPEN.test(line) ||
     RE_DIV_OPEN.test(line) ||
+    RE_DEFLIST_TERM.test(line) ||
     RE_BARE_IMAGE.test(line) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
@@ -1006,6 +1137,10 @@ const RE_SPAN = /^\[([^\]]*)\]\{([^}\n]+)\}/
 // Footnote reference `[^label]` (no `]` in the label).
 const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
 const RE_EXTENSION = /^:([a-zA-Z][\w-]*)\[([^\]]*)\](?:\{([^}]+)\})?/
+// Raw inline passthrough tag, follows a verbatim span: `` `…`{=html} ``.
+const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
+// Emoji shortcode `:name:` (after extension, which needs `[`).
+const RE_EMOJI = /^:([a-zA-Z0-9][\w+-]*):/
 const RE_AUTOLINK = /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s]+|[^\s>@]+@[^\s>]+)>/
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{([^}\n]+)\}/
@@ -1096,6 +1231,20 @@ function scanInline(text: string): InlineNode[] {
     const c = text[i]!
     const rest = text.slice(i)
 
+    // Hard line break: a backslash at end of line (before a newline).
+    if (c === '\\' && text[i + 1] === '\n') {
+      flush()
+      out.push({ type: 'hard-break' })
+      i += 2
+      continue
+    }
+    // Non-breaking space: a backslash followed by a space (djot).
+    if (c === '\\' && text[i + 1] === ' ') {
+      buf += '\u00a0'
+      i += 2
+      continue
+    }
+
     // Escape
     if (c === '\\' && i + 1 < text.length) {
       const nxt = text[i + 1]!
@@ -1134,8 +1283,15 @@ function scanInline(text: string): InlineNode[] {
       if (m) {
         flush()
         const inner = m[2]!.replace(/^ (.*) $/, '$1')
-        out.push({ type: 'code', value: inner })
-        i += m[0].length
+        // A verbatim span tagged `{=format}` is raw inline passthrough.
+        const raw = RE_RAW_INLINE.exec(text.slice(i + m[0].length))
+        if (raw) {
+          out.push({ type: 'raw-inline', format: raw[1]!, content: inner } as RawInline)
+          i += m[0].length + raw[0].length
+        } else {
+          out.push({ type: 'code', value: inner })
+          i += m[0].length
+        }
         continue
       }
     }
@@ -1247,6 +1403,14 @@ function scanInline(text: string): InlineNode[] {
         if (m[3]) ext.attrs = parseAttrs(m[3])
         out.push(ext)
         i += m[0].length
+        continue
+      }
+      // Emoji shortcode `:name:` (after extension, which needs `[`).
+      const em = RE_EMOJI.exec(rest)
+      if (em) {
+        flush()
+        out.push({ type: 'emoji', name: em[1]! } as Emoji)
+        i += em[0].length
         continue
       }
     }
