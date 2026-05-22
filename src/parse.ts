@@ -61,17 +61,23 @@ const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{([^}\n]+)\})?\s*$/
 const RE_HR = /^(?:-{3,}|\*{3,}|_{3,})\s*$/
 const RE_FENCE = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_-]*)\s*$/
 const RE_UNORDERED = /^(\s*)[-*+]\s+(.*)$/
-const RE_ORDERED = /^(\s*)(\d+)([.)])\s+(.*)$/
+// Ordered marker: decimal, a single letter (alpha), or a roman-numeral
+// run, then `.` or `)`. The dialect is fixed by the FIRST item (see
+// olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
+const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)])\s+(.*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^(\s*)[-*+]\s+\[([ xX\-_>?])\]\s+(.*)$/
 const RE_BLOCKQUOTE = /^>\s?(.*)$/
-const RE_ADMONITION_OPEN = /^:::\s*([a-zA-Z][\w-]*)\s*(.*)$/
-const RE_ADMONITION_CLOSE = /^:::\s*$/
+// Fences are a run of 3+ colons (group 1). A longer opener nests: a
+// `::::` block contains `:::` blocks, and only a bare closer of equal-or-
+// greater length closes it (djot fence-length rule).
+const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z][\w-]*)\s*(.*)$/
+const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // Generic fenced div: a `:::` opener with NO type word -- bare `:::` or
 // an attributes-only `::: {.class}` (djot's generic container). A typed
 // `::: word` routes to parseAdmonition instead. Shares the `:::` closer.
-const RE_DIV_OPEN = /^:::\s*(?:\{([^}\n]+)\})?\s*$/
+const RE_DIV_OPEN = /^(:{3,})\s*(?:\{([^}\n]+)\})?\s*$/
 // Definition list (§4.5). A TERM line is exactly two colons + space(s)
 // + text — the `(?!:)` keeps it distinct from a `:::` div/admonition. A
 // DEFINITION line is a colon + two-or-more spaces + text.
@@ -122,11 +128,11 @@ class Lexer {
   // nests. Mirrors djot-php #180's scoping (guard only on the top-level
   // paragraph path).
   nested = false
-  // Memo for divHasCloser: the smallest line index from which NO bare
-  // `:::` closer exists onward. Once a scan proves there is no closer
-  // beyond some point, every later opener (pos only advances) is O(1).
-  // Keeps generic-div detection linear on pathological input (many
-  // attrs-only `::: {…}` openers that never match the bare-`:::` closer).
+
+  // Negative cache for divHasCloser: the smallest line index from which
+  // NO bare colon-fence closer of ANY length exists onward. Once a scan
+  // proves that, every later bare opener (pos only advances) is O(1),
+  // keeping pathological "many unclosed `:::`" input linear.
   divNoCloserFrom = Infinity
 
   constructor(source: string) {
@@ -202,6 +208,15 @@ function stripContainerPrefixes(raw: string): string {
     prev = line
     line = line
       .replace(/^\s*>\s?/, '') // blockquote
+      // Only decimal ordered markers strip here. Decimal is unambiguously
+      // a list, but a leading `a.`/`i.` may be prose (§10) and this
+      // line-by-line pre-pass has no block context to tell them apart.
+      // Stripping alpha/roman would fabricate link definitions out of
+      // paragraph text (silent wrong links) — the worse failure. The
+      // trade-off: a def placed *directly on* an alpha/roman marker line
+      // is not seen by this forward-reference pass (a near-impossible
+      // input); the common case — a def on an indented continuation line
+      // under a list item — is still found via the residual indent strip.
       .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
   } while (line !== prev)
   return line.replace(/^\s+/, '') // residual indentation
@@ -528,20 +543,22 @@ function parseFootnoteDef(lexer: Lexer): null {
 function parseAdmonition(lexer: Lexer): Admonition {
   const open = lexer.consume()
   const m = RE_ADMONITION_OPEN.exec(open)!
-  const kind = m[1]!
+  const fence = m[1]!.length
+  const kind = m[2]!
   // A title is recognized ONLY when the tail after the type opens with a
   // double-quoted string (grammar quoted_title; PART 9 §12), optionally
   // followed by an attribute block. The quotes are delimiters and are
   // stripped — not part of the rendered title text. An explicitly empty
   // `""` still counts as a supplied (empty) title. Unquoted trailing
   // text is ignored (not a title).
-  const tail = m[2]?.trim() ?? ''
+  const tail = m[3]?.trim() ?? ''
   const quoted = /^"([^"]*)"\s*(?:\{[^}]*\})?$/.exec(tail)
   const titleText = quoted ? quoted[1]! : undefined
   const inner: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
-    if (RE_ADMONITION_CLOSE.test(ln)) {
+    const c = RE_ADMONITION_CLOSE.exec(ln)
+    if (c && c[1]!.length >= fence) {
       lexer.consume()
       break
     }
@@ -573,22 +590,35 @@ function parseAdmonition(lexer: Lexer): Admonition {
  * grammar: a div requires a closer).
  */
 function divHasCloser(lexer: Lexer): boolean {
+  // A bare-`:::`+ div opens only when a bare closer of equal-or-greater
+  // colon length exists ahead (otherwise a lone `:::` is literal — and a
+  // longer fence must be matched by a longer closer).
   const start = lexer.pos + 1
-  if (start >= lexer.divNoCloserFrom) return false // memoized: none ahead
+  if (start >= lexer.divNoCloserFrom) return false // memo: no closer ahead
+  const fence = /^(:{3,})/.exec(lexer.peek()!)![1]!.length
+  let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
-    if (RE_ADMONITION_CLOSE.test(lexer.lines[i]!)) return true
+    const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
+    if (c) {
+      sawAnyCloser = true
+      if (c[1]!.length >= fence) return true
+    }
   }
-  // No closer from `start` onward; pos only advances, so cache it.
-  lexer.divNoCloserFrom = start
+  // No closer of length >= fence ahead. If there is NO bare closer at all
+  // from here on, cache it (pos only advances) so later openers are O(1).
+  if (!sawAnyCloser) lexer.divNoCloserFrom = start
   return false
 }
 
 function parseDiv(lexer: Lexer): Div {
-  const attrSrc = RE_DIV_OPEN.exec(lexer.consume())![1]
+  const m = RE_DIV_OPEN.exec(lexer.consume())!
+  const fence = m[1]!.length
+  const attrSrc = m[2]
   const inner: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
-    if (RE_ADMONITION_CLOSE.test(ln)) {
+    const c = RE_ADMONITION_CLOSE.exec(ln)
+    if (c && c[1]!.length >= fence) {
       lexer.consume()
       break
     }
@@ -749,20 +779,129 @@ function matchListMarker(
   return RE_UNORDERED.exec(line)
 }
 
+// Ordered-list dialect, fixed by the first item's marker.
+type OlKind = 'dec' | 'alo' | 'aup' | 'rlo' | 'rup'
+
+function romanToInt(s: string): number {
+  const map: Record<string, number> = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 }
+  const t = s.toLowerCase()
+  let total = 0
+  for (let k = 0; k < t.length; k++) {
+    const cur = map[t[k]!]!
+    const nxt = map[t[k + 1]!] ?? 0
+    total += cur < nxt ? -cur : cur
+  }
+  return total
+}
+
+// Does `marker` belong to dialect `kind`? Used to continue a list (a
+// marker outside the dialect ends it, §11).
+function olKindMatches(marker: string, kind: OlKind): boolean {
+  switch (kind) {
+    case 'dec':
+      return /^[0-9]+$/.test(marker)
+    case 'alo':
+      return /^[a-z]$/.test(marker)
+    case 'aup':
+      return /^[A-Z]$/.test(marker)
+    case 'rlo':
+      return /^[ivxlcdm]+$/.test(marker)
+    case 'rup':
+      return /^[IVXLCDM]+$/.test(marker)
+  }
+}
+
+// Classify the FIRST marker, which fixes the list dialect. A single
+// ambiguous roman letter (i/v/x/l/c/d/m) is roman when the next sibling
+// marker is roman of the same case, or when it is `i`/`I` (the common
+// roman start); any other single letter is alphabetic.
+function olKindOf(marker: string, nextMarker: string | null): OlKind {
+  if (/^[0-9]+$/.test(marker)) return 'dec'
+  const upper = marker === marker.toUpperCase()
+  const romanChars = /^[ivxlcdm]+$/i.test(marker)
+  if (romanChars && marker.length > 1) return upper ? 'rup' : 'rlo'
+  if (romanChars) {
+    // Single ambiguous letter (i/v/x/l/c/d/m): tie-break on the next
+    // sibling. `c. d.` is alpha (consecutive letters) while `iv. v.` /
+    // `i. ii.` is roman (consecutive roman). A lone `i`/`I` defaults to
+    // roman (the canonical roman start); other lone letters are alpha.
+    if (nextMarker !== null && (nextMarker === nextMarker.toUpperCase()) === upper) {
+      if (
+        /^[ivxlcdm]+$/i.test(nextMarker) &&
+        romanToInt(nextMarker) === romanToInt(marker) + 1
+      ) {
+        return upper ? 'rup' : 'rlo'
+      }
+      if (
+        /^[a-z]$/i.test(nextMarker) &&
+        nextMarker.toLowerCase().charCodeAt(0) === marker.toLowerCase().charCodeAt(0) + 1
+      ) {
+        return upper ? 'aup' : 'alo'
+      }
+    }
+    if (marker.toLowerCase() === 'i') return upper ? 'rup' : 'rlo'
+  }
+  return upper ? 'aup' : 'alo'
+}
+
+function olStartOf(marker: string, kind: OlKind): number {
+  if (kind === 'dec') return parseInt(marker, 10)
+  if (kind === 'rlo' || kind === 'rup') return romanToInt(marker)
+  return marker.toLowerCase().charCodeAt(0) - 96 // a=1
+}
+
+function olTypeOf(kind: OlKind): '' | 'a' | 'A' | 'i' | 'I' {
+  return kind === 'dec'
+    ? ''
+    : kind === 'alo'
+      ? 'a'
+      : kind === 'aup'
+        ? 'A'
+        : kind === 'rlo'
+          ? 'i'
+          : 'I'
+}
+
+// A line continues an ordered list of `kind`/`delim` (same dialect + same
+// `.`/`)` delimiter).
+function orderedContinues(line: string, kind: OlKind, delim: string): boolean {
+  const o = RE_ORDERED.exec(line)
+  return o !== null && o[3]! === delim && olKindMatches(o[2]!, kind)
+}
+
 function parseList(lexer: Lexer): List {
   const first = lexer.peek()!
   const baseIndent = leadingWhitespace(first)
   const isTask = RE_TASK.test(first)
   const isOrdered = !isTask && RE_ORDERED.test(first)
   // A change of unordered marker character (`-` vs `*` vs `+`), or of
-  // ordered delimiter (`.` vs `)`), starts a new list (grammar PART 9
-  // §11). Capture the first item's marker so a differing sibling marker
-  // terminates this list instead of merging. (Letter/roman ordered
-  // dialects are a known gap; ordered markers are decimal only here.)
+  // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
+  // new list (grammar PART 9 §11). The first item fixes the ordered
+  // dialect; the second item's marker (if a sibling) tie-breaks an
+  // ambiguous single roman letter.
   const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(first)
   const firstOrdered = isOrdered ? RE_ORDERED.exec(first)! : null
   const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
-  const orderedStart = firstOrdered ? parseInt(firstOrdered[2]!, 10) : 1
+  let orderedKind: OlKind = 'dec'
+  let orderedStart = 1
+  if (firstOrdered) {
+    // Tie-break the dialect on the next sibling, looking past blank lines
+    // and the first item's own continuation/nested lines (indented deeper
+    // than the marker) — `x.` / blank or indented body / `xi.` is still one
+    // roman list.
+    let k = 1
+    for (; lexer.peek(k) !== undefined; k++) {
+      const ln = lexer.peek(k)!
+      if (ln.trim() !== '' && leadingWhitespace(ln) <= baseIndent) break
+    }
+    const nextLine = lexer.peek(k)
+    const nm =
+      nextLine !== undefined && leadingWhitespace(nextLine) === baseIndent
+        ? RE_ORDERED.exec(nextLine)
+        : null
+    orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
+    orderedStart = olStartOf(firstOrdered[2]!, orderedKind)
+  }
   const items: ListItem[] = []
   let loose = false
 
@@ -779,7 +918,7 @@ function parseList(lexer: Lexer): List {
     // §11: a sibling with a different marker character (unordered) or a
     // different delimiter (ordered) is a new list.
     if (!isOrdered && unorderedMarkerChar(line) !== firstMarkerChar) break
-    if (isOrdered && RE_ORDERED.exec(line)![3] !== orderedDelim) break
+    if (isOrdered && !orderedContinues(line, orderedKind, orderedDelim)) break
 
     let content: string
     let checked: boolean | undefined
@@ -827,7 +966,7 @@ function parseList(lexer: Lexer): List {
         leadingWhitespace(nextLine) === baseIndent &&
         matchListMarker(nextLine, isTask, isOrdered) &&
         (isOrdered
-          ? RE_ORDERED.exec(nextLine)![3] === orderedDelim
+          ? orderedContinues(nextLine, orderedKind, orderedDelim)
           : unorderedMarkerChar(nextLine) === firstMarkerChar)
       ) {
         loose = true
@@ -856,7 +995,11 @@ function parseList(lexer: Lexer): List {
   }
 
   const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
-  if (isOrdered && orderedStart !== 1) list.start = orderedStart
+  if (isOrdered) {
+    if (orderedStart !== 1) list.start = orderedStart
+    const t = olTypeOf(orderedKind)
+    if (t) list.olType = t
+  }
   return list
 }
 
@@ -1061,13 +1204,26 @@ function parseParagraph(lexer: Lexer): Paragraph {
 // interrupt. Mirrors djot-php #180.
 function interruptsParagraph(lexer: Lexer, ln: string): boolean {
   const isBullet = RE_UNORDERED.test(ln) || RE_TASK.test(ln)
+  // Decimal ordered markers are unambiguous (they interrupt); letter and
+  // roman markers are ambiguous like bullets, so a lone `a.`/`i.` line in
+  // prose does NOT start a list (§10 anti-prose-collision).
+  const om = RE_ORDERED.exec(ln)
+  const isAmbigOrdered = om !== null && !/^[0-9]+$/.test(om[2]!)
   const isQuote = RE_BLOCKQUOTE.test(ln)
   const isTable = RE_TABLE_ROW.test(ln)
-  if (!isBullet && !isQuote && !isTable) return true // unambiguous block
+  if (!isBullet && !isAmbigOrdered && !isQuote && !isTable) return true // unambiguous block
 
   const next = lexer.peek(1)
   if (next === undefined || next.trim() === '') return false
 
+  if (isAmbigOrdered) {
+    // A same-dialect, same-delimiter sibling next (2+ markers) or an
+    // indented continuation confirms a real list; otherwise it stays prose.
+    const kind = olKindOf(om![2]!, RE_ORDERED.exec(next)?.[2] ?? null)
+    if (orderedContinues(next, kind, om![3]!)) return true
+    if (leadingWhitespace(next) > 0) return true
+    return false
+  }
   if (isBullet) {
     // parseList merges adjacent items only when BOTH the marker
     // character (§11: `-`/`*`/`+`) and the task-vs-plain kind match, so
