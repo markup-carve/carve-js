@@ -196,6 +196,15 @@ function stripId(attrs?: Attrs): Attrs | undefined {
   return rest
 }
 
+/** Copy attrs without a given key-value (e.g. a structural `href`). */
+function stripKeyValue(attrs: Attrs | undefined, key: string): Attrs | undefined {
+  if (!attrs?.keyValues || attrs.keyValues[key] === undefined) return attrs
+  const { [key]: _omit, ...kv } = attrs.keyValues
+  const result: Attrs = { ...attrs, keyValues: kv }
+  if (attrs.order) result.order = attrs.order.filter((s) => s !== key)
+  return result
+}
+
 function indent(level: number): string {
   return '  '.repeat(level)
 }
@@ -634,7 +643,9 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       return opts.emoji?.[node.name] ?? escapeHtml(`:${node.name}:`)
     case 'autolink': {
       const display = node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
-      return `<a href="${escapeAttr(node.href)}">${escapeHtml(display)}</a>`
+      // The structural href always wins; never re-emit an author-supplied
+      // `href` from an attribute block (it would duplicate the attribute).
+      return `<a href="${escapeAttr(node.href)}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
       const href = opts.mentionUrl
