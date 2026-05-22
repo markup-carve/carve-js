@@ -716,5 +716,7 @@ function escapeHtml(s: string): string {
 }
 
 function escapeAttr(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => (c === '"' ? '&quot;' : HTML_ESCAPE[c]!))
+  return s.replace(/[&<>"']/g, (c) =>
+    c === '"' ? '&quot;' : c === "'" ? '&apos;' : HTML_ESCAPE[c]!,
+  )
 }
