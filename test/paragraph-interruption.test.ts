@@ -52,6 +52,10 @@ describe('top-level paragraph: only a blank line interrupts (§10, full djot)', 
     const html = carveToHtml('Intro\n|= A |\n^ caption')
     expect(html).not.toContain('<table')
   })
+
+  it('a generic div after prose stays prose (no blank line)', () => {
+    expect(carveToHtml('text\n:::\ncontent\n:::')).not.toContain('<div>')
+  })
 })
 
 describe('a blank line starts the block (§10)', () => {
@@ -128,5 +132,16 @@ describe('nested content still interrupts (so sublists keep nesting)', () => {
   it('lead text + single nested child in one item', () => {
     const html = carveToHtml('- parent text\n  - child')
     expect(html).toContain('<li>child</li>')
+  })
+
+  it('a closed generic div nests without a blank line', () => {
+    const html = carveToHtml('- item\n  :::\n  content\n  :::')
+    expect(html).toContain('<div>')
+    expect(html).toContain('<li>item')
+  })
+
+  it('an unclosed nested div stays literal (no hang)', () => {
+    const html = carveToHtml('- item\n  :::\n  content')
+    expect(html).not.toContain('<div>')
   })
 })
