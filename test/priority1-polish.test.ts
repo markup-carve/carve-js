@@ -23,11 +23,9 @@ describe('priority-1 polish fixes', () => {
     )
   })
 
-  it('still interrupts for two same-kind bullets', () => {
-    expect(h('Text\n- a\n- b')).toBe(
-      '<p>Text</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
-    )
-    expect(h('Text\n- [ ] a\n- [x] b')).toContain('<p>Text</p>')
+  it('two same-kind bullets after prose stay prose (need a blank line, §10)', () => {
+    expect(h('Text\n- a\n- b')).toBe('<p>Text\n- a\n- b</p>')
+    expect(h('Text\n- [ ] a\n- [x] b')).not.toContain('<ul>')
   })
 
   it('preserves an attribute block on an unresolved reference', () => {
