@@ -95,7 +95,7 @@ const RE_TABLE_ROW = /^\|/
 // it from a `+ ` list item (which never ends with `|`). Only consumed
 // inside parseTable, after a standard `|` row has opened the table.
 const RE_TABLE_CONT = /^\+.*\|\s*$/
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*(?:\{([^}]+)\})?\s*$/
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)\s*(?:\{([^}]+)\})?\s*$/
 const RE_FRONTMATTER_FENCE = /^---\s*$/
 // Raw passthrough block: ```raw FORMAT … ``` (§4.15). The info string has
 // two tokens ("raw FORMAT"), so this never collides with RE_FENCE (which
@@ -705,8 +705,9 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
   const line = lexer.consume()
   const m = RE_BARE_IMAGE.exec(line)!
   const img: Image = { type: 'image', src: m[2]!, alt: m[1]! }
-  if (m[3]) img.title = m[3]
-  if (m[4]) img.attrs = parseAttrs(m[4])
+  const title = m[3] ?? m[4]
+  if (title) img.title = title
+  if (m[5]) img.attrs = parseAttrs(m[5])
   // Optional caption
   let lookahead = 0
   while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
@@ -1127,8 +1128,12 @@ function leadingWhitespace(line: string): number {
 // Inline parsing
 // ============================================================================
 
-const RE_LINK = /^(\[)([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]+)\})?/
-const RE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)")?\)(?:\{([^}]+)\})?/
+// Link/image titles accept double OR single quotes (grammar link_title;
+// a deliberate enhancement over djot, which has no single-quote titles).
+// The double- and single-quoted titles are separate capture groups so
+// the other quote may appear inside (`"it's"`, `'say "hi"'`).
+const RE_LINK = /^(\[)([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{([^}]+)\})?/
+const RE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{([^}]+)\})?/
 const RE_REF_LINK = /^\[([^\]]+)\]\[([^\]]*)\](?:\{([^}\n]+)\})?/
 // Inline span: a bracketed run directly followed by an attribute block
 // (PART 9 §14). The `{` must abut `]`; an empty `{}` is not a valid
@@ -1344,8 +1349,9 @@ function scanInline(text: string): InlineNode[] {
       if (m) {
         flush()
         const img: Image = { type: 'image', src: m[2]!, alt: m[1]! }
-        if (m[3]) img.title = m[3]
-        if (m[4]) img.attrs = parseAttrs(m[4])
+        const title = m[3] ?? m[4]
+        if (title) img.title = title
+        if (m[5]) img.attrs = parseAttrs(m[5])
         out.push(img)
         i += m[0].length
         continue
@@ -1362,8 +1368,9 @@ function scanInline(text: string): InlineNode[] {
           href: m[3]!,
           children: scanInline(m[2]!),
         }
-        if (m[4]) link.title = m[4]
-        if (m[5]) link.attrs = parseAttrs(m[5])
+        const title = m[4] ?? m[5]
+        if (title) link.title = title
+        if (m[6]) link.attrs = parseAttrs(m[6])
         out.push(link)
         i += m[0].length
         continue
