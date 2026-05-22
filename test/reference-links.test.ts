@@ -72,10 +72,11 @@ describe('reference-link resolution (grammar §6)', () => {
     )
   })
 
-  it('treats a definition right after prose (no blank line) as a block', () => {
-    expect(html('See [x][r].\n[r]: /u')).toBe(
-      '<p>See <a href="/u">x</a>.</p>',
-    )
+  it('a definition right after prose (no blank line) still interrupts as a block (§10)', () => {
+    // Reference definitions are invisible metadata, so unlike a visible block
+    // they still interrupt a paragraph with no blank line — the def is parsed
+    // as a (hidden) block, not rendered as literal text.
+    expect(html('See [x][r].\n[r]: /u')).toBe('<p>See <a href="/u">x</a>.</p>')
   })
 
   it('collects a definition that lives inside the same blockquote', () => {
