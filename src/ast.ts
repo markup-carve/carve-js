@@ -286,6 +286,27 @@ export interface Math extends BaseNode {
   content: string
 }
 
+/**
+ * Raw inline passthrough (djot `` `…`{=format} ``): a verbatim span tagged
+ * with an output format. Emitted verbatim when `format` matches the
+ * renderer's output (html), dropped otherwise.
+ */
+export interface RawInline extends BaseNode {
+  type: 'raw-inline'
+  format: string
+  content: string
+}
+
+/**
+ * Emoji shortcode `:name:` (djot symbols). Resolved against a
+ * processor-supplied name->glyph map at render time; an unmapped name
+ * renders literally as `:name:`.
+ */
+export interface Emoji extends BaseNode {
+  type: 'emoji'
+  name: string
+}
+
 export interface AutoLink extends BaseNode {
   type: 'autolink'
   href: string
@@ -372,6 +393,8 @@ export type InlineNode =
   | Image
   | Span
   | Math
+  | RawInline
+  | Emoji
   | AutoLink
   | CrossRef
   | Mention

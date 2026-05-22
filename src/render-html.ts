@@ -27,6 +27,8 @@ import type {
 export interface RenderOptions {
   mentionUrl?: string
   tagUrl?: string
+  /** Emoji shortcode -> glyph map. `:name:` with no entry renders literally. */
+  emoji?: Record<string, string>
 }
 
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
@@ -620,6 +622,11 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
         : `\\(${escapeHtml(node.content)}\\)`
       return `<span${renderAttrs2(node.attrs, { baseClass: base })}>${body}</span>`
     }
+    case 'raw-inline':
+      // Verbatim only when the format matches this output; else dropped.
+      return node.format === 'html' ? node.content : ''
+    case 'emoji':
+      return opts.emoji?.[node.name] ?? escapeHtml(`:${node.name}:`)
     case 'autolink': {
       const display = node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
       return `<a href="${escapeAttr(node.href)}">${escapeHtml(display)}</a>`
@@ -685,10 +692,11 @@ const HTML_ESCAPE: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
   '>': '&gt;',
+  '\u00a0': '&nbsp;',
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>]/g, (c) => HTML_ESCAPE[c]!)
+  return s.replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)
 }
 
 function escapeAttr(s: string): string {
