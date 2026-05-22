@@ -599,7 +599,7 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     }
     case 'autolink': {
       const display = node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
-      return `<a href="${escapeAttr(node.href)}">${escapeHtml(display)}</a>`
+      return `<a href="${escapeAttr(node.href)}"${renderAttrs(node.attrs)}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
       const href = opts.mentionUrl
@@ -662,10 +662,12 @@ const HTML_ESCAPE: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
   '>': '&gt;',
+  // Non-breaking space (from `\ `) renders as the entity, matching djot.
+  '\u00a0': '&nbsp;',
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>]/g, (c) => HTML_ESCAPE[c]!)
+  return s.replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)
 }
 
 function escapeAttr(s: string): string {

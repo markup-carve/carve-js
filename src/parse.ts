@@ -1024,7 +1024,6 @@ const RE_TAG = /^#([a-zA-Z][\w-]*(?:\.\w+)*)/
 const SMART_TOKENS: Array<[string, string]> = [
   ['<->', '↔'],
   ['(tm)', '™'],
-  ['---', '—'],
   ['...', '…'],
   ['->', '→'],
   ['<-', '←'],
@@ -1033,10 +1032,29 @@ const SMART_TOKENS: Array<[string, string]> = [
   ['>=', '≥'],
   ['!=', '≠'],
   ['+-', '±'],
-  ['--', '–'],
   ['(c)', '©'],
   ['(r)', '®'],
 ]
+
+/**
+ * Allocate a run of `n` hyphens (n >= 2) into em/en dashes, matching
+ * djot + carve-php: all em when divisible by 3, all en when divisible by
+ * 2, otherwise max em-dashes with the remainder as en-dashes (a
+ * remainder of 1 trades one em for two en). 2->–, 3->—, 4->––, 5->—–.
+ */
+function allocateDashes(n: number): string {
+  if (n % 3 === 0) return '—'.repeat(n / 3)
+  if (n % 2 === 0) return '–'.repeat(n / 2)
+  let em = Math.floor(n / 3)
+  let en: number
+  if (n % 3 === 1) {
+    em -= 1
+    en = 2
+  } else {
+    en = 1
+  }
+  return '—'.repeat(em) + '–'.repeat(en)
+}
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
 const isQuoteOpenContext = (prev: string) =>
   prev === '' || /[\s([{\-–—/]/.test(prev) || prev === '“' || prev === '‘'
@@ -1053,6 +1071,13 @@ function smartToken(
 ): { out: string; len: number } | null {
   for (const [tok, out] of SMART_TOKENS) {
     if (text.startsWith(tok, i)) return { out, len: tok.length }
+  }
+  // A run of 2+ hyphens collapses to em/en dashes (djot allocation). A
+  // lone `-` stays literal.
+  if (text[i] === '-' && text[i + 1] === '-') {
+    let n = 0
+    while (text[i + n] === '-') n++
+    return { out: allocateDashes(n), len: n }
   }
   const c = text[i]!
   if (c === '"') {
@@ -1096,9 +1121,23 @@ function scanInline(text: string): InlineNode[] {
     const c = text[i]!
     const rest = text.slice(i)
 
-    // Escape
+    // Backslash: hard break, non-breaking space, or escape.
     if (c === '\\' && i + 1 < text.length) {
+      // Hard break: backslash + optional trailing spaces + newline.
+      const hb = /^\\[ \t]*\n/.exec(rest)
+      if (hb) {
+        flush()
+        out.push({ type: 'hard-break' })
+        i += hb[0].length
+        continue
+      }
       const nxt = text[i + 1]!
+      // Non-breaking space: backslash + space (djot).
+      if (nxt === ' ') {
+        buf += String.fromCharCode(0x00a0)
+        i += 2
+        continue
+      }
       if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$]/.test(nxt)) {
         buf += nxt
         i += 2
@@ -1269,8 +1308,18 @@ function scanInline(text: string): InlineNode[] {
           type: 'autolink',
           href: href.includes('@') && !href.includes(':') ? `mailto:${href}` : href,
         }
+        let consumed = m[0].length
+        // Optional trailing {attrs} (djot): `<url>{.c}`.
+        const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
+        if (am) {
+          const attrs = parseAttrs(am[1]!)
+          if (!isEmptyAttrs(attrs)) {
+            auto.attrs = attrs
+            consumed += am[0].length
+          }
+        }
         out.push(auto)
-        i += m[0].length
+        i += consumed
         continue
       }
     }
