@@ -67,13 +67,13 @@ describe('inline span [text]{attrs}', () => {
     expect(h('[text]{???}')).toBe('<p>[text]{???}</p>')
   })
 
-  it('does not parse a span whose body contains a nested bracket', () => {
-    // Shared limitation with RE_LINK/RE_REF_LINK: the bracketed run is
-    // matched non-recursively (stops at the first `]`), so a span body
-    // containing a link/image/nested bracket does not form a span. (The
-    // exact literal fallout is governed by the pre-existing link regex;
-    // the contract here is only that no <span> is produced.)
-    expect(h('[see [x](/u)]{.note}')).not.toContain('<span')
+  it('parses a span whose body contains nested brackets / a link', () => {
+    // The bracketed run is matched by balance (matchBracket), so the close
+    // `]` spans nested brackets and the body is parsed as inline — a span
+    // body may hold a link/image/nested bracket (matches djot).
+    expect(h('[see [x](/u)]{.note}')).toBe(
+      '<p><span class="note">see <a href="/u">x</a></span></p>',
+    )
   })
 
   it('allows a } inside a quoted attribute value', () => {
