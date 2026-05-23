@@ -74,6 +74,35 @@ const IMPLEMENTED = new Set([
   '39-smart-typography-escapes-and-code',
   '40-table-multi-line-cell-continuation',
   '41-table-rowspan-with-multi-line-content',
+  '42-math',
+  '43-footnotes',
+  '44-generic-divs',
+  '45-definition-lists',
+  '46-comments',
+  '47-raw-blocks',
+  '48-hard-line-breaks',
+  '49-non-breaking-space',
+  '50-raw-inline',
+  '51-emoji',
+  '52-ordered-list-start-and-delimiter',
+  '53-ordered-list-dialects',
+  '54-ordered-marker-vs-prose',
+  '55-footnote-with-multiple-blocks',
+  '56-editorial-markup',
+  '57-thematic-breaks',
+  '58-cross-reference',
+  '59-autolinks',
+  '60-escapes',
+  '61-empty-delimiters',
+  '62-bare-urls-stay-literal',
+  '63-nested-containers',
+  '64-attribute-edge-cases',
+  '65-escape-coverage',
+  '66-inline-span',
+  '67-superscript-and-subscript',
+  '68-parenthesized-ordered-marker',
+  '69-emphasis-edge-cases',
+  '70-list-nesting-and-looseness',
 ])
 
 /**
@@ -81,13 +110,7 @@ const IMPLEMENTED = new Set([
  * a specific construct is not yet supported. Move out of this set as
  * implementation lands.
  */
-const KNOWN_GAPS = new Set<string>([
-  // This branch drops smart fractions (1/2 -> ½ etc.) for djot parity,
-  // but the vendored spec fixture still expects the converted glyphs.
-  // Skip until the carve spec drops fractions from the 38 example and
-  // we re-vendor + bump the submodule, then un-skip.
-  '38-smart-typography-arrows-and-symbols',
-])
+const KNOWN_GAPS = new Set<string>([])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
