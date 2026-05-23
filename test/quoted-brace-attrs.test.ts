@@ -87,3 +87,43 @@ describe('inline extension attributes', () => {
     expect(h(':widget[x]')).toBe('<p><span class="ext-widget">x</span></p>')
   })
 })
+
+/**
+ * A backslash escapes ASCII punctuation inside a quoted attribute value
+ * (matching the inline text-escape rule and the carve-php reference), so the
+ * value can contain a literal quote.
+ */
+describe('escaped quotes in attribute values', () => {
+  it('unescapes a quote in a span value', () => {
+    expect(h('[x]{title="a\\"b"}')).toBe('<p><span title="a&quot;b">x</span></p>')
+  })
+
+  it('unescapes a quote in a heading value', () => {
+    expect(h('# H {title="a\\"b"}')).toBe(
+      '<section id="h">\n  <h1 title="a&quot;b">H</h1>\n</section>',
+    )
+  })
+
+  it('keeps a backslash before a non-punctuation char literal', () => {
+    expect(h('[x]{title="a\\nb"}')).toBe('<p><span title="a\\nb">x</span></p>')
+  })
+
+  it('accepts an escaped quote in a standalone block-attribute line', () => {
+    expect(h('{title="a\\"b"}\nText')).toBe('<p title="a&quot;b">Text</p>')
+  })
+})
+
+/**
+ * An attribute block that yields no valid attribute is not a heading
+ * attribute block (grammar `attribute_list` needs >= 1 attribute); it stays
+ * part of the heading text rather than being dropped.
+ */
+describe('heading attribute-less brace block stays literal', () => {
+  it('keeps a no-attribute brace block in the heading text', () => {
+    expect(h('# H {???}')).toBe('<section id="h">\n  <h1>H {???}</h1>\n</section>')
+  })
+
+  it('still applies a valid heading attribute block', () => {
+    expect(h('# H {.cls}')).toBe('<section id="h">\n  <h1 class="cls">H</h1>\n</section>')
+  })
+})
