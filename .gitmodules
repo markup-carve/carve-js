@@ -1,3 +1,4 @@
 [submodule "spec"]
 	path = spec
 	url = https://github.com/markup-carve/carve.git
+	branch = main
