@@ -1387,10 +1387,12 @@ function scanInline(text: string): InlineNode[] {
       continue
     }
 
-    // Escape
+    // Escape: a backslash before any ASCII punctuation yields that literal
+    // character (djot / grammar `ascii_punctuation` — the full set, including
+    // `& : ; ?`).
     if (c === '\\' && i + 1 < text.length) {
       const nxt = text[i + 1]!
-      if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$]/.test(nxt)) {
+      if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(nxt)) {
         buf += nxt
         i += 2
         continue
