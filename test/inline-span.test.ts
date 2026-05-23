@@ -75,4 +75,10 @@ describe('inline span [text]{attrs}', () => {
     // the contract here is only that no <span> is produced.)
     expect(h('[see [x](/u)]{.note}')).not.toContain('<span')
   })
+
+  it('allows a } inside a quoted attribute value', () => {
+    // The close `}` is the first one OUTSIDE quotes (djot "don't mind
+    // braces in quotes").
+    expect(h('[x]{data-x="{y}"}')).toBe('<p><span data-x="{y}">x</span></p>')
+  })
 })
