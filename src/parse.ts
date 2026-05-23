@@ -1249,8 +1249,10 @@ const RE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]*)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{
 const RE_REF_LINK = /^\[([^\]]+)\]\[([^\]]*)\](?:\{([^}\n]+)\})?/
 // Inline span: a bracketed run directly followed by an attribute block
 // (PART 9 §14). The `{` must abut `]`; an empty `{}` is not a valid
-// attribute block, so the inner group requires at least one character.
-const RE_SPAN = /^\[([^\]]*)\]\{([^}\n]+)\}/
+// attribute block, so the inner group requires at least one character. A `}`
+// inside a single- or double-quoted value is part of the value, not the block
+// closer (e.g. `{k="{x}"}`).
+const RE_SPAN = /^\[([^\]]*)\]\{((?:[^}"'\n]|"[^"\n]*"|'[^'\n]*')+)\}/
 // Footnote reference `[^label]` (no `]` in the label).
 const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
 const RE_EXTENSION = /^:([a-zA-Z][\w-]*)\[([^\]]*)\](?:\{([^}]+)\})?/
