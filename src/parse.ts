@@ -1806,15 +1806,18 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
   ]
   for (const [delim, type] of pairs) {
     if (c === delim) {
-      // Opener must be followed by non-space and not be at end
       const after = text[i + 1]
-      if (!after || after === ' ' || after === '\n' || after === delim) continue
-      // For italic/strong, avoid mid-word: previous char must not be word char
-      // (Djot rule)
-      if (delim === '/' || delim === '_') {
-        const prev = text[i - 1]
-        if (prev && /[A-Za-z0-9_/_]/.test(prev)) continue
-      }
+      const before = text[i - 1]
+      // Opener must be followed by a non-space character.
+      if (!after || after === ' ' || after === '\n') continue
+      // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
+      // same delimiter (before OR after) does not open, so a doubled
+      // delimiter is literal text. `**x**`, `~~x~~`, `^^x^^` stay literal,
+      // uniformly with `//x//` and `__x__`. Applies to all five types.
+      if (after === delim || before === delim) continue
+      // Italic/underline additionally can't open after a word char or `/`,
+      // keeping paths/identifiers literal (a/b/c, foo_bar, snake_/case/).
+      if ((delim === '/' || delim === '_') && before && /[A-Za-z0-9_/]/.test(before)) continue
       // Find closer that's not preceded by space
       const close = findEmphasisClose(text, i + 1, delim)
       if (close !== -1) {
