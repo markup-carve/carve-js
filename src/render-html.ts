@@ -23,12 +23,15 @@ import type {
   TableCell,
   TableRow,
 } from './ast.js'
+import type { CarveExtension, ExtensionRenderContext } from './extension.js'
 
 export interface RenderOptions {
   mentionUrl?: string
   tagUrl?: string
   /** Emoji shortcode -> glyph map. `:name:` with no entry renders literally. */
   emoji?: Record<string, string>
+  /** Registered extensions (renderers consulted; transforms run by carveToHtml). */
+  extensions?: CarveExtension[]
 }
 
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
@@ -666,8 +669,22 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       const href = opts.tagUrl.replaceAll('{name}', encodeURIComponent(node.name))
       return `<a class="tag" href="${escapeAttr(href)}">${text}</a>`
     }
-    case 'extension':
+    case 'extension': {
+      const renderer = opts.extensions
+        ?.flatMap((e) => (e.renderers ? [e.renderers] : []))
+        .map((r) => r[node.name])
+        .find((fn): fn is NonNullable<typeof fn> => fn !== undefined)
+      if (renderer) {
+        const ctx: ExtensionRenderContext = {
+          renderInlines: (nodes) => renderInlines(nodes, opts),
+          escapeHtml,
+          escapeAttr,
+          renderAttrs,
+        }
+        return renderer(node, ctx)
+      }
       return renderExtension(node.name, node.content, node.attrs, opts)
+    }
     case 'abbreviation':
       return `<abbr title="${escapeAttr(node.expansion)}">${escapeHtml(node.abbr)}</abbr>`
     case 'footnote':
