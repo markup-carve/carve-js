@@ -19,6 +19,16 @@ import { normalizeRefLabel } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
 
 /**
+ * Implicit heading references match a heading's visible TEXT, which is a
+ * fuzzier lookup than an explicit `[label]: url` reference (kept
+ * case-sensitive in normalizeRefLabel). `[getting started][]` should still
+ * resolve `# Getting Started`, so heading-text matching folds case here.
+ */
+function normalizeHeadingRefLabel(label: string): string {
+  return normalizeRefLabel(label).toLowerCase()
+}
+
+/**
  * Apply the baked Unicode->ASCII map (Latin / IPA / combining marks /
  * Cyrillic / Latin-Extended-Additional / punctuation / super- and
  * sub-script / currency / letterlike, byte-identical with djot-php's
@@ -152,7 +162,7 @@ export function resolveHeadingIds(doc: Document): Document {
     }
     if (!targets.has(id)) targets.set(id, block.children)
     const plain = inlineText(block.children)
-    const key = normalizeRefLabel(plain)
+    const key = normalizeHeadingRefLabel(plain)
     if (key && !headingRefs.has(key)) headingRefs.set(key, id)
   }
 
@@ -172,7 +182,7 @@ export function resolveHeadingIds(doc: Document): Document {
         // Try the implicit-heading index; otherwise fall back to the
         // raw source text. Explicit defs win because applyLinkDefs
         // already resolved those before this pass.
-        const id = headingRefs.get(normalizeRefLabel(n.ref))
+        const id = headingRefs.get(normalizeHeadingRefLabel(n.ref))
         if (id) {
           n.href = `#${id}`
           delete n.ref
