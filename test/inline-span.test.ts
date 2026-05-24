@@ -31,8 +31,11 @@ describe('inline span [text]{attrs}', () => {
     expect(h('[text] {.x}')).toBe('<p>[text] {.x}</p>')
   })
 
-  it('treats an empty {} as literal (not a valid attribute block)', () => {
-    expect(h('[text]{}')).toBe('<p>[text]{}</p>')
+  it('forms an empty span from a valid empty attribute block', () => {
+    // A bracket + a VALID (possibly empty) attribute block is a span, even
+    // empty (`[x]{}` -> empty <span>, matching djot).
+    expect(h('[text]{}')).toBe('<p><span>text</span></p>')
+    expect(h('[text]{ }')).toBe('<p><span>text</span></p>')
   })
 
   it('lets an inline link win over a span', () => {
@@ -59,12 +62,12 @@ describe('inline span [text]{attrs}', () => {
     expect(h('[a & b]{.x}')).toBe('<p><span class="x">a &amp; b</span></p>')
   })
 
-  it('stays literal when the attribute block has no valid attribute', () => {
-    // The attribute block is the only thing distinguishing a span from
-    // literal bracketed text, so `{ }` / `{???}` (no id/class/key) must
-    // not silently produce an empty <span>.
-    expect(h('[text]{ }')).toBe('<p>[text]{ }</p>')
+  it('stays literal when the attribute block is INVALID', () => {
+    // An empty/whitespace block is valid (forms a span); but content that
+    // isn't attribute syntax (`{???}`) is not an attribute block, so the
+    // bracketed run stays literal.
     expect(h('[text]{???}')).toBe('<p>[text]{???}</p>')
+    expect(h('[text]{=y=}')).toBe('<p>[text]{=y=}</p>')
   })
 
   it('parses a span whose body contains nested brackets / a link', () => {
