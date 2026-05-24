@@ -16,7 +16,6 @@ import type {
   CodeBlock,
   CriticComment,
   CriticDelete,
-  CriticHighlight,
   CriticInsert,
   CriticSubstitute,
   CrossRef,
@@ -1307,7 +1306,6 @@ function buildBracketMap(s: string): Record<number, number> {
 const RE_CRITIC_INS = /^\{\+([^}]*)\+\}/
 const RE_CRITIC_DEL = /^\{-([^}]*)-\}/
 const RE_CRITIC_SUB = /^\{~([^}]*)~>([^}]*)~\}/
-const RE_CRITIC_HL = /^\{=([^}]*)=\}/
 const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
 // Names can include version-style dots between alnum runs (e.g. `#release-1.0`)
 // but a trailing period is treated as sentence punctuation, not part of the name.
@@ -1517,9 +1515,15 @@ function scanInline(text: string): InlineNode[] {
           const img: Image = { type: 'image', src: ml[1]!, alt: rest.slice(2, close) }
           const title = ml[2] ?? ml[3]
           if (title) img.title = title
-          if (ml[4]) img.attrs = parseAttrs(ml[4])
+          let len = close + 1 + ml[0].length
+          if (ml[4]) {
+            const a = parseAttrs(ml[4])
+            // An empty-attr trailing `{…}` is literal, not consumed.
+            if (isEmptyAttrs(a)) len -= ml[4].length + 2
+            else img.attrs = a
+          }
           out.push(img)
-          i += close + 1 + ml[0].length
+          i += len
           continue
         }
       }
@@ -1543,9 +1547,15 @@ function scanInline(text: string): InlineNode[] {
           const link: Link = { type: 'link', href: ml[1]!, children: scanInline(innerText) }
           const title = ml[2] ?? ml[3]
           if (title) link.title = title
-          if (ml[4]) link.attrs = parseAttrs(ml[4])
+          let len = close + 1 + ml[0].length
+          if (ml[4]) {
+            const a = parseAttrs(ml[4])
+            // An empty-attr trailing `{…}` is literal, not consumed.
+            if (isEmptyAttrs(a)) len -= ml[4].length + 2
+            else link.attrs = a
+          }
           out.push(link)
-          i += close + 1 + ml[0].length
+          i += len
           continue
         }
         // Reference link [text][ref]{attrs}; collapsed [text][] reuses the
@@ -1553,18 +1563,26 @@ function scanInline(text: string): InlineNode[] {
         const mref = RE_REF_TAIL.exec(tail)
         if (mref && innerText !== '') {
           flush()
+          let len = close + 1 + mref[0].length
+          let attrs: Attrs | undefined
+          if (mref[2]) {
+            const a = parseAttrs(mref[2])
+            // An empty-attr trailing `{…}` is literal, not consumed.
+            if (isEmptyAttrs(a)) len -= mref[2].length + 2
+            else attrs = a
+          }
           const refLink: Link = {
             type: 'link',
             href: '',
             children: scanInline(innerText),
             ref: mref[1]! !== '' ? mref[1]! : innerText,
-            // rawRef includes any trailing {attrs} so the literal fallback
-            // for an unresolved ref preserves the full source.
-            rawRef: rest.slice(0, close + 1 + mref[0].length),
+            // rawRef includes any consumed trailing {attrs} so the literal
+            // fallback for an unresolved ref preserves the full source.
+            rawRef: rest.slice(0, len),
           }
-          if (mref[2]) refLink.attrs = parseAttrs(mref[2])
+          if (attrs) refLink.attrs = attrs
           out.push(refLink)
-          i += close + 1 + mref[0].length
+          i += len
           continue
         }
       }
@@ -1694,13 +1712,6 @@ function scanInline(text: string): InlineNode[] {
         i += del[0].length
         continue
       }
-      const hl = RE_CRITIC_HL.exec(rest)
-      if (hl) {
-        flush()
-        out.push({ type: 'critic-highlight', children: scanInline(hl[1]!) } as CriticHighlight)
-        i += hl[0].length
-        continue
-      }
       const cmt = RE_CRITIC_CMT.exec(rest)
       if (cmt) {
         flush()
@@ -1712,10 +1723,15 @@ function scanInline(text: string): InlineNode[] {
       const attr = RE_INLINE_ATTR.exec(rest)
       if (attr && out.length) {
         const prev = out[out.length - 1]!
-        if (prev.type !== 'text') {
+        const parsed = parseAttrs(attr[1]!)
+        // A `{...}` that yields no real attribute is literal text (PART 9
+        // §15), not an empty attribute block to attach. Without this guard a
+        // payload like `{=hl=}`, `{ }`, or `{???}` after a non-text node is
+        // silently consumed and dropped.
+        if (prev.type !== 'text' && !isEmptyAttrs(parsed)) {
           ;(prev as { attrs?: Attrs }).attrs = mergeAttrs(
             (prev as { attrs?: Attrs }).attrs,
-            parseAttrs(attr[1]!),
+            parsed,
           )
           i += attr[0].length
           continue
@@ -1787,8 +1803,11 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
       }
     }
   }
-  // ,,sub,, (priority over single , — n/a, just match double)
-  if (c === ',' && text[i + 1] === ',') {
+  // ,,sub,, (priority over single , — n/a, just match double). A run of 3+
+  // commas does not open: the doubling IS the delimiter token, so an adjacent
+  // third `,` (before or after the pair) makes it literal, consistent with
+  // the single-char same-delimiter adjacency rule (`**` etc.).
+  if (c === ',' && text[i + 1] === ',' && text[i - 1] !== ',' && text[i + 2] !== ',') {
     const close = findClose(text, i + 2, ',,')
     if (close !== -1 && close > i + 2) {
       const inner = text.slice(i + 2, close)
@@ -1800,8 +1819,9 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
       }
     }
   }
-  // ==highlight== (priority over single =)
-  if (c === '=' && text[i + 1] === '=') {
+  // ==highlight== (priority over single =). Likewise a run of 3+ `=` does not
+  // open -- `====x====` stays literal, like `**x**`.
+  if (c === '=' && text[i + 1] === '=' && text[i - 1] !== '=' && text[i + 2] !== '=') {
     const close = findClose(text, i + 2, '==')
     if (close !== -1 && close > i + 2) {
       const inner = text.slice(i + 2, close)
