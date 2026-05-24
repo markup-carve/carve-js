@@ -686,8 +686,6 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       return `<del>${renderInlines(node.children, opts)}</del>`
     case 'critic-substitute':
       return `<del>${escapeHtml(node.oldText)}</del><ins>${escapeHtml(node.newText)}</ins>`
-    case 'critic-highlight':
-      return `<mark>${renderInlines(node.children, opts)}</mark>`
     case 'critic-comment':
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'crossref':
