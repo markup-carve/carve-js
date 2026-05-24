@@ -20,6 +20,7 @@
  */
 
 import type { Document } from './ast.js'
+import type { CarveExtension } from './extension.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
@@ -27,6 +28,11 @@ import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
 export type { RenderOptions } from './render-html.js'
+export type {
+  CarveExtension,
+  ExtensionRenderer,
+  ExtensionRenderContext,
+} from './extension.js'
 export {
   djotMigrationWarnings,
   formatMigrationWarnings,
@@ -66,5 +72,9 @@ export function carveToHtml(
   source: string,
   opts: ParseOptions & RenderOptions = {},
 ): string {
-  return renderHtml(resolve(parse(source, opts)), opts)
+  let doc = resolve(parse(source, opts))
+  const exts: CarveExtension[] = opts.extensions ?? []
+  for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
+  for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
+  return renderHtml(doc, opts)
 }
