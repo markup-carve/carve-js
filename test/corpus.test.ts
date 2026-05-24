@@ -106,6 +106,7 @@ const IMPLEMENTED = new Set([
   '71-doubled-emphasis-delimiters',
   '72-nested-brackets-in-link-text',
   '73-reference-labels-are-case-sensitive',
+  '74-two-char-delimiter-runs',
 ])
 
 /**
