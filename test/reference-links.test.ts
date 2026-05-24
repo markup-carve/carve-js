@@ -31,9 +31,16 @@ describe('reference-link resolution (grammar §6)', () => {
     )
   })
 
-  it('matches labels case-insensitively and whitespace-collapsed', () => {
-    expect(html('[Foo][  BAR  baz ]\n\n[bar baz]: /u')).toBe(
+  it('collapses label whitespace but matches case-sensitively', () => {
+    // Whitespace is trimmed/collapsed on both sides, so internal or padded
+    // spaces still resolve when the case matches.
+    expect(html('[Foo][  bar  baz ]\n\n[bar baz]: /u')).toBe(
       '<p><a href="/u">Foo</a></p>',
+    )
+    // Case is NOT normalized (djot: "no case normalization on reference
+    // definitions"); a case-mismatched label stays unresolved -> literal.
+    expect(html('[Foo][BAR baz]\n\n[bar baz]: /u')).toBe(
+      '<p>[Foo][BAR baz]</p>',
     )
   })
 
