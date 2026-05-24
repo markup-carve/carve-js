@@ -15,9 +15,11 @@ describe('trailing attribute block edge cases', () => {
   // Regression: a line-leading image followed by an INVALID trailing block was
   // promoted to a standalone block image, swallowing the `{…}`. It must fall
   // through to a paragraph so the invalid block stays literal.
-  it('keeps an invalid trailing block after a line-leading image literal', () => {
+  it('keeps an empty/invalid trailing block after a line-leading image literal', () => {
     expect(h('![a](/i){=hl=}')).toBe('<p><img src="/i" alt="a">{=hl=}</p>')
     expect(h('![a](/i){???}')).toBe('<p><img src="/i" alt="a">{???}</p>')
+    // whitespace-only is an empty block, not a real attribute block
+    expect(h('![a](/i){ }')).toBe('<p><img src="/i" alt="a">{ }</p>')
   })
 
   // A bare image (optionally with a VALID attr block) is still a block image.
