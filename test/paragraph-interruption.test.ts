@@ -113,10 +113,11 @@ describe('invisible constructs still interrupt (§10 carve-out)', () => {
   })
 })
 
-// The guard is scoped to the document top level (Lexer.nested). Inside
-// already-nested block content a single marker must still start a block —
-// otherwise `- a\n  - b` regresses.
-describe('nested content still interrupts (so sublists keep nesting)', () => {
+// Inside already-nested content, ONLY a list marker interrupts without a
+// blank line (the single Carve deviation: `- a\n  - b` nests a sublist).
+// Every other block opener — heading, fence, div, etc. — does NOT interrupt
+// nested either; it needs a blank line, matching djot (grammar §10 SCOPING).
+describe('nested content: only a list marker interrupts (sublists keep nesting)', () => {
   it('single nested child still nests', () => {
     const html = carveToHtml('- parent\n  - child')
     expect(html).toContain('<ul>')
@@ -134,10 +135,21 @@ describe('nested content still interrupts (so sublists keep nesting)', () => {
     expect(html).toContain('<li>child</li>')
   })
 
-  it('a closed generic div nests without a blank line', () => {
+  it('a heading after lead text in an item stays paragraph text (no blank line)', () => {
+    const html = carveToHtml('- text\n  # H')
+    expect(html).not.toContain('<h1>')
+    expect(html).toContain('<li>text')
+  })
+
+  it('a generic div without a blank line stays paragraph text', () => {
     const html = carveToHtml('- item\n  :::\n  content\n  :::')
-    expect(html).toContain('<div>')
+    expect(html).not.toContain('<div>')
     expect(html).toContain('<li>item')
+  })
+
+  it('a blank line lets a generic div nest', () => {
+    const html = carveToHtml('- item\n\n  :::\n  content\n  :::')
+    expect(html).toContain('<div>')
   })
 
   it('an unclosed nested div stays literal (no hang)', () => {
