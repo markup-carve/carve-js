@@ -15,6 +15,14 @@ export interface Position {
   startLine: number
   /** 1-based line number, inclusive */
   endLine: number
+  /** 1-based column number, inclusive */
+  startColumn?: number
+  /** 1-based column number, exclusive */
+  endColumn?: number
+  /** 0-based UTF-16 source offset, inclusive */
+  startOffset?: number
+  /** 0-based UTF-16 source offset, exclusive */
+  endOffset?: number
 }
 
 export interface Attrs {
