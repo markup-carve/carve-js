@@ -39,6 +39,7 @@ import type {
   Math,
   Mention,
   Paragraph,
+  Position,
   RawBlock,
   RawInline,
   Span,
@@ -113,6 +114,7 @@ const RE_COMMENT_LINE = /^%%/
 
 class Lexer {
   lines: string[]
+  lineOffsets: number[]
   pos = 0
   frontmatter?: Record<string, unknown>
   abbrDefs: Map<string, string> = new Map()
@@ -140,6 +142,12 @@ class Lexer {
     if (this.lines.length && this.lines[this.lines.length - 1] === '') {
       this.lines.pop()
     }
+    this.lineOffsets = []
+    let offset = 0
+    for (const line of this.lines) {
+      this.lineOffsets.push(offset)
+      offset += line.length + 1
+    }
     this.consumeFrontmatter()
   }
 
@@ -166,6 +174,10 @@ class Lexer {
 
   eof(): boolean {
     return this.pos >= this.lines.length
+  }
+
+  lineOffset(lineIndex: number): number {
+    return this.lineOffsets[lineIndex] ?? 0
   }
 }
 
@@ -386,6 +398,13 @@ function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
 }
 
 function parseBlock(lexer: Lexer): BlockNode | null {
+  const startLine = lexer.pos
+  const node = parseBlockInner(lexer)
+  if (node) attachBlockPos(lexer, node, startLine, lexer.pos)
+  return node
+}
+
+function parseBlockInner(lexer: Lexer): BlockNode | null {
   const line = lexer.peek()!
 
   // Block-level constructs in priority order
@@ -433,7 +452,26 @@ function parseBlock(lexer: Lexer): BlockNode | null {
   return parseParagraph(lexer)
 }
 
+function attachBlockPos(
+  lexer: Lexer,
+  node: BlockNode,
+  startLineIndex: number,
+  endLineIndexExclusive: number,
+): void {
+  const endLineIndex = Math.max(startLineIndex, endLineIndexExclusive - 1)
+  const endLine = lexer.lines[endLineIndex] ?? ''
+  node.pos = {
+    startLine: startLineIndex + 1,
+    endLine: endLineIndex + 1,
+    startColumn: 1,
+    endColumn: endLine.length + 1,
+    startOffset: lexer.lineOffset(startLineIndex),
+    endOffset: lexer.lineOffset(endLineIndex) + endLine.length,
+  }
+}
+
 function parseHeading(lexer: Lexer): Heading {
+  const lineIndex = lexer.pos
   const line = lexer.consume()
   const m = RE_HEADING.exec(line)!
   const level = m[1]!.length as HeadingLevel
@@ -450,7 +488,12 @@ function parseHeading(lexer: Lexer): Heading {
       node.attrs = attrs
     }
   }
-  node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs)
+  const textColumn = line.indexOf(text) + 1
+  node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+    baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
+    startLine: lineIndex + 1,
+    startColumn: textColumn,
+  })
   return node
 }
 
@@ -1197,6 +1240,7 @@ function splitTableRow(line: string): string[] {
 
 function parseParagraph(lexer: Lexer): Paragraph {
   const lines: string[] = []
+  const startLineIndex = lexer.pos
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     if (ln.trim() === '') break
@@ -1224,7 +1268,11 @@ function parseParagraph(lexer: Lexer): Paragraph {
   }
   return {
     type: 'paragraph',
-    children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs),
+    children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs, {
+      baseOffset: lexer.lineOffset(startLineIndex),
+      startLine: startLineIndex + 1,
+      startColumn: 1,
+    }),
   }
 }
 
@@ -1380,15 +1428,31 @@ function parseInline(
   text: string,
   abbrDefs: Map<string, string>,
   linkDefs: Map<string, { href: string; title?: string }> = new Map(),
+  source: InlineSource = inlineSource(),
 ): InlineNode[] {
-  const nodes = applyAbbreviations(scanInline(text), abbrDefs)
+  const nodes = applyAbbreviations(scanInline(text, source), abbrDefs)
   return applyLinkDefs(nodes, linkDefs)
 }
 
-function scanInline(text: string): InlineNode[] {
+interface InlineSource {
+  baseOffset: number
+  startLine: number
+  startColumn: number
+}
+
+function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
+  return {
+    baseOffset: overrides.baseOffset ?? 0,
+    startLine: overrides.startLine ?? 1,
+    startColumn: overrides.startColumn ?? 1,
+  }
+}
+
+function scanInline(text: string, source: InlineSource = inlineSource()): InlineNode[] {
   const out: InlineNode[] = []
   let i = 0
   let buf = ''
+  let bufStart = 0
 
   // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
   // branches resolve the close bracket in O(1); see buildBracketMap.
@@ -1396,9 +1460,14 @@ function scanInline(text: string): InlineNode[] {
 
   const flush = () => {
     if (buf) {
-      out.push({ type: 'text', value: buf })
+      out.push(withPos({ type: 'text', value: buf } as Text, source, text, bufStart, i))
       buf = ''
     }
+  }
+
+  const append = (value: string) => {
+    if (!buf) bufStart = i
+    buf += value
   }
 
   while (i < text.length) {
@@ -1408,15 +1477,15 @@ function scanInline(text: string): InlineNode[] {
     // Hard line break: a backslash at end of line (before a newline).
     if (c === '\\' && text[i + 1] === '\n') {
       flush()
-      out.push({ type: 'hard-break' })
+      out.push(withPos({ type: 'hard-break' }, source, text, i, i + 2))
       i += 2
       continue
     }
     // Non-breaking space: a backslash followed by a space (djot).
     if (c === '\\' && text[i + 1] === ' ') {
-      buf += '\u00a0'
-      i += 2
-      continue
+        append('\u00a0')
+        i += 2
+        continue
     }
 
     // Escape: a backslash before any ASCII punctuation yields that literal
@@ -1425,7 +1494,7 @@ function scanInline(text: string): InlineNode[] {
     if (c === '\\' && i + 1 < text.length) {
       const nxt = text[i + 1]!
       if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(nxt)) {
-        buf += nxt
+        append(nxt)
         i += 2
         continue
       }
@@ -1447,7 +1516,7 @@ function scanInline(text: string): InlineNode[] {
           : ''
       const st = smartToken(text, i, prevForQuote)
       if (st) {
-        buf += st.out
+        append(st.out)
         i += st.len
         continue
       }
@@ -1462,10 +1531,11 @@ function scanInline(text: string): InlineNode[] {
         // A verbatim span tagged `{=format}` is raw inline passthrough.
         const raw = RE_RAW_INLINE.exec(text.slice(i + m[0].length))
         if (raw) {
-          out.push({ type: 'raw-inline', format: raw[1]!, content: inner } as RawInline)
-          i += m[0].length + raw[0].length
+          const len = m[0].length + raw[0].length
+          out.push(withPos({ type: 'raw-inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
+          i += len
         } else {
-          out.push({ type: 'code', value: inner })
+          out.push(withPos({ type: 'code', value: inner }, source, text, i, i + m[0].length))
           i += m[0].length
         }
         continue
@@ -1482,8 +1552,9 @@ function scanInline(text: string): InlineNode[] {
         if (mm) {
           flush()
           const content = mm[2]!.replace(/^ (.*) $/, '$1')
-          out.push({ type: 'math', display, content } as Math)
-          i += dollarLen + mm[0].length
+          const len = dollarLen + mm[0].length
+          out.push(withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
+          i += len
           continue
         }
       }
@@ -1509,7 +1580,7 @@ function scanInline(text: string): InlineNode[] {
             if (isEmptyAttrs(a)) len -= ml[4].length + 2
             else img.attrs = a
           }
-          out.push(img)
+          out.push(withPos(img, source, text, i, i + len))
           i += len
           continue
         }
@@ -1531,7 +1602,11 @@ function scanInline(text: string): InlineNode[] {
         const ml = RE_LINK_TAIL.exec(tail)
         if (ml) {
           flush()
-          const link: Link = { type: 'link', href: ml[1]!, children: scanInline(innerText) }
+          const link: Link = {
+            type: 'link',
+            href: ml[1]!,
+            children: scanInline(innerText, shiftSource(source, text, i + 1)),
+          }
           const title = ml[2] ?? ml[3]
           if (title) link.title = title
           let len = close + 1 + ml[0].length
@@ -1541,7 +1616,7 @@ function scanInline(text: string): InlineNode[] {
             if (isEmptyAttrs(a)) len -= ml[4].length + 2
             else link.attrs = a
           }
-          out.push(link)
+          out.push(withPos(link, source, text, i, i + len))
           i += len
           continue
         }
@@ -1561,14 +1636,14 @@ function scanInline(text: string): InlineNode[] {
           const refLink: Link = {
             type: 'link',
             href: '',
-            children: scanInline(innerText),
+            children: scanInline(innerText, shiftSource(source, text, i + 1)),
             ref: mref[1]! !== '' ? mref[1]! : innerText,
             // rawRef includes any consumed trailing {attrs} so the literal
             // fallback for an unresolved ref preserves the full source.
             rawRef: rest.slice(0, len),
           }
           if (attrs) refLink.attrs = attrs
-          out.push(refLink)
+          out.push(withPos(refLink, source, text, i, i + len))
           i += len
           continue
         }
@@ -1580,7 +1655,7 @@ function scanInline(text: string): InlineNode[] {
       const mfn = RE_FOOTNOTE_REF.exec(rest)
       if (mfn) {
         flush()
-        out.push({ type: 'footnote', id: mfn[1]!.trim() } as Footnote)
+        out.push(withPos({ type: 'footnote', id: mfn[1]!.trim() } as Footnote, source, text, i, i + mfn[0].length))
         i += mfn[0].length
         continue
       }
@@ -1596,8 +1671,9 @@ function scanInline(text: string): InlineNode[] {
           flush()
           out.push({
             type: 'span',
-            children: scanInline(innerText),
+            children: scanInline(innerText, shiftSource(source, text, i + 1)),
             attrs: parseAttrs(ms[1]!),
+            pos: sourcePos(source, text, i, i + close + 1 + ms[0].length),
           } as Span)
           i += close + 1 + ms[0].length
           continue
@@ -1613,10 +1689,10 @@ function scanInline(text: string): InlineNode[] {
         const ext: Extension = {
           type: 'extension',
           name: m[1]!,
-          content: scanInline(m[2]!),
+          content: scanInline(m[2]!, shiftSource(source, text, i + m[0].indexOf('[') + 1)),
         }
         if (m[3]) ext.attrs = parseAttrs(m[3])
-        out.push(ext)
+        out.push(withPos(ext, source, text, i, i + m[0].length))
         i += m[0].length
         continue
       }
@@ -1624,7 +1700,7 @@ function scanInline(text: string): InlineNode[] {
       const em = RE_EMOJI.exec(rest)
       if (em) {
         flush()
-        out.push({ type: 'emoji', name: em[1]! } as Emoji)
+        out.push(withPos({ type: 'emoji', name: em[1]! } as Emoji, source, text, i, i + em[0].length))
         i += em[0].length
         continue
       }
@@ -1636,6 +1712,7 @@ function scanInline(text: string): InlineNode[] {
       if (cr) {
         flush()
         const cref: CrossRef = { type: 'crossref', target: cr[1]! }
+        cref.pos = sourcePos(source, text, i, i + cr[0].length)
         out.push(cref)
         i += cr[0].length
         continue
@@ -1667,7 +1744,7 @@ function scanInline(text: string): InlineNode[] {
             consumed += am[0].length
           }
         }
-        out.push(auto)
+        out.push(withPos(auto, source, text, i, i + consumed))
         i += consumed
         continue
       }
@@ -1682,6 +1759,7 @@ function scanInline(text: string): InlineNode[] {
           type: 'critic-substitute',
           oldText: sub[1]!,
           newText: sub[2]!,
+          pos: sourcePos(source, text, i, i + sub[0].length),
         } as CriticSubstitute)
         i += sub[0].length
         continue
@@ -1689,21 +1767,21 @@ function scanInline(text: string): InlineNode[] {
       const ins = RE_CRITIC_INS.exec(rest)
       if (ins) {
         flush()
-        out.push({ type: 'critic-insert', children: scanInline(ins[1]!) } as CriticInsert)
+        out.push(withPos({ type: 'critic-insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2)) } as CriticInsert, source, text, i, i + ins[0].length))
         i += ins[0].length
         continue
       }
       const del = RE_CRITIC_DEL.exec(rest)
       if (del) {
         flush()
-        out.push({ type: 'critic-delete', children: scanInline(del[1]!) } as CriticDelete)
+        out.push(withPos({ type: 'critic-delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2)) } as CriticDelete, source, text, i, i + del[0].length))
         i += del[0].length
         continue
       }
       const cmt = RE_CRITIC_CMT.exec(rest)
       if (cmt) {
         flush()
-        out.push({ type: 'critic-comment', text: cmt[1]! } as CriticComment)
+        out.push(withPos({ type: 'critic-comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
         i += cmt[0].length
         continue
       }
@@ -1732,7 +1810,7 @@ function scanInline(text: string): InlineNode[] {
       const m = RE_MENTION.exec(rest)
       if (m) {
         flush()
-        out.push({ type: 'mention', user: m[1]! } as Mention)
+        out.push(withPos({ type: 'mention', user: m[1]! } as Mention, source, text, i, i + m[0].length))
         i += m[0].length
         continue
       }
@@ -1742,17 +1820,17 @@ function scanInline(text: string): InlineNode[] {
       const m = RE_TAG.exec(rest)
       if (m) {
         flush()
-        out.push({ type: 'tag', name: m[1]! } as Tag)
+        out.push(withPos({ type: 'tag', name: m[1]! } as Tag, source, text, i, i + m[0].length))
         i += m[0].length
         continue
       }
     }
 
     // Emphasis-family delimiters
-    const em = matchEmphasis(text, i)
+    const em = matchEmphasis(text, i, source)
     if (em) {
       flush()
-      out.push(em.node)
+      out.push(withPos(em.node, source, text, i, em.end))
       i = em.end
       continue
     }
@@ -1760,12 +1838,12 @@ function scanInline(text: string): InlineNode[] {
     // Soft break (single newline inside paragraph)
     if (c === '\n') {
       flush()
-      out.push({ type: 'soft-break' })
+      out.push(withPos({ type: 'soft-break' }, source, text, i, i + 1))
       i++
       continue
     }
 
-    buf += c
+    append(c)
     i++
   }
   flush()
@@ -1777,7 +1855,7 @@ interface EmphasisMatch {
   end: number
 }
 
-function matchEmphasis(text: string, i: number): EmphasisMatch | null {
+function matchEmphasis(text: string, i: number, source: InlineSource): EmphasisMatch | null {
   const c = text[i]!
 
   // Bold-italic /*...*/  (priority over /italic/ and *bold*)
@@ -1786,7 +1864,7 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
     if (close !== -1) {
       const inner = text.slice(i + 2, close)
       return {
-        node: { type: 'bold-italic', children: scanInline(inner) },
+        node: { type: 'bold-italic', children: scanInline(inner, shiftSource(source, text, i + 2)) },
         end: close + 2,
       }
     }
@@ -1801,7 +1879,7 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
       const inner = text.slice(i + 2, close)
       if (inner.trim() && !inner.startsWith(' ') && !inner.endsWith(' ')) {
         return {
-          node: { type: 'sub', children: scanInline(inner) },
+          node: { type: 'sub', children: scanInline(inner, shiftSource(source, text, i + 2)) },
           end: close + 2,
         }
       }
@@ -1815,7 +1893,7 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
       const inner = text.slice(i + 2, close)
       if (inner.trim() && !inner.startsWith(' ') && !inner.endsWith(' ')) {
         return {
-          node: { type: 'highlight', children: scanInline(inner) },
+          node: { type: 'highlight', children: scanInline(inner, shiftSource(source, text, i + 2)) },
           end: close + 2,
         }
       }
@@ -1848,7 +1926,7 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
       if (close !== -1) {
         const inner = text.slice(i + 1, close)
         return {
-          node: { type, children: scanInline(inner) },
+          node: { type, children: scanInline(inner, shiftSource(source, text, i + 1)) },
           end: close + 1,
         }
       }
@@ -1860,6 +1938,62 @@ function matchEmphasis(text: string, i: number): EmphasisMatch | null {
 function findClose(text: string, from: number, marker: string): number {
   // Search forward for marker, simple substring match
   return text.indexOf(marker, from)
+}
+
+function withPos<T extends InlineNode>(
+  node: T,
+  source: InlineSource,
+  text: string,
+  start: number,
+  end: number,
+): T {
+  node.pos = sourcePos(source, text, start, end)
+  return node
+}
+
+function sourcePos(
+  source: InlineSource,
+  text: string,
+  start: number,
+  end: number,
+): Position {
+  const startPoint = pointAt(source, text, start)
+  const endPoint = pointAt(source, text, end)
+  return {
+    startLine: startPoint.line,
+    endLine: endPoint.line,
+    startColumn: startPoint.column,
+    endColumn: endPoint.column,
+    startOffset: source.baseOffset + start,
+    endOffset: source.baseOffset + end,
+  }
+}
+
+function shiftSource(source: InlineSource, text: string, by: number): InlineSource {
+  const point = pointAt(source, text, by)
+  return {
+    baseOffset: source.baseOffset + by,
+    startLine: point.line,
+    startColumn: point.column,
+  }
+}
+
+function pointAt(
+  source: InlineSource,
+  text: string,
+  offset: number,
+): { line: number; column: number } {
+  let line = source.startLine
+  let column = source.startColumn
+  for (let i = 0; i < offset; i++) {
+    if (text[i] === '\n') {
+      line++
+      column = 1
+    } else {
+      column++
+    }
+  }
+  return { line, column }
 }
 
 function findEmphasisClose(text: string, from: number, delim: string): number {
