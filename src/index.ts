@@ -72,7 +72,9 @@ export function carveToHtml(
   source: string,
   opts: ParseOptions & RenderOptions = {},
 ): string {
-  let doc = resolve(parse(source, opts))
+  // `sourceLine` rendering needs block positions, so enable parsing them.
+  const parseOpts: ParseOptions = opts.sourceLine ? { ...opts, positions: true } : opts
+  let doc = resolve(parse(source, parseOpts))
   const exts: CarveExtension[] = opts.extensions ?? []
   for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
   for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
