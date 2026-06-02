@@ -32,6 +32,20 @@ export interface RenderOptions {
   emoji?: Record<string, string>
   /** Registered extensions (renderers consulted; transforms run by carveToHtml). */
   extensions?: CarveExtension[]
+  /**
+   * Stamp each top-level block element with `data-source-line="{n}"` (the
+   * 1-based source line it starts on). Requires the AST to carry positions
+   * (parse with `{ positions: true }`; `carveToHtml` enables this for you).
+   * Off by default so canonical output is unchanged. Intended for editor
+   * integrations that map rendered blocks back to source lines.
+   */
+  sourceLine?: boolean
+}
+
+/** Inject `data-source-line` into the first opening tag of a rendered block. */
+function withSourceLine(html: string, line: number | undefined): string {
+  if (line === undefined) return html
+  return html.replace(/^(\s*<[A-Za-z][A-Za-z0-9]*)/, `$1 data-source-line="${line}"`)
 }
 
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
@@ -65,12 +79,19 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
       sectionStack.push(node.level)
       const headingAttrs = stripId(node.attrs)
       const inner = renderInlines(node.children, opts)
+      const slAttr =
+        opts.sourceLine && node.pos ? ` data-source-line="${node.pos.startLine}"` : ''
       out.push(
-        `${indent(depth + 1)}<h${node.level}${renderAttrs(headingAttrs)}>${inner}</h${node.level}>`,
+        `${indent(depth + 1)}<h${node.level}${slAttr}${renderAttrs(headingAttrs)}>${inner}</h${node.level}>`,
       )
       continue
     }
-    const rendered = renderBlock(node, opts, sectionStack.length)
+    let rendered = renderBlock(node, opts, sectionStack.length)
+    // Raw HTML blocks emit author markup verbatim, so there is no reliable
+    // opening tag to annotate; leave them untouched.
+    if (opts.sourceLine && node.type !== 'raw-block') {
+      rendered = withSourceLine(rendered, node.pos?.startLine)
+    }
     if (rendered !== '') out.push(rendered)
   }
   closeTo(1) // close any sections still open at end of document
