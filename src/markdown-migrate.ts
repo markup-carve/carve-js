@@ -238,9 +238,16 @@ function convertInline(input: string): string {
   // ==highlight== and ^superscript^ are identical in Carve — no change.
   // (Math was converted and protected above, before the emphasis passes.)
 
-  // Restore stashes, then protected code spans.
-  line = line.replace(/\x00S(\d+)\x00/g, (_m, i) => stash[Number(i)]!)
-  line = line.replace(/\x00P(\d+)\x00/g, (_m, i) => protectedSpans[Number(i)]!)
+  // Restore stashes and protected spans until stable: a protected/stashed
+  // span may itself contain placeholders (e.g. a reference-definition line
+  // that wrapped an already-protected URL), so a single pass is not enough.
+  let prev: string
+  do {
+    prev = line
+    line = line
+      .replace(/\x00S(\d+)\x00/g, (_m, i) => stash[Number(i)]!)
+      .replace(/\x00P(\d+)\x00/g, (_m, i) => protectedSpans[Number(i)]!)
+  } while (line !== prev)
   return line
 }
 

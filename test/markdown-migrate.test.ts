@@ -110,6 +110,10 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('[id]:/api/_v1_/index')).toBe('[id]:/api/_v1_/index')
   })
 
+  it('protects a reference definition whose URL is an http(s) link', () => {
+    expect(conv('[id]: https://example.com/_x_')).toBe('[id]: https://example.com/_x_')
+  })
+
   it('still converts inline markup in a footnote definition body', () => {
     expect(conv('[^n]: an *em* note')).toBe('[^n]: an /em/ note')
   })
