@@ -48,6 +48,10 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('__outer _inner_ end__')).toBe('*outer /inner/ end*')
   })
 
+  it('converts emphasis nested inside ***bold italic***', () => {
+    expect(conv('***outer _inner_ end***')).toBe('/*outer /inner/ end*/')
+  })
+
   it('converts Markdown ~~strike~~ to Carve ~strike~', () => {
     expect(conv('a ~~gone~~ word')).toBe('a ~gone~ word')
   })
@@ -70,6 +74,10 @@ describe('markdownToCarve — inline construct mapping', () => {
 
   it('does not treat currency $5 as math', () => {
     expect(conv('costs $5 today')).toBe('costs $5 today')
+  })
+
+  it('does not treat a currency range $5-$10 as math', () => {
+    expect(conv('costs $5-$10 today')).toBe('costs $5-$10 today')
   })
 
   it('converts digit-starting math like $2+2$', () => {

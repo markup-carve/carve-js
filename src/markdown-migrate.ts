@@ -166,7 +166,9 @@ function convertInline(input: string): string {
   // $$display$$ -> $$`display`
   line = line.replace(/\$\$([^$]+)\$\$/g, (_m, inner) => protect(`$$\`${inner}\``))
   // $inline$ -> $`inline`; a bare-number body ($5, $3.50) is currency, kept.
-  line = line.replace(/\$([^$\s][^$]*[^$\s]|\S)\$/g, (m, inner: string) =>
+  // The `(?!\d)` keeps a currency range like `$5-$10` literal (otherwise the
+  // first..second `$` would be paired as math).
+  line = line.replace(/\$([^$\s][^$]*[^$\s]|\S)\$(?!\d)/g, (m, inner: string) =>
     /^[\d.,]+$/.test(inner) ? m : protect(`$\`${inner}\``),
   )
 
@@ -178,20 +180,23 @@ function convertInline(input: string): string {
     return `\x00S${stash.length - 1}\x00`
   }
 
-  // ***bold italic*** / ___bold italic___ -> /*x*/ (Carve's canonical
-  // bold-italic). The underscore form needs word boundaries: CommonMark `_`
-  // cannot open/close emphasis intraword (foo___bar___baz stays literal).
-  line = line.replace(/\*{3}(?!\s)(.+?)(?<!\s)\*{3}/g, (_m, inner) => hold(`/*${inner}*/`))
-  line = line.replace(
-    /(?<![A-Za-z0-9])___(?!\s)(.+?)(?<!\s)___(?![A-Za-z0-9])/g,
-    (_m, inner) => hold(`/*${inner}*/`),
-  )
-
-  // Recursively convert *em* / _em_ nested inside a strong span to /em/.
+  // Recursively convert *em* / _em_ nested inside a strong/bold-italic span to
+  // /em/ (so a nested `_x_` becomes `/x/`, not Carve underline).
   const convertNestedEm = (inner: string): string =>
     inner
       .replace(/(?<![A-Za-z0-9*])\*(?!\s)([^*]+?)(?<!\s)\*(?![A-Za-z0-9*])/g, '/$1/')
       .replace(/(?<![A-Za-z0-9_])_(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g, '/$1/')
+
+  // ***bold italic*** / ___bold italic___ -> /*x*/ (Carve's canonical
+  // bold-italic). The underscore form needs word boundaries: CommonMark `_`
+  // cannot open/close emphasis intraword (foo___bar___baz stays literal).
+  line = line.replace(/\*{3}(?!\s)(.+?)(?<!\s)\*{3}/g, (_m, inner: string) =>
+    hold(`/*${convertNestedEm(inner)}*/`),
+  )
+  line = line.replace(
+    /(?<![A-Za-z0-9])___(?!\s)(.+?)(?<!\s)___(?![A-Za-z0-9])/g,
+    (_m, inner: string) => hold(`/*${convertNestedEm(inner)}*/`),
+  )
 
   // **strong** -> *strong*
   line = line.replace(/\*\*(?!\s)(.+?)(?<!\s)\*\*/g, (_m, inner: string) =>
@@ -251,7 +256,10 @@ export function markdownToCarve(markdown: string): string {
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
     // Markdown rule). Carve accepts only a single [A-Za-z0-9_-] info token,
     // so an extended Markdown info string (```js title="x") is normalized to
-    // its first token, keeping the construct a code block in Carve.
+    // its first token, keeping the construct a code block in Carve. A
+    // punctuated language tag (```c++, ```c#) is likewise reduced to its
+    // leading token (c) — Carve cannot express it, and a downgraded lang is
+    // better than a fence Carve would parse as an inline code span.
     const open = !inCode ? line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/) : null
     if (open) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
