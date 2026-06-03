@@ -40,6 +40,53 @@ export interface RenderOptions {
    * integrations that map rendered blocks back to source lines.
    */
   sourceLine?: boolean
+  /**
+   * Filter dangerous URL schemes (`javascript:`, `data:`, `vbscript:`, …)
+   * on link `href` and image `src` so authored Carve cannot inject script
+   * via a crafted URL. On by default - this is the safe-by-default posture
+   * the spec's SafeMode describes. A blocked URL renders as an empty value
+   * (`href=""`) so the link text / image alt is still shown but inert.
+   *
+   * Set `false` ONLY for fully trusted input where you want authored URLs
+   * passed through verbatim. Relative URLs (no scheme) and fragments
+   * (`#id`) are always allowed regardless of this setting.
+   */
+  sanitizeUrls?: boolean
+  /**
+   * URL schemes permitted when {@link RenderOptions.sanitizeUrls} is on.
+   * Case-insensitive. Defaults to `['http', 'https', 'mailto']`. Add e.g.
+   * `'tel'` or `'ftp'` here if your application needs them. Has no effect
+   * when `sanitizeUrls` is `false`.
+   */
+  allowedUrlSchemes?: string[]
+}
+
+/** Schemes allowed on links/images by default when sanitizing is on. */
+const DEFAULT_URL_SCHEMES = ['http', 'https', 'mailto']
+
+/**
+ * Neutralize a URL whose scheme is not allowlisted, defeating
+ * `javascript:` / `data:` style injection on link `href` and image `src`.
+ *
+ * A URL with no scheme (relative path, query, fragment, protocol-relative
+ * `//host`) is always allowed. A URL whose scheme is in the allowlist is
+ * passed through unchanged. Anything else collapses to an empty string so
+ * the emitted `href`/`src` is inert while the surrounding text remains.
+ *
+ * Scheme detection ignores leading C0 control characters and whitespace,
+ * which browsers strip before parsing a scheme - so `\tjavascript:` and
+ * ` javascript:` are caught, not bypassed. The returned value is still
+ * passed through `escapeAttr` by the caller.
+ */
+function sanitizeUrl(url: string, opts: RenderOptions): string {
+  if (opts.sanitizeUrls === false) return url
+  // Browsers ignore C0 controls and whitespace when reading the scheme;
+  // strip them for detection so obfuscated schemes can't slip through.
+  const probe = url.replace(/^[\u0000-\u0020]+/, '').replace(/[\t\n\r]/g, '')
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
+  if (!scheme) return url
+  const allowed = opts.allowedUrlSchemes ?? DEFAULT_URL_SCHEMES
+  return allowed.some((s) => s.toLowerCase() === scheme[1].toLowerCase()) ? url : ''
 }
 
 /** Inject `data-source-line` into the first opening tag of a rendered block. */
@@ -222,10 +269,17 @@ function stripId(attrs?: Attrs): Attrs | undefined {
 
 /** Copy attrs without a given key-value (e.g. a structural `href`). */
 function stripKeyValue(attrs: Attrs | undefined, key: string): Attrs | undefined {
-  if (!attrs?.keyValues || attrs.keyValues[key] === undefined) return attrs
-  const { [key]: _omit, ...kv } = attrs.keyValues
+  if (!attrs?.keyValues) return attrs
+  // HTML attribute names are case-insensitive, so a `{HREF=...}` override
+  // must be dropped just like `{href=...}` - otherwise it slips past the
+  // structural-URL sanitization as a second, unsanitized attribute.
+  const lower = key.toLowerCase()
+  const matches = (k: string) => k.toLowerCase() === lower
+  if (!Object.keys(attrs.keyValues).some(matches)) return attrs
+  const kv: Record<string, string> = {}
+  for (const [k, v] of Object.entries(attrs.keyValues)) if (!matches(k)) kv[k] = v
   const result: Attrs = { ...attrs, keyValues: kv }
-  if (attrs.order) result.order = attrs.order.filter((s) => s !== key)
+  if (attrs.order) result.order = attrs.order.filter((s) => !matches(s))
   return result
 }
 
@@ -612,9 +666,12 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   )}</figcaption>\n${pad}</figure>`
 }
 
-function renderImage(img: Image, _opts: RenderOptions): string {
+function renderImage(img: Image, opts: RenderOptions): string {
   const titleAttr = img.title ? ` title="${escapeAttr(img.title)}"` : ''
-  return `<img src="${escapeAttr(img.src)}" alt="${escapeAttr(img.alt)}"${titleAttr}${renderAttrs(img.attrs)}>`
+  const src = escapeAttr(sanitizeUrl(img.src, opts))
+  // The sanitized structural src wins; never re-emit an author-supplied
+  // `src` from an attribute block, which would bypass sanitization.
+  return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${renderAttrs(stripKeyValue(img.attrs, 'src'))}>`
 }
 
 // ============================================================================
@@ -649,7 +706,10 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       return `<code>${escapeHtml(node.value)}</code>`
     case 'link': {
       const titleAttr = node.title ? ` title="${escapeAttr(node.title)}"` : ''
-      return `<a href="${escapeAttr(node.href)}"${titleAttr}${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</a>`
+      const href = escapeAttr(sanitizeUrl(node.href, opts))
+      // The sanitized structural href wins; never re-emit an author-supplied
+      // `href` from an attribute block, which would bypass sanitization.
+      return `<a href="${href}"${titleAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${renderInlines(node.children, opts)}</a>`
     }
     case 'image':
       return renderImage(node, opts)
@@ -671,7 +731,8 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       const display = node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
       // The structural href always wins; never re-emit an author-supplied
       // `href` from an attribute block (it would duplicate the attribute).
-      return `<a href="${escapeAttr(node.href)}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${escapeHtml(display)}</a>`
+      const href = escapeAttr(sanitizeUrl(node.href, opts))
+      return `<a href="${href}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${escapeHtml(display)}</a>`
     }
     case 'mention': {
       const text = `@${escapeHtml(node.user)}`
