@@ -774,9 +774,27 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     if (m) {
       lexer.consume()
       inner.push(m[1] ?? '')
-    } else {
+      continue
+    }
+    // Lazy continuation: a non-`>` line that does not itself start a block
+    // folds into the quote (CommonMark-style; matches carve-php, which is the
+    // canonical here). A blank line ends the quote. The only non-blank lines
+    // that end it are the ones that interrupt a paragraph anywhere — the
+    // "invisible" reference/footnote/abbr definitions and comments — plus a
+    // caption `^ …`, which attaches to the quote rather than folding in.
+    if (
+      ln.trim() === '' ||
+      RE_LINK_DEF.test(ln) ||
+      RE_FOOTNOTE_DEF.test(ln) ||
+      RE_ABBR_DEF.test(ln) ||
+      RE_COMMENT_LINE.test(ln) ||
+      RE_COMMENT_BLOCK.test(ln) ||
+      RE_CAPTION.test(ln)
+    ) {
       break
     }
+    lexer.consume()
+    inner.push(ln)
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs
