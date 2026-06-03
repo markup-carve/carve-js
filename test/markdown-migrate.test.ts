@@ -106,6 +106,14 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('[docs]: /api/_v1_/index')).toBe('[docs]: /api/_v1_/index')
   })
 
+  it('protects a reference definition with no space after the colon', () => {
+    expect(conv('[id]:/api/_v1_/index')).toBe('[id]:/api/_v1_/index')
+  })
+
+  it('still converts inline markup in a footnote definition body', () => {
+    expect(conv('[^n]: an *em* note')).toBe('[^n]: an /em/ note')
+  })
+
   it('protects the whole reference definition (label, dest, title)', () => {
     expect(conv('[_id_]: /u "*title*"')).toBe('[_id_]: /u "*title*"')
   })
