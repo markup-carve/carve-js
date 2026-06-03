@@ -156,6 +156,10 @@ function convertInline(input: string): string {
   line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^>\s]+>/g, protect)
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, protect)
 
+  // Bare/GFM autolink URLs in prose (https://example.com/api/_v1_/x): the
+  // path is literal, so protect it before the emphasis passes.
+  line = line.replace(/\bhttps?:\/\/[^\s<>`]+/g, protect)
+
   // Reference-link definition `[label]: dest "title"` (optional space after
   // the colon). The whole line is consumed literally by Carve's ref-link
   // parser, so protect it. A footnote definition `[^id]: body` is excluded —

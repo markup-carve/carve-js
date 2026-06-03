@@ -132,6 +132,12 @@ describe('markdownToCarve — inline construct mapping', () => {
     )
   })
 
+  it('does not rewrite delimiters inside a bare URL', () => {
+    expect(conv('see https://example.com/api/_v1_/index here')).toBe(
+      'see https://example.com/api/_v1_/index here',
+    )
+  })
+
   it('does not convert delimiters inside image alt text (raw in Carve)', () => {
     expect(conv('![*logo*](/x.png)')).toBe('![*logo*](/x.png)')
   })
