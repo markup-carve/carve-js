@@ -38,6 +38,7 @@ export {
   formatMigrationWarnings,
   type MigrationWarning,
 } from './djot-migrate.js'
+export { markdownToCarve } from './markdown-migrate.js'
 
 /**
  * Parse Carve source into a typed AST.
