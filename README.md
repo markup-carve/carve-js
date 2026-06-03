@@ -43,6 +43,35 @@ If you cloned without `--recurse-submodules`:
 git submodule update --init
 ```
 
+## Migrating from Markdown
+
+`markdownToCarve(md)` rewrites common Markdown into equivalent Carve. It is a
+source-to-source transform, not a parser, so it works on raw text and leaves
+fenced/inline code untouched.
+
+```ts
+import { markdownToCarve } from '@markup-carve/carve'
+
+markdownToCarve('a *very* **bold** ~~old~~ idea')
+// => 'a /very/ *bold* ~old~ idea'
+```
+
+It handles the inline constructs that differ between Markdown and Carve, plus
+Carve's blank-line-around-blocks rule:
+
+| Markdown                | Carve     | Note                                      |
+| ----------------------- | --------- | ----------------------------------------- |
+| `*x*`, `_x_`            | `/x/`     | `_x_` is **underline** in Carve, not em   |
+| `**x**`, `__x__`        | `*x*`     | Carve strong is a single `*`              |
+| `***x***`, `___x___`    | `/*x*/`   | Carve's canonical bold-italic             |
+| `~~x~~`                 | `~x~`     | Carve strikethrough is a single `~`       |
+| `==x==`, `^x^`          | unchanged | identical in Carve                        |
+| `$x$`                   | `` $`x` `` | inline math (`$5` left as currency)      |
+| `<em>`/`<strong>`/`<mark>`/… | Carve form | common inline HTML tags             |
+
+To go the other way — flagging a Djot document that would silently mis-render
+under Carve — use [`djotMigrationWarnings`](./src/djot-migrate.ts).
+
 ## Roadmap
 
 See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) in the spec repo.
