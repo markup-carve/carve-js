@@ -53,6 +53,8 @@ import type {
 
 export interface ParseOptions {
   positions?: boolean
+  /** Format label applied to a bare `---` frontmatter fence. Default 'yaml'. */
+  defaultFrontmatterFormat?: string
 }
 
 const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
@@ -102,7 +104,12 @@ const RE_TABLE_ROW = /^\|/
 // inside parseTable, after a standard `|` row has opened the table.
 const RE_TABLE_CONT = /^\+.*\|\s*$/
 const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)\s*(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
-const RE_FRONTMATTER_FENCE = /^---\s*$/
+// Frontmatter open fence: `---` with an optional attached format token
+// (`---toml`, `---json`); bare `---` uses the default format. A token's
+// trailing letters keep it distinct from a thematic break (`-{3,}`).
+const RE_FRONTMATTER_OPEN = /^---(\w*)\s*$/
+// Frontmatter close fence: bare `---` only.
+const RE_FRONTMATTER_CLOSE = /^---\s*$/
 // Raw passthrough block: ```raw FORMAT … ``` (§4.15). The info string has
 // two tokens ("raw FORMAT"), so this never collides with RE_FENCE (which
 // allows only a single info token).
@@ -116,7 +123,9 @@ class Lexer {
   lines: string[]
   lineOffsets: number[]
   pos = 0
-  frontmatter?: Record<string, unknown>
+  frontmatter?: { format: string; content: string }
+  /** Format applied to a bare `---` fence; set from ParseOptions. */
+  defaultFrontmatterFormat = 'yaml'
   abbrDefs: Map<string, string> = new Map()
   linkDefs: Map<string, { href: string; title?: string }> = new Map()
   // Footnote definitions keyed by raw label; value is the parsed note
@@ -136,7 +145,8 @@ class Lexer {
   // keeping pathological "many unclosed `:::`" input linear.
   divNoCloserFrom = Infinity
 
-  constructor(source: string) {
+  constructor(source: string, opts: ParseOptions = {}) {
+    this.defaultFrontmatterFormat = opts.defaultFrontmatterFormat ?? 'yaml'
     this.lines = source.replace(/\r\n?/g, '\n').split('\n')
     // Drop trailing empty line introduced by terminal newline
     if (this.lines.length && this.lines[this.lines.length - 1] === '') {
@@ -148,16 +158,20 @@ class Lexer {
       this.lineOffsets.push(offset)
       offset += line.length + 1
     }
-    this.consumeFrontmatter()
+    // Frontmatter is document-leading only; the root lexer consumes it
+    // explicitly in parse(). Sub-lexers (list items, divs, admonitions)
+    // must NOT, or nested `---`-fenced content would be swallowed.
   }
 
   consumeFrontmatter() {
     if (this.lines.length < 2) return
-    if (!RE_FRONTMATTER_FENCE.test(this.lines[0]!)) return
+    const open = RE_FRONTMATTER_OPEN.exec(this.lines[0]!)
+    if (!open) return
     for (let i = 1; i < this.lines.length; i++) {
-      if (RE_FRONTMATTER_FENCE.test(this.lines[i]!)) {
-        const yaml = this.lines.slice(1, i).join('\n')
-        this.frontmatter = parseYaml(yaml)
+      if (RE_FRONTMATTER_CLOSE.test(this.lines[i]!)) {
+        const content = this.lines.slice(1, i).join('\n')
+        const format = open[1] !== '' ? open[1]! : this.defaultFrontmatterFormat
+        this.frontmatter = { format, content }
         this.pos = i + 1
         return
       }
@@ -181,8 +195,11 @@ class Lexer {
   }
 }
 
-export function parse(source: string, _opts: ParseOptions = {}): Document {
-  const lexer = new Lexer(source)
+export function parse(source: string, opts: ParseOptions = {}): Document {
+  const lexer = new Lexer(source, opts)
+  // Consume leading frontmatter first so `lexer.pos` marks the end of the
+  // metadata region; the def passes and parseBlocks all start from there.
+  lexer.consumeFrontmatter()
   // First pass: collect abbreviation and reference-link definitions so
   // they can be resolved regardless of document order (grammar §6).
   collectAbbrDefs(lexer)
@@ -195,8 +212,10 @@ export function parse(source: string, _opts: ParseOptions = {}): Document {
 }
 
 function collectAbbrDefs(lexer: Lexer) {
-  for (const line of lexer.lines) {
-    const m = RE_ABBR_DEF.exec(line)
+  for (let idx = 0; idx < lexer.lines.length; idx++) {
+    // Skip leading frontmatter (opaque metadata); see collectLinkDefs.
+    if (idx < lexer.pos) continue
+    const m = RE_ABBR_DEF.exec(lexer.lines[idx]!)
     if (m) lexer.abbrDefs.set(m[1]!, m[2]!)
   }
 }
@@ -271,16 +290,13 @@ function stripContainerPrefixes(raw: string): string {
  */
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number } | null = null
-  // Skip leading YAML frontmatter — it is opaque metadata, never
-  // document content, so a `[ref]: ...` line there is not a definition.
-  let inFront =
-    lexer.lines.length > 0 && RE_FRONTMATTER_FENCE.test(lexer.lines[0]!)
   for (let idx = 0; idx < lexer.lines.length; idx++) {
+    // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
+    // none, including an unclosed opener that is NOT frontmatter), so a
+    // `[ref]: ...` inside it is not collected, while content after an
+    // unclosed opener still is.
+    if (idx < lexer.pos) continue
     const raw = lexer.lines[idx]!
-    if (inFront) {
-      if (idx > 0 && RE_FRONTMATTER_FENCE.test(raw)) inFront = false
-      continue
-    }
     const line = stripContainerPrefixes(raw)
     if (fence) {
       const close = line.match(/^ {0,3}([`~]{3,})\s*$/)
@@ -2212,39 +2228,3 @@ function attrOrder(a: Attrs): string[] {
   return o
 }
 
-// ============================================================================
-// Minimal flat YAML parser (key: value, one per line; values are unquoted
-// strings, bare ints, [array literals], or dates)
-// ============================================================================
-
-function parseYaml(src: string): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const raw of src.split('\n')) {
-    const line = raw.trim()
-    if (line === '' || line.startsWith('#')) continue
-    const m = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line)
-    if (!m) continue
-    out[m[1]!] = parseYamlValue(m[2]!)
-  }
-  return out
-}
-
-function parseYamlValue(s: string): unknown {
-  const v = s.trim()
-  if (v === '') return ''
-  if (v === 'true') return true
-  if (v === 'false') return false
-  if (v === 'null') return null
-  if (/^-?\d+$/.test(v)) return Number(v)
-  if (/^-?\d+\.\d+$/.test(v)) return Number(v)
-  if (v.startsWith('[') && v.endsWith(']')) {
-    return v
-      .slice(1, -1)
-      .split(',')
-      .map((x) => parseYamlValue(x.trim()))
-  }
-  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-    return v.slice(1, -1)
-  }
-  return v
-}

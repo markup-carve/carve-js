@@ -49,7 +49,12 @@ export interface BaseNode {
 
 export interface Document extends BaseNode {
   type: 'document'
-  frontmatter?: Record<string, unknown>
+  /**
+   * Raw, uninterpreted frontmatter. `content` is the verbatim text between
+   * the fences; `format` is the fence token (default `'yaml'`). Carve does
+   * not parse it - the application interprets the declared format.
+   */
+  frontmatter?: { format: string; content: string }
   children: BlockNode[]
   /**
    * Footnote definitions collected during parsing, keyed by raw label
