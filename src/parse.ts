@@ -61,7 +61,10 @@ const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:
 // Thematic break: a line of 3+ of the same `-`, `*`, or `_` (grammar
 // thematic_break). A run alone on a line can't be emphasis (no content).
 const RE_HR = /^(?:-{3,}|\*{3,}|_{3,})\s*$/
-const RE_FENCE = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_-]*)\s*$/
+// Info string is a single language token. The charset covers real-world tags
+// with punctuation (c++, c#, f#, asp.net); a multiword/quoted info (e.g.
+// `js title="x"`) is still not a fence (anchored, no whitespace allowed).
+const RE_FENCE = /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*$/
 const RE_UNORDERED = /^(\s*)[-*+]\s+(.*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see

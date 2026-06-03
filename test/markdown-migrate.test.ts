@@ -151,11 +151,16 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 
   it('normalizes an extended fence info string and keeps the block as code', () => {
-    // Carve only recognizes a single [A-Za-z0-9_-] info token, so a Markdown
-    // fence like ```js title="demo" is normalized to ```js (keeping it a code
-    // block) and its body delimiters are left untouched.
+    // Carve recognizes a single language token, so a Markdown fence like
+    // ```js title="demo" is normalized to ```js (keeping it a code block) and
+    // its body delimiters are left untouched.
     const md = ['```js title="demo"', '*a*', '```'].join('\n')
     expect(conv(md)).toBe(['```js', '*a*', '```'].join('\n'))
+  })
+
+  it('preserves a punctuated fence language like c++', () => {
+    const md = ['```c++', '*a*', '```'].join('\n')
+    expect(conv(md)).toBe(md)
   })
 })
 
