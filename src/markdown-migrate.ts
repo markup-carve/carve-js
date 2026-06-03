@@ -266,19 +266,17 @@ export function markdownToCarve(markdown: string): string {
     const trimmed = line.trim()
 
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
-    // Markdown rule). Carve accepts only a single [A-Za-z0-9_-] info token,
-    // so an extended Markdown info string (```js title="x") is normalized to
-    // its first token, keeping the construct a code block in Carve. A
-    // punctuated language tag (```c++, ```c#) is likewise reduced to its
-    // leading token (c) — Carve cannot express it, and a downgraded lang is
-    // better than a fence Carve would parse as an inline code span.
+    // Markdown rule). Carve accepts a single language token over a real-world
+    // charset (c++, c#, asp.net are valid), so the Markdown info string is
+    // normalized to its first such token — keeping `c++` intact and reducing
+    // an extended info (```js title="x") to ```js (still a code block).
     const open = !inCode ? line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/) : null
     if (open) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      const info = open[3]!.match(/[A-Za-z0-9_-]+/)?.[0] ?? ''
+      const info = open[3]!.match(/[A-Za-z0-9_+#.-]+/)?.[0] ?? ''
       out.push(open[1]! + open[2]! + info)
       prevType = 'code_fence'
       continue
