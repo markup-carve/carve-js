@@ -418,5 +418,6 @@ export type InlineNode =
   | CriticDelete
   | CriticSubstitute
   | CriticComment
+  | Comment
 
 export type AnyNode = Document | BlockNode | InlineNode
