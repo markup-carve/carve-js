@@ -4,8 +4,9 @@ import { carveToHtml } from '../src/index.js'
 /*
  * Markdown-like paragraph interruption (grammar PART 9 §10): visible block
  * starts interrupt an open paragraph without a blank line, at top level and
- * inside nested content. Ordered lists only interrupt from `1.` / `1)`, and
- * fenced code or div/admonition openers only interrupt when a closer exists.
+ * inside nested content. Ordered lists do NOT interrupt (they need a blank
+ * line, avoiding the CommonMark `1.`-only heuristic); fenced code or
+ * div/admonition openers only interrupt when a closer exists.
  */
 describe('top-level paragraph interruption (§10)', () => {
   it('a `* ` unordered marker interrupts prose', () => {
@@ -43,9 +44,9 @@ describe('top-level paragraph interruption (§10)', () => {
     )
   })
 
-  it('an ordered list starting with 1 interrupts prose', () => {
+  it('an ordered-list marker does not interrupt prose (needs a blank line)', () => {
     const html = carveToHtml('Steps\n1. first')
-    expect(html).toBe('<p>Steps</p>\n<ol>\n  <li>first</li>\n</ol>')
+    expect(html).toBe('<p>Steps\n1. first</p>')
   })
 
   it('a captioned one-line quote after prose interrupts', () => {
@@ -184,8 +185,8 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     )
   })
 
-  it('only ordered lists starting with 1 interrupt a paragraph', () => {
-    expect(carveToHtml('p\n1. a')).toBe('<p>p</p>\n<ol>\n  <li>a</li>\n</ol>')
+  it('no ordered-list marker interrupts a paragraph (needs a blank line)', () => {
+    expect(carveToHtml('p\n1. a')).toBe('<p>p\n1. a</p>')
     expect(carveToHtml('p\n2. a')).toBe('<p>p\n2. a</p>')
     expect(carveToHtml('p\n1985. a')).toBe('<p>p\n1985. a</p>')
   })
