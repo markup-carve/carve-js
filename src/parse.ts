@@ -55,6 +55,11 @@ export interface ParseOptions {
   positions?: boolean
   /** Format label applied to a bare `---` frontmatter fence. Default 'yaml'. */
   defaultFrontmatterFormat?: string
+  /**
+   * Fold auto-generated heading ids to ASCII (Über -> Uber) for URL/CSS-fragment
+   * portability. Default false: ids preserve case and non-ASCII per jgm/djot#393.
+   */
+  asciiHeadingIds?: boolean
 }
 
 const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
