@@ -46,17 +46,17 @@ describe('ordered-list dialects', () => {
 })
 
 describe('ordered dialects vs paragraphs (§10)', () => {
-  it('a lone a. in prose stays prose (does not start a list)', () => {
+  it('a lone a. in prose remains paragraph text', () => {
     expect(h('Pick option a. it is best.\nMore prose.')).toBe(
       '<p>Pick option a. it is best.\nMore prose.</p>',
     )
   })
-  it('alpha markers after prose stay prose (need a blank line, §10)', () => {
+  it('alpha ordered markers do not interrupt paragraphs (§10 guard)', () => {
     expect(h('Choices:\na. first\nb. second')).toBe(
       '<p>Choices:\na. first\nb. second</p>',
     )
   })
-  it('a single a. at block start is a list (blank-line gate)', () => {
+  it('a single a. at block start is a list', () => {
     expect(ol('a. only one')).toBe('<ol type="a">')
   })
   it('decimal markers stay unambiguous mid-prose', () => {

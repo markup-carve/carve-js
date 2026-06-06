@@ -16,16 +16,19 @@ describe('priority-1 polish fixes', () => {
     expect(h("it's fine")).toBe('<p>it’s fine</p>')
   })
 
-  it('does not split mixed task+plain bullets jammed under prose', () => {
-    // task line then plain bullet, no blank line: stays prose
+  it('interrupts prose, then splits mixed task+plain bullets', () => {
     expect(h('Text\n- [ ] todo\n- note')).toBe(
-      '<p>Text\n- [ ] todo\n- note</p>',
+      '<p>Text</p>\n<ul>\n  <li><input type="checkbox" disabled> todo</li>\n</ul>\n<ul>\n  <li>note</li>\n</ul>',
     )
   })
 
-  it('two same-kind bullets after prose stay prose (need a blank line, §10)', () => {
-    expect(h('Text\n- a\n- b')).toBe('<p>Text\n- a\n- b</p>')
-    expect(h('Text\n- [ ] a\n- [x] b')).not.toContain('<ul>')
+  it('two same-kind bullets after prose interrupt as one list (§10)', () => {
+    expect(h('Text\n- a\n- b')).toBe(
+      '<p>Text</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
+    )
+    expect(h('Text\n- [ ] a\n- [x] b')).toBe(
+      '<p>Text</p>\n<ul>\n  <li><input type="checkbox" disabled> a</li>\n  <li><input type="checkbox" checked disabled> b</li>\n</ul>',
+    )
   })
 
   it('preserves an attribute block on an unresolved reference', () => {

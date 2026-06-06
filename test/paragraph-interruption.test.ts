@@ -2,59 +2,70 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /*
- * Full-djot paragraph interruption (grammar PART 9 §10): at the document top
- * level ONLY a blank line ends a paragraph. A block-start marker on a
- * continuation line — a bullet/quote/table marker, a heading, a fence, a
- * thematic break, an admonition, even a decimal list — is paragraph text, so a
- * hard-wrapped prose line never silently becomes a block. The one scoping
- * carve-out: inside already-nested content (Lexer.nested) a marker still
- * interrupts, so `- a\n  - b` keeps nesting a sublist.
+ * Markdown-like paragraph interruption (grammar PART 9 §10): visible block
+ * starts interrupt an open paragraph without a blank line, at top level and
+ * inside nested content. Ordered lists only interrupt from `1.` / `1)`, and
+ * fenced code or div/admonition openers only interrupt when a closer exists.
  */
-describe('top-level paragraph: only a blank line interrupts (§10, full djot)', () => {
-  it('multiplication "* 3" stays prose', () => {
+describe('top-level paragraph interruption (§10)', () => {
+  it('a `* ` unordered marker interrupts prose', () => {
     const html = carveToHtml('Die Frage ist x = 5\n* 3 + 17 wahr.\nim Text.')
-    expect(html).not.toContain('<ul>')
+    expect(html).toBe(
+      '<p>Die Frage ist x = 5</p>\n<ul>\n  <li>3 + 17 wahr.</li>\n</ul>\n<p>im Text.</p>',
+    )
   })
 
-  it('two same-kind bullets after prose stay prose (need a blank line)', () => {
+  it('two same-kind bullets after prose interrupt as a list', () => {
     const html = carveToHtml('Liste:\n- eins\n- zwei')
-    expect(html).not.toContain('<ul>')
-    expect(html).toContain('<p>')
+    expect(html).toBe(
+      '<p>Liste:</p>\n<ul>\n  <li>eins</li>\n  <li>zwei</li>\n</ul>',
+    )
   })
 
-  it('an indented continuation after prose stays prose', () => {
+  it('an indented list continuation follows an interrupting bullet', () => {
     const html = carveToHtml('Shopping:\n- milk and\n  some bread')
-    expect(html).not.toContain('<ul>')
+    expect(html).toBe(
+      '<p>Shopping:</p>\n<ul>\n  <li>milk and\nsome bread</li>\n</ul>',
+    )
   })
 
-  it('two blockquote lines after prose stay prose', () => {
+  it('two blockquote lines after prose interrupt as a quote', () => {
     const html = carveToHtml('They said:\n> one\n> two')
-    expect(html).not.toContain('<blockquote>')
+    expect(html).toBe(
+      '<p>They said:</p>\n<blockquote><p>one\ntwo</p></blockquote>',
+    )
   })
 
-  it('a heading after prose stays prose (no blank line)', () => {
+  it('a heading after prose interrupts', () => {
     const html = carveToHtml('Some text\n# Heading')
-    expect(html).not.toContain('<h1')
+    expect(html).toBe(
+      '<p>Some text</p>\n<section id="heading">\n  <h1>Heading</h1>\n</section>',
+    )
   })
 
-  it('a decimal list after prose stays prose (no blank line)', () => {
+  it('an ordered list starting with 1 interrupts prose', () => {
     const html = carveToHtml('Steps\n1. first')
-    expect(html).not.toContain('<ol>')
+    expect(html).toBe('<p>Steps</p>\n<ol>\n  <li>first</li>\n</ol>')
   })
 
-  it('a captioned one-line quote after prose stays prose', () => {
+  it('a captioned one-line quote after prose interrupts', () => {
     const html = carveToHtml('Intro\n> Stay hungry\n^ Steve Jobs')
-    expect(html).not.toContain('<figure>')
-    expect(html).not.toContain('<blockquote>')
+    expect(html).toBe(
+      '<p>Intro</p>\n<figure>\n  <blockquote><p>Stay hungry</p></blockquote>\n  <figcaption>Steve Jobs</figcaption>\n</figure>',
+    )
   })
 
-  it('a captioned one-row table after prose stays prose', () => {
+  it('a captioned one-row table after prose interrupts', () => {
     const html = carveToHtml('Intro\n|= A |\n^ caption')
-    expect(html).not.toContain('<table')
+    expect(html).toBe(
+      '<p>Intro</p>\n<table>\n  <caption>caption</caption>\n  <thead><tr><th>A</th></tr></thead>\n</table>',
+    )
   })
 
-  it('a generic div after prose stays prose (no blank line)', () => {
-    expect(carveToHtml('text\n:::\ncontent\n:::')).not.toContain('<div>')
+  it('a closed generic div after prose interrupts', () => {
+    expect(carveToHtml('text\n:::\ncontent\n:::')).toBe(
+      '<p>text</p>\n<div>\n  <p>content</p>\n</div>',
+    )
   })
 })
 
@@ -113,11 +124,10 @@ describe('invisible constructs still interrupt (§10 carve-out)', () => {
   })
 })
 
-// Inside already-nested content, ONLY a list marker interrupts without a
-// blank line (the single Carve deviation: `- a\n  - b` nests a sublist).
-// Every other block opener — heading, fence, div, etc. — does NOT interrupt
-// nested either; it needs a blank line, matching djot (grammar §10 SCOPING).
-describe('nested content: only a list marker interrupts (sublists keep nesting)', () => {
+// Inside already-nested content, visible block starts also interrupt an open
+// paragraph. List markers still provide the sublist behavior expected from
+// indentation alone.
+describe('nested content: visible block starts interrupt paragraphs', () => {
   it('single nested child still nests', () => {
     const html = carveToHtml('- parent\n  - child')
     expect(html).toContain('<ul>')
@@ -135,16 +145,16 @@ describe('nested content: only a list marker interrupts (sublists keep nesting)'
     expect(html).toContain('<li>child</li>')
   })
 
-  it('a heading after lead text in an item stays paragraph text (no blank line)', () => {
+  it('a heading after lead text in an item interrupts', () => {
     const html = carveToHtml('- text\n  # H')
-    expect(html).not.toContain('<h1>')
-    expect(html).toContain('<li>text')
+    expect(html).toBe('<ul>\n  <li>text\n    <h1>H</h1>\n  </li>\n</ul>')
   })
 
-  it('a generic div without a blank line stays paragraph text', () => {
+  it('a closed generic div without a blank line interrupts', () => {
     const html = carveToHtml('- item\n  :::\n  content\n  :::')
-    expect(html).not.toContain('<div>')
-    expect(html).toContain('<li>item')
+    expect(html).toBe(
+      '<ul>\n  <li>item\n    <div>\n      <p>content</p>\n    </div>\n  </li>\n</ul>',
+    )
   })
 
   it('a blank line lets a generic div nest', () => {
@@ -155,5 +165,55 @@ describe('nested content: only a list marker interrupts (sublists keep nesting)'
   it('an unclosed nested div stays literal (no hang)', () => {
     const html = carveToHtml('- item\n  :::\n  content')
     expect(html).not.toContain('<div>')
+  })
+})
+
+describe('paragraph interruption carve-outs and nested coverage', () => {
+  it('an unterminated fence remains paragraph text', () => {
+    expect(carveToHtml('text\n```\nno closer')).toBe(
+      '<p>text\n```\nno closer</p>',
+    )
+  })
+
+  it('an unterminated div/admonition remains paragraph text', () => {
+    expect(carveToHtml('text\n:::note\nno closer')).toBe(
+      '<p>text\n:::note\nno closer</p>',
+    )
+  })
+
+  it('only ordered lists starting with 1 interrupt a paragraph', () => {
+    expect(carveToHtml('p\n1. a')).toBe('<p>p</p>\n<ol>\n  <li>a</li>\n</ol>')
+    expect(carveToHtml('p\n2. a')).toBe('<p>p\n2. a</p>')
+    expect(carveToHtml('p\n1985. a')).toBe('<p>p\n1985. a</p>')
+  })
+
+  it('a bare image line remains inline in the paragraph', () => {
+    expect(carveToHtml('p\n![a](u)')).toBe('<p>p\n<img src="u" alt="a"></p>')
+  })
+
+  it('heading, list, blockquote, and table interrupt at top level', () => {
+    expect(carveToHtml('p\n# H')).toBe(
+      '<p>p</p>\n<section id="h">\n  <h1>H</h1>\n</section>',
+    )
+    expect(carveToHtml('p\n- a')).toBe('<p>p</p>\n<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml('p\n> q')).toBe('<p>p</p>\n<blockquote><p>q</p></blockquote>')
+    expect(carveToHtml('p\n| a |')).toBe(
+      '<p>p</p>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('heading, list, blockquote, and table interrupt inside a quote', () => {
+    expect(carveToHtml('> p\n> # H')).toBe(
+      '<blockquote>\n  <p>p</p>\n  <h1>H</h1>\n</blockquote>',
+    )
+    expect(carveToHtml('> p\n> - a')).toBe(
+      '<blockquote>\n  <p>p</p>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>',
+    )
+    expect(carveToHtml('> p\n> > q')).toBe(
+      '<blockquote>\n  <p>p</p>\n  <blockquote><p>q</p></blockquote>\n</blockquote>',
+    )
+    expect(carveToHtml('> p\n> | a |')).toBe(
+      '<blockquote>\n  <p>p</p>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>',
+    )
   })
 })
