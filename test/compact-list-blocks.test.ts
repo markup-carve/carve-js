@@ -48,8 +48,7 @@ describe('list continuation marker (A3)', () => {
     expect(carveToHtml('para\n\n+\n\nnext')).toContain('<p>+</p>')
   })
 
-  it('real `+` bullets are unaffected', () => {
-    const html = carveToHtml('+ one\n+ two')
-    expect(html).toBe('<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>')
+  it('`+` is no longer a bullet, so a `+ x` line is literal paragraph text', () => {
+    expect(carveToHtml('+ one\n+ two')).toBe('<p>+ one\n+ two</p>')
   })
 })
