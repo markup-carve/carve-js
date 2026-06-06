@@ -199,6 +199,7 @@ class Lexer {
 }
 
 export function parse(source: string, opts: ParseOptions = {}): Document {
+  newlineIndexCache.clear()
   const lexer = new Lexer(source, opts)
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
@@ -2071,21 +2072,52 @@ function shiftSource(source: InlineSource, text: string, by: number): InlineSour
   }
 }
 
+// Per-document cache of newline offsets for each inline text. pointAt() used to
+// rescan `text` from 0 to `offset` on every token, which is O(offset) per call
+// and O(n^2) across a token-dense or many-line paragraph. Caching the sorted
+// newline indices once per distinct text and binary-searching makes each lookup
+// O(log n). Cleared at the start of every parse() so it never outlives a
+// document.
+const newlineIndexCache = new Map<string, number[]>()
+
+function newlineIndices(text: string): number[] {
+  let indices = newlineIndexCache.get(text)
+  if (indices === undefined) {
+    indices = []
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '\n') indices.push(i)
+    }
+    newlineIndexCache.set(text, indices)
+  }
+  return indices
+}
+
 function pointAt(
   source: InlineSource,
   text: string,
   offset: number,
 ): { line: number; column: number } {
-  let line = source.startLine
-  let column = source.startColumn
-  for (let i = 0; i < offset; i++) {
-    if (text[i] === '\n') {
-      line++
-      column = 1
+  const indices = newlineIndices(text)
+  // Count newlines strictly before `offset` (binary search for the insertion
+  // point of `offset` in the sorted indices).
+  let lo = 0
+  let hi = indices.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (indices[mid]! < offset) {
+      lo = mid + 1
     } else {
-      column++
+      hi = mid
     }
   }
+  const newlinesBefore = lo
+  const line = source.startLine + newlinesBefore
+  // Column resets to 1 right after the most recent newline; with none, it
+  // continues from the source's starting column.
+  const column =
+    newlinesBefore === 0
+      ? source.startColumn + offset
+      : offset - indices[newlinesBefore - 1]!
   return { line, column }
 }
 
