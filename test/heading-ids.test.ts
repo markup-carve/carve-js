@@ -4,38 +4,36 @@ import { parse, carveToHtml } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
 
 describe('slugify', () => {
-  it('lowercases and dashes spaces', () => {
-    expect(slugify('Getting Started')).toBe('getting-started')
+  it('dashes spaces, preserves case (jgm/djot#393)', () => {
+    expect(slugify('Getting Started')).toBe('Getting-Started')
   })
-  it('transliterates Latin Unicode to ASCII; unmapped scripts pass through', () => {
-    // Latin diacritics go through the baked Unicode->ASCII map for
-    // share-safety (auto-linkers routinely mangle non-ASCII fragments).
-    expect(slugify('Café & Crème')).toBe('cafe-creme')
-    expect(slugify('Über uns')).toBe('uber-uns')
-    expect(slugify('Привет мир')).toBe('privet-mir')
-    // Scripts the deterministic map does not cover (CJK, Arabic, ...)
-    // pass through. Authors can attach an explicit `{#id}` for a
-    // share-safe slug.
+  it('preserves non-ASCII characters by default (no transliteration)', () => {
+    expect(slugify('Café & Crème')).toBe('Café-Crème')
+    expect(slugify('Über uns')).toBe('Über-uns')
+    expect(slugify('Привет мир')).toBe('Привет-мир')
     expect(slugify('日本語の見出し')).toBe('日本語の見出し')
   })
-  it('deletes CSS-unsafe punctuation before dashing', () => {
-    expect(slugify("What's New?")).toBe('whats-new')
-    expect(slugify('RFC 2119: Key Words')).toBe('rfc-2119-key-words')
+  it('replaces each run of non-alphanumeric ASCII with a single dash', () => {
+    expect(slugify("What's New?")).toBe('What-s-New')
+    expect(slugify('RFC 2119: Key Words')).toBe('RFC-2119-Key-Words')
+    expect(slugify('user_id field')).toBe('user-id-field')
   })
-  it('preserves underscore and hyphen', () => {
-    expect(slugify('user_id field')).toBe('user_id-field')
+  it('prefixes s- when starting with a digit', () => {
+    expect(slugify('2024 Recap')).toBe('s-2024-Recap')
   })
-  it('prefixes section- when starting with a digit', () => {
-    expect(slugify('2024 Recap')).toBe('section-2024-recap')
-  })
-  it('falls back to section when empty', () => {
-    expect(slugify('!!!')).toBe('section')
-    expect(slugify('')).toBe('section')
-    expect(slugify('   ')).toBe('section')
+  it('falls back to s when empty', () => {
+    expect(slugify('!!!')).toBe('s')
+    expect(slugify('')).toBe('s')
+    expect(slugify('   ')).toBe('s')
   })
   it('collapses and trims dashes', () => {
     expect(slugify('a -- b')).toBe('a-b')
     expect(slugify('  spaced  ')).toBe('spaced')
+  })
+  it('folds to ASCII when asciiFold is set (opt-in)', () => {
+    expect(slugify('Über uns', true)).toBe('Uber-uns')
+    expect(slugify('Café & Crème', true)).toBe('Cafe-Creme')
+    expect(slugify('Привет мир', true)).toBe('Privet-mir')
   })
 })
 
