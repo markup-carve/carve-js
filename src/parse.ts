@@ -122,10 +122,20 @@ const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*raw\s+([a-zA-Z][\w-]*)\s*$/
 const RE_COMMENT_BLOCK = /^%{3,}\s*$/
 const RE_COMMENT_LINE = /^%%/
 
+// Maximum block-container nesting depth. Each level of blockquote / div / list /
+// footnote recurses parseBlocks -> parseBlock -> parseContainer -> parseBlocks,
+// so unbounded nesting (e.g. `> ` repeated thousands of times) overflows the
+// call stack. Past this depth, container openers degrade to literal paragraph
+// text instead of crashing. Far above any real document; only adversarial input
+// reaches it.
+const MAX_NESTING_DEPTH = 200
+
 class Lexer {
   lines: string[]
   lineOffsets: number[]
   pos = 0
+  // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
+  depth = 0
   frontmatter?: { format: string; content: string }
   /** Format applied to a bare `---` fence; set from ParseOptions. */
   defaultFrontmatterFormat = 'yaml'
@@ -427,6 +437,11 @@ function parseBlock(lexer: Lexer): BlockNode | null {
 function parseBlockInner(lexer: Lexer): BlockNode | null {
   const line = lexer.peek()!
 
+  // Past the nesting limit, stop opening recursive containers and treat the
+  // line as paragraph text. Prevents a call-stack overflow on pathologically
+  // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
+  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer)
+
   // Block-level constructs in priority order
   if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
   if (RE_FENCE.test(line)) return parseFence(lexer)
@@ -642,6 +657,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     sub.linkDefs = lexer.linkDefs
     sub.footnoteDefs = lexer.footnoteDefs
     sub.nested = true
+    sub.depth = lexer.depth + 1
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
   }
   return null
@@ -677,6 +693,7 @@ function parseAdmonition(lexer: Lexer): Admonition {
   subLexer.linkDefs = lexer.linkDefs
   subLexer.footnoteDefs = lexer.footnoteDefs
   subLexer.nested = true
+  subLexer.depth = lexer.depth + 1
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
   // `!== undefined` (not truthiness): an explicitly empty quoted title
@@ -737,6 +754,7 @@ function parseDiv(lexer: Lexer): Div {
   subLexer.linkDefs = lexer.linkDefs
   subLexer.footnoteDefs = lexer.footnoteDefs
   subLexer.nested = true
+  subLexer.depth = lexer.depth + 1
   const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
   if (attrSrc) node.attrs = parseAttrs(attrSrc)
   return node
@@ -762,6 +780,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     sub.linkDefs = lexer.linkDefs
     sub.footnoteDefs = lexer.footnoteDefs
     sub.nested = true
+    sub.depth = lexer.depth + 1
     return parseBlocks(sub, 0)
   }
   while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
@@ -833,6 +852,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   subLexer.linkDefs = lexer.linkDefs
   subLexer.footnoteDefs = lexer.footnoteDefs
   subLexer.nested = true
+  subLexer.depth = lexer.depth + 1
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'blockquote', children }
   // Optional caption with ^
@@ -1124,6 +1144,7 @@ function parseList(lexer: Lexer): List {
     sub.linkDefs = lexer.linkDefs
     sub.footnoteDefs = lexer.footnoteDefs
     sub.nested = true
+    sub.depth = lexer.depth + 1
     const children = parseBlocks(sub, 0)
 
     const item: ListItem = { type: 'list-item', children }
