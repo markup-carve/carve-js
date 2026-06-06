@@ -1443,39 +1443,65 @@ function fenceHasCloser(lexer: Lexer, marker: string): boolean {
 function startsInterruptingBlock(lexer: Lexer): boolean {
   const ln = lexer.peek()
   if (ln === undefined) return false
-  // Invisible constructs: reference/footnote/abbreviation definitions and
-  // comments (these interrupted even under the former hard-wrap-safe rule).
-  if (
-    RE_LINK_DEF.test(ln) ||
-    RE_FOOTNOTE_DEF.test(ln) ||
-    RE_ABBR_DEF.test(ln) ||
-    RE_COMMENT_LINE.test(ln) ||
-    RE_COMMENT_BLOCK.test(ln)
-  )
-    return true
-  // Raw passthrough / fenced code: interrupt only with a matching closer.
-  if (RE_RAW_FENCE.test(ln)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(ln)![1]!)
-  if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
-  // Thematic break, heading, definition-list term, block quote.
-  if (RE_HR.test(ln.trim())) return true
-  if (RE_HEADING.test(ln)) return true
-  if (RE_DEFLIST_TERM.test(ln)) return true
-  if (RE_BLOCKQUOTE.test(ln)) return true
-  // Lists: a bullet/task marker always interrupts; an ordered marker only as
-  // `1.`/`1)` (§10 ordered-list guard — `2.`, `1985.`, `a.`, `i.` do not).
-  if (RE_TASK.test(ln) || RE_UNORDERED.test(ln)) return true
-  if (RE_ORDERED.test(ln)) return RE_INTERRUPT_ORDERED.test(ln)
-  // Admonition / generic div: interrupt only with a matching `:::` closer
-  // ahead (§10 CLOSER LOOKAHEAD), reusing the div closer scan.
-  if (
-    (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
-    RE_DIV_OPEN.test(ln)
-  )
-    return divHasCloser(lexer)
-  // Table: a valid `|…|` row (a stray leading `|` in prose is not a row).
-  if (RE_TABLE_ROW.test(ln) && /\|\s*$/.test(ln)) return true
-  // A bare image is inline content, not a block (§10 IMAGE EXCLUDED).
-  return false
+  // Dispatch on the first non-whitespace character, so a line costs one or two
+  // regex tests instead of the whole battery — this is the per-line cost on
+  // dense interrupt text. Each regex keeps its own anchor, so leading-whitespace
+  // handling is unchanged: a `^`-anchored pattern (heading, quote, table, `:::`,
+  // raw fence, defs, comments) still fails on an indented line, and the
+  // `^\s*`-anchored ones (fence, list, link-def) still match it. The boolean
+  // result is identical to testing every pattern in order.
+  let i = 0
+  while (i < ln.length && (ln.charCodeAt(i) === 32 || ln.charCodeAt(i) === 9)) i++
+  switch (ln[i]) {
+    case '#':
+      return RE_HEADING.test(ln)
+    case '>':
+      return RE_BLOCKQUOTE.test(ln)
+    case '|':
+      // A valid `|…|` row (a stray leading `|` in prose is not a row).
+      return RE_TABLE_ROW.test(ln) && /\|\s*$/.test(ln)
+    case '`':
+    case '~':
+      // Raw passthrough / fenced code: interrupt only with a matching closer.
+      if (RE_RAW_FENCE.test(ln)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(ln)![1]!)
+      if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
+      return false
+    case '-':
+      // thematic break, task or unordered list
+      return RE_HR.test(ln.trim()) || RE_TASK.test(ln) || RE_UNORDERED.test(ln)
+    case '+':
+      // task or unordered list (`+` is not a thematic-break char)
+      return RE_TASK.test(ln) || RE_UNORDERED.test(ln)
+    case '*':
+      // abbreviation definition (invisible), thematic break, task or unordered
+      return (
+        RE_ABBR_DEF.test(ln) ||
+        RE_HR.test(ln.trim()) ||
+        RE_TASK.test(ln) ||
+        RE_UNORDERED.test(ln)
+      )
+    case '_':
+      return RE_HR.test(ln.trim())
+    case ':':
+      // definition-list term, or an admonition/div that has a `:::` closer ahead
+      if (RE_DEFLIST_TERM.test(ln)) return true
+      if (
+        (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
+        RE_DIV_OPEN.test(ln)
+      )
+        return divHasCloser(lexer)
+      return false
+    case '[':
+      // link or footnote reference definition (invisible)
+      return RE_LINK_DEF.test(ln) || RE_FOOTNOTE_DEF.test(ln)
+    case '%':
+      // line or block comment (invisible)
+      return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)
+    default:
+      // Ordered list: only `1.`/`1)` interrupts (§10 ordered-list guard —
+      // `2.`, `1985.`, `a.`, `i.` do not). A bare image is inline, not a block.
+      return RE_INTERRUPT_ORDERED.test(ln)
+  }
 }
 
 function parseParagraph(lexer: Lexer): Paragraph {
