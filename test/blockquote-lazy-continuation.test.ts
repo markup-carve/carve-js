@@ -55,9 +55,12 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
   })
 
   it('keeps a fence-looking line mid-paragraph as paragraph text and folds the lazy line', () => {
-    // This fence has no matching closer, so it does not interrupt.
+    // The fence has no matching closer, so it does not interrupt the paragraph
+    // (§10 closer lookahead) and the lazy line still folds. The mid-paragraph
+    // ``` is then an unclosed inline verbatim run, rendering as a <code> span to
+    // the end of the block (matches djot upstream + carve-php).
     expect(html('> text\n> ```\nlazy')).toBe(
-      '<blockquote><p>text\n```\nlazy</p></blockquote>',
+      '<blockquote><p>text\n<code>\nlazy</code></p></blockquote>',
     )
   })
 
