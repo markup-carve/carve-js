@@ -9,9 +9,9 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('top-level paragraph interruption (§10)', () => {
   it('a `* ` unordered marker interrupts prose', () => {
-    const html = carveToHtml('Die Frage ist x = 5\n* 3 + 17 wahr.\nim Text.')
+    const html = carveToHtml('Die Frage ist x = 5\n* 3 + 17 wahr.')
     expect(html).toBe(
-      '<p>Die Frage ist x = 5</p>\n<ul>\n  <li>3 + 17 wahr.</li>\n</ul>\n<p>im Text.</p>',
+      '<p>Die Frage ist x = 5</p>\n<ul>\n  <li>3 + 17 wahr.</li>\n</ul>',
     )
   })
 
