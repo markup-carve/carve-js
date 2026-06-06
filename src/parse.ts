@@ -798,22 +798,91 @@ function parseAbbrDef(lexer: Lexer): AbbreviationDef {
   return { type: 'abbreviation-def', abbr: m[1]!, expansion: m[2]! }
 }
 
+interface BlockQuoteLazyState {
+  inFence: boolean
+  fenceClose: RegExp | null
+  inComment: boolean
+  commentLen: number
+  paragraphOpen: boolean
+}
+
+/**
+ * Track verbatim/paragraph state across a blockquote's collected inner lines so a
+ * non-`>` lazy line only extends an OPEN paragraph (the djot/CommonMark rule).
+ * Inside an open code fence/comment, or after a structural line that leaves no open
+ * paragraph (a just-opened div, a closed fence), such a line must terminate the
+ * quote rather than be swallowed into the fence/div. Carve has no
+ * paragraph-interrupting block mode, so a fence/comment/div opener starts a block
+ * only when no paragraph is already open — a fence-looking line mid-paragraph is
+ * plain paragraph text.
+ */
+function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): void {
+  if (state.inComment) {
+    const c = /^(%{3,})\s*$/.exec(content)
+    if (c && c[1]!.length >= state.commentLen) state.inComment = false
+    state.paragraphOpen = false
+    return
+  }
+  if (state.inFence) {
+    if (state.fenceClose!.test(content)) state.inFence = false
+    state.paragraphOpen = false
+    return
+  }
+  if (content.trim() === '') {
+    state.paragraphOpen = false
+    return
+  }
+  if (!state.paragraphOpen) {
+    const fence = RE_FENCE.exec(content)
+    if (fence) {
+      const marker = fence[2]!
+      state.inFence = true
+      state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+      state.paragraphOpen = false
+      return
+    }
+    const comment = /^(%{3,})\s*$/.exec(content)
+    if (comment) {
+      state.inComment = true
+      state.commentLen = comment[1]!.length
+      state.paragraphOpen = false
+      return
+    }
+    if (RE_DIV_OPEN.test(content) || RE_ADMONITION_OPEN.test(content)) {
+      // Div / admonition opener (`:::`, `::: {…}`, or `::: type`) is structural;
+      // it opens no paragraph itself.
+      state.paragraphOpen = false
+      return
+    }
+  }
+  state.paragraphOpen = true
+}
+
 function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const inner: string[] = []
+  const state: BlockQuoteLazyState = {
+    inFence: false,
+    fenceClose: null,
+    inComment: false,
+    commentLen: 0,
+    paragraphOpen: false,
+  }
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     const m = RE_BLOCKQUOTE.exec(ln)
     if (m) {
       lexer.consume()
-      inner.push(m[1] ?? '')
+      const content = m[1] ?? ''
+      inner.push(content)
+      trackBlockQuoteLazyState(content, state)
       continue
     }
-    // Lazy continuation: a non-`>` line that does not itself start a block
-    // folds into the quote (CommonMark-style; matches carve-php, which is the
-    // canonical here). A blank line ends the quote. The only non-blank lines
-    // that end it are the ones that interrupt a paragraph anywhere — the
-    // "invisible" reference/footnote/abbr definitions and comments — plus a
-    // caption `^ …`, which attaches to the quote rather than folding in.
+    // Lazy continuation: a non-`>` line folds into the quote ONLY when it
+    // continues an open paragraph (CommonMark-style; matches carve-php). A blank
+    // line ends the quote. The only non-blank lines that end it are the ones that
+    // interrupt a paragraph anywhere — the "invisible" reference/footnote/abbr
+    // definitions and comments — plus a caption `^ …`, which attaches to the quote
+    // rather than folding in.
     if (
       ln.trim() === '' ||
       RE_LINK_DEF.test(ln) ||
@@ -825,8 +894,12 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     ) {
       break
     }
+    // A non-`>` line inside an open fence/comment, or after a block that left no
+    // open paragraph, terminates the quote instead of being swallowed.
+    if (!state.paragraphOpen) break
     lexer.consume()
     inner.push(ln)
+    trackBlockQuoteLazyState(ln, state)
   }
   const subLexer = new Lexer(inner.join('\n'))
   subLexer.abbrDefs = lexer.abbrDefs

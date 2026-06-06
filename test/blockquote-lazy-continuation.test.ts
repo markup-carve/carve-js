@@ -36,3 +36,32 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     expect(html('> a\n> b')).toBe('<blockquote><p>a\nb</p></blockquote>')
   })
 })
+
+describe('blockquote lazy continuation only extends an open paragraph', () => {
+  it('does not swallow a non-`>` line into an open fenced code block', () => {
+    // `b` and `> c` must leave the quote, not be pulled into the code block
+    // (with the `>` stripped). The quote ends at the first non-`>` line.
+    expect(html('> ```\n> a\nb\n> c')).toBe(
+      '<blockquote>\n  <pre><code>a\n</code></pre>\n</blockquote>\n<p>b\n&gt; c</p>',
+    )
+  })
+
+  it('does not pull a non-`>` line into a just-opened div', () => {
+    expect(html('> :::note\nbody\n> :::')).toBe(
+      '<blockquote>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>body\n&gt; :::</p>',
+    )
+  })
+
+  it('keeps a fence-looking line mid-paragraph as paragraph text and folds the lazy line', () => {
+    // A fence never interrupts an open paragraph, so the lazy line still folds.
+    expect(html('> text\n> ```\nlazy')).toBe(
+      '<blockquote><p>text\n```\nlazy</p></blockquote>',
+    )
+  })
+
+  it('still folds a lazy line that continues a paragraph open inside a div', () => {
+    expect(html('> :::note\n> para\nlazy\n> :::')).toBe(
+      '<blockquote>\n  <aside class="admonition note">\n    <p>para\nlazy</p>\n  </aside>\n</blockquote>',
+    )
+  })
+})
