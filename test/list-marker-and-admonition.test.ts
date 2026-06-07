@@ -8,8 +8,8 @@ const h = (s: string) => carveToHtml(s)
  * / `+`) between adjacent items at the same indent starts a new list.
  */
 describe('list marker change starts a new list (§11)', () => {
-  it('splits - then + into two lists', () => {
-    expect(h('- a\n- b\n+ c\n+ d')).toBe(
+  it('splits - then * into two lists', () => {
+    expect(h('- a\n- b\n* c\n* d')).toBe(
       [
         '<ul>',
         '  <li>a</li>',
@@ -23,9 +23,11 @@ describe('list marker change starts a new list (§11)', () => {
     )
   })
 
-  it('splits -, *, + into three single-item lists', () => {
-    const html = h('- a\n* b\n+ c')
-    expect(html.match(/<ul>/g)).toHaveLength(3)
+  it('splits - and * into two single-item lists', () => {
+    // `+` is no longer a bullet (it is the list-continuation marker), so the
+    // two remaining bullet characters split on a marker change.
+    const html = h('- a\n* b')
+    expect(html.match(/<ul>/g)).toHaveLength(2)
   })
 
   it('keeps a same-marker run as one list', () => {
@@ -60,9 +62,9 @@ describe('list marker change starts a new list (§11)', () => {
   })
 
   it('does not loosen a list when a blank precedes a different marker', () => {
-    // `- a\n\n+ b` is two distinct lists (§11); the blank line sits
+    // `- a\n\n* b` is two distinct lists (§11); the blank line sits
     // BETWEEN them, so the first list stays tight (no <p> wrapper).
-    expect(h('- a\n\n+ b')).toBe(
+    expect(h('- a\n\n* b')).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
     )
   })

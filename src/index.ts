@@ -64,8 +64,8 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
  * (no explicit `[label]: url` def and no matching heading) to its
  * literal source text.
  */
-export function resolve(doc: Document): Document {
-  return resolveHeadingIds(doc)
+export function resolve(doc: Document, opts: { asciiHeadingIds?: boolean } = {}): Document {
+  return resolveHeadingIds(doc, opts.asciiHeadingIds ?? false)
 }
 
 /** Convenience: parse + resolve + render in one call. */
@@ -75,7 +75,7 @@ export function carveToHtml(
 ): string {
   // `sourceLine` rendering needs block positions, so enable parsing them.
   const parseOpts: ParseOptions = opts.sourceLine ? { ...opts, positions: true } : opts
-  let doc = resolve(parse(source, parseOpts))
+  let doc = resolve(parse(source, parseOpts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
   const exts: CarveExtension[] = opts.extensions ?? []
   for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
   for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
