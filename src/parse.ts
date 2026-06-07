@@ -1554,23 +1554,20 @@ function parseParagraph(lexer: Lexer): Paragraph {
     if (ln.trim() === '') break
     // Paragraph interruption (grammar PART 9 §10): a paragraph is interrupted
     // only by INVISIBLE constructs — reference definitions (link/footnote/abbr)
-    // and comments — in any context, PLUS, inside nested content only, a LIST
-    // MARKER (the one Carve deviation: `- a\n  - b` nests a sublist with no
-    // blank line; parseList re-parses item content as nested, so the marker
-    // breaks the lead paragraph and dispatches the sublist). No OTHER visible
-    // block (quote, table, heading, fence, thematic break, admonition/div,
-    // image, …) interrupts a paragraph without a blank line, at the top level
-    // OR nested (full djot), so hard-wrapped prose never silently becomes a
-    // block.
+    // and comments — in any context. No VISIBLE block (list marker, quote,
+    // table, heading, fence, thematic break, admonition/div, image, …)
+    // interrupts a paragraph without a blank line, at the top level OR nested
+    // (full djot). In particular an indented sublist marker no longer interrupts
+    // the lead paragraph of a list item: `- a\n  - b` is a single item whose
+    // text is `a\n- b` (lazy continuation), matching djot; a nested list needs a
+    // blank line first (`- a\n\n  - b`).
     const isInvisible =
       RE_LINK_DEF.test(ln) ||
       RE_FOOTNOTE_DEF.test(ln) ||
       RE_ABBR_DEF.test(ln) ||
       RE_COMMENT_LINE.test(ln) ||
       RE_COMMENT_BLOCK.test(ln)
-    const isListMarker =
-      RE_TASK.test(ln) || RE_UNORDERED.test(ln) || RE_ORDERED.test(ln)
-    if (isInvisible || (lexer.nested && isListMarker)) break
+    if (isInvisible) break
     lexer.consume()
     lines.push(ln)
   }

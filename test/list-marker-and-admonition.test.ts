@@ -41,12 +41,14 @@ describe('list marker change starts a new list (§11)', () => {
     expect(html.match(/<ul>/g)).toHaveLength(2)
   })
 
-  it('does not split on a nested differing marker (deeper indent)', () => {
-    // The nested `* b` is a child of `- a`, not a sibling, so it does not
-    // terminate the outer list.
+  it('an indented differing marker with no blank line stays item text', () => {
+    // With no blank line the indented `* b` does not interrupt item 1's
+    // paragraph (it is lazy continuation text), so there is no nested list;
+    // `- c` at column 0 is a sibling item. A blank line would be needed to
+    // nest. One list, two items.
     const html = h('- a\n  * b\n- c')
-    expect(html.match(/<ul>/g)).toHaveLength(2) // outer + one nested
-    expect(html).toContain('<li>a')
+    expect(html.match(/<ul>/g)).toHaveLength(1) // no nested list
+    expect(html).toContain('<li>a\n* b</li>')
     expect(html).toContain('<li>c</li>')
   })
 

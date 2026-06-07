@@ -113,26 +113,27 @@ describe('invisible constructs still interrupt (§10 carve-out)', () => {
   })
 })
 
-// Inside already-nested content, ONLY a list marker interrupts without a
-// blank line (the single Carve deviation: `- a\n  - b` nests a sublist).
-// Every other block opener — heading, fence, div, etc. — does NOT interrupt
-// nested either; it needs a blank line, matching djot (grammar §10 SCOPING).
-describe('nested content: only a list marker interrupts (sublists keep nesting)', () => {
-  it('single nested child still nests', () => {
+// No visible block interrupts a paragraph without a blank line, nested or not
+// — including a list marker. An indented sublist marker with no blank line is
+// lazy continuation text of the item; a blank line is required to nest, exactly
+// like every other block (grammar §10, matching djot). The former list-marker
+// carve-out ("- a\n  - b" nests with no blank line) was removed.
+describe('nested content: nothing interrupts without a blank line', () => {
+  it('an indented sublist marker without a blank line stays item text', () => {
     const html = carveToHtml('- parent\n  - child')
-    expect(html).toContain('<ul>')
+    expect(html).not.toContain('<li>child</li>')
+    expect(html).toContain('<li>parent\n- child</li>')
+  })
+
+  it('a blank line lets the sublist nest', () => {
+    const html = carveToHtml('- parent\n\n  - child')
     expect(html).toContain('<li>child</li>')
   })
 
-  it('single bullet inside a blockquote still nests', () => {
+  it('an indented bullet in a blockquote without a blank line stays text', () => {
     const html = carveToHtml('> intro\n> - child')
     expect(html).toContain('<blockquote>')
-    expect(html).toContain('<li>child</li>')
-  })
-
-  it('lead text + single nested child in one item', () => {
-    const html = carveToHtml('- parent text\n  - child')
-    expect(html).toContain('<li>child</li>')
+    expect(html).not.toContain('<li>child</li>')
   })
 
   it('a heading after lead text in an item stays paragraph text (no blank line)', () => {
