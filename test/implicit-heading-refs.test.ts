@@ -80,12 +80,12 @@ describe('implicit heading references ([Heading][])', () => {
   it('extracts backslash-escaped chars in a heading', () => {
     // `# What\'s new` -> plain text "What's new".
     expect(h("# What\\'s new\n\n[What's new][]")).toContain(
-      'href="#whats-new"',
+      'href="#what-s-new"',
     )
   })
 
   it('does not invent a ref for an image-only heading', () => {
-    // `# ![alt](src)` -> inlineText is "", heading id is "section";
+    // `# ![alt](src)` -> inlineText is "", heading id is "s";
     // there is nothing to match `[alt][]` against.
     expect(h('# ![Logo](logo.png)\n\n[Logo][]')).not.toContain(
       '<a href="#logo"',
@@ -109,12 +109,12 @@ describe('implicit heading references ([Heading][])', () => {
     )
   })
 
-  it('reserves the `section` slot for empty-text headings', () => {
-    // `# ![Logo]()` -> id "section" (resolveHeadingIds). A later
-    // `# Section` heading should then become `section-2`. The implicit
-    // ref `[Section][]` must follow that dedup.
+  it('reserves the `s` slot for empty-text headings', () => {
+    // `# ![Logo]()` -> id "s" (resolveHeadingIds empty fallback). A later
+    // `# Section` heading slugs to `section` (no collision), and the
+    // implicit ref `[Section][]` must resolve to it.
     expect(h('# ![Logo](logo.png)\n\n# Section\n\n[Section][]')).toContain(
-      'href="#section-2"',
+      'href="#section"',
     )
   })
 
@@ -141,7 +141,7 @@ describe('implicit heading references ([Heading][])', () => {
   })
 
   it('does not invent a ref for an autolink-only heading', () => {
-    // Same reason: inlineText ignores autolinks, heading id is "section".
+    // Same reason: inlineText ignores autolinks, heading id is "s".
     expect(h('# <https://example.com>\n\n[https://example.com][]')).not.toContain(
       '<a href="#https',
     )
