@@ -42,6 +42,18 @@ describe('typed frontmatter (raw-hold)', () => {
     expect(doc.frontmatter?.format).toBe('json')
   })
 
+  it('accepts an optional space before the format token (lenient)', () => {
+    // `--- toml` and `---toml` are equivalent; the no-space form is canonical.
+    const doc = parse('--- toml\ntitle = "Hi"\n---\n\nBody')
+    expect(doc.frontmatter).toEqual({ format: 'toml', content: 'title = "Hi"' })
+    expect(carveToHtml('--- toml\ntitle = "Hi"\n---\n\nBody')).toBe('<p>Body</p>')
+  })
+
+  it('accepts a space before the token on a bare-default opener too', () => {
+    const doc = parse('---   \nx\n---')
+    expect(doc.frontmatter?.format).toBe('yaml')
+  })
+
   it('does not consume a fence inside a nested block as frontmatter', () => {
     // Frontmatter is document-leading only. A `---`-fenced run inside an
     // admonition body must be parsed as content, not eaten by a sub-lexer.
