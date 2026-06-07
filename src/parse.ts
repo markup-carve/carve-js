@@ -1578,9 +1578,17 @@ function parseParagraph(lexer: Lexer): Paragraph {
     lexer.consume()
     lines.push(ln)
   }
+  // A paragraph's continuation lines have their leading whitespace stripped
+  // (djot / CommonMark): `a\n   b` renders as `a\nb`, and an over-indented lazy
+  // continuation in a list item (`- a\n   - b` -> item text `a\n- b`) does not
+  // keep residual indent. The first line is already positioned by the block
+  // dispatcher, so only lines 2+ are trimmed.
+  const text = lines
+    .map((ln, idx) => (idx === 0 ? ln : ln.replace(/^[ \t]+/, '')))
+    .join('\n')
   return {
     type: 'paragraph',
-    children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs, {
+    children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
       baseOffset: lexer.lineOffset(startLineIndex),
       startLine: startLineIndex + 1,
       startColumn: 1,
