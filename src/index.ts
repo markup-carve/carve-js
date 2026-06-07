@@ -39,6 +39,7 @@ export {
   type MigrationWarning,
 } from './djot-migrate.js'
 export { markdownToCarve } from './markdown-migrate.js'
+export { tabNormalize } from './tab-normalize.js'
 
 /**
  * Parse Carve source into a typed AST.
