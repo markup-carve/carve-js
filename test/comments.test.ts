@@ -34,6 +34,6 @@ describe('trailing line comments', () => {
   it('recognizes a comment at the start of an inline run (i===0 path)', () => {
     // Heading text "%% all" reaches scanInline at offset 0, so the inline
     // i===0 guard fires and the whole title is a comment.
-    expect(carveToHtml('# %% all').trim()).toBe('<section id="section">\n  <h1></h1>\n</section>')
+    expect(carveToHtml('# %% all').trim()).toBe('<section id="s">\n  <h1></h1>\n</section>')
   })
 })
