@@ -52,3 +52,27 @@ describe('list continuation marker (A3)', () => {
     expect(carveToHtml('+ one\n+ two')).toBe('<p>+ one\n+ two</p>')
   })
 })
+
+describe('first-block item (`- +`)', () => {
+  it('`- +` opens an item whose body is the flush-left table', () => {
+    expect(carveToHtml('- +\n| a | b |\n| c | d |\n- next')).toBe(
+      '<ul>\n  <li>\n    <table>\n      <tbody>\n        <tr><td>a</td><td>b</td></tr>\n        <tr><td>c</td><td>d</td></tr>\n      </tbody>\n    </table>\n  </li>\n  <li>next</li>\n</ul>',
+    )
+  })
+
+  it('`- +` opens an item whose body is a flush-left code block', () => {
+    const html = carveToHtml('- +\n```sh\nmake\n```\n- next')
+    expect(html).toContain('<li>\n    <pre><code class="language-sh">make\n</code></pre>')
+    expect(html).toContain('<li>next</li>')
+  })
+
+  it('`- +` + flush quote matches the empty-item blank-line layout', () => {
+    expect(carveToHtml('- +\n> note\n- next')).toBe(
+      '<ul>\n  <li>\n    <blockquote><p>note</p></blockquote>\n  </li>\n  <li>next</li>\n</ul>',
+    )
+  })
+
+  it('only a bare `+` triggers it; `- + text` stays literal item text', () => {
+    expect(carveToHtml('- + text\n- next')).toContain('<li>+ text</li>')
+  })
+})
