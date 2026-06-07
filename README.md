@@ -72,6 +72,21 @@ Carve's blank-line-around-blocks rule:
 To go the other way — flagging a Djot document that would silently mis-render
 under Carve — use [`djotMigrationWarnings`](./src/djot-migrate.ts).
 
+## Extensions
+
+Extensions are plain objects passed via `{ extensions: [...] }`. Carve preserves
+literal tabs in code content by default (djot/CommonMark-aligned). Add
+`tabNormalize(width = 2)` to expand each tab to spaces on output — flat
+replacement, code content only — for fixed-width output without CSS `tab-size`:
+
+```ts
+import { carveToHtml, tabNormalize } from '@markup-carve/carve'
+
+carveToHtml(src)                                  // tabs preserved (default)
+carveToHtml(src, { extensions: [tabNormalize()] }) // tabs -> 2 spaces
+carveToHtml(src, { extensions: [tabNormalize(4)] })// tabs -> 4 spaces
+```
+
 ## Roadmap
 
 See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) in the spec repo.
