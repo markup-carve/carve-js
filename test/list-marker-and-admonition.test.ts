@@ -154,3 +154,28 @@ describe('admonition title (§12)', () => {
     )
   })
 })
+
+/**
+ * A marker is a list item only with non-empty content. A content-less marker
+ * (bare or trailing whitespace only) is paragraph text, not a list. The rule
+ * ignores trailing whitespace, so it cannot be flipped by an editor stripping
+ * the space. Stricter than CommonMark.
+ */
+describe('content-less marker is not a list', () => {
+  it('treats a bare `-` as paragraph text', () => {
+    expect(h('-\nnot a list')).toBe('<p>-\nnot a list</p>')
+  })
+
+  it('treats `- ` (trailing space only) the same as bare `-`', () => {
+    expect(h('- \nnot a list')).toBe(h('-\nnot a list').replace('-\n', '- \n'))
+    expect(h('- \nx')).not.toContain('<ul>')
+  })
+
+  it('treats a content-less ordered marker `1. ` as paragraph text', () => {
+    expect(h('1. \nx')).not.toContain('<ol>')
+  })
+
+  it('still parses a marker with real content as a list', () => {
+    expect(h('- a\n- b')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
+  })
+})
