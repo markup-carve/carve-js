@@ -79,8 +79,9 @@ import { applyMigrationFixes } from '@markup-carve/carve'
 
 const { output, applied, skipped } = applyMigrationFixes('use _emphasis_ here')
 // output  -> 'use /emphasis/ here'
-// applied -> the warnings that were spliced in
-// skipped -> overlapping collisions (e.g. **_x_**) left for manual review
+// applied -> the warnings that were spliced in (nested ones compose, so
+//            **_x_** fixes to a single-star bold wrapping a slash emphasis)
+// skipped -> crossing collisions (e.g. **_x**_) left for manual review
 ```
 
 ## Command line
@@ -96,11 +97,11 @@ carve fix --check doc.crv …      # report only; exit 1 if any would change (CI
 carve fix --stdout doc.crv       # print the fix for one file, don't modify it
 ```
 
-With no files it reads stdin and writes the fixed result to stdout. Overlapping
-collisions that cannot be auto-fixed (e.g. `**_x_**`, which is both strong and
-emphasis) are reported on stderr for manual review. `--check` is a gate: it
-exits non-zero when a file would change or has manual-review collisions, so it
-drops into a pre-commit hook or CI step.
+With no files it reads stdin and writes the fixed result to stdout. Nested
+collisions compose (`**_x_**` fixes in one pass); only *crossing* collisions
+that are genuinely ambiguous (e.g. `**_x**_`) are reported on stderr for manual
+review. `--check` is a gate: it exits non-zero when a file would change or has
+manual-review collisions, so it drops into a pre-commit hook or CI step.
 
 ## Extensions
 
