@@ -36,7 +36,9 @@ export type {
 export {
   djotMigrationWarnings,
   formatMigrationWarnings,
+  applyMigrationFixes,
   type MigrationWarning,
+  type MigrationFixResult,
 } from './djot-migrate.js'
 export { markdownToCarve } from './markdown-migrate.js'
 export { tabNormalize } from './tab-normalize.js'
