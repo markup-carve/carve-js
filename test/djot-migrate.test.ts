@@ -242,9 +242,24 @@ describe('applyMigrationFixes — autocorrect', () => {
     expect(fix('**a `code` b**')).toBe('*a `code` b*')
   })
 
-  it('skips overlapping (nested different-family) warnings instead of corrupting them', () => {
+  it('composes strictly nested different-family collisions', () => {
+    // `**_x_**` is strong over `_x_` AND emphasis over `x`. The delimiter
+    // edits sit at distinct offsets, so both fix in one pass.
     const r = applyMigrationFixes('**_x_**')
-    expect(r.output).toBe('**_x_**') // untouched
+    expect(r.output).toBe('*/x/*')
+    expect(r.applied).toHaveLength(2)
+    expect(r.skipped).toEqual([])
+  })
+
+  it('composes nested strike + emphasis (~~_x_~~ -> ~/x/~)', () => {
+    expect(applyMigrationFixes('~~_x_~~').output).toBe('~/x/~')
+  })
+
+  it('skips crossing collisions (neither span contains the other)', () => {
+    // `**_x**_`: strong over `_x` [0,6) and emphasis over `x**` [2,7) -
+    // they cross. Ambiguous source, so neither is auto-applied.
+    const r = applyMigrationFixes('**_x**_')
+    expect(r.output).toBe('**_x**_') // untouched
     expect(r.applied).toEqual([])
     expect(r.skipped).toHaveLength(2)
   })

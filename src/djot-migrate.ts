@@ -60,6 +60,15 @@ interface Rule {
   family: string
   message: (m: RegExpExecArray) => string
   suggestion: (m: RegExpExecArray) => string
+  /**
+   * Replacement delimiters `[left, right]` for a content-wrapping construct.
+   * When set, a fix is expressed as two edits that rewrite ONLY the
+   * delimiters and leave the captured content untouched — this is what lets
+   * nested collisions compose (`**_x_**` -> outer `*` edits + inner `/`
+   * edits never touch each other). Omitted for whole-span replacements
+   * (the `+` bullet), which fix via `suggestion` as a single edit.
+   */
+  delims?: [string, string]
 }
 
 // Order matters: more specific patterns (``**``, ``~~``) are tested before
@@ -75,6 +84,7 @@ const RULES: Rule[] = [
     message: () =>
       'Djot/Markdown `**strong**` is not Carve bold — Carve bold is a single `*`, so this renders with literal asterisks.',
     suggestion: (m) => `*${m[1]}*`,
+    delims: ['*', '*'],
   },
   {
     id: 'markdown-strikethrough-double-tilde',
@@ -83,6 +93,7 @@ const RULES: Rule[] = [
     message: () =>
       'Markdown `~~strikethrough~~` is not Carve — Carve strikethrough is a single `~`.',
     suggestion: (m) => `~${m[1]}~`,
+    delims: ['~', '~'],
   },
   {
     id: 'djot-subscript-tilde',
@@ -91,6 +102,7 @@ const RULES: Rule[] = [
     message: () =>
       'Djot subscript `~x~` renders as *strikethrough* in Carve.',
     suggestion: (m) => `,,${m[1]},,`,
+    delims: [',,', ',,'],
   },
   {
     id: 'djot-emphasis-underscore',
@@ -100,6 +112,7 @@ const RULES: Rule[] = [
     message: () =>
       'Djot emphasis `_x_` renders as *underline* in Carve.',
     suggestion: (m) => `/${m[1]}/`,
+    delims: ['/', '/'],
   },
   {
     id: 'djot-highlight-braces',
@@ -107,6 +120,7 @@ const RULES: Rule[] = [
     pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/gd,
     message: () => 'Djot highlight `{=x=}` is written `==x==` in Carve.',
     suggestion: (m) => `==${m[1]}==`,
+    delims: ['==', '=='],
   },
   // Block-level (line-anchored): a leading `+ content` is a bullet in
   // Djot/Markdown but NOT in Carve — `+` is the list-continuation marker, so
@@ -204,13 +218,49 @@ function maskCode(src: string): string {
   return masked
 }
 
+/** A single source splice: replace [start, end) with `text`. */
+interface Edit {
+  start: number
+  end: number
+  text: string
+}
+
+/** A scan result enriched with the delimiter edits that fix it. */
+interface ScanHit extends MigrationWarning {
+  /**
+   * The edits that apply this fix. A wrapping construct yields two edits
+   * (its delimiters); the `+` bullet yields one (a whole-span replacement).
+   * Edits never touch the captured content, so nested hits' edits don't
+   * collide.
+   */
+  edits: Edit[]
+}
+
+/** Project a ScanHit down to the public warning shape (drop `edits`). */
+function stripHit(h: ScanHit): MigrationWarning {
+  return {
+    line: h.line,
+    column: h.column,
+    rule: h.rule,
+    message: h.message,
+    suggestion: h.suggestion,
+    start: h.start,
+    end: h.end,
+  }
+}
+
 /**
  * Scan Djot/Carve source and return warnings for constructs that silently
  * change meaning under Carve. Empty array means the source is free of the
  * known Djot/Carve delimiter collisions.
  */
 export function djotMigrationWarnings(source: string): MigrationWarning[] {
-  const out: MigrationWarning[] = []
+  return scanHits(source).map(stripHit)
+}
+
+/** The full scan, carrying the fix edits used by `applyMigrationFixes`. */
+function scanHits(source: string): ScanHit[] {
+  const out: ScanHit[] = []
   // Code (fenced + inline, multi-line) is masked to spaces so no rule
   // can match through or into it. Positions are preserved 1:1. The scan
   // runs over the whole text (not per line) so delimiter pairs that
@@ -270,14 +320,27 @@ export function djotMigrationWarnings(source: string): MigrationWarning[] {
       const orig = span ? norm.slice(span[0], span[1]) : m[1]!
       const origM = m.slice() as RegExpExecArray
       origM[1] = orig
+      // Fix edits. A wrapping rule rewrites only its delimiters (the slices
+      // before/after the captured content), leaving content verbatim, so
+      // nested fixes compose. A whole-span rule (the `+` bullet) replaces
+      // its single match with the suggestion.
+      const suggestion = rule.suggestion(origM)
+      const edits: Edit[] =
+        rule.delims && span
+          ? [
+              { start, end: span[0], text: rule.delims[0] },
+              { start: span[1], end, text: rule.delims[1] },
+            ]
+          : [{ start, end, text: suggestion }]
       out.push({
         line,
         column,
         rule: rule.id,
         message: rule.message(m),
-        suggestion: rule.suggestion(origM),
+        suggestion,
         start,
         end,
+        edits,
       })
     }
   }
@@ -296,46 +359,54 @@ export interface MigrationFixResult {
   /** Warnings whose suggestion was spliced into `output`. */
   applied: MigrationWarning[]
   /**
-   * Warnings left untouched because their span overlaps another warning
-   * (nested different-family collisions such as `**_x_**` -> strong AND
-   * emphasis). Auto-rewriting overlapping spans in one pass would corrupt
-   * offsets, and re-scanning the output is unsafe (a fixed `~~x~~` -> `~x~`
-   * would be re-flagged as a subscript mis-render). These are reported for
-   * the caller to resolve by hand.
+   * Warnings left untouched because their span *crosses* another warning -
+   * a partial overlap where neither span contains the other (e.g.
+   * `**_x**_`, which is strong over `_x` AND emphasis over `x**`). Such
+   * source is genuinely ambiguous, so it is reported for the caller to
+   * resolve by hand rather than guessed at. Strictly *nested* collisions
+   * (`**_x_**`) are NOT skipped - they compose and land in `applied`.
    */
   skipped: MigrationWarning[]
 }
 
 /**
- * Apply the auto-fixable Djot/Carve migration warnings to `source`,
+ * Apply the auto-fixable Djot/Carve migration collisions to `source`,
  * returning the rewritten text. This is the autocorrect companion to
- * {@link djotMigrationWarnings}: each warning already carries the precise
- * span and the canonical Carve replacement, so the fix is a pure splice.
+ * {@link djotMigrationWarnings}.
  *
- * Single, non-recursive pass: only mutually non-overlapping warnings are
- * applied (right-to-left, so earlier offsets stay valid). Overlapping
- * warnings are returned in `skipped` rather than guessed at — see
- * {@link MigrationFixResult.skipped}.
+ * Each fix is expressed as edits to its delimiters only, never its content,
+ * so strictly nested collisions compose in one pass: the outer strong
+ * delimiters and the inner emphasis delimiters sit at distinct offsets, so
+ * `**_x_**` fixes to single-star bold wrapping a slash emphasis. Only
+ * *crossing* collisions - partial overlaps where neither span contains the
+ * other - are skipped, since that source is genuinely ambiguous. The scan is
+ * not re-run on the output, so a fixed `~~x~~` -> `~x~` is never re-flagged
+ * as a subscript.
  */
 export function applyMigrationFixes(source: string): MigrationFixResult {
-  const warnings = djotMigrationWarnings(source)
-  const overlaps = (a: MigrationWarning, b: MigrationWarning) =>
-    a.start < b.end && b.start < a.end
-  const applied: MigrationWarning[] = []
-  const skipped: MigrationWarning[] = []
-  for (const w of warnings) {
-    if (warnings.some((o) => o !== w && overlaps(w, o))) skipped.push(w)
-    else applied.push(w)
+  const hits = scanHits(source)
+  const overlaps = (a: ScanHit, b: ScanHit) => a.start < b.end && b.start < a.end
+  const contains = (a: ScanHit, b: ScanHit) =>
+    a.start <= b.start && b.end <= a.end
+  const crosses = (a: ScanHit, b: ScanHit) =>
+    overlaps(a, b) && !contains(a, b) && !contains(b, a)
+
+  const applied: ScanHit[] = []
+  const skipped: ScanHit[] = []
+  for (const h of hits) {
+    if (hits.some((o) => o !== h && crosses(h, o))) skipped.push(h)
+    else applied.push(h)
   }
 
-  // Splice from the end so each replacement leaves the offsets of the
-  // not-yet-applied (earlier) warnings unchanged.
+  // No two applied hits cross, so their delimiter edits are pairwise
+  // non-overlapping. Splice from the end so each edit leaves earlier
+  // offsets valid.
+  const edits = applied.flatMap((h) => h.edits).sort((a, b) => b.start - a.start)
   let output = source.replace(/\r\n?/g, '\n')
-  for (let i = applied.length - 1; i >= 0; i--) {
-    const w = applied[i]!
-    output = output.slice(0, w.start) + w.suggestion + output.slice(w.end)
+  for (const e of edits) {
+    output = output.slice(0, e.start) + e.text + output.slice(e.end)
   }
-  return { output, applied, skipped }
+  return { output, applied: applied.map(stripHit), skipped: skipped.map(stripHit) }
 }
 
 /** Format warnings as `file:line:col rule — message (use: suggestion)`. */
