@@ -102,6 +102,36 @@ emphasis) are reported on stderr for manual review. `--check` is a gate: it
 exits non-zero when a file would change or has manual-review collisions, so it
 drops into a pre-commit hook or CI step.
 
+## Linting
+
+`djotMigrationWarnings` catches *source-level* delimiter collisions;
+`lintCarve` catches *semantic* problems that need the parsed tree - references
+that silently degrade to literal text when the document resolves:
+
+```ts
+import { lintCarve } from '@markup-carve/carve'
+
+lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
+// [
+//   { rule: 'duplicate-heading-id', line: 3, ... },  // second "Setup" -> id setup-2
+//   { rule: 'broken-crossref',      line: 5, ... },  // </#ghost> has no heading
+// ]
+```
+
+| Rule | Catches |
+| ---- | ------- |
+| `duplicate-heading-id` | two headings producing the same id (slug collision or repeated explicit `{#id}`); ambiguous references resolve to the first |
+| `broken-crossref` | a `</#id>` cross-reference with no matching heading; it renders as literal text |
+
+The `carve lint` CLI reports both the collision warnings and these semantic
+ones as `file:line:col rule - message`, and exits non-zero if anything is
+found:
+
+```sh
+carve lint doc.crv …   # report; exit 1 if any finding (CI / pre-commit)
+carve lint < doc.crv   # read stdin
+```
+
 ## Extensions
 
 Extensions are plain objects passed via `{ extensions: [...] }`. Carve preserves

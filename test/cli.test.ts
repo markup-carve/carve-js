@@ -134,6 +134,41 @@ describe('carve fix — files mode', () => {
   })
 })
 
+describe('carve lint', () => {
+  it('reports a broken cross-reference and exits 1', async () => {
+    const t = makeIO({ stdin: '# A\n\nSee </#ghost>.' })
+    const code = await run(['lint'], t.io)
+    expect(code).toBe(1)
+    expect(t.out).toContain('broken-crossref')
+    expect(t.out).toContain('<stdin>:3:')
+  })
+
+  it('reports both collision and semantic warnings together', async () => {
+    const t = makeIO({ stdin: '# A\n\n_em_ and </#ghost>' })
+    expect(await run(['lint'], t.io)).toBe(1)
+    expect(t.out).toContain('djot-emphasis-underscore')
+    expect(t.out).toContain('broken-crossref')
+  })
+
+  it('exits 0 on a clean document', async () => {
+    const t = makeIO({ stdin: '# Intro\n\nSee </#intro>.' })
+    expect(await run(['lint'], t.io)).toBe(0)
+    expect(t.out).toBe('')
+  })
+
+  it('lints files and prefixes findings with the filename', async () => {
+    const t = makeIO({ files: { 'a.crv': '# A\n\n## A' } })
+    expect(await run(['lint', 'a.crv'], t.io)).toBe(1)
+    expect(t.out).toContain('a.crv:3:1 duplicate-heading-id')
+  })
+
+  it('reports a missing file and exits 2', async () => {
+    const t = makeIO()
+    expect(await run(['lint', 'nope.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('cannot read nope.crv')
+  })
+})
+
 describe('carve fix — overlapping (manual-review) collisions', () => {
   it('reports skipped overlaps on stderr and leaves them in output', async () => {
     const t = makeIO({ stdin: '**_x_**' })
