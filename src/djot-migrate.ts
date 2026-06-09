@@ -29,8 +29,21 @@ export interface MigrationWarning {
   rule: string
   /** Human-readable explanation of the silent mis-render. */
   message: string
-  /** The Carve syntax that preserves the intended meaning. */
+  /**
+   * The Carve syntax that preserves the intended meaning. This is also the
+   * exact replacement text `applyMigrationFixes` splices over [start, end):
+   * the captured content is taken from the ORIGINAL source (not the
+   * code-masked scan buffer), so a construct wrapping inline code stays
+   * intact.
+   */
   suggestion: string
+  /**
+   * 0-based offset of the offending construct in the line-ending-normalized
+   * source (`\r\n?` -> `\n`), inclusive. Splice target start.
+   */
+  start: number
+  /** 0-based offset in the normalized source, exclusive. Splice target end. */
+  end: number
 }
 
 interface Rule {
@@ -58,7 +71,7 @@ const RULES: Rule[] = [
   {
     id: 'markdown-strong-double-star',
     family: '*',
-    pattern: /\*\*(?!\s)((?:(?!\n[ \t]*\n)[^*])+?)(?<!\s)\*\*/g,
+    pattern: /\*\*(?!\s)((?:(?!\n[ \t]*\n)[^*])+?)(?<!\s)\*\*/gd,
     message: () =>
       'Djot/Markdown `**strong**` is not Carve bold — Carve bold is a single `*`, so this renders with literal asterisks.',
     suggestion: (m) => `*${m[1]}*`,
@@ -66,7 +79,7 @@ const RULES: Rule[] = [
   {
     id: 'markdown-strikethrough-double-tilde',
     family: '~',
-    pattern: /~~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~~/g,
+    pattern: /~~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~~/gd,
     message: () =>
       'Markdown `~~strikethrough~~` is not Carve — Carve strikethrough is a single `~`.',
     suggestion: (m) => `~${m[1]}~`,
@@ -74,7 +87,7 @@ const RULES: Rule[] = [
   {
     id: 'djot-subscript-tilde',
     family: '~',
-    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~/g,
+    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~/gd,
     message: () =>
       'Djot subscript `~x~` renders as *strikethrough* in Carve.',
     suggestion: (m) => `,,${m[1]},,`,
@@ -83,7 +96,7 @@ const RULES: Rule[] = [
     id: 'djot-emphasis-underscore',
     family: '_',
     pattern:
-      /(?<![A-Za-z0-9_])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?![A-Za-z0-9_])/g,
+      /(?<![A-Za-z0-9_])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?![A-Za-z0-9_])/gd,
     message: () =>
       'Djot emphasis `_x_` renders as *underline* in Carve.',
     suggestion: (m) => `/${m[1]}/`,
@@ -91,7 +104,7 @@ const RULES: Rule[] = [
   {
     id: 'djot-highlight-braces',
     family: '{',
-    pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/g,
+    pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/gd,
     message: () => 'Djot highlight `{=x=}` is written `==x==` in Carve.',
     suggestion: (m) => `==${m[1]}==`,
   },
@@ -102,7 +115,7 @@ const RULES: Rule[] = [
   {
     id: 'djot-plus-bullet',
     family: 'plus-bullet',
-    pattern: /(?<=^[ \t]*)(\+)(?=[ \t]+\S)/gm,
+    pattern: /(?<=^[ \t]*)(\+)(?=[ \t]+\S)/gmd,
     message: () =>
       'Djot/Markdown `+` bullet is not a Carve bullet (`+` is the list-continuation marker) — this line renders as a paragraph.',
     suggestion: () => '-',
@@ -203,7 +216,11 @@ export function djotMigrationWarnings(source: string): MigrationWarning[] {
   // runs over the whole text (not per line) so delimiter pairs that
   // cross a soft line break are still caught. Normalize line endings
   // first, exactly as parse() does, so results don't depend on CRLF.
-  const masked = maskCode(source.replace(/\r\n?/g, '\n'))
+  // `norm` keeps the real characters (incl. code) at the same offsets as
+  // `masked`, so the captured content for a suggestion is sliced from
+  // `norm` — masking only ever blanks the *content*, never the delimiters.
+  const norm = source.replace(/\r\n?/g, '\n')
+  const masked = maskCode(norm)
 
   // index -> {line, column} (both 1-based), via newline prefix sums.
   const nlAt: number[] = []
@@ -245,18 +262,80 @@ export function djotMigrationWarnings(source: string): MigrationWarning[] {
       if (sameFamilyOverlap(start, end, rule.family)) continue
       taken.push([start, end, rule.family])
       const { line, column } = posOf(start)
+      // Build the suggestion from the ORIGINAL captured content, not the
+      // code-masked one, so `*a `code` b*` round-trips instead of losing
+      // the backticked run to spaces. `m.indices` is present because every
+      // pattern carries the `d` flag; group 1 always participates.
+      const span = m.indices?.[1]
+      const orig = span ? norm.slice(span[0], span[1]) : m[1]!
+      const origM = m.slice() as RegExpExecArray
+      origM[1] = orig
       out.push({
         line,
         column,
         rule: rule.id,
         message: rule.message(m),
-        suggestion: rule.suggestion(m),
+        suggestion: rule.suggestion(origM),
+        start,
+        end,
       })
     }
   }
 
   out.sort((a, b) => a.line - b.line || a.column - b.column)
   return out
+}
+
+/** Result of {@link applyMigrationFixes}. */
+export interface MigrationFixResult {
+  /**
+   * The fixed source. Line endings are normalized to `\n` (matching how the
+   * scanner and `parse()` see the input).
+   */
+  output: string
+  /** Warnings whose suggestion was spliced into `output`. */
+  applied: MigrationWarning[]
+  /**
+   * Warnings left untouched because their span overlaps another warning
+   * (nested different-family collisions such as `**_x_**` -> strong AND
+   * emphasis). Auto-rewriting overlapping spans in one pass would corrupt
+   * offsets, and re-scanning the output is unsafe (a fixed `~~x~~` -> `~x~`
+   * would be re-flagged as a subscript mis-render). These are reported for
+   * the caller to resolve by hand.
+   */
+  skipped: MigrationWarning[]
+}
+
+/**
+ * Apply the auto-fixable Djot/Carve migration warnings to `source`,
+ * returning the rewritten text. This is the autocorrect companion to
+ * {@link djotMigrationWarnings}: each warning already carries the precise
+ * span and the canonical Carve replacement, so the fix is a pure splice.
+ *
+ * Single, non-recursive pass: only mutually non-overlapping warnings are
+ * applied (right-to-left, so earlier offsets stay valid). Overlapping
+ * warnings are returned in `skipped` rather than guessed at — see
+ * {@link MigrationFixResult.skipped}.
+ */
+export function applyMigrationFixes(source: string): MigrationFixResult {
+  const warnings = djotMigrationWarnings(source)
+  const overlaps = (a: MigrationWarning, b: MigrationWarning) =>
+    a.start < b.end && b.start < a.end
+  const applied: MigrationWarning[] = []
+  const skipped: MigrationWarning[] = []
+  for (const w of warnings) {
+    if (warnings.some((o) => o !== w && overlaps(w, o))) skipped.push(w)
+    else applied.push(w)
+  }
+
+  // Splice from the end so each replacement leaves the offsets of the
+  // not-yet-applied (earlier) warnings unchanged.
+  let output = source.replace(/\r\n?/g, '\n')
+  for (let i = applied.length - 1; i >= 0; i--) {
+    const w = applied[i]!
+    output = output.slice(0, w.start) + w.suggestion + output.slice(w.end)
+  }
+  return { output, applied, skipped }
 }
 
 /** Format warnings as `file:line:col rule — message (use: suggestion)`. */
