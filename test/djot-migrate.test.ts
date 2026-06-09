@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { djotMigrationWarnings } from '../src/djot-migrate.js'
+import {
+  djotMigrationWarnings,
+  applyMigrationFixes,
+} from '../src/djot-migrate.js'
 
 const rules = (src: string) =>
   djotMigrationWarnings(src).map((w) => w.rule)
@@ -190,5 +193,75 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
 
   it('does not flag a `+` bullet inside a fenced code block', () => {
     expect(rules('```\n+ not a bullet\n```')).toEqual([])
+  })
+
+  it('exposes the splice span (start/end) of the construct', () => {
+    const w = djotMigrationWarnings('use _emphasis_ here')
+    expect(w).toHaveLength(1)
+    // `_emphasis_` starts at offset 4 and is 10 chars long.
+    expect([w[0]!.start, w[0]!.end]).toEqual([4, 14])
+  })
+
+  it('suggestion keeps inline code that the scan masks away', () => {
+    // The scanner blanks `` `code` `` to spaces, but the suggestion must be
+    // built from the original text so the splice does not lose the code.
+    const w = djotMigrationWarnings('**a `code` b**')
+    expect(w).toHaveLength(1)
+    expect(w[0]!.rule).toBe('markdown-strong-double-star')
+    expect(w[0]!.suggestion).toBe('*a `code` b*')
+  })
+})
+
+describe('applyMigrationFixes — autocorrect', () => {
+  const fix = (src: string) => applyMigrationFixes(src).output
+
+  it('rewrites a single Djot emphasis to Carve italic', () => {
+    const r = applyMigrationFixes('use _emphasis_ here')
+    expect(r.output).toBe('use /emphasis/ here')
+    expect(r.applied).toHaveLength(1)
+    expect(r.skipped).toEqual([])
+  })
+
+  it('rewrites multiple non-overlapping constructs in one pass', () => {
+    expect(fix('_a_ then ~b~')).toBe('/a/ then ,,b,,')
+    expect(fix('**bold** and a {=note=}')).toBe('*bold* and a ==note==')
+  })
+
+  it('rewrites `+` bullets to `-` on every line', () => {
+    expect(fix('+ item one\n+ item two')).toBe('- item one\n- item two')
+  })
+
+  it('does NOT re-correct a fixed `~~strike~~` into a subscript', () => {
+    // Single pass, no re-scan: `~~x~~` -> `~x~` (Carve strikethrough) must
+    // stay put, never cascade to `,,x,,` (which the subscript rule would
+    // suggest if the output were scanned again).
+    expect(fix('~~gone~~')).toBe('~gone~')
+  })
+
+  it('preserves inline code inside a rewritten construct', () => {
+    expect(fix('**a `code` b**')).toBe('*a `code` b*')
+  })
+
+  it('skips overlapping (nested different-family) warnings instead of corrupting them', () => {
+    const r = applyMigrationFixes('**_x_**')
+    expect(r.output).toBe('**_x_**') // untouched
+    expect(r.applied).toEqual([])
+    expect(r.skipped).toHaveLength(2)
+  })
+
+  it('leaves code spans and fences untouched', () => {
+    const src = ['`_x_`', '', '```', '_y_ and **z**', '```'].join('\n')
+    expect(fix(src)).toBe(src)
+  })
+
+  it('normalizes line endings to \\n in the output', () => {
+    expect(fix('a _x_\r\nb')).toBe('a /x/\nb')
+  })
+
+  it('returns clean input unchanged with nothing applied', () => {
+    const r = applyMigrationFixes('/italic/ and *bold*')
+    expect(r.output).toBe('/italic/ and *bold*')
+    expect(r.applied).toEqual([])
+    expect(r.skipped).toEqual([])
   })
 })
