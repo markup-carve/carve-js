@@ -162,6 +162,12 @@ describe('markdownToCarve — inline construct mapping', () => {
     const md = ['```c++', '*a*', '```'].join('\n')
     expect(conv(md)).toBe(md)
   })
+
+  it('emits the canonical no-space fence opener from a spaced one', () => {
+    // ``` php (space) is accepted on input but normalized to ```php on output.
+    const md = ['``` php', '*a*', '```'].join('\n')
+    expect(conv(md)).toBe(['```php', '*a*', '```'].join('\n'))
+  })
 })
 
 describe('markdownToCarve — HTML inline tags', () => {

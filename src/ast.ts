@@ -103,6 +103,12 @@ export interface ListItem extends BaseNode {
 export interface CodeBlock extends BaseNode {
   type: 'code-block'
   lang?: string
+  /**
+   * Optional bracketed label from the info string (```php [NPM] -> "NPM").
+   * Structured metadata only: it is NOT part of the language/class. The core
+   * renderer ignores it; an extension (e.g. code-group) may use it.
+   */
+  label?: string
   content: string
 }
 

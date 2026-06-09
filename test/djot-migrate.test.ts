@@ -175,4 +175,20 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(djotMigrationWarnings('')).toEqual([])
     expect(djotMigrationWarnings('plain text, nothing special.')).toEqual([])
   })
+
+  it('flags a Djot `+` bullet (not a Carve bullet) and suggests `-`', () => {
+    const w = djotMigrationWarnings('+ item one\n+ item two')
+    expect(w.map((x) => x.rule)).toEqual(['djot-plus-bullet', 'djot-plus-bullet'])
+    expect(w[0]!.suggestion).toBe('-')
+    expect(w[0]!.line).toBe(1)
+    expect(w[0]!.column).toBe(1)
+  })
+
+  it('does not flag a lone `+` (the legit Carve continuation marker)', () => {
+    expect(rules('- item\n+\n> note')).toEqual([])
+  })
+
+  it('does not flag a `+` bullet inside a fenced code block', () => {
+    expect(rules('```\n+ not a bullet\n```')).toEqual([])
+  })
 })

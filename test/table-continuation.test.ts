@@ -63,10 +63,8 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
-  it('does not treat a plain + list as table continuation', () => {
-    expect(h('+ one\n+ two')).toBe(
-      '<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>',
-    )
+  it('a plain + line is not a table continuation (and `+` is not a bullet)', () => {
+    expect(h('+ one\n+ two')).toBe('<p>+ one\n+ two</p>')
   })
 
   it('a table after prose interrupts without a blank line (§10)', () => {
@@ -76,8 +74,8 @@ describe('table `+` multi-line cell continuation', () => {
   })
 
   it('a + line with no preceding table row is not a continuation', () => {
-    // No table opened: parsed as an unordered list, not consumed here.
-    expect(h('+ just a list')).toBe('<ul>\n  <li>just a list</li>\n</ul>')
+    // No table opened, and `+` is not a bullet, so it is paragraph text.
+    expect(h('+ just a list')).toBe('<p>+ just a list</p>')
   })
 
   it('appends content to the first column', () => {
