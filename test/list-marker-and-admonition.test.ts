@@ -50,15 +50,18 @@ describe('list marker change starts a new list (§11)', () => {
     expect(html).toContain('<li>c</li>')
   })
 
-  it('does not interrupt a paragraph with two differing lone markers (§10+§11)', () => {
-    // `- a` then `+ b` after prose with no blank line are two single
-    // markers of different character — each its own one-item list — so
-    // per §10 they do not interrupt; the lines stay paragraph text.
-    expect(h('para\n- a\n+ b')).toBe('<p>para\n- a\n+ b</p>')
+  it('interrupts a paragraph, then splits two differing markers (§10+§11)', () => {
+    // `+` is not a Carve bullet (§3 divergence; it is the continuation marker),
+    // so the two differing bullets here are `-` and `*`.
+    expect(h('para\n- a\n* b')).toBe(
+      '<p>para</p>\n<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
+    )
   })
 
-  it('two same-marker lines after prose stay prose (need a blank line, §10)', () => {
-    expect(h('para\n- a\n- b')).toBe('<p>para\n- a\n- b</p>')
+  it('two same-marker lines after prose interrupt as one list (§10)', () => {
+    expect(h('para\n- a\n- b')).toBe(
+      '<p>para</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
+    )
   })
 
   it('does not loosen a list when a blank precedes a different marker', () => {

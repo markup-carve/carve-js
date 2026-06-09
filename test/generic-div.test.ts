@@ -36,10 +36,10 @@ describe('generic divs', () => {
     )
   })
 
-  it('does not interrupt a paragraph even for a closed div without a blank line', () => {
-    // djot opens a fenced div only after a blank line; a `:::` reached
-    // mid-paragraph is literal text.
-    expect(h('before\n:::\nx\n:::')).toBe('<p>before\n:::\nx\n:::</p>')
+  it('interrupts a paragraph for a closed div without a blank line', () => {
+    expect(h('before\n:::\nx\n:::')).toBe(
+      '<p>before</p>\n<div>\n  <p>x</p>\n</div>',
+    )
   })
 
   it('still renders canonical admonitions as <aside>', () => {

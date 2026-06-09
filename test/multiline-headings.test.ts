@@ -28,7 +28,7 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('folds a list-marker-looking line (nothing interrupts, §10)', () => {
+  it('folds a list-marker-looking line into an open heading', () => {
     expect(html('# H\n- item')).toBe(
       '<section id="h-item">\n  <h1>H\n- item</h1>\n</section>',
     )

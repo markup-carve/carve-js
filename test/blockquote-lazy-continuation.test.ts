@@ -22,8 +22,10 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     )
   })
 
-  it('folds a line that looks like a block marker (paragraphs are never interrupted)', () => {
-    expect(html('> a\n# H')).toBe('<blockquote><p>a\n# H</p></blockquote>')
+  it('lets a visible block marker interrupt the quote paragraph', () => {
+    expect(html('> a\n# H')).toBe(
+      '<blockquote>\n  <p>a</p>\n  <h1>H</h1>\n</blockquote>',
+    )
   })
 
   it('a caption attaches to the quote rather than folding in', () => {
@@ -42,20 +44,21 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     // `b` and `> c` must leave the quote, not be pulled into the code block
     // (with the `>` stripped). The quote ends at the first non-`>` line.
     expect(html('> ```\n> a\nb\n> c')).toBe(
-      '<blockquote>\n  <pre><code>a\n</code></pre>\n</blockquote>\n<p>b\n&gt; c</p>',
+      '<blockquote>\n  <pre><code>a\n</code></pre>\n</blockquote>\n<p>b</p>\n<blockquote><p>c</p></blockquote>',
     )
   })
 
   it('does not pull a non-`>` line into a just-opened div', () => {
     expect(html('> :::note\nbody\n> :::')).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>body\n&gt; :::</p>',
+      '<blockquote>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>body</p>\n<blockquote><p>:::</p></blockquote>',
     )
   })
 
   it('keeps a fence-looking line mid-paragraph as paragraph text and folds the lazy line', () => {
-    // A fence never interrupts an open paragraph, so the lazy line still folds.
-    // The mid-paragraph ``` is an unclosed inline verbatim run, so it renders as
-    // a <code> span to the end of the block (matches djot upstream + carve-php).
+    // The fence has no matching closer, so it does not interrupt the paragraph
+    // (§10 closer lookahead) and the lazy line still folds. The mid-paragraph
+    // ``` is then an unclosed inline verbatim run, rendering as a <code> span to
+    // the end of the block (matches djot upstream + carve-php).
     expect(html('> text\n> ```\nlazy')).toBe(
       '<blockquote><p>text\n<code>\nlazy</code></p></blockquote>',
     )
