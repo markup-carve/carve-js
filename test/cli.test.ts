@@ -169,17 +169,24 @@ describe('carve lint', () => {
   })
 })
 
-describe('carve fix — overlapping (manual-review) collisions', () => {
-  it('reports skipped overlaps on stderr and leaves them in output', async () => {
+describe('carve fix — collisions', () => {
+  it('composes nested collisions (**_x_** -> */x/*)', async () => {
     const t = makeIO({ stdin: '**_x_**' })
     const code = await run(['fix'], t.io)
     expect(code).toBe(0)
-    expect(t.out).toBe('**_x_**') // nothing auto-applied
+    expect(t.out).toBe('*/x/*')
+  })
+
+  it('reports crossing collisions on stderr and leaves them in output', async () => {
+    const t = makeIO({ stdin: '**_x**_' })
+    const code = await run(['fix'], t.io)
+    expect(code).toBe(0)
+    expect(t.out).toBe('**_x**_') // ambiguous, nothing auto-applied
     expect(t.err).toContain('overlapping collision')
   })
 
-  it('--check fails (exit 1) when a file has only manual-review collisions', async () => {
-    const t = makeIO({ files: { 'a.crv': '**_x_**' } })
+  it('--check fails (exit 1) when a file has only crossing collisions', async () => {
+    const t = makeIO({ files: { 'a.crv': '**_x**_' } })
     // applied is empty, but skipped is non-empty -> not clean.
     expect(await run(['fix', 'a.crv'], t.io)).toBe(1)
   })
