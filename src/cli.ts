@@ -17,7 +17,10 @@ import process from 'node:process'
 import { parseArgs } from 'node:util'
 import {
   applyMigrationFixes,
+  djotMigrationWarnings,
   formatMigrationWarnings,
+  lintCarve,
+  formatLintWarnings,
   type MigrationWarning,
 } from './index.js'
 
@@ -38,21 +41,27 @@ export interface CliIO {
 const HELP = `carve - Carve markup tooling
 
 Usage:
-  carve fix [options] [files...]
+  carve fix [options] [files...]   Auto-fix delimiter collisions
+  carve lint [files...]            Report problems without changing anything
 
-Rewrite Djot/Markdown delimiter collisions to their Carve equivalents -
+fix - rewrite Djot/Markdown delimiter collisions to their Carve equivalents,
 constructs that otherwise silently mis-render under Carve (e.g. **bold**
 -> *bold*, _em_ -> /em/, ~~strike~~ -> ~strike~, + bullets -> -).
 
-Options:
-  -w, --write    Rewrite the given files in place
-      --check    Report files that would change; exit 1 if any (no writes)
-      --stdout   Print the fixed output to stdout (single file or stdin)
-  -h, --help     Show this help
+  fix options:
+    -w, --write    Rewrite the given files in place
+        --check    Report files that would change; exit 1 if any (no writes)
+        --stdout   Print the fixed output to stdout (single file or stdin)
 
-With no files, reads Carve source on stdin and writes the fixed result to
-stdout. Overlapping collisions that cannot be auto-fixed (e.g. **_x_**) are
-reported on stderr for manual review.
+  With no files, fix reads Carve source on stdin and writes the fixed result
+  to stdout. Crossing collisions that cannot be auto-fixed are reported on
+  stderr for manual review.
+
+lint - report delimiter collisions AND semantic problems (broken </#id>
+cross-references, duplicate heading ids) as \`file:line:col rule - message\`.
+Reads files or stdin; exits 1 if anything is reported, 0 if clean.
+
+  -h, --help     Show this help
 `
 
 /** Report the un-auto-fixable (overlapping) warnings for one input. */
@@ -181,11 +190,59 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
     io.writeErr(HELP)
     return 2
   }
-  if (sub !== 'fix') {
-    io.writeErr(`carve: unknown command '${sub}'\n\n${HELP}`)
+  if (sub === 'fix') return runFix(rest, io)
+  if (sub === 'lint') return runLint(rest, io)
+  io.writeErr(`carve: unknown command '${sub}'\n\n${HELP}`)
+  return 2
+}
+
+/** Report all warnings for one source; returns how many were found. */
+function reportLint(source: string, file: string, io: CliIO): number {
+  const migration = djotMigrationWarnings(source)
+  const semantic = lintCarve(source)
+  if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
+  if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
+  return migration.length + semantic.length
+}
+
+async function runLint(args: string[], io: CliIO): Promise<number> {
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: { help: { type: 'boolean', short: 'h' } },
+      allowPositionals: true,
+    })
+    if (parsed.values.help) {
+      io.write(HELP)
+      return 0
+    }
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve lint: ${(e as Error).message}\n`)
     return 2
   }
-  return runFix(rest, io)
+
+  if (positionals.length === 0) {
+    const src = await io.readStdin()
+    return reportLint(src, '<stdin>', io) > 0 ? 1 : 0
+  }
+
+  let total = 0
+  let hadError = false
+  for (const file of positionals) {
+    let src: string
+    try {
+      src = io.readFile(file)
+    } catch {
+      io.writeErr(`carve lint: cannot read ${file}\n`)
+      hadError = true
+      continue
+    }
+    total += reportLint(src, file, io)
+  }
+  if (hadError) return 2
+  return total > 0 ? 1 : 0
 }
 
 async function readStdin(): Promise<string> {

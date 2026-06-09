@@ -41,6 +41,11 @@ export {
   type MigrationFixResult,
 } from './djot-migrate.js'
 export { markdownToCarve } from './markdown-migrate.js'
+export {
+  lintCarve,
+  formatLintWarnings,
+  type LintWarning,
+} from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 
 /**
