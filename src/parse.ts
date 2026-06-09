@@ -1674,7 +1674,16 @@ function parseParagraph(lexer: Lexer): Paragraph {
     // definitions, comments) interrupt too. A bare image does not interrupt,
     // an ordered marker interrupts only as `1.`/`1)`, and a fence/`:::` only
     // when it has a matching closer ahead. See startsInterruptingBlock.
-    if (startsInterruptingBlock(lexer)) break
+    //
+    // Only a paragraph that already holds a line can be interrupted: the FIRST
+    // line is always consumed. In normal dispatch the first line reaching
+    // parseParagraph is never a block opener (parseBlockInner would have
+    // claimed it), so this does not change interruption. It DOES guarantee
+    // progress on the MAX_NESTING_DEPTH degradation path, where a marker line
+    // (e.g. a `>` past the depth cap) is routed here to become literal text —
+    // without this guard startsInterruptingBlock would break before consuming,
+    // looping forever on the same line.
+    if (lines.length > 0 && startsInterruptingBlock(lexer)) break
     lexer.consume()
     lines.push(ln)
   }
