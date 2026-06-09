@@ -1,0 +1,216 @@
+#!/usr/bin/env node
+/*
+ * `carve` command-line tool.
+ *
+ * Currently one subcommand: `carve fix`, a thin wrapper over
+ * applyMigrationFixes that rewrites Djot/Markdown delimiter collisions to
+ * their Carve equivalents (see src/djot-migrate.ts).
+ *
+ * The work is done by `run(argv, io)`, which takes its I/O through an
+ * injectable interface so it can be unit-tested without touching the real
+ * filesystem, stdin, or process exit code. The bottom of the file wires the
+ * real process I/O and invokes it only when executed as the binary.
+ */
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import process from 'node:process'
+import { parseArgs } from 'node:util'
+import {
+  applyMigrationFixes,
+  formatMigrationWarnings,
+  type MigrationWarning,
+} from './index.js'
+
+/** Injectable I/O so `run` is testable without real fs / stdin / exit. */
+export interface CliIO {
+  /** Read all of stdin as UTF-8. */
+  readStdin: () => Promise<string>
+  /** Write to stdout. */
+  write: (s: string) => void
+  /** Write to stderr (diagnostics, skipped-warning reports). */
+  writeErr: (s: string) => void
+  /** Read a file as UTF-8; may throw (caught and reported per file). */
+  readFile: (path: string) => string
+  /** Write a file as UTF-8. */
+  writeFile: (path: string, content: string) => void
+}
+
+const HELP = `carve - Carve markup tooling
+
+Usage:
+  carve fix [options] [files...]
+
+Rewrite Djot/Markdown delimiter collisions to their Carve equivalents -
+constructs that otherwise silently mis-render under Carve (e.g. **bold**
+-> *bold*, _em_ -> /em/, ~~strike~~ -> ~strike~, + bullets -> -).
+
+Options:
+  -w, --write    Rewrite the given files in place
+      --check    Report files that would change; exit 1 if any (no writes)
+      --stdout   Print the fixed output to stdout (single file or stdin)
+  -h, --help     Show this help
+
+With no files, reads Carve source on stdin and writes the fixed result to
+stdout. Overlapping collisions that cannot be auto-fixed (e.g. **_x_**) are
+reported on stderr for manual review.
+`
+
+/** Report the un-auto-fixable (overlapping) warnings for one input. */
+function reportSkipped(skipped: MigrationWarning[], file: string, io: CliIO): void {
+  if (skipped.length === 0) return
+  const n = skipped.length
+  io.writeErr(
+    `${file}: ${n} overlapping collision${n === 1 ? '' : 's'} need manual review:\n`,
+  )
+  io.writeErr(formatMigrationWarnings(skipped, file) + '\n')
+}
+
+function plural(n: number): string {
+  return n === 1 ? '' : 's'
+}
+
+async function runFix(args: string[], io: CliIO): Promise<number> {
+  let values: { write?: boolean; check?: boolean; stdout?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        write: { type: 'boolean', short: 'w' },
+        check: { type: 'boolean' },
+        stdout: { type: 'boolean' },
+        help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve fix: ${(e as Error).message}\n`)
+    return 2
+  }
+
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const modes = [values.write, values.check, values.stdout].filter(Boolean).length
+  if (modes > 1) {
+    io.writeErr('carve fix: choose at most one of --write, --check, --stdout\n')
+    return 2
+  }
+
+  const files = positionals
+
+  // No files: stream stdin -> stdout (or --check the stream).
+  if (files.length === 0) {
+    if (values.write) {
+      io.writeErr('carve fix: --write requires file arguments\n')
+      return 2
+    }
+    const src = await io.readStdin()
+    const res = applyMigrationFixes(src)
+    reportSkipped(res.skipped, '<stdin>', io)
+    if (values.check) return res.applied.length > 0 ? 1 : 0
+    io.write(res.output)
+    return 0
+  }
+
+  if (values.stdout && files.length > 1) {
+    io.writeErr('carve fix: --stdout takes a single file\n')
+    return 2
+  }
+
+  const mode: 'write' | 'stdout' | 'check' = values.write
+    ? 'write'
+    : values.stdout
+      ? 'stdout'
+      : 'check'
+
+  let changed = 0
+  let skippedTotal = 0
+  let hadError = false
+
+  for (const file of files) {
+    let src: string
+    try {
+      src = io.readFile(file)
+    } catch {
+      io.writeErr(`carve fix: cannot read ${file}\n`)
+      hadError = true
+      continue
+    }
+    const res = applyMigrationFixes(src)
+    skippedTotal += res.skipped.length
+    reportSkipped(res.skipped, file, io)
+    const applied = res.applied.length
+
+    if (mode === 'stdout') {
+      io.write(res.output)
+      continue
+    }
+    if (applied === 0) continue
+    changed++
+    if (mode === 'write') {
+      io.writeFile(file, res.output)
+      io.writeErr(`fixed ${file} (${applied} change${plural(applied)})\n`)
+    } else {
+      io.writeErr(`would fix ${file} (${applied} change${plural(applied)})\n`)
+    }
+  }
+
+  if (hadError) return 2
+  // --check is a gate: non-zero if anything would change or needs manual work.
+  if (mode === 'check') return changed > 0 || skippedTotal > 0 ? 1 : 0
+  return 0
+}
+
+/**
+ * Dispatch a `carve` invocation. `argv` is the argument list *after* `node`
+ * and the script path (i.e. `process.argv.slice(2)`). Returns the intended
+ * process exit code.
+ */
+export async function run(argv: string[], io: CliIO): Promise<number> {
+  const [sub, ...rest] = argv
+  if (sub === '--help' || sub === '-h') {
+    io.write(HELP)
+    return 0
+  }
+  if (sub === undefined) {
+    io.writeErr(HELP)
+    return 2
+  }
+  if (sub !== 'fix') {
+    io.writeErr(`carve: unknown command '${sub}'\n\n${HELP}`)
+    return 2
+  }
+  return runFix(rest, io)
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+const realIO: CliIO = {
+  readStdin,
+  write: (s) => void process.stdout.write(s),
+  writeErr: (s) => void process.stderr.write(s),
+  readFile: (p) => readFileSync(p, 'utf8'),
+  writeFile: (p, c) => writeFileSync(p, c, 'utf8'),
+}
+
+// Run only when executed as the binary, not when imported by a test.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  run(process.argv.slice(2), realIO).then(
+    (code) => {
+      process.exitCode = code
+    },
+    (err) => {
+      process.stderr.write(`carve: ${(err as Error).message}\n`)
+      process.exitCode = 1
+    },
+  )
+}

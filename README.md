@@ -70,7 +70,37 @@ Carve's blank-line-around-blocks rule:
 | `<em>`/`<strong>`/`<mark>`/… | Carve form | common inline HTML tags             |
 
 To go the other way — flagging a Djot document that would silently mis-render
-under Carve — use [`djotMigrationWarnings`](./src/djot-migrate.ts).
+under Carve — use [`djotMigrationWarnings`](./src/djot-migrate.ts), and to
+rewrite those collisions in place use `applyMigrationFixes` (or the `carve fix`
+CLI below):
+
+```ts
+import { applyMigrationFixes } from '@markup-carve/carve'
+
+const { output, applied, skipped } = applyMigrationFixes('use _emphasis_ here')
+// output  -> 'use /emphasis/ here'
+// applied -> the warnings that were spliced in
+// skipped -> overlapping collisions (e.g. **_x_**) left for manual review
+```
+
+## Command line
+
+Installing the package provides a `carve` binary. Its one subcommand, `carve
+fix`, wraps `applyMigrationFixes` to rewrite Djot/Markdown delimiter collisions
+to their Carve equivalents.
+
+```sh
+carve fix < in.crv > out.crv     # stdin -> stdout (default)
+carve fix --write doc.crv …      # rewrite files in place
+carve fix --check doc.crv …      # report only; exit 1 if any would change (CI)
+carve fix --stdout doc.crv       # print the fix for one file, don't modify it
+```
+
+With no files it reads stdin and writes the fixed result to stdout. Overlapping
+collisions that cannot be auto-fixed (e.g. `**_x_**`, which is both strong and
+emphasis) are reported on stderr for manual review. `--check` is a gate: it
+exits non-zero when a file would change or has manual-review collisions, so it
+drops into a pre-commit hook or CI step.
 
 ## Extensions
 
