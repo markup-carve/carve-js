@@ -339,6 +339,17 @@ export interface CrossRef extends BaseNode {
   target: string
 }
 
+/**
+ * Caption number placeholder (the bare `#` in `^ Figure #: …`). Emitted
+ * only in caption context; `resolve()` fills `n` with the assigned number.
+ * Renders as the number text.
+ */
+export interface CaptionNumber extends BaseNode {
+  type: 'caption-number'
+  /** Assigned during resolve; undefined until then. */
+  n?: number
+}
+
 export interface Mention extends BaseNode {
   type: 'mention'
   user: string
@@ -413,6 +424,7 @@ export type InlineNode =
   | Emoji
   | AutoLink
   | CrossRef
+  | CaptionNumber
   | Mention
   | Tag
   | Extension

@@ -19,6 +19,7 @@ import type {
   CriticInsert,
   CriticSubstitute,
   CrossRef,
+  CaptionNumber,
   Comment,
   DefinitionItem,
   DefinitionList,
@@ -970,7 +971,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       return {
         type: 'figure',
         target: bq,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs),
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -1009,7 +1010,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
       return {
         type: 'figure',
         target: img,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs),
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -1555,7 +1556,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs)
+      table.caption = parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true)
     }
   }
   return table
@@ -1911,8 +1912,9 @@ function parseInline(
   abbrDefs: Map<string, string>,
   linkDefs: Map<string, { href: string; title?: string }> = new Map(),
   source: InlineSource = inlineSource(),
+  captionContext = false,
 ): InlineNode[] {
-  const nodes = applyAbbreviations(scanInline(text, source), abbrDefs)
+  const nodes = applyAbbreviations(scanInline(text, source, false, captionContext), abbrDefs)
   return applyLinkDefs(nodes, linkDefs)
 }
 
@@ -1934,11 +1936,14 @@ function scanInline(
   text: string,
   source: InlineSource = inlineSource(),
   inFootnote = false,
+  captionContext = false,
 ): InlineNode[] {
   const out: InlineNode[] = []
   let i = 0
   let buf = ''
   let bufStart = 0
+  // Caption number placeholder: only the first bare `#` in a caption becomes one.
+  let captionNumberEmitted = false
   // Last char appended to buf. Tracked explicitly because reading
   // `buf[buf.length - 1]` each char indexes a growing ConsString, which V8 must
   // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
@@ -2377,6 +2382,15 @@ function scanInline(
         flush()
         out.push(withPos({ type: 'tag', name: m[1]! } as Tag, source, text, i, i + m[0].length))
         i += m[0].length
+        continue
+      }
+      // Bare `#` (not a tag) in a caption = number placeholder, first only.
+      // `\#` never reaches here (the escape branch consumes it as literal).
+      if (captionContext && !captionNumberEmitted) {
+        flush()
+        out.push(withPos({ type: 'caption-number' } as CaptionNumber, source, text, i, i + 1))
+        captionNumberEmitted = true
+        i += 1
         continue
       }
     }
