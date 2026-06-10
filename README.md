@@ -152,6 +152,25 @@ carveToHtml(src, { extensions: [tabNormalize()] }) // tabs -> 2 spaces
 carveToHtml(src, { extensions: [tabNormalize(4)] })// tabs -> 4 spaces
 ```
 
+`details()` renders `::: details` admonitions as the HTML5
+`<details>/<summary>` disclosure widget instead of the default
+`<div class="details">`. The quoted title becomes the `<summary>` (a
+title-less block falls back to `<summary>Details</summary>`):
+
+```ts
+import { carveToHtml, details } from '@markup-carve/carve'
+
+const src = '::: details "More info"\nHidden until expanded.\n:::'
+carveToHtml(src)                              // <div class="details">…
+carveToHtml(src, { extensions: [details()] }) // <details><summary>More info</summary>…
+```
+
+The summary renders as escaped plain text (inline markup in a title is
+flattened), and the widget needs raw-HTML output, so it is inert when raw
+HTML is stripped. A top-level details block whose direct children include a
+heading falls back to a plain `<div class="details">` (to avoid mis-nesting
+it against heading section-wrapping).
+
 ## Roadmap
 
 See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) in the spec repo.

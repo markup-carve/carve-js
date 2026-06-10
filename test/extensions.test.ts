@@ -76,6 +76,47 @@ describe('extension renderers', () => {
   })
 })
 
+describe('block renderers', () => {
+  it('lets an extension take over a core block node type', () => {
+    const wrap: CarveExtension = {
+      name: 'wrap',
+      blockRenderers: {
+        blockquote: (_node, ctx) => `${ctx.indent(ctx.level)}<aside>!</aside>`,
+      },
+    }
+    expect(carveToHtml('> hi', { extensions: [wrap] }).trim()).toBe('<aside>!</aside>')
+  })
+
+  it('renders children through the core renderer at the right level', () => {
+    const box: CarveExtension = {
+      name: 'box',
+      blockRenderers: {
+        div: (node, ctx) => {
+          const kids = ctx.renderChildren(
+            (node as { children: never[] }).children,
+            ctx.level + 1,
+          )
+          return `${ctx.indent(ctx.level)}<box>\n${kids}\n${ctx.indent(ctx.level)}</box>`
+        },
+      },
+    }
+    expect(carveToHtml(':::\nhi\n:::', { extensions: [box] }).trim()).toBe(
+      ['<box>', '  <p>hi</p>', '</box>'].join('\n'),
+    )
+  })
+
+  it('falls through to the core renderer when the block renderer returns undefined', () => {
+    const onlyEmpty: CarveExtension = {
+      name: 'only-empty',
+      blockRenderers: {
+        paragraph: (node) =>
+          (node as { children: unknown[] }).children.length === 0 ? '<empty>' : undefined,
+      },
+    }
+    expect(carveToHtml('hi', { extensions: [onlyEmpty] }).trim()).toBe('<p>hi</p>')
+  })
+})
+
 describe('extension worked example: heading collector', () => {
   it('collects heading text via afterParse and injects a paragraph via beforeRender', () => {
     const titles: string[] = []
