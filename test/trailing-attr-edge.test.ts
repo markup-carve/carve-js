@@ -40,3 +40,13 @@ describe('inline attribute on a code span', () => {
     expect(h('`x`{#i .a .b}')).toBe('<p><code id="i" class="a b">x</code></p>')
   })
 })
+
+describe('tag name may start with a digit', () => {
+  const h = (s: string) => carveToHtml(s).trim()
+  it('treats #1num as a tag', () => {
+    expect(h('#1num')).toBe('<p><span class="tag"><strong>#1num</strong></span></p>')
+  })
+  it('still requires a word boundary before #', () => {
+    expect(h('a#notag')).toBe('<p>a#notag</p>')
+  })
+})
