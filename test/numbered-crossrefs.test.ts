@@ -78,6 +78,13 @@ describe('resolve: caption numbering + crossrefs', () => {
     expect(out).toContain('<figcaption>Quote 1: outer</figcaption>')
   })
 
+  it('does not emit a broken anchor for a label with an implicit heading ref', () => {
+    // The label `[Setup][]` resolves to the heading; the crossref auto-text
+    // must clone the resolved link, never href="".
+    const out = h('# Setup\n\n{#fig-a}\n![x](x.jpg)\n^ [Setup][] #: cap\n\nSee </#fig-a>.')
+    expect(out).not.toContain('href=""')
+  })
+
   it('does NOT treat a # inside inline markup as a placeholder (top-level only)', () => {
     // Documented scope: the placeholder is recognized in the caption's
     // top-level text, not inside emphasis/links. The # stays literal here.

@@ -392,11 +392,16 @@ export function resolveHeadingIds(doc: Document, asciiFold = false): Document {
       }
     }
   }
+  for (const block of doc.children) walkBlock(block, resolveRefs)
+  for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
+
+  // Number captions AFTER ref resolution so a label that contains an
+  // implicit heading reference (`^ [Setup][] #: …`) is cloned into the
+  // crossref auto-text already resolved (no dangling href=""), and BEFORE
+  // crossref resolution so a `</#id>` to a numbered caption resolves.
   numberBlocks(doc.children)
   for (const body of footnoteBodies) numberBlocks(body)
 
-  for (const block of doc.children) walkBlock(block, resolveRefs)
-  for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
   for (const block of doc.children) walkBlock(block, resolveCrossrefs)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
   return doc
