@@ -212,6 +212,23 @@ line directly below paragraph text needs a blank line first. Paragraph
 interruption (spec §10) is core-only, and carve-rs / carve-php behave the same
 way — this keeps extension block syntax identical across implementations.
 
+### Built-in: autolink
+
+`autolink()` linkifies bare URLs and email addresses (carve core leaves them
+literal by default). Ported from carve-php's AutolinkExtension:
+
+```ts
+import { carveToHtml, autolink } from '@markup-carve/carve'
+
+carveToHtml('Visit https://example.com or a@b.com.', { extensions: [autolink()] })
+// <p>Visit <a href="https://example.com">https://example.com</a> or <a href="mailto:a@b.com">a@b.com</a>.</p>
+```
+
+Linkifies `https://`, `http://`, `mailto:`, and bare emails; a trailing
+sentence punctuation mark stays outside the link. Restrict with
+`autolink({ allowedSchemes: ['https'] })` (dropping `mailto` also disables bare
+email linking).
+
 ## Roadmap
 
 See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) in the spec repo.

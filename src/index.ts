@@ -55,6 +55,7 @@ export {
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
+export { autolink, type AutolinkOptions } from './autolink.js'
 
 /**
  * Parse Carve source into a typed AST.
