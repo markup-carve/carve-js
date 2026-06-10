@@ -840,6 +840,9 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'crossref':
       return `&lt;/#${escapeHtml(node.target)}&gt;`
+    case 'caption-number':
+      // Filled by resolve(); an unresolved placeholder renders empty.
+      return node.n === undefined ? '' : String(node.n)
     case 'comment':
       // Comments are not rendered (§4.13); inline form mirrors the block one.
       return ''
