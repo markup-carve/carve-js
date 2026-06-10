@@ -171,6 +171,47 @@ HTML is stripped. A top-level details block whose direct children include a
 heading falls back to a plain `<div class="details">` (to avoid mis-nesting
 it against heading section-wrapping).
 
+### Adding syntax: parse-stage matchers
+
+An extension can add new syntax with a `matchInline` or `matchBlock` matcher
+(the parse half of the contract, matching carve-php and carve-rs). Core
+constructs are dispatched first at each position; a matcher is offered only
+where core declined, so extensions add syntax and never hijack core. The `ctx`
+exposes recursive `parseInlines` / `parseBlocks` plus the link/abbr definition
+tables.
+
+```ts
+import { carveToHtml, type CarveExtension } from '@markup-carve/carve'
+
+// Inline: `[[Page]]` -> a wiki link, inner text parsed recursively.
+const wikilinks: CarveExtension = {
+  name: 'wikilinks',
+  matchInline(text, pos, ctx) {
+    if (!text.startsWith('[[', pos)) return null
+    const close = text.indexOf(']]', pos + 2)
+    if (close < 0) return null
+    const label = text.slice(pos + 2, close)
+    return {
+      node: { type: 'link', href: '/' + label, children: ctx.parseInlines(label) },
+      end: close + 2,
+    }
+  },
+}
+
+carveToHtml('See [[Home]].', { extensions: [wikilinks] })
+// <p>See <a href="/Home">Home</a>.</p>
+```
+
+An inline matcher returns `{ node, end }` (`end` is the source offset past the
+match); a block matcher receives `(lines, start, ctx)` and returns
+`{ node, linesConsumed }`. Matchers run in registration order.
+
+A block matcher is offered at block start (after a blank line or another
+block); it does not interrupt an open paragraph, so an extension block on the
+line directly below paragraph text needs a blank line first. Paragraph
+interruption (spec §10) is core-only, and carve-rs / carve-php behave the same
+way — this keeps extension block syntax identical across implementations.
+
 ## Roadmap
 
 See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) in the spec repo.
