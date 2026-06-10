@@ -55,6 +55,7 @@ export {
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
+export { wikilinks, type WikilinksOptions } from './wikilinks.js'
 
 /**
  * Parse Carve source into a typed AST.
