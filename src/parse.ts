@@ -1687,20 +1687,20 @@ function parseParagraph(lexer: Lexer): Paragraph {
     lexer.consume()
     lines.push(ln)
   }
-  // A paragraph's continuation lines have their leading whitespace stripped
-  // (djot / CommonMark): `a\n   b` renders as `a\nb`, and an over-indented lazy
-  // continuation in a list item (`- a\n   - b` -> item text `a\n- b`) does not
-  // keep residual indent. The first line is already positioned by the block
-  // dispatcher, so only lines 2+ are trimmed.
-  const text = lines
-    .map((ln, idx) => (idx === 0 ? ln : ln.replace(/^[ \t]+/, '')))
-    .join('\n')
+  // Every paragraph line has its leading whitespace stripped (djot /
+  // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
+  // line (` c`, or a fresh paragraph after a list closes) renders as `c` —
+  // Carve has no indented code blocks, so indentation never survives into a
+  // paragraph. The first line's stripped width is folded into the inline
+  // base position so source offsets/columns stay accurate.
+  const firstLead = lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
+  const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n')
   return {
     type: 'paragraph',
     children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
-      baseOffset: lexer.lineOffset(startLineIndex),
+      baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
       startLine: startLineIndex + 1,
-      startColumn: 1,
+      startColumn: 1 + firstLead,
     }),
   }
 }
