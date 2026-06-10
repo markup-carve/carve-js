@@ -1,7 +1,6 @@
 {
   "name": "@markup-carve/carve",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "Reference TypeScript implementation of the Carve markup language",
   "license": "MIT",
@@ -9,8 +8,16 @@
   "homepage": "https://markup-carve.github.io/carve/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/markup-carve/carve-js.git"
+    "url": "git+https://github.com/markup-carve/carve-js.git"
   },
+  "bugs": "https://github.com/markup-carve/carve-js/issues",
+  "keywords": [
+    "carve",
+    "markup",
+    "parser",
+    "markdown",
+    "djot"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -27,6 +34,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
