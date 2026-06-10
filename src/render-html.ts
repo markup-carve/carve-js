@@ -709,7 +709,7 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     case 'bold-italic':
       return `<strong${renderAttrs(node.attrs)}><em>${renderInlines(node.children, opts)}</em></strong>`
     case 'code':
-      return `<code>${escapeHtml(node.value)}</code>`
+      return `<code${renderAttrs(node.attrs)}>${escapeHtml(node.value)}</code>`
     case 'link': {
       const titleAttr = node.title ? ` title="${escapeAttr(node.title)}"` : ''
       const href = escapeAttr(sanitizeUrl(node.href, opts))

@@ -28,3 +28,15 @@ describe('trailing attribute block edge cases', () => {
     expect(h('![a](/i){.cls}')).toBe('<img src="/i" alt="a" class="cls">')
   })
 })
+
+describe('inline attribute on a code span', () => {
+  const h = (s: string) => carveToHtml(s).trim()
+
+  it('attaches a class to inline code', () => {
+    expect(h('`code`{.cls}')).toBe('<p><code class="cls">code</code></p>')
+  })
+
+  it('attaches id and multiple classes', () => {
+    expect(h('`x`{#i .a .b}')).toBe('<p><code id="i" class="a b">x</code></p>')
+  })
+})
