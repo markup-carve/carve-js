@@ -71,4 +71,17 @@ describe('resolve: caption numbering + crossrefs', () => {
     expect(out).toContain('Figure 1: a')
     expect(out).toContain('Abbildung 1: b')
   })
+
+  it('numbers a captioned figure nested inside a captioned blockquote', () => {
+    const out = h('> ![x](x.jpg)\n> ^ Figure #: inner\n\n^ Quote #: outer')
+    expect(out).toContain('<figcaption>Figure 1: inner</figcaption>')
+    expect(out).toContain('<figcaption>Quote 1: outer</figcaption>')
+  })
+
+  it('does NOT treat a # inside inline markup as a placeholder (top-level only)', () => {
+    // Documented scope: the placeholder is recognized in the caption's
+    // top-level text, not inside emphasis/links. The # stays literal here.
+    const out = h('![x](x.jpg)\n^ *Figure #*: cap')
+    expect(out).toContain('<figcaption><strong>Figure #</strong>: cap</figcaption>')
+  })
 })

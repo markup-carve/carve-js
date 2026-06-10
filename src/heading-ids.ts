@@ -379,6 +379,14 @@ export function resolveHeadingIds(doc: Document, asciiFold = false): Document {
         case 'definition-list':
           for (const it of b.items) for (const d of it.definitions) numberBlocks(d)
           break
+        case 'figure':
+          // A figure wraps an image / blockquote / table; descend into a
+          // blockquote or table target so a nested captioned element is
+          // numbered too (mirrors walkBlock's figure-target descent).
+          if (b.target.type === 'blockquote') numberBlocks(b.target.children)
+          else if (b.target.type === 'table' && b.target.caption)
+            numberCaption(b.target.caption, b.target.attrs)
+          break
         default:
           break
       }
