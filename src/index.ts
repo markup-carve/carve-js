@@ -32,6 +32,8 @@ export type {
   CarveExtension,
   ExtensionRenderer,
   ExtensionRenderContext,
+  BlockExtensionRenderer,
+  BlockExtensionRenderContext,
 } from './extension.js'
 export {
   djotMigrationWarnings,
@@ -47,6 +49,7 @@ export {
   type LintWarning,
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
+export { details } from './details.js'
 
 /**
  * Parse Carve source into a typed AST.

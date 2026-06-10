@@ -23,7 +23,11 @@ import type {
   TableCell,
   TableRow,
 } from './ast.js'
-import type { CarveExtension, ExtensionRenderContext } from './extension.js'
+import type {
+  BlockExtensionRenderContext,
+  CarveExtension,
+  ExtensionRenderContext,
+} from './extension.js'
 
 export interface RenderOptions {
   mentionUrl?: string
@@ -146,11 +150,18 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   return out.join('\n')
 }
 
+interface FootnoteEntry {
+  /** Reference label, for a `[^label]` note; undefined for an inline note. */
+  label?: string
+  /** Inline content, for an `^[content]` note; undefined for a reference note. */
+  inline?: InlineNode[]
+  /** Backlink-target ids in reference order. */
+  backrefs: string[]
+}
+
 interface FootnoteState {
-  /** Referenced labels in first-occurrence order; index + 1 = number. */
-  order: string[]
-  /** Per label, the backlink-target ids in reference order. */
-  backrefs: Record<string, string[]>
+  /** Note instances in document order; index + 1 = number. */
+  order: FootnoteEntry[]
 }
 
 /** Visit every inline array under a block subtree (depth-first). */
@@ -206,31 +217,44 @@ function visitInlineTree(nodes: InlineNode[], fn: (n: InlineNode) => void): void
 
 function collectFootnotes(ast: Document): FootnoteState {
   const defs = ast.footnoteDefs ?? {}
-  const order: string[] = []
-  const backrefs: Record<string, string[]> = {}
+  const order: FootnoteEntry[] = []
   const seen: Record<string, number> = {}
   const onNode = (n: InlineNode): void => {
-    if (n.type !== 'footnote' || !n.id || !defs[n.id]) return
-    let idx = order.indexOf(n.id)
+    if (n.type !== 'footnote') return
+    // Inline footnote (`^[content]`): always a fresh, anonymous number.
+    if (n.inline) {
+      const number = order.length + 1
+      const refId = `fnref${number}`
+      order.push({ inline: n.inline, backrefs: [refId] })
+      n.number = number
+      n.refId = refId
+      return
+    }
+    // Reference footnote (`[^label]`): numbered at first resolved reference.
+    if (!n.id || !defs[n.id]) return
+    let idx = order.findIndex((e) => e.label === n.id)
     if (idx === -1) {
-      order.push(n.id)
+      order.push({ label: n.id, backrefs: [] })
       idx = order.length - 1
-      backrefs[n.id] = []
     }
     const number = idx + 1
     const occ = (seen[n.id] = (seen[n.id] ?? 0) + 1)
     const refId = occ === 1 ? `fnref${number}` : `fnref${number}-${occ}`
     n.number = number
     n.refId = refId
-    backrefs[n.id]!.push(refId)
+    order[idx]!.backrefs.push(refId)
   }
   for (const b of ast.children) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
-  // Footnote bodies may reference further footnotes; walk referenced
-  // bodies in discovery order (the queue grows as onNode appends labels).
+  // Reference bodies may cite further reference footnotes; walk them in
+  // discovery order (the queue grows as onNode appends entries). Inline-note
+  // content lives in `.inline`, which visitInlineTree does not descend, so it
+  // is never walked for footnotes (design §3.1: no footnotes inside notes).
   for (let k = 0; k < order.length; k++) {
-    for (const b of defs[order[k]!] ?? []) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
+    const label = order[k]!.label
+    if (label === undefined) continue
+    for (const b of defs[label] ?? []) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
   }
-  return { order, backrefs }
+  return { order }
 }
 
 /**
@@ -241,10 +265,12 @@ function collectFootnotes(ast: Document): FootnoteState {
 function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOptions): string {
   const defs = ast.footnoteDefs ?? {}
   const lines: string[] = ['<section role="doc-endnotes">', `${indent(1)}<hr>`, `${indent(1)}<ol>`]
-  st.order.forEach((label, idx) => {
+  st.order.forEach((entry, idx) => {
     const number = idx + 1
-    const body = (defs[label] ?? []).map((b) => renderBlock(b, opts, 3))
-    const blink = (st.backrefs[label] ?? [])
+    const body = entry.inline
+      ? [`${indent(3)}<p>${renderInlines(entry.inline, opts)}</p>`]
+      : (defs[entry.label!] ?? []).map((b) => renderBlock(b, opts, 3))
+    const blink = entry.backrefs
       .map((rid) => `<a href="#${rid}" role="doc-backlink">↩</a>`)
       .join('')
     const last = body.length - 1
@@ -359,6 +385,25 @@ function renderAttrs2(
 
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  // Extension block renderers (keyed by node type) get first claim; one may
+  // return undefined to defer back to the core renderer below.
+  const blockRenderer = opts.extensions
+    ?.flatMap((e) => (e.blockRenderers ? [e.blockRenderers] : []))
+    .map((r) => r[node.type])
+    .find((fn): fn is NonNullable<typeof fn> => fn !== undefined)
+  if (blockRenderer) {
+    const ctx: BlockExtensionRenderContext = {
+      level,
+      indent,
+      renderChildren: (nodes, lvl) => nodes.map((c) => renderBlock(c, opts, lvl)).join('\n'),
+      renderInlines: (nodes) => renderInlines(nodes, opts),
+      escapeHtml,
+      escapeAttr,
+      renderAttrs,
+    }
+    const out = blockRenderer(node, ctx)
+    if (out !== undefined) return out
+  }
   switch (node.type) {
     case 'heading': {
       const inner = renderInlines(node.children, opts)
