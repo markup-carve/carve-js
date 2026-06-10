@@ -1827,7 +1827,7 @@ const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
 // Names can include version-style dots between alnum runs (e.g. `#release-1.0`)
 // but a trailing period is treated as sentence punctuation, not part of the name.
 const RE_MENTION = /^@([a-zA-Z][\w-]*(?:\.\w+)*)/
-const RE_TAG = /^#([a-zA-Z][\w-]*(?:\.\w+)*)/
+const RE_TAG = /^#([\w][\w-]*(?:\.\w+)*)/
 
 // Fixed multi-character smart-typography tokens, longest first so
 // `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
