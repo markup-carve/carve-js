@@ -1911,6 +1911,11 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
   let i = 0
   let buf = ''
   let bufStart = 0
+  // Last char appended to buf. Tracked explicitly because reading
+  // `buf[buf.length - 1]` each char indexes a growing ConsString, which V8 must
+  // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
+  // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
+  let bufLast = ''
 
   // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
   // branches resolve the close bracket in O(1); see buildBracketMap.
@@ -1920,12 +1925,14 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
     if (buf) {
       out.push(withPos({ type: 'text', value: buf } as Text, source, text, bufStart, i))
       buf = ''
+      bufLast = ''
     }
   }
 
   const append = (value: string) => {
     if (!buf) bufStart = i
     buf += value
+    if (value) bufLast = value[value.length - 1]!
   }
 
   while (i < text.length) {
@@ -1968,7 +1975,7 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
       // inline node like code/emphasis/link) treat it as word-adjacent
       // so a closing quote stays closing; only true start is "".
       const prevForQuote = buf.length
-        ? buf[buf.length - 1]!
+        ? bufLast
         : out.length
           ? 'x'
           : ''

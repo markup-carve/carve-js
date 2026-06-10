@@ -24,6 +24,19 @@ describe('inline position mapping (perf + correctness)', () => {
     expect(elapsed).toBeLessThan(500)
   })
 
+  it('parses a quote-dense paragraph in linear time', () => {
+    // Guard against indexing the growing text buffer (a ConsString) per char
+    // in the smart-quote context check: it was O(n^2) with a catastrophic cliff
+    // (32k single quotes took ~10s). Linear is well under the bound below.
+    const source = "'w' ".repeat(40000)
+
+    const start = performance.now()
+    parse(source)
+    const elapsed = performance.now() - start
+
+    expect(elapsed).toBeLessThan(2000)
+  })
+
   it('keeps correct line/column across soft breaks', () => {
     const doc = parse('para line one\nline two *b* end')
     const para = doc.children[0]!
