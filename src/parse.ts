@@ -1352,9 +1352,12 @@ function parseList(lexer: Lexer): List {
       content = m[2]!
     }
 
-    // Column where item content begins; deeper-indented lines belong to
-    // this item (continuation paragraphs or nested lists).
-    const contentCol = m[0]!.length - content.length
+    // Column where item content begins; deeper-indented lines belong to this
+    // item (continuation paragraphs or nested lists). For a TASK item the
+    // checkbox is content, not marker, so the content column is the bullet width
+    // (`- `/`* ` = 2), matching the spec's task attribute/continuation
+    // convention (`- [x] x` / `  {.c}`) -- not the full `- [x] ` width.
+    const contentCol = isTask ? baseIndent + 2 : m[0]!.length - content.length
     lexer.consume()
 
     // First-block item (Carve): `- +` opens an item whose body is the
