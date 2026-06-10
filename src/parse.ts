@@ -1289,6 +1289,14 @@ function parseList(lexer: Lexer): List {
     }
 
     const nested: string[] = []
+    // Index in `nested` where an indented ORDERED sub-list begins. Ordered
+    // markers do not interrupt a paragraph (§10), so if the sub-list is joined
+    // with the lead text it folds into the lead paragraph instead of nesting
+    // (`1. a` / `   1. b` -> `<li>a\n1. b</li>`). Splitting it into its own block
+    // stream lets it nest. Unordered/task sub-lists interrupt and already nest
+    // via the join, and lazy continuation / block-attribute lines must stay on
+    // the join, so only an indented ordered marker triggers the split.
+    let firstBlockIdx = -1
     let pendingBlanks = 0
     while (!lexer.eof()) {
       const l = lexer.peek()!
@@ -1328,7 +1336,15 @@ function parseList(lexer: Lexer): List {
       if (leadingWhitespace(l) >= contentCol) {
         for (let k = 0; k < pendingBlanks; k++) nested.push('')
         pendingBlanks = 0
-        nested.push(l.slice(contentCol))
+        const dedented = l.slice(contentCol)
+        if (
+          firstBlockIdx === -1 &&
+          RE_ORDERED.test(dedented) &&
+          !RE_TASK.test(dedented)
+        ) {
+          firstBlockIdx = nested.length
+        }
+        nested.push(dedented)
         lexer.consume()
       } else if (pendingBlanks === 0 && !lazyContinuationEndsList(l, lexer)) {
         // Lazy continuation: a non-indented line with no blank before it that
@@ -1375,17 +1391,25 @@ function parseList(lexer: Lexer): List {
       }
     }
 
-    // Parse the lead text together with its continuation/nested lines as
-    // one block sequence. Lazy continuation (an indented line with no
-    // blank before it) then merges into the lead paragraph instead of
-    // becoming a stray second block.
-    const sub = new Lexer([content, ...nested].join('\n'))
-    sub.abbrDefs = lexer.abbrDefs
-    sub.linkDefs = lexer.linkDefs
-    sub.footnoteDefs = lexer.footnoteDefs
-    sub.nested = true
-    sub.depth = lexer.depth + 1
-    const children = parseBlocks(sub, 0)
+    // Parse the lead text together with its continuation/nested lines as one
+    // block sequence (lazy continuation merges into the lead paragraph). An
+    // indented ordered sub-list, however, is parsed as its own block stream so
+    // it nests instead of folding into the lead paragraph.
+    const leadLines = firstBlockIdx === -1 ? nested : nested.slice(0, firstBlockIdx)
+    const blockLines = firstBlockIdx === -1 ? [] : nested.slice(firstBlockIdx)
+    const mkSub = (text: string): Lexer => {
+      const s = new Lexer(text)
+      s.abbrDefs = lexer.abbrDefs
+      s.linkDefs = lexer.linkDefs
+      s.footnoteDefs = lexer.footnoteDefs
+      s.nested = true
+      s.depth = lexer.depth + 1
+      return s
+    }
+    const children = parseBlocks(mkSub([content, ...leadLines].join('\n')), 0)
+    if (blockLines.length > 0) {
+      children.push(...parseBlocks(mkSub(blockLines.join('\n')), 0))
+    }
 
     const item: ListItem = { type: 'list-item', children }
     if (checked !== undefined) item.checked = checked
