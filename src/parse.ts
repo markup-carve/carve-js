@@ -19,6 +19,7 @@ import type {
   CriticInsert,
   CriticSubstitute,
   CrossRef,
+  CaptionNumber,
   Comment,
   DefinitionItem,
   DefinitionList,
@@ -50,6 +51,7 @@ import type {
   Text,
   ThematicBreak,
 } from './ast.js'
+import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
 
 export interface ParseOptions {
   positions?: boolean
@@ -61,7 +63,20 @@ export interface ParseOptions {
    * verbatim. See markup-carve/carve#73.
    */
   asciiHeadingIds?: boolean
+  /**
+   * Extensions whose parse-stage matchers (`matchInline` / `matchBlock`) add
+   * syntax to the parse. Extensions with only render/transform hooks need not
+   * be passed here; `carveToHtml` forwards them automatically.
+   */
+  extensions?: CarveExtension[]
 }
+
+// Active extension matchers for the current parse() call. A module-level hook
+// keeps the ~15 recursive scanInline call sites and every sub-lexer free of an
+// extra threaded parameter. Parsing is synchronous; parse() saves/restores the
+// previous values in a finally so nested and sequential parses stay isolated.
+let activeMatchers: CarveExtension[] = []
+let activeMatcherCtx: MatcherContext | null = null
 
 const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
 // Thematic break: a line of 3+ of the same `-`, `*`, or `_` (grammar
@@ -243,11 +258,96 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   // they can be resolved regardless of document order (grammar §6).
   collectAbbrDefs(lexer)
   collectLinkDefs(lexer)
-  const children = parseBlocks(lexer, 0)
-  const doc: Document = { type: 'document', children }
-  if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
-  if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
-  return doc
+
+  const prevMatchers = activeMatchers
+  const prevCtx = activeMatcherCtx
+  activeMatchers = (opts.extensions ?? []).filter((e) => e.matchInline || e.matchBlock)
+  activeMatcherCtx = activeMatchers.length ? makeMatcherCtx(lexer, opts) : null
+  try {
+    const children = parseBlocks(lexer, 0)
+    const doc: Document = { type: 'document', children }
+    if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
+    if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
+    return doc
+  } finally {
+    activeMatchers = prevMatchers
+    activeMatcherCtx = prevCtx
+  }
+}
+
+// The MatcherContext handed to an extension's matchers, bound to a specific
+// lexer's definition tables. Recursive parsing resolves that lexer's defs so
+// extension-parsed content behaves like core nested content, not an isolated
+// snippet.
+function makeMatcherCtx(lexer: Lexer, opts: ParseOptions): MatcherContext {
+  return {
+    parseInlines: (t) => parseInline(t, lexer.abbrDefs, lexer.linkDefs),
+    parseBlocks: (s) => parseBlockSource(s, opts, lexer),
+    linkDefs: lexer.linkDefs,
+    abbrDefs: lexer.abbrDefs,
+  }
+}
+
+// Recursively parse a block source for an extension's ctx.parseBlocks. Reuses
+// the current activeMatchers (so nested content sees the same extensions)
+// without re-entering parse() — which would reset the matcher context. The
+// document's link/abbr defs are seeded first so references defined elsewhere
+// resolve inside the snippet (snippet-local defs override on top), and the
+// root footnote map is SHARED by reference — exactly as core nested containers
+// (blockquotes/lists) do — so a footnote def inside extension-owned content
+// reaches the document. While parsing, the matcher context is rebound to the
+// sub-lexer so a nested matcher reading ctx.linkDefs/abbrDefs sees the
+// snippet-local definitions.
+function parseBlockSource(source: string, opts: ParseOptions, root: Lexer): BlockNode[] {
+  const sub = new Lexer(source, opts)
+  // Propagate nesting depth so MAX_NESTING_DEPTH still bounds extension-owned
+  // recursion (a self-recursive container matcher would otherwise stack-overflow).
+  sub.depth = root.depth + 1
+  sub.nested = true
+  for (const [k, v] of root.linkDefs) sub.linkDefs.set(k, v)
+  for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
+  sub.footnoteDefs = root.footnoteDefs
+  collectAbbrDefs(sub)
+  collectLinkDefs(sub)
+  if (!activeMatchers.length) return parseBlocks(sub, 0)
+  const prevCtx = activeMatcherCtx
+  activeMatcherCtx = makeMatcherCtx(sub, opts)
+  try {
+    return parseBlocks(sub, 0)
+  } finally {
+    activeMatcherCtx = prevCtx
+  }
+}
+
+// Offer the active block matchers the line at the lexer cursor, in registration
+// order. On a match, advance the lexer by linesConsumed and return the node.
+// Core block constructs are dispatched first (see parseBlockInner), so an
+// extension only sees lines core declined.
+function tryBlockMatchers(lexer: Lexer): BlockNode | null {
+  const ctx = activeMatcherCtx
+  if (!ctx) return null
+  for (const ext of activeMatchers) {
+    if (!ext.matchBlock) continue
+    const res = ext.matchBlock(lexer.lines, lexer.pos, ctx)
+    if (res && res.linesConsumed > 0) {
+      for (let k = 0; k < res.linesConsumed && !lexer.eof(); k++) lexer.consume()
+      return res.node
+    }
+  }
+  return null
+}
+
+// Offer the active inline matchers the position `pos` in `text`, in
+// registration order. Returns the first match whose end advances past pos.
+function tryInlineMatchers(text: string, pos: number): InlineMatch | null {
+  const ctx = activeMatcherCtx
+  if (!ctx) return null
+  for (const ext of activeMatchers) {
+    if (!ext.matchInline) continue
+    const res = ext.matchInline(text, pos, ctx)
+    if (res && res.end > pos && res.end <= text.length) return res
+  }
+  return null
 }
 
 function collectAbbrDefs(lexer: Lexer) {
@@ -509,6 +609,12 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     return parseList(lexer)
   if (RE_TABLE_ROW.test(line)) return parseTable(lexer)
   if (isBlockImageLine(line)) return parseBlockImage(lexer)
+  // Extension block matchers run after every core construct, before the
+  // paragraph fallback: extensions add syntax, they never hijack core.
+  if (activeMatchers.length) {
+    const matched = tryBlockMatchers(lexer)
+    if (matched) return matched
+  }
   return parseParagraph(lexer)
 }
 
@@ -970,7 +1076,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       return {
         type: 'figure',
         target: bq,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs),
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -1009,7 +1115,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
       return {
         type: 'figure',
         target: img,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs),
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -1246,9 +1352,12 @@ function parseList(lexer: Lexer): List {
       content = m[2]!
     }
 
-    // Column where item content begins; deeper-indented lines belong to
-    // this item (continuation paragraphs or nested lists).
-    const contentCol = m[0]!.length - content.length
+    // Column where item content begins; deeper-indented lines belong to this
+    // item (continuation paragraphs or nested lists). For a TASK item the
+    // checkbox is content, not marker, so the content column is the bullet width
+    // (`- `/`* ` = 2), matching the spec's task attribute/continuation
+    // convention (`- [x] x` / `  {.c}`) -- not the full `- [x] ` width.
+    const contentCol = isTask ? baseIndent + 2 : m[0]!.length - content.length
     lexer.consume()
 
     // First-block item (Carve): `- +` opens an item whose body is the
@@ -1564,7 +1673,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs)
+      table.caption = parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true)
     }
   }
   return table
@@ -1836,7 +1945,7 @@ const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
 // Names can include version-style dots between alnum runs (e.g. `#release-1.0`)
 // but a trailing period is treated as sentence punctuation, not part of the name.
 const RE_MENTION = /^@([a-zA-Z][\w-]*(?:\.\w+)*)/
-const RE_TAG = /^#([a-zA-Z][\w-]*(?:\.\w+)*)/
+const RE_TAG = /^#([\w][\w-]*(?:\.\w+)*)/
 
 // Fixed multi-character smart-typography tokens, longest first so
 // `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
@@ -1920,8 +2029,9 @@ function parseInline(
   abbrDefs: Map<string, string>,
   linkDefs: Map<string, { href: string; title?: string }> = new Map(),
   source: InlineSource = inlineSource(),
+  captionContext = false,
 ): InlineNode[] {
-  const nodes = applyAbbreviations(scanInline(text, source), abbrDefs)
+  const nodes = applyAbbreviations(scanInline(text, source, false, captionContext), abbrDefs)
   return applyLinkDefs(nodes, linkDefs)
 }
 
@@ -1943,11 +2053,14 @@ function scanInline(
   text: string,
   source: InlineSource = inlineSource(),
   inFootnote = false,
+  captionContext = false,
 ): InlineNode[] {
   const out: InlineNode[] = []
   let i = 0
   let buf = ''
   let bufStart = 0
+  // Caption number placeholder: only the first bare `#` in a caption becomes one.
+  let captionNumberEmitted = false
   // Last char appended to buf. Tracked explicitly because reading
   // `buf[buf.length - 1]` each char indexes a growing ConsString, which V8 must
   // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
@@ -2388,6 +2501,15 @@ function scanInline(
         i += m[0].length
         continue
       }
+      // Bare `#` (not a tag) in a caption = number placeholder, first only.
+      // `\#` never reaches here (the escape branch consumes it as literal).
+      if (captionContext && !captionNumberEmitted) {
+        flush()
+        out.push(withPos({ type: 'caption-number' } as CaptionNumber, source, text, i, i + 1))
+        captionNumberEmitted = true
+        i += 1
+        continue
+      }
     }
 
     // Emphasis-family delimiters
@@ -2405,6 +2527,18 @@ function scanInline(
       out.push(withPos({ type: 'soft-break' }, source, text, i, i + 1))
       i++
       continue
+    }
+
+    // Extension inline matchers run only here, where every core construct has
+    // declined position i: extensions add syntax, they never hijack core.
+    if (activeMatchers.length) {
+      const xm = tryInlineMatchers(text, i)
+      if (xm) {
+        flush()
+        out.push(withPos(xm.node, source, text, i, xm.end))
+        i = xm.end
+        continue
+      }
     }
 
     append(c)

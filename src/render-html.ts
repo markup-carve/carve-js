@@ -23,7 +23,11 @@ import type {
   TableCell,
   TableRow,
 } from './ast.js'
-import type { CarveExtension, ExtensionRenderContext } from './extension.js'
+import type {
+  BlockExtensionRenderContext,
+  CarveExtension,
+  ExtensionRenderContext,
+} from './extension.js'
 
 export interface RenderOptions {
   mentionUrl?: string
@@ -381,6 +385,25 @@ function renderAttrs2(
 
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  // Extension block renderers (keyed by node type) get first claim; one may
+  // return undefined to defer back to the core renderer below.
+  const blockRenderer = opts.extensions
+    ?.flatMap((e) => (e.blockRenderers ? [e.blockRenderers] : []))
+    .map((r) => r[node.type])
+    .find((fn): fn is NonNullable<typeof fn> => fn !== undefined)
+  if (blockRenderer) {
+    const ctx: BlockExtensionRenderContext = {
+      level,
+      indent,
+      renderChildren: (nodes, lvl) => nodes.map((c) => renderBlock(c, opts, lvl)).join('\n'),
+      renderInlines: (nodes) => renderInlines(nodes, opts),
+      escapeHtml,
+      escapeAttr,
+      renderAttrs,
+    }
+    const out = blockRenderer(node, ctx)
+    if (out !== undefined) return out
+  }
   switch (node.type) {
     case 'heading': {
       const inner = renderInlines(node.children, opts)
@@ -817,6 +840,9 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'crossref':
       return `&lt;/#${escapeHtml(node.target)}&gt;`
+    case 'caption-number':
+      // Filled by resolve(); an unresolved placeholder renders empty.
+      return node.n === undefined ? '' : String(node.n)
     case 'comment':
       // Comments are not rendered (§4.13); inline form mirrors the block one.
       return ''

@@ -32,6 +32,13 @@ export type {
   CarveExtension,
   ExtensionRenderer,
   ExtensionRenderContext,
+  BlockExtensionRenderer,
+  BlockExtensionRenderContext,
+  InlineMatch,
+  BlockMatch,
+  MatcherContext,
+  InlineMatcher,
+  BlockMatcher,
 } from './extension.js'
 export {
   djotMigrationWarnings,
@@ -47,6 +54,7 @@ export {
   type LintWarning,
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
+export { details } from './details.js'
 
 /**
  * Parse Carve source into a typed AST.
@@ -81,10 +89,15 @@ export function carveToHtml(
   source: string,
   opts: ParseOptions & RenderOptions = {},
 ): string {
-  // `sourceLine` rendering needs block positions, so enable parsing them.
-  const parseOpts: ParseOptions = opts.sourceLine ? { ...opts, positions: true } : opts
-  let doc = resolve(parse(source, parseOpts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
   const exts: CarveExtension[] = opts.extensions ?? []
+  // `sourceLine` rendering needs block positions, so enable parsing them.
+  // Extensions are forwarded to the parse so their matchers add syntax.
+  const parseOpts: ParseOptions = {
+    ...opts,
+    extensions: exts,
+    ...(opts.sourceLine ? { positions: true } : {}),
+  }
+  let doc = resolve(parse(source, parseOpts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
   for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
   for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
   return renderHtml(doc, opts)
