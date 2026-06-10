@@ -1346,10 +1346,19 @@ function parseList(lexer: Lexer): List {
         }
         nested.push(dedented)
         lexer.consume()
-      } else if (pendingBlanks === 0 && !lazyContinuationEndsList(l, lexer)) {
-        // Lazy continuation: a non-indented line with no blank before it that
-        // starts no block folds into the item's lead paragraph (djot rule). A
-        // block-starting line or a blank line instead ends the list.
+      } else if (
+        pendingBlanks === 0 &&
+        (!lazyContinuationEndsList(l, lexer) ||
+          // An ordered marker indented past the base column but below the
+          // content column is lazy continuation, not a new block: ordered
+          // markers do not interrupt a paragraph (§10). At the base column it
+          // can still start a new list (a dialect change, §11), so only an
+          // indented one folds.
+          (leadingWhitespace(l) > baseIndent && RE_ORDERED.test(l) && !RE_TASK.test(l)))
+      ) {
+        // Lazy continuation: a line with no blank before it that starts no block
+        // (or is the indented ordered marker above) folds into the item's lead
+        // paragraph (djot rule). A block-starting line or a blank ends the list.
         nested.push(l)
         lexer.consume()
       } else {

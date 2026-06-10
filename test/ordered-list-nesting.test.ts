@@ -33,3 +33,25 @@ describe('ordered sub-list nesting', () => {
     )
   })
 })
+
+describe('ordered list indentation (Model A: content column)', () => {
+  const h = (s: string) => carveToHtml(s).trim()
+
+  it('folds an ordered child BELOW the content column (no blank, §10)', () => {
+    // `  1. b` is at column 2, below `1. `'s content column (3); ordered does
+    // not interrupt a paragraph, so it is lazy continuation, not a sub-list.
+    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a\n1. b</li>\n</ol>')
+  })
+
+  it('nests an ordered child AT the content column', () => {
+    expect(h('1. a\n   1. b')).toBe(
+      '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n  </li>\n</ol>',
+    )
+  })
+
+  it('an ordered dialect change at the base column still starts a new list (§11)', () => {
+    expect(h('1. a\nb. c')).toBe(
+      '<ol>\n  <li>a</li>\n</ol>\n<ol type="a" start="2">\n  <li>c</li>\n</ol>',
+    )
+  })
+})
