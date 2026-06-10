@@ -1930,7 +1930,11 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
   }
 }
 
-function scanInline(text: string, source: InlineSource = inlineSource()): InlineNode[] {
+function scanInline(
+  text: string,
+  source: InlineSource = inlineSource(),
+  inFootnote = false,
+): InlineNode[] {
   const out: InlineNode[] = []
   let i = 0
   let buf = ''
@@ -2117,6 +2121,25 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
       }
     }
 
+    // Inline footnote `^[content]` (pandoc-style; design §2-§5). The caret must
+    // immediately precede `[`, must not itself follow a `^` (`^^[` is suppressed
+    // by same-delimiter adjacency), and must not be inside footnote content
+    // (no notes inside notes, §3.1). The matching `]` is the balanced close from
+    // bracketClose (escape/code-span aware). Empty or whitespace-only content is
+    // literal. Ranked above superscript. Content is inline-only, parsed with
+    // footnote recognition disabled.
+    if (!inFootnote && c === '^' && text[i + 1] === '[' && text[i - 1] !== '^') {
+      const close = bracketClose[i + 1]
+      if (close !== undefined && text.slice(i + 2, close).trim() !== '') {
+        flush()
+        const inner = text.slice(i + 2, close)
+        const children = scanInline(inner, shiftSource(source, text, i + 2), true)
+        out.push(withPos({ type: 'footnote', inline: children } as Footnote, source, text, i, close + 1))
+        i = close + 1
+        continue
+      }
+    }
+
     // Link / reference link / footnote / span. The bracket text may contain
     // nested balanced [...] (djot: `[a [b] c](/u)`, `[[x](y)](z)`), so the
     // matching close `]` is found by balance — not a [^\]]* regex that would
@@ -2135,7 +2158,7 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
           const link: Link = {
             type: 'link',
             href: ml[1]!,
-            children: scanInline(innerText, shiftSource(source, text, i + 1)),
+            children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
           }
           const title = ml[2] ?? ml[3]
           if (title) link.title = title
@@ -2166,7 +2189,7 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
           const refLink: Link = {
             type: 'link',
             href: '',
-            children: scanInline(innerText, shiftSource(source, text, i + 1)),
+            children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
             ref: mref[1]! !== '' ? mref[1]! : innerText,
             // rawRef includes any consumed trailing {attrs} so the literal
             // fallback for an unresolved ref preserves the full source.
@@ -2182,7 +2205,9 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
       // footnote ref (the `{.c}` then attaches via the inline-attr pass)
       // rather than becoming a <span> of `^x`. Footnote labels hold no
       // nested brackets, so its own regex stays authoritative.
-      const mfn = RE_FOOTNOTE_REF.exec(rest)
+      // Inside footnote content a `[^x]` is literal, not a reference
+      // (no notes inside notes, design §3.1).
+      const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
       if (mfn) {
         flush()
         out.push(withPos({ type: 'footnote', id: mfn[1]!.trim() } as Footnote, source, text, i, i + mfn[0].length))
@@ -2201,7 +2226,7 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
           flush()
           out.push({
             type: 'span',
-            children: scanInline(innerText, shiftSource(source, text, i + 1)),
+            children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
             attrs: parseAttrs(ms[1]!),
             pos: sourcePos(source, text, i, i + close + 1 + ms[0].length),
           } as Span)
@@ -2219,7 +2244,7 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
         const ext: Extension = {
           type: 'extension',
           name: m[1]!,
-          content: scanInline(m[2]!, shiftSource(source, text, i + m[0].indexOf('[') + 1)),
+          content: scanInline(m[2]!, shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote),
         }
         if (m[3]) ext.attrs = parseAttrs(m[3])
         out.push(withPos(ext, source, text, i, i + m[0].length))
@@ -2297,14 +2322,14 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
       const ins = RE_CRITIC_INS.exec(rest)
       if (ins) {
         flush()
-        out.push(withPos({ type: 'critic-insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2)) } as CriticInsert, source, text, i, i + ins[0].length))
+        out.push(withPos({ type: 'critic-insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, i + ins[0].length))
         i += ins[0].length
         continue
       }
       const del = RE_CRITIC_DEL.exec(rest)
       if (del) {
         flush()
-        out.push(withPos({ type: 'critic-delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2)) } as CriticDelete, source, text, i, i + del[0].length))
+        out.push(withPos({ type: 'critic-delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, i + del[0].length))
         i += del[0].length
         continue
       }
@@ -2357,7 +2382,7 @@ function scanInline(text: string, source: InlineSource = inlineSource()): Inline
     }
 
     // Emphasis-family delimiters
-    const em = matchEmphasis(text, i, source)
+    const em = matchEmphasis(text, i, source, inFootnote)
     if (em) {
       flush()
       out.push(withPos(em.node, source, text, i, em.end))
@@ -2385,7 +2410,12 @@ interface EmphasisMatch {
   end: number
 }
 
-function matchEmphasis(text: string, i: number, source: InlineSource): EmphasisMatch | null {
+function matchEmphasis(
+  text: string,
+  i: number,
+  source: InlineSource,
+  inFootnote = false,
+): EmphasisMatch | null {
   const c = text[i]!
 
   // Bold-italic /*...*/  (priority over /italic/ and *bold*)
@@ -2394,7 +2424,7 @@ function matchEmphasis(text: string, i: number, source: InlineSource): EmphasisM
     if (close !== -1) {
       const inner = text.slice(i + 2, close)
       return {
-        node: { type: 'bold-italic', children: scanInline(inner, shiftSource(source, text, i + 2)) },
+        node: { type: 'bold-italic', children: scanInline(inner, shiftSource(source, text, i + 2), inFootnote) },
         end: close + 2,
       }
     }
@@ -2409,7 +2439,7 @@ function matchEmphasis(text: string, i: number, source: InlineSource): EmphasisM
       const inner = text.slice(i + 2, close)
       if (inner.trim() && !inner.startsWith(' ') && !inner.endsWith(' ')) {
         return {
-          node: { type: 'sub', children: scanInline(inner, shiftSource(source, text, i + 2)) },
+          node: { type: 'sub', children: scanInline(inner, shiftSource(source, text, i + 2), inFootnote) },
           end: close + 2,
         }
       }
@@ -2423,7 +2453,7 @@ function matchEmphasis(text: string, i: number, source: InlineSource): EmphasisM
       const inner = text.slice(i + 2, close)
       if (inner.trim() && !inner.startsWith(' ') && !inner.endsWith(' ')) {
         return {
-          node: { type: 'highlight', children: scanInline(inner, shiftSource(source, text, i + 2)) },
+          node: { type: 'highlight', children: scanInline(inner, shiftSource(source, text, i + 2), inFootnote) },
           end: close + 2,
         }
       }
@@ -2456,7 +2486,7 @@ function matchEmphasis(text: string, i: number, source: InlineSource): EmphasisM
       if (close !== -1) {
         const inner = text.slice(i + 1, close)
         return {
-          node: { type, children: scanInline(inner, shiftSource(source, text, i + 1)) },
+          node: { type, children: scanInline(inner, shiftSource(source, text, i + 1), inFootnote) },
           end: close + 1,
         }
       }
@@ -2606,6 +2636,14 @@ function applyAbbreviations(
           defs,
         )
       }
+      // Inline-footnote content lives in `.inline` (design §3); recurse there too.
+      const anyInline = (node as unknown as { inline?: InlineNode[] }).inline
+      if (Array.isArray(anyInline)) {
+        ;(node as unknown as { inline: InlineNode[] }).inline = applyAbbreviations(
+          anyInline,
+          defs,
+        )
+      }
       out.push(node)
       continue
     }
@@ -2650,6 +2688,14 @@ function applyLinkDefs(
     if (Array.isArray(anyChildren)) {
       ;(node as unknown as { children: InlineNode[] }).children = applyLinkDefs(
         anyChildren,
+        defs,
+      )
+    }
+    // Inline-footnote content lives in `.inline` (design §3); recurse there too.
+    const anyInline = (node as unknown as { inline?: InlineNode[] }).inline
+    if (Array.isArray(anyInline)) {
+      ;(node as unknown as { inline: InlineNode[] }).inline = applyLinkDefs(
+        anyInline,
         defs,
       )
     }
