@@ -150,7 +150,7 @@
         "ansi": "Text(an aside) here.\n"
     },
     "super-sub": {
-        "carve": "x^2^ and y~i~\n",
+        "carve": "x{^2^} and y{~i~}\n",
         "markdown": "x<sup>2</sup> and y~~i~~\n",
         "plain": "x2 and yi\n",
         "ansi": "x\u00b2 and y\u001b[9mi\u001b[0m\n"

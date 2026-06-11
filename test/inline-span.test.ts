@@ -67,7 +67,7 @@ describe('inline span [text]{attrs}', () => {
     // isn't attribute syntax (`{???}`) is not an attribute block, so the
     // bracketed run stays literal.
     expect(h('[text]{???}')).toBe('<p>[text]{???}</p>')
-    expect(h('[text]{=y=}')).toBe('<p>[text]{=y=}</p>')
+    expect(h('[text]{?y?}')).toBe('<p>[text]{?y?}</p>')
   })
 
   it('parses a span whose body contains nested brackets / a link', () => {
