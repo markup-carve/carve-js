@@ -441,7 +441,7 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       return `${open}\n${body}\n${pad}</div>`
     }
     case 'definition-list': {
-      const lines = [`${pad}<dl>`]
+      const lines = [`${pad}<dl${renderAttrs(node.attrs)}>`]
       for (const it of node.items) {
         for (const t of it.terms) lines.push(`${pad}  <dt>${renderInlines(t, opts)}</dt>`)
         for (const d of it.definitions) {
@@ -525,13 +525,13 @@ function renderListItem(
 
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
   if (item.children.length === 1 && item.children[0]!.type === 'paragraph') {
-    return `${pad}<li>${checkbox}${wrapPara(item.children[0] as Paragraph)}</li>`
+    return `${pad}<li${renderAttrs(item.attrs)}>${checkbox}${wrapPara(item.children[0] as Paragraph)}</li>`
   }
 
   // Mixed content (e.g. a lead paragraph followed by a nested list): the
   // first paragraph sits on the <li> line; remaining blocks go below,
   // indented one level deeper, with the closing </li> back at item indent.
-  let head = `${pad}<li>${checkbox}`
+  let head = `${pad}<li${renderAttrs(item.attrs)}>${checkbox}`
   const body: string[] = []
   item.children.forEach((child, i) => {
     if (child.type === 'paragraph') {
