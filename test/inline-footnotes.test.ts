@@ -81,7 +81,10 @@ describe('inline footnotes ^[content]', () => {
   })
 
   it('keeps superscript working when no bracket follows the caret', () => {
-    expect(h('x^2^ y\n')).toContain('<sup>2</sup>')
+    // `^2^` (caret + non-bracket) is superscript, not a footnote. Bare
+    // superscript needs a word boundary, so the caret sits at line start;
+    // intraword sup (`x^2^`) is literal and uses the forced `{^2^}` form.
+    expect(h('^2^ y\n')).toContain('<sup>2</sup>')
   })
 
   it('resolves an implicit heading reference inside note content', () => {

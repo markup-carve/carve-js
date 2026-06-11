@@ -37,7 +37,7 @@ describe('list-item attributes', () => {
   })
 
   it('rejects an invalid payload: `-{` is not a marker', () => {
-    expect(h('-{=y=} text')).toBe('<p>-{=y=} text</p>')
+    expect(h('-{?} text')).toBe('<p>-{?} text</p>')
   })
 
   it('attaches to a task item, abutting the marker before the checkbox', () => {
