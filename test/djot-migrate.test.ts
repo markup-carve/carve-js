@@ -20,7 +20,7 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     const w = djotMigrationWarnings('H~2~O')
     expect(w).toHaveLength(1)
     expect(w[0]!.rule).toBe('djot-subscript-tilde')
-    expect(w[0]!.suggestion).toBe(',,2,,')
+    expect(w[0]!.suggestion).toBe('{,2,}')
   })
 
   it('flags Markdown **strong** and does not double-report as *x*', () => {
@@ -34,7 +34,7 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
   it('flags Djot highlight {=x=}', () => {
     const w = djotMigrationWarnings('a {=note=} b')
     expect(w[0]!.rule).toBe('djot-highlight-braces')
-    expect(w[0]!.suggestion).toBe('==note==')
+    expect(w[0]!.suggestion).toBe('{=note=}')
   })
 
   it('does not flag full reference-style links (resolve identically)', () => {
@@ -46,11 +46,11 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
   it('does not warn on Carve-native syntax', () => {
     expect(
       djotMigrationWarnings(
-        '/italic/ *bold* _underline_is fine when not paired_? ,,sub,, ==hl== ^sup^',
+        '/italic/ *bold* _underline_is fine when not paired_? ,sub, =hl= ^sup^',
       ).filter((w) => w.rule !== 'djot-emphasis-underscore'),
     ).toEqual([])
     // Genuinely Carve-only line: no warnings at all.
-    expect(djotMigrationWarnings('/italic/ and *bold* and ,,x,, and ==y==')).toEqual([])
+    expect(djotMigrationWarnings('/italic/ and *bold* and ,x, and =y=')).toEqual([])
   })
 
   it('does not warn inside inline code spans', () => {
@@ -223,8 +223,8 @@ describe('applyMigrationFixes — autocorrect', () => {
   })
 
   it('rewrites multiple non-overlapping constructs in one pass', () => {
-    expect(fix('_a_ then ~b~')).toBe('/a/ then ,,b,,')
-    expect(fix('**bold** and a {=note=}')).toBe('*bold* and a ==note==')
+    expect(fix('_a_ then ~b~')).toBe('/a/ then {,b,}')
+    expect(fix('**bold** and a {=note=}')).toBe('*bold* and a {=note=}')
   })
 
   it('rewrites `+` bullets to `-` on every line', () => {
@@ -233,7 +233,7 @@ describe('applyMigrationFixes — autocorrect', () => {
 
   it('does NOT re-correct a fixed `~~strike~~` into a subscript', () => {
     // Single pass, no re-scan: `~~x~~` -> `~x~` (Carve strikethrough) must
-    // stay put, never cascade to `,,x,,` (which the subscript rule would
+    // stay put, never cascade to `{,x,}` (which the subscript rule would
     // suggest if the output were scanned again).
     expect(fix('~~gone~~')).toBe('~gone~')
   })
