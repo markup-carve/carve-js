@@ -14,6 +14,7 @@ import type {
   BlockQuote,
   Document,
   Figure,
+  Heading,
   Image,
   InlineNode,
   List,
@@ -128,6 +129,14 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
       const sectionId = id ? ` id="${escapeAttr(id)}"` : ''
       out.push(`${indent(depth)}<section${sectionId}>`)
       sectionStack.push(node.level)
+      // An extension may render the <h*> element itself (e.g. heading
+      // permalinks); the <section> wrapper above stays core. Returns undefined
+      // to fall through to the default heading rendering.
+      const custom = renderHeadingElement(node, opts, depth + 1)
+      if (custom !== undefined) {
+        out.push(opts.sourceLine ? withSourceLine(custom, node.pos?.startLine) : custom)
+        continue
+      }
       const headingAttrs = stripId(node.attrs)
       const inner = renderInlines(node.children, opts)
       const slAttr =
@@ -383,16 +392,53 @@ function renderAttrs2(
   return renderAttrs(a)
 }
 
+// Let an extension render a top-level heading's <h*> element via a
+// `blockRenderers.heading` renderer (the <section> wrapper stays core), tried
+// in registration order like other block renderers. Returns undefined when no
+// extension claims it, so core renders the default heading.
+function renderHeadingElement(
+  node: Heading,
+  opts: RenderOptions,
+  level: number,
+): string | undefined {
+  const headingRenderers = opts.extensions?.flatMap((e) => {
+    const fn = e.blockRenderers?.heading
+    return fn ? [fn] : []
+  })
+  if (!headingRenderers || !headingRenderers.length) return undefined
+  const ctx: BlockExtensionRenderContext = {
+    level,
+    indent,
+    renderChildren: (nodes, lvl) => nodes.map((c) => renderBlock(c, opts, lvl)).join('\n'),
+    renderInlines: (nodes) => renderInlines(nodes, opts),
+    escapeHtml,
+    escapeAttr,
+    renderAttrs,
+  }
+  for (const r of headingRenderers) {
+    const out = r(node, ctx)
+    if (out !== undefined) return out
+  }
+  return undefined
+}
+
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   // Extension block renderers (keyed by node type) get first claim, tried in
   // registration order: each may return undefined to defer to the next
   // extension's renderer (so one extension can claim only some nodes of a
   // type, e.g. mermaid claims only `mermaid` code blocks), then to core.
-  const blockRenderers = opts.extensions?.flatMap((e) => {
-    const fn = e.blockRenderers?.[node.type]
-    return fn ? [fn] : []
-  })
+  // Headings are excluded here: a top-level heading is rendered by the
+  // section-wrapping pass (renderHeadingElement), where the id lives on the
+  // <section>. A heading nested in a container keeps its id on the <h*> and is
+  // rendered by core below, so heading renderers do not apply to it.
+  const blockRenderers =
+    node.type === 'heading'
+      ? undefined
+      : opts.extensions?.flatMap((e) => {
+          const fn = e.blockRenderers?.[node.type]
+          return fn ? [fn] : []
+        })
   if (blockRenderers && blockRenderers.length) {
     const ctx: BlockExtensionRenderContext = {
       level,
