@@ -95,21 +95,21 @@ const RE_FENCE =
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
 // item only with non-empty content: a content-less marker (`-`, `- `, `-   ` --
 // bare or trailing whitespace only) is NOT a list, it is paragraph text.
-const RE_UNORDERED = /^(\s*)[-*]\s+(\S.*)$/
+const RE_UNORDERED = /^(\s*)[-*] +(\S.*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
-const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)])\s+(\S.*)$/
+const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)]) +(\S.*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(\s*)[-*]\s+\[([ xX\-_>?])\]\s+(\S.*)$/
+const RE_TASK = /^(\s*)[-*] +\[([ xX\-_>?])\] +(\S.*)$/
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
 // (Carve addition, grammar `item_attributes`). The brace body uses the same
 // quote-aware subpattern as the inline span tail (RE_SPAN_TAIL).
 const RE_ITEM_ATTR =
-  /^(\s*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}(\s+\S.*)$/
+  /^(\s*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +\S.*)$/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload

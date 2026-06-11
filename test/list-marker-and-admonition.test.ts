@@ -184,3 +184,28 @@ describe('content-less marker is not a list', () => {
     expect(h('- a\n- b')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
   })
 })
+
+/**
+ * A list marker requires a SPACE after the marker character, not a tab
+ * (the space is a syntax delimiter, not indentation). A tab there means the
+ * line is paragraph text, matching carve-php and carve-rs.
+ */
+describe('marker separator must be a space, not a tab', () => {
+  const t = (s: string) => carveToHtml(s).trim()
+
+  it('a tab after a bullet is not a list item', () => {
+    expect(t('-\ta')).toBe('<p>-\ta</p>')
+  })
+
+  it('a tab after an ordered marker is not a list item', () => {
+    expect(t('1.\ta')).toBe('<p>1.\ta</p>')
+  })
+
+  it('a tab after a task checkbox marker is not a task item', () => {
+    expect(t('-\t[x] done')).toBe('<p>-\t[x] done</p>')
+  })
+
+  it('a normal space-separated bullet is still a list', () => {
+    expect(t('- a')).toBe('<ul>\n  <li>a</li>\n</ul>')
+  })
+})
