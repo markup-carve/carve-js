@@ -179,16 +179,16 @@ describe('markdownToCarve — HTML inline tags', () => {
     expect(conv('<strong>a</strong> <b>b</b>')).toBe('*a* *b*')
   })
 
-  it('converts <mark> to =x=', () => {
-    expect(conv('<mark>hot</mark>')).toBe('=hot=')
+  it('converts <mark> to the forced highlight {=x=}', () => {
+    expect(conv('<mark>hot</mark>')).toBe('{=hot=}')
   })
 
-  it('converts <sub> to ,x,', () => {
-    expect(conv('H<sub>2</sub>O')).toBe('H,2,O')
+  it('converts <sub> to the forced subscript {,x,} (renders intraword)', () => {
+    expect(conv('H<sub>2</sub>O')).toBe('H{,2,}O')
   })
 
-  it('converts <sup> to ^x^', () => {
-    expect(conv('x<sup>2</sup>')).toBe('x^2^')
+  it('converts <sup> to the forced superscript {^x^} (renders intraword)', () => {
+    expect(conv('x<sup>2</sup>')).toBe('x{^2^}')
   })
 
   it('converts <del>/<s> to ~x~', () => {

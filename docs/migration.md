@@ -27,15 +27,19 @@ Carve's blank-line-around-blocks rule:
 | `~~x~~`                      | `~x~`      | Carve strikethrough is a single `~`                        |
 | `==x==`                      | `=x=`      | highlight: Carve uses a single `=` (`==x==` renders literal) |
 | `^x^`                        | `^x^`      | superscript: identical in Carve                            |
-| `<sub>x</sub>`               | `,x,`      | subscript: Carve uses a single `,` (`,,x,,` renders literal) |
+| `<mark>x</mark>`             | `{=x=}`    | highlight tag → forced brace form (renders intraword)      |
+| `<sub>x</sub>`               | `{,x,}`    | subscript tag → forced brace form (e.g. `H<sub>2</sub>O` → `H{,2,}O`) |
+| `<sup>x</sup>`               | `{^x^}`    | superscript tag → forced brace form (renders intraword)    |
 | `$x$`                        | `` $`x` `` | inline math (`$5` left as currency)                        |
-| `<em>`/`<strong>`/`<mark>`/… | Carve form | common inline HTML tags map to their Carve markers         |
+| `<em>`/`<strong>`/`<del>`/…  | Carve form | other inline HTML tags map to their Carve markers          |
 
 > [!NOTE]
 > Carve's highlight and subscript markers are **single** characters (`=x=`,
-> `,x,`). The doubled forms `==x==` and `,,x,,` are literal text in Carve (see
-> the corpus pair `74-two-char-delimiter-runs`), so the converter emits the
-> single-character forms.
+> `,x,`); the doubled forms `==x==` and `,,x,,` are literal text in Carve (see
+> the corpus pair `74-two-char-delimiter-runs`). A bare `,x,` / `^x^` / `=x=`
+> only renders at a word boundary, so the `<mark>`/`<sub>`/`<sup>` tags - which
+> can sit intraword - map to the **forced brace forms** `{=x=}` / `{,x,}` /
+> `{^x^}`, which render in every position (corpus `67-superscript-and-subscript`).
 
 To go the other way - flagging a Djot document that would silently mis-render
 under Carve - use `djotMigrationWarnings`, and to rewrite those collisions in
