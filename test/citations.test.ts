@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { parse } from '../src/index.js'
+import { carveToHtml, parse } from '../src/index.js'
 import { citations } from '../src/citations.js'
+
+const h = (s: string) => carveToHtml(s, { extensions: [citations()] }).trim()
+const ha = (s: string) =>
+  carveToHtml(s, { extensions: [citations({ mode: 'author-date' })] }).trim()
 
 function group(src: string): { items: { key: string; suppressAuthor: boolean }[] } | undefined {
   const doc = parse(src, { extensions: [citations()] })
@@ -47,5 +51,57 @@ describe('citation matcher', () => {
   it('parses multiple ;-separated items', () => {
     const g = group('[@a; @b]')
     expect(g?.items.map((i) => i.key)).toEqual(['a', 'b'])
+  })
+})
+
+describe('citations: defs + numbered rendering', () => {
+  it('drops the [@key]: definition paragraph and numbers the citation', () => {
+    const out = h('See [@smith2020].\n\n[@smith2020]: Smith, J. (2020). Title.')
+    expect(out).toContain('[<a href="#ref-smith2020">1</a>]')
+    expect(out).not.toContain('<p>Smith, J. (2020). Title.</p>')
+  })
+
+  it('builds a references list with stable ids', () => {
+    const out = h('[@a].\n\n[@a]: Entry A.')
+    expect(out).toContain('<ol class="references">')
+    expect(out).toContain('<li id="ref-a">Entry A.</li>')
+  })
+
+  it('numbers by first-citation order', () => {
+    const out = h('[@b] then [@a].\n\n[@a]: A.\n\n[@b]: B.')
+    expect(out).toContain('href="#ref-b">1</a>')
+    expect(out).toContain('href="#ref-a">2</a>')
+  })
+
+  it('renders locator and prefix inside the brackets', () => {
+    const out = h('[see @a, p. 3].\n\n[@a]: A.')
+    expect(out).toContain('[see <a href="#ref-a">1</a>, p. 3]')
+  })
+
+  it('renders an undefined key verbatim', () => {
+    expect(h('[@nope].')).toContain('[@nope]')
+  })
+
+  it('keeps a bare @mention and a [text][ref] link working', () => {
+    expect(h('@alice')).toContain('class="mention"')
+  })
+})
+
+describe('citations: author-date mode', () => {
+  it('renders (Author Year) from the entry attrs', () => {
+    const out = ha('See [@s].\n\n[@s]: {author="Smith" year="2020"} Smith, J.')
+    expect(out).toContain('(<a href="#ref-s">Smith 2020</a>)')
+  })
+
+  it('suppresses the author with -@key', () => {
+    const out = ha('[-@s].\n\n[@s]: {author="Smith" year="2020"} S.')
+    expect(out).toContain('>2020</a>')
+  })
+})
+
+describe('citations: references placement', () => {
+  it('injects into an explicit ::: references block', () => {
+    const out = h('[@a].\n\n::: references\n:::\n\n[@a]: A.')
+    expect(out).toMatch(/<div class="references">[\s\S]*<ol class="references">/)
   })
 })
