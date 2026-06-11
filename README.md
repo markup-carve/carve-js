@@ -236,6 +236,22 @@ section-wrapping pass, so an extension can render the `<h*>` element (the
 `<section id>` wrapper stays core) by registering a renderer for the `heading`
 node type.
 
+`tableOfContents()` builds a nested `<nav class="toc">` of links from the
+document's headings, ported from carve-php's TableOfContentsExtension:
+
+```ts
+import { carveToHtml, tableOfContents } from '@markup-carve/carve'
+
+carveToHtml('# Intro\n\n## Details', { extensions: [tableOfContents()] })
+// <nav class="toc"><ul><li><a href="#intro">Intro</a><ul><li><a href="#details">Details</a></li></ul></li></ul></nav>
+// <section id="intro"> … </section>
+```
+
+A `beforeRender` transform: it reads the resolved heading ids and inserts the
+TOC at the document `top` (default) or `bottom`. Configurable `minLevel`,
+`maxLevel`, `listType` (`ul`/`ol`), `cssClass`, and `position`. The generated
+markup is raw HTML, so it is inert when raw HTML output is stripped.
+
 ### Adding syntax: parse-stage matchers
 
 An extension can add new syntax with a `matchInline` or `matchBlock` matcher
