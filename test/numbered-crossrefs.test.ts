@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToHtml, parse } from '../src/index.js'
+import { carveToHtml, carveToMarkdown, parse } from '../src/index.js'
 
 const h = (s: string) => carveToHtml(s).trim()
 
@@ -90,5 +90,51 @@ describe('resolve: caption numbering + crossrefs', () => {
     // top-level text, not inside emphasis/links. The # stays literal here.
     const out = h('![x](x.jpg)\n^ *Figure #*: cap')
     expect(out).toContain('<figcaption><strong>Figure #</strong>: cap</figcaption>')
+  })
+})
+
+describe('listing captions (caption on a code block)', () => {
+  const fence = '```python\nx = 1\n```'
+
+  it('wraps a captioned code block in a figure with the pre inside', () => {
+    const out = h(`${fence}\n^ Listing 1: example`)
+    expect(out).toContain('<figure>')
+    expect(out).toContain('<pre><code class="language-python">x = 1\n</code></pre>')
+    expect(out).toContain('<figcaption>Listing 1: example</figcaption>')
+  })
+
+  it('leaves a code block without a caption as a bare pre (no figure)', () => {
+    const out = h(fence)
+    expect(out).not.toContain('<figure>')
+    expect(out).toContain('<pre><code class="language-python">x = 1\n</code></pre>')
+  })
+
+  it('numbers a Listing caption in place of the #', () => {
+    expect(h(`${fence}\n^ Listing #: example`)).toContain(
+      '<figcaption>Listing 1: example</figcaption>',
+    )
+  })
+
+  it('resolves </#id> to a numbered listing as label + number', () => {
+    const out = h(`{#lst-a}\n${fence}\n^ Listing #: example\n\nSee </#lst-a>.`)
+    expect(out).toContain('See <a href="#lst-a">Listing 1</a>.')
+  })
+
+  it('shares the per-label counter with other Listing captions', () => {
+    const out = h(`${fence}\n^ Listing #: one\n\n${fence}\n^ Listing #: two`)
+    expect(out).toContain('Listing 1: one')
+    expect(out).toContain('Listing 2: two')
+  })
+
+  it('attaches a caption across a single blank line', () => {
+    expect(h(`${fence}\n\n^ Listing #: spaced`)).toContain(
+      '<figcaption>Listing 1: spaced</figcaption>',
+    )
+  })
+
+  it('keeps the caption on its own line in Markdown output (not glued to the fence)', () => {
+    const md = carveToMarkdown(`${fence}\n^ Listing #: example`)
+    expect(md).toContain('```\nListing 1: example')
+    expect(md).not.toContain('```Listing')
   })
 })

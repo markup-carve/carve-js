@@ -758,6 +758,8 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   } else if (node.target.type === 'blockquote') {
     const bq = renderBlockQuote(node.target, opts, level + 1)
     inner = bq
+  } else if (node.target.type === 'code-block') {
+    inner = renderBlock(node.target, opts, level + 1)
   } else {
     inner = renderTable(node.target, opts, level + 1)
   }

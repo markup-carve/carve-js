@@ -714,7 +714,7 @@ function parseHeading(lexer: Lexer): Heading {
   return node
 }
 
-function parseFence(lexer: Lexer): CodeBlock {
+function parseFence(lexer: Lexer): CodeBlock | Figure {
   const open = lexer.consume()
   const m = RE_FENCE.exec(open)!
   const indent = m[1]!.length
@@ -737,6 +737,24 @@ function parseFence(lexer: Lexer): CodeBlock {
   const cb: CodeBlock = { type: 'code-block', content: lines.join('\n') }
   if (lang) cb.lang = lang
   if (label !== undefined) cb.label = label
+  // Optional caption (`^ …`): a captioned code block is a numbered LISTING,
+  // wrapped in a figure exactly like a captioned image/blockquote/table.
+  let lookahead = 0
+  while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
+  const next = lexer.peek(lookahead)
+  if (next) {
+    const cap = RE_CAPTION.exec(next)
+    // §4: a caption attaches only when it immediately follows the block
+    // or is separated by at most ONE blank line.
+    if (cap && lookahead <= 1) {
+      for (let i = 0; i <= lookahead; i++) lexer.consume()
+      return {
+        type: 'figure',
+        target: cb,
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      } as Figure
+    }
+  }
   return cb
 }
 
