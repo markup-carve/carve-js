@@ -106,3 +106,40 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
     expect(h('\t- a\n\t- b')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
   })
 })
+
+describe('mixed tab+space aligned sub-items are siblings (visual columns)', () => {
+  const h = (s: string) => carveToHtml(s).trim()
+
+  it('aligns ordered sub-items at the same visual column as siblings', () => {
+    // `\t  1. b` (tab to col 4, +2 = col 6) and `      2. c` (6 spaces) sit at the
+    // same visual column, so they are siblings, not parent/child. A sub-list block
+    // stream is dedented residual-aware, so the partially-consumed tab leaves the
+    // two markers at an equal column and the sub-list re-derives its base from
+    // visual columns (matches carve-php).
+    expect(h('1. a\n\t  1. b\n      2. c')).toBe(
+      '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n      <li>c</li>\n    </ol>\n  </li>\n</ol>',
+    )
+  })
+
+  it('aligns unordered sub-items the same way', () => {
+    expect(h('- a\n\t  - b\n      - c')).toBe(
+      '<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n      <li>c</li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  it('nests a tab-indented block quote under an item (lead block, whole-tab dedent)', () => {
+    // A lead block (no preceding sub-list) is dedented whole-tab, so the block
+    // opener reaches column 0 and parses.
+    expect(h('1. a\n\t> quote')).toBe(
+      '<ol>\n  <li>a\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ol>',
+    )
+  })
+
+  it('parses a block opener after a sub-list as an outer-item sibling block', () => {
+    // `> q` returns to the item content column after the sub-list, so it is a
+    // block quote sibling of the sub-list within the outer item, not lazy text.
+    expect(h('1. a\n   1. b\n   > q')).toBe(
+      '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
+    )
+  })
+})
