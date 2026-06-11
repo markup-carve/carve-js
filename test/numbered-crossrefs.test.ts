@@ -138,3 +138,49 @@ describe('listing captions (caption on a code block)', () => {
     expect(md).not.toContain('```Listing')
   })
 })
+
+describe('equation captions (caption on standalone display math)', () => {
+  const eq = '$$`E = mc^2`'
+
+  it('wraps a captioned display-math block in a figure', () => {
+    const out = h(`${eq}\n^ Equation 1: mass-energy`)
+    expect(out).toContain('<figure>')
+    expect(out).toContain('<span class="math display">\\[E = mc^2\\]</span>')
+    expect(out).toContain('<figcaption>Equation 1: mass-energy</figcaption>')
+  })
+
+  it('leaves display math without a caption as a bare paragraph (no figure)', () => {
+    const out = h(eq)
+    expect(out).not.toContain('<figure>')
+    expect(out).toContain('<span class="math display">\\[E = mc^2\\]</span>')
+  })
+
+  it('does NOT wrap inline math or math with trailing prose', () => {
+    expect(h('Energy is $`E=mc^2` here.\n^ Equation #: x')).not.toContain('<figure>')
+    expect(h(`${eq} and more text\n^ Equation #: x`)).not.toContain('<figure>')
+  })
+
+  it('numbers an Equation caption in place of the #', () => {
+    expect(h(`${eq}\n^ Equation #: mass-energy`)).toContain(
+      '<figcaption>Equation 1: mass-energy</figcaption>',
+    )
+  })
+
+  it('resolves </#id> to a numbered equation as label + number', () => {
+    const out = h(`{#eq-e}\n${eq}\n^ Equation #: mass-energy\n\nSee </#eq-e>.`)
+    expect(out).toContain('<figure id="eq-e">')
+    expect(out).toContain('See <a href="#eq-e">Equation 1</a>.')
+  })
+
+  it('shares the per-label counter across equations', () => {
+    const out = h(`${eq}\n^ Equation #: one\n\n$$\`a+b\`\n^ Equation #: two`)
+    expect(out).toContain('Equation 1: one')
+    expect(out).toContain('Equation 2: two')
+  })
+
+  it('recognizes an indented standalone equation (leading whitespace stripped)', () => {
+    const out = h(`   ${eq}\n^ Equation #: indented`)
+    expect(out).toContain('<figcaption>Equation 1: indented</figcaption>')
+    expect(out).toContain('<span class="math display">\\[E = mc^2\\]</span>')
+  })
+})
