@@ -87,6 +87,16 @@ describe('citations: defs + numbered rendering', () => {
   })
 })
 
+describe('citations: consecutive definition lines', () => {
+  it('collects each [@key]: line when defs are not blank-separated', () => {
+    const out = h('[@a] and [@b].\n\n[@a]: First.\n[@b]: Second.')
+    expect(out).toContain('href="#ref-a">1</a>')
+    expect(out).toContain('href="#ref-b">2</a>')
+    expect(out).toContain('<li id="ref-a">First.</li>')
+    expect(out).toContain('<li id="ref-b">Second.</li>')
+  })
+})
+
 describe('citations: author-date mode', () => {
   it('renders (Author Year) from the entry attrs', () => {
     const out = ha('See [@s].\n\n[@s]: {author="Smith" year="2020"} Smith, J.')

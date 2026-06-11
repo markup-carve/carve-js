@@ -155,23 +155,55 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
 const ATTR_RE = /^\{([^}]*)\}\s*/
 const KV_RE = (k: string) => new RegExp(`${k}\\s*=\\s*"([^"]*)"`)
 
-/** Return a new block list with def-paragraphs removed, populating `defs`. */
+/** Return a new block list with definition lines removed, populating `defs`.
+ *  Consecutive `[@key]: entry` lines parse as one paragraph (soft-break
+ *  separated), so split each paragraph into lines and collect per line. */
 function collectDefs(blocks: BlockNode[], defs: Map<string, Def>): BlockNode[] {
   const out: BlockNode[] = []
   for (const b of blocks) {
-    const def = asDefinition(b)
-    if (def) {
-      defs.set(def.key, def.value)
+    if (b.type !== 'paragraph') {
+      out.push(b)
       continue
     }
+    const lines = splitOnSoftBreaks(b.children)
+    const kept: InlineNode[][] = []
+    for (const line of lines) {
+      const def = asDefinition(line)
+      if (def) defs.set(def.key, def.value)
+      else kept.push(line)
+    }
+    if (kept.length === 0) continue // whole paragraph was definitions
+    if (kept.length === lines.length) {
+      out.push(b) // nothing removed
+      continue
+    }
+    b.children = joinWithSoftBreaks(kept)
     out.push(b)
   }
   return out
 }
 
-function asDefinition(b: BlockNode): { key: string; value: Def } | null {
-  if (b.type !== 'paragraph') return null
-  const kids = b.children
+/** Split an inline run into segments at each soft-break (the breaks dropped). */
+function splitOnSoftBreaks(nodes: InlineNode[]): InlineNode[][] {
+  const lines: InlineNode[][] = [[]]
+  for (const n of nodes) {
+    if (n.type === 'soft-break') lines.push([])
+    else lines[lines.length - 1]!.push(n)
+  }
+  return lines
+}
+
+/** Inverse of splitOnSoftBreaks. */
+function joinWithSoftBreaks(lines: InlineNode[][]): InlineNode[] {
+  const out: InlineNode[] = []
+  lines.forEach((line, i) => {
+    if (i > 0) out.push({ type: 'soft-break' } as InlineNode)
+    out.push(...line)
+  })
+  return out
+}
+
+function asDefinition(kids: InlineNode[]): { key: string; value: Def } | null {
   const g = kids[0]
   if (!g || g.type !== 'citation-group') return null
   const cg = g as CitationGroup
