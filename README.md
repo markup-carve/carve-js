@@ -203,6 +203,21 @@ carveToHtml('[[Tiger Facts|big cats]]', {
 // <p><a href="/wiki/tiger-facts" class="wikilink" data-wikilink="Tiger Facts">big cats</a></p>
 ```
 
+`externalLinks()` adds `target` and `rel` to external (`http(s)://`) links and
+autolinks, ported from carve-php's ExternalLinksExtension. It runs as a
+`beforeRender` transform, so the core renderer emits the attributes:
+
+```ts
+import { carveToHtml, externalLinks } from '@markup-carve/carve'
+
+carveToHtml('[docs](https://example.com)', { extensions: [externalLinks()] })
+// <p><a href="https://example.com" target="_blank" rel="noopener noreferrer">docs</a></p>
+```
+
+Configurable `target`, `rel`, and `nofollow`. Relative and anchor links are
+left untouched. (Semantic spans like `:kbd[…]`, `:abbr[…]`, `:dfn[…]` are
+already core, no extension needed.)
+
 ### Adding syntax: parse-stage matchers
 
 An extension can add new syntax with a `matchInline` or `matchBlock` matcher
