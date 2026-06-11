@@ -13,9 +13,13 @@
  *        strong        double-star / double-underscore -> single star *x*
  *        bold-italic   triple-star / triple-underscore -> star+slash
  *        strikethrough double-tilde -> single tilde ~x~
- *        highlight     ==x==       -> ==x==   ( unchanged )
+ *        highlight     ==x==       -> =x=     ( Carve highlight is a single `=` )
  *        superscript   ^x^         -> ^x^     ( unchanged )
  *        inline math   $x$         -> $`x`
+ *
+ *      Carve's highlight/subscript markers are single chars (`=x=`, `,x,`); the
+ *      doubled forms `==x==` / `,,x,,` are literal. The `<mark>` and `<sub>`
+ *      HTML tags above therefore map to the single-char Carve forms.
  *
  * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
  * keeps `_x_`, which Carve renders as underline — a silent mis-render.
@@ -46,12 +50,12 @@
  */
 
 const HTML_TAG_RULES: Array<[RegExp, string]> = [
-  [/<mark>([^<]+)<\/mark>/gi, '==$1=='],
+  [/<mark>([^<]+)<\/mark>/gi, '=$1='],
   [/<ins>([^<]+)<\/ins>/gi, '{+$1+}'],
   [/<del>([^<]+)<\/del>/gi, '~$1~'],
   [/<s>([^<]+)<\/s>/gi, '~$1~'],
   [/<sup>([^<]+)<\/sup>/gi, '^$1^'],
-  [/<sub>([^<]+)<\/sub>/gi, ',,$1,,'],
+  [/<sub>([^<]+)<\/sub>/gi, ',$1,'],
   [/<strong>([^<]+)<\/strong>/gi, '*$1*'],
   [/<b>([^<]+)<\/b>/gi, '*$1*'],
   [/<em>([^<]+)<\/em>/gi, '/$1/'],
@@ -228,6 +232,11 @@ function convertInline(input: string): string {
   // ~~strikethrough~~ -> ~strikethrough~
   line = line.replace(/~~([^~]+)~~/g, '~$1~')
 
+  // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
+  // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),
+  // so a Markdown highlight left unchanged would silently mis-render.
+  line = line.replace(/==(?!\s)([^=]+?)(?<!\s)==/g, '=$1=')
+
   // HTML inline tags -> Carve. Run after the emphasis/strong passes: the tag
   // bodies contain no * _ ~ delimiters, so the markup they produce (e.g.
   // <strong>a</strong> -> *a*) is not re-matched and turned into /a/.
@@ -235,8 +244,9 @@ function convertInline(input: string): string {
     line = line.replace(re, repl)
   }
 
-  // ==highlight== and ^superscript^ are identical in Carve — no change.
-  // (Math was converted and protected above, before the emphasis passes.)
+  // ^superscript^ is identical in Carve — no change. (Highlight ==x== was
+  // converted to =x= above; math was converted and protected before the
+  // emphasis passes.)
 
   // Restore stashes and protected spans until stable: a protected/stashed
   // span may itself contain placeholders (e.g. a reference-definition line
