@@ -848,20 +848,24 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       // Filled by resolve(); an unresolved placeholder renders empty.
       return node.n === undefined ? '' : String(node.n)
     case 'citation-group': {
-      // Extension-produced node: delegate to a registered inline renderer
-      // (citations ext); fall back to the verbatim source.
-      const r = opts.extensions
-        ?.flatMap((e) => (e.inlineRenderers?.[node.type] ? [e.inlineRenderers[node.type]!] : []))
-        .find((fn): fn is NonNullable<typeof fn> => fn !== undefined)
-      if (r) {
+      // Extension-produced node: delegate to registered inline renderers in
+      // order; each may return undefined to defer to the next (mirrors the
+      // block-renderer dispatch). Fall back to the verbatim source.
+      const inlineRenderers = opts.extensions?.flatMap((e) => {
+        const fn = e.inlineRenderers?.[node.type]
+        return fn ? [fn] : []
+      })
+      if (inlineRenderers && inlineRenderers.length) {
         const ctx: ExtensionRenderContext = {
           renderInlines: (nodes) => renderInlines(nodes, opts),
           escapeHtml,
           escapeAttr,
           renderAttrs,
         }
-        const out = r(node, ctx)
-        if (out !== undefined) return out
+        for (const r of inlineRenderers) {
+          const out = r(node, ctx)
+          if (out !== undefined) return out
+        }
       }
       return escapeHtml(node.raw)
     }

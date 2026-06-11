@@ -99,6 +99,17 @@ describe('citations: author-date mode', () => {
   })
 })
 
+describe('citations: state isolation', () => {
+  it('does not leak definitions across documents on a reused instance', () => {
+    const ext = citations()
+    carveToHtml('[@a].\n\n[@a]: First doc A.', { extensions: [ext] })
+    // Second doc cites @a but never defines it ⇒ must fall back to raw.
+    const out = carveToHtml('[@a].', { extensions: [ext] }).trim()
+    expect(out).toContain('[@a]')
+    expect(out).not.toContain('href="#ref-a"')
+  })
+})
+
 describe('citations: references placement', () => {
   it('injects into an explicit ::: references block', () => {
     const out = h('[@a].\n\n::: references\n:::\n\n[@a]: A.')
