@@ -218,6 +218,24 @@ Configurable `target`, `rel`, and `nofollow`. Relative and anchor links are
 left untouched. (Semantic spans like `:kbd[…]`, `:abbr[…]`, `:dfn[…]` are
 already core, no extension needed.)
 
+`headingPermalinks()` adds a clickable anchor to each heading (ported from
+carve-php's HeadingPermalinksExtension):
+
+```ts
+import { carveToHtml, headingPermalinks } from '@markup-carve/carve'
+
+carveToHtml('# My Heading', { extensions: [headingPermalinks()] })
+// <section id="my-heading">
+//   <h1>My Heading <a href="#my-heading" class="permalink" aria-label="Permalink">¶</a></h1>
+// </section>
+```
+
+Configurable `symbol`, `cssClass`, `ariaLabel`, `levels`, and `prepend`. It
+uses a `blockRenderers.heading` renderer: top-level headings render through a
+section-wrapping pass, so an extension can render the `<h*>` element (the
+`<section id>` wrapper stays core) by registering a renderer for the `heading`
+node type.
+
 ### Adding syntax: parse-stage matchers
 
 An extension can add new syntax with a `matchInline` or `matchBlock` matcher
