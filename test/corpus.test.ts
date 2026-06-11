@@ -108,6 +108,7 @@ const IMPLEMENTED = new Set([
   '73-reference-labels-are-case-sensitive',
   '74-two-char-delimiter-runs',
   '75-trailing-attribute-block-edge-cases',
+  '88-line-blocks',
 ])
 
 /**

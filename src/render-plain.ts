@@ -175,9 +175,11 @@ function cleanEscapedText(node: Text): string {
     node.pos?.startOffset !== undefined && node.pos.endOffset !== undefined
       ? node.pos.endOffset - node.pos.startOffset
       : undefined
-  return span !== undefined && span > node.value.length
-    ? node.value.replace(/[*#_]/g, '')
-    : node.value
+  return (
+    span !== undefined && span > node.value.length
+      ? node.value.replace(/[*#_]/g, '')
+      : node.value
+  ).replace(/\u00a0/g, ' ')
 }
 
 function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {
