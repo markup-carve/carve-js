@@ -221,3 +221,36 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     )
   })
 })
+
+describe('block openers below the content column nest under a list item', () => {
+  const h = (s: string) => carveToHtml(s).trim()
+
+  it('nests a block quote indented below an ordered item content column', () => {
+    // `> q` at column 2 is below the `1. ` content column (3) but past the base,
+    // so it interrupts the item paragraph and nests (matches carve-php); only
+    // ordered MARKERS fold below the content column.
+    expect(h('1. a\n  > q')).toBe(
+      '<ol>\n  <li>a\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
+    )
+  })
+
+  it('nests a one-space-indented block quote under an ordered item', () => {
+    expect(h('1. a\n > q')).toBe(
+      '<ol>\n  <li>a\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
+    )
+  })
+
+  it('nests a heading below the content column', () => {
+    expect(h('1. a\n  # H')).toBe('<ol>\n  <li>a\n    <h1>H</h1>\n  </li>\n</ol>')
+  })
+
+  it('nests a multi-line block quote below the content column', () => {
+    expect(h('1. a\n  > q1\n  > q2')).toBe(
+      '<ol>\n  <li>a\n    <blockquote><p>q1\nq2</p></blockquote>\n  </li>\n</ol>',
+    )
+  })
+
+  it('still folds an ordered marker below the content column (no interrupt)', () => {
+    expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a\n1. b</li>\n</ol>')
+  })
+})

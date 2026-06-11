@@ -1488,7 +1488,35 @@ function parseList(lexer: Lexer): List {
         }
         continue
       }
-      if (indentColumns(l) >= contentCol) {
+      // A block opener (block quote, heading, fence, div, table) indented past
+      // the base but BELOW the content column still interrupts the item's lead
+      // paragraph and nests as a child block (matching carve-php) -- only ordered
+      // MARKERS fold below the content column, since they do not interrupt. The
+      // opener regexes key off column 0, so test the line dedented to column 0,
+      // and exclude list markers (their fold/nest is handled in the else-branch).
+      const lw = indentColumns(l)
+      let belowColBlockOpener = false
+      if (lw > baseIndent && lw < contentCol) {
+        const d0 = sliceColumns(l, lw)
+        // A block opener indented past the base but below the content column
+        // interrupts the item's lead paragraph and nests (matching carve-php).
+        // Restricted to NON-container openers (block quote, heading, thematic
+        // break, table, defs): these need no closing fence, so the single line
+        // dedented to column 0 is enough. Fenced/`:::` containers are excluded --
+        // their verbatim/closer-sensitive bodies are only handled cleanly AT the
+        // content column; below it they keep the existing behavior. List markers
+        // are excluded too (their fold/nest is decided in the else-branch).
+        belowColBlockOpener =
+          !RE_ORDERED.test(d0) &&
+          !RE_UNORDERED.test(d0) &&
+          !RE_TASK.test(d0) &&
+          !RE_FENCE.test(d0) &&
+          !RE_RAW_FENCE.test(d0) &&
+          !RE_DIV_OPEN.test(d0) &&
+          !RE_ADMONITION_OPEN.test(d0) &&
+          lineOpensBlock(d0)
+      }
+      if (lw >= contentCol || belowColBlockOpener) {
         for (let k = 0; k < pendingBlanks; k++) nested.push('')
         pendingBlanks = 0
         // A sub-list marker (ordered, unordered, or task) at or past the content
