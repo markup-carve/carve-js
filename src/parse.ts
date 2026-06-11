@@ -1731,6 +1731,35 @@ function parseTable(lexer: Lexer): Table | Figure {
     rawRows.push(raw)
     lastRaw = raw
   }
+  // GFM-style header separator: when the SECOND row is a delimiter row -- every
+  // cell a run of dashes with optional alignment colons (`---`, `:--`, `--:`,
+  // `:-:`) -- the first row becomes the header (rendered in <thead>) and the
+  // colons set per-column alignment for the whole column. The delimiter row is
+  // dropped. This is in addition to Carve's tight per-cell markers `|=`/`|<`; a
+  // delimiter row anywhere else is an ordinary data row.
+  const isDelimCell = (c: RawCell): boolean =>
+    !c.span && /^:?-+:?$/.test(c.raw.trim())
+  if (
+    rawRows.length >= 2 &&
+    rawRows[1]!.length > 0 &&
+    rawRows[1]!.every(isDelimCell) &&
+    !rawRows[0]!.every(isDelimCell)
+  ) {
+    const aligns = rawRows[1]!.map((c) => {
+      const t = c.raw.trim()
+      const left = t.startsWith(':')
+      const right = t.endsWith(':')
+      return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
+    })
+    rawRows.splice(1, 1)
+    for (const c of rawRows[0]!) c.header = true
+    for (const rc of rawRows) {
+      rc.forEach((c, i) => {
+        const a = aligns[i]
+        if (a && !c.align) c.align = a
+      })
+    }
+  }
   const rows: TableRow[] = rawRows.map((rc) => ({
     type: 'table-row',
     cells: rc.map((c) => {
