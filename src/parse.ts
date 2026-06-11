@@ -103,6 +103,24 @@ const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)])\s+(\S
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^(\s*)[-*]\s+\[([ xX\-_>?])\]\s+(\S.*)$/
+// A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
+// ordered marker directly followed by `{...}` (no space), then the marker's
+// required space and content. The brace attaches its attributes to the <li>
+// (Carve addition, grammar `item_attributes`). The brace body uses the same
+// quote-aware subpattern as the inline span tail (RE_SPAN_TAIL).
+const RE_ITEM_ATTR =
+  /^(\s*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}(\s+\S.*)$/
+// Strip a valid abutting `{...}` from a marker line so the bare marker regexes
+// match, returning the stripped line plus the parsed attributes. Returns null
+// when there is no abutting brace or the brace is not a valid attribute payload
+// (then `-{...}` is not a marker and the line stays ordinary text, mirroring the
+// inline-span disambiguation, grammar §14).
+function extractItemAttr(line: string): { stripped: string; attrs: Attrs } | null {
+  const m = RE_ITEM_ATTR.exec(line)
+  if (!m) return null
+  if (!isValidAttrPayload(m[3]!)) return null
+  return { stripped: m[1]! + m[2]! + m[4]!, attrs: parseAttrs(m[3]!) }
+}
 const RE_BLOCKQUOTE = /^>\s?(.*)$/
 // Fences are a run of 3+ colons (group 1). A longer opener nests: a
 // `::::` block contains `:::` blocks, and only a bare closer of equal-or-
@@ -605,7 +623,12 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Definition list starts on a `:: term` line (two colons, not three).
   if (RE_DEFLIST_TERM.test(line)) return parseDefinitionList(lexer)
   if (RE_BLOCKQUOTE.test(line)) return parseBlockQuote(lexer)
-  if (RE_TASK.test(line) || RE_UNORDERED.test(line) || RE_ORDERED.test(line))
+  if (
+    RE_TASK.test(line) ||
+    RE_UNORDERED.test(line) ||
+    RE_ORDERED.test(line) ||
+    extractItemAttr(line) !== null
+  )
     return parseList(lexer)
   if (RE_TABLE_ROW.test(line)) return parseTable(lexer)
   if (isBlockImageLine(line)) return parseBlockImage(lexer)
@@ -1262,6 +1285,7 @@ function lineOpensBlock(line: string): boolean {
     RE_TASK.test(line) ||
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
+    extractItemAttr(line) !== null ||
     RE_TABLE_ROW.test(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     RE_DIV_OPEN.test(line)
@@ -1285,6 +1309,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_TASK.test(line) ||
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
+    extractItemAttr(line) !== null ||
     RE_TABLE_ROW.test(line) ||
     isBlockImageLine(line)
   )
@@ -1293,15 +1318,18 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
 function parseList(lexer: Lexer): List {
   const first = lexer.peek()!
   const baseIndent = indentColumns(first)
-  const isTask = RE_TASK.test(first)
-  const isOrdered = !isTask && RE_ORDERED.test(first)
+  // Classify on the marker after stripping any abutting `{...}` attribute block.
+  const firstAttr = extractItemAttr(first)
+  const firstStripped = firstAttr ? firstAttr.stripped : first
+  const isTask = RE_TASK.test(firstStripped)
+  const isOrdered = !isTask && RE_ORDERED.test(firstStripped)
   // A change of unordered marker character (`-` vs `*` vs `+`), or of
   // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
   // new list (grammar PART 9 §11). The first item fixes the ordered
   // dialect; the second item's marker (if a sibling) tie-breaks an
   // ambiguous single roman letter.
-  const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(first)
-  const firstOrdered = isOrdered ? RE_ORDERED.exec(first)! : null
+  const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(firstStripped)
+  const firstOrdered = isOrdered ? RE_ORDERED.exec(firstStripped)! : null
   const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
   let orderedKind: OlKind = 'dec'
   let orderedStart = 1
@@ -1316,9 +1344,13 @@ function parseList(lexer: Lexer): List {
       if (ln.trim() !== '' && indentColumns(ln) <= baseIndent) break
     }
     const nextLine = lexer.peek(k)
+    const nextStripped =
+      nextLine !== undefined
+        ? (extractItemAttr(nextLine)?.stripped ?? nextLine)
+        : undefined
     const nm =
-      nextLine !== undefined && indentColumns(nextLine) === baseIndent
-        ? RE_ORDERED.exec(nextLine)
+      nextStripped !== undefined && indentColumns(nextLine!) === baseIndent
+        ? RE_ORDERED.exec(nextStripped)
         : null
     orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
     orderedStart = olStartOf(firstOrdered[2]!, orderedKind)
@@ -1334,12 +1366,16 @@ function parseList(lexer: Lexer): List {
       break
     }
     if (indentColumns(line) !== baseIndent) break
-    const m = matchListMarker(line, isTask, isOrdered)
+    // Strip an abutting `{...}` attribute block off the marker so the bare
+    // marker regexes match; remember its attributes to attach to the <li>.
+    const la = extractItemAttr(line)
+    const mline = la ? la.stripped : line
+    const m = matchListMarker(mline, isTask, isOrdered)
     if (!m) break
     // §11: a sibling with a different marker character (unordered) or a
     // different delimiter (ordered) is a new list.
-    if (!isOrdered && unorderedMarkerChar(line) !== firstMarkerChar) break
-    if (isOrdered && !orderedContinues(line, orderedKind, orderedDelim)) break
+    if (!isOrdered && unorderedMarkerChar(mline) !== firstMarkerChar) break
+    if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim)) break
 
     let content: string
     let checked: boolean | undefined
@@ -1351,19 +1387,22 @@ function parseList(lexer: Lexer): List {
     } else {
       content = m[2]!
     }
+    const itemAttrs = la ? la.attrs : undefined
 
-    // Column where item content begins; deeper-indented lines belong to this
-    // item (continuation paragraphs or nested lists). For a TASK item the
-    // checkbox is content, not marker, so the content column is the bullet width
-    // (`- `/`* ` = 2), matching the spec's task attribute/continuation
-    // convention (`- [x] x` / `  {.c}`) -- not the full `- [x] ` width.
-    // Visual content column: base column plus the marker width. The marker
-    // (`- `, `1. `) contains no tabs, so its character width equals its column
-    // width; the leading whitespace, however, may be a tab, so it must be
-    // measured in columns (baseIndent) rather than characters.
-    const markerWidth =
-      m[0]!.length - content.length - leadingWhitespace(line)
-    const contentCol = isTask ? baseIndent + 2 : baseIndent + markerWidth
+    // item (continuation paragraphs or nested lists). Visual content column:
+    // baseIndent (tab-aware columns) plus the marker width in characters. The
+    // marker (`- `, `1. `) and any abutting `{...}` attr block contain no tabs,
+    // so their column width equals their character count; the leading
+    // whitespace may be a tab, so it is measured in columns (baseIndent) rather
+    // than characters. The marker/attr width is taken from the ORIGINAL line so
+    // an abutting `{...}` block widens it correctly. For a TASK item the
+    // checkbox is content, not marker, so the content column is the bullet
+    // width (`- `/`* ` = 2) plus any abutting attr width -- not the full
+    // `- [x] ` width (matching the spec's task attribute/continuation
+    // convention `- [x] x` / `  {.c}`).
+    const contentCol = isTask
+      ? baseIndent + 2 + (la ? line.length - mline.length : 0)
+      : baseIndent + (line.length - leadingWhitespace(line) - content.length)
     lexer.consume()
 
     // First-block item (Carve): `- +` opens an item whose body is the
@@ -1399,6 +1438,7 @@ function parseList(lexer: Lexer): List {
       const fbChildren = parseBlocks(sub, 0)
       const fbItem: ListItem = { type: 'list-item', children: fbChildren }
       if (checked !== undefined) fbItem.checked = checked
+      if (itemAttrs) fbItem.attrs = itemAttrs
       items.push(fbItem)
       continue
     }
@@ -1491,12 +1531,13 @@ function parseList(lexer: Lexer): List {
     // (§11), so it must not loosen this one.
     if (pendingBlanks > 0 && !lexer.eof()) {
       const nextLine = lexer.peek()!
+      const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
       if (
         indentColumns(nextLine) === baseIndent &&
-        matchListMarker(nextLine, isTask, isOrdered) &&
+        matchListMarker(nextStripped, isTask, isOrdered) &&
         (isOrdered
-          ? orderedContinues(nextLine, orderedKind, orderedDelim)
-          : unorderedMarkerChar(nextLine) === firstMarkerChar)
+          ? orderedContinues(nextStripped, orderedKind, orderedDelim)
+          : unorderedMarkerChar(nextStripped) === firstMarkerChar)
       ) {
         loose = true
       }
@@ -1540,6 +1581,7 @@ function parseList(lexer: Lexer): List {
 
     const item: ListItem = { type: 'list-item', children }
     if (checked !== undefined) item.checked = checked
+    if (itemAttrs) item.attrs = itemAttrs
     items.push(item)
   }
 
@@ -1773,8 +1815,13 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
       return false
     case '-':
-      // thematic break, task or unordered list
-      return RE_HR.test(ln.trim()) || RE_TASK.test(ln) || RE_UNORDERED.test(ln)
+      // thematic break, task or unordered list (incl. abutting-attr marker)
+      return (
+        RE_HR.test(ln.trim()) ||
+        RE_TASK.test(ln) ||
+        RE_UNORDERED.test(ln) ||
+        extractItemAttr(ln) !== null
+      )
     case '+':
       // task or unordered list (`+` is not a thematic-break char)
       return RE_TASK.test(ln) || RE_UNORDERED.test(ln)
@@ -1784,7 +1831,8 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
         RE_ABBR_DEF.test(ln) ||
         RE_HR.test(ln.trim()) ||
         RE_TASK.test(ln) ||
-        RE_UNORDERED.test(ln)
+        RE_UNORDERED.test(ln) ||
+        extractItemAttr(ln) !== null
       )
     case '_':
       return RE_HR.test(ln.trim())
