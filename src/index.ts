@@ -24,10 +24,22 @@ import type { CarveExtension } from './extension.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
+import {
+  renderMarkdown as renderMarkdownImpl,
+  type MarkdownRenderOptions,
+} from './render-markdown.js'
+import {
+  renderPlainText as renderPlainTextImpl,
+  type PlainTextRenderOptions,
+} from './render-plain.js'
+import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
 export type { RenderOptions } from './render-html.js'
+export type { MarkdownRenderOptions } from './render-markdown.js'
+export type { PlainTextRenderOptions } from './render-plain.js'
+export type { AnsiRenderOptions } from './render-ansi.js'
 export type {
   CarveExtension,
   ExtensionRenderer,
@@ -79,6 +91,21 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   return renderHtmlImpl(ast, opts)
 }
 
+/** Render a resolved Carve AST to Markdown. */
+export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
+  return renderMarkdownImpl(ast, opts)
+}
+
+/** Render a resolved Carve AST to plain text. */
+export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
+  return renderPlainTextImpl(ast, opts)
+}
+
+/** Render a resolved Carve AST to ANSI terminal text. */
+export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  return renderAnsiImpl(ast, opts)
+}
+
 /**
  * Post-parse semantic resolution: heading ids, `</#id>` crossrefs,
  * implicit heading references (`[Foo][]` -> `#foo`), and finalization
@@ -107,4 +134,31 @@ export function carveToHtml(
   for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
   for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
   return renderHtml(doc, opts)
+}
+
+/** Convenience: parse + resolve + render Markdown in one call. */
+export function carveToMarkdown(
+  source: string,
+  opts: ParseOptions & MarkdownRenderOptions = {},
+): string {
+  const doc = resolve(parse(source, opts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  return renderMarkdown(doc, opts)
+}
+
+/** Convenience: parse + resolve + render plain text in one call. */
+export function carveToPlainText(
+  source: string,
+  opts: ParseOptions & PlainTextRenderOptions = {},
+): string {
+  const doc = resolve(parse(source, opts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  return renderPlainText(doc, opts)
+}
+
+/** Convenience: parse + resolve + render ANSI terminal text in one call. */
+export function carveToAnsi(
+  source: string,
+  opts: ParseOptions & AnsiRenderOptions = {},
+): string {
+  const doc = resolve(parse(source, opts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  return renderAnsi(doc, opts)
 }
