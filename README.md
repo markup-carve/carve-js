@@ -185,6 +185,24 @@ import { carveToHtml, mermaid } from '@markup-carve/carve'
 carveToHtml(diagramSource, { extensions: [mermaid()] })
 ```
 
+`wikilinks()` parses `[[Page]]` links (Obsidian / MediaWiki style) into
+anchors, using the parse-stage matcher below. Forms: `[[Page]]`,
+`[[page|Display]]`, `[[page#anchor]]`, `[[folder/page]]`. The default href is a
+slug; pass `urlGenerator` for custom routing, `cssClass` (default `wikilink`),
+or `newWindow`:
+
+```ts
+import { carveToHtml, wikilinks } from '@markup-carve/carve'
+
+carveToHtml('See [[Tigers]].', { extensions: [wikilinks()] })
+// <p>See <a href="tigers" class="wikilink" data-wikilink="Tigers">Tigers</a>.</p>
+
+carveToHtml('[[Tiger Facts|big cats]]', {
+  extensions: [wikilinks({ urlGenerator: (p) => '/wiki/' + p.toLowerCase().replace(/ /g, '-') })],
+})
+// <p><a href="/wiki/tiger-facts" class="wikilink" data-wikilink="Tiger Facts">big cats</a></p>
+```
+
 ### Adding syntax: parse-stage matchers
 
 An extension can add new syntax with a `matchInline` or `matchBlock` matcher
