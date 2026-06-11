@@ -55,6 +55,8 @@ export {
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
+export { mermaid, type MermaidOptions } from './mermaid.js'
+export { wikilinks, type WikilinksOptions } from './wikilinks.js'
 export { autolink, type AutolinkOptions } from './autolink.js'
 
 /**
