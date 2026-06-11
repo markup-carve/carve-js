@@ -18,8 +18,9 @@
  *        inline math   $x$         -> $`x`
  *
  *      Carve's highlight/subscript markers are single chars (`=x=`, `,x,`); the
- *      doubled forms `==x==` / `,,x,,` are literal. The `<mark>` and `<sub>`
- *      HTML tags above therefore map to the single-char Carve forms.
+ *      doubled forms `==x==` / `,,x,,` are literal. The `<mark>`/`<sub>`/`<sup>`
+ *      HTML tags map to the forced brace forms (`{=x=}` / `{,x,}` / `{^x^}`),
+ *      which also render when the tag sits intraword (e.g. `H<sub>2</sub>O`).
  *
  * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
  * keeps `_x_`, which Carve renders as underline — a silent mis-render.
@@ -50,12 +51,16 @@
  */
 
 const HTML_TAG_RULES: Array<[RegExp, string]> = [
-  [/<mark>([^<]+)<\/mark>/gi, '=$1='],
+  // Highlight/super/subscript use the forced brace forms: an HTML tag can sit
+  // intraword (e.g. `H<sub>2</sub>O`), where a bare `,2,` / `^2^` / `=2=` is
+  // literal in Carve. The `{,x,}` / `{^x^}` / `{=x=}` forms render in every
+  // position (corpus 67-superscript-and-subscript).
+  [/<mark>([^<]+)<\/mark>/gi, '{=$1=}'],
   [/<ins>([^<]+)<\/ins>/gi, '{+$1+}'],
   [/<del>([^<]+)<\/del>/gi, '~$1~'],
   [/<s>([^<]+)<\/s>/gi, '~$1~'],
-  [/<sup>([^<]+)<\/sup>/gi, '^$1^'],
-  [/<sub>([^<]+)<\/sub>/gi, ',$1,'],
+  [/<sup>([^<]+)<\/sup>/gi, '{^$1^}'],
+  [/<sub>([^<]+)<\/sub>/gi, '{,$1,}'],
   [/<strong>([^<]+)<\/strong>/gi, '*$1*'],
   [/<b>([^<]+)<\/b>/gi, '*$1*'],
   [/<em>([^<]+)<\/em>/gi, '/$1/'],
