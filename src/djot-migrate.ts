@@ -101,8 +101,8 @@ const RULES: Rule[] = [
     pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~/gd,
     message: () =>
       'Djot subscript `~x~` renders as *strikethrough* in Carve.',
-    suggestion: (m) => `,,${m[1]},,`,
-    delims: [',,', ',,'],
+    suggestion: (m) => `,${m[1]},`,
+    delims: [',', ','],
   },
   {
     id: 'djot-emphasis-underscore',
@@ -118,9 +118,9 @@ const RULES: Rule[] = [
     id: 'djot-highlight-braces',
     family: '{',
     pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/gd,
-    message: () => 'Djot highlight `{=x=}` is written `==x==` in Carve.',
-    suggestion: (m) => `==${m[1]}==`,
-    delims: ['==', '=='],
+    message: () => 'Djot highlight `{=x=}` is written `=x=` in Carve.',
+    suggestion: (m) => `=${m[1]}=`,
+    delims: ['=', '='],
   },
   // Block-level (line-anchored): a leading `+ content` is a bullet in
   // Djot/Markdown but NOT in Carve — `+` is the list-continuation marker, so
