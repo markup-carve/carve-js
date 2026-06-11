@@ -171,6 +171,20 @@ HTML is stripped. A top-level details block whose direct children include a
 heading falls back to a plain `<div class="details">` (to avoid mis-nesting
 it against heading section-wrapping).
 
+`mermaid()` renders a fenced code block tagged `mermaid` (a ` ``` mermaid `
+fence) as `<pre class="mermaid">` for client-side Mermaid.js, instead of the
+default `<pre><code>`. `>` is preserved so arrow syntax (`A-->B`) survives, and
+the diagram source renders as `<pre class="mermaid">graph TD; A-->B</pre>`. A
+preceding block-attribute line (`{#id .class}`) carries onto the `<pre>`;
+non-mermaid code blocks defer to the core renderer. Configurable `cssClass`
+and `language`:
+
+```ts
+import { carveToHtml, mermaid } from '@markup-carve/carve'
+
+carveToHtml(diagramSource, { extensions: [mermaid()] })
+```
+
 ### Adding syntax: parse-stage matchers
 
 An extension can add new syntax with a `matchInline` or `matchBlock` matcher

@@ -385,13 +385,15 @@ function renderAttrs2(
 
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
   const pad = indent(level)
-  // Extension block renderers (keyed by node type) get first claim; one may
-  // return undefined to defer back to the core renderer below.
-  const blockRenderer = opts.extensions
-    ?.flatMap((e) => (e.blockRenderers ? [e.blockRenderers] : []))
-    .map((r) => r[node.type])
-    .find((fn): fn is NonNullable<typeof fn> => fn !== undefined)
-  if (blockRenderer) {
+  // Extension block renderers (keyed by node type) get first claim, tried in
+  // registration order: each may return undefined to defer to the next
+  // extension's renderer (so one extension can claim only some nodes of a
+  // type, e.g. mermaid claims only `mermaid` code blocks), then to core.
+  const blockRenderers = opts.extensions?.flatMap((e) => {
+    const fn = e.blockRenderers?.[node.type]
+    return fn ? [fn] : []
+  })
+  if (blockRenderers && blockRenderers.length) {
     const ctx: BlockExtensionRenderContext = {
       level,
       indent,
@@ -401,8 +403,10 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       escapeAttr,
       renderAttrs,
     }
-    const out = blockRenderer(node, ctx)
-    if (out !== undefined) return out
+    for (const r of blockRenderers) {
+      const out = r(node, ctx)
+      if (out !== undefined) return out
+    }
   }
   switch (node.type) {
     case 'heading': {
