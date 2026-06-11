@@ -108,12 +108,64 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('preserves a quoted title when an attribute block follows', () => {
-    // `::: note "Heads up" {#x}` — the title survives; the trailing
-    // attribute block is tolerated (carve-js does not yet attach
-    // admonition attributes, but the title must not be dropped).
-    expect(h('::: note "Heads up" {#x}\nBody.\n:::')).toContain(
-      '<p class="admonition-title">Heads up</p>',
+  it('applies a trailing attribute block, keeping the quoted title', () => {
+    // `::: note "Heads up" {#x}`: the title survives and the trailing
+    // attribute block attaches to the wrapper (grammar admonition_open
+    // [attributes] slot).
+    expect(h('::: note "Heads up" {#x}\nBody.\n:::')).toBe(
+      [
+        '<aside class="admonition note" id="x">',
+        '  <p class="admonition-title">Heads up</p>',
+        '  <p>Body.</p>',
+        '</aside>',
+      ].join('\n'),
+    )
+  })
+
+  it('applies a trailing class block on a typed opener', () => {
+    expect(h('::: note {.highlight}\nBody.\n:::')).toBe(
+      '<aside class="admonition note highlight">\n  <p>Body.</p>\n</aside>',
+    )
+  })
+
+  it('applies an attribute block that abuts the type word', () => {
+    // The [attributes] slot needs no leading space: `::: note{.x}`.
+    expect(h('::: note{.highlight}\nBody.\n:::')).toBe(
+      '<aside class="admonition note highlight">\n  <p>Body.</p>\n</aside>',
+    )
+  })
+
+  it('keeps braces inside a quoted title out of the attribute block', () => {
+    expect(h('::: note "Use {x}" {.highlight}\nBody.\n:::')).toBe(
+      [
+        '<aside class="admonition note highlight">',
+        '  <p class="admonition-title">Use {x}</p>',
+        '  <p>Body.</p>',
+        '</aside>',
+      ].join('\n'),
+    )
+  })
+
+  it('merges a leading block-attribute line with the opener attributes', () => {
+    // Leading attrs are earlier in source; classes accumulate after the
+    // type class, opener attrs win on id/key conflict (§15).
+    expect(h('{.lead}\n::: note {.x}\nBody.\n:::')).toBe(
+      '<aside class="admonition note lead x">\n  <p>Body.</p>\n</aside>',
+    )
+  })
+
+  it('applies a trailing attribute block on a custom (Tier-2) type', () => {
+    expect(h('::: hint {.x}\nBody.\n:::')).toBe(
+      '<div class="hint x">\n  <p>Body.</p>\n</div>',
+    )
+  })
+
+  it('ignores an invalid trailing attribute block (no silent partial apply)', () => {
+    // `{.x junk}` is not a valid attribute block (a bareword token is not
+    // an id/class/key=value), so it does not hoist `.x` and drop `junk`;
+    // the wrapper carries no extra attributes.
+    expect(h('::: note {.x junk}\nBody.\n:::')).toBe(
+      '<aside class="admonition note">\n  <p>Body.</p>\n</aside>',
     )
   })
 

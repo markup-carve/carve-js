@@ -825,15 +825,22 @@ function parseAdmonition(lexer: Lexer): Admonition {
   const m = RE_ADMONITION_OPEN.exec(open)!
   const fence = m[1]!.length
   const kind = m[2]!
-  // A title is recognized ONLY when the tail after the type opens with a
-  // double-quoted string (grammar quoted_title; PART 9 §12), optionally
-  // followed by an attribute block. The quotes are delimiters and are
-  // stripped — not part of the rendered title text. An explicitly empty
-  // `""` still counts as a supplied (empty) title. Unquoted trailing
-  // text is ignored (not a title).
+  // The tail after the type word may carry an optional quoted title
+  // (grammar quoted_title; PART 9 §12) and an optional trailing attribute
+  // block (grammar admonition_open [attributes]). The block needs no
+  // leading space, so it may abut the type or the title (`::: note{.x}`,
+  // `::: note "T"{.x}`). The quotes delimit the title and are stripped
+  // (not part of the rendered text); an explicitly empty `""` still counts
+  // as a supplied (empty) title. A quoted title may itself contain braces,
+  // so the attribute block is only the `{...}` after the closing quote.
+  // Unquoted trailing text is ignored (not a title, not attributes).
   const tail = m[3]?.trim() ?? ''
-  const quoted = /^"([^"]*)"\s*(?:\{[^}]*\})?$/.exec(tail)
-  const titleText = quoted ? quoted[1]! : undefined
+  const tm =
+    /^(?:"([^"]*)"\s*)?(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\})?$/.exec(
+      tail,
+    )
+  const titleText = tm ? tm[1] : undefined
+  const attrSrc = tm?.[2]
   const inner: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -858,6 +865,13 @@ function parseAdmonition(lexer: Lexer): Admonition {
   if (titleText !== undefined) {
     node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
   }
+  // The opener's own trailing attributes (`::: note {.x}`). A leading
+  // block-attribute line merges with these in parseBlocks (pending first,
+  // opener attrs win on conflict), the same path parseDiv uses. An invalid
+  // payload (`{.x junk}`) is not an attribute block (no silent partial
+  // apply, matching block-attribute lines and grammar §14); the trailing
+  // text is ignored.
+  if (attrSrc && isValidAttrPayload(attrSrc)) node.attrs = parseAttrs(attrSrc)
   return node
 }
 
@@ -913,7 +927,9 @@ function parseDiv(lexer: Lexer): Div {
   subLexer.nested = true
   subLexer.depth = lexer.depth + 1
   const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
-  if (attrSrc) node.attrs = parseAttrs(attrSrc)
+  // An invalid payload (`:::{.x junk}`) is not an attribute block: no
+  // silent partial apply, matching block-attribute lines and grammar §14.
+  if (attrSrc && isValidAttrPayload(attrSrc)) node.attrs = parseAttrs(attrSrc)
   return node
 }
 

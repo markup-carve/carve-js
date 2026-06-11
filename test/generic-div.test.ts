@@ -20,6 +20,12 @@ describe('generic divs', () => {
     )
   })
 
+  it('ignores an invalid attribute payload on the opener (no silent partial apply)', () => {
+    // `{.x junk}` is not a valid attribute block, so `.x` is not hoisted
+    // (matching block-attribute lines and grammar §14).
+    expect(h(':::{.x junk}\nz\n:::')).toBe('<div>\n  <p>z</p>\n</div>')
+  })
+
   it('does NOT open a div for a stray, unclosed ::: after prose', () => {
     // Regression: a lone `:::` must not swallow the rest of the document.
     // Matches djot + carve-php: it stays paragraph text.
