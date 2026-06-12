@@ -45,11 +45,13 @@ export interface CliIO {
 const HELP = `carve - Carve markup tooling
 
 Usage:
+  carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
 
 render - convert Carve source to an output format (reads a file or stdin).
+The 'render' subcommand is optional: \`carve --ansi file\` works the same.
 
   render options (default --html; choose at most one):
     --html         HTML (default)
@@ -276,8 +278,11 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'render') return runRender(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
-  io.writeErr(`carve: unknown command '${sub}'\n\n${HELP}`)
-  return 2
+  // Default action is render, so the `render` subcommand is optional:
+  // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
+  // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
+  // format flag or an input file, handled by runRender over the full argv.
+  return runRender(argv, io)
 }
 
 /** Report all warnings for one source; returns how many were found. */
