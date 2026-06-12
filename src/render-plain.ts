@@ -170,7 +170,11 @@ function renderInline(node: InlineNode): string {
 }
 
 function normalize(text: string): string {
-  return `${text.replace(/\n{3,}/g, '\n\n').trim()}\n`
+  // The internal non-breaking-space placeholder (U+E000) collapses to an
+  // ordinary space in plain text. Done after trimming so placeholder-derived
+  // leading indentation (e.g. in a line block) survives; a literal U+00A0 in
+  // the author's text is left intact.
+  return `${text.replace(/\n{3,}/g, '\n\n').trim()}\n`.replace(/\ue000/g, ' ')
 }
 
 function cleanEscapedText(node: Text): string {
@@ -182,7 +186,7 @@ function cleanEscapedText(node: Text): string {
     span !== undefined && span > node.value.length
       ? node.value.replace(/[*#_]/g, '')
       : node.value
-  ).replace(/\u00a0/g, ' ')
+  )
 }
 
 function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {

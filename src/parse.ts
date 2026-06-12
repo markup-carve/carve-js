@@ -1029,7 +1029,11 @@ function expandLineBlockLeadingWhitespace(line: string): string {
     else break
     i++
   }
-  return '\u00a0'.repeat(columns) + line.slice(i)
+  // Use the internal non-breaking-space placeholder (U+E000) - the same
+  // private-use sentinel as an escaped space - so the indent never collides
+  // with a literal U+00A0 in the author's text and is converted per renderer
+  // (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
+  return '\ue000'.repeat(columns) + line.slice(i)
 }
 
 // Generic div: same body collection as an admonition, but emits a plain
@@ -2453,9 +2457,12 @@ function scanInline(
       i += 2
       continue
     }
-    // Non-breaking space: a backslash followed by a space (djot).
+    // Non-breaking space: a backslash followed by a space (djot). Emit the
+    // internal placeholder (U+E000) rather than a literal U+00A0 so it is
+    // converted per renderer (HTML &nbsp;, Markdown U+00A0, plain/ANSI a
+    // space) and never confused with an author's literal non-breaking space.
     if (c === '\\' && text[i + 1] === ' ') {
-        append('\u00a0')
+        append('\ue000')
         i += 2
         continue
     }
