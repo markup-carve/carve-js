@@ -45,11 +45,11 @@ describe('carve CLI — dispatch', () => {
     expect(t.out).toContain('carve fix')
   })
 
-  it('errors (exit 2) on an unknown command', async () => {
+  it('treats a non-subcommand first arg as a file to render (exit 2 if missing)', async () => {
     const t = makeIO()
     const code = await run(['frobnicate'], t.io)
     expect(code).toBe(2)
-    expect(t.err).toContain("unknown command 'frobnicate'")
+    expect(t.err).toContain('cannot read frobnicate')
   })
 
   it('errors (exit 2) when invoked with no arguments', async () => {
@@ -244,5 +244,23 @@ describe('carve render', () => {
     const t = makeIO()
     expect(await run(['render', 'missing.crv'], t.io)).toBe(2)
     expect(t.err).toContain('cannot read')
+  })
+
+  it('renders without the render subcommand (carve --ansi)', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['--ansi'], t.io)).toBe(0)
+    expect(t.out).toContain('[') // SGR escape emitted
+  })
+
+  it('renders a bare file argument as HTML by default', async () => {
+    const t = makeIO({ files: { 'a.crv': SRC } })
+    expect(await run(['a.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('<h1>Hi</h1>')
+  })
+
+  it('renders --markdown without the subcommand', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['--markdown'], t.io)).toBe(0)
+    expect(t.out).toContain('# Hi')
   })
 })
