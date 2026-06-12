@@ -754,11 +754,6 @@ function attachBlockPos(
   }
 }
 
-// Trailing `{…}` attribute block on a (possibly multi-line) heading. Quote-
-// and escape-aware so a `}` inside a quoted value does not end it early.
-const RE_HEADING_TRAIL_ATTR =
-  /^([\s\S]*?)[ \t]*\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}$/
-
 function parseHeading(lexer: Lexer): Heading {
   const lineIndex = lexer.pos
   const line = lexer.consume()
@@ -789,16 +784,9 @@ function parseHeading(lexer: Lexer): Heading {
   }
 
   const node: Heading = { type: 'heading', level, children: [] }
-  // A trailing `{…}` attribute block applies to the whole heading. It is only
-  // consumed when it yields >= 1 real attribute; otherwise it stays text.
-  const am = RE_HEADING_TRAIL_ATTR.exec(text)
-  if (am) {
-    const attrs = parseAttrs(am[2]!)
-    if (!isEmptyAttrs(attrs)) {
-      node.attrs = attrs
-      text = am[1]!.replace(/[ \t]+$/, '')
-    }
-  }
+  // djot-strict: a heading takes its attributes on the PRECEDING block-
+  // attribute line (§15), not as a trailing `{…}` on its own line. A `{…}`
+  // at the end of the heading text is therefore ordinary inline content.
   // Column where the content starts on the first line (the marker + spaces).
   const textColumn = line.length - line.replace(/^#{1,6}[ \t]+/, '').length + 1
   node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {

@@ -80,7 +80,7 @@ describe('resolveHeadingIds', () => {
     )
   })
   it('keeps an explicit id verbatim and never suffixes it', () => {
-    const doc = parse('# A {#Keep_This}\n\n# A {#Keep_This}')
+    const doc = parse('{#Keep_This}\n# A\n\n{#Keep_This}\n# A')
     resolveHeadingIds(doc)
     const ids = doc.children
       .filter((b) => b.type === 'heading')
@@ -96,7 +96,7 @@ describe('resolveHeadingIds', () => {
     expect(ids).toEqual(['setup', 'notes', 'setup-2', 'setup-3'])
   })
   it('shares the namespace: auto collides with earlier explicit', () => {
-    const doc = parse('# Intro {#intro}\n\n# Intro')
+    const doc = parse('{#intro}\n# Intro\n\n# Intro')
     resolveHeadingIds(doc)
     const ids = doc.children
       .filter((b) => b.type === 'heading')

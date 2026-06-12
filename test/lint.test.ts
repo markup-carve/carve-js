@@ -22,7 +22,7 @@ describe('lintCarve — broken cross-references', () => {
   })
 
   it('honors an explicit heading id as a crossref target', () => {
-    expect(lintCarve('# Intro {#start}\n\nSee </#start>.')).toEqual([])
+    expect(lintCarve('{#start}\n# Intro\n\nSee </#start>.')).toEqual([])
   })
 
   it('finds a crossref nested below the top level (inside a list item)', () => {
@@ -51,9 +51,9 @@ describe('lintCarve — duplicate heading ids', () => {
   })
 
   it('flags a repeated explicit id', () => {
-    const w = lintCarve('# A {#dup}\n\n# B {#dup}')
+    const w = lintCarve('{#dup}\n# A\n\n{#dup}\n# B')
     expect(w.map((x) => x.rule)).toEqual(['duplicate-heading-id'])
-    expect(w[0]!.line).toBe(3)
+    expect(w[0]!.line).toBe(5)
   })
 
   it('flags three-way slug collisions once each (title-2, title-3)', () => {
