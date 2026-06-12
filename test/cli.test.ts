@@ -52,9 +52,10 @@ describe('carve CLI — dispatch', () => {
     expect(t.err).toContain('cannot read frobnicate')
   })
 
-  it('errors (exit 2) when invoked with no arguments', async () => {
-    const t = makeIO()
-    expect(await run([], t.io)).toBe(2)
+  it('renders stdin (HTML) when invoked with no arguments', async () => {
+    const t = makeIO({ stdin: '# Hi\n' })
+    expect(await run([], t.io)).toBe(0)
+    expect(t.out).toContain('<h1>Hi</h1>')
   })
 })
 

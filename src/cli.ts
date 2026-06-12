@@ -271,10 +271,10 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
     io.write(HELP)
     return 0
   }
-  if (sub === undefined) {
-    io.writeErr(HELP)
-    return 2
-  }
+  // No arguments: render from stdin (HTML), matching the carve-rs / carve-php
+  // CLIs so `echo '# Hi' | carve` works. The real binary still shows help when
+  // stdin is an interactive TTY (see the wrapper at the bottom of this file).
+  if (sub === undefined) return runRender([], io)
   if (sub === 'render') return runRender(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
@@ -350,13 +350,22 @@ const realIO: CliIO = {
 
 // Run only when executed as the binary, not when imported by a test.
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  run(process.argv.slice(2), realIO).then(
-    (code) => {
-      process.exitCode = code
-    },
-    (err) => {
-      process.stderr.write(`carve: ${(err as Error).message}\n`)
-      process.exitCode = 1
-    },
-  )
+  const args = process.argv.slice(2)
+  // With no args and an interactive terminal there is nothing to render, so
+  // show help instead of silently blocking on stdin. Piped/redirected input
+  // (`echo … | carve`) falls through to render from stdin.
+  if (args.length === 0 && process.stdin.isTTY) {
+    process.stderr.write(HELP)
+    process.exitCode = 2
+  } else {
+    run(args, realIO).then(
+      (code) => {
+        process.exitCode = code
+      },
+      (err) => {
+        process.stderr.write(`carve: ${(err as Error).message}\n`)
+        process.exitCode = 1
+      },
+    )
+  }
 }
