@@ -132,7 +132,13 @@ const RE_BLOCKQUOTE = /^>\s?(.*)$/
 // block-attribute line.
 const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z][\w-]*)\s*("[^"]*")?\s*$/
 const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
-const RE_LINE_BLOCK_OPEN = /^(:{3,})[ \t]+line-block[ \t]*$/
+// Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
+// `::: line-block` keyword is no longer special -- it falls through to the
+// admonition branch and renders as an ordinary `<div class="line-block">`
+// with NO hard-break / stanza / leading-whitespace handling. Output of the
+// pipe form is unchanged (`<div class="line-block">` with `<br>` breaks).
+// Mirrors carve#119 / carve-php#124.
+const RE_LINE_BLOCK_OPEN = /^(:{3,})[ \t]+\|[ \t]*$/
 // Generic fenced div: a bare `:::` opener with NO type word (djot's generic
 // container). A typed `::: word` routes to parseAdmonition. An inline
 // `::: {.class}` is NOT a div (strict djot) -- use a preceding attribute
@@ -1199,9 +1205,13 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
       state.paragraphOpen = false
       return
     }
-    if (RE_DIV_OPEN.test(content) || RE_ADMONITION_OPEN.test(content)) {
-      // Div / admonition opener (`:::`, `::: {…}`, or `::: type`) is structural;
-      // it opens no paragraph itself.
+    if (
+      RE_DIV_OPEN.test(content) ||
+      RE_ADMONITION_OPEN.test(content) ||
+      RE_LINE_BLOCK_OPEN.test(content)
+    ) {
+      // Div / admonition / line-block opener (`:::`, `::: type`, or `::: |`)
+      // is structural; it opens no paragraph itself.
       state.paragraphOpen = false
       return
     }
@@ -1463,7 +1473,8 @@ function lineOpensBlock(line: string): boolean {
     extractItemAttr(line) !== null ||
     RE_TABLE_ROW.test(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
-    RE_DIV_OPEN.test(line)
+    RE_DIV_OPEN.test(line) ||
+    RE_LINE_BLOCK_OPEN.test(line)
   )
 }
 
@@ -1474,6 +1485,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_COMMENT_BLOCK.test(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
+    (RE_LINE_BLOCK_OPEN.test(line) && divHasCloser(lexer)) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
@@ -2074,11 +2086,13 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '_':
       return RE_HR.test(ln.trim())
     case ':':
-      // definition-list term, or an admonition/div that has a `:::` closer ahead
+      // definition-list term, or an admonition/div/line-block that has a `:::`
+      // closer ahead (the `::: |` line-block shares the bare `:::` closer)
       if (RE_DEFLIST_TERM.test(ln)) return true
       if (
         (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
-        RE_DIV_OPEN.test(ln)
+        RE_DIV_OPEN.test(ln) ||
+        RE_LINE_BLOCK_OPEN.test(ln)
       )
         return divHasCloser(lexer)
       return false

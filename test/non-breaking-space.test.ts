@@ -25,21 +25,21 @@ function stripAnsi(s: string): string {
 
 describe('non-breaking-space handling', () => {
   it('renders the line-block indent as &nbsp; in HTML', () => {
-    const html = carveToHtml('::: line-block\nflush\n  indented\n:::')
+    const html = carveToHtml('::: |\nflush\n  indented\n:::')
 
     expect(html).toContain('flush<br>\n&nbsp;&nbsp;indented')
     expect(html).not.toContain(PLACEHOLDER)
   })
 
   it('renders the line-block indent as a real nbsp in Markdown', () => {
-    const markdown = carveToMarkdown('::: line-block\nflush\n  indented\n:::')
+    const markdown = carveToMarkdown('::: |\nflush\n  indented\n:::')
 
     expect(markdown).toContain(`${NBSP}${NBSP}indented`)
     expect(markdown).not.toContain(PLACEHOLDER)
   })
 
   it('renders the line-block indent as ordinary spaces in plain text', () => {
-    const text = carveToPlainText('::: line-block\nflush\n  indented\n:::')
+    const text = carveToPlainText('::: |\nflush\n  indented\n:::')
 
     expect(text).toContain('flush\n  indented')
     expect(text).not.toContain(PLACEHOLDER)
