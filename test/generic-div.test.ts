@@ -59,4 +59,15 @@ describe('generic divs', () => {
       '<aside class="admonition note">\n  <p>z</p>\n</aside>',
     )
   })
+
+  it('treats ::: line-block as an ordinary div (the keyword is no longer special)', () => {
+    // The line-block opener is now `::: |` ONLY; the `line-block` type word
+    // is an ordinary Tier-2 typed div. It carries the `line-block` class (as
+    // any type word does) but gets NONE of the line-block handling: no `<br>`
+    // hard breaks and no leading-whitespace nbsp indent (the soft break
+    // collapses to a space). Mirrors carve-php#124 / carve#119.
+    expect(h('::: line-block\nflush\n  indented\n:::')).toBe(
+      '<div class="line-block">\n  <p>flush\nindented</p>\n</div>',
+    )
+  })
 })
