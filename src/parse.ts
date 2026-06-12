@@ -3240,8 +3240,11 @@ function isValidAttrPayload(inner: string): boolean {
   // `(letter | '_'), {letter | digit | '_' | '-'}` -- it may NOT start with a
   // digit. A digit-first name (`.123`, `#1`, `2=v`) makes the whole block an
   // invalid attribute block, so it stays literal (§14) -- stricter than djot.
+  // The bareword (boolean-attribute) alternative comes after key=value so a
+  // `key=value` is consumed whole, and before `\s+`. It makes `{disabled}` and
+  // `{.c disabled}` valid blocks (boolean attrs) rather than literal text.
   const stripped = inner.replace(
-    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+))|\s+/g,
+    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+))|(?:[a-zA-Z_][\w-]*)|\s+/g,
     '',
   )
   return stripped === ''
@@ -3280,7 +3283,10 @@ export function parseAttrs(src: string): Attrs {
   // letters / digits / `_` / `-`); a digit-first token is not a valid
   // attribute and is skipped here (the payload is rejected as invalid
   // upstream by isValidAttrPayload, so the block stays literal).
-  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\S+)))/g
+  // The bareword alternative (m[7]) is LAST so `key=value` matches as a
+  // key/value, not as a bareword `key` with a leftover `=value`. A bareword is
+  // a value-less (boolean) attribute -> rendered `name=""` (djot-php form).
+  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\S+)))|(?:([a-zA-Z_][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
@@ -3296,6 +3302,10 @@ export function parseAttrs(src: string): Attrs {
         : (m[6] ?? '')
       attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
       note(m[3])
+    } else if (m[7]) {
+      // Boolean attribute: a bare word with no value.
+      attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[7]]: '' }
+      note(m[7])
     }
   }
   if (order.length) attrs.order = order

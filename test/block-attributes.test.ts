@@ -41,18 +41,22 @@ describe('block attribute lines (§15)', () => {
     expect(h('{.foo\n .bar}\nText')).toBe('<p class="foo bar">Text</p>')
   })
 
-  it('treats a non-attribute brace line as literal text', () => {
-    expect(h('{foo}\nText')).toBe('<p>{foo}\nText</p>')
+  it('a bare word is a boolean (value-less) attribute', () => {
+    expect(h('{foo}\nText')).toBe('<p foo="">Text</p>')
   })
 
   it('a {...} line with trailing text is not a block-attribute line', () => {
     expect(h('{.x} text')).toBe('<p>{.x} text</p>')
   })
 
-  it('rejects a brace line with junk after a valid token (no silent drop)', () => {
-    // `{.note junk}` must not hoist `.note` and drop `junk`; the whole
-    // payload must be valid attribute syntax or the line is literal.
-    expect(h('{.note junk}\nText')).toBe('<p>{.note junk}\nText</p>')
+  it('keeps a valid token alongside a boolean attribute (no drop)', () => {
+    // `{.note junk}` applies the class AND the boolean `junk` -- a bare word is
+    // a value-less attribute, not "junk" that invalidates the block.
+    expect(h('{.note junk}\nText')).toBe('<p class="note" junk="">Text</p>')
+  })
+
+  it('still rejects a digit-first bare word (not a valid attribute name)', () => {
+    expect(h('{2bad}\nText')).toBe('<p>{2bad}\nText</p>')
   })
 
   it('attaches a class to a heading section body', () => {
