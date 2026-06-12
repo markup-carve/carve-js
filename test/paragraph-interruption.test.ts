@@ -68,6 +68,14 @@ describe('top-level paragraph interruption (§10)', () => {
       '<p>text</p>\n<div>\n  <p>content</p>\n</div>',
     )
   })
+
+  it('a closed ::: | line block after prose interrupts', () => {
+    // The pipe opener shares the bare `:::` closer, so it interrupts a
+    // paragraph (with a closer ahead) just like a generic div does.
+    expect(carveToHtml('intro\n::: |\nverse\n:::')).toBe(
+      '<p>intro</p>\n<div class="line-block">\n  <p>verse</p>\n</div>',
+    )
+  })
 })
 
 describe('a blank line starts the block (§10)', () => {

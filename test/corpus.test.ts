@@ -116,7 +116,16 @@ const IMPLEMENTED = new Set([
  * a specific construct is not yet supported. Move out of this set as
  * implementation lands.
  */
-const KNOWN_GAPS = new Set<string>([])
+const KNOWN_GAPS = new Set<string>([
+  // Inline-attribute `:::` openers. The carve#119 spec corpus expects
+  // `::: {.x}` / `:::{k=v}` to open an attributed div, but carve-js follows
+  // strict djot (merged PR #149): a `:::` fence carries NO inline attributes,
+  // so these openers are paragraphs here. This is an orthogonal policy
+  // difference, independent of the line-block `|` opener this branch adds.
+  '44-generic-divs',
+  '64-attribute-edge-cases-7',
+  '88-line-blocks-5',
+])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
