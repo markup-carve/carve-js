@@ -109,33 +109,12 @@ const IMPLEMENTED = new Set([
   '74-two-char-delimiter-runs',
   '75-trailing-attribute-block-edge-cases',
   '88-line-blocks',
-])
-
-/**
- * Sub-examples in IMPLEMENTED categories that are known to fail because
- * a specific construct is not yet supported. Move out of this set as
- * implementation lands.
- */
-const KNOWN_GAPS = new Set<string>([
-  // Inline-attribute `:::` openers. The carve#119 spec corpus expects
-  // `::: {.x}` / `:::{k=v}` to open an attributed div, but carve-js follows
-  // strict djot (merged PR #149): a `:::` fence carries NO inline attributes,
-  // so these openers are paragraphs here. This is an orthogonal policy
-  // difference, independent of the line-block `|` opener this branch adds.
-  '44-generic-divs',
-  '64-attribute-edge-cases-7',
-  '88-line-blocks-5',
-  // Trailing `{…}` heading-attribute form. The spec corpus pin still expects
-  // `# Title {.x #id}` (a trailing attribute block) to attribute the heading,
-  // but carve-js now follows strict djot: a heading takes its attributes on a
-  // PRECEDING block-attribute line, and a trailing `{…}` is ordinary inline
-  // text. This mirrors the strict-`:::` divergence above and is pending a spec
-  // corpus follow-up.
-  '02-headings-3',
-  '17-attributes',
-  '19-heading-ids',
-  '64-attribute-edge-cases-6',
-  '64-attribute-edge-cases-12',
+  '89-mention-and-tag-name-boundaries',
+  '90-superscript-in-a-table-cell',
+  '91-nested-comment-fences',
+  '92-strong-emphasis-starting-with-a-link',
+  '93-abbreviation-definition-interrupts-a-paragraph',
+  '94-literal-less-than-in-prose',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
@@ -159,7 +138,7 @@ describe('spec corpus', () => {
     const expected = readFileSync(htmlPath, 'utf8')
     const allowlisted = IMPLEMENTED.has(name) || IMPLEMENTED.has(baseSlug(name))
 
-    if (allowlisted && !KNOWN_GAPS.has(name)) {
+    if (allowlisted) {
       it(`${name}`, () => {
         const actual = carveToHtml(source)
         expect(actual.trim()).toBe(expected.trim())
