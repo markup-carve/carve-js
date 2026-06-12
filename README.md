@@ -54,6 +54,30 @@ const doc = resolve(parse(source)) // typed Document AST
 const html = renderHtml(doc)       // same as carveToHtml(source)
 ```
 
+## CLI
+
+The package installs a `carve` binary. Rendering is the default action — it
+reads a file or stdin and writes the rendered output to stdout. HTML is the
+default; pass a format flag for Markdown, plain text, or ANSI:
+
+```bash
+carve README.crv > README.html   # HTML (default)
+carve --markdown README.crv      # Markdown
+carve --plain README.crv         # plain text
+carve --ansi README.crv          # ANSI-colored terminal text
+echo '# Hello' | carve           # render from stdin
+```
+
+`--html` / `--markdown` (`--md`) / `--plain` (`--plain-text`) / `--ansi` select
+the format (the explicit `render` subcommand also works: `carve render --ansi`).
+Two more subcommands round out the tooling:
+
+```bash
+carve fix  file.crv   # auto-fix Djot/Markdown delimiter collisions
+carve lint file.crv   # report collisions + broken </#id> refs, duplicate ids
+carve --help
+```
+
 ## Documentation
 
 - [Extensions](./docs/extensions.md) - opt-in extensions (`tabNormalize`,
@@ -79,7 +103,7 @@ carve-js/
 │   ├── render-ansi.ts      AST → ANSI-styled renderer
 │   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
 │   ├── markdown-migrate.ts Markdown → Carve source transform
-│   ├── cli.ts              `carve` binary (carve fix, carve lint)
+│   ├── cli.ts              `carve` binary (render, fix, lint)
 │   └── index.ts            Public API
 ├── test/                   Vitest suites + the spec corpus runner
 ├── spec/                   git submodule → markup-carve/carve
