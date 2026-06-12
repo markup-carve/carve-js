@@ -117,4 +117,25 @@ describe('block attribute lines (§15)', () => {
       '<ul>\n  <li><p class="x">text</p></li>\n</ul>',
     )
   })
+
+  // A `{...}` line that directly trails paragraph content (no blank line) is a
+  // block-attribute line: it interrupts the paragraph and floats forward like
+  // any other (§15), rather than folding into the paragraph as literal text.
+  it('a trailing block-attribute line interrupts and is dropped when nothing follows', () => {
+    expect(h('Para\n{.class}')).toBe('<p>Para</p>')
+  })
+
+  it('a trailing block-attribute line floats forward to the next block', () => {
+    expect(h('Para\n{.class}\n\nNext')).toBe(
+      '<p>Para</p>\n<p class="class">Next</p>',
+    )
+  })
+
+  it('a trailing block-attribute line after a multi-line paragraph is dropped', () => {
+    expect(h('a\nb\n{.c}')).toBe('<p>a\nb</p>')
+  })
+
+  it('an inline {...} on the same line as content stays literal', () => {
+    expect(h('text {.x} y')).toBe('<p>text {.x} y</p>')
+  })
 })
