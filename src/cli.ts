@@ -21,6 +21,10 @@ import {
   formatMigrationWarnings,
   lintCarve,
   formatLintWarnings,
+  carveToHtml,
+  carveToMarkdown,
+  carveToPlainText,
+  carveToAnsi,
   type MigrationWarning,
 } from './index.js'
 
@@ -41,8 +45,18 @@ export interface CliIO {
 const HELP = `carve - Carve markup tooling
 
 Usage:
+  carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
+
+render - convert Carve source to an output format (reads a file or stdin).
+
+  render options (default --html; choose at most one):
+    --html         HTML (default)
+    --markdown     Markdown
+    --plain        plain text
+    --ansi         ANSI-colored terminal text
+
 
 fix - rewrite Djot/Markdown delimiter collisions to their Carve equivalents,
 constructs that otherwise silently mis-render under Carve (e.g. **bold**
@@ -175,6 +189,75 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
   return 0
 }
 
+const RENDERERS = {
+  html: carveToHtml,
+  markdown: carveToMarkdown,
+  plain: carveToPlainText,
+  ansi: carveToAnsi,
+} as const
+
+async function runRender(args: string[], io: CliIO): Promise<number> {
+  let values: {
+    html?: boolean
+    markdown?: boolean
+    plain?: boolean
+    ansi?: boolean
+    help?: boolean
+  }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        html: { type: 'boolean' },
+        markdown: { type: 'boolean' },
+        plain: { type: 'boolean' },
+        ansi: { type: 'boolean' },
+        help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve render: ${(e as Error).message}\n`)
+    return 2
+  }
+
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const chosen = (['html', 'markdown', 'plain', 'ansi'] as const).filter((f) => values[f])
+  if (chosen.length > 1) {
+    io.writeErr('carve render: choose at most one of --html, --markdown, --plain, --ansi\n')
+    return 2
+  }
+  if (positionals.length > 1) {
+    io.writeErr('carve render: takes a single file (or stdin)\n')
+    return 2
+  }
+  const render = RENDERERS[chosen[0] ?? 'html']
+
+  let src: string
+  if (positionals.length === 0) {
+    src = await io.readStdin()
+  } else {
+    try {
+      src = io.readFile(positionals[0]!)
+    } catch {
+      io.writeErr(`carve render: cannot read ${positionals[0]}\n`)
+      return 2
+    }
+  }
+
+  let out = render(src)
+  if (!out.endsWith('\n')) out += '\n'
+  io.write(out)
+  return 0
+}
+
 /**
  * Dispatch a `carve` invocation. `argv` is the argument list *after* `node`
  * and the script path (i.e. `process.argv.slice(2)`). Returns the intended
@@ -190,6 +273,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
     io.writeErr(HELP)
     return 2
   }
+  if (sub === 'render') return runRender(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   io.writeErr(`carve: unknown command '${sub}'\n\n${HELP}`)
