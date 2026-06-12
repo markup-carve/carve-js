@@ -73,9 +73,11 @@ describe('block attribute lines (§15)', () => {
     )
   })
 
-  it('merges a leading class with the block’s own trailing id', () => {
-    // Leading `.lead` + heading’s own `{#x}`: class on h1, id on section.
-    const html = h('{.lead}\n# H {#x}')
+  it('hoists an explicit id to the section while other attrs stay on the h*', () => {
+    // Strict djot: all heading attributes come from the preceding block-
+    // attribute line. The explicit `#x` hoists to the <section>; the class
+    // stays on the <h1>.
+    const html = h('{.lead #x}\n# H')
     expect(html).toContain('<section id="x">')
     expect(html).toContain('<h1 class="lead">H</h1>')
   })

@@ -114,7 +114,7 @@
         "ansi": "See \u001b[4m\u001b[34mSetup\u001b[0m.\n\n\u001b[1m\u001b[95mSetup\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n"
     },
     "explicit-id-crossref": {
-        "carve": "# Title {#foo}\n\nSee </#foo>.\n",
+        "carve": "{#foo}\n# Title\n\nSee </#foo>.\n",
         "markdown": "# Title {#foo}\n\nSee [Title](#foo).\n",
         "plain": "Title\n\nSee Title.\n",
         "ansi": "\u001b[1m\u001b[95mTitle\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n\nSee \u001b[4m\u001b[34mTitle\u001b[0m.\n"

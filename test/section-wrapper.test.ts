@@ -52,7 +52,9 @@ describe('heading <section> wrapping', () => {
   })
 
   it('puts an explicit {#id} on the section, other attrs on the heading', () => {
-    expect(h('# Title {.large #intro}\n\nP.')).toBe(
+    // Strict djot: heading attributes come from the PRECEDING block-attribute
+    // line; the explicit id still hoists to the <section>, the rest stay on h*.
+    expect(h('{.large #intro}\n# Title\n\nP.')).toBe(
       '<section id="intro">\n  <h1 class="large">Title</h1>\n  <p>P.</p>\n</section>',
     )
   })

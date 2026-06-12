@@ -35,7 +35,7 @@ describe('headingPermalinks extension', () => {
   })
 
   it('keeps other heading attributes on the h* (id stays on the section)', () => {
-    expect(carveToHtml('# Hi {.big}', { extensions: [headingPermalinks()] })).toBe(
+    expect(carveToHtml('{.big}\n# Hi', { extensions: [headingPermalinks()] })).toBe(
       '<section id="hi">\n  <h1 class="big">Hi <a href="#hi" class="permalink" aria-label="Permalink">¶</a></h1>\n</section>',
     )
   })
@@ -49,7 +49,7 @@ describe('headingPermalinks extension', () => {
   it('leaves a heading nested in a container untouched (id stays on the h*)', () => {
     // No section wrapper inside a div, so the id must remain on the heading
     // and no permalink is added (heading renderers apply to section headings).
-    const html = carveToHtml('::::\n# Hi {#x}\n::::', { extensions: [headingPermalinks()] })
+    const html = carveToHtml('::::\n{#x}\n# Hi\n::::', { extensions: [headingPermalinks()] })
     expect(html).toContain('<h1 id="x">Hi</h1>')
     expect(html).not.toContain('permalink')
   })
