@@ -534,6 +534,35 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
  * attribute is not a block-attribute line — it falls through to normal
  * block parsing (literal text). Grammar PART 9 §15.
  */
+/**
+ * Non-consuming check: is the lexer positioned on a standalone block-attribute
+ * line? Mirrors tryCollectBlockAttributes' recognition without consuming, so
+ * startsInterruptingBlock can break an open paragraph on a trailing `{...}`
+ * line (which then floats forward via parseBlocks).
+ */
+function peekBlockAttributes(lexer: Lexer): boolean {
+  if (!/^\s*\{/.test(lexer.peek()!)) return false
+  let collected = ''
+  let n = 0
+  let closed = false
+  for (;;) {
+    const ln = lexer.peek(n)
+    if (ln === undefined) break
+    if (n > 0 && ln.trim() === '') break
+    collected += (n === 0 ? '' : '\n') + ln
+    n++
+    if (ln.includes('}')) {
+      closed = true
+      break
+    }
+  }
+  if (!closed) return false
+  const m = /^\s*\{([\s\S]*)\}\s*$/.exec(collected)
+  if (!m) return false
+  if (!isValidAttrPayload(m[1]!)) return false
+  return !isEmptyAttrs(parseAttrs(m[1]!))
+}
+
 function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
   if (!/^\s*\{/.test(lexer.peek()!)) return null
   let collected = ''
@@ -2068,6 +2097,11 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '%':
       // line or block comment (invisible)
       return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)
+    case '{':
+      // A standalone block-attribute line (invisible): it floats forward to
+      // the next block (or is dropped when none follows, §15), so it must
+      // interrupt the paragraph rather than fold in as literal text.
+      return peekBlockAttributes(lexer)
     default:
       // An ordered-list marker does NOT interrupt a paragraph (it needs a blank
       // line, matching Djot): allowing it would require the CommonMark `1.`-only
