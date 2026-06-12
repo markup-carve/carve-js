@@ -115,6 +115,7 @@ const IMPLEMENTED = new Set([
   '92-strong-emphasis-starting-with-a-link',
   '93-abbreviation-definition-interrupts-a-paragraph',
   '94-literal-less-than-in-prose',
+  '95-boolean-attributes',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
