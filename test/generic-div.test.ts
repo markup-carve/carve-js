@@ -4,26 +4,32 @@ import { carveToHtml } from '../src/index.js'
 const h = (s: string) => carveToHtml(s)
 
 /**
- * Generic divs: a bare `:::` or attributes-only `::: {…}` opens a plain
- * `<div>` (grammar `div` production; PART 9 §12). Crucially, a `:::`
- * only opens a div when a matching closing `:::` exists ahead — a lone,
- * unclosed `:::` is literal text (djot + carve-php + the grammar).
+ * Generic divs: a bare `:::` opens a plain `<div>` (grammar `div`
+ * production; PART 9 §12). The `:::` fence carries NO inline attributes
+ * (strict djot): an `::: {…}` opener is a paragraph, and attributes
+ * attach via a PRECEDING `{…}` block-attribute line. A `:::` only opens a
+ * div when a matching closing `:::` exists ahead; a lone, unclosed `:::`
+ * is literal text (djot + carve-php + the grammar).
  */
 describe('generic divs', () => {
   it('wraps a bare ::: block in a plain <div>', () => {
     expect(h(':::\nx\n:::')).toBe('<div>\n  <p>x</p>\n</div>')
   })
 
-  it('parses an attributes-only ::: opener', () => {
-    expect(h('::: {.x #y}\nz\n:::')).toBe(
+  it('attributes a div via a preceding block-attribute line', () => {
+    expect(h('{.x #y}\n:::\nz\n:::')).toBe(
       '<div class="x" id="y">\n  <p>z</p>\n</div>',
     )
   })
 
-  it('ignores an invalid attribute payload on the opener (no silent partial apply)', () => {
-    // `{.x junk}` is not a valid attribute block, so `.x` is not hoisted
-    // (matching block-attribute lines and grammar §14).
-    expect(h(':::{.x junk}\nz\n:::')).toBe('<div>\n  <p>z</p>\n</div>')
+  it('an inline-attribute opener is not a div (strict djot)', () => {
+    // `::: {…}` / `:::{…}` on the fence line is a paragraph, not a div (its
+    // inline content is then parsed as prose).
+    for (const src of ['::: {.x #y}', ':::{.x junk}']) {
+      const html = h(`${src}\nz\n:::`)
+      expect(html.startsWith('<p>')).toBe(true)
+      expect(html).not.toContain('<div')
+    }
   })
 
   it('does NOT open a div for a stray, unclosed ::: after prose', () => {

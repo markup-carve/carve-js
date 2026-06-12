@@ -22,7 +22,9 @@ describe('::: fence-length nesting', () => {
   })
 
   it('nests a div inside a longer-fenced div', () => {
-    expect(h(':::: {.outer}\n::: {.inner}\nx\n:::\n::::')).toBe(
+    // Attributes via preceding block-attribute lines (strict djot: no
+    // inline attrs on the ::: fence).
+    expect(h('{.outer}\n::::\n{.inner}\n:::\nx\n:::\n::::')).toBe(
       [
         '<div class="outer">',
         '  <div class="inner">',
@@ -35,7 +37,7 @@ describe('::: fence-length nesting', () => {
 
   it('treats a shorter bare closer as content, not a closer', () => {
     // The inner `:::` (len 3) does not close the `::::` (len 4) block.
-    const out = h(':::: {#box}\n::: tip\nuse a longer fence\n:::\n::::')
+    const out = h('{#box}\n::::\n::: tip\nuse a longer fence\n:::\n::::')
     expect(out).toContain('<div id="box">')
     expect(out).toContain('<aside class="admonition tip">')
   })

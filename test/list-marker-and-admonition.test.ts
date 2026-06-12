@@ -96,10 +96,10 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('does not treat unquoted trailing text as a title', () => {
-    expect(h('::: note hello\nBody.\n:::')).toBe(
-      '<aside class="admonition note">\n  <p>Body.</p>\n</aside>',
-    )
+  it('a typed opener followed by an unquoted word is not a fence (strict)', () => {
+    // Only a quoted title may follow the type; any other trailing text
+    // makes the line an ordinary paragraph (strict djot).
+    expect(h('::: note hello\nBody.\n:::')).toBe('<p>::: note hello\nBody.\n:::</p>')
   })
 
   it('renders no title element when the opener has only a type', () => {
@@ -108,37 +108,26 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('applies a trailing attribute block, keeping the quoted title', () => {
-    // `::: note "Heads up" {#x}`: the title survives and the trailing
-    // attribute block attaches to the wrapper (grammar admonition_open
-    // [attributes] slot).
-    expect(h('::: note "Heads up" {#x}\nBody.\n:::')).toBe(
+  it('a trailing attribute block on the opener is not a fence (strict)', () => {
+    // No inline attributes on a ::: fence: the line is a paragraph. Covers
+    // spaced, abutting, and post-title forms.
+    for (const src of [
+      '::: note {.x}',
+      '::: note{.x}',
+      '::: note "Heads up" {#x}',
+      '::: hint {.x}',
+    ]) {
+      const html = h(`${src}\nBody.\n:::`)
+      expect(html.startsWith('<p>')).toBe(true)
+      expect(html).not.toContain('<aside')
+      expect(html).not.toContain('<div')
+    }
+  })
+
+  it('a quoted title still renders, with braces preserved (no attributes)', () => {
+    expect(h('::: note "Use {x}"\nBody.\n:::')).toBe(
       [
-        '<aside class="admonition note" id="x">',
-        '  <p class="admonition-title">Heads up</p>',
-        '  <p>Body.</p>',
-        '</aside>',
-      ].join('\n'),
-    )
-  })
-
-  it('applies a trailing class block on a typed opener', () => {
-    expect(h('::: note {.highlight}\nBody.\n:::')).toBe(
-      '<aside class="admonition note highlight">\n  <p>Body.</p>\n</aside>',
-    )
-  })
-
-  it('applies an attribute block that abuts the type word', () => {
-    // The [attributes] slot needs no leading space: `::: note{.x}`.
-    expect(h('::: note{.highlight}\nBody.\n:::')).toBe(
-      '<aside class="admonition note highlight">\n  <p>Body.</p>\n</aside>',
-    )
-  })
-
-  it('keeps braces inside a quoted title out of the attribute block', () => {
-    expect(h('::: note "Use {x}" {.highlight}\nBody.\n:::')).toBe(
-      [
-        '<aside class="admonition note highlight">',
+        '<aside class="admonition note">',
         '  <p class="admonition-title">Use {x}</p>',
         '  <p>Body.</p>',
         '</aside>',
@@ -146,26 +135,14 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('merges a leading block-attribute line with the opener attributes', () => {
-    // Leading attrs are earlier in source; classes accumulate after the
-    // type class, opener attrs win on id/key conflict (§15).
-    expect(h('{.lead}\n::: note {.x}\nBody.\n:::')).toBe(
-      '<aside class="admonition note lead x">\n  <p>Body.</p>\n</aside>',
+  it('attributes attach via a preceding block-attribute line (strict)', () => {
+    // The only way to attribute an admonition: a {...} line before the
+    // opener (§15). Works for Tier-1 and Tier-2 types.
+    expect(h('{#x .lead}\n::: note\nBody.\n:::')).toBe(
+      '<aside class="admonition note lead" id="x">\n  <p>Body.</p>\n</aside>',
     )
-  })
-
-  it('applies a trailing attribute block on a custom (Tier-2) type', () => {
-    expect(h('::: hint {.x}\nBody.\n:::')).toBe(
-      '<div class="hint x">\n  <p>Body.</p>\n</div>',
-    )
-  })
-
-  it('ignores an invalid trailing attribute block (no silent partial apply)', () => {
-    // `{.x junk}` is not a valid attribute block (a bareword token is not
-    // an id/class/key=value), so it does not hoist `.x` and drop `junk`;
-    // the wrapper carries no extra attributes.
-    expect(h('::: note {.x junk}\nBody.\n:::')).toBe(
-      '<aside class="admonition note">\n  <p>Body.</p>\n</aside>',
+    expect(h('{.lead}\n::: hint\nBody.\n:::')).toBe(
+      '<div class="hint lead">\n  <p>Body.</p>\n</div>',
     )
   })
 
