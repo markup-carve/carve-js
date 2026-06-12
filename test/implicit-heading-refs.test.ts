@@ -29,7 +29,7 @@ describe('implicit heading references ([Heading][])', () => {
   })
 
   it('honors an explicit `{#id}` on the heading', () => {
-    expect(h('# API {#api-v2}\n\nSee [API][].')).toContain(
+    expect(h('{#api-v2}\n# API\n\nSee [API][].')).toContain(
       '<a href="#api-v2">API</a>',
     )
   })
@@ -97,7 +97,7 @@ describe('implicit heading references ([Heading][])', () => {
     // First heading reserves `#api` via explicit id. The second `# API`
     // auto-slugs to `api` -> dedup -> `api-2`. The implicit ref `[API][]`
     // (text "API") should point at the SECOND heading (`#api-2`).
-    expect(h('# Intro {#api}\n\n# API\n\n[API][]')).toContain(
+    expect(h('{#api}\n# Intro\n\n# API\n\n[API][]')).toContain(
       'href="#api-2">API</a>',
     )
   })

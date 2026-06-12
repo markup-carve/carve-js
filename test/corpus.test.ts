@@ -125,6 +125,17 @@ const KNOWN_GAPS = new Set<string>([
   '44-generic-divs',
   '64-attribute-edge-cases-7',
   '88-line-blocks-5',
+  // Trailing `{…}` heading-attribute form. The spec corpus pin still expects
+  // `# Title {.x #id}` (a trailing attribute block) to attribute the heading,
+  // but carve-js now follows strict djot: a heading takes its attributes on a
+  // PRECEDING block-attribute line, and a trailing `{…}` is ordinary inline
+  // text. This mirrors the strict-`:::` divergence above and is pending a spec
+  // corpus follow-up.
+  '02-headings-3',
+  '17-attributes',
+  '19-heading-ids',
+  '64-attribute-edge-cases-6',
+  '64-attribute-edge-cases-12',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')

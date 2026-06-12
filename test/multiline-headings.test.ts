@@ -40,8 +40,11 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('a trailing attribute block on the last line applies to the heading', () => {
-    expect(html('# Title\nmore {#id}')).toBe(
+  it('a preceding block-attribute line applies to the whole multi-line heading', () => {
+    // Strict djot: heading attributes come from the PRECEDING block-attribute
+    // line, not a trailing `{…}` on the last line. The id covers the folded
+    // multi-line heading.
+    expect(html('{#id}\n# Title\nmore')).toBe(
       '<section id="id">\n  <h1>Title\nmore</h1>\n</section>',
     )
   })
