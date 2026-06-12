@@ -70,4 +70,12 @@ describe('generic divs', () => {
       '<div class="line-block">\n  <p>flush\nindented</p>\n</div>',
     )
   })
+
+  it('accepts a type word that starts with an underscore', () => {
+    // The type word is a grammar identifier (letter | underscore first),
+    // matching carve-php / carve-rs.
+    expect(h('::: _box\nz\n:::')).toBe(
+      '<div class="_box">\n  <p>z</p>\n</div>',
+    )
+  })
 })
