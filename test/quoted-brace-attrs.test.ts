@@ -27,8 +27,10 @@ describe('} inside a quoted attribute value', () => {
     expect(h('# H {k="{y}"}')).toBe('<section id="h">\n  <h1 k="{y}">H</h1>\n</section>')
   })
 
-  it('generic div', () => {
-    expect(h(':::{k="{y}"}\nbody\n:::')).toBe('<div k="{y}">\n  <p>body</p>\n</div>')
+  it('generic div (attrs via preceding line)', () => {
+    // Strict djot: no inline attrs on the ::: fence; a brace inside a
+    // quoted value on the preceding block-attribute line is preserved.
+    expect(h('{k="{y}"}\n:::\nbody\n:::')).toBe('<div k="{y}">\n  <p>body</p>\n</div>')
   })
 
   it('reference link', () => {
