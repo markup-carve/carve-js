@@ -130,7 +130,10 @@ const RE_BLOCKQUOTE = /^>\s?(.*)$/
 // trailing `{...}` (or other non-title text) makes it not a fence, so the
 // line is an ordinary paragraph. Attributes attach via a PRECEDING `{...}`
 // block-attribute line.
-const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z][\w-]*)\s*("[^"]*")?\s*$/
+// The type word is a grammar `identifier`: `(letter | '_'), {letter | digit
+// | '_' | '-'}`, so it may start with an underscore (matches carve-php /
+// carve-rs).
+const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z_][\w-]*)\s*("[^"]*")?\s*$/
 const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
 // `::: line-block` keyword is no longer special -- it falls through to the
