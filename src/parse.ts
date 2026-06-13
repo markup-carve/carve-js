@@ -2338,8 +2338,12 @@ const FORCED_TYPE: Record<string, Emphasis['type']> = {
 }
 // Names can include version-style dots between alnum runs (e.g. `#release-1.0`)
 // but a trailing period is treated as sentence punctuation, not part of the name.
-const RE_MENTION = /^@([a-zA-Z][\w-]*(?:\.\w+)*)/
-const RE_TAG = /^#([\w][\w-]*(?:\.\w+)*)/
+// Mention / tag name = name_word ('.' name_word)*, name_word = (letter | digit
+// | '_' | '-')+ (grammar PART 9 §7). Interior dots only (a trailing dot stays
+// punctuation — the non-greedy dotted-segment match leaves it); each segment
+// allows digits, `_` and `-` in any position. Matches carve-php / carve-rs.
+const RE_MENTION = /^@([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
+const RE_TAG = /^#([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 
 // Fixed multi-character smart-typography tokens, longest first so
 // `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
