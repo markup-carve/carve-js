@@ -48,9 +48,16 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     )
   })
 
-  it('does not pull a non-`>` line into a just-opened div', () => {
+  it('keeps an unterminated `:::note` inside a quote literal (no closer in scope)', () => {
+    // The quote's own content is just `:::note`; its `:::` closer sits on a
+    // separately-marked line that lazy continuation does not fold in, so there
+    // is no closer in scope and the opener is NOT an admonition (grammar:
+    // `admonition = open … close`). It stays a literal paragraph rather than
+    // opening an empty aside. (Deeply underspecified blockquote corner;
+    // carve-php/carve-rs still open an empty aside here — tracked for a spec
+    // decision + alignment.)
     expect(html('> :::note\nbody\n> :::')).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>body</p>\n<blockquote><p>:::</p></blockquote>',
+      '<blockquote><p>:::note</p></blockquote>\n<p>body</p>\n<blockquote><p>:::</p></blockquote>',
     )
   })
 

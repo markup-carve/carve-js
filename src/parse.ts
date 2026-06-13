@@ -226,6 +226,13 @@ class Lexer {
   // keeping pathological "many unclosed `:::`" input linear.
   divNoCloserFrom = Infinity
 
+  // Negative cache for divHasCloser keyed by fence length: fenceLen → smallest
+  // line index from which no bare closer of >= that length exists onward. Keeps
+  // "many `:::: word` openers + one too-short closer" input linear instead of
+  // O(n²) (the any-length cache above never trips when a too-short closer is
+  // present). pos only advances, so the stored start is a monotone frontier.
+  divNoCloserOfLenFrom = new Map<number, number>()
+
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead): the smallest line index from which NO bare fence-closer
   // line exists onward. Once proven, every later fence opener (pos only
@@ -640,7 +647,15 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     return { type: 'comment', block: false, content: l.slice(2).replace(/^\s/, '') }
   }
   if (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) return parseLineBlock(lexer)
-  if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
+  // A typed `::: word` admonition, like a bare `:::` div, opens ONLY when a
+  // matching closer exists ahead (PART 9 §12 / grammar: `admonition = open …
+  // close`). Without this guard an unterminated `::: note` swallows the rest
+  // of the document into an aside.
+  if (
+    RE_ADMONITION_OPEN.test(line) &&
+    !RE_ADMONITION_CLOSE.test(line) &&
+    divHasCloser(lexer)
+  )
     return parseAdmonition(lexer)
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
   // admonition branch above already claimed the `::: word` form) — but
@@ -1043,12 +1058,17 @@ function expandLineBlockLeadingWhitespace(line: string): string {
  * grammar: a div requires a closer).
  */
 function divHasCloser(lexer: Lexer): boolean {
-  // A bare-`:::`+ div opens only when a bare closer of equal-or-greater
-  // colon length exists ahead (otherwise a lone `:::` is literal — and a
-  // longer fence must be matched by a longer closer).
+  // A bare-`:::`+ div (or typed `::: word` admonition) opens only when a bare
+  // closer of equal-or-greater colon length exists ahead (otherwise the opener
+  // is literal — and a longer fence must be matched by a longer closer).
   const start = lexer.pos + 1
-  if (start >= lexer.divNoCloserFrom) return false // memo: no closer ahead
+  if (start >= lexer.divNoCloserFrom) return false // memo: no closer at all ahead
   const fence = /^(:{3,})/.exec(lexer.peek()!)![1]!.length
+  // memo: no closer of >= this fence length from here on. Without this, input
+  // like thousands of `:::: word` openers followed by a single too-short `:::`
+  // rescans to EOF for every opener (the "no closer at all" cache never trips
+  // because a closer *is* seen, just too short) → O(n²).
+  if (start >= (lexer.divNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
   let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
     const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
@@ -1057,8 +1077,11 @@ function divHasCloser(lexer: Lexer): boolean {
       if (c[1]!.length >= fence) return true
     }
   }
-  // No closer of length >= fence ahead. If there is NO bare closer at all
-  // from here on, cache it (pos only advances) so later openers are O(1).
+  // No closer of length >= fence ahead. Cache it per fence length (pos only
+  // advances, so the smallest such start is a monotone frontier); also cache
+  // the stronger "no bare closer at all" when that holds.
+  const prev = lexer.divNoCloserOfLenFrom.get(fence) ?? Infinity
+  if (start < prev) lexer.divNoCloserOfLenFrom.set(fence, start)
   if (!sawAnyCloser) lexer.divNoCloserFrom = start
   return false
 }
@@ -1474,7 +1497,12 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_RAW_FENCE.test(line) ||
     RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
-    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
+    // A typed admonition ends the list only when it actually opens one — i.e.
+    // a closer exists ahead (same guard as the block dispatch + the bare div).
+    // An unterminated `::: note` is not a block, so it folds as lazy text.
+    (RE_ADMONITION_OPEN.test(line) &&
+      !RE_ADMONITION_CLOSE.test(line) &&
+      divHasCloser(lexer)) ||
     (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
     (RE_LINE_BLOCK_OPEN.test(line) && divHasCloser(lexer)) ||
     RE_ABBR_DEF.test(line) ||
@@ -2415,11 +2443,37 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
   }
 }
 
+// Inline recursion depth, bounding the same nesting the block side caps with
+// MAX_NESTING_DEPTH. scanInline recurses one frame per nested link / span /
+// emphasis / critic level; without a cap a deeply nested run (e.g.
+// `[[[[…x]]]]`) overflows the call stack and throws RangeError. JS is
+// single-threaded, so a module-level counter with try/finally is sufficient
+// (and far less invasive than threading a depth arg through every recursive
+// call site). Over the cap the run stays literal text instead of recursing.
+let inlineDepth = 0
+
 function scanInline(
   text: string,
   source: InlineSource = inlineSource(),
   inFootnote = false,
   captionContext = false,
+): InlineNode[] {
+  if (inlineDepth >= MAX_NESTING_DEPTH) {
+    return [withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
+  }
+  inlineDepth++
+  try {
+    return scanInlineInner(text, source, inFootnote, captionContext)
+  } finally {
+    inlineDepth--
+  }
+}
+
+function scanInlineInner(
+  text: string,
+  source: InlineSource,
+  inFootnote: boolean,
+  captionContext: boolean,
 ): InlineNode[] {
   const out: InlineNode[] = []
   let i = 0
