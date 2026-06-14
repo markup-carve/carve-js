@@ -2114,9 +2114,10 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '_':
       return RE_HR.test(ln.trim())
     case ':':
-      // definition-list term, or an admonition/div/line-block that has a `:::`
-      // closer ahead (the `::: |` line-block shares the bare `:::` closer)
-      if (RE_DEFLIST_TERM.test(ln)) return true
+      // An admonition/div/line-block that has a `:::` closer ahead (the `::: |`
+      // line-block shares the bare `:::` closer). A definition-list term (`::`)
+      // is NOT in the §10 interrupter set (like an ordered list), so it does
+      // not interrupt a paragraph or heading -- it folds as lazy text.
       if (
         (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
         RE_DIV_OPEN.test(ln) ||
