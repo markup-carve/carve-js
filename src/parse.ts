@@ -167,6 +167,12 @@ const RE_LINK_DEF =
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
 const RE_CAPTION = /^\^\s+(.+)$/
 const RE_TABLE_ROW = /^\|/
+// A complete standard table row opens AND closes with `|` (grammar
+// standard_row). A stray leading `|` with no closing `|` (`| a`) is ordinary
+// paragraph text, not a table -- so a table opener / interrupter must have the
+// trailing pipe, not just a leading one.
+const isTableRow = (line: string): boolean =>
+  RE_TABLE_ROW.test(line) && /\|\s*$/.test(line)
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed
@@ -693,7 +699,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     extractItemAttr(line) !== null
   )
     return parseList(lexer)
-  if (RE_TABLE_ROW.test(line)) return parseTable(lexer)
+  if (isTableRow(line)) return parseTable(lexer)
   if (isBlockImageLine(line)) return parseBlockImage(lexer)
   // Extension block matchers run after every core construct, before the
   // paragraph fallback: extensions add syntax, they never hijack core.
@@ -1488,7 +1494,7 @@ function lineOpensBlock(line: string): boolean {
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
     extractItemAttr(line) !== null ||
-    RE_TABLE_ROW.test(line) ||
+    isTableRow(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     RE_DIV_OPEN.test(line) ||
     RE_LINE_BLOCK_OPEN.test(line)
@@ -1519,7 +1525,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
     extractItemAttr(line) !== null ||
-    RE_TABLE_ROW.test(line) ||
+    isTableRow(line) ||
     isBlockImageLine(line)
   )
 }
@@ -2078,7 +2084,7 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       return RE_BLOCKQUOTE.test(ln)
     case '|':
       // A valid `|…|` row (a stray leading `|` in prose is not a row).
-      return RE_TABLE_ROW.test(ln) && /\|\s*$/.test(ln)
+      return isTableRow(ln)
     case '`':
     case '~':
       // Raw passthrough / fenced code: interrupt only with a matching closer.
