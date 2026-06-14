@@ -126,7 +126,9 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
       // The id moves to <section>; any other heading attrs (classes,
       // key-values) stay on the <h*>.
       const id = node.attrs?.id
-      const sectionId = id ? ` id="${escapeAttr(id)}"` : ''
+      // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
+      // <section> (it already suppressed the auto-slug in resolveHeadingIds).
+      const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
       out.push(`${indent(depth)}<section${sectionId}>`)
       sectionStack.push(node.level)
       // An extension may render the <h*> element itself (e.g. heading
