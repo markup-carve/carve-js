@@ -88,6 +88,10 @@ describe('glued cell attributes', () => {
     expect(td('| {.x} hi | b |\n|---|---|\n| c | d |'))
       .toBe('  <thead><tr><th>{.x} hi</th><th>b</th></tr></thead>')
   })
+  it('a partially-invalid attribute payload stays literal', () => {
+    expect(td('|{.x 1bad} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th>{.x 1bad} hi</th><th>b</th></tr></thead>')
+  })
   it('an attributed cell is not a bare span marker (content stays literal)', () => {
     expect(td('|{.x} < | b |\n|---|---|\n| c | d |'))
       .toBe('  <thead><tr><th class="x">&lt;</th><th>b</th></tr></thead>')

@@ -1884,7 +1884,10 @@ function parseCellMarkers(src: string): {
   // attribute payload leaves the `{` as ordinary content.
   if (src[0] === '{') {
     const m = /^\{([^}\n]*)\}/.exec(src)
-    if (m) {
+    // The WHOLE payload must be valid attribute syntax (same as inline / block
+    // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
+    // attribute block, so the `{` stays ordinary content.
+    if (m && isValidAttrPayload(m[1]!)) {
       const attrs = parseAttrs(m[1]!)
       if (!isEmptyAttrs(attrs)) {
         return { header: false, attrs, content: src.slice(m[0].length).trim() }
