@@ -2277,7 +2277,7 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // `}` is the first one outside quotes (djot "don't mind braces in quotes").
 // RE_SPAN_TAIL's body is `*` so an empty `{}` matches; isValidAttrPayload then
 // decides span (valid block, possibly empty) vs literal (invalid content).
-const RE_LINK_TAIL = /^\(([^)\s]*)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_LINK_TAIL = /^\(([^)\s]*)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
@@ -2681,7 +2681,7 @@ function scanInlineInner(
           flush()
           const img: Image = { type: 'image', src: ml[1]!, alt: rest.slice(2, close) }
           const title = ml[2] ?? ml[3]
-          if (title) img.title = title
+          if (title) img.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
             const a = parseAttrs(ml[4])
@@ -2736,7 +2736,7 @@ function scanInlineInner(
             children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
           }
           const title = ml[2] ?? ml[3]
-          if (title) link.title = title
+          if (title) link.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
             const a = parseAttrs(ml[4])

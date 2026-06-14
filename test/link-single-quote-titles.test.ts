@@ -37,4 +37,12 @@ describe('single-quote link/image titles', () => {
   it('escapes a literal apostrophe in an attribute value (matches djot + carve-php)', () => {
     expect(h('[t](/u "it\'s")')).toContain('title="it&apos;s"')
   })
+
+  it('accepts an escaped quote inside a double-quoted title (matches carve-php)', () => {
+    expect(h('[t](u "a \\"b\\" c")')).toBe('<p><a href="u" title="a &quot;b&quot; c">t</a></p>')
+  })
+
+  it('accepts an escaped quote inside an image title', () => {
+    expect(h('![a](i "t\\"i")')).toBe('<p><img src="i" alt="a" title="t&quot;i"></p>')
+  })
 })
