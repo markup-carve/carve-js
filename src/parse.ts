@@ -86,12 +86,14 @@ const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:
 const RE_HR = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 // Info string is a single language token, optionally followed by a bracketed
 // `[label]` (structured metadata; e.g. ```php [NPM] or ```[NPM]). The charset
-// covers real-world tags with punctuation (c++, c#, f#, asp.net). Anything else
-// after the token -- a bare second word, a quoted value, `key=val` -- is NOT a
-// fence (e.g. `js title="x"`): the bracket is the only allowed delimiter, so
-// such a line falls back to inline parsing.
+// covers real-world tags with punctuation (c++, c#, f#, asp.net, text/html).
+// Anything else after the token -- a bare second word, a quoted value,
+// `key=val` -- is NOT a fence (e.g. `js title="x"`): the bracket is the only
+// allowed delimiter, so such a line falls back to inline parsing. An info
+// string of the form `=FORMAT` is a raw passthrough block (RE_RAW_FENCE),
+// matched before this; a leading `=` therefore never starts a language token.
 const RE_FENCE =
-  /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*(\[[^\]]*\])?\s*$/
+  /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#/.-]*)\s*(\[[^\]]*\])?\s*$/
 // Bullets are `-` and `*` only. Unlike Markdown/djot, `+` is not a Carve bullet
 // -- it is reserved as the list-continuation marker (PART 9 §17), so a lone `+`
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
@@ -187,10 +189,12 @@ const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)
 const RE_FRONTMATTER_OPEN = /^---[ \t]*(\w*)\s*$/
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = /^---\s*$/
-// Raw passthrough block: ```raw FORMAT … ``` (§4.15). The info string has
-// two tokens ("raw FORMAT"), so this never collides with RE_FENCE (which
-// allows only a single info token).
-const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*raw\s+([a-zA-Z][\w-]*)\s*$/
+// Raw passthrough block: ```=FORMAT … ``` (§4.15, djot raw-block syntax). The
+// info string is `=FORMAT` (a leading `=` immediately followed by the format
+// name), so this never collides with RE_FENCE (whose language charset excludes
+// `=`). The `=` is the block parallel of the inline raw `{=format}` attribute.
+// FORMAT must follow `=` with no intervening space (```= html is not raw).
+const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*=([a-zA-Z][\w-]*)\s*$/
 // Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
 // by length); a `%%` line is a line comment. Neither is rendered.
 const RE_COMMENT_BLOCK = /^%{3,}\s*$/
@@ -876,7 +880,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
   return cb
 }
 
-// Raw passthrough block: ```raw FORMAT … ``` . Content is verbatim; the
+// Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
 // renderer emits it only when FORMAT matches the output (html).
 function parseRawBlock(lexer: Lexer): RawBlock {
   const m = RE_RAW_FENCE.exec(lexer.consume())!
