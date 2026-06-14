@@ -1,14 +1,25 @@
 /*
- * Semantic lint for Carve documents.
+ * Lint for silent-failure problems in Carve documents.
  *
  * djotMigrationWarnings (djot-migrate.ts) catches *source-level* delimiter
- * collisions. This module catches *semantic* problems that need the parsed
- * tree: references that silently degrade to literal text at resolve() time.
+ * collisions. This module catches markup that parses without error but
+ * renders as the wrong thing, so nothing throws:
  *
- * The checks run on parse() output and mirror resolveHeadingIds so they agree
- * with what the resolver actually does - they do not re-run resolve (which
- * would discard the very nodes we want to flag by turning a broken crossref
- * or unresolved ref into a Text node).
+ *   - references that degrade to literal text at resolve() time: broken
+ *     `</#id>` cross-references and duplicate heading ids;
+ *   - a trailing `{…}` on a heading, which is literal text under
+ *     heading-strict, not an attribute block;
+ *   - a ```raw FORMAT fence (the Carve raw block is ```=FORMAT; the wrong
+ *     form fails to open and desyncs the rest of the document's fences);
+ *   - a line that begins with a block marker (`:::`, `{#`, `{.`) yet parsed
+ *     as a paragraph because the block never opened.
+ *
+ * The id/crossref checks mirror resolveHeadingIds so they agree with what the
+ * resolver actually does - they do not re-run resolve (which would discard the
+ * very nodes we want to flag by turning a broken crossref or unresolved ref
+ * into a Text node). The remaining checks read the source line at each node's
+ * position and skip verbatim regions (code/raw blocks) the parser already
+ * accounts for.
  */
 import { parse } from './parse.js'
 import { slugify, inlineText } from './heading-ids.js'
@@ -75,8 +86,9 @@ function collectCrossrefs(doc: Document): Array<{ target: string; node: Position
 }
 
 /**
- * Lint a Carve document for semantic problems that render as literal text:
- * duplicate heading ids and `</#id>` cross-references with no target.
+ * Lint a Carve document for silent-failure problems: duplicate heading ids,
+ * `</#id>` cross-references with no target, trailing heading attribute blocks,
+ * legacy `raw FORMAT` fences, and block markers that leaked as paragraph text.
  *
  * `asciiHeadingIds` must match the value passed to `resolve()`, since it
  * changes how heading slugs (and therefore the valid id set) are computed.
@@ -138,8 +150,132 @@ export function lintCarve(
     })
   }
 
+  collectSilentFailures(source, doc, out)
+
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
+}
+
+/** A trailing `{.class}` / `{#id}` attribute block at the end of a line. The
+ *  leading `(^|\s)` keeps a valid inline span like `[t]{.c}` (brace abuts `]`,
+ *  no space) from matching. */
+const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
+/** A fenced block whose info string is the legacy `raw FORMAT` form. */
+const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
+/** A line that opens like a block construct (`:::`, `{#`, `{.`). */
+const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
+
+/**
+ * Source-line checks for constructs that parsed into the wrong node. Each is
+ * anchored to a parsed node so verbatim regions (code/raw blocks) are skipped
+ * automatically: only real headings/paragraphs are inspected, and the
+ * raw-fence scan ignores lines inside a code/raw block.
+ */
+function collectSilentFailures(source: string, doc: Document, out: LintWarning[]): void {
+  const lines = source.split('\n')
+  const lineStart: number[] = []
+  for (let off = 0, i = 0; i < lines.length; i++) {
+    lineStart[i] = off
+    off += lines[i]!.length + 1
+  }
+  const push = (lineNo: number, col: number, len: number, rule: string, message: string): void => {
+    const start = (lineStart[lineNo - 1] ?? 0) + (col - 1)
+    out.push({ line: lineNo, column: col, rule, message, start, end: start + len })
+  }
+
+  const verbatim: Array<[number, number]> = []
+  const headings: Positioned[] = []
+  const paragraphs: Positioned[] = []
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    const pos = (node as Positioned).pos
+    const endLine = (pos as { endLine?: number } | undefined)?.endLine
+    if (node.type === 'heading') headings.push(node as Positioned)
+    else if (node.type === 'paragraph') paragraphs.push(node as Positioned)
+    else if ((node.type === 'code-block' || node.type === 'raw-block') && pos) {
+      verbatim.push([pos.startLine, endLine ?? pos.startLine])
+    } else if (node.type === 'figure' && pos) {
+      // A captioned code/raw block is a figure wrapping a *position-less*
+      // code-block target, so the block itself never reaches the branch above.
+      // Use the figure's range so the fence scan still skips its verbatim body.
+      const target = (node.target as { type?: string } | undefined)?.type
+      if (target === 'code-block' || target === 'raw-block') {
+        verbatim.push([pos.startLine, endLine ?? pos.startLine])
+      }
+    }
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'attrs') walk(node[key])
+    }
+  }
+  walk(doc.children)
+
+  // 1. Trailing attribute block on a heading: literal text, not attributes.
+  for (const h of headings) {
+    const ln = (h.pos as { endLine?: number } | undefined)?.endLine ?? h.pos?.startLine
+    if (!ln) continue
+    const line = lines[ln - 1] ?? ''
+    // Guard against position drift: only flag if this really is a heading line.
+    if (!/^\s*#{1,6}\s/.test(line)) continue
+    const m = TRAILING_HEADING_ATTR.exec(line)
+    if (!m) continue
+    const col = m.index + m[1]!.length + 1
+    push(
+      ln,
+      col,
+      m[2]!.length,
+      'heading-trailing-attribute',
+      `Trailing "${m[2]}" on a heading is literal text in Carve, not an attribute block. ` +
+        `Move it to a "${m[2]}" line directly above the heading.`,
+    )
+  }
+
+  // 2. Legacy `raw FORMAT` fence: never opens, and desyncs later fences.
+  const inVerbatim = (ln: number): boolean => verbatim.some(([s, e]) => ln >= s && ln <= e)
+  for (let i = 0; i < lines.length; i++) {
+    if (inVerbatim(i + 1)) continue
+    const m = LEGACY_RAW_FENCE.exec(lines[i]!)
+    if (!m) continue
+    push(
+      i + 1,
+      m[1]!.length + 1,
+      lines[i]!.length - m[1]!.length,
+      'raw-block-syntax',
+      `"${m[2]}raw ${m[3]}" is not a Carve raw block; it fails to open and desyncs the ` +
+        `document's fences. Use "${m[2]}=${m[3]}" to pass content through to ${m[3]}.`,
+    )
+  }
+
+  // 3. A paragraph whose first inline text opens like a block construct: the
+  //    block never opened, so the marker leaked as plain text. Gating on the
+  //    text content (not the source line) avoids a false positive when a valid
+  //    container's child paragraph reports its parent's start line.
+  for (const p of paragraphs) {
+    const first = (p as { children?: unknown[] }).children?.[0] as
+      | { type?: string; value?: string }
+      | undefined
+    if (first?.type !== 'text' || typeof first.value !== 'string') continue
+    const m = LEAKED_BLOCK_MARKER.exec(first.value)
+    if (!m) continue
+    const loc = locate(first as Positioned)
+    const what = m[2]!.startsWith(':')
+      ? `an admonition/div fence ("${m[2]}")`
+      : `a block-attribute line ("${m[2]}…")`
+    out.push({
+      line: loc.line,
+      column: loc.column,
+      rule: 'block-marker-as-text',
+      message:
+        `This line begins like ${what} but parsed as plain text - the block did not open. ` +
+        `Check this line's syntax and any unterminated fence above it.`,
+      start: loc.start,
+      end: loc.start + m[2]!.length,
+    })
+  }
 }
 
 /** Format lint warnings as `file:line:col rule — message`. */

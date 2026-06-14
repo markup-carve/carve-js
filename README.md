@@ -74,9 +74,17 @@ Two more subcommands round out the tooling:
 
 ```bash
 carve fix  file.crv   # auto-fix Djot/Markdown delimiter collisions
-carve lint file.crv   # report collisions + broken </#id> refs, duplicate ids
+carve lint file.crv   # validate: collisions + silent-failure problems
 carve --help
 ```
+
+`carve lint` is a validator for problems that *parse* but render as the wrong
+thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
+ids, a trailing `{…}` on a heading (literal text, not an attribute block), a
+legacy `` ```raw FORMAT `` fence (use `` ```=FORMAT ``), and a line that opens
+like a block (`:::`, `{#`) but parsed as plain text. It exits non-zero when it
+reports anything, so it works as a CI gate. The same checks surface live in
+editors through [carve-lsp](https://github.com/markup-carve/carve-lsp).
 
 ## Documentation
 

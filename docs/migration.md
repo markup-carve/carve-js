@@ -77,8 +77,8 @@ manual-review collisions, so it drops into a pre-commit hook or CI step.
 ## Linting
 
 `djotMigrationWarnings` catches *source-level* delimiter collisions;
-`lintCarve` catches *semantic* problems that need the parsed tree - references
-that silently degrade to literal text when the document resolves:
+`lintCarve` catches *silent-failure* problems - markup that parses without
+error but renders as the wrong thing, so nothing throws:
 
 ```ts
 import { lintCarve } from '@markup-carve/carve'
@@ -94,9 +94,12 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | ---- | ------- |
 | `duplicate-heading-id` | two headings producing the same id (slug collision or repeated explicit `{#id}`); ambiguous references resolve to the first |
 | `broken-crossref` | a `</#id>` cross-reference with no matching heading; it renders as literal text |
+| `heading-trailing-attribute` | a trailing `{#id}` / `{.class}` on a heading line; under heading-strict this is literal text, so the attributes never attach (put them on a `{…}` line *above* the heading) |
+| `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
+| `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
 
-The `carve lint` CLI reports both the collision warnings and these semantic
-ones as `file:line:col rule - message`, and exits non-zero if anything is
+The `carve lint` CLI reports both the collision warnings and these lint
+findings as `file:line:col rule - message`, and exits non-zero if anything is
 found:
 
 ```sh
