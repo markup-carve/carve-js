@@ -708,6 +708,26 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   return lines.join('\n')
 }
 
+/**
+ * Drop author cell attributes that collide with a structural attribute this
+ * renderer ACTUALLY emits for the cell (a computed `rowspan` / `colspan` /
+ * `style` from `^`/`<` markers or column alignment) -- the computed value is
+ * authoritative, so an author copy would duplicate it. Comparison is
+ * case-insensitive (HTML attribute names are). When no structural attribute is
+ * emitted, the author's value (e.g. a custom `style`) is preserved.
+ */
+function stripStructuralAttrs(attrs: Attrs | undefined, emitted: Set<string>): Attrs | undefined {
+  if (!attrs?.keyValues || emitted.size === 0) return attrs
+  const collides = (k: string): boolean => emitted.has(k.toLowerCase())
+  if (!Object.keys(attrs.keyValues).some(collides)) return attrs
+  const keyValues = Object.fromEntries(
+    Object.entries(attrs.keyValues).filter(([k]) => !collides(k)),
+  )
+  const out: Attrs = { ...attrs, keyValues }
+  if (attrs.order) out.order = attrs.order.filter((s) => !collides(s))
+  return out
+}
+
 function renderTableRowFlat(
   cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
   opts: RenderOptions,
@@ -717,10 +737,25 @@ function renderTableRowFlat(
     if (entry.skip) continue
     const tag = entry.cell.header ? 'th' : 'td'
     const attrs: string[] = []
-    if (entry.rowspan > 1) attrs.push(`rowspan="${entry.rowspan}"`)
-    if (entry.colspan > 1) attrs.push(`colspan="${entry.colspan}"`)
-    if (entry.align) attrs.push(`style="text-align: ${entry.align};"`)
-    const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+    const emitted = new Set<string>()
+    if (entry.rowspan > 1) {
+      attrs.push(`rowspan="${entry.rowspan}"`)
+      emitted.add('rowspan')
+    }
+    if (entry.colspan > 1) {
+      attrs.push(`colspan="${entry.colspan}"`)
+      emitted.add('colspan')
+    }
+    if (entry.align) {
+      attrs.push(`style="text-align: ${entry.align};"`)
+      emitted.add('style')
+    }
+    // Author cell attributes (a `{...}` glued to the opening pipe) come first,
+    // then the structural span / alignment attributes; any author copy of a
+    // structural key actually emitted here is dropped to avoid a duplicate.
+    const attrStr =
+      renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
+      (attrs.length ? ' ' + attrs.join(' ') : '')
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
   }
   parts.push('</tr>')
