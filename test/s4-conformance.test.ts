@@ -88,6 +88,16 @@ describe('glued cell attributes', () => {
     expect(td('| {.x} hi | b |\n|---|---|\n| c | d |'))
       .toBe('  <thead><tr><th>{.x} hi</th><th>b</th></tr></thead>')
   })
+  it('computed span wins over an author-supplied rowspan (no duplicate attr)', () => {
+    const html = carveToHtml('|{rowspan=9} a | b |\n|---|---|\n| ^ | d |')
+    expect(html).toContain('<th rowspan="2">a</th>')
+    expect(html).not.toContain('rowspan="9"')
+  })
+  it('an attributed dash row is not a GFM header delimiter', () => {
+    const html = carveToHtml('| h | i |\n|{.x} --- | --- |\n| c | d |')
+    expect(html).not.toContain('<thead>')
+    expect(html).toContain('class="x"')
+  })
   it('handles a quoted brace in a cell attribute value', () => {
     expect(td('|{key="{y}"} hi | b |\n|---|---|\n| c | d |'))
       .toBe('  <thead><tr><th key="{y}">hi</th><th>b</th></tr></thead>')

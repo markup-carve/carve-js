@@ -1988,8 +1988,10 @@ function parseTable(lexer: Lexer): Table | Figure {
   // colons set per-column alignment for the whole column. The delimiter row is
   // dropped. This is in addition to Carve's tight per-cell markers `|=`/`|<`; a
   // delimiter row anywhere else is an ordinary data row.
+  // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
+  // structural delimiter, so it never makes its row a GFM header separator.
   const isDelimCell = (c: RawCell): boolean =>
-    !c.span && /^:?-+:?$/.test(c.raw.trim())
+    !c.span && !c.attrs && /^:?-+:?$/.test(c.raw.trim())
   if (
     rawRows.length >= 2 &&
     rawRows[1]!.length > 0 &&

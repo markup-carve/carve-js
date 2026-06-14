@@ -708,6 +708,23 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   return lines.join('\n')
 }
 
+/**
+ * Drop the structural keys (`rowspan` / `colspan` / `style`) from author cell
+ * attributes; those are computed from `^`/`<` markers and column alignment and
+ * are emitted separately, so an author-supplied copy would duplicate them.
+ */
+function stripStructuralAttrs(attrs?: Attrs): Attrs | undefined {
+  if (!attrs?.keyValues) return attrs
+  const drop = new Set(['rowspan', 'colspan', 'style'])
+  if (!Object.keys(attrs.keyValues).some((k) => drop.has(k))) return attrs
+  const keyValues = Object.fromEntries(
+    Object.entries(attrs.keyValues).filter(([k]) => !drop.has(k)),
+  )
+  const out: Attrs = { ...attrs, keyValues }
+  if (attrs.order) out.order = attrs.order.filter((s) => !drop.has(s))
+  return out
+}
+
 function renderTableRowFlat(
   cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
   opts: RenderOptions,
@@ -721,9 +738,12 @@ function renderTableRowFlat(
     if (entry.colspan > 1) attrs.push(`colspan="${entry.colspan}"`)
     if (entry.align) attrs.push(`style="text-align: ${entry.align};"`)
     // Author cell attributes (a `{...}` glued to the opening pipe) come first,
-    // then the structural span / alignment attributes.
+    // then the structural span / alignment attributes. The structural keys
+    // (`rowspan` / `colspan` / `style`) are computed here and are authoritative,
+    // so drop any author-supplied copies to avoid a duplicate HTML attribute.
     const attrStr =
-      renderAttrs(entry.cell.attrs) + (attrs.length ? ' ' + attrs.join(' ') : '')
+      renderAttrs(stripStructuralAttrs(entry.cell.attrs)) +
+      (attrs.length ? ' ' + attrs.join(' ') : '')
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
   }
   parts.push('</tr>')
