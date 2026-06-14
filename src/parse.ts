@@ -778,11 +778,12 @@ function parseHeading(lexer: Lexer): Heading {
   const m = RE_HEADING.exec(line)!
   const level = m[1]!.length as HeadingLevel
 
-  // Carve headings are multi-line, like Djot (and like blockquotes): the text
-  // spills onto following lines until a blank line. A continuation line may
-  // carry the same-or-lower number of `#` (stripped) or none; a higher/other
-  // heading marker starts a NEW heading, and a caption (`^ …`) or fenced
-  // comment (`%%%`) ends the heading. Per §10 no other block interrupts it.
+  // Carve headings are multi-line: the text spills onto following lines until a
+  // blank line. A continuation line may carry the same-or-lower number of `#`
+  // (stripped) or none; a higher/other heading marker starts a NEW heading, and
+  // a caption (`^ …`) or fenced comment (`%%%`) ends the heading. A block-opener
+  // (list/quote/table/fence/div/thematic break) ALSO ends it and starts that
+  // block, exactly as it interrupts a paragraph (§10) -- only plain text folds.
   let text = line.replace(/^#{1,6}[ \t]+/, '')
   const sameOrLower = new RegExp(`^#{1,${level}}[ \\t]+(.+)$`)
   while (!lexer.eof()) {
@@ -797,6 +798,9 @@ function parseHeading(lexer: Lexer): Heading {
     if (/^#{1,6}([ \t]|$)/.test(next) || RE_CAPTION.test(next) || RE_COMMENT_BLOCK.test(next)) {
       break
     }
+    // A block-opener ends the heading and starts that block (§10), so only
+    // plain text continuation lines fold into the heading.
+    if (startsInterruptingBlock(lexer)) break
     text += '\n' + next
     lexer.consume()
   }
@@ -1252,20 +1256,17 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       trackBlockQuoteLazyState(content, state)
       continue
     }
-    // Lazy continuation: a non-`>` line folds into the quote ONLY when it
-    // continues an open paragraph (CommonMark-style; matches carve-php). A blank
-    // line ends the quote. The only non-blank lines that end it are the ones that
-    // interrupt a paragraph anywhere — the "invisible" reference/footnote/abbr
-    // definitions and comments — plus a caption `^ …`, which attaches to the quote
-    // rather than folding in.
+    // Lazy continuation: a non-`>` line folds into the quote ONLY when it is
+    // plain text continuing an open paragraph (CommonMark-style; matches
+    // carve-php). A blank line ends the quote. ANY block-opener ends it and
+    // starts that block OUTSIDE the quote, exactly as it interrupts a paragraph
+    // (§10) -- this covers visible blocks (list/quote/table/fence/div/thematic)
+    // and the "invisible" reference/footnote/abbr definitions and comments. A
+    // caption `^ …` attaches to the quote rather than folding in.
     if (
       ln.trim() === '' ||
-      RE_LINK_DEF.test(ln) ||
-      RE_FOOTNOTE_DEF.test(ln) ||
-      RE_ABBR_DEF.test(ln) ||
-      RE_COMMENT_LINE.test(ln) ||
-      RE_COMMENT_BLOCK.test(ln) ||
-      RE_CAPTION.test(ln)
+      RE_CAPTION.test(ln) ||
+      startsInterruptingBlock(lexer)
     ) {
       break
     }

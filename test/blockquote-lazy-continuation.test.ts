@@ -23,9 +23,25 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   })
 
   it('lets a visible block marker interrupt the quote paragraph', () => {
+    // A block-opener ends the quote and starts that block OUTSIDE it (§10),
+    // exactly as it interrupts a paragraph -- it does NOT fold into the quote.
     expect(html('> a\n# H')).toBe(
-      '<blockquote>\n  <p>a</p>\n  <h1>H</h1>\n</blockquote>',
+      '<blockquote><p>a</p></blockquote>\n<section id="h">\n  <h1>H</h1>\n</section>',
     )
+  })
+
+  it('a list / fence block-opener ends the quote (does not fold in)', () => {
+    expect(html('> q\n- one')).toBe(
+      '<blockquote><p>q</p></blockquote>\n<ul>\n  <li>one</li>\n</ul>',
+    )
+  })
+
+  it('an ordered marker folds (it never interrupts, §10)', () => {
+    expect(html('> q\n1. one')).toBe('<blockquote><p>q\n1. one</p></blockquote>')
+  })
+
+  it('plain text still folds into the quote paragraph', () => {
+    expect(html('> q\nplain')).toBe('<blockquote><p>q\nplain</p></blockquote>')
   })
 
   it('a caption attaches to the quote rather than folding in', () => {
