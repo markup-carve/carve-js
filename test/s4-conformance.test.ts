@@ -74,3 +74,49 @@ describe('bare boolean id', () => {
     expect(carveToHtml('[x]{disabled}').trim()).toBe('<p><span disabled="">x</span></p>')
   })
 })
+
+describe('glued cell attributes', () => {
+  const td = (s: string) => carveToHtml(s).split('\n')[1]
+  it('a {…} glued to the opening pipe is the cell attribute block', () => {
+    expect(td('|{.x} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th class="x">hi</th><th>b</th></tr></thead>')
+    // multiple attrs, source order
+    expect(td('|{#id .a key=v} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th id="id" class="a" key="v">hi</th><th>b</th></tr></thead>')
+  })
+  it('a SPACE before the brace is ordinary content, not attributes', () => {
+    expect(td('| {.x} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th>{.x} hi</th><th>b</th></tr></thead>')
+  })
+  it('computed span wins over an author-supplied rowspan (no duplicate attr)', () => {
+    const html = carveToHtml('|{rowspan=9} a | b |\n|---|---|\n| ^ | d |')
+    expect(html).toContain('<th rowspan="2">a</th>')
+    expect(html).not.toContain('rowspan="9"')
+  })
+  it('strips a structural author key case-insensitively', () => {
+    const html = carveToHtml('|{ROWSPAN=9} a | b |\n|---|---|\n| ^ | d |')
+    expect(html).toContain('<th rowspan="2">a</th>')
+    expect(html.toLowerCase()).not.toContain('rowspan="9"')
+  })
+  it('keeps an author style when no alignment is computed', () => {
+    expect(td('|{style="color:red"} a | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th style="color:red">a</th><th>b</th></tr></thead>')
+  })
+  it('an attributed dash row is not a GFM header delimiter', () => {
+    const html = carveToHtml('| h | i |\n|{.x} --- | --- |\n| c | d |')
+    expect(html).not.toContain('<thead>')
+    expect(html).toContain('class="x"')
+  })
+  it('handles a quoted brace in a cell attribute value', () => {
+    expect(td('|{key="{y}"} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th key="{y}">hi</th><th>b</th></tr></thead>')
+  })
+  it('a partially-invalid attribute payload stays literal', () => {
+    expect(td('|{.x 1bad} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th>{.x 1bad} hi</th><th>b</th></tr></thead>')
+  })
+  it('an attributed cell is not a bare span marker (content stays literal)', () => {
+    expect(td('|{.x} < | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th class="x">&lt;</th><th>b</th></tr></thead>')
+  })
+})

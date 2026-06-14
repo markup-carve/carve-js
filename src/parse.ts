@@ -1873,8 +1873,30 @@ function parseCellMarkers(src: string): {
   header: boolean
   span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
+  attrs?: Attrs
   content: string
 } {
+  // A `{...}` attribute block GLUED to the opening pipe (index 0, no space)
+  // supplies the cell's attributes; the rest, after optional whitespace, is the
+  // cell content. A SPACE before the brace (`| {.x}`) is ordinary content, not
+  // attributes. A cell that carries an attribute block is never a bare span
+  // marker, so its content is literal even if it is just `<`/`^`. An invalid
+  // attribute payload leaves the `{` as ordinary content.
+  if (src[0] === '{') {
+    // Reuse the quote-aware inline-attribute matcher so a quoted `}` inside a
+    // value (`{key="{y}"}`) is handled, not truncated at the first brace. The
+    // WHOLE payload must then be valid attribute syntax (same as inline / block
+    // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
+    // attribute block, so the `{` stays ordinary content.
+    const m = RE_INLINE_ATTR.exec(src)
+    if (m && isValidAttrPayload(m[1]!)) {
+      const attrs = parseAttrs(m[1]!)
+      if (!isEmptyAttrs(attrs)) {
+        return { header: false, attrs, content: src.slice(m[0].length).trim() }
+      }
+    }
+  }
+
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
   let header = false
@@ -1917,6 +1939,7 @@ interface RawCell {
   header: boolean
   span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
+  attrs?: Attrs
   raw: string
 }
 
@@ -1949,10 +1972,11 @@ function parseTable(lexer: Lexer): Table | Figure {
     }
     lexer.consume()
     const raw: RawCell[] = splitTableRow(line).map((src) => {
-      const { header, span, align, content } = parseCellMarkers(src)
+      const { header, span, align, attrs, content } = parseCellMarkers(src)
       const c: RawCell = { header, raw: content }
       if (span) c.span = span
       if (align) c.align = align
+      if (attrs) c.attrs = attrs
       return c
     })
     rawRows.push(raw)
@@ -1964,8 +1988,10 @@ function parseTable(lexer: Lexer): Table | Figure {
   // colons set per-column alignment for the whole column. The delimiter row is
   // dropped. This is in addition to Carve's tight per-cell markers `|=`/`|<`; a
   // delimiter row anywhere else is an ordinary data row.
+  // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
+  // structural delimiter, so it never makes its row a GFM header separator.
   const isDelimCell = (c: RawCell): boolean =>
-    !c.span && /^:?-+:?$/.test(c.raw.trim())
+    !c.span && !c.attrs && /^:?-+:?$/.test(c.raw.trim())
   if (
     rawRows.length >= 2 &&
     rawRows[1]!.length > 0 &&
@@ -1999,6 +2025,7 @@ function parseTable(lexer: Lexer): Table | Figure {
       }
       if (c.span) cell.span = c.span
       if (c.align) cell.align = c.align
+      if (c.attrs) cell.attrs = c.attrs
       return cell
     }),
   }))
