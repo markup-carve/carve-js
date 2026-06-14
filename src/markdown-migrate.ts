@@ -282,16 +282,17 @@ export function markdownToCarve(markdown: string): string {
 
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
     // Markdown rule). Carve accepts a single language token over a real-world
-    // charset (c++, c#, asp.net are valid), so the Markdown info string is
-    // normalized to its first such token — keeping `c++` intact and reducing
-    // an extended info (```js title="x") to ```js (still a code block).
+    // charset (c++, c#, asp.net, text/html are valid), so the Markdown info
+    // string is normalized to its first such token — keeping `c++`/`text/html`
+    // intact and reducing an extended info (```js title="x") to ```js (still a
+    // code block). The charset matches RE_FENCE in parse.ts, including `/`.
     const open = !inCode ? line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/) : null
     if (open) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      const info = open[3]!.match(/[A-Za-z0-9_+#.-]+/)?.[0] ?? ''
+      const info = open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? ''
       out.push(open[1]! + open[2]! + info)
       prevType = 'code_fence'
       continue
