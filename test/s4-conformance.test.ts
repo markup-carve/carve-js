@@ -50,3 +50,17 @@ describe('S4 cross-impl conformance', () => {
       .toBe('<section id="t">\n  <h1>T</h1>\n</section>')
   })
 })
+
+describe('S4 decided fixes', () => {
+  it('an explicit empty id on a heading wins over the auto-slug', () => {
+    expect(carveToHtml('{id=""}\n# T').trim())
+      .toBe('<section id="">\n  <h1>T</h1>\n</section>')
+    // a heading without an explicit id still auto-slugs.
+    expect(carveToHtml('# T').trim())
+      .toBe('<section id="t">\n  <h1>T</h1>\n</section>')
+  })
+
+  it('replaces a NUL byte with the U+FFFD replacement character', () => {
+    expect(carveToHtml('a\0b').trim()).toBe('<p>a�b</p>')
+  })
+})

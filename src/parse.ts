@@ -304,6 +304,9 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
   // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
   if (source.charCodeAt(0) === 0xfeff) source = source.slice(1)
+  // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
+  // byte never reaches output (decided cross-impl behavior; WHATWG-style).
+  if (source.includes('\0')) source = source.replace(/\0/g, '�')
   const lexer = new Lexer(source, opts)
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
