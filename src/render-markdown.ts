@@ -232,8 +232,18 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return escapeText(`#${node.name}`)
     case 'extension':
       return renderInlines(node.content, ctx)
-    case 'abbreviation':
-      return node.abbr
+    case 'abbreviation': {
+      // Markdown has no abbreviation syntax; emit an HTML `<abbr>` so the title
+      // survives (markdown allows inline HTML), matching carve-php. Dropping it
+      // to plain text would lose the expansion.
+      const title = node.expansion.replace(/[&<>"]/g, (c) =>
+        c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
+      )
+      const text = node.abbr.replace(/[&<>]/g, (c) =>
+        c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;',
+      )
+      return `<abbr title="${title}">${text}</abbr>`
+    }
     case 'footnote':
       return node.inline ? `^[${renderInlines(node.inline, ctx)}]` : `[^${node.id ?? ''}]`
     case 'soft-break':
