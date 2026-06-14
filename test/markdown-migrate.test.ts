@@ -163,6 +163,11 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv(md)).toBe(md)
   })
 
+  it('preserves a MIME-style fence language like text/html', () => {
+    const md = ['```text/html', '<b>x</b>', '```'].join('\n')
+    expect(conv(md)).toBe(md)
+  })
+
   it('emits the canonical no-space fence opener from a spaced one', () => {
     // ``` php (space) is accepted on input but normalized to ```php on output.
     const md = ['``` php', '*a*', '```'].join('\n')
