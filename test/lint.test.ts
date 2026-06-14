@@ -15,6 +15,16 @@ describe('lintCarve — broken cross-references', () => {
     expect(lintCarve('# Intro\n\nSee </#intro>.')).toEqual([])
   })
 
+  it('does not flag a crossref that targets a numbered caption id', () => {
+    expect(lintCarve('{#tbl}\n| A |\n|---|\n| 1 |\n^ Table #: Data\n\nSee </#tbl>.')).toEqual([])
+  })
+
+  it('finds a crossref inside a footnote definition', () => {
+    const w = lintCarve('See[^n].\n\n[^n]: See </#ghost>.')
+    expect(w.map((x) => x.rule)).toEqual(['broken-crossref'])
+    expect(w[0]!.message).toContain('</#ghost>')
+  })
+
   it('treats the auto-suffixed id of a duplicate heading as valid', () => {
     // Two "Title" headings -> ids `title` and `title-2`; both resolvable.
     const w = lintCarve('# Title\n\n## Title\n\n</#title> and </#title-2>')
@@ -64,6 +74,51 @@ describe('lintCarve — duplicate heading ids', () => {
     ])
     expect(w[0]!.message).toContain('t-2')
     expect(w[1]!.message).toContain('t-3')
+  })
+})
+
+describe('lintCarve — unresolved reference links', () => {
+  it('flags a reference link with no link definition or matching heading', () => {
+    const w = lintCarve('See [docs][missing].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toContain('[docs][missing]')
+  })
+
+  it('does not flag a reference link with an explicit definition', () => {
+    expect(lintCarve('See [docs][site].\n\n[site]: https://example.com')).toEqual([])
+  })
+
+  it('does not flag an implicit heading reference', () => {
+    expect(lintCarve('# Getting Started\n\nSee [getting started][].')).toEqual([])
+  })
+
+  it('finds unresolved reference links inside footnote definitions', () => {
+    const w = lintCarve('See[^n].\n\n[^n]: See [docs][missing].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+  })
+})
+
+describe('lintCarve — footnotes', () => {
+  it('flags a footnote reference with no definition', () => {
+    const w = lintCarve('See[^missing].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-footnote'])
+    expect(w[0]!.message).toContain('[^missing]')
+  })
+
+  it('flags a duplicate footnote definition', () => {
+    const w = lintCarve('[^a]: one\n\n[^a]: two\n\nSee[^a].')
+    expect(w.map((x) => x.rule)).toEqual(['duplicate-footnote-definition'])
+    expect(w[0]!.line).toBe(3)
+  })
+
+  it('flags an unused footnote definition', () => {
+    const w = lintCarve('[^unused]: note')
+    expect(w.map((x) => x.rule)).toEqual(['unused-footnote-definition'])
+    expect(w[0]!.message).toContain('[^unused]')
+  })
+
+  it('does not flag a referenced footnote definition', () => {
+    expect(lintCarve('See[^a].\n\n[^a]: note')).toEqual([])
   })
 })
 

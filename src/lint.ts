@@ -6,7 +6,9 @@
  * renders as the wrong thing, so nothing throws:
  *
  *   - references that degrade to literal text at resolve() time: broken
- *     `</#id>` cross-references and duplicate heading ids;
+ *     `</#id>` cross-references, unresolved `[text][ref]` links, missing
+ *     footnotes, and duplicate heading ids;
+ *   - footnote definitions that are duplicate or never referenced;
  *   - a trailing `{…}` on a heading, which is literal text under
  *     heading-strict, not an attribute block;
  *   - a ```raw FORMAT fence (the Carve raw block is ```=FORMAT; the wrong
@@ -23,6 +25,7 @@
  */
 import { parse } from './parse.js'
 import { slugify, inlineText } from './heading-ids.js'
+import { normalizeRefLabel } from './parse.js'
 import type { Document, Heading } from './ast.js'
 
 export interface LintWarning {
@@ -62,32 +65,79 @@ function locate(node: Positioned): Pick<
   }
 }
 
-/** Every `crossref` node anywhere under `doc.children`, with its raw target. */
-function collectCrossrefs(doc: Document): Array<{ target: string; node: Positioned }> {
-  const found: Array<{ target: string; node: Positioned }> = []
+function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) => void): void {
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visit(item)
       return
     }
-    if (value && typeof value === 'object') {
-      const node = value as Record<string, unknown>
-      if (node.type === 'crossref' && typeof node.target === 'string') {
-        found.push({ target: node.target, node: node as Positioned })
-      }
-      // Recurse into child containers; pos/attrs hold no inline nodes.
-      for (const key of Object.keys(node)) {
-        if (key !== 'pos' && key !== 'attrs') visit(node[key])
-      }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    visitNode(node)
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'attrs') visit(node[key])
     }
   }
   visit(doc.children)
+  if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
+}
+
+function normalizeHeadingRefLabel(label: string): string {
+  return normalizeRefLabel(label).toLowerCase()
+}
+
+/** Every `crossref` node anywhere under the document, with its raw target. */
+function collectCrossrefs(doc: Document): Array<{ target: string; node: Positioned }> {
+  const found: Array<{ target: string; node: Positioned }> = []
+  walkDocument(doc, (node) => {
+    if (node.type === 'crossref' && typeof node.target === 'string') {
+      found.push({ target: node.target, node: node as Positioned })
+    }
+  })
   return found
+}
+
+function collectUnresolvedRefLinks(
+  doc: Document,
+): Array<{ ref: string; rawRef: string; node: Positioned }> {
+  const found: Array<{ ref: string; rawRef: string; node: Positioned }> = []
+  walkDocument(doc, (node) => {
+    if (node.type !== 'link' || typeof node.ref !== 'string') return
+    found.push({
+      ref: node.ref,
+      rawRef: typeof node.rawRef === 'string' ? node.rawRef : `[${node.ref}]`,
+      node: node as Positioned,
+    })
+  })
+  return found
+}
+
+function collectFootnoteRefs(doc: Document): Array<{ id: string; node: Positioned }> {
+  const found: Array<{ id: string; node: Positioned }> = []
+  walkDocument(doc, (node) => {
+    if (node.type === 'footnote' && typeof node.id === 'string') {
+      found.push({ id: node.id, node: node as Positioned })
+    }
+  })
+  return found
+}
+
+function captionHasNumber(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.some(
+      (node) =>
+        node &&
+        typeof node === 'object' &&
+        (node as { type?: string }).type === 'caption-number',
+    )
+  )
 }
 
 /**
  * Lint a Carve document for silent-failure problems: duplicate heading ids,
- * `</#id>` cross-references with no target, trailing heading attribute blocks,
+ * `</#id>` cross-references with no target, unresolved reference links,
+ * missing/duplicate/unused footnotes, trailing heading attribute blocks,
  * legacy `raw FORMAT` fences, and block markers that leaked as paragraph text.
  *
  * `asciiHeadingIds` must match the value passed to `resolve()`, since it
@@ -105,12 +155,15 @@ export function lintCarve(
   // (explicit ids win; colliding slugs get a `-2`, `-3`, … suffix), and warn
   // on every collision along the way.
   const used = new Set<string>()
+  const headingRefs = new Map<string, string>()
   for (const block of doc.children) {
     if (block.type !== 'heading') continue
     const heading = block as Heading
     const explicit = heading.attrs?.id
+    let id: string
 
-    if (explicit) {
+    if (explicit !== undefined) {
+      id = explicit
       if (used.has(explicit)) {
         out.push({
           ...locate(heading),
@@ -119,25 +172,37 @@ export function lintCarve(
         })
       }
       used.add(explicit)
-      continue
+    } else {
+      const base = slugify(inlineText(heading.children), asciiFold)
+      if (used.has(base)) {
+        let n = 2
+        while (used.has(`${base}-${n}`)) n++
+        id = `${base}-${n}`
+        out.push({
+          ...locate(heading),
+          rule: 'duplicate-heading-id',
+          message: `Heading slug "${base}" collides with an earlier heading; its auto id becomes "${id}", and ambiguous references to "${base}" resolve to the first occurrence.`,
+        })
+        used.add(id)
+      } else {
+        id = base
+        used.add(base)
+      }
     }
 
-    const base = slugify(inlineText(heading.children), asciiFold)
-    if (!base) continue
-    if (used.has(base)) {
-      let n = 2
-      while (used.has(`${base}-${n}`)) n++
-      const id = `${base}-${n}`
-      out.push({
-        ...locate(heading),
-        rule: 'duplicate-heading-id',
-        message: `Heading slug "${base}" collides with an earlier heading; its auto id becomes "${id}", and ambiguous references to "${base}" resolve to the first occurrence.`,
-      })
-      used.add(id)
-    } else {
-      used.add(base)
-    }
+    const plain = inlineText(heading.children)
+    const key = normalizeHeadingRefLabel(plain)
+    if (key && !headingRefs.has(key)) headingRefs.set(key, id)
   }
+
+  // Captioned tables/figures with a `#` caption-number placeholder and an id
+  // are also valid cross-reference targets after resolve() numbers captions.
+  walkDocument(doc, (node) => {
+    const attrs = node.attrs as { id?: string } | undefined
+    if (attrs?.id === undefined) return
+    if (node.type === 'table' && captionHasNumber(node.caption)) used.add(attrs.id)
+    if (node.type === 'figure' && captionHasNumber(node.caption)) used.add(attrs.id)
+  })
 
   // `used` now holds every valid id. A crossref to anything else degrades to
   // literal text in resolveHeadingIds.
@@ -150,7 +215,33 @@ export function lintCarve(
     })
   }
 
+  // Reference links that survived parse() have no explicit link definition.
+  // resolve() may still turn them into implicit heading links; anything else
+  // renders as its literal source text.
+  for (const { ref, rawRef, node } of collectUnresolvedRefLinks(doc)) {
+    if (headingRefs.has(normalizeHeadingRefLabel(ref))) continue
+    out.push({
+      ...locate(node),
+      rule: 'unresolved-reference-link',
+      message: `Reference link ${rawRef} has no matching link definition or heading; it renders as literal text.`,
+    })
+  }
+
+  const footnoteRefs = collectFootnoteRefs(doc)
+  const footnoteDefs = doc.footnoteDefs ?? {}
+  const referencedFootnotes = new Set<string>()
+  for (const { id, node } of footnoteRefs) {
+    referencedFootnotes.add(id)
+    if (footnoteDefs[id]) continue
+    out.push({
+      ...locate(node),
+      rule: 'unresolved-footnote',
+      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.`,
+    })
+  }
+
   collectSilentFailures(source, doc, out)
+  collectFootnoteDefinitionWarnings(source, doc, referencedFootnotes, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -164,6 +255,8 @@ const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
 const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
 /** A line that opens like a block construct (`:::`, `{#`, `{.`). */
 const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
+/** A footnote definition line. Mirrors parse.ts. */
+const FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
 
 /**
  * Source-line checks for constructs that parsed into the wrong node. Each is
@@ -274,6 +367,73 @@ function collectSilentFailures(source: string, doc: Document, out: LintWarning[]
         `Check this line's syntax and any unterminated fence above it.`,
       start: loc.start,
       end: loc.start + m[2]!.length,
+    })
+  }
+}
+
+function collectFootnoteDefinitionWarnings(
+  source: string,
+  doc: Document,
+  referenced: Set<string>,
+  out: LintWarning[],
+): void {
+  const lines = source.split('\n')
+  const lineStart: number[] = []
+  for (let off = 0, i = 0; i < lines.length; i++) {
+    lineStart[i] = off
+    off += lines[i]!.length + 1
+  }
+
+  const verbatim: Array<[number, number]> = []
+  walkDocument(doc, (node) => {
+    const pos = (node as Positioned).pos
+    const endLine = (pos as { endLine?: number } | undefined)?.endLine
+    if ((node.type === 'code-block' || node.type === 'raw-block') && pos) {
+      verbatim.push([pos.startLine, endLine ?? pos.startLine])
+    } else if (node.type === 'figure' && pos) {
+      const target = (node.target as { type?: string } | undefined)?.type
+      if (target === 'code-block' || target === 'raw-block') {
+        verbatim.push([pos.startLine, endLine ?? pos.startLine])
+      }
+    }
+  })
+
+  const inVerbatim = (ln: number): boolean => verbatim.some(([s, e]) => ln >= s && ln <= e)
+  const firstSites = new Map<string, { line: number; col: number; start: number; end: number }>()
+
+  for (let i = 0; i < lines.length; i++) {
+    if (inVerbatim(i + 1)) continue
+    const line = lines[i]!
+    const m = FOOTNOTE_DEF.exec(line)
+    if (!m) continue
+    const label = m[1]!.trim()
+    const col = line.indexOf('[^') + 1
+    const start = (lineStart[i] ?? 0) + (col - 1)
+    const site = { line: i + 1, col, start, end: start + m[0].length }
+    if (firstSites.has(label)) {
+      out.push({
+        line: site.line,
+        column: site.col,
+        rule: 'duplicate-footnote-definition',
+        message: `Duplicate footnote definition [^${label}] is ignored; the first definition for a label wins.`,
+        start: site.start,
+        end: site.end,
+      })
+    } else {
+      firstSites.set(label, site)
+    }
+  }
+
+  for (const label of Object.keys(doc.footnoteDefs ?? {})) {
+    if (referenced.has(label)) continue
+    const site = firstSites.get(label)
+    out.push({
+      line: site?.line ?? 1,
+      column: site?.col ?? 1,
+      rule: 'unused-footnote-definition',
+      message: `Footnote definition [^${label}] is never referenced, so it is omitted from the rendered document.`,
+      start: site?.start ?? 0,
+      end: site?.end ?? 0,
     })
   }
 }

@@ -74,11 +74,12 @@ constructs that otherwise silently mis-render under Carve (e.g. **bold**
   stderr for manual review.
 
 lint - report delimiter collisions AND silent-failure problems as
-\`file:line:col rule - message\`: broken </#id> cross-references, duplicate
-heading ids, trailing {…} attribute blocks on headings (literal, not
-attributes), legacy \`\`\`raw FORMAT fences (use \`\`\`=FORMAT), and lines that
-open like a block (\`:::\`, \`{#\`) but parsed as plain text. Reads files or
-stdin; exits 1 if anything is reported, 0 if clean.
+\`file:line:col rule - message\`: broken </#id> cross-references, unresolved
+reference links, duplicate heading ids, missing/duplicate/unused footnotes,
+trailing {…} attribute blocks on headings (literal, not attributes), legacy
+\`\`\`raw FORMAT fences (use \`\`\`=FORMAT), and lines that open like a block
+(\`:::\`, \`{#\`) but parsed as plain text. Reads files or stdin; exits 1 if
+anything is reported, 0 if clean.
 
   -h, --help     Show this help
 `
