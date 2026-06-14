@@ -67,6 +67,69 @@ describe('lintCarve — duplicate heading ids', () => {
   })
 })
 
+describe('lintCarve — trailing heading attribute', () => {
+  it('flags a heading that ends with {#id} (literal, not an attribute)', () => {
+    const w = lintCarve('## Setup {#install}')
+    expect(w.map((x) => x.rule)).toEqual(['heading-trailing-attribute'])
+    expect(w[0]!.message).toContain('{#install}')
+    expect(w[0]!.column).toBe(10)
+  })
+
+  it('flags the {.class} form too', () => {
+    expect(rules('## Setup {.featured}')).toEqual(['heading-trailing-attribute'])
+  })
+
+  it('does not flag the correct preceding block-attribute line', () => {
+    expect(lintCarve('{#install .lead}\n## Setup')).toEqual([])
+  })
+
+  it('does not flag a valid inline span at the end of a heading', () => {
+    // `[text]{.class}` is a span (brace abuts `]`), not a heading attribute.
+    expect(lintCarve('## See [foo]{.bar}')).toEqual([])
+  })
+
+  it('ignores a brace that only looks attribute-like inside code', () => {
+    expect(lintCarve('```\n## Setup {#x}\n```')).toEqual([])
+  })
+})
+
+describe('lintCarve — legacy raw fence', () => {
+  it('flags ```raw FORMAT and suggests ```=FORMAT', () => {
+    const w = lintCarve('```raw html\n<b>x</b>\n```')
+    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax'])
+    expect(w[0]!.message).toContain('```=html')
+    expect(w[0]!.line).toBe(1)
+  })
+
+  it('does not flag the correct ```=FORMAT raw block', () => {
+    expect(lintCarve('```=html\n<b>x</b>\n```')).toEqual([])
+  })
+
+  it('does not flag a raw-looking line inside a real code block', () => {
+    expect(lintCarve('```python\n```raw html\n```')).toEqual([])
+  })
+
+  it('does not flag a raw-looking line inside a captioned (figure) code block', () => {
+    expect(lintCarve('```python\n```raw html\nx\n```\n^ A listing caption')).toEqual([])
+  })
+})
+
+describe('lintCarve — block marker leaked as text', () => {
+  it('flags a ::: fence that parsed as a paragraph', () => {
+    const w = lintCarve(':::note\nbody')
+    expect(w.map((x) => x.rule)).toEqual(['block-marker-as-text'])
+    expect(w[0]!.message).toContain(':::')
+  })
+
+  it('does not flag a valid admonition', () => {
+    expect(lintCarve('::: note\nbody\n:::')).toEqual([])
+  })
+
+  it('does not flag a valid admonition with a title', () => {
+    expect(lintCarve('::: tip "Heads up"\nbody\n:::')).toEqual([])
+  })
+})
+
 describe('lintCarve — clean input', () => {
   it('returns nothing for an empty or plain document', () => {
     expect(lintCarve('')).toEqual([])
