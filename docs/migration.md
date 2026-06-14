@@ -93,7 +93,11 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | Rule | Catches |
 | ---- | ------- |
 | `duplicate-heading-id` | two headings producing the same id (slug collision or repeated explicit `{#id}`); ambiguous references resolve to the first |
-| `broken-crossref` | a `</#id>` cross-reference with no matching heading; it renders as literal text |
+| `broken-crossref` | a `</#id>` cross-reference with no matching heading or numbered caption id; it renders as literal text |
+| `unresolved-reference-link` | a `[text][label]` or `[text][]` reference link with no matching link definition or implicit heading target; it renders as literal text |
+| `unresolved-footnote` | a `[^label]` footnote reference with no matching `[^label]: ...` definition; it renders as literal text |
+| `duplicate-footnote-definition` | a repeated `[^label]: ...` definition; the parser keeps the first definition and ignores the later one |
+| `unused-footnote-definition` | a footnote definition that is never referenced; it is omitted from rendered output |
 | `heading-trailing-attribute` | a trailing `{#id}` / `{.class}` on a heading line; under heading-strict this is literal text, so the attributes never attach (put them on a `{…}` line *above* the heading) |
 | `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
 | `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
