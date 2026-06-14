@@ -169,9 +169,9 @@
     },
     "escapes": {
         "carve": "literal \\* and \\# and \\_\n",
-        "markdown": "literal  and  and\n",
-        "plain": "literal  and  and\n",
-        "ansi": "literal  and  and\n"
+        "markdown": "literal \\* and \\# and \\_\n",
+        "plain": "literal * and # and _\n",
+        "ansi": "literal * and # and _\n"
     },
     "admonition": {
         "carve": "::: note\nWatch out.\n:::\n",

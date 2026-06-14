@@ -305,15 +305,11 @@ function escapeText(text: string): string {
 }
 
 function cleanEscapedText(node: Text): string {
-  const span =
-    node.pos?.startOffset !== undefined && node.pos.endOffset !== undefined
-      ? node.pos.endOffset - node.pos.startOffset
-      : undefined
-  return (
-    span !== undefined && span > node.value.length
-      ? node.value.replace(/[*#_]/g, '')
-      : node.value
-  )
+  // The value is the literal text (the parser already resolved backslash
+  // escapes), so a `\*` reaches here as `*`. Return it verbatim -- dropping the
+  // character would lose data. Markdown re-escapes specials via escapeText;
+  // plain/ansi need no escaping.
+  return node.value
 }
 
 function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {
