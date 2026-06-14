@@ -720,7 +720,10 @@ function renderTableRowFlat(
     if (entry.rowspan > 1) attrs.push(`rowspan="${entry.rowspan}"`)
     if (entry.colspan > 1) attrs.push(`colspan="${entry.colspan}"`)
     if (entry.align) attrs.push(`style="text-align: ${entry.align};"`)
-    const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+    // Author cell attributes (a `{...}` glued to the opening pipe) come first,
+    // then the structural span / alignment attributes.
+    const attrStr =
+      renderAttrs(entry.cell.attrs) + (attrs.length ? ' ' + attrs.join(' ') : '')
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
   }
   parts.push('</tr>')

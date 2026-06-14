@@ -74,3 +74,22 @@ describe('bare boolean id', () => {
     expect(carveToHtml('[x]{disabled}').trim()).toBe('<p><span disabled="">x</span></p>')
   })
 })
+
+describe('glued cell attributes', () => {
+  const td = (s: string) => carveToHtml(s).split('\n')[1]
+  it('a {…} glued to the opening pipe is the cell attribute block', () => {
+    expect(td('|{.x} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th class="x">hi</th><th>b</th></tr></thead>')
+    // multiple attrs, source order
+    expect(td('|{#id .a key=v} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th id="id" class="a" key="v">hi</th><th>b</th></tr></thead>')
+  })
+  it('a SPACE before the brace is ordinary content, not attributes', () => {
+    expect(td('| {.x} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th>{.x} hi</th><th>b</th></tr></thead>')
+  })
+  it('an attributed cell is not a bare span marker (content stays literal)', () => {
+    expect(td('|{.x} < | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th class="x">&lt;</th><th>b</th></tr></thead>')
+  })
+})
