@@ -1883,10 +1883,12 @@ function parseCellMarkers(src: string): {
   // marker, so its content is literal even if it is just `<`/`^`. An invalid
   // attribute payload leaves the `{` as ordinary content.
   if (src[0] === '{') {
-    const m = /^\{([^}\n]*)\}/.exec(src)
-    // The WHOLE payload must be valid attribute syntax (same as inline / block
+    // Reuse the quote-aware inline-attribute matcher so a quoted `}` inside a
+    // value (`{key="{y}"}`) is handled, not truncated at the first brace. The
+    // WHOLE payload must then be valid attribute syntax (same as inline / block
     // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
     // attribute block, so the `{` stays ordinary content.
+    const m = RE_INLINE_ATTR.exec(src)
     if (m && isValidAttrPayload(m[1]!)) {
       const attrs = parseAttrs(m[1]!)
       if (!isEmptyAttrs(attrs)) {

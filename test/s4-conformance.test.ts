@@ -88,6 +88,10 @@ describe('glued cell attributes', () => {
     expect(td('| {.x} hi | b |\n|---|---|\n| c | d |'))
       .toBe('  <thead><tr><th>{.x} hi</th><th>b</th></tr></thead>')
   })
+  it('handles a quoted brace in a cell attribute value', () => {
+    expect(td('|{key="{y}"} hi | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th key="{y}">hi</th><th>b</th></tr></thead>')
+  })
   it('a partially-invalid attribute payload stays literal', () => {
     expect(td('|{.x 1bad} hi | b |\n|---|---|\n| c | d |'))
       .toBe('  <thead><tr><th>{.x 1bad} hi</th><th>b</th></tr></thead>')
