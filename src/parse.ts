@@ -79,9 +79,11 @@ let activeMatchers: CarveExtension[] = []
 let activeMatcherCtx: MatcherContext | null = null
 
 const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
-// Thematic break: a line of 3+ of the same `-`, `*`, or `_` (grammar
-// thematic_break). A run alone on a line can't be emphasis (no content).
-const RE_HR = /^(?:-{3,}|\*{3,}|_{3,})\s*$/
+// Thematic break: a line of 3+ of the same `-`, `*`, or `_`, optionally
+// separated by spaces/tabs (`---`, `- - -`, `* * *`); nothing else on the line
+// (grammar thematic_break). A run alone on a line can't be emphasis (no
+// content). The chars must all match, so a mixed `-*-` is not a break.
+const RE_HR = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 // Info string is a single language token, optionally followed by a bracketed
 // `[label]` (structured metadata; e.g. ```php [NPM] or ```[NPM]). The charset
 // covers real-world tags with punctuation (c++, c#, f#, asp.net). Anything else
