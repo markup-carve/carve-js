@@ -3394,9 +3394,17 @@ export function parseAttrs(src: string): Attrs {
         note(m[3])
       }
     } else if (m[7]) {
-      // Boolean attribute: a bare word with no value.
-      attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[7]]: '' }
-      note(m[7])
+      if (m[7] === 'id') {
+        // A bare boolean `id` also feeds the id slot (value ''), last-wins and
+        // single -- `{id id=j}` -> `id="j"`, `{id}` -> `id=""` -- so `id` never
+        // enters keyValues and no duplicate `id` attribute can be produced.
+        attrs.id = ''
+        note('#id')
+      } else {
+        // Boolean attribute: a bare word with no value.
+        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[7]]: '' }
+        note(m[7])
+      }
     }
   }
   if (order.length) attrs.order = order

@@ -64,3 +64,13 @@ describe('S4 decided fixes', () => {
     expect(carveToHtml('a\0b').trim()).toBe('<p>a�b</p>')
   })
 })
+
+describe('bare boolean id', () => {
+  it('a bare `id` feeds the id slot (single, last-wins) — no duplicate id', () => {
+    expect(carveToHtml('[x]{id id=j}').trim()).toBe('<p><span id="j">x</span></p>')
+    expect(carveToHtml('[x]{id=j id}').trim()).toBe('<p><span id="">x</span></p>')
+    expect(carveToHtml('[x]{id}').trim()).toBe('<p><span id="">x</span></p>')
+    // other boolean attributes are unaffected
+    expect(carveToHtml('[x]{disabled}').trim()).toBe('<p><span disabled="">x</span></p>')
+  })
+})

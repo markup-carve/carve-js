@@ -138,3 +138,11 @@ describe('details disclosure extension', () => {
     )
   })
 })
+
+describe('details: explicit empty id', () => {
+  it('preserves an explicit empty id from a preceding block-attribute line', () => {
+    const h = (s: string) => carveToHtml(s, { extensions: [details()] }).trim()
+    expect(h('{id}\n::: details "T"\nx\n:::')).toContain('<details id="">')
+    expect(h('{#foo}\n::: details "T"\nx\n:::')).toContain('<details id="foo">')
+  })
+})
