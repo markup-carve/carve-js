@@ -28,9 +28,35 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('folds a list-marker-looking line into an open heading', () => {
+  it('lets a block-opener interrupt the heading instead of folding it', () => {
+    // A list/quote/table/fence/div/thematic line ends the heading and starts
+    // that block (§10), exactly as it interrupts a paragraph. Only plain text
+    // folds into a multi-line heading.
     expect(html('# H\n- item')).toBe(
-      '<section id="h-item">\n  <h1>H\n- item</h1>\n</section>',
+      '<section id="h">\n  <h1>H</h1>\n  <ul>\n    <li>item</li>\n  </ul>\n</section>',
+    )
+  })
+
+  it('a blockquote and a table also interrupt the heading', () => {
+    expect(html('# H\n> q')).toBe(
+      '<section id="h">\n  <h1>H</h1>\n  <blockquote><p>q</p></blockquote>\n</section>',
+    )
+    expect(html('# H\n| a | b |')).toBe(
+      '<section id="h">\n  <h1>H</h1>\n  <table>\n    <tbody>\n      <tr><td>a</td><td>b</td></tr>\n    </tbody>\n  </table>\n</section>',
+    )
+  })
+
+  it('an ordered marker does NOT interrupt (it folds, like in a paragraph)', () => {
+    // §10: an ordered list never interrupts (only bullets do), so `1. one`
+    // folds into the heading text just as it would into a paragraph.
+    expect(html('# H\n1. one')).toBe(
+      '<section id="h-1-one">\n  <h1>H\n1. one</h1>\n</section>',
+    )
+  })
+
+  it('plain text still folds into the heading', () => {
+    expect(html('# H\nplain words')).toBe(
+      '<section id="h-plain-words">\n  <h1>H\nplain words</h1>\n</section>',
     )
   })
 
