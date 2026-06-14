@@ -93,6 +93,15 @@ describe('glued cell attributes', () => {
     expect(html).toContain('<th rowspan="2">a</th>')
     expect(html).not.toContain('rowspan="9"')
   })
+  it('strips a structural author key case-insensitively', () => {
+    const html = carveToHtml('|{ROWSPAN=9} a | b |\n|---|---|\n| ^ | d |')
+    expect(html).toContain('<th rowspan="2">a</th>')
+    expect(html.toLowerCase()).not.toContain('rowspan="9"')
+  })
+  it('keeps an author style when no alignment is computed', () => {
+    expect(td('|{style="color:red"} a | b |\n|---|---|\n| c | d |'))
+      .toBe('  <thead><tr><th style="color:red">a</th><th>b</th></tr></thead>')
+  })
   it('an attributed dash row is not a GFM header delimiter', () => {
     const html = carveToHtml('| h | i |\n|{.x} --- | --- |\n| c | d |')
     expect(html).not.toContain('<thead>')
