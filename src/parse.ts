@@ -299,6 +299,11 @@ class Lexer {
 
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
+  // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
+  // is a heading, not literal text. Only here in the root entry -- nested
+  // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
+  // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
+  if (source.charCodeAt(0) === 0xfeff) source = source.slice(1)
   const lexer = new Lexer(source, opts)
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
@@ -2325,8 +2330,12 @@ function buildBracketMap(s: string): Record<number, number> {
   }
   return map
 }
-const RE_CRITIC_INS = /^\{\+([^}]*)\+\}/
-const RE_CRITIC_DEL = /^\{-([^}]*)-\}/
+// Content runs to the delimiter-specific closer (`+}` / `-}`), so a nested
+// span of a DIFFERENT type whose `}` would otherwise abort an `[^}]*` class is
+// kept inside and recursed into: `{+a {-b-} c+}` -> ins(a, del(b), c). Matches
+// carve-php / carve-rs.
+const RE_CRITIC_INS = /^\{\+((?:[^+]|\+(?!\}))*)\+\}/
+const RE_CRITIC_DEL = /^\{-((?:[^-]|-(?!\}))*)-\}/
 const RE_CRITIC_SUB = /^\{~([^}]*)~>([^}]*)~\}/
 const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
 // Forced intraword emphasis (§22): a brace pair around a bare delimiter forces
@@ -2908,8 +2917,11 @@ function scanInlineInner(
         i += forced[0].length
         continue
       }
-      // Inline attribute block — attaches to preceding node
-      const attr = RE_INLINE_ATTR.exec(rest)
+      // Inline attribute block — attaches to preceding node. It must be GLUED:
+      // a non-empty `buf` means unflushed text (e.g. a space) sits between the
+      // preceding node and the `{`, so the block is NOT attached -- it stays
+      // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
+      const attr = !buf ? RE_INLINE_ATTR.exec(rest) : null
       if (attr && out.length) {
         const prev = out[out.length - 1]!
         const parsed = parseAttrs(attr[1]!)
@@ -3368,8 +3380,16 @@ export function parseAttrs(src: string): Attrs {
         m[4] !== undefined ? unescapeAttrValue(m[4])
         : m[5] !== undefined ? unescapeAttrValue(m[5])
         : (m[6] ?? '')
-      attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
-      note(m[3])
+      if (m[3] === 'id') {
+        // `id=j` is the SAME attribute as `#j`: it sets the id slot, last-wins
+        // (§15), instead of emitting a second `id="…"` (invalid HTML). Matches
+        // carve-php; `{#i id=j}` -> `id="j"`.
+        attrs.id = val
+        note('#id')
+      } else {
+        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
+        note(m[3])
+      }
     } else if (m[7]) {
       // Boolean attribute: a bare word with no value.
       attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[7]]: '' }
@@ -3383,7 +3403,9 @@ export function parseAttrs(src: string): Attrs {
 function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   if (!a) return b
   const out: Attrs = { ...a }
-  if (b.id) out.id = b.id
+  // `!== undefined`, not truthiness: an explicit `id=""` in a later block wins
+  // over an earlier `#old` (last-wins §15), e.g. `[x]{#old}{id=""}` -> `id=""`.
+  if (b.id !== undefined) out.id = b.id
   if (b.classes) out.classes = [...(out.classes ?? []), ...b.classes]
   if (b.keyValues) out.keyValues = { ...(out.keyValues ?? {}), ...b.keyValues }
   // Merge source order: keep `a`'s order, append `b`'s new slots (a slot
