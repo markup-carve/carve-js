@@ -174,4 +174,8 @@ describe('URL scheme sanitization (configuration)', () => {
       '<p><a href="">x</a></p>',
     )
   })
+
+  it('blocks a NUL-obfuscated scheme (NUL -> U+FFFD at parse, still caught)', () => {
+    expect(h('[x](java\0script:alert(1))')).toBe('<p><a href="">x</a>)</p>')
+  })
 })

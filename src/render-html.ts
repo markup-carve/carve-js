@@ -87,7 +87,7 @@ function sanitizeUrl(url: string, opts: RenderOptions): string {
   if (opts.sanitizeUrls === false) return url
   // Browsers ignore C0 controls and whitespace when reading the scheme;
   // strip them for detection so obfuscated schemes can't slip through.
-  const probe = url.replace(/^[\u0000-\u0020]+/, '').replace(/[\t\n\r]/g, '')
+  const probe = url.replace(/^[\u0000-\u0020]+/, '').replace(/[\t\n\r�]/g, '')
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (!scheme) return url
   const allowed = opts.allowedUrlSchemes ?? DEFAULT_URL_SCHEMES
