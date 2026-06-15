@@ -117,6 +117,8 @@ const IMPLEMENTED = new Set([
   '94-literal-less-than-in-prose',
   '95-boolean-attributes',
   '96-table-span-marker-in-first-column',
+  '98-table-row-attributes',
+  '99-table-header-cell-rowspan',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
