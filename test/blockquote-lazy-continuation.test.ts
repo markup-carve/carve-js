@@ -30,10 +30,10 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     )
   })
 
-  it('a list / fence block-opener ends the quote (does not fold in)', () => {
-    expect(html('> q\n- one')).toBe(
-      '<blockquote><p>q</p></blockquote>\n<ul>\n  <li>one</li>\n</ul>',
-    )
+  it('a bullet marker folds into the quote paragraph (no blank line)', () => {
+    // A bullet no longer interrupts an open quote paragraph; without a blank
+    // line it folds in as lazy continuation, just like an ordered marker.
+    expect(html('> q\n- one')).toBe('<blockquote><p>q\n- one</p></blockquote>')
   })
 
   it('an ordered marker folds (it never interrupts, §10)', () => {

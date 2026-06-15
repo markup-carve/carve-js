@@ -28,12 +28,12 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('lets a block-opener interrupt the heading instead of folding it', () => {
-    // A list/quote/table/fence/div/thematic line ends the heading and starts
-    // that block (§10), exactly as it interrupts a paragraph. Only plain text
-    // folds into a multi-line heading.
+  it('folds a bullet marker into the heading (no blank line)', () => {
+    // A bullet no longer interrupts an open heading (§10); without a blank line
+    // it folds into the multi-line heading text, like an ordered marker does.
+    // A quote/table/fence/div/thematic line still ends the heading.
     expect(html('# H\n- item')).toBe(
-      '<section id="h">\n  <h1>H</h1>\n  <ul>\n    <li>item</li>\n  </ul>\n</section>',
+      '<section id="h-item">\n  <h1>H\n- item</h1>\n</section>',
     )
   })
 
