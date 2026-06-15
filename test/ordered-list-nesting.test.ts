@@ -73,8 +73,10 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
   const nestedOl =
     '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n  </li>\n</ol>'
 
-  it('nests an unordered child below the content column (one space, §10 interrupt)', () => {
-    expect(h('- a\n - b')).toBe(nestedUl)
+  it('folds an unordered child below the content column (one space, no interrupt)', () => {
+    // `- b` at column 1 is below `- `'s content column (2); a bullet no longer
+    // interrupts, so it folds into the lead text as lazy continuation.
+    expect(h('- a\n - b')).toBe('<ul>\n  <li>a\n- b</li>\n</ul>')
   })
 
   it('still nests an unordered child at the content column (two spaces)', () => {

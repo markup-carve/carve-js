@@ -28,10 +28,9 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('lets a block-opener interrupt the heading instead of folding it', () => {
-    // A list/quote/table/fence/div/thematic line ends the heading and starts
-    // that block (§10), exactly as it interrupts a paragraph. Only plain text
-    // folds into a multi-line heading.
+  it('a bullet marker ends the heading and starts a sibling list', () => {
+    // A bullet does not fold into an open heading; it ends the heading and
+    // opens a sibling list inside the section (Option D, matches djot).
     expect(html('# H\n- item')).toBe(
       '<section id="h">\n  <h1>H</h1>\n  <ul>\n    <li>item</li>\n  </ul>\n</section>',
     )
@@ -46,11 +45,11 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('an ordered marker does NOT interrupt (it folds, like in a paragraph)', () => {
-    // §10: an ordered list never interrupts (only bullets do), so `1. one`
-    // folds into the heading text just as it would into a paragraph.
+  it('an ordered marker ends the heading and starts a sibling list', () => {
+    // A list marker ends an open heading and opens a sibling list inside the
+    // section, ordered behaving the same as bullet (Option D, matches djot).
     expect(html('# H\n1. one')).toBe(
-      '<section id="h-1-one">\n  <h1>H\n1. one</h1>\n</section>',
+      '<section id="h">\n  <h1>H</h1>\n  <ol>\n    <li>one</li>\n  </ol>\n</section>',
     )
   })
 
