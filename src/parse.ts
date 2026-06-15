@@ -176,7 +176,8 @@ const RE_TABLE_ROW = /^\|/
 // GLUED to its closing pipe (`| a |{.x}` -> <tr class="x">); rowAttrsFromLine
 // validates and strips it, so the gate allows an optional trailing `{...}`.
 const isTableRow = (line: string): boolean =>
-  RE_TABLE_ROW.test(line) && /\|(?:\{[^\n]+\})?[ \t]*$/.test(line)
+  RE_TABLE_ROW.test(line) &&
+  (/\|[ \t]*$/.test(line) || rowAttrsFromLine(line).attrs !== undefined)
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed

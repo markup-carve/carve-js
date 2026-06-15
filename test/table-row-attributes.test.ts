@@ -32,7 +32,10 @@ describe('table row attributes ({...} glued to the closing pipe)', () => {
     expect(h('| a | {.x}')).toBe('<p>| a | {.x}</p>')
   })
 
-  it('an empty payload is not a row attribute (and not a table)', () => {
+  it('an empty or invalid payload is not a row attribute (so the line is not a table)', () => {
+    // The trailing brace must be a valid attribute block to open the table;
+    // otherwise the line stays paragraph text (it does not end with a pipe).
     expect(h('| a |{}')).toBe('<p>| a |{}</p>')
+    expect(h('| a |{1bad}')).toBe('<p>| a |{1bad}</p>')
   })
 })
