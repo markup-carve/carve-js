@@ -1652,7 +1652,17 @@ function parseList(lexer: Lexer): List {
             (isOrdered
               ? orderedContinues(a, orderedKind, orderedDelim)
               : unorderedMarkerChar(a) === firstMarkerChar)
-          if (sibling || a.trim() === '+') break
+          // A base-column line that is ANY list marker (a different
+          // kind/dialect, e.g. an ordered `1.` after this unordered first-block
+          // item, or an abutting-attribute bullet `-{.x}`) starts a SIBLING
+          // list (§11), not item content -- stop attaching so it parses as a
+          // separate top-level list (Bug C, first-block `- +` path).
+          const anyMarker =
+            RE_ORDERED.test(a) ||
+            RE_UNORDERED.test(a) ||
+            RE_TASK.test(a) ||
+            extractItemAttr(a) !== null
+          if (sibling || anyMarker || a.trim() === '+') break
         }
         attached.push(sliceColumns(a, baseIndent))
         lexer.consume()
@@ -1681,6 +1691,9 @@ function parseList(lexer: Lexer): List {
     // the join, so only an indented ordered marker triggers the split.
     let firstBlockIdx = -1
     let pendingBlanks = 0
+    // Indices in `nested` that hold a `+`-injected blank separator. These keep
+    // the attached block parsing standalone but never loosen the list (Bug B).
+    const plusSeparators = new Set<number>()
     while (!lexer.eof()) {
       const l = lexer.peek()!
       if (l.trim() === '') {
@@ -1696,6 +1709,11 @@ function parseList(lexer: Lexer): List {
       if (indentColumns(l) === baseIndent && l.trim() === '+') {
         lexer.consume()
         pendingBlanks = 0
+        // Mark this blank as a `+`-injected separator: it lets the attached
+        // block parse on its own but must NOT loosen the list (Bug B). A real
+        // internal blank before a plain paragraph still loosens; a `+` one
+        // never does, matching carve-php.
+        plusSeparators.add(nested.length)
         nested.push('')
         while (!lexer.eof()) {
           const a = lexer.peek()!
@@ -1709,7 +1727,17 @@ function parseList(lexer: Lexer): List {
               (isOrdered
                 ? orderedContinues(a, orderedKind, orderedDelim)
                 : unorderedMarkerChar(a) === firstMarkerChar)
-            if (sibling || a.trim() === '+') break
+            // A base-column line that is ANY list marker (even a different
+            // kind/dialect, e.g. an ordered `1.` after this unordered item, or
+            // an abutting-attribute bullet `-{.x}`) starts a SIBLING list
+            // (§11), not item content -- stop attaching so it parses as a
+            // separate top-level list (Bug C).
+            const anyMarker =
+              RE_ORDERED.test(a) ||
+              RE_UNORDERED.test(a) ||
+              RE_TASK.test(a) ||
+              extractItemAttr(a) !== null
+            if (sibling || anyMarker || a.trim() === '+') break
           }
           nested.push(sliceColumns(a, baseIndent))
           lexer.consume()
@@ -1825,6 +1853,10 @@ function parseList(lexer: Lexer): List {
     // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
     for (let k = 0; k < nested.length; k++) {
       if (nested[k] !== '') continue
+      // A `+`-injected separator never loosens, even when the block it attaches
+      // is a plain paragraph -- it keeps the item tight like a `+`-attached
+      // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
+      if (plusSeparators.has(k)) continue
       let j = k + 1
       while (j < nested.length && nested[j] === '') j++
       if (j < nested.length && !lineOpensBlock(nested[j]!)) {

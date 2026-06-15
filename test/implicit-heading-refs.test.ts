@@ -64,11 +64,12 @@ describe('implicit heading references ([Heading][])', () => {
     )
   })
 
-  it('does NOT resolve to a heading nested in a container', () => {
-    // `resolveHeadingIds()` only assigns `id`s to top-level headings, so
-    // an implicit ref to a nested heading would point at a missing
-    // target. The ref stays literal; use an explicit `{#id}` if you
-    // need to link into a nested heading.
+  it('does NOT resolve to a heading nested in a blockquote', () => {
+    // A heading inside a blockquote gets an id and is a valid `</#id>`
+    // crossref target, but is NOT registered as an implicit `[label][]`
+    // reference target -- a blockquote ancestor suppresses that index entry
+    // (carve-php parity). The ref stays literal. (List/div nesting does not
+    // suppress it; only a blockquote ancestor does.)
     expect(h('> # Sub\n\nSee [Sub][].')).not.toContain('<a href="#sub"')
   })
 
