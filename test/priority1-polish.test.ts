@@ -16,19 +16,15 @@ describe('priority-1 polish fixes', () => {
     expect(h("it's fine")).toBe('<p>it’s fine</p>')
   })
 
-  it('interrupts prose, then splits mixed task+plain bullets', () => {
-    expect(h('Text\n- [ ] todo\n- note')).toBe(
-      '<p>Text</p>\n<ul>\n  <li><input type="checkbox" disabled> todo</li>\n</ul>\n<ul>\n  <li>note</li>\n</ul>',
-    )
+  it('folds mixed task+plain bullets into prose (no blank line)', () => {
+    // A bullet no longer interrupts an open paragraph (§10); without a blank
+    // line both marker lines fold in as lazy continuation.
+    expect(h('Text\n- [ ] todo\n- note')).toBe('<p>Text\n- [ ] todo\n- note</p>')
   })
 
-  it('two same-kind bullets after prose interrupt as one list (§10)', () => {
-    expect(h('Text\n- a\n- b')).toBe(
-      '<p>Text</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
-    )
-    expect(h('Text\n- [ ] a\n- [x] b')).toBe(
-      '<p>Text</p>\n<ul>\n  <li><input type="checkbox" disabled> a</li>\n  <li><input type="checkbox" checked disabled> b</li>\n</ul>',
-    )
+  it('folds same-kind bullets after prose into the paragraph (no blank line)', () => {
+    expect(h('Text\n- a\n- b')).toBe('<p>Text\n- a\n- b</p>')
+    expect(h('Text\n- [ ] a\n- [x] b')).toBe('<p>Text\n- [ ] a\n- [x] b</p>')
   })
 
   it('preserves an attribute block on an unresolved reference', () => {
