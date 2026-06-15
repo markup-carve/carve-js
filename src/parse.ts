@@ -1916,7 +1916,11 @@ function parseList(lexer: Lexer): List {
         // top-level block instead. A blockquote/div trailing paragraph keeps the
         // fold open (lazyFoldable stays true). The indented-marker special case
         // below still folds regardless, matching the symmetric §10 behavior.
-        ((lazyState.lazyFoldable && !lazyContinuationEndsList(l, lexer)) ||
+        // An UNTERMINATED fence (inFence still open) is NOT a code block -- it is
+        // an inline-verbatim run that is part of the paragraph, so a dedented
+        // line folds into it (matching the §10 closer-lookahead rule).
+        (((lazyState.lazyFoldable || lazyState.inFence) &&
+          !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
           // symmetric §10 no list marker interrupts a paragraph, so on the
