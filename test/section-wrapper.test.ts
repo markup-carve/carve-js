@@ -94,10 +94,10 @@ describe('heading <section> wrapping', () => {
   })
 
   it('does not wrap a heading nested inside a blockquote', () => {
-    // resolveHeadingIds only assigns ids to top-level headings, so nested
-    // headings carry no id and stay bare <h*> with no <section>.
+    // A nested heading carries its slug id on the <h*> (carve-php parity) but
+    // gets NO <section> wrapper -- the section pass is a top-level-only concern.
     const html = h('> # Sub\n')
     expect(html).not.toContain('<section')
-    expect(html).toContain('<h1>Sub</h1>')
+    expect(html).toContain('<h1 id="sub">Sub</h1>')
   })
 })
