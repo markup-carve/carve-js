@@ -741,10 +741,12 @@ function stripStructuralAttrs(attrs: Attrs | undefined, emitted: Set<string>): A
 }
 
 function renderTableRowFlat(
-  cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
+  cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
   opts: RenderOptions,
 ): string {
-  const parts: string[] = ['<tr>']
+  // A row attribute block (`| … |{.x}`) lives on the TableRow, shared by every
+  // grid entry in this row.
+  const parts: string[] = [`<tr${renderAttrs(cells[0]?.row.attrs)}>`]
   for (const entry of cells) {
     if (entry.skip) continue
     const tag = entry.cell.header ? 'th' : 'td'
