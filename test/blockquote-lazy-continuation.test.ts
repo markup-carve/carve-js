@@ -30,14 +30,18 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     )
   })
 
-  it('a bullet marker folds into the quote paragraph (no blank line)', () => {
-    // A bullet no longer interrupts an open quote paragraph; without a blank
-    // line it folds in as lazy continuation, just like an ordered marker.
-    expect(html('> q\n- one')).toBe('<blockquote><p>q\n- one</p></blockquote>')
+  it('a bullet marker ends the quote and starts a sibling list', () => {
+    // A bullet does not fold into an open quote paragraph; it ends the quote
+    // and opens a top-level sibling list (Option D, matches djot).
+    expect(html('> q\n- one')).toBe(
+      '<blockquote><p>q</p></blockquote>\n<ul>\n  <li>one</li>\n</ul>',
+    )
   })
 
-  it('an ordered marker folds (it never interrupts, §10)', () => {
-    expect(html('> q\n1. one')).toBe('<blockquote><p>q\n1. one</p></blockquote>')
+  it('an ordered marker ends the quote and starts a sibling list', () => {
+    expect(html('> q\n1. one')).toBe(
+      '<blockquote><p>q</p></blockquote>\n<ol>\n  <li>one</li>\n</ol>',
+    )
   })
 
   it('plain text still folds into the quote paragraph', () => {

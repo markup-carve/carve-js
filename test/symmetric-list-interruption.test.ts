@@ -9,7 +9,11 @@ const h = (s: string) => carveToHtml(s)
  * A list marker never interrupts an open paragraph: a bullet (`- `/`* `) and a
  * task marker need a blank line before them, exactly like an ordered marker
  * (`1.`/`a.`/`i.`) already did. Without the blank line the marker folds into the
- * open paragraph (or heading, or quoted paragraph) as lazy continuation.
+ * open paragraph as lazy continuation.
+ *
+ * A heading or a quoted paragraph behaves differently (Option D, matches djot):
+ * a list marker ENDS the open heading or quote and starts a top-level sibling
+ * list (it does not fold in). Bullet and ordered behave identically there.
  *
  * Tight nested lists are unaffected: an indented marker that reaches the parent
  * item's content column opens a sublist with no blank line (§24). A marker BELOW
@@ -33,12 +37,16 @@ describe('symmetric list interruption (§10)', () => {
     expect(h('intro\n---\nmore')).toBe('<p>intro</p>\n<hr>\n<p>more</p>')
   })
 
-  it('a bullet folds into an open heading, like an ordered marker', () => {
-    expect(h('# T\n- item')).toBe('<section id="t-item">\n  <h1>T\n- item</h1>\n</section>')
+  it('a bullet ends an open heading and starts a sibling list, like an ordered marker', () => {
+    expect(h('# T\n- item')).toBe(
+      '<section id="t">\n  <h1>T</h1>\n  <ul>\n    <li>item</li>\n  </ul>\n</section>',
+    )
   })
 
-  it('a bullet folds into a quoted paragraph (no interrupt in a quote)', () => {
-    expect(h('> quoted\n- item')).toBe('<blockquote><p>quoted\n- item</p></blockquote>')
+  it('a bullet ends a quoted paragraph and starts a sibling list', () => {
+    expect(h('> quoted\n- item')).toBe(
+      '<blockquote><p>quoted</p></blockquote>\n<ul>\n  <li>item</li>\n</ul>',
+    )
   })
 
   it('keeps tight unordered nesting at the content column', () => {
