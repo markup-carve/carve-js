@@ -48,6 +48,25 @@ function transliterate(s: string): string {
 }
 
 /**
+ * Reverse smart-typography substitutions to their ASCII source before a slug is
+ * computed, so an id never depends on presentational typography. Without this,
+ * `# That's all` (parsed with smart quotes) would keep the curly `’` in its id;
+ * `# Step 1 -> 2` would keep `→`. The map is the inverse of the parser's
+ * SMART_TOKENS plus smart quotes and dashes. Applied before slugRun, so the
+ * recovered ASCII punctuation then collapses to hyphens like any other.
+ */
+const SMART_TO_ASCII: Record<string, string> = {
+  '↔': '<->', '™': '(tm)', '…': '...', '→': '->', '←': '<-', '⇒': '=>',
+  '≤': '<=', '≥': '>=', '≠': '!=', '±': '+-', '©': '(c)', '®': '(r)',
+  '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"',
+}
+function deTypography(s: string): string {
+  let out = ''
+  for (const ch of s) out += SMART_TO_ASCII[ch] ?? ch
+  return out
+}
+
+/**
  * jgm/djot#393 slug step: replace each maximal run of non-alphanumeric ASCII with a
  * single '-' and trim. Non-ASCII characters and letter case are preserved.
  */
@@ -74,7 +93,7 @@ export function slugify(
   plainText: string,
   opts: { lowercase?: boolean; asciiFold?: boolean } = {},
 ): string {
-  let s = slugRun(plainText)
+  let s = slugRun(deTypography(plainText))
   if (opts.asciiFold) {
     s = slugRun(transliterate(s))
   }
