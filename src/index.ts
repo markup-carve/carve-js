@@ -23,6 +23,8 @@ import type { Document } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
 import { resolveHeadingIds } from './heading-ids.js'
+import { Profile } from './profile.js'
+import { applyProfile as applyProfileImpl } from './profile-filter.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
 import {
   renderMarkdown as renderMarkdownImpl,
@@ -73,6 +75,62 @@ export { autolink, type AutolinkOptions } from './autolink.js'
 export { externalLinks, type ExternalLinksOptions } from './external-links.js'
 export { tableOfContents, type TableOfContentsOptions } from './table-of-contents.js'
 export { headingPermalinks, type HeadingPermalinksOptions } from './heading-permalinks.js'
+export {
+  Profile,
+  LinkPolicy,
+  ProfileViolationError,
+  formatProfileViolation,
+  canonicalType,
+  CANONICAL_BLOCK_TYPES,
+  CANONICAL_INLINE_TYPES,
+  type DisallowedAction,
+  type ProfileViolation,
+} from './profile.js'
+export { applyProfile, type ProfileFilterResult } from './profile-filter.js'
+
+/**
+ * Options shared by every `carveTo*` entry point for profile-based feature
+ * restriction. A profile runs as an AST transform after resolve() and before
+ * the renderer, so it applies identically to HTML/Markdown/plain/ANSI output.
+ */
+export interface ProfileOptions {
+  /**
+   * Feature-restriction profile. When set, disallowed nodes are converted to
+   * text / stripped / error'd per the profile's action, link/image URLs are
+   * gated by its link policy, and maxNesting / maxLength are enforced. Omit
+   * for no restriction (all features pass through).
+   */
+  profile?: Profile
+  /**
+   * Current document host, used by the profile's link policy to tell internal
+   * from external links (e.g. `internalOnly`). Optional.
+   */
+  profileBaseHost?: string
+}
+
+/**
+ * Apply a profile to a resolved document in the shared pipeline position
+ * (after resolve, before render). Enforces maxLength on the source bytes
+ * first (matching carve-php, which checks the input length pre-parse and
+ * throws). Mutates and returns `doc`.
+ */
+function runProfile(doc: Document, source: string, opts: ProfileOptions): Document {
+  const profile = opts.profile
+  if (!profile) return doc
+  const maxLength = profile.getMaxLength()
+  if (maxLength > 0 && byteLength(source) > maxLength) {
+    throw new RangeError(
+      `Input exceeds the profile's maximum length of ${maxLength} bytes ` +
+        `(got ${byteLength(source)} bytes).`,
+    )
+  }
+  return applyProfileImpl(doc, profile, opts.profileBaseHost ?? null).doc
+}
+
+/** UTF-8 byte length, matching PHP's strlen() on the source string. */
+function byteLength(s: string): number {
+  return new TextEncoder().encode(s).length
+}
 
 /**
  * Parse Carve source into a typed AST.
@@ -126,7 +184,7 @@ export function resolve(
 /** Convenience: parse + resolve + render in one call. */
 export function carveToHtml(
   source: string,
-  opts: ParseOptions & RenderOptions = {},
+  opts: ParseOptions & RenderOptions & ProfileOptions = {},
 ): string {
   const exts: CarveExtension[] = opts.extensions ?? []
   // `sourceLine` rendering needs block positions, so enable parsing them.
@@ -142,41 +200,45 @@ export function carveToHtml(
   })
   for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
   for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
+  doc = runProfile(doc, source, opts)
   return renderHtml(doc, opts)
 }
 
 /** Convenience: parse + resolve + render Markdown in one call. */
 export function carveToMarkdown(
   source: string,
-  opts: ParseOptions & MarkdownRenderOptions = {},
+  opts: ParseOptions & MarkdownRenderOptions & ProfileOptions = {},
 ): string {
-  const doc = resolve(parse(source, opts), {
+  let doc = resolve(parse(source, opts), {
     asciiHeadingIds: opts.asciiHeadingIds ?? false,
     lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
   })
+  doc = runProfile(doc, source, opts)
   return renderMarkdown(doc, opts)
 }
 
 /** Convenience: parse + resolve + render plain text in one call. */
 export function carveToPlainText(
   source: string,
-  opts: ParseOptions & PlainTextRenderOptions = {},
+  opts: ParseOptions & PlainTextRenderOptions & ProfileOptions = {},
 ): string {
-  const doc = resolve(parse(source, opts), {
+  let doc = resolve(parse(source, opts), {
     asciiHeadingIds: opts.asciiHeadingIds ?? false,
     lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
   })
+  doc = runProfile(doc, source, opts)
   return renderPlainText(doc, opts)
 }
 
 /** Convenience: parse + resolve + render ANSI terminal text in one call. */
 export function carveToAnsi(
   source: string,
-  opts: ParseOptions & AnsiRenderOptions = {},
+  opts: ParseOptions & AnsiRenderOptions & ProfileOptions = {},
 ): string {
-  const doc = resolve(parse(source, opts), {
+  let doc = resolve(parse(source, opts), {
     asciiHeadingIds: opts.asciiHeadingIds ?? false,
     lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
   })
+  doc = runProfile(doc, source, opts)
   return renderAnsi(doc, opts)
 }
