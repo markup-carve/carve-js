@@ -103,13 +103,13 @@
     },
     "heading-crossref": {
         "carve": "# Setup\n\nSee </#setup> for details.\n",
-        "markdown": "# Setup {#setup}\n\nSee [Setup](#setup) for details.\n",
+        "markdown": "# Setup {#Setup}\n\nSee [Setup](#Setup) for details.\n",
         "plain": "Setup\n\nSee Setup for details.\n",
         "ansi": "\u001b[1m\u001b[95mSetup\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n\nSee \u001b[4m\u001b[34mSetup\u001b[0m for details.\n"
     },
     "forward-crossref": {
         "carve": "See </#setup>.\n\n# Setup\n",
-        "markdown": "See [Setup](#setup).\n\n# Setup {#setup}\n",
+        "markdown": "See [Setup](#Setup).\n\n# Setup {#Setup}\n",
         "plain": "See Setup.\n\nSetup\n",
         "ansi": "See \u001b[4m\u001b[34mSetup\u001b[0m.\n\n\u001b[1m\u001b[95mSetup\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n"
     },

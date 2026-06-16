@@ -39,7 +39,7 @@ describe('symmetric list interruption (§10)', () => {
 
   it('a bullet ends an open heading and starts a sibling list, like an ordered marker', () => {
     expect(h('# T\n- item')).toBe(
-      '<section id="t">\n  <h1>T</h1>\n  <ul>\n    <li>item</li>\n  </ul>\n</section>',
+      '<section id="T">\n  <h1>T</h1>\n  <ul>\n    <li>item</li>\n  </ul>\n</section>',
     )
   })
 

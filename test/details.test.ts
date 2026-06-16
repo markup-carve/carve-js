@@ -51,7 +51,7 @@ describe('details disclosure extension', () => {
         '  <summary>T</summary>',
         // A heading inside the container still carries its slug id on the
         // <h*> (carve-php parity); only the top-level <section> pass is skipped.
-        '  <h1 id="h">H</h1>',
+        '  <h1 id="H">H</h1>',
         '  <p>x</p>',
         '</details>',
       ].join('\n'),

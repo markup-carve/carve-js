@@ -26,7 +26,7 @@ describe('} inside a quoted attribute value', () => {
   it('heading (attrs via preceding line)', () => {
     // Strict djot: a heading takes its attributes on a PRECEDING block-
     // attribute line; a brace inside a quoted value there is preserved.
-    expect(h('{k="{y}"}\n# H')).toBe('<section id="h">\n  <h1 k="{y}">H</h1>\n</section>')
+    expect(h('{k="{y}"}\n# H')).toBe('<section id="H">\n  <h1 k="{y}">H</h1>\n</section>')
   })
 
   it('generic div (attrs via preceding line)', () => {
@@ -104,7 +104,7 @@ describe('escaped quotes in attribute values', () => {
 
   it('unescapes a quote in a heading value (attrs via preceding line)', () => {
     expect(h('{title="a\\"b"}\n# H')).toBe(
-      '<section id="h">\n  <h1 title="a&quot;b">H</h1>\n</section>',
+      '<section id="H">\n  <h1 title="a&quot;b">H</h1>\n</section>',
     )
   })
 
@@ -124,12 +124,12 @@ describe('escaped quotes in attribute values', () => {
  */
 describe('heading attribute-less brace block stays literal', () => {
   it('keeps a no-attribute brace block in the heading text', () => {
-    expect(h('# H {???}')).toBe('<section id="h">\n  <h1>H {???}</h1>\n</section>')
+    expect(h('# H {???}')).toBe('<section id="H">\n  <h1>H {???}</h1>\n</section>')
   })
 
   it('still applies a valid heading attribute block (via preceding line)', () => {
     // Strict djot: the valid attribute block attaches from the PRECEDING
     // block-attribute line, not as a trailing `{…}` on the heading itself.
-    expect(h('{.cls}\n# H')).toBe('<section id="h">\n  <h1 class="cls">H</h1>\n</section>')
+    expect(h('{.cls}\n# H')).toBe('<section id="H">\n  <h1 class="cls">H</h1>\n</section>')
   })
 })
