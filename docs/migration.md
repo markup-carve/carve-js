@@ -27,9 +27,9 @@ Carve's blank-line-around-blocks rule:
 | `~~x~~`                      | `~x~`      | Carve strikethrough is a single `~`                        |
 | `==x==`                      | `=x=`      | highlight: Carve uses a single `=` (`==x==` renders literal) |
 | `^x^`                        | `^x^`      | superscript: identical in Carve                            |
-| `<mark>x</mark>`             | `{=x=}`    | highlight tag → forced brace form (renders intraword)      |
-| `<sub>x</sub>`               | `{,x,}`    | subscript tag → forced brace form (e.g. `H<sub>2</sub>O` → `H{,2,}O`) |
-| `<sup>x</sup>`               | `{^x^}`    | superscript tag → forced brace form (renders intraword)    |
+| `<mark>x</mark>`             | `=x=`      | highlight tag → bare marker (brace-forced `{=x=}` intraword) |
+| `<sub>x</sub>`               | `,x,`      | subscript tag → bare marker (`H<sub>2</sub>O` → `H{,2,}O` intraword) |
+| `<sup>x</sup>`               | `^x^`      | superscript tag → bare marker (brace-forced `{^x^}` intraword) |
 | `$x$`                        | `` $`x` `` | inline math (`$5` left as currency)                        |
 | `<em>`/`<strong>`/`<del>`/…  | Carve form | other inline HTML tags map to their Carve markers          |
 
@@ -37,9 +37,32 @@ Carve's blank-line-around-blocks rule:
 > Carve's highlight and subscript markers are **single** characters (`=x=`,
 > `,x,`); the doubled forms `==x==` and `,,x,,` are literal text in Carve (see
 > the corpus pair `74-two-char-delimiter-runs`). A bare `,x,` / `^x^` / `=x=`
-> only renders at a word boundary, so the `<mark>`/`<sub>`/`<sup>` tags - which
-> can sit intraword - map to the **forced brace forms** `{=x=}` / `{,x,}` /
-> `{^x^}`, which render in every position (corpus `67-superscript-and-subscript`).
+> only renders at a word boundary, so the `<mark>`/`<sub>`/`<sup>` tags map to
+> the **bare markers** when they sit between non-alphanumeric neighbors (the
+> common, whitespace-separated case) and to the **forced brace forms** `{=x=}` /
+> `{,x,}` / `{^x^}` only when intraword (e.g. `H<sub>2</sub>O` → `H{,2,}O`),
+> where the brace form renders in every position (corpus
+> `67-superscript-and-subscript`).
+
+It also rewrites **GFM tables** to Carve's native form: a header row followed by
+a `| --- |` delimiter row becomes `|=`-prefixed header cells, and the delimiter
+row is dropped (Carve needs no separator). Column alignment from the delimiter
+(`:--`, `--:`, `:--:`) is glued onto the header marker as `|=<`, `|=>`, `|=~`:
+
+```md
+| L | C | R |
+| :-- | :--: | --: |
+| a | b | c |
+```
+
+becomes
+
+```
+|=< L |=~ C |=> R |
+| a | b | c |
+```
+
+Body rows are already valid Carve, so they pass through unchanged.
 
 To go the other way - flagging a Djot document that would silently mis-render
 under Carve - use `djotMigrationWarnings`, and to rewrite those collisions in
