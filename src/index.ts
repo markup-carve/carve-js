@@ -75,6 +75,15 @@ export { autolink, type AutolinkOptions } from './autolink.js'
 export { externalLinks, type ExternalLinksOptions } from './external-links.js'
 export { tableOfContents, type TableOfContentsOptions } from './table-of-contents.js'
 export { headingPermalinks, type HeadingPermalinksOptions } from './heading-permalinks.js'
+export { codeGroup, type CodeGroupOptions } from './code-group.js'
+export { tabs, type TabsOptions, type TabsMode } from './tabs.js'
+export { headingLevelShift, type HeadingLevelShiftOptions } from './heading-level-shift.js'
+export { headingReference, type HeadingReferenceOptions } from './heading-reference.js'
+export {
+  defaultAttributes,
+  type DefaultAttributesOptions,
+  type DefaultAttributesMap,
+} from './default-attributes.js'
 export {
   Profile,
   LinkPolicy,
@@ -194,14 +203,31 @@ export function carveToHtml(
     extensions: exts,
     ...(opts.sourceLine ? { positions: true } : {}),
   }
-  let doc = resolve(parse(source, parseOpts), {
-    asciiHeadingIds: opts.asciiHeadingIds ?? false,
-    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
-  })
-  for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
-  for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
+  let doc = applyTransforms(
+    resolve(parse(source, parseOpts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    exts,
+  )
   doc = runProfile(doc, source, opts)
   return renderHtml(doc, opts)
+}
+
+/**
+ * Run the renderer-agnostic extension transforms (`afterParse`,
+ * `beforeRender`) over a resolved document. Renderer-specific output (block
+ * renderers, inline renderers) is consulted by the HTML renderer only, but the
+ * transform hooks mutate the AST itself, so they apply to every renderer -
+ * matching carve-php, where a `beforeRender` extension (heading level shift,
+ * default attributes, …) affects Markdown/PlainText/ANSI output too.
+ */
+function applyTransforms(doc: Document, exts: CarveExtension[] | undefined): Document {
+  if (!exts) return doc
+  let out = doc
+  for (const ext of exts) if (ext.afterParse) out = ext.afterParse(out)
+  for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out)
+  return out
 }
 
 /** Convenience: parse + resolve + render Markdown in one call. */
@@ -209,10 +235,13 @@ export function carveToMarkdown(
   source: string,
   opts: ParseOptions & MarkdownRenderOptions & ProfileOptions = {},
 ): string {
-  let doc = resolve(parse(source, opts), {
-    asciiHeadingIds: opts.asciiHeadingIds ?? false,
-    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
-  })
+  let doc = applyTransforms(
+    resolve(parse(source, opts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    opts.extensions,
+  )
   doc = runProfile(doc, source, opts)
   return renderMarkdown(doc, opts)
 }
@@ -222,10 +251,13 @@ export function carveToPlainText(
   source: string,
   opts: ParseOptions & PlainTextRenderOptions & ProfileOptions = {},
 ): string {
-  let doc = resolve(parse(source, opts), {
-    asciiHeadingIds: opts.asciiHeadingIds ?? false,
-    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
-  })
+  let doc = applyTransforms(
+    resolve(parse(source, opts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    opts.extensions,
+  )
   doc = runProfile(doc, source, opts)
   return renderPlainText(doc, opts)
 }
@@ -235,10 +267,13 @@ export function carveToAnsi(
   source: string,
   opts: ParseOptions & AnsiRenderOptions & ProfileOptions = {},
 ): string {
-  let doc = resolve(parse(source, opts), {
-    asciiHeadingIds: opts.asciiHeadingIds ?? false,
-    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
-  })
+  let doc = applyTransforms(
+    resolve(parse(source, opts), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    opts.extensions,
+  )
   doc = runProfile(doc, source, opts)
   return renderAnsi(doc, opts)
 }
