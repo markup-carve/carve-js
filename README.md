@@ -54,6 +54,34 @@ const doc = resolve(parse(source)) // typed Document AST
 const html = renderHtml(doc)       // same as carveToHtml(source)
 ```
 
+### Heading ids
+
+Every heading gets an automatic id derived from its text. Ids are
+**case-preserving** and keep non-ASCII verbatim by default (`# Über uns` ->
+`Über-uns`); cross-references (`</#uber-uns>`) resolve case-insensitively. Two
+orthogonal options on every converter (and on `resolve` / `lintCarve`) adjust
+the slug:
+
+| Option | Values | Effect |
+|--------|--------|--------|
+| `asciiHeadingIds` | `false` (default) | keep non-ASCII verbatim |
+| | `true` / `'fold'` | best-effort: transliterate non-ASCII to ASCII, but scripts the map can't handle (Greek, CJK, Arabic, emoji) are kept verbatim |
+| | `'strict'` | guarantee a pure-ASCII id (`[0-9A-Za-z-]`): transliterate, then drop any unmappable residue |
+| `lowercaseHeadingIds` | `false` (default) / `true` | lowercase the id (GitHub/SSG-style anchors) |
+
+The two combine - `'strict'` plus `lowercaseHeadingIds` yields a fully lowercase
+ASCII slug.
+
+```ts
+carveToHtml('# Café 日本語', { asciiHeadingIds: 'fold' })   // id="Cafe-日本語"
+carveToHtml('# Café 日本語', { asciiHeadingIds: 'strict' }) // id="Cafe"
+carveToHtml('# Über uns', { asciiHeadingIds: 'strict', lowercaseHeadingIds: true }) // id="uber-uns"
+```
+
+Under `'strict'`, a heading made entirely of unmappable script has no ASCII
+left and falls back to the id `s` (then `s-2`, ...); attach an explicit
+`{#my-id}` to such a heading for a meaningful anchor.
+
 ## CLI
 
 The package installs a `carve` binary. Rendering is the default action — it

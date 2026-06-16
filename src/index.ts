@@ -22,7 +22,11 @@
 import type { Document } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
-import { resolveHeadingIds } from './heading-ids.js'
+import {
+  resolveHeadingIds,
+  headingIdSlugOpts,
+  type AsciiHeadingIdMode,
+} from './heading-ids.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
@@ -182,12 +186,9 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
  */
 export function resolve(
   doc: Document,
-  opts: { asciiHeadingIds?: boolean; lowercaseHeadingIds?: boolean } = {},
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): Document {
-  return resolveHeadingIds(doc, {
-    lowercase: opts.lowercaseHeadingIds ?? false,
-    asciiFold: opts.asciiHeadingIds ?? false,
-  })
+  return resolveHeadingIds(doc, headingIdSlugOpts(opts))
 }
 
 /** Convenience: parse + resolve + render in one call. */
