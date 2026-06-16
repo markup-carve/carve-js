@@ -184,16 +184,23 @@ describe('markdownToCarve — HTML inline tags', () => {
     expect(conv('<strong>a</strong> <b>b</b>')).toBe('*a* *b*')
   })
 
-  it('converts <mark> to the forced highlight {=x=}', () => {
-    expect(conv('<mark>hot</mark>')).toBe('{=hot=}')
+  it('converts a standalone <mark> to the bare highlight =x=', () => {
+    expect(conv('a <mark>hot</mark> day')).toBe('a =hot= day')
   })
 
-  it('converts <sub> to the forced subscript {,x,} (renders intraword)', () => {
+  it('converts a whitespace-separated <sup>/<sub> to the bare ^x^ / ,x,', () => {
+    expect(conv('a <sup>up</sup> and <sub>down</sub>')).toBe('a ^up^ and ,down,')
+  })
+
+  it('brace-forces highlight/sub/sup when intraword (bare form would be literal)', () => {
     expect(conv('H<sub>2</sub>O')).toBe('H{,2,}O')
+    expect(conv('x<sup>2</sup>')).toBe('x{^2^}')
+    expect(conv('foo<mark>bar</mark>baz')).toBe('foo{=bar=}baz')
   })
 
-  it('converts <sup> to the forced superscript {^x^} (renders intraword)', () => {
-    expect(conv('x<sup>2</sup>')).toBe('x{^2^}')
+  it('always brace-forces <ins> (Carve has no bare + delimiter)', () => {
+    expect(conv('a <ins>new</ins> note')).toBe('a {+new+} note')
+    expect(conv('foo<ins>bar</ins>baz')).toBe('foo{+bar+}baz')
   })
 
   it('converts <del>/<s> to ~x~', () => {
@@ -202,6 +209,33 @@ describe('markdownToCarve — HTML inline tags', () => {
 
   it('converts <code> to `x`', () => {
     expect(conv('<code>f()</code>')).toBe('`f()`')
+  })
+})
+
+describe('markdownToCarve — GFM tables', () => {
+  it('rewrites a header row + delimiter to Carve |= header cells (no delimiter row)', () => {
+    const md = ['| Name | Type |', '|---|---|', '| Carve | Markup |'].join('\n')
+    expect(conv(md)).toBe(['|= Name |= Type |', '| Carve | Markup |'].join('\n'))
+  })
+
+  it('maps GFM column alignment to the |= glued markers (< ~ >)', () => {
+    const md = ['| L | C | R |', '| :-- | :--: | --: |', '| a | b | c |'].join('\n')
+    expect(conv(md)).toBe(['|=< L |=~ C |=> R |', '| a | b | c |'].join('\n'))
+  })
+
+  it('converts inline markup inside header cells', () => {
+    const md = ['| **Bold** | _Under_ |', '| --- | --- |', '| x | y |'].join('\n')
+    expect(conv(md)).toBe(['|= *Bold* |= /Under/ |', '| x | y |'].join('\n'))
+  })
+
+  it('leaves a pipe-bearing paragraph alone when no delimiter row follows', () => {
+    expect(conv('a | b | c')).toBe('a | b | c')
+  })
+
+  it('does not treat a column-count mismatch as a table (delimiter not consumed)', () => {
+    // `a | b` (2 cols) over `---` (1 col) is not a GFM table; it is a setext
+    // h2, so the delimiter must not be eaten into a bogus table.
+    expect(conv('a | b\n---')).toBe('## a | b')
   })
 })
 
