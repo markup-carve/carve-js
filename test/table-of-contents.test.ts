@@ -8,8 +8,8 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml(src, { extensions: [tableOfContents()] })
     expect(html.startsWith(
       '<nav class="toc"><ul>' +
-        '<li><a href="#intro">Intro</a><ul><li><a href="#details">Details</a></li></ul></li>' +
-        '<li><a href="#end">End</a></li>' +
+        '<li><a href="#Intro">Intro</a><ul><li><a href="#Details">Details</a></li></ul></li>' +
+        '<li><a href="#End">End</a></li>' +
         '</ul></nav>',
     )).toBe(true)
     // The document content still follows.
@@ -20,28 +20,28 @@ describe('tableOfContents extension', () => {
     // Section-wrapping keeps the last section open to EOF, so a bottom TOC
     // renders after the heading content (inside that trailing section).
     const html = carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })
-    expect(html).toContain('<h1>A</h1>\n<nav class="toc"><ul><li><a href="#a">A</a></li></ul></nav>')
+    expect(html).toContain('<h1>A</h1>\n<nav class="toc"><ul><li><a href="#A">A</a></li></ul></nav>')
     expect(html.indexOf('<nav')).toBeGreaterThan(html.indexOf('<h1>A</h1>'))
   })
 
   it('honors minLevel and maxLevel', () => {
     const src = '# One\n\n## Two\n\n### Three'
     const html = carveToHtml(src, { extensions: [tableOfContents({ minLevel: 2, maxLevel: 2 })] })
-    expect(html).toContain('<nav class="toc"><ul><li><a href="#two">Two</a></li></ul></nav>')
-    expect(html).not.toContain('href="#one"')
-    expect(html).not.toContain('href="#three"')
+    expect(html).toContain('<nav class="toc"><ul><li><a href="#Two">Two</a></li></ul></nav>')
+    expect(html).not.toContain('href="#One"')
+    expect(html).not.toContain('href="#Three"')
   })
 
   it('uses an ordered list when listType is ol', () => {
     const html = carveToHtml('# A', { extensions: [tableOfContents({ listType: 'ol' })] })
-    expect(html).toContain('<nav class="toc"><ol><li><a href="#a">A</a></li></ol></nav>')
+    expect(html).toContain('<nav class="toc"><ol><li><a href="#A">A</a></li></ol></nav>')
   })
 
   it('honors a custom cssClass and escapes heading text', () => {
     const html = carveToHtml('# A & <B>', {
       extensions: [tableOfContents({ cssClass: 'contents' })],
     })
-    expect(html).toContain('<nav class="contents"><ul><li><a href="#a-b">A &amp; &lt;B&gt;</a>')
+    expect(html).toContain('<nav class="contents"><ul><li><a href="#A-B">A &amp; &lt;B&gt;</a>')
   })
 
   it('keeps a partially-restored level nested under its ancestor', () => {
@@ -50,14 +50,14 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml('## A\n\n#### B\n\n### C', { extensions: [tableOfContents()] })
     const toc = html.slice(0, html.indexOf('</nav>'))
     // A is the only top-level <li>; B and C both sit under it.
-    expect(toc).toContain('<a href="#a">A</a>')
-    expect(toc.match(/<li><a href="#a"/g)?.length).toBe(1)
-    expect(toc.indexOf('#c')).toBeGreaterThan(toc.indexOf('#a'))
+    expect(toc).toContain('<a href="#A">A</a>')
+    expect(toc.match(/<li><a href="#A"/g)?.length).toBe(1)
+    expect(toc.indexOf('#C')).toBeGreaterThan(toc.indexOf('#A'))
     // The only top-level list item is A (C is not promoted to top level).
     expect(toc).toBe(
-      '<nav class="toc"><ul><li><a href="#a">A</a>' +
-        '<ul><li><a href="#b">B</a></li></ul>' +
-        '<ul><li><a href="#c">C</a></li></ul>' +
+      '<nav class="toc"><ul><li><a href="#A">A</a>' +
+        '<ul><li><a href="#B">B</a></li></ul>' +
+        '<ul><li><a href="#C">C</a></li></ul>' +
         '</li></ul>',
     )
   })
@@ -68,7 +68,7 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml('## A\n\n# B', { extensions: [tableOfContents()] })
     const toc = html.slice(0, html.indexOf('</nav>') + '</nav>'.length)
     expect(toc).toBe(
-      '<nav class="toc"><ul><li><a href="#a">A</a></li><li><a href="#b">B</a></li></ul></nav>',
+      '<nav class="toc"><ul><li><a href="#A">A</a></li><li><a href="#B">B</a></li></ul></nav>',
     )
   })
 
@@ -77,7 +77,7 @@ describe('tableOfContents extension', () => {
       // @ts-expect-error testing a runtime-supplied invalid value
       extensions: [tableOfContents({ listType: 'ul><script>x</script><ul' })],
     })
-    expect(html).toContain('<nav class="toc"><ul><li><a href="#a">A</a></li></ul></nav>')
+    expect(html).toContain('<nav class="toc"><ul><li><a href="#A">A</a></li></ul></nav>')
     expect(html).not.toContain('<script>')
   })
 
@@ -87,6 +87,6 @@ describe('tableOfContents extension', () => {
   })
 
   it('is inert without the extension', () => {
-    expect(carveToHtml('# A')).toBe('<section id="a">\n  <h1>A</h1>\n</section>')
+    expect(carveToHtml('# A')).toBe('<section id="A">\n  <h1>A</h1>\n</section>')
   })
 })

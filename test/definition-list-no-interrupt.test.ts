@@ -10,7 +10,7 @@ describe('a definition list does not interrupt a paragraph or heading (§10)', (
 
   it('a `::` term after a heading line folds into the heading', () => {
     expect(html('# H\n:: t\n:  d')).toBe(
-      '<section id="h-t-d">\n  <h1>H\n:: t\n:  d</h1>\n</section>',
+      '<section id="H-t-d">\n  <h1>H\n:: t\n:  d</h1>\n</section>',
     )
   })
 

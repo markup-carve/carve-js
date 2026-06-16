@@ -145,10 +145,17 @@ function captionHasNumber(value: unknown): boolean {
  */
 export function lintCarve(
   source: string,
-  opts: { asciiHeadingIds?: boolean } = {},
+  opts: { asciiHeadingIds?: boolean; lowercaseHeadingIds?: boolean } = {},
 ): LintWarning[] {
   const doc = parse(source, { positions: true })
-  const asciiFold = opts.asciiHeadingIds ?? false
+  const slugOpts = {
+    lowercase: opts.lowercaseHeadingIds ?? false,
+    asciiFold: opts.asciiHeadingIds ?? false,
+  }
+  // Cross-references resolve case-insensitively, so the broken-crossref check
+  // folds case the same way resolveHeadingIds does.
+  const foldId = (s: string): string =>
+    Array.from(s, (c) => c.toLowerCase()).join('')
   const out: LintWarning[] = []
 
   // Build the final heading-id set exactly as resolveHeadingIds does
@@ -178,7 +185,7 @@ export function lintCarve(
             }
             used.add(explicit)
           } else {
-            const base = slugify(inlineText(heading.children), asciiFold)
+            const base = slugify(inlineText(heading.children), slugOpts)
             if (used.has(base)) {
               let n = 2
               while (used.has(`${base}-${n}`)) n++
@@ -236,8 +243,9 @@ export function lintCarve(
 
   // `used` now holds every valid id. A crossref to anything else degrades to
   // literal text in resolveHeadingIds.
+  const usedFolded = new Set([...used].map(foldId))
   for (const { target, node } of collectCrossrefs(doc)) {
-    if (used.has(target)) continue
+    if (used.has(target) || usedFolded.has(foldId(target))) continue
     out.push({
       ...locate(node),
       rule: 'broken-crossref',

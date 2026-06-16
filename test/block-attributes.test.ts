@@ -63,7 +63,7 @@ describe('block attribute lines (§15)', () => {
     // The id (auto or explicit) lives on <section>; a leading class
     // attaches to the <h*>.
     expect(h('{.big}\n# Title')).toBe(
-      '<section id="title">\n  <h1 class="big">Title</h1>\n</section>',
+      '<section id="Title">\n  <h1 class="big">Title</h1>\n</section>',
     )
   })
 

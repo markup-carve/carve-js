@@ -89,8 +89,8 @@ describe('inline footnotes ^[content]', () => {
 
   it('resolves an implicit heading reference inside note content', () => {
     const out = h('# Title\n\nsee^[go [Title][]] here.\n')
-    // The [Title][] implicit ref inside the note resolves to #title, not <a href="">.
-    expect(out).toContain('<a href="#title">Title</a>')
+    // The [Title][] implicit ref inside the note resolves to #Title, not <a href="">.
+    expect(out).toContain('<a href="#Title">Title</a>')
     expect(out).not.toContain('<a href="">')
   })
 

@@ -19,7 +19,7 @@ describe('boolean (bare-word) attributes', () => {
 
   it('heading, via a leading block-attribute line', () => {
     expect(h('{disabled}\n# H')).toBe(
-      '<section id="h">\n  <h1 disabled="">H</h1>\n</section>',
+      '<section id="H">\n  <h1 disabled="">H</h1>\n</section>',
     )
   })
 
