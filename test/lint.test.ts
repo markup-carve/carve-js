@@ -53,7 +53,7 @@ describe('lintCarve — duplicate heading ids', () => {
     expect(w).toHaveLength(1)
     expect(w[0]!.rule).toBe('duplicate-heading-id')
     expect(w[0]!.line).toBe(3)
-    expect(w[0]!.message).toContain('setup-2')
+    expect(w[0]!.message).toContain('Setup-2')
   })
 
   it('does not flag distinct heading slugs', () => {
@@ -72,8 +72,8 @@ describe('lintCarve — duplicate heading ids', () => {
       'duplicate-heading-id',
       'duplicate-heading-id',
     ])
-    expect(w[0]!.message).toContain('t-2')
-    expect(w[1]!.message).toContain('t-3')
+    expect(w[0]!.message).toContain('T-2')
+    expect(w[1]!.message).toContain('T-3')
   })
 })
 

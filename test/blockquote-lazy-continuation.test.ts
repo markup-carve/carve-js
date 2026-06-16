@@ -26,7 +26,7 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     // A block-opener ends the quote and starts that block OUTSIDE it (§10),
     // exactly as it interrupts a paragraph -- it does NOT fold into the quote.
     expect(html('> a\n# H')).toBe(
-      '<blockquote><p>a</p></blockquote>\n<section id="h">\n  <h1>H</h1>\n</section>',
+      '<blockquote><p>a</p></blockquote>\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
   })
 

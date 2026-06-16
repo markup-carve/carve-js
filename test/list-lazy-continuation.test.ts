@@ -34,7 +34,7 @@ describe('list lazy continuation', () => {
 
   it('a heading line ends the list', () => {
     expect(html('- a\n# H')).toBe(
-      '<ul>\n  <li>a</li>\n</ul>\n<section id="h">\n  <h1>H</h1>\n</section>',
+      '<ul>\n  <li>a</li>\n</ul>\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
   })
 

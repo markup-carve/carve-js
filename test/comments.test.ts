@@ -22,7 +22,7 @@ describe('trailing line comments', () => {
   it('works in a heading without affecting the id', () => {
     // The id lives on the <section> wrapper (PART 9 §13); the comment is stripped.
     const html = carveToHtml('# Title %% note').trim()
-    expect(html).toContain('<section id="title">')
+    expect(html).toContain('<section id="Title">')
     expect(html).toContain('<h1>Title</h1>')
     expect(html).not.toContain('note')
   })

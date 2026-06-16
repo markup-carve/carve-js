@@ -5,8 +5,8 @@ import { carveToHtml, headingPermalinks } from '../src/index.js'
 describe('headingPermalinks extension', () => {
   it('appends a permalink anchor to a top-level heading', () => {
     expect(carveToHtml('# My Heading', { extensions: [headingPermalinks()] })).toBe(
-      '<section id="my-heading">\n' +
-        '  <h1>My Heading <a href="#my-heading" class="permalink" aria-label="Permalink">¶</a></h1>\n' +
+      '<section id="My-Heading">\n' +
+        '  <h1>My Heading <a href="#My-Heading" class="permalink" aria-label="Permalink">¶</a></h1>\n' +
         '</section>',
     )
   })
@@ -17,13 +17,13 @@ describe('headingPermalinks extension', () => {
         extensions: [headingPermalinks({ symbol: '#', cssClass: 'anchor', ariaLabel: 'Link' })],
       }),
     ).toBe(
-      '<section id="hi">\n  <h1>Hi <a href="#hi" class="anchor" aria-label="Link">#</a></h1>\n</section>',
+      '<section id="Hi">\n  <h1>Hi <a href="#Hi" class="anchor" aria-label="Link">#</a></h1>\n</section>',
     )
   })
 
   it('can prepend the anchor', () => {
     expect(carveToHtml('# Hi', { extensions: [headingPermalinks({ prepend: true })] })).toBe(
-      '<section id="hi">\n  <h1><a href="#hi" class="permalink" aria-label="Permalink">¶</a> Hi</h1>\n</section>',
+      '<section id="Hi">\n  <h1><a href="#Hi" class="permalink" aria-label="Permalink">¶</a> Hi</h1>\n</section>',
     )
   })
 
@@ -31,12 +31,12 @@ describe('headingPermalinks extension', () => {
     const ext = headingPermalinks({ levels: [2] })
     const html = carveToHtml('# One\n\n## Two', { extensions: [ext] })
     expect(html).toContain('<h1>One</h1>')
-    expect(html).toContain('<h2>Two <a href="#two"')
+    expect(html).toContain('<h2>Two <a href="#Two"')
   })
 
   it('keeps other heading attributes on the h* (id stays on the section)', () => {
     expect(carveToHtml('{.big}\n# Hi', { extensions: [headingPermalinks()] })).toBe(
-      '<section id="hi">\n  <h1 class="big">Hi <a href="#hi" class="permalink" aria-label="Permalink">¶</a></h1>\n</section>',
+      '<section id="Hi">\n  <h1 class="big">Hi <a href="#Hi" class="permalink" aria-label="Permalink">¶</a></h1>\n</section>',
     )
   })
 
@@ -56,7 +56,7 @@ describe('headingPermalinks extension', () => {
 
   it('is inert without the extension', () => {
     expect(carveToHtml('# My Heading')).toBe(
-      '<section id="my-heading">\n  <h1>My Heading</h1>\n</section>',
+      '<section id="My-Heading">\n  <h1>My Heading</h1>\n</section>',
     )
   })
 })

@@ -54,7 +54,7 @@ describe('inline span [text]{attrs}', () => {
 
   it('contributes its text to a heading slug and renders inside the heading', () => {
     const html = h('# A [x]{.k} b')
-    expect(html).toContain('<section id="a-x-b">')
+    expect(html).toContain('<section id="A-x-b">')
     expect(html).toContain('<h1>A <span class="k">x</span> b</h1>')
   })
 

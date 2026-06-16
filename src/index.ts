@@ -113,8 +113,14 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
  * (no explicit `[label]: url` def and no matching heading) to its
  * literal source text.
  */
-export function resolve(doc: Document, opts: { asciiHeadingIds?: boolean } = {}): Document {
-  return resolveHeadingIds(doc, opts.asciiHeadingIds ?? false)
+export function resolve(
+  doc: Document,
+  opts: { asciiHeadingIds?: boolean; lowercaseHeadingIds?: boolean } = {},
+): Document {
+  return resolveHeadingIds(doc, {
+    lowercase: opts.lowercaseHeadingIds ?? false,
+    asciiFold: opts.asciiHeadingIds ?? false,
+  })
 }
 
 /** Convenience: parse + resolve + render in one call. */
@@ -130,7 +136,10 @@ export function carveToHtml(
     extensions: exts,
     ...(opts.sourceLine ? { positions: true } : {}),
   }
-  let doc = resolve(parse(source, parseOpts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  let doc = resolve(parse(source, parseOpts), {
+    asciiHeadingIds: opts.asciiHeadingIds ?? false,
+    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+  })
   for (const ext of exts) if (ext.afterParse) doc = ext.afterParse(doc)
   for (const ext of exts) if (ext.beforeRender) doc = ext.beforeRender(doc)
   return renderHtml(doc, opts)
@@ -141,7 +150,10 @@ export function carveToMarkdown(
   source: string,
   opts: ParseOptions & MarkdownRenderOptions = {},
 ): string {
-  const doc = resolve(parse(source, opts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  const doc = resolve(parse(source, opts), {
+    asciiHeadingIds: opts.asciiHeadingIds ?? false,
+    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+  })
   return renderMarkdown(doc, opts)
 }
 
@@ -150,7 +162,10 @@ export function carveToPlainText(
   source: string,
   opts: ParseOptions & PlainTextRenderOptions = {},
 ): string {
-  const doc = resolve(parse(source, opts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  const doc = resolve(parse(source, opts), {
+    asciiHeadingIds: opts.asciiHeadingIds ?? false,
+    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+  })
   return renderPlainText(doc, opts)
 }
 
@@ -159,6 +174,9 @@ export function carveToAnsi(
   source: string,
   opts: ParseOptions & AnsiRenderOptions = {},
 ): string {
-  const doc = resolve(parse(source, opts), { asciiHeadingIds: opts.asciiHeadingIds ?? false })
+  const doc = resolve(parse(source, opts), {
+    asciiHeadingIds: opts.asciiHeadingIds ?? false,
+    lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+  })
   return renderAnsi(doc, opts)
 }
