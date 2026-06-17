@@ -164,15 +164,14 @@ describe('implicit heading references ([Heading][])', () => {
     // Two-pass resolution: the implicit-heading-ref pass MUST finalize
     // the `[Install][]` placeholder inside heading 1 BEFORE the
     // crossref-cloning pass clones heading 1's children for the
-    // forward `</#install>` in the leading paragraph. Otherwise the
-    // clone would carry an unresolved Link placeholder and the output
-    // would be nested broken anchors.
+    // forward `</#install>` in the leading paragraph. The clone then
+    // carries a finalized Link, and the final links-never-nest pass
+    // unwraps that inner link (a link may not contain another link) so
+    // the crossref renders a single anchor with plain text.
     const html = h('See </#install>.\n\n# [Install][]\n\n# Install')
-    // Forward crossref points at the first occurrence and contains
-    // the finalized link, not a nested placeholder.
-    expect(html).toContain(
-      '<p>See <a href="#Install"><a href="#Install">Install</a></a>.</p>',
-    )
+    // Forward crossref points at the first occurrence; the inner link
+    // cloned from the heading is flattened to its text.
+    expect(html).toContain('<p>See <a href="#Install">Install</a>.</p>')
   })
 
   it('resolves a self-referencing heading via implicit ref', () => {
