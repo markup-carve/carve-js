@@ -24,7 +24,12 @@
  * accounts for.
  */
 import { parse } from './parse.js'
-import { slugify, inlineText } from './heading-ids.js'
+import {
+  slugify,
+  inlineText,
+  headingIdSlugOpts,
+  type AsciiHeadingIdMode,
+} from './heading-ids.js'
 import { normalizeRefLabel } from './parse.js'
 import type { BlockNode, Document, Heading } from './ast.js'
 
@@ -145,13 +150,10 @@ function captionHasNumber(value: unknown): boolean {
  */
 export function lintCarve(
   source: string,
-  opts: { asciiHeadingIds?: boolean; lowercaseHeadingIds?: boolean } = {},
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): LintWarning[] {
   const doc = parse(source, { positions: true })
-  const slugOpts = {
-    lowercase: opts.lowercaseHeadingIds ?? false,
-    asciiFold: opts.asciiHeadingIds ?? false,
-  }
+  const slugOpts = headingIdSlugOpts(opts)
   // Cross-references resolve case-insensitively, so the broken-crossref check
   // folds case the same way resolveHeadingIds does.
   const foldId = (s: string): string =>
