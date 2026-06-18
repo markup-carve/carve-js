@@ -1323,15 +1323,18 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     }
     // Lazy continuation: a non-`>` line folds into the quote ONLY when it is
     // plain text continuing an open paragraph (CommonMark-style; matches
-    // carve-php). A blank line ends the quote. ANY block-opener ends it and
-    // starts that block OUTSIDE the quote, exactly as it interrupts a paragraph
-    // (§10) -- this covers visible blocks (list/quote/table/fence/div/thematic)
-    // and the "invisible" reference/footnote/abbr definitions and comments. A
-    // caption `^ …` attaches to the quote rather than folding in.
+    // carve-php). A blank line ends the quote. A block-opener that INTERRUPTS a
+    // paragraph (§10) ends the quote too and starts that block OUTSIDE it --
+    // this covers visible blocks (heading/quote/table/fence/div/thematic) and
+    // the "invisible" reference/footnote/abbr definitions and comments. A bare
+    // list marker is NOT a paragraph interrupter, so it FOLDS into the quoted
+    // paragraph as literal text instead of ending the quote -- the same rule the
+    // top-level paragraph uses (see startsInterruptingBlock / parseParagraph).
+    // A caption `^ …` attaches to the quote rather than folding in.
     if (
       ln.trim() === '' ||
       RE_CAPTION.test(ln) ||
-      endsHeadingOrQuote(lexer)
+      startsInterruptingBlock(lexer)
     ) {
       break
     }

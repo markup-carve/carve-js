@@ -30,18 +30,15 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     )
   })
 
-  it('a bullet marker ends the quote and starts a sibling list', () => {
-    // A bullet does not fold into an open quote paragraph; it ends the quote
-    // and opens a top-level sibling list (Option D, matches djot).
-    expect(html('> q\n- one')).toBe(
-      '<blockquote><p>q</p></blockquote>\n<ul>\n  <li>one</li>\n</ul>',
-    )
+  it('a bullet marker folds into the open quote paragraph as literal text', () => {
+    // A bullet is not a paragraph interrupter, so it folds into the open quoted
+    // paragraph exactly as it folds into a top-level paragraph. Only a visible
+    // block-opener (e.g. a heading) ends the quote.
+    expect(html('> q\n- one')).toBe('<blockquote><p>q\n- one</p></blockquote>')
   })
 
-  it('an ordered marker ends the quote and starts a sibling list', () => {
-    expect(html('> q\n1. one')).toBe(
-      '<blockquote><p>q</p></blockquote>\n<ol>\n  <li>one</li>\n</ol>',
-    )
+  it('an ordered marker folds into the open quote paragraph as literal text', () => {
+    expect(html('> q\n1. one')).toBe('<blockquote><p>q\n1. one</p></blockquote>')
   })
 
   it('plain text still folds into the quote paragraph', () => {
@@ -56,6 +53,30 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
 
   it('a `>`-prefixed line still continues the quote', () => {
     expect(html('> a\n> b')).toBe('<blockquote><p>a\nb</p></blockquote>')
+  })
+
+  it('a `>`-prefixed list is still a real list inside the quote', () => {
+    expect(html('> - a\n> - b')).toBe(
+      '<blockquote>\n  <ul>\n    <li>a</li>\n    <li>b</li>\n  </ul>\n</blockquote>',
+    )
+  })
+
+  it('the `+` continuation marker still attaches a real list to the quote', () => {
+    expect(html('> q\n+\n- item')).toBe(
+      '<blockquote>\n  <p>q</p>\n  <ul>\n    <li>item</li>\n  </ul>\n</blockquote>',
+    )
+  })
+
+  it('an invisible reference definition still ends the quote', () => {
+    expect(html('> quoted\n[r]: /u')).toBe('<blockquote><p>quoted</p></blockquote>')
+  })
+
+  it('an invisible comment line still ends the quote', () => {
+    expect(html('> quoted\n%% c')).toBe('<blockquote><p>quoted</p></blockquote>')
+  })
+
+  it('an invisible block-attribute line still ends the quote', () => {
+    expect(html('> quoted\n{.x}')).toBe('<blockquote><p>quoted</p></blockquote>')
   })
 })
 
