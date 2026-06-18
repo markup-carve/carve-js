@@ -49,8 +49,8 @@ describe('blockquote continuation marker (+)', () => {
   })
 
   it('does not treat an indented `+` as a continuation marker', () => {
-    expect(html('> q\n  +\n- item')).toBe(
-      '<blockquote><p>q\n+</p></blockquote>\n<ul>\n  <li>item</li>\n</ul>',
-    )
+    // The indented `+` folds into the open quoted paragraph (not a marker), and
+    // the following bullet is not a paragraph interrupter, so it folds in too.
+    expect(html('> q\n  +\n- item')).toBe('<blockquote><p>q\n+\n- item</p></blockquote>')
   })
 })

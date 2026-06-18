@@ -11,9 +11,11 @@ const h = (s: string) => carveToHtml(s)
  * (`1.`/`a.`/`i.`) already did. Without the blank line the marker folds into the
  * open paragraph as lazy continuation.
  *
- * A heading or a quoted paragraph behaves differently (Option D, matches djot):
- * a list marker ENDS the open heading or quote and starts a top-level sibling
- * list (it does not fold in). Bullet and ordered behave identically there.
+ * A quoted paragraph behaves like a top-level paragraph: a list marker folds
+ * into the open quoted paragraph as literal text (it does not end the quote),
+ * keeping the two consistent. A heading is the sole construct a list marker
+ * ENDS -- a bounded title cannot absorb a marker, so the marker ends the heading
+ * and starts a top-level sibling list. Bullet and ordered behave identically.
  *
  * Tight nested lists are unaffected: an indented marker that reaches the parent
  * item's content column opens a sublist with no blank line (§24). A marker BELOW
@@ -43,10 +45,8 @@ describe('symmetric list interruption (§10)', () => {
     )
   })
 
-  it('a bullet ends a quoted paragraph and starts a sibling list', () => {
-    expect(h('> quoted\n- item')).toBe(
-      '<blockquote><p>quoted</p></blockquote>\n<ul>\n  <li>item</li>\n</ul>',
-    )
+  it('a bullet folds into a quoted paragraph as literal text', () => {
+    expect(h('> quoted\n- item')).toBe('<blockquote><p>quoted\n- item</p></blockquote>')
   })
 
   it('keeps tight unordered nesting at the content column', () => {
