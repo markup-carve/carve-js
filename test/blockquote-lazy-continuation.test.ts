@@ -118,3 +118,34 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     )
   })
 })
+
+describe('blockquote lazy list marker only folds into an OPEN paragraph', () => {
+  it('a bullet ENDS the quote when the last quoted block is a heading', () => {
+    // The quoted content is a HEADING, not an open paragraph, so the bullet has
+    // nothing to fold into: it ends the quote and starts a sibling list at the
+    // top level -- exactly as `# h\n- item` is a heading plus a sibling list.
+    expect(html('> # h\n- item')).toBe(
+      '<blockquote>\n  <h1 id="h">h</h1>\n</blockquote>\n<ul>\n  <li>item</li>\n</ul>',
+    )
+  })
+
+  it('an ordered marker ENDS the quote when the last quoted block is a heading', () => {
+    expect(html('> # h\n1. item')).toBe(
+      '<blockquote>\n  <h1 id="h">h</h1>\n</blockquote>\n<ol>\n  <li>item</li>\n</ol>',
+    )
+  })
+
+  it('a bullet ENDS the quote when a heading follows a quoted paragraph', () => {
+    // The quote holds a paragraph AND a heading; the heading is the LAST block,
+    // so no open paragraph precedes the bullet and it ends the quote.
+    expect(html('> a\n> # h\n- item')).toBe(
+      '<blockquote>\n  <p>a</p>\n  <h1 id="h">h</h1>\n</blockquote>\n<ul>\n  <li>item</li>\n</ul>',
+    )
+  })
+
+  it('a bullet still FOLDS when the last quoted block is an open paragraph', () => {
+    // Sanity counterpart: an open quoted paragraph still absorbs the bullet as
+    // literal text (the rule the fix must not break).
+    expect(html('> para\n- item')).toBe('<blockquote><p>para\n- item</p></blockquote>')
+  })
+})
