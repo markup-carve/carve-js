@@ -28,6 +28,20 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
+  it('a same-level ## continuation line folds (same number of #)', () => {
+    expect(html('## H\n## more')).toBe(
+      '<section id="H-more">\n  <h2>H\nmore</h2>\n</section>',
+    )
+  })
+
+  it('a fewer-# marker ends the heading and starts a new heading', () => {
+    // Djot continuation requires EXACTLY the same number of `#`. A line with
+    // fewer `#` is no longer folded; it opens a new heading at that level.
+    expect(html('## H\n# more')).toBe(
+      '<section id="H">\n  <h2>H</h2>\n</section>\n<section id="more">\n  <h1>more</h1>\n</section>',
+    )
+  })
+
   it('a bullet marker ends the heading and starts a sibling list', () => {
     // A bullet does not fold into an open heading; it ends the heading and
     // opens a sibling list inside the section (Option D, matches djot).
