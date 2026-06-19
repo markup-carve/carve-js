@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, citations } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus-optional')
@@ -32,6 +32,9 @@ const featureRunners: Record<string, (source: string) => string> = {
         tada: '🎉',
       },
     }),
+  'citations-numbered': (source) => carveToHtml(source, { extensions: [citations()] }),
+  'citations-author-date': (source) =>
+    carveToHtml(source, { extensions: [citations({ mode: 'author-date' })] }),
 }
 
 describe('optional Tier-2 corpus', () => {

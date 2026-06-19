@@ -39,6 +39,16 @@ export type BlockExtensionRenderer = (
   ctx: BlockExtensionRenderContext,
 ) => string | undefined
 
+/**
+ * Renderer for an extension-produced INLINE node, keyed by node `type`
+ * (e.g. `citation-group`). The inline twin of {@link BlockExtensionRenderer}.
+ * Return a string to render, or `undefined` to defer to the next renderer.
+ */
+export type InlineExtensionRenderer = (
+  node: InlineNode,
+  ctx: ExtensionRenderContext,
+) => string | undefined
+
 /** Result of an inline matcher: the produced node and the offset just past it. */
 export interface InlineMatch {
   node: InlineNode
@@ -105,4 +115,6 @@ export interface CarveExtension {
   renderers?: Record<string, ExtensionRenderer>
   /** Renderers keyed by core block node `type` (e.g. `admonition`). */
   blockRenderers?: Record<string, BlockExtensionRenderer>
+  /** Renderers keyed by an extension inline node `type` (e.g. `citation-group`). */
+  inlineRenderers?: Record<string, InlineExtensionRenderer>
 }
