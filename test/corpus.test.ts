@@ -119,6 +119,20 @@ const IMPLEMENTED = new Set([
   '96-table-span-marker-in-first-column',
   '98-table-row-attributes',
   '99-table-header-cell-rowspan',
+  '76-paragraph-interruption',
+  '77-blockquote-lazy-continuation',
+  '78-fenced-code-language-with-punctuation',
+  '79-multi-line-headings',
+  '80-blockquote-lazy-continuation-stops-at-a-fenced-block',
+  '81-list-lazy-continuation',
+  '82-compact-list-blocks',
+  '83-list-continuation-marker',
+  '84-block-attribute-lines',
+  '85-numbered-cross-references',
+  '86-inline-footnotes',
+  '87-list-item-attributes',
+  '97-table-cell-attributes',
+  '100-block-quote-continuation-marker',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
