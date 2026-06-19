@@ -133,6 +133,8 @@ const IMPLEMENTED = new Set([
   '87-list-item-attributes',
   '97-table-cell-attributes',
   '100-block-quote-continuation-marker',
+  '101-heading-marker-column-zero',
+  '102-paragraph-trailing-whitespace',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
@@ -141,6 +143,29 @@ const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+// Coverage guard: every distinct `NN-slug` base category present in the spec
+// corpus MUST be listed in IMPLEMENTED. Categories not in IMPLEMENTED are run
+// as `.todo` above and silently skipped, which is exactly how 14 spec
+// categories once went unvalidated. This is a REAL test (not todo): when a
+// future spec adds a corpus category, this fails with the missing names,
+// forcing the category into IMPLEMENTED (or the build breaks).
+describe('spec corpus coverage guard', () => {
+  it('every corpus base category is in IMPLEMENTED', () => {
+    const categories = new Set<string>()
+    for (const name of pairs) {
+      if (!existsSync(resolve(corpusDir, `${name}.html`))) continue
+      categories.add(baseSlug(name))
+    }
+    const missing = [...categories]
+      .filter((c) => !IMPLEMENTED.has(c))
+      .sort()
+    expect(
+      missing,
+      `Corpus categories missing from IMPLEMENTED (add them so they are not silently .todo): ${missing.join(', ')}`,
+    ).toEqual([])
+  })
+})
 
 describe('spec corpus', () => {
   for (const name of pairs) {
