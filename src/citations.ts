@@ -153,7 +153,9 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
 // ----- afterParse: collect [@key]: definitions ------------------------------
 
 const ATTR_RE = /^\{([^}]*)\}\s*/
-const KV_RE = (k: string) => new RegExp(`${k}\\s*=\\s*"([^"]*)"`)
+// The `{author= year=}` block sits in the entry prose, so the core typographic
+// pass may have turned its straight quotes into curly ones (#196). Accept both.
+const KV_RE = (k: string) => new RegExp(`${k}\\s*=\\s*["“”]([^"“”]*)["“”]`)
 
 /** Return a new block list with definition lines removed, populating `defs`.
  *  Consecutive `[@key]: entry` lines parse as one paragraph (soft-break
