@@ -54,7 +54,7 @@ describe('inline span [text]{attrs}', () => {
 
   it('contributes its text to a heading slug and renders inside the heading', () => {
     const html = h('# A [x]{.k} b')
-    expect(html).toContain('<section id="a-x-b">')
+    expect(html).toContain('<section id="A-x-b">')
     expect(html).toContain('<h1>A <span class="k">x</span> b</h1>')
   })
 
@@ -67,7 +67,7 @@ describe('inline span [text]{attrs}', () => {
     // isn't attribute syntax (`{???}`) is not an attribute block, so the
     // bracketed run stays literal.
     expect(h('[text]{???}')).toBe('<p>[text]{???}</p>')
-    expect(h('[text]{=y=}')).toBe('<p>[text]{=y=}</p>')
+    expect(h('[text]{?y?}')).toBe('<p>[text]{?y?}</p>')
   })
 
   it('parses a span whose body contains nested brackets / a link', () => {
@@ -83,5 +83,20 @@ describe('inline span [text]{attrs}', () => {
     // The close `}` is the first one OUTSIDE quotes (djot "don't mind
     // braces in quotes").
     expect(h('[x]{data-x="{y}"}')).toBe('<p><span data-x="{y}">x</span></p>')
+  })
+
+  it('rejects a digit-first attribute name (block stays literal)', () => {
+    // An attribute name (id, class, key) is a grammar identifier and may not
+    // start with a digit; the whole block is then not an attribute block and
+    // stays literal (§14), stricter than djot.
+    expect(h('[x]{.123}')).toBe('<p>[x]{.123}</p>')
+    expect(h('[x]{123=v}')).toBe('<p>[x]{123=v}</p>')
+    expect(h('[x]{.1a}')).toBe('<p>[x]{.1a}</p>')
+  })
+
+  it('still accepts a digit AFTER the first identifier character', () => {
+    expect(h('[x]{.a1 #b2 k3=v}')).toBe(
+      '<p><span class="a1" id="b2" k3="v">x</span></p>',
+    )
   })
 })

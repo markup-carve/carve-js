@@ -13,9 +13,14 @@
  *        strong        double-star / double-underscore -> single star *x*
  *        bold-italic   triple-star / triple-underscore -> star+slash
  *        strikethrough double-tilde -> single tilde ~x~
- *        highlight     ==x==       -> ==x==   ( unchanged )
+ *        highlight     ==x==       -> =x=     ( Carve highlight is a single `=` )
  *        superscript   ^x^         -> ^x^     ( unchanged )
  *        inline math   $x$         -> $`x`
+ *
+ *      Carve's highlight/subscript markers are single chars (`=x=`, `,x,`); the
+ *      doubled forms `==x==` / `,,x,,` are literal. The `<mark>`/`<sub>`/`<sup>`
+ *      HTML tags map to the forced brace forms (`{=x=}` / `{,x,}` / `{^x^}`),
+ *      which also render when the tag sits intraword (e.g. `H<sub>2</sub>O`).
  *
  * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
  * keeps `_x_`, which Carve renders as underline — a silent mis-render.
@@ -45,13 +50,41 @@
  *    CommonMark does, so `![*x*](u)` keeps `*x*` in the Carve alt attribute.
  */
 
-const HTML_TAG_RULES: Array<[RegExp, string]> = [
-  [/<mark>([^<]+)<\/mark>/gi, '==$1=='],
+type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
+
+/**
+ * Build a replacer for a single-char inline marker (`^` super, `,` sub, `=`
+ * highlight). Carve's bare markers do not open/close intraword or next to
+ * whitespace, so the bare form (`^x^`) is only used when the tag has a
+ * non-alphanumeric neighbor on each side and its body is not whitespace-padded.
+ * Otherwise the brace form (`{^x^}`) is required — it renders in every position
+ * (e.g. `H<sub>2</sub>O`), at the cost of being noisier. Preferring the bare
+ * form keeps the common, whitespace-separated case clean on a Markdown→Carve
+ * round-trip (corpus 67-superscript-and-subscript).
+ */
+function markerForm(marker: string): (match: string, body: string, offset: number, full: string) => string {
+  return (match, body, offset, full) => {
+    const before = full[offset - 1] ?? ''
+    const after = full[offset + match.length] ?? ''
+    const intraword = /[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)
+    const padded = /^\s|\s$/.test(body)
+    return intraword || padded ? `{${marker}${body}${marker}}` : `${marker}${body}${marker}`
+  }
+}
+
+const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
+  // Highlight/super/subscript use Carve's single-char markers, brace-forced
+  // only when needed: an HTML tag can sit intraword (e.g. `H<sub>2</sub>O`),
+  // where a bare `,2,` / `^2^` / `=2=` is literal in Carve, so `markerForm`
+  // emits `{,x,}` / `{^x^}` / `{=x=}` there and the bare form everywhere else.
+  [/<mark>([^<]+)<\/mark>/gi, markerForm('=')],
+  // `<ins>` has no bare Carve form (insertion is the CriticMarkup `{+x+}`), so
+  // it always uses the brace form — unlike the single-char markers below.
   [/<ins>([^<]+)<\/ins>/gi, '{+$1+}'],
   [/<del>([^<]+)<\/del>/gi, '~$1~'],
   [/<s>([^<]+)<\/s>/gi, '~$1~'],
-  [/<sup>([^<]+)<\/sup>/gi, '^$1^'],
-  [/<sub>([^<]+)<\/sub>/gi, ',,$1,,'],
+  [/<sup>([^<]+)<\/sup>/gi, markerForm('^')],
+  [/<sub>([^<]+)<\/sub>/gi, markerForm(',')],
   [/<strong>([^<]+)<\/strong>/gi, '*$1*'],
   [/<b>([^<]+)<\/b>/gi, '*$1*'],
   [/<em>([^<]+)<\/em>/gi, '/$1/'],
@@ -228,15 +261,21 @@ function convertInline(input: string): string {
   // ~~strikethrough~~ -> ~strikethrough~
   line = line.replace(/~~([^~]+)~~/g, '~$1~')
 
+  // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
+  // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),
+  // so a Markdown highlight left unchanged would silently mis-render.
+  line = line.replace(/==(?!\s)([^=]+?)(?<!\s)==/g, '=$1=')
+
   // HTML inline tags -> Carve. Run after the emphasis/strong passes: the tag
   // bodies contain no * _ ~ delimiters, so the markup they produce (e.g.
   // <strong>a</strong> -> *a*) is not re-matched and turned into /a/.
   for (const [re, repl] of HTML_TAG_RULES) {
-    line = line.replace(re, repl)
+    line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, repl)
   }
 
-  // ==highlight== and ^superscript^ are identical in Carve — no change.
-  // (Math was converted and protected above, before the emphasis passes.)
+  // ^superscript^ is identical in Carve — no change. (Highlight ==x== was
+  // converted to =x= above; math was converted and protected before the
+  // emphasis passes.)
 
   // Restore stashes and protected spans until stable: a protected/stashed
   // span may itself contain placeholders (e.g. a reference-definition line
@@ -249,6 +288,45 @@ function convertInline(input: string): string {
       .replace(/\x00P(\d+)\x00/g, (_m, i) => protectedSpans[Number(i)]!)
   } while (line !== prev)
   return line
+}
+
+/** A GFM table delimiter row, e.g. `| --- | :--: |` (at least one column). */
+const RE_TABLE_DELIMITER = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$/
+
+/**
+ * Split a pipe-delimited table row into trimmed cell texts, honoring `\|`
+ * escapes and dropping the empty cells produced by a leading/trailing pipe.
+ */
+function splitTableRow(row: string): string[] {
+  const cells: string[] = []
+  let cur = ''
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i]!
+    if (ch === '\\' && i + 1 < row.length) {
+      cur += ch + row[++i]!
+      continue
+    }
+    if (ch === '|') {
+      cells.push(cur)
+      cur = ''
+      continue
+    }
+    cur += ch
+  }
+  cells.push(cur)
+  if (cells.length > 1 && cells[0]!.trim() === '') cells.shift()
+  if (cells.length > 1 && cells[cells.length - 1]!.trim() === '') cells.pop()
+  return cells.map((c) => c.trim())
+}
+
+/** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
+function alignMarker(cell: string): '' | '<' | '>' | '~' {
+  const left = cell.startsWith(':')
+  const right = cell.endsWith(':')
+  if (left && right) return '~'
+  if (right) return '>'
+  if (left) return '<'
+  return ''
 }
 
 /** Convert a Markdown document to Carve. */
@@ -267,16 +345,17 @@ export function markdownToCarve(markdown: string): string {
 
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
     // Markdown rule). Carve accepts a single language token over a real-world
-    // charset (c++, c#, asp.net are valid), so the Markdown info string is
-    // normalized to its first such token — keeping `c++` intact and reducing
-    // an extended info (```js title="x") to ```js (still a code block).
+    // charset (c++, c#, asp.net, text/html are valid), so the Markdown info
+    // string is normalized to its first such token — keeping `c++`/`text/html`
+    // intact and reducing an extended info (```js title="x") to ```js (still a
+    // code block). The charset matches RE_FENCE in parse.ts, including `/`.
     const open = !inCode ? line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/) : null
     if (open) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      const info = open[3]!.match(/[A-Za-z0-9_+#.-]+/)?.[0] ?? ''
+      const info = open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? ''
       out.push(open[1]! + open[2]! + info)
       prevType = 'code_fence'
       continue
@@ -297,6 +376,34 @@ export function markdownToCarve(markdown: string): string {
         prevType = 'code'
       }
       continue
+    }
+
+    // GFM table header: a `| ... |` row immediately followed by a delimiter
+    // row (`| --- | :--: |`). Carve marks header cells with `|=` (alignment
+    // glued as `<`/`>`/`~`) and needs no delimiter row, so rewrite the header
+    // and drop the delimiter. Body rows are already valid Carve and fall
+    // through as plain text below, so only the header is special-cased here.
+    if (trimmed.includes('|')) {
+      const next = i + 1 < lines.length ? lines[i + 1]!.trim() : ''
+      if (next.includes('-') && RE_TABLE_DELIMITER.test(next)) {
+        const headerCells = splitTableRow(trimmed)
+        const aligns = splitTableRow(next).map(alignMarker)
+        // GFM requires the delimiter row to have the same column count as the
+        // header; a mismatch (e.g. `a | b` over `---`) is not a table, so leave
+        // it for the setext/thematic-break handling below.
+        if (aligns.length === headerCells.length) {
+          let header = ''
+          for (let c = 0; c < headerCells.length; c++) {
+            header += `|=${aligns[c] ?? ''} ${convertInline(headerCells[c]!)} `
+          }
+          header += '|'
+          if (prevType !== 'blank' && out.length > 0) out.push('')
+          out.push(header)
+          i++ // consume the delimiter row
+          prevType = 'text'
+          continue
+        }
+      }
     }
 
     const isBlank = trimmed === ''

@@ -45,16 +45,17 @@ describe('carve CLI — dispatch', () => {
     expect(t.out).toContain('carve fix')
   })
 
-  it('errors (exit 2) on an unknown command', async () => {
+  it('treats a non-subcommand first arg as a file to render (exit 2 if missing)', async () => {
     const t = makeIO()
     const code = await run(['frobnicate'], t.io)
     expect(code).toBe(2)
-    expect(t.err).toContain("unknown command 'frobnicate'")
+    expect(t.err).toContain('cannot read frobnicate')
   })
 
-  it('errors (exit 2) when invoked with no arguments', async () => {
-    const t = makeIO()
-    expect(await run([], t.io)).toBe(2)
+  it('renders stdin (HTML) when invoked with no arguments', async () => {
+    const t = makeIO({ stdin: '# Hi\n' })
+    expect(await run([], t.io)).toBe(0)
+    expect(t.out).toContain('<h1>Hi</h1>')
   })
 })
 
@@ -189,5 +190,78 @@ describe('carve fix — collisions', () => {
     const t = makeIO({ files: { 'a.crv': '**_x**_' } })
     // applied is empty, but skipped is non-empty -> not clean.
     expect(await run(['fix', 'a.crv'], t.io)).toBe(1)
+  })
+})
+
+describe('carve render', () => {
+  const SRC = '# Hi\n\n_em_ *strong* `code`\n'
+
+  it('renders HTML by default from stdin', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render'], t.io)).toBe(0)
+    expect(t.out).toContain('<h1>Hi</h1>')
+    expect(t.out).toContain('<strong>strong</strong>')
+  })
+
+  it('renders Markdown with --markdown', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render', '--markdown'], t.io)).toBe(0)
+    expect(t.out).toContain('# Hi')
+    expect(t.out).toContain('**strong**')
+  })
+
+  it('renders plain text with --plain', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render', '--plain'], t.io)).toBe(0)
+    expect(t.out).toContain('Hi')
+    expect(t.out).not.toContain('<h1>')
+    expect(t.out).not.toContain('**')
+  })
+
+  it('renders ANSI escape codes with --ansi', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render', '--ansi'], t.io)).toBe(0)
+    expect(t.out).toContain('[') // an SGR escape was emitted
+  })
+
+  it('reads a file argument', async () => {
+    const t = makeIO({ files: { 'a.crv': SRC } })
+    expect(await run(['render', '--markdown', 'a.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('# Hi')
+  })
+
+  it('rejects more than one format flag', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render', '--ansi', '--markdown'], t.io)).toBe(2)
+    expect(t.err).toContain('choose at most one')
+  })
+
+  it('rejects multiple input files', async () => {
+    const t = makeIO({ files: { 'a.crv': SRC, 'b.crv': SRC } })
+    expect(await run(['render', 'a.crv', 'b.crv'], t.io)).toBe(2)
+  })
+
+  it('reports an unreadable file', async () => {
+    const t = makeIO()
+    expect(await run(['render', 'missing.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('cannot read')
+  })
+
+  it('renders without the render subcommand (carve --ansi)', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['--ansi'], t.io)).toBe(0)
+    expect(t.out).toContain('[') // SGR escape emitted
+  })
+
+  it('renders a bare file argument as HTML by default', async () => {
+    const t = makeIO({ files: { 'a.crv': SRC } })
+    expect(await run(['a.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('<h1>Hi</h1>')
+  })
+
+  it('renders --markdown without the subcommand', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['--markdown'], t.io)).toBe(0)
+    expect(t.out).toContain('# Hi')
   })
 })

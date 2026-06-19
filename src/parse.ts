@@ -52,17 +52,28 @@ import type {
   ThematicBreak,
 } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
+import type { AsciiHeadingIdMode } from './heading-ids.js'
 
 export interface ParseOptions {
   positions?: boolean
   /** Format label applied to a bare `---` frontmatter fence. Default 'yaml'. */
   defaultFrontmatterFormat?: string
   /**
-   * Fold auto-generated heading ids to ASCII (Über -> uber) for URL/CSS-fragment
-   * portability. Default false: ids are lowercased (GitHub-style) but keep non-ASCII
-   * verbatim. See markup-carve/carve#73.
+   * Lowercase auto-generated heading ids (GitHub/SSG-style anchors), folded per
+   * code point so it stays portable. Default false: ids are case-preserving.
+   * Cross-references resolve case-insensitively either way.
    */
-  asciiHeadingIds?: boolean
+  lowercaseHeadingIds?: boolean
+  /**
+   * Fold auto-generated heading ids to ASCII for share-safe URL/CSS-fragment
+   * portability. Default false (off). `true` / `'fold'` is best-effort:
+   * transliterate non-ASCII, but scripts the map can't handle (Greek, CJK,
+   * Arabic, emoji) are kept verbatim. `'strict'` additionally drops that
+   * unmappable residue, guaranteeing a pure-ASCII id (a heading made entirely
+   * of unmappable script then falls back to `s`). Orthogonal to
+   * `lowercaseHeadingIds`; combine both for a fully lowercase ASCII slug.
+   */
+  asciiHeadingIds?: AsciiHeadingIdMode
   /**
    * Extensions whose parse-stage matchers (`matchInline` / `matchBlock`) add
    * syntax to the parse. Extensions with only render/transform hooks need not
@@ -79,40 +90,78 @@ let activeMatchers: CarveExtension[] = []
 let activeMatcherCtx: MatcherContext | null = null
 
 const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
-// Thematic break: a line of 3+ of the same `-`, `*`, or `_` (grammar
-// thematic_break). A run alone on a line can't be emphasis (no content).
-const RE_HR = /^(?:-{3,}|\*{3,}|_{3,})\s*$/
+// Thematic break: a line of 3+ of the same `-`, `*`, or `_`, optionally
+// separated by spaces/tabs (`---`, `- - -`, `* * *`); nothing else on the line
+// (grammar thematic_break). A run alone on a line can't be emphasis (no
+// content). The chars must all match, so a mixed `-*-` is not a break.
+const RE_HR = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 // Info string is a single language token, optionally followed by a bracketed
 // `[label]` (structured metadata; e.g. ```php [NPM] or ```[NPM]). The charset
-// covers real-world tags with punctuation (c++, c#, f#, asp.net). Anything else
-// after the token -- a bare second word, a quoted value, `key=val` -- is NOT a
-// fence (e.g. `js title="x"`): the bracket is the only allowed delimiter, so
-// such a line falls back to inline parsing.
+// covers real-world tags with punctuation (c++, c#, f#, asp.net, text/html).
+// Anything else after the token -- a bare second word, a quoted value,
+// `key=val` -- is NOT a fence (e.g. `js title="x"`): the bracket is the only
+// allowed delimiter, so such a line falls back to inline parsing. An info
+// string of the form `=FORMAT` is a raw passthrough block (RE_RAW_FENCE),
+// matched before this; a leading `=` therefore never starts a language token.
 const RE_FENCE =
-  /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*(\[[^\]]*\])?\s*$/
+  /^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#/.-]*)\s*(\[[^\]]*\])?\s*$/
 // Bullets are `-` and `*` only. Unlike Markdown/djot, `+` is not a Carve bullet
 // -- it is reserved as the list-continuation marker (PART 9 §17), so a lone `+`
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
 // item only with non-empty content: a content-less marker (`-`, `- `, `-   ` --
 // bare or trailing whitespace only) is NOT a list, it is paragraph text.
-const RE_UNORDERED = /^(\s*)[-*]\s+(\S.*)$/
+const RE_UNORDERED = /^(\s*)[-*] +(\S.*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
-const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)])\s+(\S.*)$/
+const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)]) +(\S.*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(\s*)[-*]\s+\[([ xX\-_>?])\]\s+(\S.*)$/
+const RE_TASK = /^(\s*)[-*] +\[([ xX\-_>?])\] +(\S.*)$/
+// A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
+// ordered marker directly followed by `{...}` (no space), then the marker's
+// required space and content. The brace attaches its attributes to the <li>
+// (Carve addition, grammar `item_attributes`). The brace body uses the same
+// quote-aware subpattern as the inline span tail (RE_SPAN_TAIL).
+const RE_ITEM_ATTR =
+  /^(\s*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +\S.*)$/
+// Strip a valid abutting `{...}` from a marker line so the bare marker regexes
+// match, returning the stripped line plus the parsed attributes. Returns null
+// when there is no abutting brace or the brace is not a valid attribute payload
+// (then `-{...}` is not a marker and the line stays ordinary text, mirroring the
+// inline-span disambiguation, grammar §14).
+function extractItemAttr(line: string): { stripped: string; attrs: Attrs } | null {
+  const m = RE_ITEM_ATTR.exec(line)
+  if (!m) return null
+  if (!isValidAttrPayload(m[3]!)) return null
+  return { stripped: m[1]! + m[2]! + m[4]!, attrs: parseAttrs(m[3]!) }
+}
 const RE_BLOCKQUOTE = /^>\s?(.*)$/
 // Fences are a run of 3+ colons (group 1). A longer opener nests: a
 // `::::` block contains `:::` blocks, and only a bare closer of equal-or-
 // greater length closes it (djot fence-length rule).
-const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z][\w-]*)\s*(.*)$/
+// A `:::` opener carries NO inline attributes (strict djot): the fence line
+// is `colon_fence [space type [space "title"]]` and nothing else. Any
+// trailing `{...}` (or other non-title text) makes it not a fence, so the
+// line is an ordinary paragraph. Attributes attach via a PRECEDING `{...}`
+// block-attribute line.
+// The type word is a grammar `identifier`: `(letter | '_'), {letter | digit
+// | '_' | '-'}`, so it may start with an underscore (matches carve-php /
+// carve-rs).
+const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z_][\w-]*)\s*("[^"]*")?\s*$/
 const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
-// Generic fenced div: a `:::` opener with NO type word -- bare `:::` or
-// an attributes-only `::: {.class}` (djot's generic container). A typed
-// `::: word` routes to parseAdmonition instead. Shares the `:::` closer.
-const RE_DIV_OPEN = /^(:{3,})\s*(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+// Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
+// `::: line-block` keyword is no longer special -- it falls through to the
+// admonition branch and renders as an ordinary `<div class="line-block">`
+// with NO hard-break / stanza / leading-whitespace handling. Output of the
+// pipe form is unchanged (`<div class="line-block">` with `<br>` breaks).
+// Mirrors carve#119 / carve-php#124.
+const RE_LINE_BLOCK_OPEN = /^(:{3,})[ \t]+\|[ \t]*$/
+// Generic fenced div: a bare `:::` opener with NO type word (djot's generic
+// container). A typed `::: word` routes to parseAdmonition. An inline
+// `::: {.class}` is NOT a div (strict djot) -- use a preceding attribute
+// line. Shares the `:::` closer.
+const RE_DIV_OPEN = /^(:{3,})\s*$/
 // Definition list (§4.5). A TERM line is exactly two colons + space(s)
 // + text — the `(?!:)` keeps it distinct from a `:::` div/admonition. A
 // DEFINITION line is a colon + two-or-more spaces + text.
@@ -133,6 +182,15 @@ const RE_LINK_DEF =
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
 const RE_CAPTION = /^\^\s+(.+)$/
 const RE_TABLE_ROW = /^\|/
+// A complete standard table row opens AND closes with `|` (grammar
+// standard_row). A stray leading `|` with no closing `|` (`| a`) is ordinary
+// paragraph text, not a table -- so a table opener / interrupter must have the
+// trailing pipe, not just a leading one. A row may carry an attribute block
+// GLUED to its closing pipe (`| a |{.x}` -> <tr class="x">); rowAttrsFromLine
+// validates and strips it, so the gate allows an optional trailing `{...}`.
+const isTableRow = (line: string): boolean =>
+  RE_TABLE_ROW.test(line) &&
+  (/\|[ \t]*$/.test(line) || rowAttrsFromLine(line).attrs !== undefined)
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed
@@ -147,10 +205,12 @@ const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)
 const RE_FRONTMATTER_OPEN = /^---[ \t]*(\w*)\s*$/
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = /^---\s*$/
-// Raw passthrough block: ```raw FORMAT … ``` (§4.15). The info string has
-// two tokens ("raw FORMAT"), so this never collides with RE_FENCE (which
-// allows only a single info token).
-const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*raw\s+([a-zA-Z][\w-]*)\s*$/
+// Raw passthrough block: ```=FORMAT … ``` (§4.15, djot raw-block syntax). The
+// info string is `=FORMAT` (a leading `=` immediately followed by the format
+// name), so this never collides with RE_FENCE (whose language charset excludes
+// `=`). The `=` is the block parallel of the inline raw `{=format}` attribute.
+// FORMAT must follow `=` with no intervening space (```= html is not raw).
+const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*=([a-zA-Z][\w-]*)\s*$/
 // Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
 // by length); a `%%` line is a line comment. Neither is rendered.
 const RE_COMMENT_BLOCK = /^%{3,}\s*$/
@@ -193,6 +253,13 @@ class Lexer {
   // proves that, every later bare opener (pos only advances) is O(1),
   // keeping pathological "many unclosed `:::`" input linear.
   divNoCloserFrom = Infinity
+
+  // Negative cache for divHasCloser keyed by fence length: fenceLen → smallest
+  // line index from which no bare closer of >= that length exists onward. Keeps
+  // "many `:::: word` openers + one too-short closer" input linear instead of
+  // O(n²) (the any-length cache above never trips when a too-short closer is
+  // present). pos only advances, so the stored start is a monotone frontier.
+  divNoCloserOfLenFrom = new Map<number, number>()
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead): the smallest line index from which NO bare fence-closer
@@ -252,6 +319,14 @@ class Lexer {
 
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
+  // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
+  // is a heading, not literal text. Only here in the root entry -- nested
+  // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
+  // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
+  if (source.charCodeAt(0) === 0xfeff) source = source.slice(1)
+  // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
+  // byte never reaches output (decided cross-impl behavior; WHATWG-style).
+  if (source.includes('\0')) source = source.replace(/\0/g, '�')
   const lexer = new Lexer(source, opts)
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
@@ -516,6 +591,35 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
  * attribute is not a block-attribute line — it falls through to normal
  * block parsing (literal text). Grammar PART 9 §15.
  */
+/**
+ * Non-consuming check: is the lexer positioned on a standalone block-attribute
+ * line? Mirrors tryCollectBlockAttributes' recognition without consuming, so
+ * startsInterruptingBlock can break an open paragraph on a trailing `{...}`
+ * line (which then floats forward via parseBlocks).
+ */
+function peekBlockAttributes(lexer: Lexer): boolean {
+  if (!/^\s*\{/.test(lexer.peek()!)) return false
+  let collected = ''
+  let n = 0
+  let closed = false
+  for (;;) {
+    const ln = lexer.peek(n)
+    if (ln === undefined) break
+    if (n > 0 && ln.trim() === '') break
+    collected += (n === 0 ? '' : '\n') + ln
+    n++
+    if (ln.includes('}')) {
+      closed = true
+      break
+    }
+  }
+  if (!closed) return false
+  const m = /^\s*\{([\s\S]*)\}\s*$/.exec(collected)
+  if (!m) return false
+  if (!isValidAttrPayload(m[1]!)) return false
+  return !isEmptyAttrs(parseAttrs(m[1]!))
+}
+
 function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
   if (!/^\s*\{/.test(lexer.peek()!)) return null
   let collected = ''
@@ -578,7 +682,16 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     const l = lexer.consume()
     return { type: 'comment', block: false, content: l.slice(2).replace(/^\s/, '') }
   }
-  if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
+  if (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) return parseLineBlock(lexer)
+  // A typed `::: word` admonition, like a bare `:::` div, opens ONLY when a
+  // matching closer exists ahead (PART 9 §12 / grammar: `admonition = open …
+  // close`). Without this guard an unterminated `::: note` swallows the rest
+  // of the document into an aside.
+  if (
+    RE_ADMONITION_OPEN.test(line) &&
+    !RE_ADMONITION_CLOSE.test(line) &&
+    divHasCloser(lexer)
+  )
     return parseAdmonition(lexer)
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
   // admonition branch above already claimed the `::: word` form) — but
@@ -607,9 +720,14 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Definition list starts on a `:: term` line (two colons, not three).
   if (RE_DEFLIST_TERM.test(line)) return parseDefinitionList(lexer)
   if (RE_BLOCKQUOTE.test(line)) return parseBlockQuote(lexer)
-  if (RE_TASK.test(line) || RE_UNORDERED.test(line) || RE_ORDERED.test(line))
+  if (
+    RE_TASK.test(line) ||
+    RE_UNORDERED.test(line) ||
+    RE_ORDERED.test(line) ||
+    extractItemAttr(line) !== null
+  )
     return parseList(lexer)
-  if (RE_TABLE_ROW.test(line)) return parseTable(lexer)
+  if (isTableRow(line)) return parseTable(lexer)
   if (isBlockImageLine(line)) return parseBlockImage(lexer)
   // Extension block matchers run after every core construct, before the
   // paragraph fallback: extensions add syntax, they never hijack core.
@@ -617,7 +735,59 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     const matched = tryBlockMatchers(lexer)
     if (matched) return matched
   }
+  // A line that is nothing but a display-math span (`$$`…``) standalone on its
+  // block is a candidate EQUATION; when a caption follows it is numbered like a
+  // figure/table/listing (#87). Diverted here, before the paragraph fallback,
+  // because parseParagraph would otherwise fold the caption line into the math
+  // paragraph.
+  if (line.trimStart().startsWith('$$`')) {
+    const eq = parseEquationBlock(lexer)
+    if (eq) return eq
+  }
   return parseParagraph(lexer)
+}
+
+// Parse a standalone display-math line, optionally wrapping it in a figure when
+// a caption follows (a numbered equation). Returns null when the line is not
+// solely display math, or when non-blank prose follows with no blank line (so
+// the line belongs to a normal multi-line paragraph instead).
+function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
+  // Mirror parseParagraph's leading-whitespace strip + base-position folding so
+  // an indented standalone equation is still recognized and the math span keeps
+  // its true source offset.
+  const lineIndex = lexer.pos
+  const raw = lexer.peek()!
+  const firstLead = raw.match(/^[ \t]+/)?.[0].length ?? 0
+  const inline = parseInline(raw.replace(/^[ \t]+/, ''), lexer.abbrDefs, lexer.linkDefs, {
+    baseOffset: lexer.lineOffset(lineIndex) + firstLead,
+    startLine: lineIndex + 1,
+    startColumn: 1 + firstLead,
+  })
+  if (inline.length !== 1) return null
+  const only = inline[0]!
+  if (only.type !== 'math' || !(only as Math).display) return null
+  // First non-blank line after the math line, and how many blanks precede it.
+  let la = 1
+  while (lexer.peek(la)?.trim() === '') la++
+  const after = lexer.peek(la)
+  const blanks = la - 1
+  const cap = after !== undefined ? RE_CAPTION.exec(after) : null
+  const para: Paragraph = { type: 'paragraph', children: inline }
+  // §4: a caption attaches across at most one blank line.
+  if (cap && blanks <= 1) {
+    for (let i = 0; i <= la; i++) lexer.consume()
+    return {
+      type: 'figure',
+      target: para,
+      caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+    } as Figure
+  }
+  // Non-blank, non-caption text immediately follows: let parseParagraph fold
+  // the math and that text into one paragraph (preserve existing behavior).
+  if (after !== undefined && blanks === 0) return null
+  // Standalone display math with no caption: a plain single-math paragraph.
+  lexer.consume()
+  return para
 }
 
 function attachBlockPos(
@@ -638,28 +808,25 @@ function attachBlockPos(
   }
 }
 
-// Trailing `{…}` attribute block on a (possibly multi-line) heading. Quote-
-// and escape-aware so a `}` inside a quoted value does not end it early.
-const RE_HEADING_TRAIL_ATTR =
-  /^([\s\S]*?)[ \t]*\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}$/
-
 function parseHeading(lexer: Lexer): Heading {
   const lineIndex = lexer.pos
   const line = lexer.consume()
   const m = RE_HEADING.exec(line)!
   const level = m[1]!.length as HeadingLevel
 
-  // Carve headings are multi-line, like Djot (and like blockquotes): the text
-  // spills onto following lines until a blank line. A continuation line may
-  // carry the same-or-lower number of `#` (stripped) or none; a higher/other
-  // heading marker starts a NEW heading, and a caption (`^ …`) or fenced
-  // comment (`%%%`) ends the heading. Per §10 no other block interrupts it.
+  // Carve headings are multi-line: the text spills onto following lines until a
+  // blank line. A continuation line may carry the same number of `#` (stripped)
+  // or none; a heading marker with a different count (more OR fewer) starts a
+  // NEW heading, and a caption (`^ …`) or fenced comment (`%%%`) ends the
+  // heading. A block-opener (list/quote/table/fence/div/thematic break) ALSO
+  // ends it and starts that block, exactly as it interrupts a paragraph (§10)
+  // -- only plain text folds.
   let text = line.replace(/^#{1,6}[ \t]+/, '')
-  const sameOrLower = new RegExp(`^#{1,${level}}[ \\t]+(.+)$`)
+  const sameLevel = new RegExp(`^#{${level}}[ \\t]+(.+)$`)
   while (!lexer.eof()) {
     const next = lexer.peek()!
     if (next.trim() === '') break
-    const cont = sameOrLower.exec(next)
+    const cont = sameLevel.exec(next)
     if (cont) {
       text += '\n' + cont[1]!
       lexer.consume()
@@ -668,21 +835,18 @@ function parseHeading(lexer: Lexer): Heading {
     if (/^#{1,6}([ \t]|$)/.test(next) || RE_CAPTION.test(next) || RE_COMMENT_BLOCK.test(next)) {
       break
     }
+    // A block-opener ends the heading and starts that block (§10), so only
+    // plain text continuation lines fold into the heading. A list marker also
+    // ends the heading (it folds only into a paragraph, not a heading).
+    if (endsHeadingOrQuote(lexer)) break
     text += '\n' + next
     lexer.consume()
   }
 
   const node: Heading = { type: 'heading', level, children: [] }
-  // A trailing `{…}` attribute block applies to the whole heading. It is only
-  // consumed when it yields >= 1 real attribute; otherwise it stays text.
-  const am = RE_HEADING_TRAIL_ATTR.exec(text)
-  if (am) {
-    const attrs = parseAttrs(am[2]!)
-    if (!isEmptyAttrs(attrs)) {
-      node.attrs = attrs
-      text = am[1]!.replace(/[ \t]+$/, '')
-    }
-  }
+  // djot-strict: a heading takes its attributes on the PRECEDING block-
+  // attribute line (§15), not as a trailing `{…}` on its own line. A `{…}`
+  // at the end of the heading text is therefore ordinary inline content.
   // Column where the content starts on the first line (the marker + spaces).
   const textColumn = line.length - line.replace(/^#{1,6}[ \t]+/, '').length + 1
   node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
@@ -693,7 +857,7 @@ function parseHeading(lexer: Lexer): Heading {
   return node
 }
 
-function parseFence(lexer: Lexer): CodeBlock {
+function parseFence(lexer: Lexer): CodeBlock | Figure {
   const open = lexer.consume()
   const m = RE_FENCE.exec(open)!
   const indent = m[1]!.length
@@ -716,10 +880,28 @@ function parseFence(lexer: Lexer): CodeBlock {
   const cb: CodeBlock = { type: 'code-block', content: lines.join('\n') }
   if (lang) cb.lang = lang
   if (label !== undefined) cb.label = label
+  // Optional caption (`^ …`): a captioned code block is a numbered LISTING,
+  // wrapped in a figure exactly like a captioned image/blockquote/table.
+  let lookahead = 0
+  while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
+  const next = lexer.peek(lookahead)
+  if (next) {
+    const cap = RE_CAPTION.exec(next)
+    // §4: a caption attaches only when it immediately follows the block
+    // or is separated by at most ONE blank line.
+    if (cap && lookahead <= 1) {
+      for (let i = 0; i <= lookahead; i++) lexer.consume()
+      return {
+        type: 'figure',
+        target: cb,
+        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      } as Figure
+    }
+  }
   return cb
 }
 
-// Raw passthrough block: ```raw FORMAT … ``` . Content is verbatim; the
+// Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
 // renderer emits it only when FORMAT matches the output (html).
 function parseRawBlock(lexer: Lexer): RawBlock {
   const m = RE_RAW_FENCE.exec(lexer.consume())!
@@ -804,15 +986,12 @@ function parseAdmonition(lexer: Lexer): Admonition {
   const m = RE_ADMONITION_OPEN.exec(open)!
   const fence = m[1]!.length
   const kind = m[2]!
-  // A title is recognized ONLY when the tail after the type opens with a
-  // double-quoted string (grammar quoted_title; PART 9 §12), optionally
-  // followed by an attribute block. The quotes are delimiters and are
-  // stripped — not part of the rendered title text. An explicitly empty
-  // `""` still counts as a supplied (empty) title. Unquoted trailing
-  // text is ignored (not a title).
-  const tail = m[3]?.trim() ?? ''
-  const quoted = /^"([^"]*)"\s*(?:\{[^}]*\})?$/.exec(tail)
-  const titleText = quoted ? quoted[1]! : undefined
+  // The opener carries an optional quoted title only (grammar
+  // quoted_title; PART 9 §12). The quotes delimit the title and are
+  // stripped (not part of the rendered text); an explicitly empty `""`
+  // still counts as a supplied (empty) title. No inline attributes -- the
+  // opener regex already rejected any trailing `{...}`.
+  const titleText = m[3] !== undefined ? m[3]!.slice(1, -1) : undefined
   const inner: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -837,7 +1016,78 @@ function parseAdmonition(lexer: Lexer): Admonition {
   if (titleText !== undefined) {
     node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
   }
+  // No inline opener attributes (strict djot): a preceding block-attribute
+  // line is the only way to attribute an admonition, and parseBlocks
+  // applies it to the returned node.
   return node
+}
+
+function lineBlockHasCloser(lexer: Lexer): boolean {
+  const start = lexer.pos + 1
+  const fence = RE_LINE_BLOCK_OPEN.exec(lexer.peek()!)![1]!.length
+  for (let i = start; i < lexer.lines.length; i++) {
+    const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
+    if (c && c[1]!.length >= fence) return true
+  }
+  return false
+}
+
+function parseLineBlock(lexer: Lexer): Div {
+  const open = lexer.consume()
+  const m = RE_LINE_BLOCK_OPEN.exec(open)!
+  const fence = m[1]!.length
+  const stanzas: string[][] = []
+  let stanza: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    const c = RE_ADMONITION_CLOSE.exec(ln)
+    if (c && c[1]!.length >= fence) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    if (ln.trim() === '') {
+      if (stanza.length) {
+        stanzas.push(stanza)
+        stanza = []
+      }
+      continue
+    }
+    stanza.push(expandLineBlockLeadingWhitespace(ln))
+  }
+  if (stanza.length) stanzas.push(stanza)
+
+  const children = stanzas.map<Paragraph>((lines) => ({
+    type: 'paragraph',
+    children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs).map((node) =>
+      node.type === 'soft-break' ? ({ type: 'hard-break' } as InlineNode) : node,
+    ),
+  }))
+  // No inline opener attributes (strict djot); a preceding block-attribute
+  // line merges onto this div in parseBlocks.
+  const node: Div = {
+    type: 'div',
+    attrs: { classes: ['line-block'], order: ['.class'] },
+    children,
+  }
+  return node
+}
+
+function expandLineBlockLeadingWhitespace(line: string): string {
+  let i = 0
+  let columns = 0
+  while (i < line.length) {
+    const ch = line[i]
+    if (ch === ' ') columns++
+    else if (ch === '\t') columns += 4 - (columns % 4)
+    else break
+    i++
+  }
+  // Use the internal non-breaking-space placeholder (U+E000) - the same
+  // private-use sentinel as an escaped space - so the indent never collides
+  // with a literal U+00A0 in the author's text and is converted per renderer
+  // (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
+  return '\ue000'.repeat(columns) + line.slice(i)
 }
 
 // Generic div: same body collection as an admonition, but emits a plain
@@ -850,12 +1100,17 @@ function parseAdmonition(lexer: Lexer): Admonition {
  * grammar: a div requires a closer).
  */
 function divHasCloser(lexer: Lexer): boolean {
-  // A bare-`:::`+ div opens only when a bare closer of equal-or-greater
-  // colon length exists ahead (otherwise a lone `:::` is literal — and a
-  // longer fence must be matched by a longer closer).
+  // A bare-`:::`+ div (or typed `::: word` admonition) opens only when a bare
+  // closer of equal-or-greater colon length exists ahead (otherwise the opener
+  // is literal — and a longer fence must be matched by a longer closer).
   const start = lexer.pos + 1
-  if (start >= lexer.divNoCloserFrom) return false // memo: no closer ahead
+  if (start >= lexer.divNoCloserFrom) return false // memo: no closer at all ahead
   const fence = /^(:{3,})/.exec(lexer.peek()!)![1]!.length
+  // memo: no closer of >= this fence length from here on. Without this, input
+  // like thousands of `:::: word` openers followed by a single too-short `:::`
+  // rescans to EOF for every opener (the "no closer at all" cache never trips
+  // because a closer *is* seen, just too short) → O(n²).
+  if (start >= (lexer.divNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
   let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
     const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
@@ -864,8 +1119,11 @@ function divHasCloser(lexer: Lexer): boolean {
       if (c[1]!.length >= fence) return true
     }
   }
-  // No closer of length >= fence ahead. If there is NO bare closer at all
-  // from here on, cache it (pos only advances) so later openers are O(1).
+  // No closer of length >= fence ahead. Cache it per fence length (pos only
+  // advances, so the smallest such start is a monotone frontier); also cache
+  // the stronger "no bare closer at all" when that holds.
+  const prev = lexer.divNoCloserOfLenFrom.get(fence) ?? Infinity
+  if (start < prev) lexer.divNoCloserOfLenFrom.set(fence, start)
   if (!sawAnyCloser) lexer.divNoCloserFrom = start
   return false
 }
@@ -873,7 +1131,6 @@ function divHasCloser(lexer: Lexer): boolean {
 function parseDiv(lexer: Lexer): Div {
   const m = RE_DIV_OPEN.exec(lexer.consume())!
   const fence = m[1]!.length
-  const attrSrc = m[2]
   const inner: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -891,8 +1148,9 @@ function parseDiv(lexer: Lexer): Div {
   subLexer.footnoteDefs = lexer.footnoteDefs
   subLexer.nested = true
   subLexer.depth = lexer.depth + 1
+  // No inline opener attributes (strict djot): a bare `:::` carries none;
+  // a preceding block-attribute line attaches them in parseBlocks.
   const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
-  if (attrSrc) node.attrs = parseAttrs(attrSrc)
   return node
 }
 
@@ -987,10 +1245,34 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     state.paragraphOpen = false
     return
   }
+  // A heading, table row, or thematic break is an UNCONDITIONAL paragraph
+  // interrupter (no matching-closer dependency), so it leaves no open trailing
+  // paragraph even directly after quoted prose. A following lazy list marker
+  // then ENDS the quote (it has no paragraph to fold into) -- exactly as
+  // `# h\n- item` is a heading plus a sibling list at the top level, and as
+  // `> a\n> # h\n- item` is a quote (para + heading) plus a sibling list.
+  // Mirrors trackItemLazyState.
+  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content.trim())) {
+    state.paragraphOpen = false
+    return
+  }
+  // The remaining structural openers (fence/comment/div) only start a block
+  // when NO paragraph is already open: Carve has no paragraph-interrupting
+  // block mode, so a fence/comment-looking line WHILE a quoted paragraph is
+  // open is plain paragraph text (e.g. a mid-paragraph ``` is an inline
+  // verbatim run, not a code block).
   if (!state.paragraphOpen) {
     const fence = RE_FENCE.exec(content)
     if (fence) {
       const marker = fence[2]!
+      state.inFence = true
+      state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+      state.paragraphOpen = false
+      return
+    }
+    const raw = RE_RAW_FENCE.exec(content)
+    if (raw) {
+      const marker = raw[1]!
       state.inFence = true
       state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
       state.paragraphOpen = false
@@ -1003,13 +1285,20 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
       state.paragraphOpen = false
       return
     }
-    if (RE_DIV_OPEN.test(content) || RE_ADMONITION_OPEN.test(content)) {
-      // Div / admonition opener (`:::`, `::: {…}`, or `::: type`) is structural;
-      // it opens no paragraph itself.
+    if (
+      RE_DIV_OPEN.test(content) ||
+      RE_ADMONITION_OPEN.test(content) ||
+      RE_LINE_BLOCK_OPEN.test(content)
+    ) {
+      // Div / admonition / line-block opener (`:::`, `::: type`, or `::: |`)
+      // is structural; it opens no paragraph itself.
       state.paragraphOpen = false
       return
     }
   }
+  // Everything else (plain prose, a folded list-marker line, div body text, or
+  // a fence/comment-looking line while a paragraph is open) leaves an open
+  // paragraph that a following list marker or plain text folds into.
   state.paragraphOpen = true
 }
 
@@ -1032,25 +1321,60 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       trackBlockQuoteLazyState(content, state)
       continue
     }
-    // Lazy continuation: a non-`>` line folds into the quote ONLY when it
-    // continues an open paragraph (CommonMark-style; matches carve-php). A blank
-    // line ends the quote. The only non-blank lines that end it are the ones that
-    // interrupt a paragraph anywhere — the "invisible" reference/footnote/abbr
-    // definitions and comments — plus a caption `^ …`, which attaches to the quote
-    // rather than folding in.
+    // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
+    // quoted line attaches the FOLLOWING flush-left block to the quote -- the
+    // un-prefixed analogue of the list-item form, so a real block (list, fenced
+    // code, table, ...) can join the quote without repeating `>`. Collect the
+    // block's lines (up to a blank line, a `>` line, or a further `+`) and
+    // splice them into the quote body behind a blank-line separator, so they
+    // parse as their own block instead of folding into the quoted paragraph.
+    if (/^\+[ \t]*$/.test(ln)) {
+      lexer.consume()
+      const attached: string[] = []
+      while (!lexer.eof()) {
+        const next = lexer.peek()!
+        if (next.trim() === '' || RE_BLOCKQUOTE.test(next) || /^\+[ \t]*$/.test(next)) {
+          break
+        }
+        lexer.consume()
+        attached.push(next)
+      }
+      if (attached.length > 0) {
+        // `inner` always holds the quote's first content line, so a leading
+        // blank separates the attached block from it.
+        inner.push('')
+        for (const attachedLine of attached) inner.push(attachedLine)
+        inner.push('')
+        // The attached block closed any open paragraph: a following unmarked
+        // line no longer lazily continues the quote.
+        state.paragraphOpen = false
+      }
+      continue
+    }
+    // Lazy continuation: a non-`>` line folds into the quote ONLY when it is
+    // plain text continuing an open paragraph (CommonMark-style; matches
+    // carve-php). A blank line ends the quote. A block-opener that INTERRUPTS a
+    // paragraph (§10) ends the quote too and starts that block OUTSIDE it --
+    // this covers visible blocks (heading/quote/table/fence/div/thematic) and
+    // the "invisible" reference/footnote/abbr definitions and comments. A bare
+    // list marker is NOT a paragraph interrupter, so it FOLDS into the quoted
+    // paragraph as literal text instead of ending the quote -- but ONLY when an
+    // open paragraph precedes it (the `paragraphOpen` guard below). When the
+    // last quoted block is a heading/table/fence/thematic break/div (no open
+    // paragraph), a list marker has nothing to fold into and ENDS the quote,
+    // mirroring the top level: `text\n- item` folds, `# h\n- item` is a heading
+    // plus a sibling list. A caption `^ …` attaches to the quote.
     if (
       ln.trim() === '' ||
-      RE_LINK_DEF.test(ln) ||
-      RE_FOOTNOTE_DEF.test(ln) ||
-      RE_ABBR_DEF.test(ln) ||
-      RE_COMMENT_LINE.test(ln) ||
-      RE_COMMENT_BLOCK.test(ln) ||
-      RE_CAPTION.test(ln)
+      RE_CAPTION.test(ln) ||
+      startsInterruptingBlock(lexer)
     ) {
       break
     }
     // A non-`>` line inside an open fence/comment, or after a block that left no
-    // open paragraph, terminates the quote instead of being swallowed.
+    // open paragraph (heading/table/fence/thematic/div), terminates the quote
+    // instead of being swallowed. This is also what ends the quote on a lazy
+    // list marker when no open paragraph precedes it.
     if (!state.paragraphOpen) break
     lexer.consume()
     inner.push(ln)
@@ -1264,9 +1588,11 @@ function lineOpensBlock(line: string): boolean {
     RE_TASK.test(line) ||
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
-    RE_TABLE_ROW.test(line) ||
+    extractItemAttr(line) !== null ||
+    isTableRow(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
-    RE_DIV_OPEN.test(line)
+    RE_DIV_OPEN.test(line) ||
+    RE_LINE_BLOCK_OPEN.test(line)
   )
 }
 
@@ -1275,8 +1601,14 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_RAW_FENCE.test(line) ||
     RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
-    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
+    // A typed admonition ends the list only when it actually opens one — i.e.
+    // a closer exists ahead (same guard as the block dispatch + the bare div).
+    // An unterminated `::: note` is not a block, so it folds as lazy text.
+    (RE_ADMONITION_OPEN.test(line) &&
+      !RE_ADMONITION_CLOSE.test(line) &&
+      divHasCloser(lexer)) ||
     (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
+    (RE_LINE_BLOCK_OPEN.test(line) && divHasCloser(lexer)) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
@@ -1287,23 +1619,118 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_TASK.test(line) ||
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
-    RE_TABLE_ROW.test(line) ||
+    extractItemAttr(line) !== null ||
+    isTableRow(line) ||
     isBlockImageLine(line)
   )
 }
 
+interface ItemLazyState {
+  inFence: boolean
+  fenceClose: RegExp | null
+  inComment: boolean
+  commentLen: number
+  // Whether the item's collected content currently ends in an OPEN paragraph
+  // that a dedented (below content-column) non-blank line lazily continues
+  // (CommonMark family-D rule). True after plain prose, a blockquote line, or
+  // plain text inside an open div/admonition; false after a code fence, table,
+  // heading, thematic break, a just-opened div, or a blank line.
+  lazyFoldable: boolean
+}
+
+/**
+ * Track verbatim/paragraph state across a list item's collected inner lines so a
+ * dedented non-blank line only lazily continues an OPEN paragraph (the
+ * djot/CommonMark family-D rule, matching carve-php). Each line is passed in its
+ * content-column-dedented form so the block-opener regexes key off column 0.
+ *
+ * Mirrors `trackBlockQuoteLazyState`, but a blockquote line (`>`) keeps the
+ * fold open: the trailing quote paragraph absorbs the dedented line in the
+ * quote's own lazy continuation. After a code fence or a table (no open
+ * trailing paragraph) the dedented line must END the item instead.
+ */
+function trackItemLazyState(content: string, state: ItemLazyState): void {
+  if (state.inComment) {
+    const c = /^(%{3,})\s*$/.exec(content)
+    if (c && c[1]!.length >= state.commentLen) state.inComment = false
+    state.lazyFoldable = false
+    return
+  }
+  if (state.inFence) {
+    if (state.fenceClose!.test(content)) state.inFence = false
+    state.lazyFoldable = false
+    return
+  }
+  if (content.trim() === '') {
+    state.lazyFoldable = false
+    return
+  }
+  // A code fence or raw fence opens a verbatim block with no open paragraph.
+  const fence = RE_FENCE.exec(content)
+  if (fence) {
+    const marker = fence[2]!
+    state.inFence = true
+    state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+    state.lazyFoldable = false
+    return
+  }
+  const raw = RE_RAW_FENCE.exec(content)
+  if (raw) {
+    const marker = raw[1]!
+    state.inFence = true
+    state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+    state.lazyFoldable = false
+    return
+  }
+  const comment = /^(%{3,})\s*$/.exec(content)
+  if (comment) {
+    state.inComment = true
+    state.commentLen = comment[1]!.length
+    state.lazyFoldable = false
+    return
+  }
+  // A table row, heading, or thematic break leaves no open trailing paragraph.
+  if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(content.trim())) {
+    state.lazyFoldable = false
+    return
+  }
+  // A blockquote line keeps the fold open: the quote's trailing paragraph
+  // absorbs the dedented line via the quote's own lazy continuation.
+  if (RE_BLOCKQUOTE.test(content)) {
+    state.lazyFoldable = true
+    return
+  }
+  // A div / admonition / line-block OPENER is structural; it opens no paragraph
+  // itself, but plain text on a later line inside it does (handled by the
+  // fall-through below once the opener line has been seen).
+  if (
+    RE_DIV_OPEN.test(content) ||
+    (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
+    RE_LINE_BLOCK_OPEN.test(content)
+  ) {
+    state.lazyFoldable = false
+    return
+  }
+  // Everything else (plain prose, list-marker content, div body text) leaves an
+  // open paragraph the dedented line can continue.
+  state.lazyFoldable = true
+}
+
 function parseList(lexer: Lexer): List {
   const first = lexer.peek()!
-  const baseIndent = leadingWhitespace(first)
-  const isTask = RE_TASK.test(first)
-  const isOrdered = !isTask && RE_ORDERED.test(first)
+  const baseIndent = indentColumns(first)
+  // Classify on the marker after stripping any abutting `{...}` attribute block.
+  const firstAttr = extractItemAttr(first)
+  const firstStripped = firstAttr ? firstAttr.stripped : first
+  const isTask = RE_TASK.test(firstStripped)
+  const isOrdered = !isTask && RE_ORDERED.test(firstStripped)
   // A change of unordered marker character (`-` vs `*` vs `+`), or of
   // ordered dialect/delimiter (decimal/alpha/roman, `.` vs `)`), starts a
   // new list (grammar PART 9 §11). The first item fixes the ordered
   // dialect; the second item's marker (if a sibling) tie-breaks an
   // ambiguous single roman letter.
-  const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(first)
-  const firstOrdered = isOrdered ? RE_ORDERED.exec(first)! : null
+  const firstMarkerChar = isOrdered ? '' : unorderedMarkerChar(firstStripped)
+  const firstOrdered = isOrdered ? RE_ORDERED.exec(firstStripped)! : null
   const orderedDelim = firstOrdered ? firstOrdered[3]! : ''
   let orderedKind: OlKind = 'dec'
   let orderedStart = 1
@@ -1315,12 +1742,16 @@ function parseList(lexer: Lexer): List {
     let k = 1
     for (; lexer.peek(k) !== undefined; k++) {
       const ln = lexer.peek(k)!
-      if (ln.trim() !== '' && leadingWhitespace(ln) <= baseIndent) break
+      if (ln.trim() !== '' && indentColumns(ln) <= baseIndent) break
     }
     const nextLine = lexer.peek(k)
+    const nextStripped =
+      nextLine !== undefined
+        ? (extractItemAttr(nextLine)?.stripped ?? nextLine)
+        : undefined
     const nm =
-      nextLine !== undefined && leadingWhitespace(nextLine) === baseIndent
-        ? RE_ORDERED.exec(nextLine)
+      nextStripped !== undefined && indentColumns(nextLine!) === baseIndent
+        ? RE_ORDERED.exec(nextStripped)
         : null
     orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
     orderedStart = olStartOf(firstOrdered[2]!, orderedKind)
@@ -1335,13 +1766,17 @@ function parseList(lexer: Lexer): List {
       // below; a stray leading blank just ends the list.
       break
     }
-    if (leadingWhitespace(line) !== baseIndent) break
-    const m = matchListMarker(line, isTask, isOrdered)
+    if (indentColumns(line) !== baseIndent) break
+    // Strip an abutting `{...}` attribute block off the marker so the bare
+    // marker regexes match; remember its attributes to attach to the <li>.
+    const la = extractItemAttr(line)
+    const mline = la ? la.stripped : line
+    const m = matchListMarker(mline, isTask, isOrdered)
     if (!m) break
     // §11: a sibling with a different marker character (unordered) or a
     // different delimiter (ordered) is a new list.
-    if (!isOrdered && unorderedMarkerChar(line) !== firstMarkerChar) break
-    if (isOrdered && !orderedContinues(line, orderedKind, orderedDelim)) break
+    if (!isOrdered && unorderedMarkerChar(mline) !== firstMarkerChar) break
+    if (isOrdered && !orderedContinues(mline, orderedKind, orderedDelim)) break
 
     let content: string
     let checked: boolean | undefined
@@ -1353,13 +1788,22 @@ function parseList(lexer: Lexer): List {
     } else {
       content = m[2]!
     }
+    const itemAttrs = la ? la.attrs : undefined
 
-    // Column where item content begins; deeper-indented lines belong to this
-    // item (continuation paragraphs or nested lists). For a TASK item the
-    // checkbox is content, not marker, so the content column is the bullet width
-    // (`- `/`* ` = 2), matching the spec's task attribute/continuation
-    // convention (`- [x] x` / `  {.c}`) -- not the full `- [x] ` width.
-    const contentCol = isTask ? baseIndent + 2 : m[0]!.length - content.length
+    // item (continuation paragraphs or nested lists). Visual content column:
+    // baseIndent (tab-aware columns) plus the marker width in characters. The
+    // marker (`- `, `1. `) and any abutting `{...}` attr block contain no tabs,
+    // so their column width equals their character count; the leading
+    // whitespace may be a tab, so it is measured in columns (baseIndent) rather
+    // than characters. The marker/attr width is taken from the ORIGINAL line so
+    // an abutting `{...}` block widens it correctly. For a TASK item the
+    // checkbox is content, not marker, so the content column is the bullet
+    // width (`- `/`* ` = 2) plus any abutting attr width -- not the full
+    // `- [x] ` width (matching the spec's task attribute/continuation
+    // convention `- [x] x` / `  {.c}`).
+    const contentCol = isTask
+      ? baseIndent + 2 + (la ? line.length - mline.length : 0)
+      : baseIndent + (line.length - leadingWhitespace(line) - content.length)
     lexer.consume()
 
     // First-block item (Carve): `- +` opens an item whose body is the
@@ -1372,7 +1816,7 @@ function parseList(lexer: Lexer): List {
       while (!lexer.eof()) {
         const a = lexer.peek()!
         if (a.trim() === '') break
-        const ind = leadingWhitespace(a)
+        const ind = indentColumns(a)
         if (ind < baseIndent) break
         if (ind === baseIndent) {
           const am = matchListMarker(a, isTask, isOrdered)
@@ -1381,9 +1825,19 @@ function parseList(lexer: Lexer): List {
             (isOrdered
               ? orderedContinues(a, orderedKind, orderedDelim)
               : unorderedMarkerChar(a) === firstMarkerChar)
-          if (sibling || a.trim() === '+') break
+          // A base-column line that is ANY list marker (a different
+          // kind/dialect, e.g. an ordered `1.` after this unordered first-block
+          // item, or an abutting-attribute bullet `-{.x}`) starts a SIBLING
+          // list (§11), not item content -- stop attaching so it parses as a
+          // separate top-level list (Bug C, first-block `- +` path).
+          const anyMarker =
+            RE_ORDERED.test(a) ||
+            RE_UNORDERED.test(a) ||
+            RE_TASK.test(a) ||
+            extractItemAttr(a) !== null
+          if (sibling || anyMarker || a.trim() === '+') break
         }
-        attached.push(a.slice(baseIndent))
+        attached.push(sliceColumns(a, baseIndent))
         lexer.consume()
       }
       const sub = new Lexer(attached.join('\n'))
@@ -1395,6 +1849,7 @@ function parseList(lexer: Lexer): List {
       const fbChildren = parseBlocks(sub, 0)
       const fbItem: ListItem = { type: 'list-item', children: fbChildren }
       if (checked !== undefined) fbItem.checked = checked
+      if (itemAttrs) fbItem.attrs = itemAttrs
       items.push(fbItem)
       continue
     }
@@ -1409,6 +1864,18 @@ function parseList(lexer: Lexer): List {
     // the join, so only an indented ordered marker triggers the split.
     let firstBlockIdx = -1
     let pendingBlanks = 0
+    // Indices in `nested` that hold a `+`-injected blank separator. These keep
+    // the attached block parsing standalone but never loosen the list (Bug B).
+    const plusSeparators = new Set<number>()
+    // Track whether the item's collected content currently ends in an open
+    // paragraph (family-D lazy continuation). The lead text opens one.
+    const lazyState: ItemLazyState = {
+      inFence: false,
+      fenceClose: null,
+      inComment: false,
+      commentLen: 0,
+      lazyFoldable: content.trim() !== '',
+    }
     while (!lexer.eof()) {
       const l = lexer.peek()!
       if (l.trim() === '') {
@@ -1421,14 +1888,20 @@ function parseList(lexer: Lexer): List {
       // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
       // injects a blank separator so the block parses on its own; the
       // compact-list rule above then keeps the item tight.
-      if (leadingWhitespace(l) === baseIndent && l.trim() === '+') {
+      if (indentColumns(l) === baseIndent && l.trim() === '+') {
         lexer.consume()
         pendingBlanks = 0
+        // Mark this blank as a `+`-injected separator: it lets the attached
+        // block parse on its own but must NOT loosen the list (Bug B). A real
+        // internal blank before a plain paragraph still loosens; a `+` one
+        // never does, matching carve-php.
+        plusSeparators.add(nested.length)
         nested.push('')
+        trackItemLazyState('', lazyState)
         while (!lexer.eof()) {
           const a = lexer.peek()!
           if (a.trim() === '') break
-          const ind = leadingWhitespace(a)
+          const ind = indentColumns(a)
           if (ind < baseIndent) break
           if (ind === baseIndent) {
             const am = matchListMarker(a, isTask, isOrdered)
@@ -1437,40 +1910,117 @@ function parseList(lexer: Lexer): List {
               (isOrdered
                 ? orderedContinues(a, orderedKind, orderedDelim)
                 : unorderedMarkerChar(a) === firstMarkerChar)
-            if (sibling || a.trim() === '+') break
+            // A base-column line that is ANY list marker (even a different
+            // kind/dialect, e.g. an ordered `1.` after this unordered item, or
+            // an abutting-attribute bullet `-{.x}`) starts a SIBLING list
+            // (§11), not item content -- stop attaching so it parses as a
+            // separate top-level list (Bug C).
+            const anyMarker =
+              RE_ORDERED.test(a) ||
+              RE_UNORDERED.test(a) ||
+              RE_TASK.test(a) ||
+              extractItemAttr(a) !== null
+            if (sibling || anyMarker || a.trim() === '+') break
           }
-          nested.push(a.slice(baseIndent))
+          const attached = sliceColumns(a, baseIndent)
+          nested.push(attached)
+          trackItemLazyState(attached, lazyState)
           lexer.consume()
         }
         continue
       }
-      if (leadingWhitespace(l) >= contentCol) {
-        for (let k = 0; k < pendingBlanks; k++) nested.push('')
+      // A block opener (block quote, heading, fence, div, table) indented past
+      // the base but BELOW the content column still interrupts the item's lead
+      // paragraph and nests as a child block (matching carve-php) -- only ordered
+      // MARKERS fold below the content column, since they do not interrupt. The
+      // opener regexes key off column 0, so test the line dedented to column 0,
+      // and exclude list markers (their fold/nest is handled in the else-branch).
+      const lw = indentColumns(l)
+      let belowColBlockOpener = false
+      if (lw > baseIndent && lw < contentCol) {
+        const d0 = sliceColumns(l, lw)
+        // A block opener indented past the base but below the content column
+        // interrupts the item's lead paragraph and nests (matching carve-php).
+        // Restricted to NON-container openers (block quote, heading, thematic
+        // break, table, defs): these need no closing fence, so the single line
+        // dedented to column 0 is enough. Fenced/`:::` containers are excluded --
+        // their verbatim/closer-sensitive bodies are only handled cleanly AT the
+        // content column; below it they keep the existing behavior. List markers
+        // are excluded too (their fold/nest is decided in the else-branch).
+        belowColBlockOpener =
+          !RE_ORDERED.test(d0) &&
+          !RE_UNORDERED.test(d0) &&
+          !RE_TASK.test(d0) &&
+          // An abutting-attr bullet (`-{.x} item`) is a list marker too, so it
+          // folds below the content column like a plain bullet (it does not
+          // interrupt). Excluded here so it is not treated as a nesting opener.
+          extractItemAttr(d0) === null &&
+          !RE_FENCE.test(d0) &&
+          !RE_RAW_FENCE.test(d0) &&
+          !RE_DIV_OPEN.test(d0) &&
+          !RE_ADMONITION_OPEN.test(d0) &&
+          lineOpensBlock(d0)
+      }
+      if (lw >= contentCol || belowColBlockOpener) {
+        for (let k = 0; k < pendingBlanks; k++) {
+          nested.push('')
+          trackItemLazyState('', lazyState)
+        }
         pendingBlanks = 0
-        const dedented = l.slice(contentCol)
-        if (
-          firstBlockIdx === -1 &&
-          RE_ORDERED.test(dedented) &&
-          !RE_TASK.test(dedented)
-        ) {
+        // A sub-list marker (ordered, unordered, or task) at or past the content
+        // column starts the item's block stream. A sub-list MARKER line is
+        // dedented residual-aware so tab+space-aligned siblings keep the same
+        // visual column (the recursive parse re-derives the child base from it).
+        // Every other line -- lead text, and block openers (quotes, headings)
+        // before OR after a sub-list -- uses whole-tab dedent so it reaches
+        // column 0 and parses / interrupts; carry the residual only on markers.
+        const isMarker =
+          RE_ORDERED.test(l) ||
+          RE_UNORDERED.test(l) ||
+          RE_TASK.test(l) ||
+          // An abutting-attr bullet (`-{.x} item`) is a marker too. It no longer
+          // reaches here via §10 interruption (bullets do not interrupt), so the
+          // sub-list nesting path must recognize it directly to keep nesting.
+          extractItemAttr(l) !== null
+        if (firstBlockIdx === -1 && isMarker) {
           firstBlockIdx = nested.length
         }
+        const keepResidual = firstBlockIdx !== -1 && isMarker
+        const dedented = sliceColumns(l, contentCol, keepResidual)
         nested.push(dedented)
+        trackItemLazyState(dedented, lazyState)
         lexer.consume()
       } else if (
         pendingBlanks === 0 &&
-        (!lazyContinuationEndsList(l, lexer) ||
-          // An ordered marker indented past the base column but below the
-          // content column is lazy continuation, not a new block: ordered
-          // markers do not interrupt a paragraph (§10). At the base column it
-          // can still start a new list (a dialect change, §11), so only an
-          // indented one folds.
-          (leadingWhitespace(l) > baseIndent && RE_ORDERED.test(l) && !RE_TASK.test(l)))
+        // A dedented (below content-column) plain line only lazily continues an
+        // OPEN paragraph (family-D rule). After a code fence or table -- which
+        // leave no open paragraph -- the line ends the item and becomes a
+        // top-level block instead. A blockquote/div trailing paragraph keeps the
+        // fold open (lazyFoldable stays true). The indented-marker special case
+        // below still folds regardless, matching the symmetric §10 behavior.
+        // An UNTERMINATED fence (inFence still open) is NOT a code block -- it is
+        // an inline-verbatim run that is part of the paragraph, so a dedented
+        // line folds into it (matching the §10 closer-lookahead rule).
+        (((lazyState.lazyFoldable || lazyState.inFence) &&
+          !lazyContinuationEndsList(l, lexer)) ||
+          // A list marker indented past the base column but BELOW the content
+          // column folds into the lead text rather than ending the list. Under
+          // symmetric §10 no list marker interrupts a paragraph, so on the
+          // recursive reparse it stays folded: `1. a`/`  1. b`, `- a`/` - b`,
+          // and the abutting-attr form `- a`/` -{.x} b` all fold. (At or past
+          // the content column the marker nests; at the base column it can start
+          // a sibling list, §11 -- so only a below-content indented one folds.)
+          (indentColumns(l) > baseIndent &&
+            (RE_TASK.test(l) ||
+              RE_UNORDERED.test(l) ||
+              RE_ORDERED.test(l) ||
+              extractItemAttr(l) !== null)))
       ) {
         // Lazy continuation: a line with no blank before it that starts no block
         // (or is the indented ordered marker above) folds into the item's lead
         // paragraph (djot rule). A block-starting line or a blank ends the list.
         nested.push(l)
+        trackItemLazyState(l, lazyState)
         lexer.consume()
       } else {
         break
@@ -1484,12 +2034,13 @@ function parseList(lexer: Lexer): List {
     // (§11), so it must not loosen this one.
     if (pendingBlanks > 0 && !lexer.eof()) {
       const nextLine = lexer.peek()!
+      const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
       if (
-        leadingWhitespace(nextLine) === baseIndent &&
-        matchListMarker(nextLine, isTask, isOrdered) &&
+        indentColumns(nextLine) === baseIndent &&
+        matchListMarker(nextStripped, isTask, isOrdered) &&
         (isOrdered
-          ? orderedContinues(nextLine, orderedKind, orderedDelim)
-          : unorderedMarkerChar(nextLine) === firstMarkerChar)
+          ? orderedContinues(nextStripped, orderedKind, orderedDelim)
+          : unorderedMarkerChar(nextStripped) === firstMarkerChar)
       ) {
         loose = true
       }
@@ -1503,6 +2054,10 @@ function parseList(lexer: Lexer): List {
     // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
     for (let k = 0; k < nested.length; k++) {
       if (nested[k] !== '') continue
+      // A `+`-injected separator never loosens, even when the block it attaches
+      // is a plain paragraph -- it keeps the item tight like a `+`-attached
+      // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
+      if (plusSeparators.has(k)) continue
       let j = k + 1
       while (j < nested.length && nested[j] === '') j++
       if (j < nested.length && !lineOpensBlock(nested[j]!)) {
@@ -1533,6 +2088,7 @@ function parseList(lexer: Lexer): List {
 
     const item: ListItem = { type: 'list-item', children }
     if (checked !== undefined) item.checked = checked
+    if (itemAttrs) item.attrs = itemAttrs
     items.push(item)
   }
 
@@ -1564,8 +2120,30 @@ function parseCellMarkers(src: string): {
   header: boolean
   span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
+  attrs?: Attrs
   content: string
 } {
+  // A `{...}` attribute block GLUED to the opening pipe (index 0, no space)
+  // supplies the cell's attributes; the rest, after optional whitespace, is the
+  // cell content. A SPACE before the brace (`| {.x}`) is ordinary content, not
+  // attributes. A cell that carries an attribute block is never a bare span
+  // marker, so its content is literal even if it is just `<`/`^`. An invalid
+  // attribute payload leaves the `{` as ordinary content.
+  if (src[0] === '{') {
+    // Reuse the quote-aware inline-attribute matcher so a quoted `}` inside a
+    // value (`{key="{y}"}`) is handled, not truncated at the first brace. The
+    // WHOLE payload must then be valid attribute syntax (same as inline / block
+    // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
+    // attribute block, so the `{` stays ordinary content.
+    const m = RE_INLINE_ATTR.exec(src)
+    if (m && isValidAttrPayload(m[1]!)) {
+      const attrs = parseAttrs(m[1]!)
+      if (!isEmptyAttrs(attrs)) {
+        return { header: false, attrs, content: src.slice(m[0].length).trim() }
+      }
+    }
+  }
+
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
   let header = false
@@ -1608,7 +2186,26 @@ interface RawCell {
   header: boolean
   span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
+  attrs?: Attrs
   raw: string
+}
+
+// A row attribute block is a valid `{...}` attribute block GLUED to the row's
+// closing `|` and running to end of line -- the row-level twin of a cell's
+// opening-pipe attribute block. It sets the `<tr>` attributes. The whole
+// payload must be valid attribute syntax (same gate as cell / inline / block
+// attributes); otherwise the `{` is ordinary content and there is no row attr.
+function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } {
+  const stripped = line.replace(/[ \t]+$/, '')
+  const lastPipe = stripped.lastIndexOf('|')
+  if (lastPipe < 0 || stripped[lastPipe + 1] !== '{') return { body: line }
+  const after = stripped.slice(lastPipe + 1)
+  const m = RE_INLINE_ATTR.exec(after)
+  if (m && m[0].length === after.length && isValidAttrPayload(m[1]!)) {
+    const attrs = parseAttrs(m[1]!)
+    if (!isEmptyAttrs(attrs)) return { attrs, body: stripped.slice(0, lastPipe + 1) }
+  }
+  return { body: line }
 }
 
 function parseTable(lexer: Lexer): Table | Figure {
@@ -1617,6 +2214,7 @@ function parseTable(lexer: Lexer): Table | Figure {
   // construct spanning the line boundary is one logical cell. Inline
   // parsing happens once, after merging.
   const rawRows: RawCell[][] = []
+  const rowAttrsList: (Attrs | undefined)[] = []
   let lastRaw: RawCell[] | null = null
   while (
     !lexer.eof() &&
@@ -1639,31 +2237,72 @@ function parseTable(lexer: Lexer): Table | Figure {
       continue
     }
     lexer.consume()
-    const raw: RawCell[] = splitTableRow(line).map((src) => {
-      const { header, span, align, content } = parseCellMarkers(src)
+    const { attrs: rowAttrs, body: rowBody } = rowAttrsFromLine(line)
+    const raw: RawCell[] = splitTableRow(rowBody).map((src) => {
+      const { header, span, align, attrs, content } = parseCellMarkers(src)
       const c: RawCell = { header, raw: content }
       if (span) c.span = span
       if (align) c.align = align
+      if (attrs) c.attrs = attrs
       return c
     })
     rawRows.push(raw)
+    rowAttrsList.push(rowAttrs)
     lastRaw = raw
   }
-  const rows: TableRow[] = rawRows.map((rc) => ({
-    type: 'table-row',
-    cells: rc.map((c) => {
-      const cell: TableCell = {
-        type: 'table-cell',
-        header: c.header,
-        children: c.span
-          ? []
-          : parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs),
-      }
-      if (c.span) cell.span = c.span
-      if (c.align) cell.align = c.align
-      return cell
-    }),
-  }))
+  // GFM-style header separator: when the SECOND row is a delimiter row -- every
+  // cell a run of dashes with optional alignment colons (`---`, `:--`, `--:`,
+  // `:-:`) -- the first row becomes the header (rendered in <thead>) and the
+  // colons set per-column alignment for the whole column. The delimiter row is
+  // dropped. This is in addition to Carve's tight per-cell markers `|=`/`|<`; a
+  // delimiter row anywhere else is an ordinary data row.
+  // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
+  // structural delimiter, so it never makes its row a GFM header separator.
+  const isDelimCell = (c: RawCell): boolean =>
+    !c.span && !c.attrs && /^:?-+:?$/.test(c.raw.trim())
+  if (
+    rawRows.length >= 2 &&
+    rawRows[1]!.length > 0 &&
+    rawRows[1]!.every(isDelimCell) &&
+    !rawRows[0]!.every(isDelimCell)
+  ) {
+    const aligns = rawRows[1]!.map((c) => {
+      const t = c.raw.trim()
+      const left = t.startsWith(':')
+      const right = t.endsWith(':')
+      return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
+    })
+    rawRows.splice(1, 1)
+    rowAttrsList.splice(1, 1)
+    for (const c of rawRows[0]!) c.header = true
+    for (const rc of rawRows) {
+      rc.forEach((c, i) => {
+        const a = aligns[i]
+        if (a && !c.align) c.align = a
+      })
+    }
+  }
+  const rows: TableRow[] = rawRows.map((rc, idx) => {
+    const row: TableRow = {
+      type: 'table-row',
+      cells: rc.map((c) => {
+        const cell: TableCell = {
+          type: 'table-cell',
+          header: c.header,
+          children: c.span
+            ? []
+            : parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs),
+        }
+        if (c.span) cell.span = c.span
+        if (c.align) cell.align = c.align
+        if (c.attrs) cell.attrs = c.attrs
+        return cell
+      }),
+    }
+    const ra = rowAttrsList[idx]
+    if (ra) row.attrs = ra
+    return row
+  })
   const table: Table = { type: 'table', rows }
   // Optional caption ^ ...
   let lookahead = 0
@@ -1758,7 +2397,7 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       return RE_BLOCKQUOTE.test(ln)
     case '|':
       // A valid `|…|` row (a stray leading `|` in prose is not a row).
-      return RE_TABLE_ROW.test(ln) && /\|\s*$/.test(ln)
+      return isTableRow(ln)
     case '`':
     case '~':
       // Raw passthrough / fenced code: interrupt only with a matching closer.
@@ -1766,27 +2405,27 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
       return false
     case '-':
-      // thematic break, task or unordered list
-      return RE_HR.test(ln.trim()) || RE_TASK.test(ln) || RE_UNORDERED.test(ln)
+      // thematic break only. A bullet/task does NOT interrupt a paragraph
+      // (symmetric with ordered markers; a list needs a blank line, §10).
+      return RE_HR.test(ln.trim())
     case '+':
-      // task or unordered list (`+` is not a thematic-break char)
-      return RE_TASK.test(ln) || RE_UNORDERED.test(ln)
+      // `+` is the list-continuation marker, never an interrupter.
+      return false
     case '*':
-      // abbreviation definition (invisible), thematic break, task or unordered
-      return (
-        RE_ABBR_DEF.test(ln) ||
-        RE_HR.test(ln.trim()) ||
-        RE_TASK.test(ln) ||
-        RE_UNORDERED.test(ln)
-      )
+      // abbreviation definition (invisible) or thematic break. A bullet/task
+      // does NOT interrupt (symmetric, §10).
+      return RE_ABBR_DEF.test(ln) || RE_HR.test(ln.trim())
     case '_':
       return RE_HR.test(ln.trim())
     case ':':
-      // definition-list term, or an admonition/div that has a `:::` closer ahead
-      if (RE_DEFLIST_TERM.test(ln)) return true
+      // An admonition/div/line-block that has a `:::` closer ahead (the `::: |`
+      // line-block shares the bare `:::` closer). A definition-list term (`::`)
+      // is NOT in the §10 interrupter set (like an ordered list), so it does
+      // not interrupt a paragraph or heading -- it folds as lazy text.
       if (
         (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
-        RE_DIV_OPEN.test(ln)
+        RE_DIV_OPEN.test(ln) ||
+        RE_LINE_BLOCK_OPEN.test(ln)
       )
         return divHasCloser(lexer)
       return false
@@ -1796,6 +2435,11 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '%':
       // line or block comment (invisible)
       return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)
+    case '{':
+      // A standalone block-attribute line (invisible): it floats forward to
+      // the next block (or is dropped when none follows, §15), so it must
+      // interrupt the paragraph rather than fold in as literal text.
+      return peekBlockAttributes(lexer)
     default:
       // An ordered-list marker does NOT interrupt a paragraph (it needs a blank
       // line, matching Djot): allowing it would require the CommonMark `1.`-only
@@ -1803,6 +2447,25 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       // A bare image is inline, not a block, so it does not interrupt either.
       return false
   }
+}
+
+// Whether the peeked line ENDS an open heading or blockquote (and starts a
+// sibling block). A list marker (bullet, task, ordered, or abutting-attr) ends
+// them and starts a sibling list -- unlike paragraph interruption, where a list
+// marker FOLDS in (symmetric §10): a list folds into a PARAGRAPH but ends a
+// heading/quote, matching djot. Every paragraph-interrupter ends them too.
+function endsHeadingOrQuote(lexer: Lexer): boolean {
+  const ln = lexer.peek()
+  if (
+    ln !== undefined &&
+    (RE_UNORDERED.test(ln) ||
+      RE_TASK.test(ln) ||
+      RE_ORDERED.test(ln) ||
+      extractItemAttr(ln) !== null)
+  ) {
+    return true
+  }
+  return startsInterruptingBlock(lexer)
 }
 
 function parseParagraph(lexer: Lexer): Paragraph {
@@ -1838,7 +2501,15 @@ function parseParagraph(lexer: Lexer): Paragraph {
   // paragraph. The first line's stripped width is folded into the inline
   // base position so source offsets/columns stay accurate.
   const firstLead = lines[0]!.match(/^[ \t]+/)?.[0].length ?? 0
-  const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n')
+  // Strip the trailing whitespace at the very END of the paragraph (the final
+  // line's trailing spaces/tabs, with nothing after them). CommonMark / djot /
+  // carve-php all drop a paragraph's final spaces before inline parsing, so
+  // `abc ` is `<p>abc</p>` and a bare `# ` (not a heading) is `<p>#</p>`.
+  // The `$` anchor (no `m` flag) matches only the very end of the joined text,
+  // so interior trailing whitespace before a soft break (`a  \nb`, which carve
+  // keeps verbatim since two trailing spaces are NOT a hard break here) is left
+  // intact, and a backslash hard break is never affected.
+  const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n').replace(/[ \t]+$/, '')
   return {
     type: 'paragraph',
     children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
@@ -1853,6 +2524,51 @@ function leadingWhitespace(line: string): number {
   let n = 0
   while (n < line.length && (line[n] === ' ' || line[n] === '\t')) n++
   return n
+}
+
+// Visual column of the leading whitespace, expanding tabs to the next
+// CommonMark tab stop (a multiple of 4). This is the column model used for list
+// nesting comparisons: a space advances one column, a tab advances to the next
+// tab stop. For space-only indentation it equals leadingWhitespace().
+function indentColumns(line: string): number {
+  let col = 0
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === ' ') col++
+    else if (line[i] === '\t') col += 4 - (col % 4)
+    else break
+  }
+  return col
+}
+
+// Dedent counterpart of indentColumns(): drop leading whitespace up to `cols`
+// columns. By default a tab straddling the boundary is consumed whole, so a
+// block opener (quote, heading) dedents flush to column 0 and parses -- Carve
+// has no indent-sensitive block where a leftover column would change meaning.
+// With keepResidual (used only for sub-list marker lines), the unconsumed
+// columns of a straddling tab are re-emitted as spaces so tab+space-aligned
+// sibling markers keep the same visual column and the recursive parse re-derives
+// the child base from it. For space-only indentation this equals line.slice(cols).
+function sliceColumns(line: string, cols: number, keepResidual = false): string {
+  let col = 0
+  let i = 0
+  while (i < line.length && col < cols) {
+    if (line[i] === ' ') {
+      col++
+      i++
+    } else if (line[i] === '\t') {
+      col += 4 - (col % 4)
+      i++
+    } else {
+      break
+    }
+  }
+  // When dedenting a sub-list block stream, a tab straddling the boundary leaves
+  // residual columns; reinsert them as spaces so tab+space-aligned sibling
+  // markers stay at the same visual column and the recursive parse re-derives
+  // correctly. Lead content uses whole-tab consumption (keepResidual=false) so a
+  // block opener reaches column 0. (Space-only indentation has no residual.)
+  if (keepResidual && col > cols) return ' '.repeat(col - cols) + line.slice(i)
+  return line.slice(i)
 }
 
 // ============================================================================
@@ -1880,7 +2596,7 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // `}` is the first one outside quotes (djot "don't mind braces in quotes").
 // RE_SPAN_TAIL's body is `*` so an empty `{}` matches; isValidAttrPayload then
 // decides span (valid block, possibly empty) vs literal (invalid content).
-const RE_LINK_TAIL = /^\(([^)\s]*)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_LINK_TAIL = /^\(([^)\s]*)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
@@ -1940,14 +2656,39 @@ function buildBracketMap(s: string): Record<number, number> {
   }
   return map
 }
-const RE_CRITIC_INS = /^\{\+([^}]*)\+\}/
-const RE_CRITIC_DEL = /^\{-([^}]*)-\}/
+// Content runs to the delimiter-specific closer (`+}` / `-}`), so a nested
+// span of a DIFFERENT type whose `}` would otherwise abort an `[^}]*` class is
+// kept inside and recursed into: `{+a {-b-} c+}` -> ins(a, del(b), c). Matches
+// carve-php / carve-rs.
+const RE_CRITIC_INS = /^\{\+((?:[^+]|\+(?!\}))*)\+\}/
+const RE_CRITIC_DEL = /^\{-((?:[^-]|-(?!\}))*)-\}/
 const RE_CRITIC_SUB = /^\{~([^}]*)~>([^}]*)~\}/
 const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
+// Forced intraword emphasis (§22): a brace pair around a bare delimiter forces
+// a span with no word-boundary condition. Group 1 is the delimiter; the
+// backreference closes it before `}`, non-greedy so the nearest `delim}` wins.
+// Matched AFTER RE_CRITIC_SUB, so `{~…~>…~}` is substitution and a bare
+// `{~…~}` (no `~>`) is forced strikethrough. The `=` form requires a trailing
+// `=` before `}`, so the raw-inline `{=format}` attribute (no trailing `=`,
+// e.g. `{=html}`) does not match here.
+const RE_FORCED_EMPHASIS = /^\{([/*_^,~=])([\s\S]+?)\1\}/
+const FORCED_TYPE: Record<string, Emphasis['type']> = {
+  '/': 'italic',
+  '*': 'strong',
+  _: 'underline',
+  '^': 'super',
+  ',': 'sub',
+  '~': 'strike',
+  '=': 'highlight',
+}
 // Names can include version-style dots between alnum runs (e.g. `#release-1.0`)
 // but a trailing period is treated as sentence punctuation, not part of the name.
-const RE_MENTION = /^@([a-zA-Z][\w-]*(?:\.\w+)*)/
-const RE_TAG = /^#([\w][\w-]*(?:\.\w+)*)/
+// Mention / tag name = name_word ('.' name_word)*, name_word = (letter | digit
+// | '_' | '-')+ (grammar PART 9 §7). Interior dots only (a trailing dot stays
+// punctuation — the non-greedy dotted-segment match leaves it); each segment
+// allows digits, `_` and `-` in any position. Matches carve-php / carve-rs.
+const RE_MENTION = /^@([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
+const RE_TAG = /^#([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 
 // Fixed multi-character smart-typography tokens, longest first so
 // `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
@@ -2051,11 +2792,37 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
   }
 }
 
+// Inline recursion depth, bounding the same nesting the block side caps with
+// MAX_NESTING_DEPTH. scanInline recurses one frame per nested link / span /
+// emphasis / critic level; without a cap a deeply nested run (e.g.
+// `[[[[…x]]]]`) overflows the call stack and throws RangeError. JS is
+// single-threaded, so a module-level counter with try/finally is sufficient
+// (and far less invasive than threading a depth arg through every recursive
+// call site). Over the cap the run stays literal text instead of recursing.
+let inlineDepth = 0
+
 function scanInline(
   text: string,
   source: InlineSource = inlineSource(),
   inFootnote = false,
   captionContext = false,
+): InlineNode[] {
+  if (inlineDepth >= MAX_NESTING_DEPTH) {
+    return [withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
+  }
+  inlineDepth++
+  try {
+    return scanInlineInner(text, source, inFootnote, captionContext)
+  } finally {
+    inlineDepth--
+  }
+}
+
+function scanInlineInner(
+  text: string,
+  source: InlineSource,
+  inFootnote: boolean,
+  captionContext: boolean,
 ): InlineNode[] {
   const out: InlineNode[] = []
   let i = 0
@@ -2098,9 +2865,12 @@ function scanInline(
       i += 2
       continue
     }
-    // Non-breaking space: a backslash followed by a space (djot).
+    // Non-breaking space: a backslash followed by a space (djot). Emit the
+    // internal placeholder (U+E000) rather than a literal U+00A0 so it is
+    // converted per renderer (HTML &nbsp;, Markdown U+00A0, plain/ANSI a
+    // space) and never confused with an author's literal non-breaking space.
     if (c === '\\' && text[i + 1] === ' ') {
-        append('\u00a0')
+        append('\ue000')
         i += 2
         continue
     }
@@ -2230,7 +3000,7 @@ function scanInline(
           flush()
           const img: Image = { type: 'image', src: ml[1]!, alt: rest.slice(2, close) }
           const title = ml[2] ?? ml[3]
-          if (title) img.title = title
+          if (title) img.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
             const a = parseAttrs(ml[4])
@@ -2285,7 +3055,7 @@ function scanInline(
             children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
           }
           const title = ml[2] ?? ml[3]
-          if (title) link.title = title
+          if (title) link.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
             const a = parseAttrs(ml[4])
@@ -2464,8 +3234,20 @@ function scanInline(
         i += cmt[0].length
         continue
       }
-      // Inline attribute block — attaches to preceding node
-      const attr = RE_INLINE_ATTR.exec(rest)
+      // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
+      // bare delimiter, but with no word-boundary condition.
+      const forced = RE_FORCED_EMPHASIS.exec(rest)
+      if (forced) {
+        flush()
+        out.push(withPos({ type: FORCED_TYPE[forced[1]!]!, children: scanInline(forced[2]!, shiftSource(source, text, i + 2), inFootnote) } as Emphasis, source, text, i, i + forced[0].length))
+        i += forced[0].length
+        continue
+      }
+      // Inline attribute block — attaches to preceding node. It must be GLUED:
+      // a non-empty `buf` means unflushed text (e.g. a space) sits between the
+      // preceding node and the `{`, so the block is NOT attached -- it stays
+      // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
+      const attr = !buf ? RE_INLINE_ATTR.exec(rest) : null
       if (attr && out.length) {
         const prev = out[out.length - 1]!
         const parsed = parseAttrs(attr[1]!)
@@ -2574,43 +3356,17 @@ function matchEmphasis(
       }
     }
   }
-  // ,,sub,, (priority over single , — n/a, just match double). A run of 3+
-  // commas does not open: the doubling IS the delimiter token, so an adjacent
-  // third `,` (before or after the pair) makes it literal, consistent with
-  // the single-char same-delimiter adjacency rule (`**` etc.).
-  if (c === ',' && text[i + 1] === ',' && text[i - 1] !== ',' && text[i + 2] !== ',') {
-    const close = findClose(text, i + 2, ',,')
-    if (close !== -1 && close > i + 2) {
-      const inner = text.slice(i + 2, close)
-      if (inner.trim() && !inner.startsWith(' ') && !inner.endsWith(' ')) {
-        return {
-          node: { type: 'sub', children: scanInline(inner, shiftSource(source, text, i + 2), inFootnote) },
-          end: close + 2,
-        }
-      }
-    }
-  }
-  // ==highlight== (priority over single =). Likewise a run of 3+ `=` does not
-  // open -- `====x====` stays literal, like `**x**`.
-  if (c === '=' && text[i + 1] === '=' && text[i - 1] !== '=' && text[i + 2] !== '=') {
-    const close = findClose(text, i + 2, '==')
-    if (close !== -1 && close > i + 2) {
-      const inner = text.slice(i + 2, close)
-      if (inner.trim() && !inner.startsWith(' ') && !inner.endsWith(' ')) {
-        return {
-          node: { type: 'highlight', children: scanInline(inner, shiftSource(source, text, i + 2), inFootnote) },
-          end: close + 2,
-        }
-      }
-    }
-  }
-  // Single-char delimiters
+  // Single-char delimiters. Highlight `=` and subscript `,` are single-char
+  // like the rest; a doubled `==`/`,,` is therefore literal by same-delimiter
+  // adjacency (handled below), exactly like `**x**`.
   const pairs: Array<[string, Emphasis['type']]> = [
     ['/', 'italic'],
     ['*', 'strong'],
     ['_', 'underline'],
     ['~', 'strike'],
     ['^', 'super'],
+    ['=', 'highlight'],
+    [',', 'sub'],
   ]
   for (const [delim, type] of pairs) {
     if (c === delim) {
@@ -2620,12 +3376,17 @@ function matchEmphasis(
       if (!after || after === ' ' || after === '\n') continue
       // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
       // same delimiter (before OR after) does not open, so a doubled
-      // delimiter is literal text. `**x**`, `~~x~~`, `^^x^^` stay literal,
-      // uniformly with `//x//` and `__x__`. Applies to all five types.
+      // delimiter is literal text. `**x**`, `~~x~~`, `^^x^^`, `==x==`, `,,x,,`
+      // stay literal, uniformly with `//x//` and `__x__`. Applies to all seven.
       if (after === delim || before === delim) continue
-      // Italic/underline additionally can't open after a word char or `/`,
-      // keeping paths/identifiers literal (a/b/c, foo_bar, snake_/case/).
-      if ((delim === '/' || delim === '_') && before && /[A-Za-z0-9_/]/.test(before)) continue
+      // Word-boundary opener (spec §9): every bare delimiter can't open after
+      // an alphanumeric or `_`, keeping paths/identifiers/numbers literal
+      // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
+      // forced `{X…X}` family for deliberate intraword emphasis.
+      if (before && /[A-Za-z0-9_]/.test(before)) continue
+      // Italic/underline additionally can't open after `/` (path protection,
+      // e.g. snake_/case/).
+      if ((delim === '/' || delim === '_') && before === '/') continue
       // Find closer that's not preceded by space
       const close = findEmphasisClose(text, i + 1, delim)
       if (close !== -1) {
@@ -2754,9 +3515,9 @@ function findEmphasisClose(text: string, from: number, delim: string): number {
       const prev = text[j - 1]
       if (prev === ' ' || prev === '\n' || prev === undefined) continue
       const next = text[j + 1]
-      // Closer must not be followed by alphanumeric for / and _
-      if ((delim === '/' || delim === '_') && next && /[A-Za-z0-9]/.test(next))
-        continue
+      // Word-boundary closer (spec §9): no bare delimiter closes when followed
+      // by an alphanumeric. Applies to every delimiter, not just / and _.
+      if (next && /[A-Za-z0-9]/.test(next)) continue
       if (depth === 0) return j
       depth--
     }
@@ -2881,8 +3642,15 @@ function isValidAttrPayload(inner: string): boolean {
   // well as double-quoted) so the same payloads parseAttrs accepts validate
   // as block attributes — otherwise `"a\"b"` strips only to `"a\"` and the
   // rest leaks, falsely rejecting the block.
+  // An attribute name (id, class, key) is a grammar identifier:
+  // `(letter | '_'), {letter | digit | '_' | '-'}` -- it may NOT start with a
+  // digit. A digit-first name (`.123`, `#1`, `2=v`) makes the whole block an
+  // invalid attribute block, so it stays literal (§14) -- stricter than djot.
+  // The bareword (boolean-attribute) alternative comes after key=value so a
+  // `key=value` is consumed whole, and before `\s+`. It makes `{disabled}` and
+  // `{.c disabled}` valid blocks (boolean attrs) rather than literal text.
   const stripped = inner.replace(
-    /(?:#[\w-]+)|(?:\.[\w-]+)|(?:[\w-]+=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+))|\s+/g,
+    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+))|(?:[a-zA-Z_][\w-]*)|\s+/g,
     '',
   )
   return stripped === ''
@@ -2917,7 +3685,14 @@ export function parseAttrs(src: string): Attrs {
   // strip their delimiters, so `k='{y}'` yields the literal `{y}`. A
   // backslash escapes ASCII punctuation inside a quoted value, so
   // `k="a\"b"` yields the literal `a"b`.
-  const re = /(?:#([\w-]+))|(?:\.([\w-]+))|(?:([\w-]+)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\S+)))/g
+  // An attribute name is a grammar identifier (letter or `_` first, then
+  // letters / digits / `_` / `-`); a digit-first token is not a valid
+  // attribute and is skipped here (the payload is rejected as invalid
+  // upstream by isValidAttrPayload, so the block stays literal).
+  // The bareword alternative (m[7]) is LAST so `key=value` matches as a
+  // key/value, not as a bareword `key` with a leftover `=value`. A bareword is
+  // a value-less (boolean) attribute -> rendered `name=""` (djot-php form).
+  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\S+)))|(?:([a-zA-Z_][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
@@ -2931,8 +3706,28 @@ export function parseAttrs(src: string): Attrs {
         m[4] !== undefined ? unescapeAttrValue(m[4])
         : m[5] !== undefined ? unescapeAttrValue(m[5])
         : (m[6] ?? '')
-      attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
-      note(m[3])
+      if (m[3] === 'id') {
+        // `id=j` is the SAME attribute as `#j`: it sets the id slot, last-wins
+        // (§15), instead of emitting a second `id="…"` (invalid HTML). Matches
+        // carve-php; `{#i id=j}` -> `id="j"`.
+        attrs.id = val
+        note('#id')
+      } else {
+        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
+        note(m[3])
+      }
+    } else if (m[7]) {
+      if (m[7] === 'id') {
+        // A bare boolean `id` also feeds the id slot (value ''), last-wins and
+        // single -- `{id id=j}` -> `id="j"`, `{id}` -> `id=""` -- so `id` never
+        // enters keyValues and no duplicate `id` attribute can be produced.
+        attrs.id = ''
+        note('#id')
+      } else {
+        // Boolean attribute: a bare word with no value.
+        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[7]]: '' }
+        note(m[7])
+      }
     }
   }
   if (order.length) attrs.order = order
@@ -2942,7 +3737,9 @@ export function parseAttrs(src: string): Attrs {
 function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   if (!a) return b
   const out: Attrs = { ...a }
-  if (b.id) out.id = b.id
+  // `!== undefined`, not truthiness: an explicit `id=""` in a later block wins
+  // over an earlier `#old` (last-wins §15), e.g. `[x]{#old}{id=""}` -> `id=""`.
+  if (b.id !== undefined) out.id = b.id
   if (b.classes) out.classes = [...(out.classes ?? []), ...b.classes]
   if (b.keyValues) out.keyValues = { ...(out.keyValues ?? {}), ...b.keyValues }
   // Merge source order: keep `a`'s order, append `b`'s new slots (a slot
@@ -2963,4 +3760,3 @@ function attrOrder(a: Attrs): string[] {
   if (a.keyValues) for (const k of Object.keys(a.keyValues)) o.push(k)
   return o
 }
-

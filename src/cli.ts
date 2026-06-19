@@ -21,6 +21,10 @@ import {
   formatMigrationWarnings,
   lintCarve,
   formatLintWarnings,
+  carveToHtml,
+  carveToMarkdown,
+  carveToPlainText,
+  carveToAnsi,
   type MigrationWarning,
 } from './index.js'
 
@@ -41,8 +45,20 @@ export interface CliIO {
 const HELP = `carve - Carve markup tooling
 
 Usage:
+  carve [options] [file]           Render (default; the 'render' word is optional)
+  carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
+
+render - convert Carve source to an output format (reads a file or stdin).
+The 'render' subcommand is optional: \`carve --ansi file\` works the same.
+
+  render options (default --html; choose at most one):
+    --html         HTML (default)
+    --markdown     Markdown
+    --plain        plain text
+    --ansi         ANSI-colored terminal text
+
 
 fix - rewrite Djot/Markdown delimiter collisions to their Carve equivalents,
 constructs that otherwise silently mis-render under Carve (e.g. **bold**
@@ -57,9 +73,13 @@ constructs that otherwise silently mis-render under Carve (e.g. **bold**
   to stdout. Crossing collisions that cannot be auto-fixed are reported on
   stderr for manual review.
 
-lint - report delimiter collisions AND semantic problems (broken </#id>
-cross-references, duplicate heading ids) as \`file:line:col rule - message\`.
-Reads files or stdin; exits 1 if anything is reported, 0 if clean.
+lint - report delimiter collisions AND silent-failure problems as
+\`file:line:col rule - message\`: broken </#id> cross-references, unresolved
+reference links, duplicate heading ids, missing/duplicate/unused footnotes,
+trailing {…} attribute blocks on headings (literal, not attributes), legacy
+\`\`\`raw FORMAT fences (use \`\`\`=FORMAT), and lines that open like a block
+(\`:::\`, \`{#\`) but parsed as plain text. Reads files or stdin; exits 1 if
+anything is reported, 0 if clean.
 
   -h, --help     Show this help
 `
@@ -175,6 +195,75 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
   return 0
 }
 
+const RENDERERS = {
+  html: carveToHtml,
+  markdown: carveToMarkdown,
+  plain: carveToPlainText,
+  ansi: carveToAnsi,
+} as const
+
+async function runRender(args: string[], io: CliIO): Promise<number> {
+  let values: {
+    html?: boolean
+    markdown?: boolean
+    plain?: boolean
+    ansi?: boolean
+    help?: boolean
+  }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        html: { type: 'boolean' },
+        markdown: { type: 'boolean' },
+        plain: { type: 'boolean' },
+        ansi: { type: 'boolean' },
+        help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve render: ${(e as Error).message}\n`)
+    return 2
+  }
+
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const chosen = (['html', 'markdown', 'plain', 'ansi'] as const).filter((f) => values[f])
+  if (chosen.length > 1) {
+    io.writeErr('carve render: choose at most one of --html, --markdown, --plain, --ansi\n')
+    return 2
+  }
+  if (positionals.length > 1) {
+    io.writeErr('carve render: takes a single file (or stdin)\n')
+    return 2
+  }
+  const render = RENDERERS[chosen[0] ?? 'html']
+
+  let src: string
+  if (positionals.length === 0) {
+    src = await io.readStdin()
+  } else {
+    try {
+      src = io.readFile(positionals[0]!)
+    } catch {
+      io.writeErr(`carve render: cannot read ${positionals[0]}\n`)
+      return 2
+    }
+  }
+
+  let out = render(src)
+  if (!out.endsWith('\n')) out += '\n'
+  io.write(out)
+  return 0
+}
+
 /**
  * Dispatch a `carve` invocation. `argv` is the argument list *after* `node`
  * and the script path (i.e. `process.argv.slice(2)`). Returns the intended
@@ -186,14 +275,18 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
     io.write(HELP)
     return 0
   }
-  if (sub === undefined) {
-    io.writeErr(HELP)
-    return 2
-  }
+  // No arguments: render from stdin (HTML), matching the carve-rs / carve-php
+  // CLIs so `echo '# Hi' | carve` works. The real binary still shows help when
+  // stdin is an interactive TTY (see the wrapper at the bottom of this file).
+  if (sub === undefined) return runRender([], io)
+  if (sub === 'render') return runRender(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
-  io.writeErr(`carve: unknown command '${sub}'\n\n${HELP}`)
-  return 2
+  // Default action is render, so the `render` subcommand is optional:
+  // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
+  // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
+  // format flag or an input file, handled by runRender over the full argv.
+  return runRender(argv, io)
 }
 
 /** Report all warnings for one source; returns how many were found. */
@@ -261,13 +354,22 @@ const realIO: CliIO = {
 
 // Run only when executed as the binary, not when imported by a test.
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  run(process.argv.slice(2), realIO).then(
-    (code) => {
-      process.exitCode = code
-    },
-    (err) => {
-      process.stderr.write(`carve: ${(err as Error).message}\n`)
-      process.exitCode = 1
-    },
-  )
+  const args = process.argv.slice(2)
+  // With no args and an interactive terminal there is nothing to render, so
+  // show help instead of silently blocking on stdin. Piped/redirected input
+  // (`echo … | carve`) falls through to render from stdin.
+  if (args.length === 0 && process.stdin.isTTY) {
+    process.stderr.write(HELP)
+    process.exitCode = 2
+  } else {
+    run(args, realIO).then(
+      (code) => {
+        process.exitCode = code
+      },
+      (err) => {
+        process.stderr.write(`carve: ${(err as Error).message}\n`)
+        process.exitCode = 1
+      },
+    )
+  }
 }

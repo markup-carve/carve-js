@@ -12,19 +12,19 @@ const h = (s: string) => carveToHtml(s)
 describe('heading <section> wrapping', () => {
   it('wraps a single heading and its body', () => {
     expect(h('# Intro\n\nText.')).toBe(
-      '<section id="intro">\n  <h1>Intro</h1>\n  <p>Text.</p>\n</section>',
+      '<section id="Intro">\n  <h1>Intro</h1>\n  <p>Text.</p>\n</section>',
     )
   })
 
   it('nests a deeper heading inside the shallower section', () => {
     expect(h('# A\n\n## B')).toBe(
-      '<section id="a">\n  <h1>A</h1>\n  <section id="b">\n    <h2>B</h2>\n  </section>\n</section>',
+      '<section id="A">\n  <h1>A</h1>\n  <section id="B">\n    <h2>B</h2>\n  </section>\n</section>',
     )
   })
 
   it('produces sibling sections for same-level headings', () => {
     expect(h('# A\n\n# B')).toBe(
-      '<section id="a">\n  <h1>A</h1>\n</section>\n<section id="b">\n  <h1>B</h1>\n</section>',
+      '<section id="A">\n  <h1>A</h1>\n</section>\n<section id="B">\n  <h1>B</h1>\n</section>',
     )
   })
 
@@ -32,13 +32,13 @@ describe('heading <section> wrapping', () => {
     const html = h('# A\n\n## B\n\n# C')
     expect(html).toBe(
       [
-        '<section id="a">',
+        '<section id="A">',
         '  <h1>A</h1>',
-        '  <section id="b">',
+        '  <section id="B">',
         '    <h2>B</h2>',
         '  </section>',
         '</section>',
-        '<section id="c">',
+        '<section id="C">',
         '  <h1>C</h1>',
         '</section>',
       ].join('\n'),
@@ -47,12 +47,14 @@ describe('heading <section> wrapping', () => {
 
   it('nests by level number across a skipped level', () => {
     expect(h('# H1\n\n### H3')).toBe(
-      '<section id="h1">\n  <h1>H1</h1>\n  <section id="h3">\n    <h3>H3</h3>\n  </section>\n</section>',
+      '<section id="H1">\n  <h1>H1</h1>\n  <section id="H3">\n    <h3>H3</h3>\n  </section>\n</section>',
     )
   })
 
   it('puts an explicit {#id} on the section, other attrs on the heading', () => {
-    expect(h('# Title {.large #intro}\n\nP.')).toBe(
+    // Strict djot: heading attributes come from the PRECEDING block-attribute
+    // line; the explicit id still hoists to the <section>, the rest stay on h*.
+    expect(h('{.large #intro}\n# Title\n\nP.')).toBe(
       '<section id="intro">\n  <h1 class="large">Title</h1>\n  <p>P.</p>\n</section>',
     )
   })
@@ -71,11 +73,11 @@ describe('heading <section> wrapping', () => {
     // each section's own depth.
     expect(html).toBe(
       [
-        '<section id="a">',
+        '<section id="A">',
         '  <h1>A</h1>',
-        '  <section id="b">',
+        '  <section id="B">',
         '    <h2>B</h2>',
-        '    <section id="c">',
+        '    <section id="C">',
         '      <h3>C</h3>',
         '    </section>',
         '  </section>',
@@ -86,16 +88,16 @@ describe('heading <section> wrapping', () => {
 
   it('keeps the fragment target resolvable via crossref', () => {
     const html = h('# Getting Started\n\nSee </#getting-started>.')
-    expect(html).toContain('<section id="getting-started">')
+    expect(html).toContain('<section id="Getting-Started">')
     expect(html).toContain('<h1>Getting Started</h1>')
-    expect(html).toContain('<a href="#getting-started">Getting Started</a>')
+    expect(html).toContain('<a href="#Getting-Started">Getting Started</a>')
   })
 
   it('does not wrap a heading nested inside a blockquote', () => {
-    // resolveHeadingIds only assigns ids to top-level headings, so nested
-    // headings carry no id and stay bare <h*> with no <section>.
+    // A nested heading carries its slug id on the <h*> (carve-php parity) but
+    // gets NO <section> wrapper -- the section pass is a top-level-only concern.
     const html = h('> # Sub\n')
     expect(html).not.toContain('<section')
-    expect(html).toContain('<h1>Sub</h1>')
+    expect(html).toContain('<h1 id="Sub">Sub</h1>')
   })
 })

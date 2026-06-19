@@ -50,18 +50,14 @@ describe('list marker change starts a new list (§11)', () => {
     expect(html).toContain('<li>c</li>')
   })
 
-  it('interrupts a paragraph, then splits two differing markers (§10+§11)', () => {
-    // `+` is not a Carve bullet (§3 divergence; it is the continuation marker),
-    // so the two differing bullets here are `-` and `*`.
-    expect(h('para\n- a\n* b')).toBe(
-      '<p>para</p>\n<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>',
-    )
+  it('folds differing bullet markers into the open paragraph (no blank line)', () => {
+    // A bullet no longer interrupts an open paragraph (§10), so both marker
+    // lines fold in as lazy continuation rather than starting lists.
+    expect(h('para\n- a\n* b')).toBe('<p>para\n- a\n* b</p>')
   })
 
-  it('two same-marker lines after prose interrupt as one list (§10)', () => {
-    expect(h('para\n- a\n- b')).toBe(
-      '<p>para</p>\n<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
-    )
+  it('folds same-marker lines into the open paragraph (no blank line)', () => {
+    expect(h('para\n- a\n- b')).toBe('<p>para\n- a\n- b</p>')
   })
 
   it('does not loosen a list when a blank precedes a different marker', () => {
@@ -96,10 +92,10 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('does not treat unquoted trailing text as a title', () => {
-    expect(h('::: note hello\nBody.\n:::')).toBe(
-      '<aside class="admonition note">\n  <p>Body.</p>\n</aside>',
-    )
+  it('a typed opener followed by an unquoted word is not a fence (strict)', () => {
+    // Only a quoted title may follow the type; any other trailing text
+    // makes the line an ordinary paragraph (strict djot).
+    expect(h('::: note hello\nBody.\n:::')).toBe('<p>::: note hello\nBody.\n:::</p>')
   })
 
   it('renders no title element when the opener has only a type', () => {
@@ -108,12 +104,41 @@ describe('admonition title (§12)', () => {
     )
   })
 
-  it('preserves a quoted title when an attribute block follows', () => {
-    // `::: note "Heads up" {#x}` — the title survives; the trailing
-    // attribute block is tolerated (carve-js does not yet attach
-    // admonition attributes, but the title must not be dropped).
-    expect(h('::: note "Heads up" {#x}\nBody.\n:::')).toContain(
-      '<p class="admonition-title">Heads up</p>',
+  it('a trailing attribute block on the opener is not a fence (strict)', () => {
+    // No inline attributes on a ::: fence: the line is a paragraph. Covers
+    // spaced, abutting, and post-title forms.
+    for (const src of [
+      '::: note {.x}',
+      '::: note{.x}',
+      '::: note "Heads up" {#x}',
+      '::: hint {.x}',
+    ]) {
+      const html = h(`${src}\nBody.\n:::`)
+      expect(html.startsWith('<p>')).toBe(true)
+      expect(html).not.toContain('<aside')
+      expect(html).not.toContain('<div')
+    }
+  })
+
+  it('a quoted title still renders, with braces preserved (no attributes)', () => {
+    expect(h('::: note "Use {x}"\nBody.\n:::')).toBe(
+      [
+        '<aside class="admonition note">',
+        '  <p class="admonition-title">Use {x}</p>',
+        '  <p>Body.</p>',
+        '</aside>',
+      ].join('\n'),
+    )
+  })
+
+  it('attributes attach via a preceding block-attribute line (strict)', () => {
+    // The only way to attribute an admonition: a {...} line before the
+    // opener (§15). Works for Tier-1 and Tier-2 types.
+    expect(h('{#x .lead}\n::: note\nBody.\n:::')).toBe(
+      '<aside class="admonition note lead" id="x">\n  <p>Body.</p>\n</aside>',
+    )
+    expect(h('{.lead}\n::: hint\nBody.\n:::')).toBe(
+      '<div class="hint lead">\n  <p>Body.</p>\n</div>',
     )
   })
 
@@ -182,5 +207,30 @@ describe('content-less marker is not a list', () => {
 
   it('still parses a marker with real content as a list', () => {
     expect(h('- a\n- b')).toBe('<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>')
+  })
+})
+
+/**
+ * A list marker requires a SPACE after the marker character, not a tab
+ * (the space is a syntax delimiter, not indentation). A tab there means the
+ * line is paragraph text, matching carve-php and carve-rs.
+ */
+describe('marker separator must be a space, not a tab', () => {
+  const t = (s: string) => carveToHtml(s).trim()
+
+  it('a tab after a bullet is not a list item', () => {
+    expect(t('-\ta')).toBe('<p>-\ta</p>')
+  })
+
+  it('a tab after an ordered marker is not a list item', () => {
+    expect(t('1.\ta')).toBe('<p>1.\ta</p>')
+  })
+
+  it('a tab after a task checkbox marker is not a task item', () => {
+    expect(t('-\t[x] done')).toBe('<p>-\t[x] done</p>')
+  })
+
+  it('a normal space-separated bullet is still a list', () => {
+    expect(t('- a')).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 })

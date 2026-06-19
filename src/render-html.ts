@@ -14,6 +14,7 @@ import type {
   BlockQuote,
   Document,
   Figure,
+  Heading,
   Image,
   InlineNode,
   List,
@@ -125,9 +126,19 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
       // The id moves to <section>; any other heading attrs (classes,
       // key-values) stay on the <h*>.
       const id = node.attrs?.id
-      const sectionId = id ? ` id="${escapeAttr(id)}"` : ''
+      // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
+      // <section> (it already suppressed the auto-slug in resolveHeadingIds).
+      const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
       out.push(`${indent(depth)}<section${sectionId}>`)
       sectionStack.push(node.level)
+      // An extension may render the <h*> element itself (e.g. heading
+      // permalinks); the <section> wrapper above stays core. Returns undefined
+      // to fall through to the default heading rendering.
+      const custom = renderHeadingElement(node, opts, depth + 1)
+      if (custom !== undefined) {
+        out.push(opts.sourceLine ? withSourceLine(custom, node.pos?.startLine) : custom)
+        continue
+      }
       const headingAttrs = stripId(node.attrs)
       const inner = renderInlines(node.children, opts)
       const slAttr =
@@ -270,9 +281,16 @@ function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOpt
     const body = entry.inline
       ? [`${indent(3)}<p>${renderInlines(entry.inline, opts)}</p>`]
       : (defs[entry.label!] ?? []).map((b) => renderBlock(b, opts, 3))
+    // A note referenced once gets a plain `↩`; a note referenced N>1 times gets
+    // one numbered backlink per reference (`↩<sup>k</sup>`, space-separated) so
+    // each return arrow is distinct (matches carve-php + pandoc).
+    const multiRef = entry.backrefs.length > 1
     const blink = entry.backrefs
-      .map((rid) => `<a href="#${rid}" role="doc-backlink">↩</a>`)
-      .join('')
+      .map(
+        (rid, k) =>
+          `<a href="#${rid}" role="doc-backlink">↩${multiRef ? `<sup>${k + 1}</sup>` : ''}</a>`,
+      )
+      .join(multiRef ? ' ' : '')
     const last = body.length - 1
     if (last >= 0 && /<\/p>\s*$/.test(body[last]!)) {
       body[last] = body[last]!.replace(/<\/p>(\s*)$/, `${blink}</p>$1`)
@@ -320,7 +338,14 @@ function renderAttrs(attrs?: Attrs): string {
     attrs.classes && attrs.classes.length
       ? `class="${attrs.classes.join(' ')}"`
       : ''
-  const idAttr = () => (attrs.id ? `id="${attrs.id}"` : '')
+  // Escape the id value: an `#id` is identifier-restricted (escaping is a
+  // no-op), but `id=value` (which now also feeds this slot, last-wins §15) can
+  // carry arbitrary quoted text and must not inject markup.
+  // `!== undefined`, not truthiness: an explicit `id=""` is a real (empty) id
+  // and must render `id=""` (matches carve-php), the same last-wins slot as
+  // `#id`/`id=value`. Escape the value: `#id` is identifier-restricted (escape
+  // is a no-op), but `id=value` can carry arbitrary quoted text.
+  const idAttr = () => (attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : '')
   const kvAttr = (k: string) => {
     const v = attrs.keyValues?.[k]
     return v !== undefined ? `${k}="${escapeAttr(v)}"` : ''
@@ -383,16 +408,53 @@ function renderAttrs2(
   return renderAttrs(a)
 }
 
+// Let an extension render a top-level heading's <h*> element via a
+// `blockRenderers.heading` renderer (the <section> wrapper stays core), tried
+// in registration order like other block renderers. Returns undefined when no
+// extension claims it, so core renders the default heading.
+function renderHeadingElement(
+  node: Heading,
+  opts: RenderOptions,
+  level: number,
+): string | undefined {
+  const headingRenderers = opts.extensions?.flatMap((e) => {
+    const fn = e.blockRenderers?.heading
+    return fn ? [fn] : []
+  })
+  if (!headingRenderers || !headingRenderers.length) return undefined
+  const ctx: BlockExtensionRenderContext = {
+    level,
+    indent,
+    renderChildren: (nodes, lvl) => nodes.map((c) => renderBlock(c, opts, lvl)).join('\n'),
+    renderInlines: (nodes) => renderInlines(nodes, opts),
+    escapeHtml,
+    escapeAttr,
+    renderAttrs,
+  }
+  for (const r of headingRenderers) {
+    const out = r(node, ctx)
+    if (out !== undefined) return out
+  }
+  return undefined
+}
+
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   // Extension block renderers (keyed by node type) get first claim, tried in
   // registration order: each may return undefined to defer to the next
   // extension's renderer (so one extension can claim only some nodes of a
   // type, e.g. mermaid claims only `mermaid` code blocks), then to core.
-  const blockRenderers = opts.extensions?.flatMap((e) => {
-    const fn = e.blockRenderers?.[node.type]
-    return fn ? [fn] : []
-  })
+  // Headings are excluded here: a top-level heading is rendered by the
+  // section-wrapping pass (renderHeadingElement), where the id lives on the
+  // <section>. A heading nested in a container keeps its id on the <h*> and is
+  // rendered by core below, so heading renderers do not apply to it.
+  const blockRenderers =
+    node.type === 'heading'
+      ? undefined
+      : opts.extensions?.flatMap((e) => {
+          const fn = e.blockRenderers?.[node.type]
+          return fn ? [fn] : []
+        })
   if (blockRenderers && blockRenderers.length) {
     const ctx: BlockExtensionRenderContext = {
       level,
@@ -441,7 +503,7 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       return `${open}\n${body}\n${pad}</div>`
     }
     case 'definition-list': {
-      const lines = [`${pad}<dl>`]
+      const lines = [`${pad}<dl${renderAttrs(node.attrs)}>`]
       for (const it of node.items) {
         for (const t of it.terms) lines.push(`${pad}  <dt>${renderInlines(t, opts)}</dt>`)
         for (const d of it.definitions) {
@@ -514,32 +576,48 @@ function renderListItem(
         ? '<input type="checkbox" checked disabled> '
         : '<input type="checkbox" disabled> '
 
-  const wrapPara = (p: Paragraph) => {
+  // `isLead` is the item's FIRST paragraph. In a tight item only the lead
+  // paragraph is unwrapped (it sits on the <li> line); a SUBSEQUENT paragraph
+  // -- e.g. one attached via `+` after the lead -- still renders as a real <p>
+  // even though the list is tight (Bug B; carve-php parity).
+  const wrapPara = (p: Paragraph, isLead: boolean) => {
     const inner = renderInlines(p.children, opts)
-    // Tight items normally omit the <p>, but a paragraph carrying its
-    // own attributes (e.g. a leading block-attribute line, §15) must
-    // keep the <p> so the attributes survive.
-    if (tight && !p.attrs) return inner
+    // Tight items normally omit the <p> on the lead paragraph, but a paragraph
+    // carrying its own attributes (e.g. a leading block-attribute line, §15)
+    // must keep the <p> so the attributes survive.
+    if (tight && isLead && !p.attrs) return inner
     return `<p${renderAttrs(p.attrs)}>${inner}</p>`
   }
 
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
   if (item.children.length === 1 && item.children[0]!.type === 'paragraph') {
-    return `${pad}<li>${checkbox}${wrapPara(item.children[0] as Paragraph)}</li>`
+    return `${pad}<li${renderAttrs(item.attrs)}>${checkbox}${wrapPara(item.children[0] as Paragraph, true)}</li>`
   }
 
   // Mixed content (e.g. a lead paragraph followed by a nested list): the
   // first paragraph sits on the <li> line; remaining blocks go below,
   // indented one level deeper, with the closing </li> back at item indent.
-  let head = `${pad}<li>${checkbox}`
+  let head = `${pad}<li${renderAttrs(item.attrs)}>${checkbox}`
   const body: string[] = []
+  // A paragraph that immediately follows the lead paragraph (a consecutive
+  // run from index 0, e.g. a `+`-attached second paragraph -- Bug B) renders as
+  // a real <p> even in a tight item, matching carve-php. Once a non-paragraph
+  // block appears, the lead run ends and later paragraphs fall back to the
+  // tight unwrapped form -- this leaves the DEFERRED "plain text after a
+  // block-in-item" family (`- item` / `+` / fence / tail) unchanged.
+  let inLeadRun = true
   item.children.forEach((child, i) => {
     if (child.type === 'paragraph') {
-      const rendered = wrapPara(child as Paragraph)
+      const rendered = wrapPara(child as Paragraph, i === 0 || !inLeadRun)
       if (i === 0) head += rendered
       else body.push(`${indent(level + 1)}${rendered}`)
     } else {
-      body.push(renderBlock(child, opts, level + 1))
+      inLeadRun = false
+      // Skip blocks that render to nothing (a comment, an abbreviation def, a
+      // non-HTML raw block): pushing `''` would leave stray blank lines inside
+      // the <li> (`<p>a</p>\n\n  </li>`). Matches carve-rs.
+      const rendered = renderBlock(child, opts, level + 1)
+      if (rendered !== '') body.push(rendered)
     }
   })
   if (body.length === 0) return `${head}</li>`
@@ -642,19 +720,56 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   return lines.join('\n')
 }
 
+/**
+ * Drop author cell attributes that collide with a structural attribute this
+ * renderer ACTUALLY emits for the cell (a computed `rowspan` / `colspan` /
+ * `style` from `^`/`<` markers or column alignment) -- the computed value is
+ * authoritative, so an author copy would duplicate it. Comparison is
+ * case-insensitive (HTML attribute names are). When no structural attribute is
+ * emitted, the author's value (e.g. a custom `style`) is preserved.
+ */
+function stripStructuralAttrs(attrs: Attrs | undefined, emitted: Set<string>): Attrs | undefined {
+  if (!attrs?.keyValues || emitted.size === 0) return attrs
+  const collides = (k: string): boolean => emitted.has(k.toLowerCase())
+  if (!Object.keys(attrs.keyValues).some(collides)) return attrs
+  const keyValues = Object.fromEntries(
+    Object.entries(attrs.keyValues).filter(([k]) => !collides(k)),
+  )
+  const out: Attrs = { ...attrs, keyValues }
+  if (attrs.order) out.order = attrs.order.filter((s) => !collides(s))
+  return out
+}
+
 function renderTableRowFlat(
-  cells: Array<{ cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
+  cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
   opts: RenderOptions,
 ): string {
-  const parts: string[] = ['<tr>']
+  // A row attribute block (`| … |{.x}`) lives on the TableRow, shared by every
+  // grid entry in this row.
+  const parts: string[] = [`<tr${renderAttrs(cells[0]?.row.attrs)}>`]
   for (const entry of cells) {
     if (entry.skip) continue
     const tag = entry.cell.header ? 'th' : 'td'
     const attrs: string[] = []
-    if (entry.rowspan > 1) attrs.push(`rowspan="${entry.rowspan}"`)
-    if (entry.colspan > 1) attrs.push(`colspan="${entry.colspan}"`)
-    if (entry.align) attrs.push(`style="text-align: ${entry.align};"`)
-    const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+    const emitted = new Set<string>()
+    if (entry.rowspan > 1) {
+      attrs.push(`rowspan="${entry.rowspan}"`)
+      emitted.add('rowspan')
+    }
+    if (entry.colspan > 1) {
+      attrs.push(`colspan="${entry.colspan}"`)
+      emitted.add('colspan')
+    }
+    if (entry.align) {
+      attrs.push(`style="text-align: ${entry.align};"`)
+      emitted.add('style')
+    }
+    // Author cell attributes (a `{...}` glued to the opening pipe) come first,
+    // then the structural span / alignment attributes; any author copy of a
+    // structural key actually emitted here is dropped to avoid a duplicate.
+    const attrStr =
+      renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
+      (attrs.length ? ' ' + attrs.join(' ') : '')
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
   }
   parts.push('</tr>')
@@ -712,6 +827,8 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   } else if (node.target.type === 'blockquote') {
     const bq = renderBlockQuote(node.target, opts, level + 1)
     inner = bq
+  } else if (node.target.type === 'code-block' || node.target.type === 'paragraph') {
+    inner = renderBlock(node.target, opts, level + 1)
   } else {
     inner = renderTable(node.target, opts, level + 1)
   }
@@ -905,10 +1022,12 @@ const HTML_ESCAPE: Record<string, string> = {
   '<': '&lt;',
   '>': '&gt;',
   '\u00a0': '&nbsp;',
+  // Internal non-breaking-space placeholder (line-block indent / escaped space).
+  '\ue000': '&nbsp;',
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>\u00a0]/g, (c) => HTML_ESCAPE[c]!)
+  return s.replace(/[&<>\u00a0\ue000]/g, (c) => HTML_ESCAPE[c]!)
 }
 
 function escapeAttr(s: string): string {

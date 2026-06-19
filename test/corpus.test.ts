@@ -108,14 +108,34 @@ const IMPLEMENTED = new Set([
   '73-reference-labels-are-case-sensitive',
   '74-two-char-delimiter-runs',
   '75-trailing-attribute-block-edge-cases',
+  '88-line-blocks',
+  '89-mention-and-tag-name-boundaries',
+  '90-superscript-in-a-table-cell',
+  '91-nested-comment-fences',
+  '92-strong-emphasis-starting-with-a-link',
+  '93-abbreviation-definition-interrupts-a-paragraph',
+  '94-literal-less-than-in-prose',
+  '95-boolean-attributes',
+  '96-table-span-marker-in-first-column',
+  '98-table-row-attributes',
+  '99-table-header-cell-rowspan',
+  '76-paragraph-interruption',
+  '77-blockquote-lazy-continuation',
+  '78-fenced-code-language-with-punctuation',
+  '79-multi-line-headings',
+  '80-blockquote-lazy-continuation-stops-at-a-fenced-block',
+  '81-list-lazy-continuation',
+  '82-compact-list-blocks',
+  '83-list-continuation-marker',
+  '84-block-attribute-lines',
+  '85-numbered-cross-references',
+  '86-inline-footnotes',
+  '87-list-item-attributes',
+  '97-table-cell-attributes',
+  '100-block-quote-continuation-marker',
+  '101-heading-marker-column-zero',
+  '102-paragraph-trailing-whitespace',
 ])
-
-/**
- * Sub-examples in IMPLEMENTED categories that are known to fail because
- * a specific construct is not yet supported. Move out of this set as
- * implementation lands.
- */
-const KNOWN_GAPS = new Set<string>([])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
@@ -123,6 +143,29 @@ const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+// Coverage guard: every distinct `NN-slug` base category present in the spec
+// corpus MUST be listed in IMPLEMENTED. Categories not in IMPLEMENTED are run
+// as `.todo` above and silently skipped, which is exactly how 14 spec
+// categories once went unvalidated. This is a REAL test (not todo): when a
+// future spec adds a corpus category, this fails with the missing names,
+// forcing the category into IMPLEMENTED (or the build breaks).
+describe('spec corpus coverage guard', () => {
+  it('every corpus base category is in IMPLEMENTED', () => {
+    const categories = new Set<string>()
+    for (const name of pairs) {
+      if (!existsSync(resolve(corpusDir, `${name}.html`))) continue
+      categories.add(baseSlug(name))
+    }
+    const missing = [...categories]
+      .filter((c) => !IMPLEMENTED.has(c))
+      .sort()
+    expect(
+      missing,
+      `Corpus categories missing from IMPLEMENTED (add them so they are not silently .todo): ${missing.join(', ')}`,
+    ).toEqual([])
+  })
+})
 
 describe('spec corpus', () => {
   for (const name of pairs) {
@@ -138,7 +181,7 @@ describe('spec corpus', () => {
     const expected = readFileSync(htmlPath, 'utf8')
     const allowlisted = IMPLEMENTED.has(name) || IMPLEMENTED.has(baseSlug(name))
 
-    if (allowlisted && !KNOWN_GAPS.has(name)) {
+    if (allowlisted) {
       it(`${name}`, () => {
         const actual = carveToHtml(source)
         expect(actual.trim()).toBe(expected.trim())

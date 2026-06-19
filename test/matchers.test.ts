@@ -145,7 +145,7 @@ describe('extension block matchers', () => {
     }
     // Core heading is dispatched before the matcher is offered the line.
     expect(carveToHtml('# Title', { extensions: [greedy] })).toBe(
-      '<section id="title">\n  <h1>Title</h1>\n</section>',
+      '<section id="Title">\n  <h1>Title</h1>\n</section>',
     )
     expect(sawHeading).toBe(false)
   })

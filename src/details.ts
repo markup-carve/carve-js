@@ -68,7 +68,8 @@ export function details(): CarveExtension {
 function attrsToHtml(attrs: Attrs | undefined, ctx: BlockExtensionRenderContext): string {
   if (!attrs) return ''
   const slots: string[] = []
-  const id = (): string => (attrs.id ? ` id="${ctx.escapeAttr(attrs.id)}"` : '')
+  // `!== undefined` so an explicit empty id (`{id}` / `{id=""}`) renders id="".
+  const id = (): string => (attrs.id !== undefined ? ` id="${ctx.escapeAttr(attrs.id)}"` : '')
   const cls = (): string =>
     attrs.classes?.length ? ` class="${ctx.escapeAttr(attrs.classes.join(' '))}"` : ''
   const kv = (key: string): string => {
@@ -79,7 +80,7 @@ function attrsToHtml(attrs: Attrs | undefined, ctx: BlockExtensionRenderContext)
   const seen = new Set(order)
   const fullOrder = [
     ...order,
-    ...(attrs.id && !seen.has('#id') ? ['#id'] : []),
+    ...(attrs.id !== undefined && !seen.has('#id') ? ['#id'] : []),
     ...(attrs.classes?.length && !seen.has('.class') ? ['.class'] : []),
     ...Object.keys(attrs.keyValues ?? {}).filter((k) => !seen.has(k)),
   ]

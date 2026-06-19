@@ -48,6 +48,25 @@ function transliterate(s: string): string {
 }
 
 /**
+ * Reverse smart-typography substitutions to their ASCII source before a slug is
+ * computed, so an id never depends on presentational typography. Without this,
+ * `# That's all` (parsed with smart quotes) would keep the curly `’` in its id;
+ * `# Step 1 -> 2` would keep `→`. The map is the inverse of the parser's
+ * SMART_TOKENS plus smart quotes and dashes. Applied before slugRun, so the
+ * recovered ASCII punctuation then collapses to hyphens like any other.
+ */
+const SMART_TO_ASCII: Record<string, string> = {
+  '↔': '<->', '™': '(tm)', '…': '...', '→': '->', '←': '<-', '⇒': '=>',
+  '≤': '<=', '≥': '>=', '≠': '!=', '±': '+-', '©': '(c)', '®': '(r)',
+  '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"',
+}
+function deTypography(s: string): string {
+  let out = ''
+  for (const ch of s) out += SMART_TO_ASCII[ch] ?? ch
+  return out
+}
+
+/**
  * jgm/djot#393 slug step: replace each maximal run of non-alphanumeric ASCII with a
  * single '-' and trim. Non-ASCII characters and letter case are preserved.
  */
@@ -56,25 +75,74 @@ function slugRun(s: string): string {
 }
 
 /**
+ * Strict variant of slugRun: collapses every run of non-ASCII-alphanumeric -
+ * INCLUDING any non-ASCII code point - to a single '-', then trims. Used by the
+ * strict ASCII heading-id mode for residue that transliterate() cannot map
+ * (Greek, CJK, Arabic, emoji): such code points become separators instead of
+ * surviving verbatim, so the slug is guaranteed to match `[0-9A-Za-z-]`.
+ */
+function slugRunAscii(s: string): string {
+  return s.replace(/[^0-9A-Za-z]+/gu, '-').replace(/^-+|-+$/gu, '')
+}
+
+/**
+ * Public opt-in for ASCII heading ids. `true` / `'fold'` is best-effort
+ * transliteration (non-ASCII the map can't handle is kept verbatim); `'strict'`
+ * additionally drops that unmappable residue so the id is guaranteed pure ASCII.
+ */
+export type AsciiHeadingIdMode = boolean | 'fold' | 'strict'
+
+/**
+ * Translate the public `asciiHeadingIds` / `lowercaseHeadingIds` options into
+ * the `slugify` flags. Shared by `resolve()` and `lintCarve` so the lint id set
+ * matches the resolver exactly.
+ */
+export function headingIdSlugOpts(opts: {
+  asciiHeadingIds?: AsciiHeadingIdMode
+  lowercaseHeadingIds?: boolean
+}): { lowercase: boolean; asciiFold: boolean; asciiStrict: boolean } {
+  const v = opts.asciiHeadingIds
+  return {
+    lowercase: opts.lowercaseHeadingIds ?? false,
+    asciiFold: v === true || v === 'fold' || v === 'strict',
+    asciiStrict: v === 'strict',
+  }
+}
+
+/**
  * The automatic-identifier rule. Pure, context-free, no dedup.
  *
- * Uses the jgm/djot#393 run-replacement, then **lowercases** (GitHub/SSG style):
- * non-ASCII characters are preserved (only their case is folded). Lowercasing makes
- * ids and cross-references case-insensitive without special lookup logic. With
- * `asciiFold` (opt-in via `asciiHeadingIds`) the slug is transliterated to ASCII and
- * re-slugged.
+ * Default is CASE-PRESERVING with no Unicode normalization or case folding:
+ * the jgm/djot#393 run-replacement over the raw code points, keeping non-ASCII
+ * verbatim (e.g. a German heading keeps its umlaut). Zero-dependency and
+ * byte-identical across implementations, matching djot's "no Unicode tables"
+ * identifier model. Cross-reference resolution is case-insensitive (see
+ * resolveHeadingIds), so `</#getting-started>` still resolves to the
+ * case-preserved `Getting-Started` id. Three opt-in, orthogonal transforms:
+ * `lowercase` (GitHub/SSG-style anchors, folded per code point so no
+ * context mapping such as Greek final-sigma applies); `asciiFold`
+ * (transliterate the slug to ASCII for share-safe URL fragments, best-effort -
+ * unmappable scripts are kept); and `asciiStrict` (implies `asciiFold`, also
+ * drops the unmappable residue for a guaranteed pure-ASCII slug). Combine with
+ * `lowercase` for a fully lowercase ASCII slug.
  */
-export function slugify(plainText: string, asciiFold = false): string {
-  // NFC first so a decomposed `résumé` (macOS copy-paste,
-  // some editors) slugs identically to its precomposed `résumé` form.
-  // Without this, the map would only catch precomposed letters and
-  // NFD inputs would emit different ids for visually identical text.
-  let s = slugRun(plainText.normalize('NFC'))
-  if (asciiFold) {
-    s = slugRun(transliterate(s))
+export function slugify(
+  plainText: string,
+  opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
+): string {
+  let s = slugRun(deTypography(plainText))
+  if (opts.asciiFold || opts.asciiStrict) {
+    // Transliterate runs in both modes so Latin/Cyrillic become letters rather
+    // than separators. Strict then uses slugRunAscii to drop unmappable
+    // residue; best-effort fold uses slugRun, which keeps it verbatim.
+    s = transliterate(s)
+    s = opts.asciiStrict ? slugRunAscii(s) : slugRun(s)
   }
-  // Lowercase (Unicode-aware): GitHub-style anchors, inherently case-insensitive.
-  s = s.toLowerCase()
+  // Per code point (no whole-string context mappings, e.g. final-sigma)
+  // so opt-in lowercasing stays portable across implementations.
+  if (opts.lowercase) {
+    s = Array.from(s, (c) => c.toLowerCase()).join('')
+  }
   // A leading digit is a valid HTML id but an invalid bare CSS selector, so prefix.
   if (/^\p{N}/u.test(s)) s = `s-${s}`
   if (s === '') s = 's'
@@ -153,23 +221,52 @@ export function inlineText(nodes: InlineNode[]): string {
  * crossrefs (first-occurrence target, link text cloned from the target
  * heading; unresolved -> literal text). Mutates and returns `doc`.
  */
-export function resolveHeadingIds(doc: Document, asciiFold = false): Document {
+export function resolveHeadingIds(
+  doc: Document,
+  opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
+): Document {
   const used = new Set<string>()
   const targets = new Map<string, InlineNode[]>()
+  // Case-insensitive `</#id>` index: case-folded id -> actual (verbatim) id,
+  // first occurrence wins. Lets `</#getting-started>` resolve to a
+  // case-preserved `Getting-Started` heading (or an explicit `{#MyId}`)
+  // without lowercasing the emitted id. Folded per code point to stay
+  // portable, mirroring slugify's optional lowercase.
+  const foldId = (s: string): string =>
+    Array.from(s, (c) => c.toLowerCase()).join('')
+  const foldedTargets = new Map<string, string>()
   // Implicit-reference index: normalized visible heading text -> heading id.
   // First-occurrence wins (matches `</#id>` ambiguous-ref behavior). Built
   // from the parsed AST's inlineText so it agrees with the heading slug
   // exactly — no regex pre-pass guesswork.
   const headingRefs = new Map<string, string>()
 
-  for (const block of doc.children) {
-    if (block.type !== 'heading') continue
+  // Assign every heading an id in DOCUMENT ORDER, descending into nested
+  // containers (list items, blockquotes, divs/admonitions, definition lists,
+  // tables, figures) so a heading inside a list item carries its slug id on
+  // the <h*> just like a top-level one (Bug A; carve-php parity). The dedup
+  // counter and the implicit-reference/crossref target index are shared across
+  // top-level and nested headings, matching carve-php's single document-order
+  // pass. The <section> wrapper stays a top-level-only concern in render-html;
+  // nested headings emit just <h* id> with no section.
+  // `inBlockquote`: a heading with ANY blockquote ancestor still gets an id and
+  // is a valid `</#id>` crossref target, but is NOT registered as an implicit
+  // `[label][]` reference target -- matching carve-php, where a blockquote
+  // ancestor (in either nesting order) suppresses the implicit-ref index entry
+  // while list/div/deflist nesting does not.
+  const assignHeadingId = (
+    heading: { attrs?: Attrs; children: InlineNode[] },
+    inBlockquote: boolean,
+  ): void => {
     let id: string
-    if (block.attrs?.id) {
-      id = block.attrs.id
+    if (heading.attrs?.id !== undefined) {
+      // An explicit id wins verbatim, INCLUDING an explicit empty `id=""`
+      // (`{id=""}` then `# T` -> `<section id="">`): it suppresses the auto
+      // slug rather than being treated as absent.
+      id = heading.attrs.id
       used.add(id)
     } else {
-      const base = slugify(inlineText(block.children), asciiFold)
+      const base = slugify(inlineText(heading.children), opts)
       if (!used.has(base)) {
         id = base
       } else {
@@ -178,13 +275,45 @@ export function resolveHeadingIds(doc: Document, asciiFold = false): Document {
         id = `${base}-${n}`
       }
       used.add(id)
-      block.attrs = { ...block.attrs, id }
+      heading.attrs = { ...heading.attrs, id }
     }
-    if (!targets.has(id)) targets.set(id, block.children)
-    const plain = inlineText(block.children)
+    if (!targets.has(id)) targets.set(id, heading.children)
+    const fk = foldId(id)
+    if (!foldedTargets.has(fk)) foldedTargets.set(fk, id)
+    if (inBlockquote) return
+    const plain = inlineText(heading.children)
     const key = normalizeHeadingRefLabel(plain)
     if (key && !headingRefs.has(key)) headingRefs.set(key, id)
   }
+  const assignIds = (blocks: BlockNode[], inBlockquote: boolean): void => {
+    for (const b of blocks) {
+      switch (b.type) {
+        case 'heading':
+          assignHeadingId(b, inBlockquote)
+          break
+        case 'blockquote':
+          assignIds(b.children, true)
+          break
+        case 'admonition':
+        case 'div':
+          assignIds(b.children, inBlockquote)
+          break
+        case 'list':
+          for (const it of b.items) assignIds(it.children, inBlockquote)
+          break
+        case 'definition-list':
+          for (const it of b.items)
+            for (const d of it.definitions) assignIds(d, inBlockquote)
+          break
+        case 'figure':
+          if (b.target.type === 'blockquote') assignIds(b.target.children, true)
+          break
+        default:
+          break
+      }
+    }
+  }
+  assignIds(doc.children, false)
 
   // Two-pass resolution: implicit-heading refs must be finalized
   // BEFORE crossref cloning, otherwise a forward `</#id>` could clone
@@ -246,11 +375,17 @@ export function resolveHeadingIds(doc: Document, asciiFold = false): Document {
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!
       if (n.type === 'crossref') {
-        const tgt = targets.get(n.target)
-        if (tgt) {
+        // Exact match first, then case-insensitive (case-folded) fallback so a
+        // lowercase `</#getting-started>` resolves to a case-preserved
+        // `Getting-Started` id. The emitted href uses the ACTUAL id.
+        const tgtId = targets.has(n.target)
+          ? n.target
+          : foldedTargets.get(foldId(n.target))
+        const tgt = tgtId !== undefined ? targets.get(tgtId) : undefined
+        if (tgt && tgtId !== undefined) {
           const link: Link = {
             type: 'link',
-            href: `#${n.target}`,
+            href: `#${tgtId}`,
             // structuredClone would need DOM/Node lib typings absent from this
             // tsconfig; InlineNode is plain JSON-serializable data so a
             // stringify/parse round-trip is a safe deep clone here.
@@ -412,5 +547,72 @@ export function resolveHeadingIds(doc: Document, asciiFold = false): Document {
 
   for (const block of doc.children) walkBlock(block, resolveCrossrefs)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
+
+  // Pass 3: enforce "links never nest" (CommonMark: a link may not contain
+  // another link). This runs AFTER reference and crossref resolution because
+  // both turn into Link nodes only here -- so a `</#id>` crossref or a
+  // resolved reference inside a link's text would otherwise survive as a
+  // nested anchor. A link found inside another link is unwrapped to its text
+  // (only the outermost destination applies); an autolink becomes plain text.
+  // A footnote body renders in the endnotes section, outside any anchor, so
+  // its links are not nested -- the walk re-enters it with insideLink = false.
+  const enforceNoNesting = (nodes: InlineNode[], insideLink: boolean): InlineNode[] => {
+    const out: InlineNode[] = []
+    for (const n of nodes) {
+      switch (n.type) {
+        case 'link': {
+          const children = enforceNoNesting(n.children, true)
+          if (insideLink) {
+            out.push(...children)
+          } else {
+            n.children = children
+            out.push(n)
+          }
+          break
+        }
+        case 'autolink':
+          if (insideLink) {
+            const value = n.href.startsWith('mailto:')
+              ? n.href.slice('mailto:'.length)
+              : n.href
+            out.push({ type: 'text', value } as Text)
+          } else {
+            out.push(n)
+          }
+          break
+        case 'footnote':
+          if (n.inline) n.inline = enforceNoNesting(n.inline, false)
+          out.push(n)
+          break
+        case 'italic':
+        case 'strong':
+        case 'underline':
+        case 'strike':
+        case 'super':
+        case 'sub':
+        case 'highlight':
+        case 'bold-italic':
+        case 'span':
+        case 'critic-insert':
+        case 'critic-delete':
+          n.children = enforceNoNesting(n.children, insideLink)
+          out.push(n)
+          break
+        case 'extension':
+          n.content = enforceNoNesting(n.content, insideLink)
+          out.push(n)
+          break
+        default:
+          out.push(n)
+          break
+      }
+    }
+    return out
+  }
+  const applyNoNesting = (xs: InlineNode[]): void => {
+    xs.splice(0, xs.length, ...enforceNoNesting(xs, false))
+  }
+  for (const block of doc.children) walkBlock(block, applyNoNesting)
+  for (const body of footnoteBodies) for (const b of body) walkBlock(b, applyNoNesting)
   return doc
 }

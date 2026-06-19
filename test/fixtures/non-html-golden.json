@@ -1,0 +1,188 @@
+{
+    "heading": {
+        "carve": "# Title\n\n## Sub\n",
+        "markdown": "# Title\n\n## Sub\n",
+        "plain": "Title\n\nSub\n",
+        "ansi": "\u001b[1m\u001b[95mTitle\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n\n\u001b[1m\u001b[96mSub\u001b[0m\n\u001b[96m\u2500\u2500\u2500\u001b[0m\n"
+    },
+    "paragraph": {
+        "carve": "First para.\n\nSecond para.\n",
+        "markdown": "First para.\n\nSecond para.\n",
+        "plain": "First para.\n\nSecond para.\n",
+        "ansi": "First para.\n\nSecond para.\n"
+    },
+    "emphasis": {
+        "carve": "_em_ and *strong* and `code` here.\n",
+        "markdown": "<u>em</u> and **strong** and `code` here.\n",
+        "plain": "em and strong and code here.\n",
+        "ansi": "\u001b[4mem\u001b[0m and \u001b[1mstrong\u001b[0m and \u001b[93mcode\u001b[0m here.\n"
+    },
+    "nested-emphasis": {
+        "carve": "*strong with _em_ inside*\n",
+        "markdown": "**strong with <u>em</u> inside**\n",
+        "plain": "strong with em inside\n",
+        "ansi": "\u001b[1mstrong with \u001b[4mem\u001b[0m inside\u001b[0m\n"
+    },
+    "inline-code": {
+        "carve": "Call `foo()` now.\n",
+        "markdown": "Call `foo()` now.\n",
+        "plain": "Call foo() now.\n",
+        "ansi": "Call \u001b[93mfoo()\u001b[0m now.\n"
+    },
+    "link": {
+        "carve": "A [link](https://example.com) here.\n",
+        "markdown": "A [link](https://example.com) here.\n",
+        "plain": "A https://example.com here.\n",
+        "ansi": "A \u001b[4m\u001b[34mlink\u001b[0m\u001b[2m (https://example.com)\u001b[0m here.\n"
+    },
+    "link-title": {
+        "carve": "A [link](https://example.com \"Title\") here.\n",
+        "markdown": "A [link](https://example.com \"Title\") here.\n",
+        "plain": "A https://example.com here.\n",
+        "ansi": "A \u001b[4m\u001b[34mlink\u001b[0m\u001b[2m (https://example.com)\u001b[0m here.\n"
+    },
+    "autolink": {
+        "carve": "<https://example.com>\n",
+        "markdown": "[https://example.com](https://example.com)\n",
+        "plain": "https://example.com\n",
+        "ansi": "\u001b[4m\u001b[34mhttps://example.com\u001b[0m\n"
+    },
+    "image": {
+        "carve": "![alt text](img.png)\n",
+        "markdown": "![alt text](img.png)\n",
+        "plain": "alt text\n",
+        "ansi": "\u001b[35m[img:\u001b[0m alt text\u001b[35m]\u001b[0m\n"
+    },
+    "unordered-list": {
+        "carve": "- one\n- two\n- three\n",
+        "markdown": "- one\n- two\n- three\n",
+        "plain": "- one\n- two\n- three\n",
+        "ansi": "\u001b[36m\u2022\u001b[0m one\n\u001b[36m\u2022\u001b[0m two\n\u001b[36m\u2022\u001b[0m three\n"
+    },
+    "ordered-list": {
+        "carve": "1. first\n2. second\n",
+        "markdown": "1. first\n2. second\n",
+        "plain": "1. first\n2. second\n",
+        "ansi": "\u001b[33m1.\u001b[0m first\n\u001b[33m2.\u001b[0m second\n"
+    },
+    "nested-list": {
+        "carve": "- a\n  - a1\n  - a2\n- b\n",
+        "markdown": "- a\n  \n    - a1\n    - a2\n- b\n",
+        "plain": "- a\n\n- a1\n- a2\n- b\n",
+        "ansi": "\u001b[36m\u2022\u001b[0m a\n\n  \u001b[36m\u2022\u001b[0m a1\n  \u001b[36m\u2022\u001b[0m a2\n\u001b[36m\u2022\u001b[0m b\n"
+    },
+    "task-list": {
+        "carve": "- [ ] todo\n- [x] done\n",
+        "markdown": "- [ ] todo\n- [x] done\n",
+        "plain": "- todo\n- done\n",
+        "ansi": "\u001b[90m\u2610\u001b[0m todo\n\u001b[32m\u2611\u001b[0m done\n"
+    },
+    "blockquote": {
+        "carve": "> quoted line\n> second line\n",
+        "markdown": "> quoted line\n> second line\n",
+        "plain": "\"quoted line second line\"\n",
+        "ansi": "\u001b[36m\u001b[2m\u2502\u001b[0m quoted line second line\n"
+    },
+    "code-block": {
+        "carve": "```js\nconst x = 1;\n```\n",
+        "markdown": "```js\nconst x = 1;\n```\n",
+        "plain": "const x = 1;\n",
+        "ansi": "\u001b[2m\u250c\u2500\u2500 js \u001b[0m\n\u001b[97m  const x = 1;\u001b[0m\n"
+    },
+    "thematic-break": {
+        "carve": "above\n\n---\n\nbelow\n",
+        "markdown": "above\n\n---\n\nbelow\n",
+        "plain": "above\n\n---\n\nbelow\n",
+        "ansi": "above\n\n\u001b[2m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m\n\nbelow\n"
+    },
+    "table": {
+        "carve": "|= Item |= Qty |\n| Apple | 3 |\n| Pear | 5 |\n",
+        "markdown": "| Item | Qty |\n| --- | --- |\n| Apple | 3 |\n| Pear | 5 |\n",
+        "plain": "Item | Qty\nApple | 3\nPear | 5\n",
+        "ansi": "\u001b[2m\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2510\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[1mItem \u001b[0m \u001b[2m\u2502\u001b[0m \u001b[1mQty\u001b[0m \u001b[2m\u2502\u001b[0m\n\u001b[2m\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2524\u001b[0m\n\u001b[2m\u2502\u001b[0m Apple \u001b[2m\u2502\u001b[0m 3   \u001b[2m\u2502\u001b[0m\n\u001b[2m\u2502\u001b[0m Pear  \u001b[2m\u2502\u001b[0m 5   \u001b[2m\u2502\u001b[0m\n\u001b[2m\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2518\u001b[0m\n"
+    },
+    "heading-crossref": {
+        "carve": "# Setup\n\nSee </#setup> for details.\n",
+        "markdown": "# Setup {#Setup}\n\nSee [Setup](#Setup) for details.\n",
+        "plain": "Setup\n\nSee Setup for details.\n",
+        "ansi": "\u001b[1m\u001b[95mSetup\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n\nSee \u001b[4m\u001b[34mSetup\u001b[0m for details.\n"
+    },
+    "forward-crossref": {
+        "carve": "See </#setup>.\n\n# Setup\n",
+        "markdown": "See [Setup](#Setup).\n\n# Setup {#Setup}\n",
+        "plain": "See Setup.\n\nSetup\n",
+        "ansi": "See \u001b[4m\u001b[34mSetup\u001b[0m.\n\n\u001b[1m\u001b[95mSetup\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n"
+    },
+    "explicit-id-crossref": {
+        "carve": "{#foo}\n# Title\n\nSee </#foo>.\n",
+        "markdown": "# Title {#foo}\n\nSee [Title](#foo).\n",
+        "plain": "Title\n\nSee Title.\n",
+        "ansi": "\u001b[1m\u001b[95mTitle\u001b[0m\n\u001b[95m\u2550\u2550\u2550\u2550\u2550\u001b[0m\n\nSee \u001b[4m\u001b[34mTitle\u001b[0m.\n"
+    },
+    "unresolved-crossref": {
+        "carve": "See </#nope>.\n",
+        "markdown": "See </#nope>.\n",
+        "plain": "See </#nope>.\n",
+        "ansi": "See </#nope>.\n"
+    },
+    "numbered-figure": {
+        "carve": "{#fig}\n![A sunset](sun.jpg)\n^ Figure #: A sunset\n",
+        "markdown": "![A sunset](sun.jpg)Figure 1: A sunset\n",
+        "plain": "A sunsetFigure 1: A sunset\n",
+        "ansi": "\u001b[35m[img:\u001b[0m A sunset\u001b[35m]\u001b[0m\n\u001b[3m\u001b[2mFigure 1: A sunset\u001b[0m\n"
+    },
+    "numbered-figure-crossref": {
+        "carve": "{#fig}\n![A sunset](sun.jpg)\n^ Figure #: A sunset\n\nSee </#fig>.\n",
+        "markdown": "![A sunset](sun.jpg)Figure 1: A sunsetSee Figure 1.\n",
+        "plain": "A sunsetFigure 1: A sunsetSee Figure 1.\n",
+        "ansi": "\u001b[35m[img:\u001b[0m A sunset\u001b[35m]\u001b[0m\n\u001b[3m\u001b[2mFigure 1: A sunset\u001b[0m\n\nSee \u001b[4m\u001b[34mFigure 1\u001b[0m.\n"
+    },
+    "footnote": {
+        "carve": "Text[^a] here.\n\n[^a]: the note.\n",
+        "markdown": "Text[^a] here.\n\n[^a]: the note.\n",
+        "plain": "Text[a] here.\n\n[a]: the note.\n",
+        "ansi": "Text\u001b[36m\u001b[1m[a]\u001b[0m here.\n\n\u001b[36m\u001b[2m[a]\u001b[0m the note.\n"
+    },
+    "inline-footnote": {
+        "carve": "Text^[an aside] here.\n",
+        "markdown": "Text^[an aside] here.\n",
+        "plain": "Text(an aside) here.\n",
+        "ansi": "Text(an aside) here.\n"
+    },
+    "super-sub": {
+        "carve": "x{^2^} and y{~i~}\n",
+        "markdown": "x<sup>2</sup> and y~~i~~\n",
+        "plain": "x2 and yi\n",
+        "ansi": "x\u00b2 and y\u001b[9mi\u001b[0m\n"
+    },
+    "smart-typography": {
+        "carve": "\"quoted\" -- dash ... ellipsis\n",
+        "markdown": "\u201cquoted\u201d \u2013 dash \u2026 ellipsis\n",
+        "plain": "\u201cquoted\u201d \u2013 dash \u2026 ellipsis\n",
+        "ansi": "\u201cquoted\u201d \u2013 dash \u2026 ellipsis\n"
+    },
+    "mention-tag": {
+        "carve": "Hi @alice see #topic\n",
+        "markdown": "Hi @alice see \\#topic\n",
+        "plain": "Hi @alice see #topic\n",
+        "ansi": "Hi @alice see #topic\n"
+    },
+    "escapes": {
+        "carve": "literal \\* and \\# and \\_\n",
+        "markdown": "literal \\* and \\# and \\_\n",
+        "plain": "literal * and # and _\n",
+        "ansi": "literal * and # and _\n"
+    },
+    "admonition": {
+        "carve": "::: note\nWatch out.\n:::\n",
+        "markdown": "Watch out.\n",
+        "plain": "Watch out.\n",
+        "ansi": "Watch out.\n"
+    },
+    "definition-list": {
+        "carve": ": Term\n  Definition text.\n",
+        "markdown": "**Term**\n: Definition text.\n",
+        "plain": "Term\n  Definition text.\n",
+        "ansi": "\u001b[1m\u001b[33mTerm\u001b[0m\n  Definition text.\n"
+    }
+}

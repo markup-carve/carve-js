@@ -15,6 +15,16 @@ describe('lintCarve — broken cross-references', () => {
     expect(lintCarve('# Intro\n\nSee </#intro>.')).toEqual([])
   })
 
+  it('does not flag a crossref that targets a numbered caption id', () => {
+    expect(lintCarve('{#tbl}\n| A |\n|---|\n| 1 |\n^ Table #: Data\n\nSee </#tbl>.')).toEqual([])
+  })
+
+  it('finds a crossref inside a footnote definition', () => {
+    const w = lintCarve('See[^n].\n\n[^n]: See </#ghost>.')
+    expect(w.map((x) => x.rule)).toEqual(['broken-crossref'])
+    expect(w[0]!.message).toContain('</#ghost>')
+  })
+
   it('treats the auto-suffixed id of a duplicate heading as valid', () => {
     // Two "Title" headings -> ids `title` and `title-2`; both resolvable.
     const w = lintCarve('# Title\n\n## Title\n\n</#title> and </#title-2>')
@@ -22,7 +32,7 @@ describe('lintCarve — broken cross-references', () => {
   })
 
   it('honors an explicit heading id as a crossref target', () => {
-    expect(lintCarve('# Intro {#start}\n\nSee </#start>.')).toEqual([])
+    expect(lintCarve('{#start}\n# Intro\n\nSee </#start>.')).toEqual([])
   })
 
   it('finds a crossref nested below the top level (inside a list item)', () => {
@@ -43,7 +53,7 @@ describe('lintCarve — duplicate heading ids', () => {
     expect(w).toHaveLength(1)
     expect(w[0]!.rule).toBe('duplicate-heading-id')
     expect(w[0]!.line).toBe(3)
-    expect(w[0]!.message).toContain('setup-2')
+    expect(w[0]!.message).toContain('Setup-2')
   })
 
   it('does not flag distinct heading slugs', () => {
@@ -51,9 +61,9 @@ describe('lintCarve — duplicate heading ids', () => {
   })
 
   it('flags a repeated explicit id', () => {
-    const w = lintCarve('# A {#dup}\n\n# B {#dup}')
+    const w = lintCarve('{#dup}\n# A\n\n{#dup}\n# B')
     expect(w.map((x) => x.rule)).toEqual(['duplicate-heading-id'])
-    expect(w[0]!.line).toBe(3)
+    expect(w[0]!.line).toBe(5)
   })
 
   it('flags three-way slug collisions once each (title-2, title-3)', () => {
@@ -62,8 +72,116 @@ describe('lintCarve — duplicate heading ids', () => {
       'duplicate-heading-id',
       'duplicate-heading-id',
     ])
-    expect(w[0]!.message).toContain('t-2')
-    expect(w[1]!.message).toContain('t-3')
+    expect(w[0]!.message).toContain('T-2')
+    expect(w[1]!.message).toContain('T-3')
+  })
+})
+
+describe('lintCarve — unresolved reference links', () => {
+  it('flags a reference link with no link definition or matching heading', () => {
+    const w = lintCarve('See [docs][missing].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+    expect(w[0]!.message).toContain('[docs][missing]')
+  })
+
+  it('does not flag a reference link with an explicit definition', () => {
+    expect(lintCarve('See [docs][site].\n\n[site]: https://example.com')).toEqual([])
+  })
+
+  it('does not flag an implicit heading reference', () => {
+    expect(lintCarve('# Getting Started\n\nSee [getting started][].')).toEqual([])
+  })
+
+  it('finds unresolved reference links inside footnote definitions', () => {
+    const w = lintCarve('See[^n].\n\n[^n]: See [docs][missing].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-reference-link'])
+  })
+})
+
+describe('lintCarve — footnotes', () => {
+  it('flags a footnote reference with no definition', () => {
+    const w = lintCarve('See[^missing].')
+    expect(w.map((x) => x.rule)).toEqual(['unresolved-footnote'])
+    expect(w[0]!.message).toContain('[^missing]')
+  })
+
+  it('flags a duplicate footnote definition', () => {
+    const w = lintCarve('[^a]: one\n\n[^a]: two\n\nSee[^a].')
+    expect(w.map((x) => x.rule)).toEqual(['duplicate-footnote-definition'])
+    expect(w[0]!.line).toBe(3)
+  })
+
+  it('flags an unused footnote definition', () => {
+    const w = lintCarve('[^unused]: note')
+    expect(w.map((x) => x.rule)).toEqual(['unused-footnote-definition'])
+    expect(w[0]!.message).toContain('[^unused]')
+  })
+
+  it('does not flag a referenced footnote definition', () => {
+    expect(lintCarve('See[^a].\n\n[^a]: note')).toEqual([])
+  })
+})
+
+describe('lintCarve — trailing heading attribute', () => {
+  it('flags a heading that ends with {#id} (literal, not an attribute)', () => {
+    const w = lintCarve('## Setup {#install}')
+    expect(w.map((x) => x.rule)).toEqual(['heading-trailing-attribute'])
+    expect(w[0]!.message).toContain('{#install}')
+    expect(w[0]!.column).toBe(10)
+  })
+
+  it('flags the {.class} form too', () => {
+    expect(rules('## Setup {.featured}')).toEqual(['heading-trailing-attribute'])
+  })
+
+  it('does not flag the correct preceding block-attribute line', () => {
+    expect(lintCarve('{#install .lead}\n## Setup')).toEqual([])
+  })
+
+  it('does not flag a valid inline span at the end of a heading', () => {
+    // `[text]{.class}` is a span (brace abuts `]`), not a heading attribute.
+    expect(lintCarve('## See [foo]{.bar}')).toEqual([])
+  })
+
+  it('ignores a brace that only looks attribute-like inside code', () => {
+    expect(lintCarve('```\n## Setup {#x}\n```')).toEqual([])
+  })
+})
+
+describe('lintCarve — legacy raw fence', () => {
+  it('flags ```raw FORMAT and suggests ```=FORMAT', () => {
+    const w = lintCarve('```raw html\n<b>x</b>\n```')
+    expect(w.map((x) => x.rule)).toEqual(['raw-block-syntax'])
+    expect(w[0]!.message).toContain('```=html')
+    expect(w[0]!.line).toBe(1)
+  })
+
+  it('does not flag the correct ```=FORMAT raw block', () => {
+    expect(lintCarve('```=html\n<b>x</b>\n```')).toEqual([])
+  })
+
+  it('does not flag a raw-looking line inside a real code block', () => {
+    expect(lintCarve('```python\n```raw html\n```')).toEqual([])
+  })
+
+  it('does not flag a raw-looking line inside a captioned (figure) code block', () => {
+    expect(lintCarve('```python\n```raw html\nx\n```\n^ A listing caption')).toEqual([])
+  })
+})
+
+describe('lintCarve — block marker leaked as text', () => {
+  it('flags a ::: fence that parsed as a paragraph', () => {
+    const w = lintCarve(':::note\nbody')
+    expect(w.map((x) => x.rule)).toEqual(['block-marker-as-text'])
+    expect(w[0]!.message).toContain(':::')
+  })
+
+  it('does not flag a valid admonition', () => {
+    expect(lintCarve('::: note\nbody\n:::')).toEqual([])
+  })
+
+  it('does not flag a valid admonition with a title', () => {
+    expect(lintCarve('::: tip "Heads up"\nbody\n:::')).toEqual([])
   })
 })
 

@@ -49,7 +49,9 @@ describe('details disclosure extension', () => {
       [
         '<details>',
         '  <summary>T</summary>',
-        '  <h1>H</h1>',
+        // A heading inside the container still carries its slug id on the
+        // <h*> (carve-php parity); only the top-level <section> pass is skipped.
+        '  <h1 id="H">H</h1>',
         '  <p>x</p>',
         '</details>',
       ].join('\n'),
@@ -136,5 +138,13 @@ describe('details disclosure extension', () => {
     expect(carveToHtml('::: details "More"\nHidden.\n:::').trim()).toContain(
       '<div class="details">',
     )
+  })
+})
+
+describe('details: explicit empty id', () => {
+  it('preserves an explicit empty id from a preceding block-attribute line', () => {
+    const h = (s: string) => carveToHtml(s, { extensions: [details()] }).trim()
+    expect(h('{id}\n::: details "T"\nx\n:::')).toContain('<details id="">')
+    expect(h('{#foo}\n::: details "T"\nx\n:::')).toContain('<details id="foo">')
   })
 })

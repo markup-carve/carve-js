@@ -4,22 +4,22 @@ import { parse, carveToHtml } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
 
 describe('slugify', () => {
-  it('dashes spaces, lowercases (GitHub-style)', () => {
-    expect(slugify('Getting Started')).toBe('getting-started')
+  it('dashes spaces, preserves case by default', () => {
+    expect(slugify('Getting Started')).toBe('Getting-Started')
   })
-  it('preserves non-ASCII characters by default (only case folded)', () => {
-    expect(slugify('Café & Crème')).toBe('café-crème')
-    expect(slugify('Über uns')).toBe('über-uns')
-    expect(slugify('Привет мир')).toBe('привет-мир')
+  it('preserves non-ASCII characters AND case by default', () => {
+    expect(slugify('Café & Crème')).toBe('Café-Crème')
+    expect(slugify('Über uns')).toBe('Über-uns')
+    expect(slugify('Привет мир')).toBe('Привет-мир')
     expect(slugify('日本語の見出し')).toBe('日本語の見出し')
   })
   it('replaces each run of non-alphanumeric ASCII with a single dash', () => {
-    expect(slugify("What's New?")).toBe('what-s-new')
-    expect(slugify('RFC 2119: Key Words')).toBe('rfc-2119-key-words')
+    expect(slugify("What's New?")).toBe('What-s-New')
+    expect(slugify('RFC 2119: Key Words')).toBe('RFC-2119-Key-Words')
     expect(slugify('user_id field')).toBe('user-id-field')
   })
   it('prefixes s- when starting with a digit', () => {
-    expect(slugify('2024 Recap')).toBe('s-2024-recap')
+    expect(slugify('2024 Recap')).toBe('s-2024-Recap')
   })
   it('falls back to s when empty', () => {
     expect(slugify('!!!')).toBe('s')
@@ -30,10 +30,21 @@ describe('slugify', () => {
     expect(slugify('a -- b')).toBe('a-b')
     expect(slugify('  spaced  ')).toBe('spaced')
   })
-  it('folds to ASCII when asciiFold is set (opt-in)', () => {
-    expect(slugify('Über uns', true)).toBe('uber-uns')
-    expect(slugify('Café & Crème', true)).toBe('cafe-creme')
-    expect(slugify('Привет мир', true)).toBe('privet-mir')
+  it('lowercases per code point when lowercase is set (opt-in, GitHub-style)', () => {
+    expect(slugify('Getting Started', { lowercase: true })).toBe('getting-started')
+    expect(slugify('Über uns', { lowercase: true })).toBe('über-uns')
+    expect(slugify('Привет мир', { lowercase: true })).toBe('привет-мир')
+  })
+  it('folds to ASCII keeping case when asciiFold is set (opt-in)', () => {
+    expect(slugify('Über uns', { asciiFold: true })).toBe('Uber-uns')
+    expect(slugify('Café & Crème', { asciiFold: true })).toBe('Cafe-Creme')
+    expect(slugify('Привет мир', { asciiFold: true })).toBe('Privet-mir')
+  })
+  it('combines asciiFold and lowercase for a fully lowercase ASCII slug', () => {
+    expect(slugify('Über uns', { asciiFold: true, lowercase: true })).toBe('uber-uns')
+    expect(slugify('Café & Crème', { asciiFold: true, lowercase: true })).toBe(
+      'cafe-creme',
+    )
   })
 })
 
@@ -76,11 +87,11 @@ describe('resolveHeadingIds', () => {
     const doc = parse('# Getting Started')
     resolveHeadingIds(doc)
     expect((doc.children[0] as { attrs?: { id?: string } }).attrs?.id).toBe(
-      'getting-started',
+      'Getting-Started',
     )
   })
   it('keeps an explicit id verbatim and never suffixes it', () => {
-    const doc = parse('# A {#Keep_This}\n\n# A {#Keep_This}')
+    const doc = parse('{#Keep_This}\n# A\n\n{#Keep_This}\n# A')
     resolveHeadingIds(doc)
     const ids = doc.children
       .filter((b) => b.type === 'heading')
@@ -93,22 +104,27 @@ describe('resolveHeadingIds', () => {
     const ids = doc.children
       .filter((b) => b.type === 'heading')
       .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
-    expect(ids).toEqual(['setup', 'notes', 'setup-2', 'setup-3'])
+    expect(ids).toEqual(['Setup', 'Notes', 'Setup-2', 'Setup-3'])
   })
-  it('shares the namespace: auto collides with earlier explicit', () => {
-    const doc = parse('# Intro {#intro}\n\n# Intro')
+  it('shares the namespace: auto collides with earlier explicit (case-sensitive)', () => {
+    // Dedup is case-sensitive (verbatim `used` set). The explicit `Intro`
+    // matches the case-preserved auto slug, so the second heading suffixes.
+    const doc = parse('{#Intro}\n# Intro\n\n# Intro')
     resolveHeadingIds(doc)
     const ids = doc.children
       .filter((b) => b.type === 'heading')
       .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
-    expect(ids).toEqual(['intro', 'intro-2'])
+    expect(ids).toEqual(['Intro', 'Intro-2'])
   })
-  it('resolves </#id> to a link with cloned target text', () => {
+  it('resolves </#id> case-insensitively to a link with cloned target text', () => {
+    // The auto id is case-preserving (`Getting-Started`); a lowercase
+    // `</#getting-started>` still resolves (case-insensitive lookup) and
+    // emits the target's ACTUAL case-preserved id.
     const html = carveToHtml('# Getting Started\n\nSee </#getting-started>.')
     // The id lives on the <section>, not the <h1> (PART 9 §13).
-    expect(html).toContain('<section id="getting-started">')
+    expect(html).toContain('<section id="Getting-Started">')
     expect(html).toContain('<h1>Getting Started</h1>')
-    expect(html).toContain('<a href="#getting-started">Getting Started</a>')
+    expect(html).toContain('<a href="#Getting-Started">Getting Started</a>')
   })
   it('renders an unresolved </#id> as literal text', () => {
     const html = carveToHtml('See </#nope>.')
@@ -117,6 +133,6 @@ describe('resolveHeadingIds', () => {
   })
   it('ambiguous bare ref resolves to the first occurrence', () => {
     const html = carveToHtml('# Setup\n\n# Setup\n\nGo </#setup>.')
-    expect(html).toContain('<a href="#setup">Setup</a>')
+    expect(html).toContain('<a href="#Setup">Setup</a>')
   })
 })

@@ -41,25 +41,29 @@ describe('block attribute lines (§15)', () => {
     expect(h('{.foo\n .bar}\nText')).toBe('<p class="foo bar">Text</p>')
   })
 
-  it('treats a non-attribute brace line as literal text', () => {
-    expect(h('{foo}\nText')).toBe('<p>{foo}\nText</p>')
+  it('a bare word is a boolean (value-less) attribute', () => {
+    expect(h('{foo}\nText')).toBe('<p foo="">Text</p>')
   })
 
   it('a {...} line with trailing text is not a block-attribute line', () => {
     expect(h('{.x} text')).toBe('<p>{.x} text</p>')
   })
 
-  it('rejects a brace line with junk after a valid token (no silent drop)', () => {
-    // `{.note junk}` must not hoist `.note` and drop `junk`; the whole
-    // payload must be valid attribute syntax or the line is literal.
-    expect(h('{.note junk}\nText')).toBe('<p>{.note junk}\nText</p>')
+  it('keeps a valid token alongside a boolean attribute (no drop)', () => {
+    // `{.note junk}` applies the class AND the boolean `junk` -- a bare word is
+    // a value-less attribute, not "junk" that invalidates the block.
+    expect(h('{.note junk}\nText')).toBe('<p class="note" junk="">Text</p>')
+  })
+
+  it('still rejects a digit-first bare word (not a valid attribute name)', () => {
+    expect(h('{2bad}\nText')).toBe('<p>{2bad}\nText</p>')
   })
 
   it('attaches a class to a heading section body', () => {
     // The id (auto or explicit) lives on <section>; a leading class
     // attaches to the <h*>.
     expect(h('{.big}\n# Title')).toBe(
-      '<section id="title">\n  <h1 class="big">Title</h1>\n</section>',
+      '<section id="Title">\n  <h1 class="big">Title</h1>\n</section>',
     )
   })
 
@@ -73,9 +77,11 @@ describe('block attribute lines (§15)', () => {
     )
   })
 
-  it('merges a leading class with the block’s own trailing id', () => {
-    // Leading `.lead` + heading’s own `{#x}`: class on h1, id on section.
-    const html = h('{.lead}\n# H {#x}')
+  it('hoists an explicit id to the section while other attrs stay on the h*', () => {
+    // Strict djot: all heading attributes come from the preceding block-
+    // attribute line. The explicit `#x` hoists to the <section>; the class
+    // stays on the <h1>.
+    const html = h('{.lead #x}\n# H')
     expect(html).toContain('<section id="x">')
     expect(html).toContain('<h1 class="lead">H</h1>')
   })
@@ -116,5 +122,26 @@ describe('block attribute lines (§15)', () => {
     expect(h('- {.x}\n  text')).toBe(
       '<ul>\n  <li><p class="x">text</p></li>\n</ul>',
     )
+  })
+
+  // A `{...}` line that directly trails paragraph content (no blank line) is a
+  // block-attribute line: it interrupts the paragraph and floats forward like
+  // any other (§15), rather than folding into the paragraph as literal text.
+  it('a trailing block-attribute line interrupts and is dropped when nothing follows', () => {
+    expect(h('Para\n{.class}')).toBe('<p>Para</p>')
+  })
+
+  it('a trailing block-attribute line floats forward to the next block', () => {
+    expect(h('Para\n{.class}\n\nNext')).toBe(
+      '<p>Para</p>\n<p class="class">Next</p>',
+    )
+  })
+
+  it('a trailing block-attribute line after a multi-line paragraph is dropped', () => {
+    expect(h('a\nb\n{.c}')).toBe('<p>a\nb</p>')
+  })
+
+  it('an inline {...} on the same line as content stays literal', () => {
+    expect(h('text {.x} y')).toBe('<p>text {.x} y</p>')
   })
 })
