@@ -45,6 +45,84 @@ HTML is stripped. A top-level details block whose direct children include a
 heading falls back to a plain `<div class="details">` (to avoid mis-nesting
 it against heading section-wrapping).
 
+## listTable
+
+`listTable()` renders a `::: list-table` admonition as a real HTML `<table>`,
+with the table authored as a nested list so cells can hold full block content
+(paragraphs, lists, code) that the native pipe-table syntax cannot. Each outer
+list item is a row; each inner list item is a cell:
+
+```ts
+import { carveToHtml, listTable } from '@markup-carve/carve'
+
+const src = [
+  '{header-rows=1}',
+  '::: list-table "Quarterly results"',
+  '- - Region',
+  '  - Notes',
+  '- - EMEA',
+  '  - Strong quarter.',
+  ':::',
+].join('\n')
+
+carveToHtml(src, { extensions: [listTable()] })
+// <table>
+//   <caption>Quarterly results</caption>
+//   <thead><tr><th>Region</th><th>Notes</th></tr></thead>
+//   <tbody>
+//     <tr><td>EMEA</td><td>Strong quarter.</td></tr>
+//   </tbody>
+// </table>
+```
+
+The quoted title becomes the `<caption>`. Attributes sit on the **preceding**
+line (a trailing `{...}` on the `:::` opener would make the whole block
+literal in Carve):
+
+- `header-rows=N` promotes the first `N` rows to `<thead>` / `<th>`.
+- `header-cols=N` promotes the first `N` cells of every row to row-header
+  `<th>`.
+
+A single-paragraph cell collapses to inline content (`<td>text</td>`), matching
+tight list-item rendering; a multi-block cell keeps its block wrappers. A cell's
+own list-item attributes (`-{.x} cell`) carry onto its `<td>` / `<th>`.
+
+Cells span rows and columns with the **same** continuation markers Carve's pipe
+tables use: a cell whose only content is a lone `^` merges with the cell above
+(rowspan), and a lone `<` merges with the cell to the left (colspan). The span
+markup matches what the equivalent pipe table produces. A cell carrying its own
+attribute block, or one with extra blocks, is never a bare marker - its `^` / `<`
+is then literal (the same escape pipe tables use). A header-row rowspan is
+clamped at the `<thead>` / `<tbody>` boundary (an HTML cell cannot reliably span
+row groups), where it degrades to an empty cell.
+
+```ts
+const sales = [
+  '{header-rows=1}',
+  '::: list-table "Sales"',
+  '- - Region',
+  '  - Q1',
+  '  - Q2',
+  '- - EMEA',
+  '  - 10',
+  '  - 12',
+  '- - ^',   // rowspan: merge with EMEA above
+  '  - 14',
+  '  - 16',
+  '- - Total',
+  '  - <',   // colspan: merge with Total to the left
+  '  - <',
+  ':::',
+].join('\n')
+// EMEA gets rowspan="2"; Total gets colspan="3".
+```
+
+Only `::: list-table` blocks are claimed; every other admonition defers to the
+core renderer. When the extension is not registered (or the block is malformed -
+a row with no cell list, or stray siblings around the list) it degrades to the
+default `<div class="list-table">` holding the literal nested list, so content
+is never silently dropped.
+
 ## mermaid
 
 `mermaid()` renders a fenced code block tagged `mermaid` (a ` ``` mermaid `
