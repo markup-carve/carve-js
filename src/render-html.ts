@@ -94,6 +94,35 @@ function sanitizeUrl(url: string, opts: RenderOptions): string {
   return allowed.some((s) => s.toLowerCase() === scheme[1].toLowerCase()) ? url : ''
 }
 
+/** HTML-injection sink attributes that are unsafe regardless of value. Event
+ *  handlers (`on*`) and these are stripped from ALL rendered attributes, always
+ *  - there is no legitimate use in a content-markup document. */
+const DANGEROUS_ATTR_NAMES = new Set(['srcdoc', 'formaction'])
+function isDangerousAttrName(name: string): boolean {
+  const n = name.toLowerCase()
+  return n.startsWith('on') || DANGEROUS_ATTR_NAMES.has(n)
+}
+
+/** URL schemes that must never appear in an attribute value. */
+const DANGEROUS_VALUE_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file'])
+
+/**
+ * Blank an attribute value that carries a dangerous URL scheme or a CSS
+ * `expression(...)`, so an author cannot smuggle script through an attribute
+ * the name filter allows (e.g. `background`, `style`). The scheme is
+ * normalized (C0 controls + spaces stripped) before comparison to defeat
+ * `java\tscript:` style evasion, matching the link/image URL sanitizer.
+ */
+function sanitizeAttrValue(name: string, value: string): string {
+  const colon = value.indexOf(':')
+  if (colon !== -1) {
+    const scheme = value.slice(0, colon).replace(/[\u0000-\u0020]+/g, '').toLowerCase()
+    if (DANGEROUS_VALUE_SCHEMES.has(scheme)) return ''
+  }
+  if (name.toLowerCase() === 'style' && /expression\s*\(/i.test(value)) return ''
+  return value
+}
+
 /** Inject `data-source-line` into the first opening tag of a rendered block. */
 function withSourceLine(html: string, line: number | undefined): string {
   if (line === undefined) return html
@@ -347,8 +376,11 @@ function renderAttrs(attrs?: Attrs): string {
   // is a no-op), but `id=value` can carry arbitrary quoted text.
   const idAttr = () => (attrs.id !== undefined ? `id="${escapeAttr(attrs.id)}"` : '')
   const kvAttr = (k: string) => {
+    // Always strip event-handler / injection-sink attribute names, and blank a
+    // dangerous-scheme or CSS-expression value, regardless of render options.
+    if (isDangerousAttrName(k)) return ''
     const v = attrs.keyValues?.[k]
-    return v !== undefined ? `${k}="${escapeAttr(v)}"` : ''
+    return v !== undefined ? `${k}="${escapeAttr(sanitizeAttrValue(k, v))}"` : ''
   }
   // Emit the recorded source order first (matches djot + carve-php),
   // then append any populated slot not covered by `order` -- so an attr
