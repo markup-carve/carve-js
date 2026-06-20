@@ -135,6 +135,7 @@ const IMPLEMENTED = new Set([
   '100-block-quote-continuation-marker',
   '101-heading-marker-column-zero',
   '102-paragraph-trailing-whitespace',
+  '103-marker-line-nested-lists',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
