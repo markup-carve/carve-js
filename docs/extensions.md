@@ -143,6 +143,40 @@ import { carveToHtml, mermaid } from '@markup-carve/carve'
 carveToHtml(diagramSource, { extensions: [mermaid()] })
 ```
 
+## fencedRender
+
+`fencedRender(opts)` is the generic client-rendered fenced-block factory that
+`mermaid` is a preset of. It claims fenced code blocks by language word and
+emits one hydration element; the body is passed through verbatim. One factory
+covers D2, Graphviz, WaveDrom, ABC, Vega-Lite, Chart.js, etc.
+
+Options: `language` (string | string[], required), `cssClass` (default: first
+language word), `tag` (`'pre'` | `'div'`; default `'div'` for json mode else
+`'pre'`), `contentMode` (`'text'` | `'json'`, default `'text'`), `wrapInFigure`,
+`figureClass`.
+
+- **text mode** (Mermaid/D2/Graphviz/WaveDrom/ABC): escapes `&` and `<`, keeps
+  `>` for arrow syntax.
+- **json mode** (Vega-Lite/Chart.js): body verbatim inside
+  `<script type="application/json">`, with `</` rewritten to `<\/` so it cannot
+  close the script early.
+
+```ts
+import { carveToHtml, fencedRender, d2, vegaLite } from '@markup-carve/carve'
+
+carveToHtml('```d2\na -> b\n```', { extensions: [d2()] })
+// → <pre class="d2">a -> b</pre>
+carveToHtml('```vega-lite\n{"mark":"bar"}\n```', { extensions: [vegaLite()] })
+// → <div class="vega-lite"><script type="application/json">{"mark":"bar"}</script></div>
+carveToHtml('```dot\na->b\n```', { extensions: [fencedRender({ language: ['dot', 'graphviz'], cssClass: 'graphviz' })] })
+```
+
+Built-in presets: `d2()`, `graphviz()` (claims `dot` + `graphviz`), `wavedrom()`,
+`abc()`, `vegaLite()`, `chart()`. Author attributes on the fence are copied
+through `renderAttrs`, which applies the always-on attribute hardening (strips
+`on*` / `srcdoc` / `formaction`, neutralizes dangerous URL / `expression()`
+values), so a `{onclick="…"}` fence can never reach the output.
+
 ## mathBlock
 
 `mathBlock()` renders a fenced code block tagged `math` (a ` ``` math ` fence)
