@@ -73,6 +73,7 @@ export {
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
+export { listTable } from './list-table.js'
 export { citations, type CitationsOptions } from './citations.js'
 export { mermaid, type MermaidOptions } from './mermaid.js'
 export { mathBlock, type MathBlockOptions } from './math-block.js'
