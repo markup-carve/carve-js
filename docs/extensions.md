@@ -61,6 +61,32 @@ import { carveToHtml, mermaid } from '@markup-carve/carve'
 carveToHtml(diagramSource, { extensions: [mermaid()] })
 ```
 
+## mathBlock
+
+`mathBlock()` renders a fenced code block tagged `math` (a ` ``` math ` fence)
+as `<div class="math display">\[ … \]</div>`, the GFM-style block form of
+Carve's core `$$` display math. The body is HTML-escaped (`&`, `<`, `>`) and
+wrapped in `\[ … \]` for a client-side math engine (KaTeX/MathJax).
+Non-`math` code blocks defer to the core renderer. Configurable `language`:
+
+```ts
+import { carveToHtml, mathBlock } from '@markup-carve/carve'
+
+carveToHtml('```math\nx^2\n```', { extensions: [mathBlock()] })
+// → <div class="math display">\[x^2\]</div>
+```
+
+> [!IMPORTANT]
+> Unlike `mermaid`, `mathBlock` does **not** copy any author attributes onto
+> the output `<div>` - neither a fence info-string nor a preceding
+> `{#id .class}` block-attribute line. The extension emits raw HTML directly,
+> bypassing the core safe-mode attribute sanitizer, so copying attributes would
+> let `{onclick="…"}` through unfiltered on untrusted documents. The class is
+> always the fixed `math display`. If you need styleable/targetable math, use
+> the **core** inline `` $`…` `` / display `` $$`…` `` forms instead: those
+> carry `{...}` attributes through the core renderer, where safe-mode strips
+> dangerous handlers but keeps your classes and id.
+
 ## wikilinks
 
 `wikilinks()` parses `[[Page]]` links (Obsidian / MediaWiki style) into
