@@ -2072,13 +2072,17 @@ function parseList(lexer: Lexer): List {
     // dedented line as ONE block stream so the marker-line sub-list behaves
     // exactly like a sub-list opened on a *following* line: following
     // same-indent markers MERGE into it as siblings, and post-blank indented
-    // blocks are ABSORBED into its items. This deliberately DIVERGES from djot
-    // (which line-scopes the marker-line case, splitting it from following
-    // items and leaking later indented blocks to the parent row). The single
-    // combined stream reuses the normal nested-list/absorption logic -- no
-    // separate path. The lead/block split below stays for the indented-ordered
-    // sub-list case (an ordered marker that does NOT interrupt the lead
-    // paragraph), where the lead really is a paragraph.
+    // blocks are ABSORBED into its items. This MATCHES reference djot.js
+    // (@djot/djot 0.3.2) and CommonMark, which both treat a marker-line
+    // sub-list as a normal nested list. It corrects Carve's prior line-scoping
+    // (which split the sub-list from following items and leaked later indented
+    // blocks to the parent row) -- a bug inherited from djot-php, whose
+    // marker-line handling deviates from reference djot (see
+    // php-collective/djot-php). The single combined stream reuses the normal
+    // nested-list/absorption logic -- no separate path. The lead/block split
+    // below stays for the indented-ordered sub-list case (an ordered marker
+    // that does NOT interrupt the lead paragraph), where the lead really is a
+    // paragraph.
     const leadIsMarker =
       RE_UNORDERED.test(content) ||
       RE_ORDERED.test(content) ||
