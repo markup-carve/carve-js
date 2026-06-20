@@ -640,4 +640,12 @@ describe('list-table Tier-3 extension', () => {
     expect(html).toContain('<li>B</li>')
     expect(html).not.toContain('<table')
   })
+
+  it('defers an over-large table to the plain div (DoS guard)', () => {
+    const rows = Array.from({ length: 10001 }, () => '- - a\n  - b').join('\n')
+    const src = `::: list-table\n${rows}\n:::`
+    const out = h(src)
+    expect(out.startsWith('<div class="list-table">')).toBe(true)
+    expect(out).not.toContain('<table>')
+  })
 })
