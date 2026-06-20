@@ -28,4 +28,11 @@ describe('math-block extension', () => {
     const src = '``` math\nx^2\n```'
     expect(carveToHtml(src)).toBe('<pre><code class="language-math">x^2\n</code></pre>')
   })
+
+  it('does not copy fence attributes onto the div (no safe-mode bypass)', () => {
+    const src = '{#eq .big onclick="alert(1)"}\n``` math\nx^2\n```'
+    expect(carveToHtml(src, { extensions: [mathBlock()] })).toBe(
+      '<div class="math display">\\[x^2\\]</div>',
+    )
+  })
 })

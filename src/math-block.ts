@@ -1,4 +1,4 @@
-import type { Attrs, CodeBlock } from './ast.js'
+import type { CodeBlock } from './ast.js'
 import type { CarveExtension } from './extension.js'
 
 /** Options for the {@link mathBlock} extension. */
@@ -38,13 +38,11 @@ export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
       'code-block': (node, ctx) => {
         const code = node as CodeBlock
         if (code.lang !== language) return undefined
-        // Preserve the block's own attributes; merge the math classes into the
-        // class group (mandatory base classes first, matching inline math).
-        const attrs: Attrs = {
-          ...code.attrs,
-          classes: ['math', 'display', ...(code.attrs?.classes ?? [])],
-        }
-        return `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(attrs)}>\\[${escapeMath(code.content)}\\]</div>`
+        // Emit only the fixed `math display` class. Author attributes from the
+        // fence are intentionally NOT copied: rendering them here would bypass
+        // safe-mode attribute filtering (an `{onclick=…}` on a ```math fence
+        // would become an executable handler on the <div>).
+        return `${ctx.indent(ctx.level)}<div class="math display">\\[${escapeMath(code.content)}\\]</div>`
       },
     },
   }
