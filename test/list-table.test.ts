@@ -81,6 +81,50 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
+  it('treats {header-rows} with no value as the first row (boolean form)', () => {
+    const src = [
+      '{header-rows}',
+      '::: list-table',
+      '- - Region',
+      '  - Notes',
+      '- - EMEA',
+      '  - ok',
+      ':::',
+    ].join('\n')
+    expect(h(src)).toBe(
+      [
+        '<table>',
+        '  <thead><tr><th>Region</th><th>Notes</th></tr></thead>',
+        '  <tbody>',
+        '    <tr><td>EMEA</td><td>ok</td></tr>',
+        '  </tbody>',
+        '</table>',
+      ].join('\n'),
+    )
+  })
+
+  it('treats {header-cols} with no value as the first column (boolean form)', () => {
+    const src = [
+      '{header-cols}',
+      '::: list-table',
+      '- - Region',
+      '  - Notes',
+      '- - EMEA',
+      '  - ok',
+      ':::',
+    ].join('\n')
+    expect(h(src)).toBe(
+      [
+        '<table>',
+        '  <tbody>',
+        '    <tr><th>Region</th><td>Notes</td></tr>',
+        '    <tr><th>EMEA</th><td>ok</td></tr>',
+        '  </tbody>',
+        '</table>',
+      ].join('\n'),
+    )
+  })
+
   it('combines header-rows and header-cols', () => {
     const src = [
       '{header-rows=1}',
