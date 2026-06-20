@@ -2066,12 +2066,36 @@ function parseList(lexer: Lexer): List {
       }
     }
 
+    // When the item's content BEGINS, on the marker line, with another list
+    // marker (`- - A`, `* - A`, `1. - A`, ...), the lead is itself a sub-list,
+    // not a paragraph. Carve then parses the lead together with every following
+    // dedented line as ONE block stream so the marker-line sub-list behaves
+    // exactly like a sub-list opened on a *following* line: following
+    // same-indent markers MERGE into it as siblings, and post-blank indented
+    // blocks are ABSORBED into its items. This deliberately DIVERGES from djot
+    // (which line-scopes the marker-line case, splitting it from following
+    // items and leaking later indented blocks to the parent row). The single
+    // combined stream reuses the normal nested-list/absorption logic -- no
+    // separate path. The lead/block split below stays for the indented-ordered
+    // sub-list case (an ordered marker that does NOT interrupt the lead
+    // paragraph), where the lead really is a paragraph.
+    const leadIsMarker =
+      RE_UNORDERED.test(content) ||
+      RE_ORDERED.test(content) ||
+      RE_TASK.test(content) ||
+      // An abutting-attribute bullet/ordered marker (`-{.x} A`, `1.{.x} A`) is a
+      // list marker too, exactly as the sub-list nesting path above recognizes
+      // it -- keep this detection in step so the attributed marker-line case
+      // merges/absorbs like the plain one.
+      extractItemAttr(content) !== null
+
     // Parse the lead text together with its continuation/nested lines as one
     // block sequence (lazy continuation merges into the lead paragraph). An
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
-    const leadLines = firstBlockIdx === -1 ? nested : nested.slice(0, firstBlockIdx)
-    const blockLines = firstBlockIdx === -1 ? [] : nested.slice(firstBlockIdx)
+    const leadLines = firstBlockIdx === -1 || leadIsMarker ? nested : nested.slice(0, firstBlockIdx)
+    const blockLines =
+      firstBlockIdx === -1 || leadIsMarker ? [] : nested.slice(firstBlockIdx)
     const mkSub = (text: string): Lexer => {
       const s = new Lexer(text)
       s.abbrDefs = lexer.abbrDefs
