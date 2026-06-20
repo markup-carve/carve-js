@@ -1,4 +1,4 @@
-import type { CodeBlock } from './ast.js'
+import type { Attrs, CodeBlock } from './ast.js'
 import type { CarveExtension } from './extension.js'
 
 /** Options for the {@link mathBlock} extension. */
@@ -28,7 +28,15 @@ function escapeMath(s: string): string {
  * renders as `<div class="math display">\[\int_0^1 x^2 \, dx\]</div>`. A
  * non-math code block defers to the core renderer, and without the extension a
  * ` ```math ` block stays an ordinary `language-math` code block so documents
- * remain readable. Ported alongside carve-php's `MathBlockExtension`.
+ * remain readable.
+ *
+ * A `{#eq .big key=val}` block-attribute line above the fence merges onto the
+ * `<div>` exactly as core display `$$` math carries its attributes (the
+ * `math display` base class ahead of author classes, other attributes in source
+ * order). `ctx.renderAttrs` hardens names/values (strips `on*` / `srcdoc` /
+ * `formaction`, neutralizes dangerous URL / `expression()` values), so a
+ * `{onclick=…}` on a fence can never reach the output. Ported alongside
+ * carve-php's `MathBlockExtension`.
  */
 export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
   const language = opts.language ?? 'math'
@@ -38,11 +46,16 @@ export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
       'code-block': (node, ctx) => {
         const code = node as CodeBlock
         if (code.lang !== language) return undefined
-        // Emit only the fixed `math display` class. Author attributes from the
-        // fence are intentionally NOT copied: rendering them here would bypass
-        // safe-mode attribute filtering (an `{onclick=…}` on a ```math fence
-        // would become an executable handler on the <div>).
-        return `${ctx.indent(ctx.level)}<div class="math display">\\[${escapeMath(code.content)}\\]</div>`
+        // Merge the `math display` base class ahead of author classes and copy
+        // the author attributes, mirroring core display `$$` math (renderAttrs2
+        // with baseClass). ctx.renderAttrs applies the always-on attribute
+        // hardening, so a {onclick=…} fence cannot inject a handler.
+        const attrs: Attrs = { ...(code.attrs ?? {}) }
+        attrs.classes = ['math display', ...(attrs.classes ?? [])]
+        if (attrs.order && !attrs.order.includes('.class')) {
+          attrs.order = ['.class', ...attrs.order]
+        }
+        return `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(attrs)}>\\[${escapeMath(code.content)}\\]</div>`
       },
     },
   }
