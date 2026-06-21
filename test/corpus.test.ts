@@ -137,6 +137,8 @@ const IMPLEMENTED = new Set([
   '102-paragraph-trailing-whitespace',
   '103-marker-line-nested-lists',
   '104-blocked-span-marker-renders-as-empty-cell',
+  '105-colspan-marker-scans-left-past-a-consumed-cell',
+  '106-security-hardening',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
