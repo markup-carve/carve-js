@@ -61,8 +61,9 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       }
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'code-block': {
-      const fence = safeFence(node.content, 3)
-      return `${fence}${node.lang ?? ''}\n${node.content}\n${fence}\n\n`
+      const content = stripControls(node.content)
+      const fence = safeFence(content, 3)
+      return `${fence}${node.lang ?? ''}\n${content}\n${fence}\n\n`
     }
     case 'blockquote': {
       const lines = renderBlocks(node.children, ctx).trim().split('\n')
@@ -94,7 +95,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return renderImage(node)
     case 'raw-block':
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
-      return node.format === 'html' ? `${escapeMdHtml(node.content)}\n\n` : ''
+      return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
     case 'abbreviation-def':
     case 'comment':
       return ''
@@ -180,7 +181,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[^${label}]: ${renderBlocks(blocks, ctx).trim()}\n`
+    out += `[^${stripControls(label)}]: ${renderBlocks(blocks, ctx).trim()}\n`
   }
   return out
 }
@@ -212,7 +213,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'bold-italic':
       return `***${renderInlines(node.children, ctx)}***`
     case 'code':
-      return renderCode(node.value)
+      return renderCode(stripControls(node.value))
     case 'link':
       return renderLink(node, ctx)
     case 'image':
@@ -220,9 +221,11 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'span':
       return renderInlines(node.children, ctx)
     case 'math':
-      return node.display ? `$$${node.content}$$` : `$${node.content}$`
+      return node.display
+        ? `$$${stripControls(node.content)}$$`
+        : `$${stripControls(node.content)}$`
     case 'raw-inline':
-      return node.format === 'html' ? escapeMdHtml(node.content) : ''
+      return node.format === 'html' ? escapeMdHtml(stripControls(node.content)) : ''
     case 'emoji':
       return `:${node.name}:`
     case 'autolink': {
@@ -239,16 +242,18 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Markdown has no abbreviation syntax; emit an HTML `<abbr>` so the title
       // survives (markdown allows inline HTML), matching carve-php. Dropping it
       // to plain text would lose the expansion.
-      const title = node.expansion.replace(/[&<>"]/g, (c) =>
+      const title = stripControls(node.expansion).replace(/[&<>"]/g, (c) =>
         c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
       )
-      const text = node.abbr.replace(/[&<>]/g, (c) =>
+      const text = stripControls(node.abbr).replace(/[&<>]/g, (c) =>
         c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;',
       )
       return `<abbr title="${title}">${text}</abbr>`
     }
     case 'footnote':
-      return node.inline ? `^[${renderInlines(node.inline, ctx)}]` : `[^${node.id ?? ''}]`
+      return node.inline
+        ? `^[${renderInlines(node.inline, ctx)}]`
+        : `[^${stripControls(node.id ?? '')}]`
     case 'soft-break':
       return '\n'
     case 'hard-break':
@@ -263,12 +268,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'critic-comment':
       return ''
     case 'crossref':
-      return `</#${node.target}>`
+      return `</#${stripControls(node.target)}>`
     case 'caption-number':
       return node.n === undefined ? '#' : String(node.n)
     case 'citation-group':
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
-      return node.raw
+      return stripControls(node.raw)
     case 'comment':
       return ''
     default: {
@@ -290,13 +295,14 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
 
 function renderImage(node: Image): string {
   const src = markdownDestination(node.src)
+  const alt = stripControls(node.alt)
   return node.title === undefined
-    ? `![${node.alt}](${src})`
-    : `![${node.alt}](${src} "${escapeMdTitle(node.title)}")`
+    ? `![${alt}](${src})`
+    : `![${alt}](${src} "${escapeMdTitle(node.title)}")`
 }
 
 function escapeMdTitle(title: string): string {
-  return title.replace(/[\\"]/g, '\\$&')
+  return stripControls(title).replace(/[\\"]/g, '\\$&')
 }
 
 function safeFence(content: string, min: number): string {
@@ -343,6 +349,7 @@ function fragmentId(href: string): string | undefined {
 }
 
 function escapeText(text: string): string {
+  text = stripControls(text)
   // Neutralize embedded HTML (<>&) so Markdown re-rendered to HTML cannot
   // execute it: carve's "HTML is text" guarantee holds for the Markdown target
   // too. `&` first so the entities are not re-escaped.

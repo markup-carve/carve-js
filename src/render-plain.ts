@@ -19,7 +19,7 @@ function renderBlock(node: BlockNode): string {
     case 'paragraph':
       if (isLegacyDefinitionParagraph(node)) {
         const [term, def] = legacyDefinitionParts(node)
-        return `${term}\n  ${def}\n\n`
+        return `${stripControls(term)}\n  ${stripControls(def)}\n\n`
       }
       return `${renderInlines(node.children)}\n\n`
     case 'code-block':
@@ -47,7 +47,7 @@ function renderBlock(node: BlockNode): string {
     case 'figure':
       return renderFigure(node)
     case 'image':
-      return node.alt
+      return stripControls(node.alt)
     case 'raw-block':
     case 'abbreviation-def':
     case 'comment':
@@ -91,7 +91,7 @@ function renderTable(node: Table): string {
 function renderFigure(node: Figure): string {
   const target =
     node.target.type === 'image'
-      ? node.target.alt
+      ? stripControls(node.target.alt)
       : node.target.type === 'table'
         ? renderTable(node.target).trim()
         : renderBlock(node.target).trim()
@@ -105,7 +105,7 @@ function renderFootnoteDefs(ast: Document): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[${label}]: ${renderBlocks(blocks).trim()}\n`
+    out += `[${stripControls(label)}]: ${renderBlocks(blocks).trim()}\n`
   }
   return out
 }
@@ -136,7 +136,7 @@ function renderInline(node: InlineNode): string {
     case 'link':
       return node.href.startsWith('#') ? renderInlines(node.children) : stripControls(node.href)
     case 'image':
-      return node.alt
+      return stripControls(node.alt)
     case 'math':
       return stripControls(node.content)
     case 'raw-inline':
@@ -152,25 +152,25 @@ function renderInline(node: InlineNode): string {
     case 'extension':
       return renderInlines(node.content)
     case 'abbreviation':
-      return node.abbr
+      return stripControls(node.abbr)
     case 'footnote':
-      return node.inline ? `(${renderInlines(node.inline)})` : `[${node.id ?? ''}]`
+      return node.inline ? `(${renderInlines(node.inline)})` : `[${stripControls(node.id ?? '')}]`
     case 'soft-break':
       return ' '
     case 'hard-break':
       return '\n'
     case 'critic-substitute':
       // Keep both sides (old struck like critic-delete, then new).
-      return `~${node.oldText}~${node.newText}`
+      return `~${stripControls(node.oldText)}~${stripControls(node.newText)}`
     case 'critic-comment':
       return ''
     case 'crossref':
-      return `</#${node.target}>`
+      return `</#${stripControls(node.target)}>`
     case 'caption-number':
       return node.n === undefined ? '#' : String(node.n)
     case 'citation-group':
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
-      return node.raw
+      return stripControls(node.raw)
     case 'comment':
       return ''
     default: {
