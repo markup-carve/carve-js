@@ -46,37 +46,52 @@ export interface RenderOptions {
    */
   sourceLine?: boolean
   /**
-   * Filter dangerous URL schemes (`javascript:`, `data:`, `vbscript:`, …)
-   * on link `href` and image `src` so authored Carve cannot inject script
-   * via a crafted URL. On by default - this is the safe-by-default posture
-   * the spec's SafeMode describes. A blocked URL renders as an empty value
-   * (`href=""`) so the link text / image alt is still shown but inert.
+   * Filter dangerous URL schemes on link `href` and image `src` so authored
+   * Carve cannot inject script via a crafted URL. On by default (safe by
+   * default). A blocked URL renders as an empty value (`href=""`) so the link
+   * text / image alt is still shown but inert.
    *
-   * Set `false` ONLY for fully trusted input where you want authored URLs
-   * passed through verbatim. Relative URLs (no scheme) and fragments
-   * (`#id`) are always allowed regardless of this setting.
+   * Default policy is a DENYLIST: `javascript:`, `vbscript:`, `data:`, `file:`
+   * are blocked; every other scheme and any scheme-less URL (relative,
+   * fragment, protocol-relative) passes. Set `false` ONLY for fully trusted
+   * input where you want authored URLs passed through verbatim.
    */
   sanitizeUrls?: boolean
   /**
-   * URL schemes permitted when {@link RenderOptions.sanitizeUrls} is on.
-   * Case-insensitive. Defaults to `['http', 'https', 'mailto']`. Add e.g.
-   * `'tel'` or `'ftp'` here if your application needs them. Has no effect
-   * when `sanitizeUrls` is `false`.
+   * Opt in to a strict ALLOWLIST instead of the default denylist: when set,
+   * ONLY these schemes pass on `href`/`src` (case-insensitive); everything
+   * else is blanked. No effect when `sanitizeUrls` is `false`.
    */
   allowedUrlSchemes?: string[]
+  /**
+   * Customize the default scheme DENYLIST (case-insensitive). Ignored when
+   * `allowedUrlSchemes` is set. Defaults to
+   * `['javascript', 'vbscript', 'data', 'file']`.
+   */
+  deniedUrlSchemes?: string[]
+  /**
+   * Allow raw HTML passthrough (the `` `…`{=html} `` inline and ` ```=html `
+   * block forms) to emit verbatim. On by default, matching the conformance
+   * corpus. Set `false` for UNTRUSTED input: raw-HTML content is then escaped
+   * to text instead of emitted, closing the one author-controlled raw-HTML
+   * injection vector. Non-HTML raw formats are unaffected.
+   */
+  allowRawHtml?: boolean
 }
 
-/** Schemes allowed on links/images by default when sanitizing is on. */
-const DEFAULT_URL_SCHEMES = ['http', 'https', 'mailto']
+/** Dangerous URL schemes blocked by default on links/images (denylist). */
+const DANGEROUS_URL_SCHEMES = ['javascript', 'vbscript', 'data', 'file']
 
 /**
- * Neutralize a URL whose scheme is not allowlisted, defeating
- * `javascript:` / `data:` style injection on link `href` and image `src`.
+ * Neutralize a dangerous URL on a link `href` or image `src`, defeating
+ * `javascript:` / `data:` style injection.
  *
- * A URL with no scheme (relative path, query, fragment, protocol-relative
- * `//host`) is always allowed. A URL whose scheme is in the allowlist is
- * passed through unchanged. Anything else collapses to an empty string so
- * the emitted `href`/`src` is inert while the surrounding text remains.
+ * Default policy is a DENYLIST: a URL whose scheme is `javascript`,
+ * `vbscript`, `data`, or `file` collapses to an empty string (link text /
+ * image alt still shows, element inert); every other scheme and any
+ * scheme-less URL (relative, query, fragment, protocol-relative `//host`)
+ * passes. Pass `allowedUrlSchemes` to switch to a strict ALLOWLIST instead;
+ * pass `deniedUrlSchemes` to customize the denylist.
  *
  * Scheme detection ignores leading C0 control characters and whitespace,
  * which browsers strip before parsing a scheme - so `\tjavascript:` and
@@ -87,11 +102,17 @@ function sanitizeUrl(url: string, opts: RenderOptions): string {
   if (opts.sanitizeUrls === false) return url
   // Browsers ignore C0 controls and whitespace when reading the scheme;
   // strip them for detection so obfuscated schemes can't slip through.
-  const probe = url.replace(/^[\u0000-\u0020]+/, '').replace(/[\t\n\r]/g, '')
+  const probe = url.replace(/[\u0000-\u0020]/g, '')
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (!scheme) return url
-  const allowed = opts.allowedUrlSchemes ?? DEFAULT_URL_SCHEMES
-  return allowed.some((s) => s.toLowerCase() === scheme[1].toLowerCase()) ? url : ''
+  const s = scheme[1].toLowerCase()
+  // Explicit allowlist (opt-in): only the listed schemes pass.
+  if (opts.allowedUrlSchemes) {
+    return opts.allowedUrlSchemes.some((a) => a.toLowerCase() === s) ? url : ''
+  }
+  // Default: denylist of dangerous schemes.
+  const denied = opts.deniedUrlSchemes ?? DANGEROUS_URL_SCHEMES
+  return denied.some((d) => d.toLowerCase() === s) ? '' : url
 }
 
 /** HTML-injection sink attributes that are unsafe regardless of value. Event
@@ -119,8 +140,24 @@ function sanitizeAttrValue(name: string, value: string): string {
     const scheme = value.slice(0, colon).replace(/[\u0000-\u0020]+/g, '').toLowerCase()
     if (DANGEROUS_VALUE_SCHEMES.has(scheme)) return ''
   }
-  if (name.toLowerCase() === 'style' && /expression\s*\(/i.test(value)) return ''
+  if (name.toLowerCase() === 'style' && hasDangerousCss(value)) return ''
   return value
+}
+
+/** Detect script-bearing / fetching constructs in a CSS `style` value. Blanks
+ *  the whole value rather than attempting CSS surgery: `expression()` (legacy
+ *  IE script), `url(...)` (can fetch or carry `javascript:`), `@import`, and
+ *  the legacy `behavior` / `-moz-binding` script bindings. Whitespace is
+ *  collapsed first so `expr ession (` cannot evade. */
+function hasDangerousCss(value: string): boolean {
+  const compact = value.replace(/\s+/g, '').toLowerCase()
+  return (
+    compact.includes('expression(') ||
+    compact.includes('url(') ||
+    compact.includes('@import') ||
+    compact.includes('behavior:') ||
+    compact.includes('-moz-binding')
+  )
 }
 
 /** Inject `data-source-line` into the first opening tag of a rendered block. */
@@ -555,7 +592,13 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
     case 'abbreviation-def':
       return ''
     case 'raw-block':
-      return node.format === 'html' ? node.content : ''
+      // Raw HTML passthrough; escape it instead when raw HTML is disabled
+      // (untrusted input). Non-HTML raw formats are always dropped.
+      return node.format === 'html'
+        ? opts.allowRawHtml === false
+          ? escapeHtml(node.content)
+          : node.content
+        : ''
     case 'comment':
       // Comments are not rendered (§4.13).
       return ''
@@ -928,7 +971,12 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     }
     case 'raw-inline':
       // Verbatim only when the format matches this output; else dropped.
-      return node.format === 'html' ? node.content : ''
+      // Escape it instead when raw HTML is disabled (untrusted input).
+      return node.format === 'html'
+        ? opts.allowRawHtml === false
+          ? escapeHtml(node.content)
+          : node.content
+        : ''
     case 'emoji':
       return opts.emoji?.[node.name] ?? escapeHtml(`:${node.name}:`)
     case 'autolink': {
