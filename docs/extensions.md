@@ -134,8 +134,9 @@ fence) as `<pre class="mermaid">` for client-side Mermaid.js, instead of the
 default `<pre><code>`. `>` is preserved so arrow syntax (`A-->B`) survives, and
 the diagram source renders as `<pre class="mermaid">graph TD; A-->B</pre>`. A
 preceding block-attribute line (`{#id .class}`) carries onto the `<pre>`;
-non-mermaid code blocks defer to the core renderer. Configurable `cssClass`
-and `language`:
+non-mermaid code blocks defer to the core renderer. Mermaid is a preset of
+`fencedRender` (below) and accepts the same `cssClass` / `tag` / `wrapInFigure` /
+`figureClass` options:
 
 ```ts
 import { carveToHtml, mermaid } from '@markup-carve/carve'
@@ -171,8 +172,12 @@ carveToHtml('```vega-lite\n{"mark":"bar"}\n```', { extensions: [vegaLite()] })
 carveToHtml('```dot\na->b\n```', { extensions: [fencedRender({ language: ['dot', 'graphviz'], cssClass: 'graphviz' })] })
 ```
 
-Built-in presets: `d2()`, `graphviz()` (claims `dot` + `graphviz`), `wavedrom()`,
-`abc()`, `vegaLite()`, `chart()`. Author attributes on the fence are copied
+Built-in presets: `mermaid()`, `d2()`, `graphviz()` (claims `dot` + `graphviz`),
+`wavedrom()`, `abc()`, `vegaLite()`, `chart()`. `presets()` returns all seven as
+an array to spread straight into `extensions`
+(`carveToHtml(src, { extensions: [...presets(), mathBlock()] })`); note it claims
+every preset fence word, so a literal code sample in one of those languages
+becomes a hydration element. Author attributes on the fence are copied
 through `renderAttrs`, which applies the always-on attribute hardening (strips
 `on*` / `srcdoc` / `formaction`, neutralizes dangerous URL / `expression()`
 values), so a `{onclick="…"}` fence can never reach the output.

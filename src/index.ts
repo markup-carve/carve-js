@@ -75,15 +75,16 @@ export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
 export { listTable } from './list-table.js'
 export { citations, type CitationsOptions } from './citations.js'
-export { mermaid, type MermaidOptions } from './mermaid.js'
 export {
   fencedRender,
+  mermaid,
   d2,
   graphviz,
   wavedrom,
   abc,
   vegaLite,
   chart,
+  presets,
   type FencedRenderOptions,
   type FencedRenderContentMode,
 } from './fenced-render.js'
