@@ -196,7 +196,7 @@ const isTableRow = (line: string): boolean =>
 // it from a `+ ` list item (which never ends with `|`). Only consumed
 // inside parseTable, after a standard `|` row has opened the table.
 const RE_TABLE_CONT = /^\+.*\|\s*$/
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)\s*(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(((?:[^()\s]|\([^()\s]*\))+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)\s*(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
 // Frontmatter open fence: `---` with an optional format token (`---toml`,
 // `---json`); bare `---` uses the default format. The space before the token is
 // optional (lenient input: both `---toml` and `--- toml` are accepted; the
@@ -260,6 +260,11 @@ class Lexer {
   // O(n²) (the any-length cache above never trips when a too-short closer is
   // present). pos only advances, so the stored start is a monotone frontier.
   divNoCloserOfLenFrom = new Map<number, number>()
+
+  // Negative cache for lineBlockHasCloser, mirroring divHasCloser for the
+  // `::: |` opener. Without it, many unclosed line-block openers rescan to EOF.
+  lineBlockNoCloserFrom = Infinity
+  lineBlockNoCloserOfLenFrom = new Map<number, number>()
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead): the smallest line index from which NO bare fence-closer
@@ -1024,11 +1029,20 @@ function parseAdmonition(lexer: Lexer): Admonition {
 
 function lineBlockHasCloser(lexer: Lexer): boolean {
   const start = lexer.pos + 1
+  if (start >= lexer.lineBlockNoCloserFrom) return false
   const fence = RE_LINE_BLOCK_OPEN.exec(lexer.peek()!)![1]!.length
+  if (start >= (lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
+  let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
     const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
-    if (c && c[1]!.length >= fence) return true
+    if (c) {
+      sawAnyCloser = true
+      if (c[1]!.length >= fence) return true
+    }
   }
+  const prev = lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity
+  if (start < prev) lexer.lineBlockNoCloserOfLenFrom.set(fence, start)
+  if (!sawAnyCloser) lexer.lineBlockNoCloserFrom = start
   return false
 }
 
@@ -1608,7 +1622,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
       !RE_ADMONITION_CLOSE.test(line) &&
       divHasCloser(lexer)) ||
     (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
-    (RE_LINE_BLOCK_OPEN.test(line) && divHasCloser(lexer)) ||
+    (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
@@ -2624,7 +2638,7 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // `}` is the first one outside quotes (djot "don't mind braces in quotes").
 // RE_SPAN_TAIL's body is `*` so an empty `{}` matches; isValidAttrPayload then
 // decides span (valid block, possibly empty) vs literal (invalid content).
-const RE_LINK_TAIL = /^\(([^)\s]*)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_LINK_TAIL = /^\(((?:[^()\s]|\([^()\s]*\))*)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 

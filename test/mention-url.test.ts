@@ -20,6 +20,12 @@ describe('mention/tag URL templates', () => {
     )
   })
 
+  it('sanitizes the final templated mention href', () => {
+    expect(carveToHtml('@alice', { mentionUrl: 'javascript:alert({name})' }).trim()).toBe(
+      '<p><a class="mention" href="">@alice</a></p>',
+    )
+  })
+
   it('still accepts the legacy {user} placeholder for mentions', () => {
     expect(carveToHtml('@alice', { mentionUrl: '/u/{user}' }).trim()).toBe(
       '<p><a class="mention" href="/u/alice">@alice</a></p>',
