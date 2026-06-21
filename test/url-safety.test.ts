@@ -14,11 +14,11 @@ const h = (s: string, opts = {}) => carveToHtml(s, opts)
  */
 describe('URL scheme sanitization (default on)', () => {
   it('blocks javascript: in a link href', () => {
-    expect(h('[click](javascript:alert(1))')).toBe('<p><a href="">click</a></p>')
+    expect(h('[click](javascript:alert(1))')).toBe('<p><a href="">click</a>)</p>')
   })
 
   it('blocks javascript: case-insensitively', () => {
-    expect(h('[x](JavaScript:alert(1))')).toBe('<p><a href="">x</a></p>')
+    expect(h('[x](JavaScript:alert(1))')).toBe('<p><a href="">x</a>)</p>')
   })
 
   it('does not even form a link when the URL has leading whitespace', () => {
@@ -43,11 +43,13 @@ describe('URL scheme sanitization (default on)', () => {
   })
 
   it('blocks vbscript: URLs', () => {
-    expect(h('[x](vbscript:msgbox(1))')).toBe('<p><a href="">x</a></p>')
+    expect(h('[x](vbscript:msgbox(1))')).toBe('<p><a href="">x</a>)</p>')
   })
 
   it('blocks javascript: in an image src', () => {
-    expect(h("![x](javascript:alert('img'))")).toBe('<img src="" alt="x">')
+    expect(h("![x](javascript:alert('img'))")).toBe(
+      '<p><img src="" alt="x">)</p>',
+    )
   })
 
   it('blocks data: in an image src', () => {
@@ -157,7 +159,7 @@ describe('URL scheme sanitization (renderer defense-in-depth)', () => {
 describe('URL scheme sanitization (configuration)', () => {
   it('passes dangerous URLs through verbatim when sanitizeUrls is false', () => {
     expect(h('[x](javascript:alert(1))', { sanitizeUrls: false })).toBe(
-      '<p><a href="javascript:alert(1)">x</a></p>',
+      '<p><a href="javascript:alert(1">x</a>)</p>',
     )
   })
 

@@ -16,7 +16,10 @@ describe('Markdown renderer is safe-by-default', () => {
   })
 
   it('percent-encodes markdown destination breakout characters', () => {
-    expect(md('[x](https://e.com/a(b)c)')).toBe('[x](https://e.com/a%28b%29c)')
+    // A `)` reaching a destination via a reference definition (URL runs to
+    // end-of-line, not `)`-delimited) is percent-encoded so it cannot break
+    // out of the `(...)` in Markdown output.
+    expect(md('[x][r]\n\n[r]: https://e.com/a)b')).toBe('[x](https://e.com/a%29b)')
   })
 
   it('keeps safe autolink destinations unchanged', () => {
