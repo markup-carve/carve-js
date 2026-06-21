@@ -152,10 +152,12 @@ function sanitizeAttrValue(name: string, value: string): string {
  *  the legacy `behavior` / `-moz-binding` script bindings. Whitespace is
  *  collapsed first so `expr ession (` cannot evade. */
 function hasDangerousCss(value: string): boolean {
-  const compact = decodeCssEscapes(value.toLowerCase().replace(/\/\*[\s\S]*?\*\//g, '')).replace(
-    /\s+/g,
-    '',
-  )
+  // Decode CSS escapes BEFORE lowercasing: an escaped uppercase code point
+  // (e.g. `\55` -> `U`) must fold to lowercase too, or `\55rl(` would slip past
+  // the lowercase needles.
+  const compact = decodeCssEscapes(value.replace(/\/\*[\s\S]*?\*\//g, ''))
+    .toLowerCase()
+    .replace(/\s+/g, '')
   return (
     compact.includes('expression(') ||
     compact.includes('url(') ||

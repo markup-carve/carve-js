@@ -162,6 +162,11 @@ describe('CSS style hardening', () => {
     expect(h('[x]{style="background:u\\72l(http://e/p)"}')).toBe(
       '<p><span style="">x</span></p>',
     )
+    // Escaped UPPERCASE code points must fold too: `\55` -> `U` -> url(.
+    expect(h('[x]{style="background:\\55rl(http://e/p)"}')).toBe(
+      '<p><span style="">x</span></p>',
+    )
+    expect(h('[x]{style="\\45xpression(alert(1))"}')).toBe('<p><span style="">x</span></p>')
   })
 
   it('keeps a plain style value', () => {
