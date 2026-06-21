@@ -76,6 +76,17 @@ export { details } from './details.js'
 export { listTable } from './list-table.js'
 export { citations, type CitationsOptions } from './citations.js'
 export { mermaid, type MermaidOptions } from './mermaid.js'
+export {
+  fencedRender,
+  d2,
+  graphviz,
+  wavedrom,
+  abc,
+  vegaLite,
+  chart,
+  type FencedRenderOptions,
+  type FencedRenderContentMode,
+} from './fenced-render.js'
 export { mathBlock, type MathBlockOptions } from './math-block.js'
 export { wikilinks, type WikilinksOptions } from './wikilinks.js'
 export { autolink, type AutolinkOptions } from './autolink.js'
