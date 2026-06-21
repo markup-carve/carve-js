@@ -57,6 +57,10 @@ function guardScriptClose(s: string): string {
  *       ```
  *   → `<div class="vega-lite"><script type="application/json">{"mark": "bar"}</script></div>`
  *
+ *   Note: json mode emits a `<script type="application/json">`, so consumers
+ *   that sanitize the HTML after conversion should whitelist that tag or use
+ *   text mode (the config then rides in a `<pre>` as escaped text).
+ *
  * Author attributes on the fence are copied through `ctx.renderAttrs`, which
  * applies the always-on attribute hardening (strips `on*` / `srcdoc` /
  * `formaction`, neutralizes dangerous URL / `expression()` values), so a

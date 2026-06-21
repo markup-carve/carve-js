@@ -182,6 +182,20 @@ through `renderAttrs`, which applies the always-on attribute hardening (strips
 `on*` / `srcdoc` / `formaction`, neutralizes dangerous URL / `expression()`
 values), so a `{onclick="…"}` fence can never reach the output.
 
+> [!NOTE]
+> **json mode emits a `<script type="application/json">`.** If you sanitize the
+> HTML *after* converting (e.g. DOMPurify), that inert script is typically
+> stripped. Either whitelist `<script type="application/json">` in your
+> sanitizer, or render the library config in **text mode** so it rides in a
+> `<pre>` as escaped text and survives sanitizing - then read it from
+> `textContent` instead of a script tag:
+>
+> ```ts
+> // Chart.js config as escaped text in <pre class="chart"> (sanitizer-safe).
+> carveToHtml(src, { extensions: [fencedRender({ language: 'chart', contentMode: 'text', cssClass: 'chart' })] })
+> // → <pre class="chart">{ "type": "bar", … }</pre>
+> ```
+
 ## mathBlock
 
 `mathBlock()` renders a fenced code block tagged `math` (a ` ``` math ` fence)
