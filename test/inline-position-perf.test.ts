@@ -63,4 +63,17 @@ describe('inline position mapping (perf + correctness)', () => {
 
     expect(elapsed).toBeLessThan(100)
   })
+
+  it('parses repeated unclosed line-block openers in linear time', () => {
+    const source = '::: |\n\n'.repeat(4000)
+
+    const start = performance.now()
+    parse(source)
+    const elapsed = performance.now() - start
+
+    // Isolated runs are well under 100ms on this input; the full Vitest suite
+    // runs perf files concurrently, so keep the guard above the scheduler noise
+    // while still separating the linear cache from the previous O(n^2) scan.
+    expect(elapsed).toBeLessThan(500)
+  })
 })

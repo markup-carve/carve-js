@@ -261,6 +261,11 @@ class Lexer {
   // present). pos only advances, so the stored start is a monotone frontier.
   divNoCloserOfLenFrom = new Map<number, number>()
 
+  // Negative cache for lineBlockHasCloser, mirroring divHasCloser for the
+  // `::: |` opener. Without it, many unclosed line-block openers rescan to EOF.
+  lineBlockNoCloserFrom = Infinity
+  lineBlockNoCloserOfLenFrom = new Map<number, number>()
+
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead): the smallest line index from which NO bare fence-closer
   // line exists onward. Once proven, every later fence opener (pos only
@@ -1024,11 +1029,20 @@ function parseAdmonition(lexer: Lexer): Admonition {
 
 function lineBlockHasCloser(lexer: Lexer): boolean {
   const start = lexer.pos + 1
+  if (start >= lexer.lineBlockNoCloserFrom) return false
   const fence = RE_LINE_BLOCK_OPEN.exec(lexer.peek()!)![1]!.length
+  if (start >= (lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
+  let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
     const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
-    if (c && c[1]!.length >= fence) return true
+    if (c) {
+      sawAnyCloser = true
+      if (c[1]!.length >= fence) return true
+    }
   }
+  const prev = lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity
+  if (start < prev) lexer.lineBlockNoCloserOfLenFrom.set(fence, start)
+  if (!sawAnyCloser) lexer.lineBlockNoCloserFrom = start
   return false
 }
 
@@ -1608,7 +1622,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
       !RE_ADMONITION_CLOSE.test(line) &&
       divHasCloser(lexer)) ||
     (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
-    (RE_LINE_BLOCK_OPEN.test(line) && divHasCloser(lexer)) ||
+    (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||

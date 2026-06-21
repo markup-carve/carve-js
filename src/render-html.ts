@@ -296,6 +296,7 @@ function collectFootnotes(ast: Document): FootnoteState {
   const defs = ast.footnoteDefs ?? {}
   const order: FootnoteEntry[] = []
   const seen: Record<string, number> = {}
+  const labelIndexes = new Map<string, number>()
   const onNode = (n: InlineNode): void => {
     if (n.type !== 'footnote') return
     // Inline footnote (`^[content]`): always a fresh, anonymous number.
@@ -309,10 +310,11 @@ function collectFootnotes(ast: Document): FootnoteState {
     }
     // Reference footnote (`[^label]`): numbered at first resolved reference.
     if (!n.id || !defs[n.id]) return
-    let idx = order.findIndex((e) => e.label === n.id)
-    if (idx === -1) {
+    let idx = labelIndexes.get(n.id)
+    if (idx === undefined) {
       order.push({ label: n.id, backrefs: [] })
       idx = order.length - 1
+      labelIndexes.set(n.id, idx)
     }
     const number = idx + 1
     const occ = (seen[n.id] = (seen[n.id] ?? 0) + 1)
@@ -991,14 +993,14 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       // Canonical placeholder is `{name}` (matching tags and carve-php);
       // `{user}` stays as a legacy alias.
       const enc = encodeURIComponent(node.user)
-      const href = opts.mentionUrl.replaceAll('{name}', enc).replaceAll('{user}', enc)
+      const href = sanitizeUrl(opts.mentionUrl.replaceAll('{name}', enc).replaceAll('{user}', enc), opts)
       return `<a class="mention" href="${escapeAttr(href)}">${text}</a>`
     }
     case 'tag': {
       const text = `#${escapeHtml(node.name)}`
       if (!opts.tagUrl)
         return `<span class="tag"><strong>${text}</strong></span>`
-      const href = opts.tagUrl.replaceAll('{name}', encodeURIComponent(node.name))
+      const href = sanitizeUrl(opts.tagUrl.replaceAll('{name}', encodeURIComponent(node.name)), opts)
       return `<a class="tag" href="${escapeAttr(href)}">${text}</a>`
     }
     case 'extension': {
