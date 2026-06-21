@@ -210,6 +210,82 @@ carveToHtml('{#eq .big data-ref=x}\n```math\nx^2\n```', { extensions: [mathBlock
 > never reach the output. This mirrors how core inline `` $`…` `` / display
 > `` $$`…` `` math carry their `{...}` attributes.
 
+## spoiler
+
+`spoiler()` is the standard hidden-content extension (inline + block). It claims
+the reserved `spoiler` role - no new syntax.
+
+```ts
+import { carveToHtml, spoiler } from '@markup-carve/carve'
+
+carveToHtml('Plot: :spoiler[the butler did it].', { extensions: [spoiler()] })
+// <p>Plot: <span class="spoiler">the butler did it</span>.</p>
+
+carveToHtml('::: spoiler "Ending"\nEveryone lives.\n:::', { extensions: [spoiler()] })
+// <details class="spoiler">
+//   <summary>Ending</summary>
+//   <p>Everyone lives.</p>
+// </details>
+```
+
+- **Inline** `:spoiler[text]` → `<span class="spoiler">text</span>`.
+- **Block** `::: spoiler ["Title"]` → an HTML5 `<details class="spoiler">`
+  disclosure (native, keyboard- and screen-reader-accessible). No title →
+  `<summary>Spoiler</summary>`.
+- Without the extension, `:spoiler[x]` stays `<span class="ext-spoiler">x</span>`
+  and `::: spoiler` stays `<div class="spoiler">`, so documents stay readable.
+- Author attributes merge onto the output element through the shared
+  `renderAttrs` (always-on hardening: `on*` / `srcdoc` / `formaction` stripped).
+
+Carve emits only the marker; the blur / collapse + reveal is the host's CSS/JS.
+Three host looks over the same markup (hover never reveals - it would spoil by
+accident; content stays in the DOM for screen readers):
+
+- inline `:spoiler[text]` → `<span class="spoiler">` styled as a **blur** that
+  reveals on click;
+- a generic `{.spoiler}` block div → `<div class="spoiler">` styled as a
+  **blurred panel that keeps its space**, revealing on click;
+- `::: spoiler` → `<details class="spoiler">` left as a **native collapse**
+  (summary only, expands on click - no JS, fully keyboard/AT accessible).
+
+A `.masked` variant gives a credit-card / PIN look (every char a dot):
+`:spoiler[1234]{.masked}`.
+
+```css
+/* Inline: blurred until clicked. */
+span.spoiler { filter: blur(.3em); cursor: pointer; border-radius: 3px; padding: 0 .15em;
+  background: rgba(127, 127, 127, .14); user-select: none; transition: filter .2s; }
+span.spoiler.revealed { filter: none; background: transparent; user-select: text; }
+/* Credit-card / PIN variant ({.masked}): every char a dot. */
+span.spoiler.masked { filter: none; -webkit-text-security: disc; }
+span.spoiler.masked.revealed { -webkit-text-security: none; }
+/* Block as a blurred panel that keeps its space (a generic {.spoiler} div). */
+div.spoiler { filter: blur(.4em); cursor: pointer; border-radius: 8px; padding: 10px 14px;
+  border-left: 3px solid #e0af68; user-select: none; transition: filter .25s; }
+div.spoiler.revealed { filter: none; cursor: auto; user-select: text; }
+/* Block as a native collapse (::: spoiler): summary only until clicked. */
+details.spoiler { border-left: 4px solid #e0af68; border-radius: 8px; padding: 6px 14px; }
+details.spoiler > summary { color: #e0af68; cursor: pointer; list-style: none; }
+details.spoiler > summary::before { content: "👁 "; }
+details.spoiler > summary::after { content: " (click to reveal)"; font-weight: 400; }
+details.spoiler[open] > summary::after { content: ""; }
+```
+
+```js
+// The two blur forms (inline span, block div) reveal on click / Enter / Space.
+for (const el of document.querySelectorAll('span.spoiler, div.spoiler')) {
+  el.tabIndex = 0
+  el.setAttribute('role', 'button')
+  el.setAttribute('aria-label', 'Spoiler, activate to reveal')
+  const toggle = () => el.classList.toggle('revealed')
+  el.addEventListener('click', toggle)
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
+  })
+}
+// `::: spoiler` → <details> is a native disclosure - it collapses/expands on its own.
+```
+
 ## wikilinks
 
 `wikilinks()` parses `[[Page]]` links (Obsidian / MediaWiki style) into
