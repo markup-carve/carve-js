@@ -114,3 +114,32 @@ export const vegaLite = (): CarveExtension =>
   fencedRender({ language: 'vega-lite', contentMode: 'json' })
 /** Chart.js preset (json mode, `<div class="chart"><script ...>`). */
 export const chart = (): CarveExtension => fencedRender({ language: 'chart', contentMode: 'json' })
+
+/**
+ * Mermaid preset (text mode, `<pre class="mermaid">`). Mermaid is one preset of
+ * {@link fencedRender}; load Mermaid.js on the page to render the diagrams.
+ */
+export const mermaid = (
+  opts: Omit<FencedRenderOptions, 'language' | 'contentMode'> = {},
+): CarveExtension => fencedRender({ language: 'mermaid', ...opts })
+
+/**
+ * Every bundled diagram preset as ready-to-register extensions, for spreading
+ * into the `extensions` option:
+ *
+ *     carveToHtml(src, { extensions: [...presets(), mathBlock()] })
+ *
+ * This claims every preset fence word (`mermaid`, `d2`, `dot`, `graphviz`,
+ * `wavedrom`, `abc`, `vega-lite`, `chart`), so a literal code sample in one of
+ * those languages becomes a hydration element; include only the presets whose
+ * client library you actually load if that matters.
+ */
+export const presets = (): CarveExtension[] => [
+  mermaid(),
+  d2(),
+  graphviz(),
+  wavedrom(),
+  abc(),
+  vegaLite(),
+  chart(),
+]

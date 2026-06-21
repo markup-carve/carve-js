@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { abc, carveToHtml, chart, d2, fencedRender, graphviz, mermaid, vegaLite } from '../src/index.js'
+import {
+  abc,
+  carveToHtml,
+  chart,
+  d2,
+  fencedRender,
+  graphviz,
+  mermaid,
+  presets,
+  vegaLite,
+} from '../src/index.js'
 
 describe('fencedRender factory', () => {
   it('text mode escapes & and < but keeps > (arrow syntax)', () => {
@@ -90,5 +100,20 @@ describe('fencedRender factory', () => {
 
   it('throws on an empty language', () => {
     expect(() => fencedRender({ language: '' })).toThrow()
+  })
+
+  it('presets() registers every bundled fence language at once', () => {
+    const exts = presets()
+    expect(exts).toHaveLength(7)
+
+    expect(carveToHtml('``` mermaid\ngraph TD; A-->B\n```', { extensions: exts })).toBe(
+      '<pre class="mermaid">graph TD; A-->B</pre>',
+    )
+    expect(carveToHtml('``` dot\ndigraph { a -> b }\n```', { extensions: exts })).toBe(
+      '<pre class="graphviz">digraph { a -> b }</pre>',
+    )
+    expect(carveToHtml('``` chart\n{"type":"bar"}\n```', { extensions: exts })).toBe(
+      '<div class="chart"><script type="application/json">{"type":"bar"}</script></div>',
+    )
   })
 })
