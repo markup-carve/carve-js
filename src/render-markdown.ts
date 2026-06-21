@@ -225,8 +225,10 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return node.format === 'html' ? escapeMdHtml(node.content) : ''
     case 'emoji':
       return `:${node.name}:`
-    case 'autolink':
-      return `[${node.href}](${node.href})`
+    case 'autolink': {
+      const label = stripControls(node.href)
+      return `[${label}](${markdownDestination(node.href)})`
+    }
     case 'mention':
       return `@${node.user}`
     case 'tag':
@@ -280,14 +282,14 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   const text = renderInlines(node.children, ctx)
   const id = fragmentId(node.href)
   if (id && !ctx.headingIds.has(id)) return text
-  const destination = id ? markdownFragmentDestination(id) : sanitizeMdUrl(node.href)
+  const destination = id ? markdownFragmentDestination(id) : markdownDestination(node.href)
   return node.title === undefined
     ? `[${text}](${destination})`
     : `[${text}](${destination} "${escapeMdTitle(node.title)}")`
 }
 
 function renderImage(node: Image): string {
-  const src = sanitizeMdUrl(node.src)
+  const src = markdownDestination(node.src)
   return node.title === undefined
     ? `![${node.alt}](${src})`
     : `![${node.alt}](${src} "${escapeMdTitle(node.title)}")`
@@ -315,6 +317,27 @@ function markdownFragmentDestination(id: string): string {
   return `<#${id.replace(/[\\<>]/g, (ch) => `\\${ch}`)}>`
 }
 
+function markdownDestination(url: string): string {
+  return stripControls(
+    sanitizeMdUrl(url).replace(/[ ()<>]/g, (ch) => {
+      switch (ch) {
+        case ' ':
+          return '%20'
+        case '(':
+          return '%28'
+        case ')':
+          return '%29'
+        case '<':
+          return '%3C'
+        case '>':
+          return '%3E'
+        default:
+          return ch
+      }
+    }),
+  )
+}
+
 function fragmentId(href: string): string | undefined {
   return href.startsWith('#') ? href.slice(1) : undefined
 }
@@ -337,6 +360,11 @@ function sanitizeMdUrl(url: string): string {
   const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (m && MD_DANGEROUS_SCHEMES.has(m[1].toLowerCase())) return ''
   return url
+}
+
+/** Drop C0/C1 control characters (keeping tab and newline) from author content. */
+function stripControls(s: string): string {
+  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */

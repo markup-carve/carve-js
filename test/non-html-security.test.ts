@@ -11,6 +11,21 @@ describe('Markdown renderer is safe-by-default', () => {
     expect(md('[ok](https://e.com)')).toContain('[ok](https://e.com)')
   })
 
+  it('blanks dangerous autolink schemes while preserving the visible label', () => {
+    expect(md('<javascript:alert(1)>')).toBe('[javascript:alert(1)]()')
+  })
+
+  it('percent-encodes markdown destination breakout characters', () => {
+    // A `)` reaching a destination via a reference definition (URL runs to
+    // end-of-line, not `)`-delimited) is percent-encoded so it cannot break
+    // out of the `(...)` in Markdown output.
+    expect(md('[x][r]\n\n[r]: https://e.com/a)b')).toBe('[x](https://e.com/a%29b)')
+  })
+
+  it('keeps safe autolink destinations unchanged', () => {
+    expect(md('<https://example.com>')).toBe('[https://example.com](https://example.com)')
+  })
+
   it('escapes raw =html instead of emitting it', () => {
     const out = md('```=html\n<script>alert(1)</script>\n```')
     expect(out).not.toContain('<script>')
