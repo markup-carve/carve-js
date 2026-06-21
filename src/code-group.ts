@@ -98,17 +98,12 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     // Wrapper attributes: wrapperClass first, then any extra classes the author
     // added (except 'code-group'), then non-class attributes.
     const classes = [wrapperClass, ...extraClasses(node).filter((c) => c !== wrapperClass)]
-    let attrs = ` class="${ctx.escapeAttr(classes.join(' '))}"`
-    const kv = node.attrs?.keyValues
-    const id = node.attrs?.id
-    if (id !== undefined) attrs += ` id="${ctx.escapeAttr(id)}"`
-    if (kv) {
-      for (const [k, v] of Object.entries(kv)) {
-        attrs += ` ${ctx.escapeAttr(k)}="${ctx.escapeAttr(v)}"`
-      }
-    }
+    const attrs: Attrs = { classes }
+    if (node.attrs?.id !== undefined) attrs.id = node.attrs.id
+    if (node.attrs?.keyValues) attrs.keyValues = { ...node.attrs.keyValues }
+    attrs.order = ['.class', ...(node.attrs?.order ?? []).filter((s) => s !== '.class')]
 
-    let html = `${pad}<div${attrs}>\n`
+    let html = `${pad}<div${ctx.renderAttrs(attrs)}>\n`
     items.forEach((item, index) => {
       const inputId = `${groupId}-tab-${index + 1}`
       const checked = item.selected ? ' checked' : ''

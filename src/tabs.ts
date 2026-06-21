@@ -1,4 +1,4 @@
-import type { Admonition, BlockNode, Div, Heading } from './ast.js'
+import type { Admonition, Attrs, BlockNode, Div, Heading } from './ast.js'
 import { inlineText } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 
@@ -114,17 +114,20 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       wrapperClass,
       ...extraClasses(wrapper, 'tabs').filter((c) => c !== wrapperClass),
     ]
-    let attrs = ` class="${ctx.escapeAttr(classes.join(' '))}"`
-    if (role) attrs += ` role="${role}"`
+    const attrs: Attrs = { classes }
     const id = wrapper.attrs?.id
-    if (id !== undefined) attrs += ` id="${ctx.escapeAttr(id)}"`
-    const kv = wrapper.attrs?.keyValues
-    if (kv) {
-      for (const [k, v] of Object.entries(kv)) {
-        attrs += ` ${ctx.escapeAttr(k)}="${ctx.escapeAttr(v)}"`
-      }
+    if (id !== undefined) attrs.id = id
+    if (wrapper.attrs?.keyValues || role) {
+      attrs.keyValues = { ...(wrapper.attrs?.keyValues ?? {}) }
+      if (role) attrs.keyValues.role = role
     }
-    return attrs
+    const authorOrder = (wrapper.attrs?.order ?? []).filter((s) => s !== '.class')
+    attrs.order = [
+      '.class',
+      ...(role ? ['role'] : []),
+      ...authorOrder.filter((s) => s !== 'role'),
+    ]
+    return ctx.renderAttrs(attrs)
   }
 
   const renderCss = (

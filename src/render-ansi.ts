@@ -277,9 +277,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return style(stripControls(node.value), FG_BRIGHT_YELLOW)
     case 'link': {
       const text = renderInlines(node.children, ctx)
+      const href = stripControls(node.href)
       let out = style(text, UNDERLINE + FG_BLUE)
-      if (node.href && !node.href.startsWith('#') && node.href !== stripAnsi(text)) {
-        out += style(` (${node.href})`, DIM)
+      if (href && !href.startsWith('#') && href !== stripAnsi(text)) {
+        out += style(` (${href})`, DIM)
       }
       return out
     }
@@ -294,7 +295,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'emoji':
       return `:${node.name}:`
     case 'autolink':
-      return style(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href, UNDERLINE + FG_BLUE)
+      return style(
+        stripControls(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
+        UNDERLINE + FG_BLUE,
+      )
     case 'mention':
       return `@${node.user}`
     case 'tag':
