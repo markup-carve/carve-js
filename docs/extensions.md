@@ -156,18 +156,20 @@ import { carveToHtml, mathBlock } from '@markup-carve/carve'
 
 carveToHtml('```math\nx^2\n```', { extensions: [mathBlock()] })
 // → <div class="math display">\[x^2\]</div>
+
+// A {#eq .big key=val} line above the fence merges onto the div, exactly like
+// core display $$ math (math display base class, then attrs in source order):
+carveToHtml('{#eq .big data-ref=x}\n```math\nx^2\n```', { extensions: [mathBlock()] })
+// → <div id="eq" class="math display big" data-ref="x">\[x^2\]</div>
 ```
 
-> [!IMPORTANT]
-> Unlike `mermaid`, `mathBlock` does **not** copy any author attributes onto
-> the output `<div>` - neither a fence info-string nor a preceding
-> `{#id .class}` block-attribute line. The extension emits raw HTML directly,
-> bypassing the core safe-mode attribute sanitizer, so copying attributes would
-> let `{onclick="…"}` through unfiltered on untrusted documents. The class is
-> always the fixed `math display`. If you need styleable/targetable math, use
-> the **core** inline `` $`…` `` / display `` $$`…` `` forms instead: those
-> carry `{...}` attributes through the core renderer, where safe-mode strips
-> dangerous handlers but keeps your classes and id.
+> [!NOTE]
+> Author attributes are copied through the shared `renderAttrs`, which applies
+> the always-on attribute hardening every element gets: event handlers (`on*`),
+> `srcdoc`, `formaction` are stripped and dangerous URL / `expression()` values
+> neutralized, regardless of render options. So a `{onclick="…"}` on a fence can
+> never reach the output. This mirrors how core inline `` $`…` `` / display
+> `` $$`…` `` math carry their `{...}` attributes.
 
 ## wikilinks
 
