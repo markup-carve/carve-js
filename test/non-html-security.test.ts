@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToMarkdown, carveToAnsi, carveToPlainText } from '../src/index.js'
+import {
+  carveToMarkdown,
+  carveToAnsi,
+  carveToPlainText,
+  renderAnsi,
+  renderMarkdown,
+  renderPlainText,
+  type Document,
+} from '../src/index.js'
 
 const md = (s: string): string => carveToMarkdown(s).trim()
 
@@ -71,4 +79,48 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
     expect(plain).not.toContain('\x07')
     expect(plain).toContain('http://a/]0;PWNED/b')
   })
+
+  it('strips ESC/OSC controls from every author leaf in non-HTML renderers', () => {
+    const osc = (s: string) => `\x1b]0;${s}\x07`
+    const doc: Document = {
+      type: 'document',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: `text${osc('TEXT')}` },
+            { type: 'image', src: 'img.png', alt: `alt${osc('ALT')}` },
+            { type: 'code', value: `code${osc('CODE')}` },
+            { type: 'footnote', id: `fn${osc('ID')}` },
+            {
+              type: 'critic-substitute',
+              oldText: `old${osc('OLD')}`,
+              newText: `new${osc('NEW')}`,
+            },
+          ],
+        },
+      ],
+      footnoteDefs: {
+        [`label${osc('LABEL')}`]: [
+          { type: 'paragraph', children: [{ type: 'text', value: `note${osc('NOTE')}` }] },
+        ],
+      },
+    }
+
+    const outputs = [
+      renderMarkdown(doc),
+      renderPlainText(doc),
+      stripAnsiStyles(renderAnsi(doc)),
+    ]
+
+    for (const out of outputs) {
+      expect(out).not.toContain('\x1b')
+      expect(out).not.toContain('\x07')
+      expect(out).not.toContain('\x1b]0;')
+    }
+  })
 })
+
+function stripAnsiStyles(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, '')
+}

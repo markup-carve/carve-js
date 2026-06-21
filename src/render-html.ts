@@ -124,6 +124,8 @@ function isDangerousAttrName(name: string): boolean {
   return n.startsWith('on') || DANGEROUS_ATTR_NAMES.has(n)
 }
 
+const HTML_ATTR_NAME_RE = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/
+
 /** URL schemes that must never appear in an attribute value. */
 const DANGEROUS_VALUE_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file'])
 
@@ -150,7 +152,12 @@ function sanitizeAttrValue(name: string, value: string): string {
  *  the legacy `behavior` / `-moz-binding` script bindings. Whitespace is
  *  collapsed first so `expr ession (` cannot evade. */
 function hasDangerousCss(value: string): boolean {
-  const compact = value.replace(/\s+/g, '').toLowerCase()
+  // Decode CSS escapes BEFORE lowercasing: an escaped uppercase code point
+  // (e.g. `\55` -> `U`) must fold to lowercase too, or `\55rl(` would slip past
+  // the lowercase needles.
+  const compact = decodeCssEscapes(value.replace(/\/\*[\s\S]*?\*\//g, ''))
+    .toLowerCase()
+    .replace(/\s+/g, '')
   return (
     compact.includes('expression(') ||
     compact.includes('url(') ||
@@ -158,6 +165,17 @@ function hasDangerousCss(value: string): boolean {
     compact.includes('behavior:') ||
     compact.includes('-moz-binding')
   )
+}
+
+function decodeCssEscapes(value: string): string {
+  return value.replace(/\\([0-9a-f]{1,6}\s?|[\s\S])/gi, (_m, esc: string) => {
+    if (/^[0-9a-f]/i.test(esc)) {
+      const hex = esc.trim()
+      const cp = Number.parseInt(hex, 16)
+      return Number.isFinite(cp) && cp <= 0x10ffff ? String.fromCodePoint(cp) : ''
+    }
+    return esc
+  })
 }
 
 /** Inject `data-source-line` into the first opening tag of a rendered block. */
@@ -418,6 +436,7 @@ function renderAttrs(attrs?: Attrs): string {
     // Always strip event-handler / injection-sink attribute names, and blank a
     // dangerous-scheme or CSS-expression value, regardless of render options.
     if (isDangerousAttrName(k)) return ''
+    if (!HTML_ATTR_NAME_RE.test(k)) return ''
     const v = attrs.keyValues?.[k]
     return v !== undefined ? `${k}="${escapeAttr(sanitizeAttrValue(k, v))}"` : ''
   }

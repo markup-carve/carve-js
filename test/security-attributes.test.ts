@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   carveToHtml,
   codeGroup,
+  defaultAttributes,
   details,
   listTable,
   spoiler,
@@ -48,6 +49,22 @@ describe('attribute XSS hardening (always on)', () => {
     expect(h('[x]{title="hello" data-id="42" class="a b"}')).toBe(
       '<p><span title="hello" data-id="42" class="a b">x</span></p>',
     )
+  })
+
+  it('drops malformed programmatic attribute names', () => {
+    const out = carveToHtml('x', {
+      extensions: [
+        defaultAttributes({
+          defaults: {
+            paragraph: { 'x" autofocus onfocus="alert(1)': 'pwned', title: 'ok' },
+          },
+        }),
+      ],
+    }).trim()
+
+    expect(out).toBe('<p title="ok">x</p>')
+    expect(out).not.toContain('autofocus')
+    expect(out).not.toContain('onfocus')
   })
 
   it('escapes programmatically-added class values', () => {
@@ -139,6 +156,17 @@ describe('CSS style hardening', () => {
     expect(h('[x]{style="background:url(javascript:1)"}')).toContain('style=""')
     expect(h('[x]{style="@import url(evil.css)"}')).toContain('style=""')
     expect(h('[x]{style="behavior:url(x.htc)"}')).toContain('style=""')
+  })
+
+  it('normalizes CSS escapes before scanning dangerous constructs', () => {
+    expect(h('[x]{style="background:u\\72l(http://e/p)"}')).toBe(
+      '<p><span style="">x</span></p>',
+    )
+    // Escaped UPPERCASE code points must fold too: `\55` -> `U` -> url(.
+    expect(h('[x]{style="background:\\55rl(http://e/p)"}')).toBe(
+      '<p><span style="">x</span></p>',
+    )
+    expect(h('[x]{style="\\45xpression(alert(1))"}')).toBe('<p><span style="">x</span></p>')
   })
 
   it('keeps a plain style value', () => {

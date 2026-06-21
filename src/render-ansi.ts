@@ -49,7 +49,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'paragraph': {
       if (isLegacyDefinitionParagraph(node)) {
         const [term, def] = legacyDefinitionParts(node)
-        return `${style(term, BOLD + FG_YELLOW)}\n  ${def}\n\n`
+        return `${style(stripControls(term), BOLD + FG_YELLOW)}\n  ${stripControls(def)}\n\n`
       }
       let content = renderInlines(node.children, ctx)
       const prefix = blockQuotePrefix(ctx)
@@ -57,7 +57,10 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return `${content}\n\n`
     }
     case 'code-block':
-      return renderCodeBlock(stripControls(node.content), node.lang)
+      return renderCodeBlock(
+        stripControls(node.content),
+        node.lang ? stripControls(node.lang) : node.lang,
+      )
     case 'blockquote':
       ctx.blockQuoteDepth++
       {
@@ -242,7 +245,7 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `${style(`[${label}]`, FG_CYAN + DIM)} ${renderBlocks(blocks, ctx).trim()}\n`
+    out += `${style(`[${stripControls(label)}]`, FG_CYAN + DIM)} ${renderBlocks(blocks, ctx).trim()}\n`
   }
   return out
 }
@@ -306,11 +309,11 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation':
-      return `${node.abbr}${style(` (${node.expansion})`, DIM)}`
+      return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
     case 'footnote':
       return node.inline
         ? `(${renderInlines(node.inline, ctx)})`
-        : style(`[${node.id ?? ''}]`, FG_CYAN + BOLD)
+        : style(`[${stripControls(node.id ?? '')}]`, FG_CYAN + BOLD)
     case 'soft-break':
       return ' '
     case 'hard-break':
@@ -322,18 +325,18 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'critic-substitute':
       // Show BOTH sides; dropping oldText loses content.
       return (
-        style(node.oldText, STRIKE + '\x1b[31m') +
-        style(node.newText, FG_GREEN + UNDERLINE)
+        style(stripControls(node.oldText), STRIKE + '\x1b[31m') +
+        style(stripControls(node.newText), FG_GREEN + UNDERLINE)
       )
     case 'critic-comment':
       return ''
     case 'crossref':
-      return `</#${node.target}>`
+      return `</#${stripControls(node.target)}>`
     case 'caption-number':
       return node.n === undefined ? '#' : String(node.n)
     case 'citation-group':
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
-      return node.raw
+      return stripControls(node.raw)
     case 'comment':
       return ''
     default: {
@@ -344,7 +347,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
 }
 
 function renderImage(node: { alt: string }): string {
-  return `${style('[img:', FG_MAGENTA)}${node.alt ? ` ${node.alt}` : ''}${style(']', FG_MAGENTA)}`
+  const alt = stripControls(node.alt)
+  return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }
 
 function stripAnsi(text: string): string {
