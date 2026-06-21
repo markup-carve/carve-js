@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToHtml, listTable } from '../src/index.js'
+import {
+  carveToHtml,
+  codeGroup,
+  details,
+  listTable,
+  spoiler,
+  tabs,
+  type CarveExtension,
+} from '../src/index.js'
 
 /** Render to HTML, trimmed. */
 const h = (s: string): string => carveToHtml(s).trim()
@@ -42,11 +50,44 @@ describe('attribute XSS hardening (always on)', () => {
     )
   })
 
+  it('escapes programmatically-added class values', () => {
+    const addClass: CarveExtension = {
+      name: 'class-injection-test',
+      beforeRender(doc) {
+        const para = doc.children[0]
+        if (para?.type === 'paragraph') {
+          para.attrs = { classes: ['ok', 'x" onclick="alert(1)'] }
+        }
+        return doc
+      },
+    }
+    expect(carveToHtml('x', { extensions: [addClass] })).toBe(
+      '<p class="ok x&quot; onclick=&quot;alert(1)">x</p>',
+    )
+  })
+
   it('applies to list-table cells too (same core path)', () => {
     const src = ['::: list-table', '- -{onclick="x"} A', '  - B', ':::'].join('\n')
     const out = carveToHtml(src, { extensions: [listTable()] }).trim()
     expect(out).toContain('<td>A</td>')
     expect(out).not.toContain('onclick')
+  })
+
+  it('applies to extension wrapper attributes', () => {
+    const attrs = '{onclick="alert(1)" style="x:expression(1)"}'
+    const cases = [
+      carveToHtml(`${attrs}\n::: details "T"\nx\n:::`, { extensions: [details()] }),
+      carveToHtml(`${attrs}\n:::: tabs\n::: tab\nx\n:::\n::::`, { extensions: [tabs()] }),
+      carveToHtml(`${attrs}\n::: code-group\n\`\`\` js\nx\n\`\`\`\n:::`, {
+        extensions: [codeGroup()],
+      }),
+      carveToHtml(`${attrs}\n::: spoiler "T"\nx\n:::`, { extensions: [spoiler()] }),
+    ]
+    for (const out of cases) {
+      expect(out).not.toContain('onclick=')
+      expect(out).not.toContain('expression(')
+      expect(out).toContain('style=""')
+    }
   })
 })
 

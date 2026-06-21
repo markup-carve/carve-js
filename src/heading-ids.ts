@@ -226,6 +226,7 @@ export function resolveHeadingIds(
   opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
 ): Document {
   const used = new Set<string>()
+  const nextCounters = new Map<string, number>()
   const targets = new Map<string, InlineNode[]>()
   // Case-insensitive `</#id>` index: case-folded id -> actual (verbatim) id,
   // first occurrence wins. Lets `</#getting-started>` resolve to a
@@ -269,10 +270,12 @@ export function resolveHeadingIds(
       const base = slugify(inlineText(heading.children), opts)
       if (!used.has(base)) {
         id = base
+        nextCounters.set(base, 2)
       } else {
-        let n = 2
+        let n = nextCounters.get(base) ?? 2
         while (used.has(`${base}-${n}`)) n++
         id = `${base}-${n}`
+        nextCounters.set(base, n + 1)
       }
       used.add(id)
       heading.attrs = { ...heading.attrs, id }
@@ -370,6 +373,8 @@ export function resolveHeadingIds(
     }
   }
 
+  const crossrefCloneCache = new Map<string, InlineNode[]>()
+
   /** Pass 2: resolve `</#id>` crossrefs, cloning finalized children. */
   const resolveCrossrefs = (nodes: InlineNode[]): void => {
     for (let i = 0; i < nodes.length; i++) {
@@ -383,13 +388,18 @@ export function resolveHeadingIds(
           : foldedTargets.get(foldId(n.target))
         const tgt = tgtId !== undefined ? targets.get(tgtId) : undefined
         if (tgt && tgtId !== undefined) {
+          let children = crossrefCloneCache.get(tgtId)
+          if (!children) {
+            // Clone each resolved target once per document. Repeated crossrefs
+            // share that immutable inline tree instead of re-stringifying the
+            // same large heading/caption for every reference.
+            children = JSON.parse(JSON.stringify(tgt)) as InlineNode[]
+            crossrefCloneCache.set(tgtId, children)
+          }
           const link: Link = {
             type: 'link',
             href: `#${tgtId}`,
-            // structuredClone would need DOM/Node lib typings absent from this
-            // tsconfig; InlineNode is plain JSON-serializable data so a
-            // stringify/parse round-trip is a safe deep clone here.
-            children: JSON.parse(JSON.stringify(tgt)) as InlineNode[],
+            children,
           }
           nodes[i] = link
         } else {
@@ -544,6 +554,13 @@ export function resolveHeadingIds(
   // crossref resolution so a `</#id>` to a numbered caption resolves.
   numberBlocks(doc.children)
   for (const body of footnoteBodies) numberBlocks(body)
+
+  // Finalize crossrefs WITHIN target (heading/caption) children first, so the
+  // per-target clone cache below captures resolved text. Otherwise a `</#id>`
+  // appearing in the body BEFORE its target heading would clone that heading
+  // while its own nested `</#…>` are still unresolved placeholders, and the
+  // cache would then lock that stale clone in for every later reference.
+  for (const children of targets.values()) resolveCrossrefs(children)
 
   for (const block of doc.children) walkBlock(block, resolveCrossrefs)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
