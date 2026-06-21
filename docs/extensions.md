@@ -205,6 +205,42 @@ carveToHtml('{#eq .big data-ref=x}\n```math\nx^2\n```', { extensions: [mathBlock
 > never reach the output. This mirrors how core inline `` $`…` `` / display
 > `` $$`…` `` math carry their `{...}` attributes.
 
+## spoiler
+
+`spoiler()` is the standard hidden-content extension (inline + block). It claims
+the reserved `spoiler` role - no new syntax.
+
+```ts
+import { carveToHtml, spoiler } from '@markup-carve/carve'
+
+carveToHtml('Plot: :spoiler[the butler did it].', { extensions: [spoiler()] })
+// <p>Plot: <span class="spoiler">the butler did it</span>.</p>
+
+carveToHtml('::: spoiler "Ending"\nEveryone lives.\n:::', { extensions: [spoiler()] })
+// <details class="spoiler">
+//   <summary>Ending</summary>
+//   <p>Everyone lives.</p>
+// </details>
+```
+
+- **Inline** `:spoiler[text]` → `<span class="spoiler">text</span>`.
+- **Block** `::: spoiler ["Title"]` → an HTML5 `<details class="spoiler">`
+  disclosure (native, keyboard- and screen-reader-accessible). No title →
+  `<summary>Spoiler</summary>`.
+- Without the extension, `:spoiler[x]` stays `<span class="ext-spoiler">x</span>`
+  and `::: spoiler` stays `<div class="spoiler">`, so documents stay readable.
+- Author attributes merge onto the output element through the shared
+  `renderAttrs` (always-on hardening: `on*` / `srcdoc` / `formaction` stripped).
+
+Carve emits only the marker; the blur + reveal is the host's CSS. A reference
+accessible pattern (blur, reveal on `:hover` / `:focus-within`, content kept in
+the DOM for screen readers):
+
+```css
+.spoiler { background: #222; color: transparent; border-radius: 3px; cursor: pointer; }
+.spoiler:hover, .spoiler:focus-within { color: inherit; background: transparent; }
+```
+
 ## wikilinks
 
 `wikilinks()` parses `[[Page]]` links (Obsidian / MediaWiki style) into
