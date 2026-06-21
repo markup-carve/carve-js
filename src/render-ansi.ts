@@ -57,7 +57,10 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return `${content}\n\n`
     }
     case 'code-block':
-      return renderCodeBlock(stripControls(node.content), node.lang)
+      return renderCodeBlock(
+        stripControls(node.content),
+        node.lang ? stripControls(node.lang) : node.lang,
+      )
     case 'blockquote':
       ctx.blockQuoteDepth++
       {
