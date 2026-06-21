@@ -29,10 +29,17 @@ describe('math-block extension', () => {
     expect(carveToHtml(src)).toBe('<pre><code class="language-math">x^2\n</code></pre>')
   })
 
-  it('does not copy fence attributes onto the div (no safe-mode bypass)', () => {
+  it('merges author classes and copies attributes (mirrors core $$ math)', () => {
+    const src = '{#eq .big data-ref=x}\n``` math\nx^2\n```'
+    expect(carveToHtml(src, { extensions: [mathBlock()] })).toBe(
+      '<div id="eq" class="math display big" data-ref="x">\\[x^2\\]</div>',
+    )
+  })
+
+  it('strips event-handler attributes (always-on hardening)', () => {
     const src = '{#eq .big onclick="alert(1)"}\n``` math\nx^2\n```'
     expect(carveToHtml(src, { extensions: [mathBlock()] })).toBe(
-      '<div class="math display">\\[x^2\\]</div>',
+      '<div id="eq" class="math display big">\\[x^2\\]</div>',
     )
   })
 })
