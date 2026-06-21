@@ -232,14 +232,39 @@ carveToHtml('::: spoiler "Ending"\nEveryone lives.\n:::', { extensions: [spoiler
 - Author attributes merge onto the output element through the shared
   `renderAttrs` (always-on hardening: `on*` / `srcdoc` / `formaction` stripped).
 
-Carve emits only the marker; the blur + reveal is the host's CSS. A reference
-accessible pattern (blur, reveal on `:hover` / `:focus-within`, content kept in
-the DOM for screen readers):
+Carve emits only the marker; the blur + reveal is the host's CSS/JS. Recommended
+pattern: a **click-to-reveal** chip (hover does not reveal - it would spoil by
+accident), visibly marked as a spoiler (an eye cue + an accent distinct from a
+neutral `<details>`), with the content kept in the DOM for screen readers:
 
 ```css
-.spoiler { background: #222; color: transparent; border-radius: 3px; cursor: pointer; }
-.spoiler:hover, .spoiler:focus-within { color: inherit; background: transparent; }
+/* Inline: a clearly-marked, click-to-reveal spoiler. */
+.spoiler { background: #2a2f3a; color: transparent; border-radius: 4px;
+  padding: 0 .4em; cursor: pointer; user-select: none; box-shadow: inset 0 0 0 1px #4a4030; }
+.spoiler::before { content: "👁"; color: #e0af68; font-size: .8em; margin-right: .35em; }
+.spoiler.revealed { background: transparent; color: inherit; box-shadow: none; user-select: text; }
+.spoiler.revealed::before { content: ""; margin: 0; }
+/* Block: amber accent, distinct from a neutral <details>. */
+details.spoiler { border-left: 3px solid #e0af68; }
+details.spoiler > summary { color: #e0af68; cursor: pointer; }
 ```
+
+```js
+// Inline reveal on click / Enter / Space, as an accessible button.
+for (const s of document.querySelectorAll('span.spoiler')) {
+  s.tabIndex = 0
+  s.setAttribute('role', 'button')
+  s.setAttribute('aria-label', 'Spoiler, activate to reveal')
+  const toggle = () => s.classList.toggle('revealed')
+  s.addEventListener('click', toggle)
+  s.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
+  })
+}
+```
+
+The block form is a native `<details>`, so it needs no JS - it toggles on click
+and is keyboard/AT accessible out of the box.
 
 ## wikilinks
 
