@@ -23,7 +23,7 @@ function renderBlock(node: BlockNode): string {
       }
       return `${renderInlines(node.children)}\n\n`
     case 'code-block':
-      return `${node.content}\n\n`
+      return `${stripControls(node.content)}\n\n`
     case 'blockquote':
       return `"${renderBlocks(node.children).trim()}"\n\n`
     case 'list':
@@ -132,13 +132,13 @@ function renderInline(node: InlineNode): string {
     case 'critic-delete':
       return `~${renderInlines(node.children)}~`
     case 'code':
-      return node.value
+      return stripControls(node.value)
     case 'link':
       return node.href.startsWith('#') ? renderInlines(node.children) : node.href
     case 'image':
       return node.alt
     case 'math':
-      return node.content
+      return stripControls(node.content)
     case 'raw-inline':
       return ''
     case 'emoji':
@@ -190,9 +190,15 @@ function normalize(text: string): string {
 
 function cleanEscapedText(node: Text): string {
   // The value is the literal text (the parser already resolved backslash
-  // escapes), so a `\*` reaches here as `*`. Return it verbatim -- dropping the
-  // character would lose data.
-  return node.value
+  // escapes), so a `\*` reaches here as `*`. Strip control bytes so attacker
+  // text cannot inject terminal escape sequences (see stripControls).
+  return stripControls(node.value)
+}
+
+/** Drop C0/C1 control characters (keeping tab and newline) from author content
+ *  so attacker ESC / OSC sequences cannot inject into terminal output. */
+function stripControls(s: string): string {
+  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {

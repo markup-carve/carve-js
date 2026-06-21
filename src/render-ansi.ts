@@ -57,7 +57,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return `${content}\n\n`
     }
     case 'code-block':
-      return renderCodeBlock(node.content, node.lang)
+      return renderCodeBlock(stripControls(node.content), node.lang)
     case 'blockquote':
       ctx.blockQuoteDepth++
       {
@@ -92,7 +92,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'image':
       return renderImage(node)
     case 'raw-block':
-      return `${style(`[raw:${node.format}] ${node.content}`, DIM)}\n\n`
+      return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
     case 'abbreviation-def':
     case 'comment':
       return ''
@@ -274,7 +274,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'bold-italic':
       return style(renderInlines(node.children, ctx), BOLD + ITALIC)
     case 'code':
-      return style(node.value, FG_BRIGHT_YELLOW)
+      return style(stripControls(node.value), FG_BRIGHT_YELLOW)
     case 'link': {
       const text = renderInlines(node.children, ctx)
       let out = style(text, UNDERLINE + FG_BLUE)
@@ -288,7 +288,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'span':
       return renderInlines(node.children, ctx)
     case 'math':
-      return style(node.content, FG_BRIGHT_MAGENTA)
+      return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
     case 'raw-inline':
       return ''
     case 'emoji':
@@ -424,9 +424,16 @@ function normalize(text: string): string {
 
 function cleanEscapedText(node: Text): string {
   // The value is the literal text (the parser already resolved backslash
-  // escapes), so a `\*` reaches here as `*`. Return it verbatim -- dropping the
-  // character would lose data.
-  return node.value
+  // escapes), so a `\*` reaches here as `*`. Strip control bytes so attacker
+  // text cannot inject terminal escape sequences (see stripControls).
+  return stripControls(node.value)
+}
+
+/** Drop C0/C1 control characters (keeping tab and newline) from author content
+ *  so attacker ESC / OSC sequences cannot inject into ANSI terminal output. The
+ *  renderer's own styling escapes are added separately and are not affected. */
+function stripControls(s: string): string {
+  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {
