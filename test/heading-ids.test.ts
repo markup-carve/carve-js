@@ -106,6 +106,20 @@ describe('resolveHeadingIds', () => {
       .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
     expect(ids).toEqual(['Setup', 'Notes', 'Setup-2', 'Setup-3'])
   })
+  it('deduplicates many colliding heading ids in linear time', () => {
+    const source = ['{#dup}', '# seed', ...Array.from({ length: 5000 }, () => '# dup')].join('\n\n')
+    const start = performance.now()
+    const doc = parse(source)
+    resolveHeadingIds(doc)
+    const elapsed = performance.now() - start
+    const ids = doc.children
+      .filter((b) => b.type === 'heading')
+      .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
+
+    expect(elapsed).toBeLessThan(1000)
+    expect(ids.slice(0, 4)).toEqual(['dup', 'dup-2', 'dup-3', 'dup-4'])
+    expect(ids.at(-1)).toBe('dup-5001')
+  })
   it('shares the namespace: auto collides with earlier explicit (case-sensitive)', () => {
     // Dedup is case-sensitive (verbatim `used` set). The explicit `Intro`
     // matches the case-preserved auto slug, so the second heading suffixes.
@@ -134,5 +148,34 @@ describe('resolveHeadingIds', () => {
   it('ambiguous bare ref resolves to the first occurrence', () => {
     const html = carveToHtml('# Setup\n\n# Setup\n\nGo </#setup>.')
     expect(html).toContain('<a href="#Setup">Setup</a>')
+  })
+  it('bounds repeated crossrefs to a large target', () => {
+    const heading = `# ${'large target '.repeat(1000)}`
+    const refs = Array.from({ length: 3000 }, () => '</#target>').join(' ')
+    const start = performance.now()
+    const doc = parse(`{#target}\n${heading}\n\n${refs}`)
+    resolveHeadingIds(doc)
+    const elapsed = performance.now() - start
+    const para = doc.children[1]
+
+    expect(elapsed).toBeLessThan(1000)
+    expect(para.type).toBe('paragraph')
+    expect(para.children[0]?.type).toBe('link')
+    expect(para.children[0]?.href).toBe('#target')
+  })
+
+  it('clones finalized target children for refs that precede the target', () => {
+    // A body crossref appears BEFORE its target heading, and that heading
+    // itself contains a nested crossref. The clone cache must capture the
+    // resolved nested text, for the early ref AND a later one.
+    const src = ['See </#a>.', '', '{#a}', '# Title </#b>', '', '{#b}', '# Bee', '', 'Again </#a>.'].join(
+      '\n',
+    )
+    const html = carveToHtml(src)
+    expect(html).not.toContain('&lt;/#b&gt;')
+    expect(html).not.toContain('</#b>')
+    // Both references resolve to the same finalized nested text "Title Bee".
+    const matches = html.match(/Title Bee/g) ?? []
+    expect(matches.length).toBe(2)
   })
 })

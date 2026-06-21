@@ -55,4 +55,12 @@ describe('inline position mapping (perf + correctness)', () => {
     expect(strong.pos!.startLine).toBe(1)
     expect(strong.pos!.startColumn).toBe(4)
   })
+
+  it('parses an unterminated math backtick run in linear time', () => {
+    const start = performance.now()
+    parse('$' + '`'.repeat(20000))
+    const elapsed = performance.now() - start
+
+    expect(elapsed).toBeLessThan(100)
+  })
 })

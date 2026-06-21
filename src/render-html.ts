@@ -402,7 +402,7 @@ function renderAttrs(attrs?: Attrs): string {
   const parts: string[] = []
   const classAttr = () =>
     attrs.classes && attrs.classes.length
-      ? `class="${attrs.classes.join(' ')}"`
+      ? `class="${attrs.classes.map(escapeAttr).join(' ')}"`
       : ''
   // Escape the id value: an `#id` is identifier-restricted (escaping is a
   // no-op), but `id=value` (which now also feeds this slot, last-wins §15) can
@@ -880,9 +880,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   // wrapper class: extra classes append, id/key attach to the wrapper.
   const canonical = CANONICAL_ADMONITIONS.has(node.kind)
   const baseClass = canonical ? `admonition ${node.kind}` : node.kind
-  const extraClasses = node.attrs?.classes?.length
-    ? ' ' + node.attrs.classes.join(' ')
-    : ''
+  const classValue = [baseClass, ...(node.attrs?.classes ?? [])].map(escapeAttr).join(' ')
   const restAttrs: Attrs = {}
   if (node.attrs?.id !== undefined) restAttrs.id = node.attrs.id
   if (node.attrs?.keyValues) restAttrs.keyValues = node.attrs.keyValues
@@ -891,7 +889,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   if (node.attrs?.order) restAttrs.order = node.attrs.order.filter((s) => s !== '.class')
   const rest = renderAttrs(restAttrs)
   const tag = canonical ? 'aside' : 'div'
-  return `${pad}<${tag} class="${baseClass}${extraClasses}"${rest}>\n${titleLine}${body}\n${pad}</${tag}>`
+  return `${pad}<${tag} class="${classValue}"${rest}>\n${titleLine}${body}\n${pad}</${tag}>`
 }
 
 function renderFigure(node: Figure, opts: RenderOptions, level: number): string {

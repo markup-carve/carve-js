@@ -283,14 +283,18 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   const destination = id ? markdownFragmentDestination(id) : sanitizeMdUrl(node.href)
   return node.title === undefined
     ? `[${text}](${destination})`
-    : `[${text}](${destination} "${node.title}")`
+    : `[${text}](${destination} "${escapeMdTitle(node.title)}")`
 }
 
 function renderImage(node: Image): string {
   const src = sanitizeMdUrl(node.src)
   return node.title === undefined
     ? `![${node.alt}](${src})`
-    : `![${node.alt}](${src} "${node.title}")`
+    : `![${node.alt}](${src} "${escapeMdTitle(node.title)}")`
+}
+
+function escapeMdTitle(title: string): string {
+  return title.replace(/[\\"]/g, '\\$&')
 }
 
 function safeFence(content: string, min: number): string {

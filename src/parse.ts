@@ -3003,12 +3003,14 @@ function scanInlineInner(
     if (c === '$') {
       const display = text[i + 1] === '$'
       const dollarLen = display ? 2 : 1
-      if (text[i + dollarLen] === '`') {
-        const mm = /^(`+)([\s\S]*?[^`])(\1)(?!`)/.exec(text.slice(i + dollarLen))
-        if (mm) {
+      const tick = i + dollarLen
+      if (text[tick] === '`') {
+        const { end, closed, openLen } = verbatimSpanEnd(text, tick)
+        const innerEnd = end - openLen
+        if (closed && text[end] !== '`' && innerEnd > tick + openLen && text[innerEnd - 1] !== '`') {
           flush()
-          const content = mm[2]!.replace(/^ (.*) $/, '$1')
-          const len = dollarLen + mm[0].length
+          const content = text.slice(tick + openLen, innerEnd).replace(/^ (.*) $/, '$1')
+          const len = end - i
           out.push(withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
           i += len
           continue

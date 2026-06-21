@@ -27,6 +27,11 @@ describe('Markdown renderer is safe-by-default', () => {
   it('entity-escapes < > & in text', () => {
     expect(md('a < b & c')).toBe('a &lt; b &amp; c')
   })
+
+  it('escapes quotes and backslashes in link/image titles', () => {
+    expect(md('[x](u "a \\"b\\" \\\\ c")')).toBe('[x](u "a \\"b\\" \\\\ c")')
+    expect(md('![x](u "a \\"b\\" \\\\ c")')).toBe('![x](u "a \\"b\\" \\\\ c")')
+  })
 })
 
 describe('ANSI/plain renderers strip terminal escapes', () => {
@@ -38,5 +43,17 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
     const plain = carveToPlainText('a\x1bb\x07c')
     expect(plain).not.toContain('\x1b')
     expect(plain).not.toContain('\x07')
+  })
+
+  it('strips terminal controls from link hrefs', () => {
+    const src = '[x](http://a/\x1b]0;PWNED\x07/b)'
+    const ansi = carveToAnsi(src)
+    const plain = carveToPlainText(src)
+
+    expect(ansi).not.toContain('\x1b]0;PWNED')
+    expect(ansi).not.toContain('\x07')
+    expect(plain).not.toContain('\x1b')
+    expect(plain).not.toContain('\x07')
+    expect(plain).toContain('http://a/]0;PWNED/b')
   })
 })

@@ -134,7 +134,7 @@ function renderInline(node: InlineNode): string {
     case 'code':
       return stripControls(node.value)
     case 'link':
-      return node.href.startsWith('#') ? renderInlines(node.children) : node.href
+      return node.href.startsWith('#') ? renderInlines(node.children) : stripControls(node.href)
     case 'image':
       return node.alt
     case 'math':
@@ -144,7 +144,7 @@ function renderInline(node: InlineNode): string {
     case 'emoji':
       return `:${node.name}:`
     case 'autolink':
-      return node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
+      return stripControls(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
     case 'mention':
       return `@${node.user}`
     case 'tag':
