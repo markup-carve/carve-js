@@ -93,7 +93,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'image':
       return renderImage(node)
     case 'raw-block':
-      return node.format === 'html' ? `${node.content}\n\n` : ''
+      // Escape, not emit: raw HTML in Markdown would be live again downstream.
+      return node.format === 'html' ? `${escapeMdHtml(node.content)}\n\n` : ''
     case 'abbreviation-def':
     case 'comment':
       return ''
@@ -221,7 +222,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'math':
       return node.display ? `$$${node.content}$$` : `$${node.content}$`
     case 'raw-inline':
-      return node.format === 'html' ? node.content : ''
+      return node.format === 'html' ? escapeMdHtml(node.content) : ''
     case 'emoji':
       return `:${node.name}:`
     case 'autolink':
@@ -279,16 +280,17 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
   const text = renderInlines(node.children, ctx)
   const id = fragmentId(node.href)
   if (id && !ctx.headingIds.has(id)) return text
-  const destination = id ? markdownFragmentDestination(id) : node.href
+  const destination = id ? markdownFragmentDestination(id) : sanitizeMdUrl(node.href)
   return node.title === undefined
     ? `[${text}](${destination})`
     : `[${text}](${destination} "${node.title}")`
 }
 
 function renderImage(node: Image): string {
+  const src = sanitizeMdUrl(node.src)
   return node.title === undefined
-    ? `![${node.alt}](${node.src})`
-    : `![${node.alt}](${node.src} "${node.title}")`
+    ? `![${node.alt}](${src})`
+    : `![${node.alt}](${src} "${node.title}")`
 }
 
 function safeFence(content: string, min: number): string {
@@ -314,7 +316,28 @@ function fragmentId(href: string): string | undefined {
 }
 
 function escapeText(text: string): string {
+  // Neutralize embedded HTML (<>&) so Markdown re-rendered to HTML cannot
+  // execute it: carve's "HTML is text" guarantee holds for the Markdown target
+  // too. `&` first so the entities are not re-escaped.
+  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Escape Markdown metacharacters (none overlap with the HTML chars above).
   return text.replace(/[\\`*_[\]#]/g, '\\$&')
+}
+
+/** Dangerous URL schemes blanked on Markdown link/image destinations, mirroring
+ *  the HTML renderer so a `javascript:` URL does not survive into Markdown (and
+ *  from there a downstream Markdown -> HTML render). */
+const MD_DANGEROUS_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file'])
+function sanitizeMdUrl(url: string): string {
+  const probe = url.replace(/[\u0000-\u0020]/g, '')
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
+  if (m && MD_DANGEROUS_SCHEMES.has(m[1].toLowerCase())) return ''
+  return url
+}
+
+/** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
+function escapeMdHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function cleanEscapedText(node: Text): string {
