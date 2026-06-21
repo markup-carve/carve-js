@@ -232,18 +232,20 @@ carveToHtml('::: spoiler "Ending"\nEveryone lives.\n:::', { extensions: [spoiler
 - Author attributes merge onto the output element through the shared
   `renderAttrs` (always-on hardening: `on*` / `srcdoc` / `formaction` stripped).
 
-Carve emits only the marker; the blur + reveal is the host's CSS/JS. Recommended
-pattern: a **click-to-reveal** chip (hover does not reveal - it would spoil by
-accident), visibly marked as a spoiler (an eye cue + an accent distinct from a
-neutral `<details>`), with the content kept in the DOM for screen readers:
+Carve emits only the marker; the blur + reveal is the host's CSS/JS.
+Recommended pattern: **blurred until clicked** (hover does not reveal - it would
+spoil by accident), with the content kept in the DOM for screen readers. A
+`.masked` variant gives a credit-card / PIN look (every character a dot) - add
+`.masked` on the fence (`:spoiler[1234]{.masked}`):
 
 ```css
-/* Inline: a clearly-marked, click-to-reveal spoiler. */
-.spoiler { background: #2a2f3a; color: transparent; border-radius: 4px;
-  padding: 0 .4em; cursor: pointer; user-select: none; box-shadow: inset 0 0 0 1px #4a4030; }
-.spoiler::before { content: "👁"; color: #e0af68; font-size: .8em; margin-right: .35em; }
-.spoiler.revealed { background: transparent; color: inherit; box-shadow: none; user-select: text; }
-.spoiler.revealed::before { content: ""; margin: 0; }
+/* Inline: blurred until revealed (the familiar spoiler look). */
+.spoiler { filter: blur(.3em); cursor: pointer; border-radius: 3px; padding: 0 .15em;
+  background: rgba(127, 127, 127, .14); user-select: none; transition: filter .2s; }
+.spoiler.revealed { filter: none; background: transparent; user-select: text; }
+/* Variant: masked like a credit-card / PIN field (every char a dot). */
+.spoiler.masked { filter: none; -webkit-text-security: disc; }
+.spoiler.masked.revealed { -webkit-text-security: none; }
 /* Block: amber accent, distinct from a neutral <details>. */
 details.spoiler { border-left: 3px solid #e0af68; }
 details.spoiler > summary { color: #e0af68; cursor: pointer; }
