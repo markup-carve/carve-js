@@ -246,13 +246,17 @@ spoil by accident), with the content kept in the DOM for screen readers. A
 /* Variant: masked like a credit-card / PIN field (every char a dot). */
 .spoiler.masked { filter: none; -webkit-text-security: disc; }
 .spoiler.masked.revealed { -webkit-text-security: none; }
-/* Block: amber accent, distinct from a neutral <details>. */
-details.spoiler { border-left: 3px solid #e0af68; }
-details.spoiler > summary { color: #e0af68; cursor: pointer; }
+/* Block: blur the body and reveal on click, so it reads as a spoiler rather
+   than a bare collapse. Amber accent + eye, distinct from a neutral <details>. */
+details.spoiler { border-left: 3px solid #e0af68; border-radius: 6px; padding: 4px 12px; }
+details.spoiler > summary { color: #e0af68; cursor: pointer; list-style: none; user-select: none; }
+details.spoiler > summary::before { content: "👁 "; }
+details.spoiler > *:not(summary) { filter: blur(.4em); transition: filter .25s; }
+details.spoiler.revealed > *:not(summary) { filter: none; }
 ```
 
 ```js
-// Inline reveal on click / Enter / Space, as an accessible button.
+// Inline: reveal on click / Enter / Space, as an accessible button.
 for (const s of document.querySelectorAll('span.spoiler')) {
   s.tabIndex = 0
   s.setAttribute('role', 'button')
@@ -263,10 +267,19 @@ for (const s of document.querySelectorAll('span.spoiler')) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
   })
 }
+// Block: keep <details> open so the body is present, blur it, reveal on click.
+for (const d of document.querySelectorAll('details.spoiler')) {
+  d.open = true
+  d.querySelector('summary').addEventListener('click', (e) => {
+    e.preventDefault()
+    d.classList.toggle('revealed')
+  })
+}
 ```
 
-The block form is a native `<details>`, so it needs no JS - it toggles on click
-and is keyboard/AT accessible out of the box.
+Prefer this blur look, or drop the block JS and let `<details>` collapse
+natively (no JS, fully keyboard/AT accessible) - both are valid; the extension
+emits the same `<details class="spoiler">` either way.
 
 ## wikilinks
 
