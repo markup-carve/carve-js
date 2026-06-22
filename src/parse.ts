@@ -658,10 +658,7 @@ function peekBlockAttributes(lexer: Lexer): boolean {
     }
   }
   if (!closed) return false
-  const m = /^\s*\{([\s\S]*)\}\s*$/.exec(collected)
-  if (!m) return false
-  if (!isValidAttrPayload(m[1]!)) return false
-  return !isEmptyAttrs(parseAttrs(m[1]!))
+  return parseBlockAttributeRun(collected) !== null
 }
 
 function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
@@ -686,20 +683,59 @@ function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
     }
   }
   if (!closed) return null
-  // The whole run must be exactly `{ … }` with nothing after the close.
-  const m = /^\s*\{([\s\S]*)\}\s*$/.exec(collected)
-  if (!m) return null
-  // The ENTIRE payload must be valid attribute syntax (attributes +
-  // whitespace, nothing else). A line like `{.note junk}` or `{#todo#}`
-  // has leftover content -> it is NOT a block-attribute line and falls
-  // through to literal text (otherwise the junk would be silently
-  // dropped and the recognized tokens wrongly hoisted onto the next
-  // block).
-  if (!isValidAttrPayload(m[1]!)) return null
-  const attrs = parseAttrs(m[1]!)
-  if (isEmptyAttrs(attrs)) return null
+  const attrs = parseBlockAttributeRun(collected)
+  if (!attrs) return null
   for (let k = 0; k < n; k++) lexer.consume()
   return attrs
+}
+
+function parseBlockAttributeRun(src: string): Attrs | null {
+  let i = 0
+  let out: Attrs | null = null
+  let sawBlock = false
+
+  while (i < src.length) {
+    while (i < src.length && /\s/.test(src[i]!)) i++
+    if (i >= src.length) break
+    if (src[i] !== '{') return null
+
+    const start = ++i
+    let quote: '"' | "'" | null = null
+    let closed = false
+    for (; i < src.length; i++) {
+      const ch = src[i]!
+      if (quote) {
+        if (ch === '\\') {
+          i++
+          continue
+        }
+        if (ch === quote) quote = null
+        continue
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch
+        continue
+      }
+      if (ch === '}') {
+        closed = true
+        break
+      }
+    }
+    if (!closed) return null
+
+    const inner = src.slice(start, i)
+    // The ENTIRE payload must be valid attribute syntax (attributes +
+    // whitespace, nothing else). A line like `{#todo#}` has leftover content
+    // and stays literal. Empty `{}` is not a block-attribute line.
+    if (!isValidAttrPayload(inner)) return null
+    const attrs = parseAttrs(inner)
+    if (isEmptyAttrs(attrs)) return null
+    out = out ? mergeAttrs(out, attrs) : attrs
+    sawBlock = true
+    i++
+  }
+
+  return sawBlock ? out : null
 }
 
 function parseBlock(lexer: Lexer): BlockNode | null {
@@ -2292,6 +2328,12 @@ interface RawCell {
   raw: string
 }
 
+const isGfmDelimiterCell = (c: RawCell): boolean =>
+  !c.span && !c.attrs && /^:?-+:?$/.test(c.raw.trim())
+
+const isGfmDelimiterRow = (row: RawCell[]): boolean =>
+  row.length > 0 && row.every(isGfmDelimiterCell)
+
 // A row attribute block is a valid `{...}` attribute block GLUED to the row's
 // closing `|` and running to end of line -- the row-level twin of a cell's
 // opening-pipe attribute block. It sets the `<tr>` attributes. The whole
@@ -2325,6 +2367,13 @@ function parseTable(lexer: Lexer): Table | Figure {
     const line = lexer.peek()!
     if (RE_TABLE_CONT.test(line)) {
       if (!lastRaw) break // a continuation with no row to extend
+      if (
+        rawRows.length === 2 &&
+        rawRows[1] === lastRaw &&
+        isGfmDelimiterRow(lastRaw) &&
+        !isGfmDelimiterRow(rawRows[0]!)
+      )
+        break
       lexer.consume()
       splitTableRow(line).forEach((src, idx) => {
         const frag = src.trim()
@@ -2360,13 +2409,10 @@ function parseTable(lexer: Lexer): Table | Figure {
   // delimiter row anywhere else is an ordinary data row.
   // A cell carrying author attributes (`|{.x} ---`) is content, not a plain
   // structural delimiter, so it never makes its row a GFM header separator.
-  const isDelimCell = (c: RawCell): boolean =>
-    !c.span && !c.attrs && /^:?-+:?$/.test(c.raw.trim())
   if (
     rawRows.length >= 2 &&
-    rawRows[1]!.length > 0 &&
-    rawRows[1]!.every(isDelimCell) &&
-    !rawRows[0]!.every(isDelimCell)
+    isGfmDelimiterRow(rawRows[1]!) &&
+    !isGfmDelimiterRow(rawRows[0]!)
   ) {
     const aligns = rawRows[1]!.map((c) => {
       const t = c.raw.trim()
