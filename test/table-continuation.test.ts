@@ -63,6 +63,19 @@ describe('table `+` multi-line cell continuation', () => {
     )
   })
 
+  it('puts a header rowspan continuation row in tbody', () => {
+    expect(h('|=A|\n|^|')).toBe(
+      [
+        '<table>',
+        '  <thead><tr><th rowspan="2">A</th></tr></thead>',
+        '  <tbody>',
+        '    <tr></tr>',
+        '  </tbody>',
+        '</table>',
+      ].join('\n'),
+    )
+  })
+
   it('a plain + line is not a table continuation (and `+` is not a bullet)', () => {
     expect(h('+ one\n+ two')).toBe('<p>+ one\n+ two</p>')
   })

@@ -190,7 +190,8 @@ const RE_TABLE_ROW = /^\|/
 // validates and strips it, so the gate allows an optional trailing `{...}`.
 const isTableRow = (line: string): boolean =>
   RE_TABLE_ROW.test(line) &&
-  (/\|[ \t]*$/.test(line) || rowAttrsFromLine(line).attrs !== undefined)
+  (/\|[ \t]*$/.test(line) || rowAttrsFromLine(line).attrs !== undefined) &&
+  splitTableRow(rowAttrsFromLine(line).body).some((cell) => cell.length > 0)
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed
@@ -2260,7 +2261,7 @@ function parseTable(lexer: Lexer): Table | Figure {
   let lastRaw: RawCell[] | null = null
   while (
     !lexer.eof() &&
-    (RE_TABLE_ROW.test(lexer.peek()!) || RE_TABLE_CONT.test(lexer.peek()!))
+    (isTableRow(lexer.peek()!) || RE_TABLE_CONT.test(lexer.peek()!))
   ) {
     const line = lexer.peek()!
     if (RE_TABLE_CONT.test(line)) {
