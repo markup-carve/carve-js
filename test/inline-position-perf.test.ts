@@ -76,4 +76,14 @@ describe('inline position mapping (perf + correctness)', () => {
     // while still separating the linear cache from the previous O(n^2) scan.
     expect(elapsed).toBeLessThan(500)
   })
+
+  it('parses repeated emphasis openers with no closer in linear time', () => {
+    const source = '/a '.repeat(20000)
+
+    const start = performance.now()
+    parse(source)
+    const elapsed = performance.now() - start
+
+    expect(elapsed).toBeLessThan(500)
+  })
 })
