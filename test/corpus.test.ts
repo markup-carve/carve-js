@@ -140,6 +140,8 @@ const IMPLEMENTED = new Set([
   '105-colspan-marker-scans-left-past-a-consumed-cell',
   '106-security-hardening',
   '107-link-destination-stops-at-the-first-parenthesis',
+  '108-empty-link-and-image-titles-are-preserved',
+  '109-cross-references-resolve-inside-footnote-bodies',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
