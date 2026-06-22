@@ -85,6 +85,16 @@ describe('citations: defs + numbered rendering', () => {
   it('keeps a bare @mention and a [text][ref] link working', () => {
     expect(h('@alice')).toContain('class="mention"')
   })
+
+  it('declines many unmatched citation openers in linear time', () => {
+    const source = '[@x '.repeat(20000)
+
+    const start = performance.now()
+    parse(source, { extensions: [citations()] })
+    const elapsed = performance.now() - start
+
+    expect(elapsed).toBeLessThan(500)
+  })
 })
 
 describe('citations: consecutive definition lines', () => {

@@ -28,6 +28,9 @@ interface Def {
   year?: string
 }
 
+const MAX_BRACKET_MAP_CACHE = 64
+const citationBracketMaps = new Map<string, Record<number, number>>()
+
 /**
  * Citations (#90, Tier-2). Bracketed `[@key]` references with an in-document
  * `[@key]: entry` bibliography and a generated references list. Bare `@key`
@@ -103,21 +106,32 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
 
 // ----- parse: matcher -------------------------------------------------------
 
-function closeBracket(text: string, open: number): number {
-  let depth = 0
-  for (let i = open; i < text.length; i++) {
+function buildBracketMap(text: string): Record<number, number> {
+  const stack: number[] = []
+  const map: Record<number, number> = {}
+  for (let i = 0; i < text.length; i++) {
     const c = text[i]
     if (c === '\\') {
       i++
       continue
     }
-    if (c === '[') depth++
+    if (c === '[') stack.push(i)
     else if (c === ']') {
-      depth--
-      if (depth === 0) return i
+      const open = stack.pop()
+      if (open !== undefined) map[open] = i
     }
   }
-  return -1
+  return map
+}
+
+function bracketMapFor(text: string): Record<number, number> {
+  let map = citationBracketMaps.get(text)
+  if (map === undefined) {
+    if (citationBracketMaps.size >= MAX_BRACKET_MAP_CACHE) citationBracketMaps.clear()
+    map = buildBracketMap(text)
+    citationBracketMaps.set(text, map)
+  }
+  return map
 }
 
 function parseItem(raw: string, ctx: MatcherContext): Citation | null {
@@ -133,8 +147,8 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
 
 const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMatch | null => {
   if (text[pos] !== '[') return null
-  const close = closeBracket(text, pos)
-  if (close === -1) return null
+  const close = bracketMapFor(text)[pos]
+  if (close === undefined) return null
   const after = text[close + 1]
   if (after === '(' || after === '[' || after === '{') return null
   const inner = text.slice(pos + 1, close)

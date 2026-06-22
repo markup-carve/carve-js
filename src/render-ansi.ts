@@ -2,6 +2,8 @@ import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Tab
 
 export interface AnsiRenderOptions {}
 
+const MAX_RENDER_DEPTH = 200
+
 const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
 const DIM = '\x1b[2m'
@@ -22,7 +24,7 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, _opts: AnsiRenderOptions = {}): string {
-  const ctx: AnsiContext = { listDepth: 0, blockQuoteDepth: 0, ordered: [] }
+  const ctx: AnsiContext = { listDepth: 0, blockQuoteDepth: 0, ordered: [], blockDepth: 0, inlineDepth: 0 }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return normalize(`${out}${footnotes}`)
@@ -32,6 +34,8 @@ interface AnsiContext {
   listDepth: number
   blockQuoteDepth: number
   ordered: number[]
+  blockDepth: number
+  inlineDepth: number
 }
 
 function style(text: string, codes: string): string {
@@ -39,7 +43,13 @@ function style(text: string, codes: string): string {
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: AnsiContext): string {
-  return blocks.map((b) => renderBlock(b, ctx)).join('')
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  ctx.blockDepth++
+  try {
+    return blocks.map((b) => renderBlock(b, ctx)).join('')
+  } finally {
+    ctx.blockDepth--
+  }
 }
 
 function renderBlock(node: BlockNode, ctx: AnsiContext): string {
@@ -251,7 +261,13 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
 }
 
 function renderInlines(nodes: InlineNode[], ctx: AnsiContext): string {
-  return nodes.map((node) => renderInline(node, ctx)).join('')
+  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
+  ctx.inlineDepth++
+  try {
+    return nodes.map((node) => renderInline(node, ctx)).join('')
+  } finally {
+    ctx.inlineDepth--
+  }
 }
 
 function renderInline(node: InlineNode, ctx: AnsiContext): string {
@@ -296,16 +312,16 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'raw-inline':
       return ''
     case 'emoji':
-      return `:${node.name}:`
+      return `:${stripControls(node.name)}:`
     case 'autolink':
       return style(
         stripControls(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
         UNDERLINE + FG_BLUE,
       )
     case 'mention':
-      return `@${node.user}`
+      return `@${stripControls(node.user)}`
     case 'tag':
-      return `#${node.name}`
+      return `#${stripControls(node.name)}`
     case 'extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation':

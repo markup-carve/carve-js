@@ -14,6 +14,8 @@ import type {
 
 export interface MarkdownRenderOptions {}
 
+const MAX_RENDER_DEPTH = 200
+
 export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {}): string {
   const headingIds = new Set<string>()
   const referencedHeadingIds = new Set<string>()
@@ -30,7 +32,7 @@ export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {})
     })
   })
 
-  const ctx = { headingIds, referencedHeadingIds, listDepth: 0 }
+  const ctx = { headingIds, referencedHeadingIds, listDepth: 0, blockDepth: 0, inlineDepth: 0 }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return normalize(`${out}${footnotes}`)
@@ -40,10 +42,18 @@ interface MarkdownContext {
   headingIds: Set<string>
   referencedHeadingIds: Set<string>
   listDepth: number
+  blockDepth: number
+  inlineDepth: number
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
-  return blocks.map((b) => renderBlock(b, ctx)).join('')
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  ctx.blockDepth++
+  try {
+    return blocks.map((b) => renderBlock(b, ctx)).join('')
+  } finally {
+    ctx.blockDepth--
+  }
 }
 
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
@@ -63,7 +73,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'code-block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
-      return `${fence}${node.lang ?? ''}\n${content}\n${fence}\n\n`
+      const lang = markdownFenceInfo(node.lang)
+      return `${fence}${lang}\n${content}\n${fence}\n\n`
     }
     case 'blockquote': {
       const lines = renderBlocks(node.children, ctx).trim().split('\n')
@@ -187,7 +198,13 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
 }
 
 function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
-  return nodes.map((node) => renderInline(node, ctx)).join('')
+  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
+  ctx.inlineDepth++
+  try {
+    return nodes.map((node) => renderInline(node, ctx)).join('')
+  } finally {
+    ctx.inlineDepth--
+  }
 }
 
 function renderInline(node: InlineNode, ctx: MarkdownContext): string {
@@ -227,15 +244,15 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'raw-inline':
       return node.format === 'html' ? escapeMdHtml(stripControls(node.content)) : ''
     case 'emoji':
-      return `:${node.name}:`
+      return `:${stripControls(node.name)}:`
     case 'autolink': {
       const label = stripControls(node.href)
       return `[${label}](${markdownDestination(node.href)})`
     }
     case 'mention':
-      return `@${node.user}`
+      return `@${stripControls(node.user)}`
     case 'tag':
-      return escapeText(`#${node.name}`)
+      return escapeText(`#${stripControls(node.name)}`)
     case 'extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation': {
@@ -295,10 +312,20 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
 
 function renderImage(node: Image): string {
   const src = markdownDestination(node.src)
-  const alt = stripControls(node.alt)
+  const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined
     ? `![${alt}](${src})`
     : `![${alt}](${src} "${escapeMdTitle(node.title)}")`
+}
+
+function markdownFenceInfo(lang: string | undefined): string {
+  if (lang === undefined) return ''
+  const clean = stripControls(lang)
+  return /[\s`]/.test(clean) ? '' : clean
+}
+
+function escapeMarkdownLabel(text: string): string {
+  return stripControls(text).replace(/[\\[\]]/g, '\\$&')
 }
 
 function escapeMdTitle(title: string): string {

@@ -55,6 +55,32 @@ describe('Markdown renderer is safe-by-default', () => {
     expect(md('[x](u "a \\"b\\" \\\\ c")')).toBe('[x](u "a \\"b\\" \\\\ c")')
     expect(md('![x](u "a \\"b\\" \\\\ c")')).toBe('![x](u "a \\"b\\" \\\\ c")')
   })
+
+  it('drops unsafe fenced-code info strings in Markdown output', () => {
+    const doc: Document = {
+      type: 'document',
+      children: [{ type: 'code-block', lang: 'js\n```break', content: 'x' }],
+    }
+
+    expect(renderMarkdown(doc)).toBe('```\nx\n```\n')
+  })
+
+  it('escapes Markdown image alt labels', () => {
+    const doc: Document = {
+      type: 'document',
+      children: [
+        {
+          type: 'image',
+          src: 'i.png',
+          alt: String.raw`x](javascript:alert(1))![y\z`,
+        },
+      ],
+    }
+
+    expect(renderMarkdown(doc).trim()).toBe(
+      String.raw`![x\](javascript:alert(1))!\[y\\z](i.png)`,
+    )
+  })
 })
 
 describe('ANSI/plain renderers strip terminal escapes', () => {
@@ -118,6 +144,45 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
       expect(out).not.toContain('\x07')
       expect(out).not.toContain('\x1b]0;')
     }
+  })
+
+  it('strips controls from mention, tag, and emoji names in non-HTML renderers', () => {
+    const doc: Document = {
+      type: 'document',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'mention', user: 'al\x1bice' },
+            { type: 'text', value: ' ' },
+            { type: 'tag', name: 'ne\x07ws' },
+            { type: 'text', value: ' ' },
+            { type: 'emoji', name: 'ro\x1bcket' },
+          ],
+        },
+      ],
+    }
+
+    for (const out of [renderMarkdown(doc), renderPlainText(doc), stripAnsiStyles(renderAnsi(doc))]) {
+      expect(out).not.toContain('\x1b')
+      expect(out).not.toContain('\x07')
+      expect(out).toContain('@alice')
+      expect(out).toContain('#news')
+      expect(out).toContain(':rocket:')
+    }
+  })
+
+  it('caps recursive rendering depth in non-HTML renderers', () => {
+    let content: Document['children'][number]['children'] = [{ type: 'text', value: 'x' }]
+    for (let i = 0; i < 500; i++) content = [{ type: 'span', children: content }]
+    const doc: Document = {
+      type: 'document',
+      children: [{ type: 'paragraph', children: content }],
+    }
+
+    expect(() => renderMarkdown(doc)).not.toThrow()
+    expect(() => renderPlainText(doc)).not.toThrow()
+    expect(() => renderAnsi(doc)).not.toThrow()
   })
 })
 
