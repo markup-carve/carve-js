@@ -56,13 +56,15 @@ describe('Markdown renderer is safe-by-default', () => {
     expect(md('![x](u "a \\"b\\" \\\\ c")')).toBe('![x](u "a \\"b\\" \\\\ c")')
   })
 
-  it('drops unsafe fenced-code info strings in Markdown output', () => {
+  it('keeps only the first fenced-code info token, dropping injection', () => {
     const doc: Document = {
       type: 'document',
       children: [{ type: 'code-block', lang: 'js\n```break', content: 'x' }],
     }
 
-    expect(renderMarkdown(doc)).toBe('```\nx\n```\n')
+    // First whitespace-delimited token (`js`) survives; the `\n```break`
+    // injection is dropped. Byte-identical across carve-php / carve-rs.
+    expect(renderMarkdown(doc)).toBe('```js\nx\n```\n')
   })
 
   it('escapes Markdown image alt labels', () => {

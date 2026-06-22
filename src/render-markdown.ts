@@ -320,8 +320,10 @@ function renderImage(node: Image): string {
 
 function markdownFenceInfo(lang: string | undefined): string {
   if (lang === undefined) return ''
-  const clean = stripControls(lang)
-  return /[\s`]/.test(clean) ? '' : clean
+  // Keep only the first whitespace-delimited token (the language word); drop it
+  // if it still contains a backtick (would break the fence).
+  const token = stripControls(lang).split(/\s/)[0] ?? ''
+  return token.includes('`') ? '' : token
 }
 
 function escapeMarkdownLabel(text: string): string {
