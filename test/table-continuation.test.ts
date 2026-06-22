@@ -101,4 +101,15 @@ describe('table `+` multi-line cell continuation', () => {
     expect(h(src)).toContain('<td>a more</td>')
     expect(h(src)).toContain('<td>b text</td>')
   })
+
+  it('does not continue a GFM header-only table before a body row exists', () => {
+    expect(h('| a | b |\n| - | - |\n+ cont |')).toBe(
+      [
+        '<table>',
+        '  <thead><tr><th>a</th><th>b</th></tr></thead>',
+        '</table>',
+        '<p>+ cont |</p>',
+      ].join('\n'),
+    )
+  })
 })

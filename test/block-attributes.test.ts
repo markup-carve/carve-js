@@ -18,6 +18,18 @@ describe('block attribute lines (§15)', () => {
     expect(h('{.a}\n{.b}\nText')).toBe('<p class="a b">Text</p>')
   })
 
+  it('merges adjacent attribute blocks on one block-attribute line', () => {
+    expect(h('{.c}{#i}\n# H')).toBe(
+      '<section id="i">\n  <h1 class="c">H</h1>\n</section>',
+    )
+    expect(h('{.a}{.b}\n# H')).toBe(
+      '<section id="H">\n  <h1 class="a b">H</h1>\n</section>',
+    )
+    expect(h('{#i}{.c}\n# H')).toBe(
+      '<section id="i">\n  <h1 class="c">H</h1>\n</section>',
+    )
+  })
+
   it('accumulates classes with no de-duplication', () => {
     expect(h('{.a .b}\n{.b .c}\nText')).toBe('<p class="a b b c">Text</p>')
   })
