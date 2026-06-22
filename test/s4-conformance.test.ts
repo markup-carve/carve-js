@@ -49,6 +49,28 @@ describe('S4 cross-impl conformance', () => {
     expect(carveToHtml('﻿# T').trim())
       .toBe('<section id="T">\n  <h1>T</h1>\n</section>')
   })
+
+  it('does not add alignment to a lone colspan marker that renders as an empty cell', () => {
+    expect(carveToHtml('|a|\n|<|').trim())
+      .toBe('<table>\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td></td></tr>\n  </tbody>\n</table>')
+  })
+
+  it('recognizes adjacent footnote references to the same label', () => {
+    expect(carveToHtml('[^a][^a]\n\n[^a]: x').trim())
+      .toBe(
+        '<p><a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>' +
+          '<a id="fnref1-2" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
+          '<section role="doc-endnotes">\n' +
+          '  <hr>\n' +
+          '  <ol>\n' +
+          '    <li id="fn1">\n' +
+          '      <p>x<a href="#fnref1" role="doc-backlink">↩<sup>1</sup></a> ' +
+          '<a href="#fnref1-2" role="doc-backlink">↩<sup>2</sup></a></p>\n' +
+          '    </li>\n' +
+          '  </ol>\n' +
+          '</section>',
+      )
+  })
 })
 
 describe('S4 decided fixes', () => {

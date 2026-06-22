@@ -2241,6 +2241,12 @@ function parseCellMarkers(src: string): {
     }
   }
 
+  // A lone `<` is a colspan marker even when it is glued to the pipes (`|<|`).
+  // It may fail to merge later (for example in column 0), but it must still
+  // render as an empty structural marker cell rather than an empty left-aligned
+  // cell. Non-lone prefixes such as `|< text|` remain per-cell alignment.
+  if (src.trim() === '<') return { header: false, span: 'colspan', content: '' }
+
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
   let header = false
@@ -2275,7 +2281,6 @@ function parseCellMarkers(src: string): {
   // otherwise the whole trimmed text is content.
   const trimmed = src.trim()
   if (trimmed === '^') return { header: false, span: 'rowspan', content: '' }
-  if (trimmed === '<') return { header: false, span: 'colspan', content: '' }
   return { header: false, content: trimmed }
 }
 
@@ -3145,6 +3150,17 @@ function scanInlineInner(
       if (close > 0) {
         const innerText = rest.slice(1, close)
         const tail = rest.slice(close + 1)
+        // Footnote reference [^label] -- before reference links so adjacent
+        // refs like `[^a][^a]` are two notes, not one unresolved `[text][ref]`.
+        // Inside footnote content a `[^x]` is literal, not a reference
+        // (no notes inside notes, design §3.1).
+        const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
+        if (mfn) {
+          flush()
+          out.push(withPos({ type: 'footnote', id: mfn[1]!.trim() } as Footnote, source, text, i, i + mfn[0].length))
+          i += mfn[0].length
+          continue
+        }
         // Inline link [text](url "title"){attrs}
         const ml = RE_LINK_TAIL.exec(tail)
         if (ml) {
@@ -3195,12 +3211,10 @@ function scanInlineInner(
           continue
         }
       }
-      // Footnote reference [^label] — before span, so `[^x]{.c}` stays a
+      // Footnote reference [^label] -- before span, so `[^x]{.c}` stays a
       // footnote ref (the `{.c}` then attaches via the inline-attr pass)
       // rather than becoming a <span> of `^x`. Footnote labels hold no
       // nested brackets, so its own regex stays authoritative.
-      // Inside footnote content a `[^x]` is literal, not a reference
-      // (no notes inside notes, design §3.1).
       const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
       if (mfn) {
         flush()
