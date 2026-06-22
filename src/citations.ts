@@ -28,8 +28,12 @@ interface Def {
   year?: string
 }
 
-const MAX_BRACKET_MAP_CACHE = 64
-const citationBracketMaps = new Map<string, Record<number, number>>()
+// Single-entry cache: the matcher is invoked repeatedly for the SAME inline
+// text (once per `[` in it), so caching only the most-recent text gives the
+// O(1)-per-opener win without a global Map retaining large source strings of
+// past parses in a long-lived process.
+let lastBracketMapText: string | null = null
+let lastBracketMap: Record<number, number> = {}
 
 /**
  * Citations (#90, Tier-2). Bracketed `[@key]` references with an in-document
@@ -125,13 +129,11 @@ function buildBracketMap(text: string): Record<number, number> {
 }
 
 function bracketMapFor(text: string): Record<number, number> {
-  let map = citationBracketMaps.get(text)
-  if (map === undefined) {
-    if (citationBracketMaps.size >= MAX_BRACKET_MAP_CACHE) citationBracketMaps.clear()
-    map = buildBracketMap(text)
-    citationBracketMaps.set(text, map)
+  if (text !== lastBracketMapText) {
+    lastBracketMap = buildBracketMap(text)
+    lastBracketMapText = text
   }
-  return map
+  return lastBracketMap
 }
 
 function parseItem(raw: string, ctx: MatcherContext): Citation | null {
