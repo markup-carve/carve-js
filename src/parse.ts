@@ -89,7 +89,7 @@ export interface ParseOptions {
 let activeMatchers: CarveExtension[] = []
 let activeMatcherCtx: MatcherContext | null = null
 
-const RE_HEADING = /^(#{1,6})\s+(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+const RE_HEADING = /^(#{1,6}) +(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
 // Thematic break: a line of 3+ of the same `-`, `*`, or `_`, optionally
 // separated by spaces/tabs (`---`, `- - -`, `* * *`); nothing else on the line
 // (grammar thematic_break). A run alone on a line can't be emphasis (no
@@ -865,8 +865,8 @@ function parseHeading(lexer: Lexer): Heading {
   // heading. A block-opener (list/quote/table/fence/div/thematic break) ALSO
   // ends it and starts that block, exactly as it interrupts a paragraph (§10)
   // -- only plain text folds.
-  let text = line.replace(/^#{1,6}[ \t]+/, '')
-  const sameLevel = new RegExp(`^#{${level}}[ \\t]+(.+)$`)
+  let text = line.replace(/^#{1,6} +/, '')
+  const sameLevel = new RegExp(`^#{${level}} +(.+)$`)
   while (!lexer.eof()) {
     const next = lexer.peek()!
     if (next.trim() === '') break
@@ -876,7 +876,7 @@ function parseHeading(lexer: Lexer): Heading {
       lexer.consume()
       continue
     }
-    if (/^#{1,6}([ \t]|$)/.test(next) || RE_CAPTION.test(next) || RE_COMMENT_BLOCK.test(next)) {
+    if (/^#{1,6}( |$)/.test(next) || RE_CAPTION.test(next) || RE_COMMENT_BLOCK.test(next)) {
       break
     }
     // A block-opener ends the heading and starts that block (§10), so only
@@ -892,7 +892,7 @@ function parseHeading(lexer: Lexer): Heading {
   // attribute line (§15), not as a trailing `{…}` on its own line. A `{…}`
   // at the end of the heading text is therefore ordinary inline content.
   // Column where the content starts on the first line (the marker + spaces).
-  const textColumn = line.length - line.replace(/^#{1,6}[ \t]+/, '').length + 1
+  const textColumn = line.length - line.replace(/^#{1,6} +/, '').length + 1
   node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
     baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
     startLine: lineIndex + 1,

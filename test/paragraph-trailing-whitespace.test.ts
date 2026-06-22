@@ -27,6 +27,10 @@ describe('paragraph trailing whitespace', () => {
     expect(h('# ')).toBe('<p>#</p>')
   })
 
+  it('requires an ASCII space after a heading marker, not a tab', () => {
+    expect(h('#\tH')).toBe('<p>#\tH</p>')
+  })
+
   it('leaves a paragraph with no trailing whitespace unchanged', () => {
     expect(h('abc')).toBe('<p>abc</p>')
   })
