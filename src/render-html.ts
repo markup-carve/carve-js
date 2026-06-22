@@ -775,6 +775,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   let headerEnd = 0
   while (
     headerEnd < grid.length &&
+    grid[headerEnd]!.some((e) => !e.skip) &&
     grid[headerEnd]!.every((e) => e.cell.header || e.skip)
   ) {
     headerEnd++

@@ -9,9 +9,21 @@ describe('a table row needs a closing pipe', () => {
     expect(html('| a | b')).toBe('<p>| a | b</p>')
   })
 
+  it('pipe-only lines are paragraph text, not empty tables', () => {
+    expect(html('|')).toBe('<p>|</p>')
+    expect(html('||')).toBe('<p>||</p>')
+    expect(html('|||')).toBe('<p>|||</p>')
+  })
+
   it('a complete row (opens and closes with `|`) is a table', () => {
     expect(html('| a |')).toBe(
       '<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('an empty cell between pipes is still a table cell', () => {
+    expect(html('| |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>',
     )
   })
 
