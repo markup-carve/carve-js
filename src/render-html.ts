@@ -572,6 +572,9 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
     case 'thematic-break':
       return `${pad}<hr${renderAttrs(node.attrs)}>`
     case 'code-block': {
+      // The opener "header" is resolved to a `title` attribute at parse time
+      // (see parseBlocks), so it renders here AND wherever else a code block is
+      // emitted (e.g. inside a code-group).
       const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
       const escaped = escapeHtml(node.content)
       return `${pad}<pre${renderAttrs(node.attrs)}><code${langAttr}>${escaped}\n</code></pre>`

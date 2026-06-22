@@ -60,9 +60,14 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
   let tabSetCounter = 0
   let labelCounter = 0
 
+  // An explicit label is the opener `[label]` (canonical) or a `{label="..."}`
+  // attribute (deprecated). When present, an inner heading stays as content.
+  const explicitLabel = (tab: Admonition | Div): string | undefined =>
+    tab.label ?? tab.attrs?.keyValues?.label
+
   const extractLabel = (tab: Admonition | Div): string => {
-    const labelAttr = tab.attrs?.keyValues?.label
-    if (labelAttr !== undefined) return labelAttr
+    const label = explicitLabel(tab)
+    if (label !== undefined) return label
     for (const child of tab.children) {
       if (child.type === 'heading') return inlineText((child as Heading).children)
     }
@@ -70,7 +75,7 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
   }
 
   const renderTabContent = (tab: Admonition | Div, ctx: BlockExtensionRenderContext): string => {
-    const skipFirstHeading = tab.attrs?.keyValues?.label === undefined
+    const skipFirstHeading = explicitLabel(tab) === undefined
     let skipped = false
     let html = ''
     for (const child of tab.children) {
