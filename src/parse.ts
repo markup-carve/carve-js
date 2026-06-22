@@ -1440,7 +1440,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
   const m = RE_BARE_IMAGE.exec(line)!
   const img: Image = { type: 'image', src: m[2]!, alt: m[1]! }
   const title = m[3] ?? m[4]
-  if (title) img.title = title
+  if (title !== undefined) img.title = title
   if (m[5]) img.attrs = parseAttrs(m[5])
   // Optional caption
   let lookahead = 0
@@ -2877,6 +2877,7 @@ function scanInlineInner(
   // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
   // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
   let bufLast = ''
+  const emphasisNoClose = new Map<string, number>()
 
   // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
   // branches resolve the close bracket in O(1); see buildBracketMap.
@@ -3044,7 +3045,7 @@ function scanInlineInner(
           flush()
           const img: Image = { type: 'image', src: ml[1]!, alt: rest.slice(2, close) }
           const title = ml[2] ?? ml[3]
-          if (title) img.title = unescapeAttrValue(title)
+          if (title !== undefined) img.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
             const a = parseAttrs(ml[4])
@@ -3099,7 +3100,7 @@ function scanInlineInner(
             children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
           }
           const title = ml[2] ?? ml[3]
-          if (title) link.title = unescapeAttrValue(title)
+          if (title !== undefined) link.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
             const a = parseAttrs(ml[4])
@@ -3341,7 +3342,7 @@ function scanInlineInner(
     }
 
     // Emphasis-family delimiters
-    const em = matchEmphasis(text, i, source, inFootnote)
+    const em = matchEmphasis(text, i, source, inFootnote, emphasisNoClose)
     if (em) {
       flush()
       out.push(withPos(em.node, source, text, i, em.end))
@@ -3386,6 +3387,7 @@ function matchEmphasis(
   i: number,
   source: InlineSource,
   inFootnote = false,
+  noClose: Map<string, number> = new Map(),
 ): EmphasisMatch | null {
   const c = text[i]!
 
@@ -3432,7 +3434,7 @@ function matchEmphasis(
       // e.g. snake_/case/).
       if ((delim === '/' || delim === '_') && before === '/') continue
       // Find closer that's not preceded by space
-      const close = findEmphasisClose(text, i + 1, delim)
+      const close = cachedFindEmphasisClose(text, i + 1, delim, noClose)
       if (close !== -1) {
         const inner = text.slice(i + 1, close)
         return {
@@ -3448,6 +3450,19 @@ function matchEmphasis(
 function findClose(text: string, from: number, marker: string): number {
   // Search forward for marker, simple substring match
   return text.indexOf(marker, from)
+}
+
+function cachedFindEmphasisClose(
+  text: string,
+  from: number,
+  delim: string,
+  noClose: Map<string, number>,
+): number {
+  const firstNoClose = noClose.get(delim)
+  if (firstNoClose !== undefined && from >= firstNoClose) return -1
+  const close = findEmphasisClose(text, from, delim)
+  if (close === -1) noClose.set(delim, Math.min(firstNoClose ?? from, from))
+  return close
 }
 
 function withPos<T extends InlineNode>(

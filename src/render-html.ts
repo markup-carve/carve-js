@@ -933,7 +933,7 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
 }
 
 function renderImage(img: Image, opts: RenderOptions): string {
-  const titleAttr = img.title ? ` title="${escapeAttr(img.title)}"` : ''
+  const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
   const src = escapeAttr(sanitizeUrl(img.src, opts))
   // The sanitized structural src wins; never re-emit an author-supplied
   // `src` from an attribute block, which would bypass sanitization.
@@ -971,7 +971,7 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     case 'code':
       return `<code${renderAttrs(node.attrs)}>${escapeHtml(node.value)}</code>`
     case 'link': {
-      const titleAttr = node.title ? ` title="${escapeAttr(node.title)}"` : ''
+      const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
       const href = escapeAttr(sanitizeUrl(node.href, opts))
       // The sanitized structural href wins; never re-emit an author-supplied
       // `href` from an attribute block, which would bypass sanitization.
