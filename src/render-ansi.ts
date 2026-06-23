@@ -187,12 +187,18 @@ function renderDefinitionList(items: DefinitionItem[], ctx: AnsiContext, trailin
 }
 
 function renderTable(node: Table, ctx: AnsiContext): string {
-  const rows = node.rows.map((row) =>
-    row.cells.map((cell) => {
-      const content = renderInlines(cell.children, ctx).trim()
-      return { content, plain: stripAnsi(content), isHeader: row.cells.every((c) => c.header) }
-    }),
-  )
+  // Use the table's true column count (max cells across rows) so a row with
+  // rowspan/colspan filler cells still emits every column and stays aligned
+  // with the borders (matches the HTML/Markdown renderers and carve-php/rs).
+  const cols = node.rows.reduce((max, row) => Math.max(max, row.cells.length), 0)
+  const rows = node.rows.map((row) => {
+    const isHeader = row.cells.length > 0 && row.cells.every((c) => c.header)
+    return Array.from({ length: cols }, (_, i) => {
+      const cell = row.cells[i]
+      const content = cell ? renderInlines(cell.children, ctx).trim() : ''
+      return { content, plain: stripAnsi(content), isHeader }
+    })
+  })
   const widths: number[] = []
   for (const row of rows) {
     row.forEach((cell, i) => {

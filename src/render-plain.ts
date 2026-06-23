@@ -94,9 +94,17 @@ function renderDefinitionList(items: DefinitionItem[], ctx: PlainContext, traili
 }
 
 function renderTable(node: Table, ctx: PlainContext): string {
+  // Use the table's true column count (max cells across rows) so a row with
+  // rowspan/colspan filler cells still emits every column (matches the HTML and
+  // Markdown renderers and carve-php / carve-rs).
+  const cols = node.rows.reduce((max, row) => Math.max(max, row.cells.length), 0)
   let out = ''
   for (const row of node.rows) {
-    out += `${row.cells.map((cell) => renderInlines(cell.children, ctx).trim()).join(' | ')}\n`
+    const cells: string[] = []
+    for (let i = 0; i < cols; i++) {
+      cells.push(i < row.cells.length ? renderInlines(row.cells[i]!.children, ctx).trim() : '')
+    }
+    out += `${cells.join(' | ')}\n`
   }
   if (node.caption) out = `${out.trimEnd()}\n${renderInlines(node.caption, ctx)}\n`
   return `${out}\n`
