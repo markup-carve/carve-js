@@ -21,3 +21,17 @@ for (const [name, g] of Object.entries(golden)) {
     it('ansi', () => expect(carveToAnsi(g.carve)).toBe(g.ansi))
   })
 }
+
+describe('non-html renderer parity fixes', () => {
+  it('keeps blockquote attribution separated from the quote body', () => {
+    const src = '> q\n^ Attr'
+
+    expect(carveToMarkdown(src)).toBe('> q\n\nAttr\n')
+    expect(carveToPlainText(src)).toBe('"q"\n\nAttr\n')
+    expect(carveToAnsi(src)).toBe('\x1b[36m\x1b[2m│\x1b[0m q\n\n\x1b[3m\x1b[2mAttr\x1b[0m\n')
+  })
+
+  it('keeps a code-fence header in Markdown output', () => {
+    expect(carveToMarkdown('```js "Title"\nx\n```')).toBe('```js "Title"\nx\n```\n')
+  })
+})
