@@ -244,7 +244,8 @@ function renderFigure(node: Figure, ctx: AnsiContext): string {
       : node.target.type === 'table'
         ? renderTable(node.target, ctx).trimEnd()
         : renderBlock(node.target, ctx).trimEnd()
-  return `${target}\n${renderCaption(node.caption, ctx)}`
+  const sep = node.target.type === 'blockquote' ? '\n\n' : '\n'
+  return `${target}${sep}${renderCaption(node.caption, ctx)}`
 }
 
 function renderCaption(nodes: InlineNode[], ctx: AnsiContext): string {

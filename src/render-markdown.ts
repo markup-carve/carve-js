@@ -73,8 +73,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'code-block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
-      const lang = markdownFenceInfo(node.lang)
-      return `${fence}${lang}\n${content}\n${fence}\n\n`
+      const info = markdownFenceInfo(node.lang, node.header)
+      return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'blockquote': {
       const lines = renderBlocks(node.children, ctx).trim().split('\n')
@@ -184,7 +184,12 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
         : renderBlock(node.target, ctx).trim()
   // A block-level target (a code-block listing or a display-math equation)
   // keeps the caption on its own line; an inline image target stays adjacent.
-  const sep = node.target.type === 'code-block' || node.target.type === 'paragraph' ? '\n' : ''
+  const sep =
+    node.target.type === 'blockquote'
+      ? '\n\n'
+      : node.target.type === 'code-block' || node.target.type === 'paragraph'
+        ? '\n'
+        : ''
   return `${target}${sep}${renderInlines(node.caption, ctx)}`
 }
 
@@ -318,12 +323,13 @@ function renderImage(node: Image): string {
     : `![${alt}](${src} "${escapeMdTitle(node.title)}")`
 }
 
-function markdownFenceInfo(lang: string | undefined): string {
-  if (lang === undefined) return ''
+function markdownFenceInfo(lang: string | undefined, header: string | undefined): string {
   // Keep only the first whitespace-delimited token (the language word); drop it
   // if it still contains a backtick (would break the fence).
-  const token = stripControls(lang).split(/\s/)[0] ?? ''
-  return token.includes('`') ? '' : token
+  const rawToken = lang === undefined ? '' : (stripControls(lang).split(/\s/)[0] ?? '')
+  const token = rawToken.includes('`') ? '' : rawToken
+  if (header === undefined) return token
+  return `${token} "${escapeMdTitle(header)}"`
 }
 
 function escapeMarkdownLabel(text: string): string {

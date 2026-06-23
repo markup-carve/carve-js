@@ -111,7 +111,12 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
         : renderBlock(node.target, ctx).trim()
   // A block-level target (a code-block listing or a display-math equation)
   // keeps the caption on its own line; an inline image target stays adjacent.
-  const sep = node.target.type === 'code-block' || node.target.type === 'paragraph' ? '\n' : ''
+  const sep =
+    node.target.type === 'blockquote'
+      ? '\n\n'
+      : node.target.type === 'code-block' || node.target.type === 'paragraph'
+        ? '\n'
+        : ''
   return `${target}${sep}${renderInlines(node.caption, ctx)}`
 }
 
