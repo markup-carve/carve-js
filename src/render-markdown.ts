@@ -283,7 +283,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'critic-insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
     case 'critic-delete':
-      return `~~${renderInlines(node.children, ctx)}~~`
+      return `<del>${renderInlines(node.children, ctx)}</del>`
     case 'critic-substitute':
       // Emit BOTH sides like the HTML renderer; dropping oldText loses content.
       return `<del>${escapeText(node.oldText)}</del><ins>${escapeText(node.newText)}</ins>`

@@ -105,7 +105,9 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
     expect(ansi).not.toContain('\x07')
     expect(plain).not.toContain('\x1b')
     expect(plain).not.toContain('\x07')
-    expect(plain).toContain('http://a/]0;PWNED/b')
+    // plain text renders the link's visible text, not its href, so the
+    // (sanitized) URL no longer appears at all -- which is strictly safer.
+    expect(plain).toBe('x\n')
   })
 
   it('strips ESC/OSC controls from every author leaf in non-HTML renderers', () => {
