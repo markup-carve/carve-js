@@ -87,17 +87,31 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'admonition': {
       const body = renderBlocks(node.children, ctx)
       const title = node.title !== undefined ? renderInlines(node.title, ctx) : ''
+      // Carry the blockquote `│` prefix onto a bold line, matching how the
+      // paragraph renderer prefixes body content in a quote. `styled` is
+      // already a styled string (title) or raw label text.
+      const prefix = blockQuotePrefix(ctx)
+      const boldLine = (styled: string): string =>
+        prefix ? prefixLines(styled, prefix) : styled
+      // Caption floor: surface an unconsumed grouping [label] as a bold line
+      // (title first when both are present).
+      const labelLine = node.label
+        ? `${boldLine(style(stripControls(node.label), BOLD))}\n\n`
+        : ''
       if (title !== '') {
-        // Carry the blockquote `│` prefix onto the title line too, matching how
-        // the paragraph renderer prefixes body content in a quote.
-        const prefix = blockQuotePrefix(ctx)
-        const titleLine = prefix ? prefixLines(style(title, BOLD), prefix) : style(title, BOLD)
-        return `${titleLine}\n\n${body}`
+        return `${boldLine(style(title, BOLD))}\n\n${labelLine}${body}`
       }
-      return body
+      return `${labelLine}${body}`
     }
-    case 'div':
-      return renderBlocks(node.children, ctx)
+    case 'div': {
+      if (!node.label) return renderBlocks(node.children, ctx)
+      // Caption floor: a bold label line, prefixed with the blockquote `│` when
+      // inside a quote (matching the admonition label/title and the div body).
+      const prefix = blockQuotePrefix(ctx)
+      const styled = style(stripControls(node.label), BOLD)
+      const labelLine = prefix ? prefixLines(styled, prefix) : styled
+      return `${labelLine}\n\n${renderBlocks(node.children, ctx)}`
+    }
     case 'definition-list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':

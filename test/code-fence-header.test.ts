@@ -76,9 +76,13 @@ describe('code-fence header and grouping label', () => {
     expect(html).toContain('title="src/Auth.php"')
   })
 
-  it('renders a bare div with an inert [label] as a plain <div>', () => {
+  it('surfaces a bare div [label] as the caption floor (graceful degradation)', () => {
+    // An unconsumed grouping `[label]` is no longer dropped: core renders it
+    // as a `<p class="div-label">` so the authored text survives in every
+    // target (see docs/graceful-degradation). A group extension (tabs) would
+    // consume the node earlier, so there is no double rendering on the web.
     expect(carveToHtml('::: [First]\nFirst panel.\n:::')).toBe(
-      '<div>\n  <p>First panel.</p>\n</div>',
+      '<div>\n  <p class="div-label">First</p>\n  <p>First panel.</p>\n</div>',
     )
   })
 
@@ -97,8 +101,10 @@ describe('code-fence header and grouping label', () => {
   })
 
   it('accepts a label glued to the bare fence (`:::[First]`), like ```[NPM]', () => {
+    // The glued-label form parses the same; the label is surfaced as the
+    // caption floor (graceful degradation), not dropped.
     expect(carveToHtml(':::[First]\nFirst panel.\n:::')).toBe(
-      '<div>\n  <p>First panel.</p>\n</div>',
+      '<div>\n  <p class="div-label">First</p>\n  <p>First panel.</p>\n</div>',
     )
   })
 })

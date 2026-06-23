@@ -88,16 +88,23 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return renderTable(node, ctx)
     case 'admonition': {
       // Markdown has no admonition; preserve the title (otherwise lost) as a
-      // leading bold line, then the body.
+      // leading bold line, then an unconsumed grouping [label] (also bold, the
+      // caption floor; title first when both are present), then the body.
       const body = renderBlocks(node.children, ctx)
       const title = node.title !== undefined ? renderInlines(node.title, ctx) : ''
+      // Escape the label the same way text is escaped (HTML + Markdown
+      // metacharacters), not just strip controls: a label like `[<img …>]`
+      // must not emit live HTML when the Markdown is re-rendered.
+      const labelLine = node.label ? `**${escapeText(node.label)}**\n\n` : ''
       if (title !== '') {
-        return `**${title}**\n\n${body}`
+        return `**${title}**\n\n${labelLine}${body}`
       }
-      return body
+      return `${labelLine}${body}`
     }
     case 'div':
-      return renderBlocks(node.children, ctx)
+      return node.label
+        ? `**${escapeText(node.label)}**\n\n${renderBlocks(node.children, ctx)}`
+        : renderBlocks(node.children, ctx)
     case 'definition-list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':

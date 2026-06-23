@@ -55,6 +55,44 @@ export function spoiler(): CarveExtension {
         )
       },
     },
+    // Static render: hiding is meaningless offline, so the content is revealed.
+    // Inline: drop the blur, render the content plainly inside a revealed span.
+    // Block: the disclosure is expanded into a flat `<section>` with the title
+    // as a heading.
+    staticInlineRenderers: {
+      extension: (node: InlineNode, ctx: ExtensionRenderContext): string | undefined => {
+        const ext = node as Extension
+        if (ext.name !== 'spoiler') return undefined
+        const attrs: Attrs = withBaseClass(ext.attrs, 'spoiler spoiler-revealed')
+        return `<span${ctx.renderAttrs(attrs)}>${ctx.renderInlines(ext.content)}</span>`
+      },
+    },
+    staticBlockRenderers: {
+      admonition: (node, ctx) => {
+        const adm = node as Admonition
+        if (adm.kind !== 'spoiler') return undefined
+        const pad = ctx.indent(ctx.level)
+        const innerPad = ctx.indent(ctx.level + 1)
+        const title = adm.title ? inlineText(adm.title) : ''
+        const summary = title.trim() === '' ? 'Spoiler' : title
+        const attrs: Attrs = withBaseClass(adm.attrs, 'spoiler spoiler-revealed')
+        const open = `<section${ctx.renderAttrs(attrs)}>`
+        const body = ctx.renderChildren(adm.children, ctx.level + 1)
+        // Surface a grouping `[label]` (if any) as the caption floor after the
+        // title - the static path consumes the node, so the core floor never
+        // runs; preserving it keeps the no-content-dropped invariant.
+        const labelLine = adm.label
+          ? `${innerPad}<p class="div-label">${ctx.escapeHtml(adm.label)}</p>\n`
+          : ''
+        return (
+          `${pad}${open}\n` +
+          `${innerPad}<h3 class="spoiler-title">${ctx.escapeHtml(summary)}</h3>\n` +
+          labelLine +
+          `${body}\n` +
+          `${pad}</section>`
+        )
+      },
+    },
   }
 }
 

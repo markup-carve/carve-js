@@ -18,6 +18,15 @@ export interface FencedRenderOptions {
   wrapInFigure?: boolean
   /** Figure class. Default `"{cssClass}-figure"`. */
   figureClass?: string
+  /**
+   * Which build-time renderer in the static `renderers` map produces this
+   * instance's image (`'mermaid'` or `'chart'`). When set and a `mode:
+   * "static"` render supplies that renderer, `renderStatic` emits the
+   * renderer's output (an `<svg>` / `<img>`); otherwise it falls back to the
+   * source as a `<pre><code>` block. Unset means no build renderer applies and
+   * static always degrades to source.
+   */
+  staticRenderer?: 'mermaid' | 'chart'
 }
 
 // Text mode: escape `&` and `<` (blocking tag injection), but keep `>` so
@@ -79,6 +88,8 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
   const tag = opts.tag ?? (mode === 'json' ? 'div' : 'pre')
   const figureClass = opts.figureClass ?? `${cssClass}-figure`
 
+  const staticRendererKey = opts.staticRenderer
+
   return {
     name: 'fenced-render',
     blockRenderers: {
@@ -101,6 +112,35 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         return `${ctx.indent(ctx.level)}${element}`
       },
     },
+    staticBlockRenderers: {
+      // Static render: the diagram is a client-script visual, so the engine
+      // cannot draw it. If a build-time renderer is supplied for this instance
+      // (`renderers.mermaid` / `renderers.chart`), emit its output verbatim;
+      // otherwise degrade to the source as a `<pre><code class="language-…">`
+      // block - never blank, and re-renderable by a host that loads the client
+      // library.
+      'code-block': (node, ctx) => {
+        const code = node as CodeBlock
+        if (!languages.includes(code.lang ?? '')) return undefined
+        const pad = ctx.indent(ctx.level)
+        const build = staticRendererKey ? ctx.renderers[staticRendererKey] : undefined
+        if (build) {
+          const element = build(code.content)
+          if (opts.wrapInFigure) {
+            return `${pad}<figure class="${ctx.escapeAttr(figureClass)}">\n${pad}${element}\n${pad}</figure>`
+          }
+          return `${pad}${element}`
+        }
+        // Source fallback: a self-contained, escaped code block. Merge the
+        // cssClass ahead of author classes and copy the author attributes
+        // through ctx.renderAttrs (same hardening as the interactive path), so
+        // an `{#id .class data-x=y}` on the fence survives the degradation path
+        // instead of being dropped.
+        const attrs: Attrs = { ...code.attrs, classes: [cssClass, ...(code.attrs?.classes ?? [])] }
+        const langAttr = code.lang ? ` class="language-${ctx.escapeAttr(code.lang)}"` : ''
+        return `${pad}<pre${ctx.renderAttrs(attrs)}><code${langAttr}>${ctx.escapeHtml(code.content)}\n</code></pre>`
+      },
+    },
   }
 }
 
@@ -116,8 +156,10 @@ export const abc = (): CarveExtension => fencedRender({ language: 'abc' })
 /** Vega-Lite preset (json mode, `<div class="vega-lite"><script ...>`). */
 export const vegaLite = (): CarveExtension =>
   fencedRender({ language: 'vega-lite', contentMode: 'json' })
-/** Chart.js preset (json mode, `<div class="chart"><script ...>`). */
-export const chart = (): CarveExtension => fencedRender({ language: 'chart', contentMode: 'json' })
+/** Chart.js preset (json mode, `<div class="chart"><script ...>`). In a static
+ *  render a supplied `renderers.chart` pre-renders the config to an image. */
+export const chart = (): CarveExtension =>
+  fencedRender({ language: 'chart', contentMode: 'json', staticRenderer: 'chart' })
 
 /**
  * Mermaid preset (text mode, `<pre class="mermaid">`). Mermaid is one preset of
@@ -125,7 +167,7 @@ export const chart = (): CarveExtension => fencedRender({ language: 'chart', con
  */
 export const mermaid = (
   opts: Omit<FencedRenderOptions, 'language' | 'contentMode'> = {},
-): CarveExtension => fencedRender({ language: 'mermaid', ...opts })
+): CarveExtension => fencedRender({ language: 'mermaid', staticRenderer: 'mermaid', ...opts })
 
 /**
  * Every bundled diagram preset as ready-to-register extensions, for spreading
