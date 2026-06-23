@@ -159,7 +159,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'code':
       return stripControls(node.value)
     case 'link':
-      return node.href.startsWith('#') ? renderInlines(node.children, ctx) : stripControls(node.href)
+      return renderInlines(node.children, ctx)
     case 'image':
       return stripControls(node.alt)
     case 'math':
