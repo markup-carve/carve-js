@@ -32,13 +32,13 @@
     "link": {
         "carve": "A [link](https://example.com) here.\n",
         "markdown": "A [link](https://example.com) here.\n",
-        "plain": "A https://example.com here.\n",
+        "plain": "A link here.\n",
         "ansi": "A \u001b[4m\u001b[34mlink\u001b[0m\u001b[2m (https://example.com)\u001b[0m here.\n"
     },
     "link-title": {
         "carve": "A [link](https://example.com \"Title\") here.\n",
         "markdown": "A [link](https://example.com \"Title\") here.\n",
-        "plain": "A https://example.com here.\n",
+        "plain": "A link here.\n",
         "ansi": "A \u001b[4m\u001b[34mlink\u001b[0m\u001b[2m (https://example.com)\u001b[0m here.\n"
     },
     "autolink": {

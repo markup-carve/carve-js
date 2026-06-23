@@ -34,4 +34,23 @@ describe('non-html renderer parity fixes', () => {
   it('keeps a code-fence header in Markdown output', () => {
     expect(carveToMarkdown('```js "Title"\nx\n```')).toBe('```js "Title"\nx\n```\n')
   })
+
+  it('renders critic deletion as del HTML in Markdown output', () => {
+    expect(carveToMarkdown('{-del-}')).toBe('<del>del</del>\n')
+    expect(carveToMarkdown('{+ins+}')).toBe('<ins>ins</ins>\n')
+  })
+
+  it('renders link text, not link destinations, in plain text output', () => {
+    expect(carveToPlainText('[t](u)')).toBe('t\n')
+    expect(carveToPlainText('[t](u "ti")')).toBe('t\n')
+    expect(carveToPlainText('[a][r]\n\n[r]: /u "T"')).toBe('a\n')
+    expect(carveToPlainText('<https://x>')).toBe('https://x\n')
+  })
+
+  it('preserves inline code color inside ANSI table header bold styling', () => {
+    const src = '| `a|b` | c |\n|--|--|\n| d | e |'
+
+    expect(carveToAnsi(src)).toContain('\x1b[1m\x1b[93ma|b\x1b[0m\x1b[0m')
+    expect(carveToAnsi(src)).toContain('\x1b[1mc\x1b[0m')
+  })
 })

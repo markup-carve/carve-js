@@ -230,7 +230,7 @@ function tableRow(
   const parts = cells.map((cell, i) => {
     const padding = (widths[i] ?? 0) - width(cell.plain)
     const content = cell.isHeader
-      ? style(cell.plain + ' '.repeat(padding), BOLD)
+      ? style(cell.content + ' '.repeat(padding), BOLD)
       : cell.content + ' '.repeat(padding)
     return ` ${content} `
   })
