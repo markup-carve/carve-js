@@ -184,6 +184,13 @@ const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // pipe form is unchanged (`<div class="line-block">` with `<br>` breaks).
 // Mirrors carve#119 / carve-php#124.
 const RE_LINE_BLOCK_OPEN = /^(:{3,})[ \t]+\|[ \t]*$/
+// Hard-break block: `::: \` (colon fence + a single trailing backslash). Like
+// the line block it emits a `<div>`, but with class `hardbreaks`: the body is
+// parsed as ordinary blocks and soft breaks become hard breaks ONLY in the
+// div's DIRECT paragraph children (nested blocks keep ordinary soft breaks),
+// with no leading-whitespace preservation. carve spec #207 / 88-line-blocks;
+// matches carve-rs / carve-php (carve-js was the lagging impl).
+const RE_HARDBREAKS_OPEN = /^(:{3,})[ \t]+\\[ \t]*$/
 // Generic fenced div: a bare `:::` opener with NO type word (djot's generic
 // container). A typed `::: word` routes to parseAdmonition. An inline
 // `::: {.class}` is NOT a div (strict djot) -- use a preceding attribute
@@ -780,6 +787,8 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     return { type: 'comment', block: false, content: l.slice(2).replace(/^\s/, '') }
   }
   if (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) return parseLineBlock(lexer)
+  if (RE_HARDBREAKS_OPEN.test(line) && hardBreaksHasCloser(lexer))
+    return parseHardBreaksBlock(lexer)
   // A typed `::: word` admonition, like a bare `:::` div, opens ONLY when a
   // matching closer exists ahead (PART 9 §12 / grammar: `admonition = open …
   // close`). Without this guard an unterminated `::: note` swallows the rest
@@ -1211,6 +1220,67 @@ function expandLineBlockLeadingWhitespace(line: string): string {
   return '\ue000'.repeat(columns) + line.slice(i)
 }
 
+// Whether a `::: \` hard-break opener at peek(0) has a matching bare `:::`
+// closer of equal-or-greater colon length ahead. The closer is the same bare
+// `:::` the line block uses, so this reuses the line-block negative caches.
+function hardBreaksHasCloser(lexer: Lexer): boolean {
+  const start = lexer.pos + 1
+  if (start >= lexer.lineBlockNoCloserFrom) return false
+  const fence = RE_HARDBREAKS_OPEN.exec(lexer.peek()!)![1]!.length
+  if (start >= (lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
+  let sawAnyCloser = false
+  for (let i = start; i < lexer.lines.length; i++) {
+    const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
+    if (c) {
+      sawAnyCloser = true
+      if (c[1]!.length >= fence) return true
+    }
+  }
+  const prev = lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity
+  if (start < prev) lexer.lineBlockNoCloserOfLenFrom.set(fence, start)
+  if (!sawAnyCloser) lexer.lineBlockNoCloserFrom = start
+  return false
+}
+
+// `::: \` hard-break block. Unlike the line block, the body is parsed as
+// ordinary blocks (so nested admonitions / lists work); soft breaks are then
+// promoted to hard breaks ONLY in the div's DIRECT paragraph children, and
+// there is no leading-whitespace preservation. Emits `<div class="hardbreaks">`.
+function parseHardBreaksBlock(lexer: Lexer): Div {
+  const m = RE_HARDBREAKS_OPEN.exec(lexer.consume())!
+  const fence = m[1]!.length
+  const inner: string[] = []
+  while (!lexer.eof()) {
+    const ln = lexer.peek()!
+    const c = RE_ADMONITION_CLOSE.exec(ln)
+    if (c && c[1]!.length >= fence) {
+      lexer.consume()
+      break
+    }
+    lexer.consume()
+    inner.push(ln)
+  }
+  const subLexer = new Lexer(inner.join('\n'))
+  subLexer.abbrDefs = lexer.abbrDefs
+  subLexer.linkDefs = lexer.linkDefs
+  subLexer.footnoteDefs = lexer.footnoteDefs
+  subLexer.nested = true
+  subLexer.depth = lexer.depth + 1
+  const children = parseBlocks(subLexer, 0)
+  for (const child of children) {
+    if (child.type === 'paragraph') {
+      child.children = child.children.map((node) =>
+        node.type === 'soft-break' ? ({ type: 'hard-break' } as InlineNode) : node,
+      )
+    }
+  }
+  return {
+    type: 'div',
+    attrs: { classes: ['hardbreaks'], order: ['.class'] },
+    children,
+  }
+}
+
 // Generic div: same body collection as an admonition, but emits a plain
 // <div> carrying the opener's attributes (no class added). Like
 // admonitions it closes at the first bare `:::` (no length-based nesting).
@@ -1415,7 +1485,8 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     if (
       RE_DIV_OPEN.test(content) ||
       RE_ADMONITION_OPEN.test(content) ||
-      RE_LINE_BLOCK_OPEN.test(content)
+      RE_LINE_BLOCK_OPEN.test(content) ||
+      RE_HARDBREAKS_OPEN.test(content)
     ) {
       // Div / admonition / line-block opener (`:::`, `::: type`, or `::: |`)
       // is structural; it opens no paragraph itself.
@@ -1719,7 +1790,8 @@ function lineOpensBlock(line: string): boolean {
     isTableRow(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     RE_DIV_OPEN.test(line) ||
-    RE_LINE_BLOCK_OPEN.test(line)
+    RE_LINE_BLOCK_OPEN.test(line) ||
+    RE_HARDBREAKS_OPEN.test(line)
   )
 }
 
@@ -1736,6 +1808,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
       divHasCloser(lexer)) ||
     (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
     (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) ||
+    (RE_HARDBREAKS_OPEN.test(line) && hardBreaksHasCloser(lexer)) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
@@ -1833,7 +1906,8 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (
     RE_DIV_OPEN.test(content) ||
     (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
-    RE_LINE_BLOCK_OPEN.test(content)
+    RE_LINE_BLOCK_OPEN.test(content) ||
+    RE_HARDBREAKS_OPEN.test(content)
   ) {
     state.lazyFoldable = false
     return
@@ -2595,7 +2669,8 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       if (
         (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
         RE_DIV_OPEN.test(ln) ||
-        RE_LINE_BLOCK_OPEN.test(ln)
+        RE_LINE_BLOCK_OPEN.test(ln) ||
+        RE_HARDBREAKS_OPEN.test(ln)
       )
         return divHasCloser(lexer)
       return false

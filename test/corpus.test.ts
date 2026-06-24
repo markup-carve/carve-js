@@ -148,21 +148,6 @@ const IMPLEMENTED = new Set([
   '113-a-continuation-row-needs-a-body-row',
 ])
 
-/**
- * Cases whose pinned `.html` predates the graceful-degradation caption floor
- * (spec PR #205). The floor surfaces an unconsumed grouping `[label]` as a
- * `<p class="div-label">`, so these labeled-container fixtures now differ by
- * exactly that one line. The spec corpus is bumped to match in the same
- * proposal; until that submodule bump lands, run them as expected divergences
- * here (asserting the floor is present) rather than against the stale `.html`.
- * Do NOT edit the spec submodule to silence these.
- */
-const PENDING_SPEC_DIVERGENCE = new Set<string>([
-  '13-admonitions-4', // `::: tip "Pro Tip" [Build]` -> title + div-label floor
-  '13-admonitions-5', // `::: [First]` bare labeled div
-  '13-admonitions-6', // `:::[First]` glued labeled div
-])
-
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
 const pairs = readdirSync(corpusDir)
@@ -207,21 +192,7 @@ describe('spec corpus', () => {
     const expected = readFileSync(htmlPath, 'utf8')
     const allowlisted = IMPLEMENTED.has(name) || IMPLEMENTED.has(baseSlug(name))
 
-    if (PENDING_SPEC_DIVERGENCE.has(name)) {
-      // The floor adds a `<p class="div-label">…</p>` line the stale fixture
-      // lacks; assert exactly that delta so we still validate the rest of the
-      // output (and notice if anything ELSE drifts on these inputs).
-      it(`${name} (graceful-degradation floor; spec corpus pending)`, () => {
-        const actual = carveToHtml(source).trim()
-        expect(actual).toContain('<p class="div-label">')
-        // Stripping the floor line must reproduce the pinned fixture.
-        const withoutFloor = actual
-          .split('\n')
-          .filter((line) => !line.includes('class="div-label"'))
-          .join('\n')
-        expect(withoutFloor).toBe(expected.trim())
-      })
-    } else if (allowlisted) {
+    if (allowlisted) {
       it(`${name}`, () => {
         const actual = carveToHtml(source)
         expect(actual.trim()).toBe(expected.trim())

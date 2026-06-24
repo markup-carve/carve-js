@@ -79,3 +79,36 @@ describe('generic divs', () => {
     )
   })
 })
+
+describe('hard-break block (::: \\)', () => {
+  // carve spec #207 / 88-line-blocks. The body is parsed as ordinary blocks
+  // and soft breaks become hard breaks ONLY in the div's direct paragraph
+  // children; nested blocks keep ordinary soft breaks. Emits
+  // `<div class="hardbreaks">`. Matches carve-rs / carve-php.
+  it('promotes soft breaks to hard breaks in direct paragraphs', () => {
+    expect(h('::: \\\none\ntwo\n:::')).toBe(
+      '<div class="hardbreaks">\n  <p>one<br>\ntwo</p>\n</div>',
+    )
+  })
+
+  it('keeps ordinary soft breaks inside nested blocks, no leading-ws nbsp', () => {
+    expect(h(':::: \\\n  indented\nnext\n\n::: note\na\nb\n:::\n::::')).toBe(
+      '<div class="hardbreaks">\n' +
+        '  <p>indented<br>\nnext</p>\n' +
+        '  <aside class="admonition note">\n    <p>a\nb</p>\n  </aside>\n' +
+        '</div>',
+    )
+  })
+
+  it('renders inline markup within the hard-broken lines', () => {
+    expect(h('::: \\\n*Bold* and /italic/,\nplain\n:::')).toBe(
+      '<div class="hardbreaks">\n' +
+        '  <p><strong>Bold</strong> and <em>italic</em>,<br>\nplain</p>\n' +
+        '</div>',
+    )
+  })
+
+  it('does not open without a closer (opener stays literal text)', () => {
+    expect(h('::: \\\none\ntwo')).toBe('<p>::: <br>\none\ntwo</p>')
+  })
+})
