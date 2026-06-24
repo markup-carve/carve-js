@@ -115,16 +115,27 @@ const DANGEROUS_URL_SCHEMES = ['javascript', 'vbscript', 'data', 'file']
  * passes. Pass `allowedUrlSchemes` to switch to a strict ALLOWLIST instead;
  * pass `deniedUrlSchemes` to customize the denylist.
  *
- * Scheme detection ignores leading C0 control characters and whitespace,
- * which browsers strip before parsing a scheme - so `\tjavascript:` and
- * ` javascript:` are caught, not bypassed. The returned value is still
- * passed through `escapeAttr` by the caller.
+ * Scheme detection ignores leading C0 control characters, whitespace, and
+ * Unicode separators, which browsers strip (or that obfuscate) before a
+ * scheme is parsed - so `\tjavascript:`, ` javascript:`, and a NBSP-prefixed
+ * scheme are caught, not bypassed. The returned value is still passed through
+ * `escapeAttr` by the caller.
  */
+/**
+ * Characters dropped before scheme detection: C0 controls + ASCII space
+ * (U+0000..U+0020), plus Unicode whitespace/separators that some contexts
+ * tolerate around a scheme - NBSP (U+00A0), line/paragraph separators
+ * (U+2028 / U+2029) and the BOM / zero-width no-break space (U+FEFF).
+ * Stripping these defeats obfuscated schemes like " javascript:" with a
+ * leading NBSP and keeps the probe aligned with carve-rs / carve-php.
+ */
+const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0020\u00a0\u2028\u2029\ufeff]+/g
+
 function sanitizeUrl(url: string, opts: RenderOptions): string {
   if (opts.sanitizeUrls === false) return url
   // Browsers ignore C0 controls and whitespace when reading the scheme;
   // strip them for detection so obfuscated schemes can't slip through.
-  const probe = url.replace(/[\u0000-\u0020]/g, '')
+  const probe = url.replace(SCHEME_PROBE_STRIP_RE, '')
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
   if (!scheme) return url
   const s = scheme[1].toLowerCase()
@@ -161,7 +172,7 @@ const DANGEROUS_VALUE_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file
 function sanitizeAttrValue(name: string, value: string): string {
   const colon = value.indexOf(':')
   if (colon !== -1) {
-    const scheme = value.slice(0, colon).replace(/[\u0000-\u0020]+/g, '').toLowerCase()
+    const scheme = value.slice(0, colon).replace(SCHEME_PROBE_STRIP_RE, '').toLowerCase()
     if (DANGEROUS_VALUE_SCHEMES.has(scheme)) return ''
   }
   if (name.toLowerCase() === 'style' && hasDangerousCss(value)) return ''
