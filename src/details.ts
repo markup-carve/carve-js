@@ -1,13 +1,5 @@
-import type { Admonition, Attrs, InlineNode } from './ast.js'
+import type { Admonition, InlineNode } from './ast.js'
 import type { CarveExtension } from './extension.js'
-
-/** Merge a base class ahead of the author classes (a fresh Attrs copy), so the
- *  static wrapper keeps a single, merged `class` attribute. */
-function withBaseClass(attrs: Attrs | undefined, base: string): Attrs {
-  const a: Attrs = attrs ? { ...attrs } : {}
-  a.classes = [base, ...(a.classes ?? [])]
-  return a
-}
 
 /**
  * Render `::: details` admonitions as the HTML5 `<details>/<summary>`
@@ -66,9 +58,9 @@ export function details(): CarveExtension {
         )
       },
     },
-    // Static render: the disclosure is expanded - the title becomes a heading
-    // and the body is always shown (no collapse). A `<details open>` would
-    // still be a widget; a flat `<section>` is fully inert for print / archival.
+    // Static render: a disclosure is NOT flattened. It stays the same native
+    // `<details>/<summary>` element as the interactive path, but carries the
+    // `open` attribute so the body is expanded by default for print / archival.
     staticBlockRenderers: {
       admonition: (node, ctx) => {
         const adm = node as Admonition
@@ -77,23 +69,13 @@ export function details(): CarveExtension {
         const innerPad = ctx.indent(ctx.level + 1)
         const title = adm.title ? inlineText(adm.title) : ''
         const summary = title.trim() === '' ? 'Details' : title
-        // Merge the `details` base class ahead of any author classes so the
-        // wrapper carries one `class` attribute (not a duplicate).
-        const open = `<section${ctx.renderAttrs(withBaseClass(adm.attrs, 'details'))}>`
+        const open = `<details open${ctx.renderAttrs(adm.attrs)}>`
         const body = ctx.renderChildren(adm.children, ctx.level + 1)
-        // A grouping `[label]` (if any) is surfaced as the caption floor after
-        // the title heading - the static path consumes the node, so the core
-        // floor never runs; preserving it keeps the no-content-dropped
-        // invariant (title first when both are present).
-        const labelLine = adm.label
-          ? `${innerPad}<p class="div-label">${ctx.escapeHtml(adm.label)}</p>\n`
-          : ''
         return (
           `${pad}${open}\n` +
-          `${innerPad}<h3 class="details-title">${ctx.escapeHtml(summary)}</h3>\n` +
-          labelLine +
+          `${innerPad}<summary>${ctx.escapeHtml(summary)}</summary>\n` +
           `${body}\n` +
-          `${pad}</section>`
+          `${pad}</details>`
         )
       },
     },

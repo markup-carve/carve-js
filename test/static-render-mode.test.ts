@@ -79,26 +79,16 @@ describe('static render mode — tabs / code-group flatten to labeled sections',
 })
 
 describe('static render mode — details / spoiler reveal', () => {
-  it('interactive details is a <details> disclosure; static is an expanded <section>', () => {
+  it('details is a native <details> disclosure in both modes; static adds open', () => {
     const src = '::: details "More info"\nHidden body.\n:::'
     const live = carveToHtml(src, { extensions: exts(), mode: 'interactive' })
     expect(live).toContain('<details>')
     expect(live).toContain('<summary>More info</summary>')
 
     const flat = carveToHtml(src, { extensions: exts(), mode: 'static' })
-    expect(flat).not.toContain('<details')
-    expect(flat).toContain('<section class="details">')
-    expect(flat).toContain('<h3 class="details-title">More info</h3>')
+    expect(flat).toContain('<details open>')
+    expect(flat).toContain('<summary>More info</summary>')
     expect(flat).toContain('Hidden body.')
-  })
-
-  it('static details preserves a grouping [label] alongside the title', () => {
-    const html = carveToHtml('::: details "More" [Build]\nBody.\n:::', {
-      extensions: exts(),
-      mode: 'static',
-    })
-    expect(html).toContain('<h3 class="details-title">More</h3>')
-    expect(html).toContain('<p class="div-label">Build</p>')
   })
 
   it('static spoiler reveals inline + block content (no blur)', () => {
@@ -265,15 +255,15 @@ describe('core caption floor — unconsumed div [label]', () => {
 })
 
 describe('static render mode — dispatch & attribute correctness', () => {
-  it('static details merges author classes onto one class attribute (no duplicate)', () => {
+  it('static details carries author attributes onto the native <details open> tag', () => {
     // Attributes attach via a preceding block-attribute line (strict djot).
     const html = carveToHtml('{.wide}\n::: details "More"\nBody.\n:::', {
       extensions: [details()],
       mode: 'static',
     })
-    // A single merged class, not `class="details" class="wide"`.
-    expect(html).toContain('<section class="details wide">')
-    expect((html.match(/class="/g) ?? []).length).toBe(2) // section + h3
+    // Native disclosure with the open attribute and the author class.
+    expect(html).toContain('<details open class="wide">')
+    expect((html.match(/class="/g) ?? []).length).toBe(1) // details only; summary has none
   })
 
   it('honors a staticBlockRenderers.heading in static mode (API consistency)', () => {
