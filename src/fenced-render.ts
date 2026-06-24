@@ -115,28 +115,35 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
     staticBlockRenderers: {
       // Static render: the diagram is a client-script visual, so the engine
       // cannot draw it. If a build-time renderer is supplied for this instance
-      // (`renderers.mermaid` / `renderers.chart`), emit its output verbatim;
-      // otherwise degrade to the source as a `<pre><code class="language-…">`
+      // (`renderers.mermaid` / `renderers.chart`), emit its output wrapped in
+      // the attributed element so author attrs survive; otherwise degrade to
+      // the source as a `<pre><code class="language-…">`
       // block - never blank, and re-renderable by a host that loads the client
       // library.
       'code-block': (node, ctx) => {
         const code = node as CodeBlock
         if (!languages.includes(code.lang ?? '')) return undefined
         const pad = ctx.indent(ctx.level)
+        // Merge the cssClass ahead of author classes and copy the author
+        // attributes through ctx.renderAttrs (same hardening as the interactive
+        // path), so an `{#id .class data-x=y}` on the fence survives both the
+        // renderer-output and the source-fallback degradation paths.
+        const attrs: Attrs = { ...code.attrs, classes: [cssClass, ...(code.attrs?.classes ?? [])] }
         const build = staticRendererKey ? ctx.renderers[staticRendererKey] : undefined
         if (build) {
-          const element = build(code.content)
+          // Wrap the renderer's output (an `<svg>` / `<img>`) in the same
+          // element + author attributes the interactive path emits, so the
+          // fence's id / classes / other attrs land on the wrapping element
+          // instead of being dropped.
+          const element = `<${tag}${ctx.renderAttrs(attrs)}>${build(code.content)}</${tag}>`
           if (opts.wrapInFigure) {
             return `${pad}<figure class="${ctx.escapeAttr(figureClass)}">\n${pad}${element}\n${pad}</figure>`
           }
           return `${pad}${element}`
         }
-        // Source fallback: a self-contained, escaped code block. Merge the
-        // cssClass ahead of author classes and copy the author attributes
-        // through ctx.renderAttrs (same hardening as the interactive path), so
-        // an `{#id .class data-x=y}` on the fence survives the degradation path
-        // instead of being dropped.
-        const attrs: Attrs = { ...code.attrs, classes: [cssClass, ...(code.attrs?.classes ?? [])] }
+        // Source fallback: a self-contained, escaped code block reusing the
+        // same merged attrs (cssClass ahead of author classes, hardened by
+        // ctx.renderAttrs).
         const langAttr = code.lang ? ` class="language-${ctx.escapeAttr(code.lang)}"` : ''
         return `${pad}<pre${ctx.renderAttrs(attrs)}><code${langAttr}>${ctx.escapeHtml(code.content)}\n</code></pre>`
       },

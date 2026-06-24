@@ -142,15 +142,28 @@ describe('static render mode — mermaid (no-renderer source vs with-renderer im
     expect(html).toContain('<pre id="d1" class="mermaid bordered">')
   })
 
-  it('static mermaid WITH a stub renderer emits the injected SVG', () => {
+  it('static mermaid WITH a stub renderer emits the injected SVG inside the attributed wrapper', () => {
     const html = carveToHtml(SRC, {
       extensions: exts(),
       mode: 'static',
       renderers: { mermaid: (src) => `<svg data-src="${src.length}"><!--diagram--></svg>` },
     })
-    // The renderer receives the verbatim diagram source ("graph TD; A --> B").
-    expect(html).toBe('<svg data-src="17"><!--diagram--></svg>')
-    expect(html).not.toContain('<pre')
+    // The renderer receives the verbatim diagram source ("graph TD; A --> B"),
+    // and its output is wrapped in the same `<pre class="mermaid">` element the
+    // interactive / fallback paths use, so author attributes can ride along.
+    expect(html).toBe('<pre class="mermaid"><svg data-src="17"><!--diagram--></svg></pre>')
+  })
+
+  it('static mermaid WITH a renderer carries author fence attributes onto the wrapper', () => {
+    // `{#diagram .wide}` on the fence must land on the wrapping element of the
+    // renderer output, exactly as it does on the source-fallback path - the
+    // P2 codex flagged was the renderer path dropping these attributes.
+    const html = carveToHtml('{#diagram .wide}\n``` mermaid\nA --> B\n```', {
+      extensions: exts(),
+      mode: 'static',
+      renderers: { mermaid: () => '<svg><!--d--></svg>' },
+    })
+    expect(html).toBe('<pre id="diagram" class="mermaid wide"><svg><!--d--></svg></pre>')
   })
 })
 
@@ -166,13 +179,24 @@ describe('static render mode — chart', () => {
     expect(html).not.toContain('<script')
   })
 
-  it('static chart with a stub renderer emits the injected image', () => {
+  it('static chart with a stub renderer emits the injected image inside the attributed wrapper', () => {
     const html = carveToHtml(SRC, {
       extensions: exts(),
       mode: 'static',
       renderers: { chart: () => '<img alt="chart" src="chart.png">' },
     })
-    expect(html).toBe('<img alt="chart" src="chart.png">')
+    // json-mode default wrapper is `<div class="chart">`; the image rides inside
+    // it so author attributes survive the renderer path.
+    expect(html).toBe('<div class="chart"><img alt="chart" src="chart.png"></div>')
+  })
+
+  it('static chart with a renderer carries author fence attributes onto the wrapper', () => {
+    const html = carveToHtml('{#c1 .boxed}\n``` chart\n{"type":"bar"}\n```', {
+      extensions: exts(),
+      mode: 'static',
+      renderers: { chart: () => '<img alt="chart" src="chart.png">' },
+    })
+    expect(html).toBe('<div id="c1" class="chart boxed"><img alt="chart" src="chart.png"></div>')
   })
 })
 
