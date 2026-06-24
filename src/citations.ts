@@ -216,7 +216,8 @@ function joinWithSoftBreaks(lines: InlineNode[][]): InlineNode[] {
   const out: InlineNode[] = []
   lines.forEach((line, i) => {
     if (i > 0) out.push({ type: 'soft-break' } as InlineNode)
-    out.push(...line)
+    // Non-spread push: a single soft-break-delimited segment can be unbounded.
+    for (const n of line) out.push(n)
   })
   return out
 }
