@@ -2876,7 +2876,13 @@ function allocateDashes(n: number): string {
 }
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
 const isQuoteOpenContext = (prev: string) =>
-  prev === '' || /[\s([{\-–—/]/.test(prev) || prev === '“' || prev === '‘'
+  prev === '' ||
+  /[\s([{\-–—/]/.test(prev) ||
+  prev === '“' ||
+  prev === '‘' ||
+  // U+E000 is the internal non-breaking-space placeholder (escaped `\ ` /
+  // line-block indent); a nbsp is whitespace, so a quote after it opens.
+  prev === ''
 
 /**
  * Recognize one smart-typography construct at `text[i]`.
