@@ -3,6 +3,7 @@ import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Tab
 export interface AnsiRenderOptions {}
 
 const MAX_RENDER_DEPTH = 200
+const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
@@ -184,7 +185,7 @@ function renderList(node: List, ctx: AnsiContext): string {
       } else {
         marker = style('•', FG_CYAN)
       }
-      return `${indent}${marker} ${renderBlocks(item.children, ctx).trim()}\n`
+      return `${indent}${marker} ${trimNonNbsp(renderBlocks(item.children, ctx))}\n`
     })
     .join('')
   ctx.listDepth--
@@ -195,7 +196,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: AnsiContext, trailin
   let out = ''
   for (const item of items) {
     for (const term of item.terms) out += `${style(renderInlines(term, ctx), BOLD + FG_YELLOW)}\n`
-    for (const def of item.definitions) out += `  ${renderBlocks(def, ctx).trim()}\n`
+    for (const def of item.definitions) out += `  ${trimNonNbsp(renderBlocks(def, ctx))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -209,7 +210,7 @@ function renderTable(node: Table, ctx: AnsiContext): string {
     const isHeader = row.cells.length > 0 && row.cells.every((c) => c.header)
     return Array.from({ length: cols }, (_, i) => {
       const cell = row.cells[i]
-      const content = cell ? renderInlines(cell.children, ctx).trim() : ''
+      const content = cell ? trimNonNbsp(renderInlines(cell.children, ctx)) : ''
       return { content, plain: stripAnsi(content), isHeader }
     })
   })
@@ -262,21 +263,21 @@ function renderFigure(node: Figure, ctx: AnsiContext): string {
     node.target.type === 'image'
       ? renderImage(node.target)
       : node.target.type === 'table'
-        ? renderTable(node.target, ctx).trimEnd()
-        : renderBlock(node.target, ctx).trimEnd()
+        ? trimEndNonNbsp(renderTable(node.target, ctx))
+        : trimEndNonNbsp(renderBlock(node.target, ctx))
   const sep = node.target.type === 'blockquote' ? '\n\n' : '\n'
   return `${target}${sep}${renderCaption(node.caption, ctx)}`
 }
 
 function renderCaption(nodes: InlineNode[], ctx: AnsiContext): string {
-  return `${style(renderInlines(nodes, ctx).trim(), ITALIC + DIM)}\n\n`
+  return `${style(trimNonNbsp(renderInlines(nodes, ctx)), ITALIC + DIM)}\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `${style(`[${stripControls(label)}]`, FG_CYAN + DIM)} ${renderBlocks(blocks, ctx).trim()}\n`
+    out += `${style(`[${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
   }
   return out
 }
@@ -464,7 +465,15 @@ function normalize(text: string): string {
   // The internal non-breaking-space placeholder (U+E000) collapses to an
   // ordinary space in terminal output. Done after trimming so placeholder-
   // derived leading indentation survives; a literal U+00A0 is left intact.
-  return `${text.replace(/\n{3,}/g, '\n\n').trim()}\n`.replace(/\ue000/g, ' ')
+  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, ' ')
+}
+
+function trimNonNbsp(text: string): string {
+  return text.replace(TRIM_NON_NBSP_RE, '')
+}
+
+function trimEndNonNbsp(text: string): string {
+  return text.replace(/[^\S\u00a0]+$/g, '')
 }
 
 function cleanEscapedText(node: Text): string {
