@@ -15,6 +15,7 @@ import type {
 export interface MarkdownRenderOptions {}
 
 const MAX_RENDER_DEPTH = 200
+const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {}): string {
   const headingIds = new Set<string>()
@@ -59,7 +60,7 @@ function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'heading': {
-      const text = renderInlines(node.children, ctx).replace(/\s*\n\s*/g, ' ').trim()
+      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[^\S\u00a0]*\n[^\S\u00a0]*/g, ' '))
       const id = node.attrs?.id
       const suffix = id && ctx.referencedHeadingIds.has(id) ? ` {#${id}}` : ''
       return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
@@ -77,7 +78,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'blockquote': {
-      const lines = renderBlocks(node.children, ctx).trim().split('\n')
+      const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
       return `${lines.map((line) => `> ${line}`).join('\n')}\n\n`
     }
     case 'list':
@@ -139,7 +140,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     } else {
       prefix = '- '
     }
-    const content = renderListItem(item, ctx).trim()
+    const content = trimNonNbsp(renderListItem(item, ctx))
     const lines = content.split('\n')
     out += `${indent}${prefix}${lines.shift() ?? ''}\n`
     const continuation = ' '.repeat(prefix.length)
@@ -157,7 +158,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   let out = ''
   for (const item of items) {
     for (const term of item.terms) out += `**${renderInlines(term, ctx)}**\n`
-    for (const def of item.definitions) out += `: ${renderBlocks(def, ctx).trim()}\n`
+    for (const def of item.definitions) out += `: ${trimNonNbsp(renderBlocks(def, ctx))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -167,7 +168,7 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const rows: string[] = []
   let columns = 0
   for (const row of node.rows) {
-    const cells = row.cells.map((cell) => renderInlines(cell.children, ctx).trim())
+    const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
     columns = Math.max(columns, cells.length)
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) header = rendered
@@ -187,8 +188,8 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
     node.target.type === 'image'
       ? renderImage(node.target)
       : node.target.type === 'table'
-        ? renderTable(node.target, ctx).trim()
-        : renderBlock(node.target, ctx).trim()
+        ? trimNonNbsp(renderTable(node.target, ctx))
+        : trimNonNbsp(renderBlock(node.target, ctx))
   // A block-level target (a code-block listing or a display-math equation)
   // keeps the caption on its own line; an inline image target stays adjacent.
   const sep =
@@ -204,7 +205,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[^${stripControls(label)}]: ${renderBlocks(blocks, ctx).trim()}\n`
+    out += `[^${stripControls(label)}]: ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
   }
   return out
 }
@@ -453,7 +454,11 @@ function normalize(text: string): string {
   // re-render as `&nbsp;` and is never mistaken for an indented code-block
   // prefix the way ordinary leading spaces would be. Done after trimming so
   // placeholder-derived leading indentation survives.
-  return `${text.replace(/\n{3,}/g, '\n\n').trim()}\n`.replace(/\ue000/g, '\u00a0')
+  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, '\u00a0')
+}
+
+function trimNonNbsp(text: string): string {
+  return text.replace(TRIM_NON_NBSP_RE, '')
 }
 
 function walkBlocks(
