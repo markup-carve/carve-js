@@ -3,6 +3,7 @@ import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Tab
 export interface PlainTextRenderOptions {}
 
 const MAX_RENDER_DEPTH = 200
+const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {}): string {
   const ctx: PlainContext = { blockDepth: 0, inlineDepth: 0 }
@@ -39,7 +40,7 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'code-block':
       return `${stripControls(node.content)}\n\n`
     case 'blockquote':
-      return `"${renderBlocks(node.children, ctx).trim()}"\n\n`
+      return `"${trimNonNbsp(renderBlocks(node.children, ctx))}"\n\n`
     case 'list':
       return renderList(node, ctx)
     case 'thematic-break':
@@ -84,7 +85,7 @@ function renderList(node: List, ctx: PlainContext): string {
   for (const item of node.items) {
     out += node.ordered ? `${counter}. ` : '- '
     counter++
-    out += `${renderBlocks(item.children, ctx).trim()}\n`
+    out += `${trimNonNbsp(renderBlocks(item.children, ctx))}\n`
   }
   return `${out}\n`
 }
@@ -93,7 +94,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: PlainContext, traili
   let out = ''
   for (const item of items) {
     for (const term of item.terms) out += `${renderInlines(term, ctx)}\n`
-    for (const def of item.definitions) out += `  ${renderBlocks(def, ctx).trim()}\n`
+    for (const def of item.definitions) out += `  ${trimNonNbsp(renderBlocks(def, ctx))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -107,11 +108,11 @@ function renderTable(node: Table, ctx: PlainContext): string {
   for (const row of node.rows) {
     const cells: string[] = []
     for (let i = 0; i < cols; i++) {
-      cells.push(i < row.cells.length ? renderInlines(row.cells[i]!.children, ctx).trim() : '')
+      cells.push(i < row.cells.length ? trimNonNbsp(renderInlines(row.cells[i]!.children, ctx)) : '')
     }
     out += `${cells.join(' | ')}\n`
   }
-  if (node.caption) out = `${out.trimEnd()}\n${renderInlines(node.caption, ctx)}\n`
+  if (node.caption) out = `${trimEndNonNbsp(out)}\n${renderInlines(node.caption, ctx)}\n`
   return `${out}\n`
 }
 
@@ -120,8 +121,8 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
     node.target.type === 'image'
       ? stripControls(node.target.alt)
       : node.target.type === 'table'
-        ? renderTable(node.target, ctx).trim()
-        : renderBlock(node.target, ctx).trim()
+        ? trimNonNbsp(renderTable(node.target, ctx))
+        : trimNonNbsp(renderBlock(node.target, ctx))
   // A block-level target (a code-block listing or a display-math equation)
   // keeps the caption on its own line; an inline image target stays adjacent.
   const sep =
@@ -137,7 +138,7 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[${stripControls(label)}]: ${renderBlocks(blocks, ctx).trim()}\n`
+    out += `[${stripControls(label)}]: ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
   }
   return out
 }
@@ -223,7 +224,15 @@ function normalize(text: string): string {
   // ordinary space in plain text. Done after trimming so placeholder-derived
   // leading indentation (e.g. in a line block) survives; a literal U+00A0 in
   // the author's text is left intact.
-  return `${text.replace(/\n{3,}/g, '\n\n').trim()}\n`.replace(/\ue000/g, ' ')
+  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, ' ')
+}
+
+function trimNonNbsp(text: string): string {
+  return text.replace(TRIM_NON_NBSP_RE, '')
+}
+
+function trimEndNonNbsp(text: string): string {
+  return text.replace(/[^\S\u00a0]+$/g, '')
 }
 
 function cleanEscapedText(node: Text): string {

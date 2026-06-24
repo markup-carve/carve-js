@@ -116,21 +116,21 @@ const RE_FENCE =
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
 // item only with non-empty content: a content-less marker (`-`, `- `, `-   ` --
 // bare or trailing whitespace only) is NOT a list, it is paragraph text.
-const RE_UNORDERED = /^(\s*)[-*] +(\S.*)$/
+const RE_UNORDERED = /^([^\S\u00a0]*)[-*] +([\S\u00a0].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
-const RE_ORDERED = /^(\s*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)]) +(\S.*)$/
+const RE_ORDERED = /^([^\S\u00a0]*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)]) +([\S\u00a0].*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(\s*)[-*] +\[([ xX\-_>?])\] +(\S.*)$/
+const RE_TASK = /^([^\S\u00a0]*)[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
 // (Carve addition, grammar `item_attributes`). The brace body uses the same
 // quote-aware subpattern as the inline span tail (RE_SPAN_TAIL).
 const RE_ITEM_ATTR =
-  /^(\s*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +\S.*)$/
+  /^([^\S\u00a0]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[\S\u00a0].*)$/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload
@@ -142,7 +142,24 @@ function extractItemAttr(line: string): { stripped: string; attrs: Attrs } | nul
   if (!isValidAttrPayload(m[3]!)) return null
   return { stripped: m[1]! + m[2]! + m[4]!, attrs: parseAttrs(m[3]!) }
 }
-const RE_BLOCKQUOTE = /^>\s?(.*)$/
+const TRIM_STRUCTURAL_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
+
+function trimStructural(text: string): string {
+  // Fast path: a line with no literal U+00A0 trims identically to native
+  // String.trim() (which would also strip U+00A0, but there is none here), so
+  // the hot per-line blank/HR checks stay at native speed; only a line that
+  // actually carries a non-breaking space pays for the regex.
+  if (!text.includes(' ')) return text.trim()
+  return text.replace(TRIM_STRUCTURAL_RE, '')
+}
+
+function isBlankLine(line: string | undefined): boolean {
+  // A non-existent line (past EOF) is NOT a blank line: lookahead loops must
+  // terminate at EOF, not treat it as an endless run of blank lines.
+  return line !== undefined && trimStructural(line) === ''
+}
+
+const RE_BLOCKQUOTE = /^>[^\S ]?(.*)$/
 // Fences are a run of 3+ colons (group 1). A longer opener nests: a
 // `::::` block contains `:::` blocks, and only a bare closer of equal-or-
 // greater length closes it (djot fence-length rule).
@@ -191,7 +208,7 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // A leading `@` label is reserved for citation defs (`[@key]: entry`, #90),
 // handled by the citations extension — never a link destination.
 const RE_LINK_DEF =
-  /^\s*\[(?!@)([^\]]+)\]:\s+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*$/
+  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
@@ -494,10 +511,10 @@ function stripContainerPrefixes(raw: string): string {
   do {
     prev = line
     line = line
-      .replace(/^\s*>\s?/, '') // blockquote
-      .replace(/^\s*(?:[-*]|\d+[.)])\s+(?:\[[ xX\-_>?]\]\s+)?/, '') // list/task
+      .replace(/^[^\S\u00a0]*>[^\S\u00a0]?/, '') // blockquote (NBSP is content)
+      .replace(/^[^\S\u00a0]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP is content)
   } while (line !== prev)
-  return line.replace(/^\s+/, '') // residual indentation
+  return line.replace(/^[^\S\u00a0]+/, '') // residual indentation (keep a content NBSP)
 }
 
 /**
@@ -570,7 +587,7 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
   let pending: Attrs | null = null
   while (!lexer.eof()) {
     const line = lexer.peek()!
-    if (line.trim() === '') {
+    if (isBlankLine(line)) {
       // Blank lines do NOT reset pending block attributes (§15 reach).
       lexer.consume()
       continue
@@ -649,7 +666,7 @@ function peekBlockAttributes(lexer: Lexer): boolean {
   for (;;) {
     const ln = lexer.peek(n)
     if (ln === undefined) break
-    if (n > 0 && ln.trim() === '') break
+    if (n > 0 && isBlankLine(ln)) break
     collected += (n === 0 ? '' : '\n') + ln
     n++
     if (ln.includes('}')) {
@@ -674,7 +691,7 @@ function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
   for (;;) {
     const ln = lexer.peek(n)
     if (ln === undefined) break
-    if (n > 0 && ln.trim() === '') break // blank line inside an open brace: not a block
+    if (n > 0 && isBlankLine(ln)) break // blank line inside an open brace: not a block
     collected += (n === 0 ? '' : '\n') + ln
     n++
     if (ln.includes('}')) {
@@ -792,7 +809,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     lexer.consume()
     return null
   }
-  if (RE_HR.test(line.trim())) {
+  if (RE_HR.test(trimStructural(line))) {
     lexer.consume()
     return { type: 'thematic-break' } as ThematicBreak
   }
@@ -848,7 +865,7 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
   if (only.type !== 'math' || !(only as Math).display) return null
   // First non-blank line after the math line, and how many blanks precede it.
   let la = 1
-  while (lexer.peek(la)?.trim() === '') la++
+  while (isBlankLine(lexer.peek(la))) la++
   const after = lexer.peek(la)
   const blanks = la - 1
   const cap = after !== undefined ? RE_CAPTION.exec(after) : null
@@ -905,7 +922,7 @@ function parseHeading(lexer: Lexer): Heading {
   const sameLevel = new RegExp(`^#{${level}} +(.+)$`)
   while (!lexer.eof()) {
     const next = lexer.peek()!
-    if (next.trim() === '') break
+    if (isBlankLine(next)) break
     const cont = sameLevel.exec(next)
     if (cont) {
       text += '\n' + cont[1]!
@@ -968,7 +985,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
   // Optional caption (`^ …`): a captioned code block is a numbered LISTING,
   // wrapped in a figure exactly like a captioned image/blockquote/table.
   let lookahead = 0
-  while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
+  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
@@ -1009,6 +1026,10 @@ function parseRawBlock(lexer: Lexer): RawBlock {
 // Block comment: a `%%%`+ opener, closed by a line of the SAME length
 // (more `%` nest). Not rendered.
 function parseCommentBlock(lexer: Lexer): Comment {
+  // A comment fence delimiter is STRUCTURAL, not content: match the opener and
+  // closer with native trim (treating any whitespace, incl. U+00A0, as
+  // insignificant) so a stray non-breaking space cannot desync the closer and
+  // swallow the rest of the document.
   const open = lexer.consume().trim()
   const lines: string[] = []
   while (!lexer.eof()) {
@@ -1036,7 +1057,7 @@ function parseFootnoteDef(lexer: Lexer): null {
   let contentCol = -1
   while (!lexer.eof()) {
     const ln = lexer.peek()!
-    if (ln.trim() === '') {
+    if (isBlankLine(ln)) {
       pendingBlanks++
       lexer.consume()
       continue
@@ -1146,7 +1167,7 @@ function parseLineBlock(lexer: Lexer): Div {
       break
     }
     lexer.consume()
-    if (ln.trim() === '') {
+    if (isBlankLine(ln)) {
       if (stanza.length) {
         stanzas.push(stanza)
         stanza = []
@@ -1269,8 +1290,9 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     const bodyLines = [first]
     while (!lexer.eof()) {
       const ln = lexer.peek()!
-      if (ln.trim() !== '' && leadingWhitespace(ln) >= 3) {
-        bodyLines.push(ln.replace(/^\s+/, ''))
+      if (!isBlankLine(ln) && leadingWhitespace(ln) >= 3) {
+        // Strip the structural indentation but keep a content U+00A0.
+        bodyLines.push(ln.replace(/^[^\S\u00a0]+/, ''))
         lexer.consume()
       } else break
     }
@@ -1299,9 +1321,9 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     }
     items.push({ terms, definitions })
     // Allow a single blank line before the next entry's `:: term`.
-    if (!lexer.eof() && lexer.peek()!.trim() === '') {
+    if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
       let look = 1
-      while (lexer.peek(look)?.trim() === '') look++
+      while (isBlankLine(lexer.peek(look))) look++
       const next = lexer.peek(look)
       if (next && RE_DEFLIST_TERM.test(next)) for (let k = 0; k < look; k++) lexer.consume()
       else break
@@ -1346,7 +1368,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     state.paragraphOpen = false
     return
   }
-  if (content.trim() === '') {
+  if (isBlankLine(content)) {
     state.paragraphOpen = false
     return
   }
@@ -1357,7 +1379,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
   // `# h\n- item` is a heading plus a sibling list at the top level, and as
   // `> a\n> # h\n- item` is a quote (para + heading) plus a sibling list.
   // Mirrors trackItemLazyState.
-  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content.trim())) {
+  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(trimStructural(content))) {
     state.paragraphOpen = false
     return
   }
@@ -1438,7 +1460,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       const attached: string[] = []
       while (!lexer.eof()) {
         const next = lexer.peek()!
-        if (next.trim() === '' || RE_BLOCKQUOTE.test(next) || /^\+[ \t]*$/.test(next)) {
+        if (isBlankLine(next) || RE_BLOCKQUOTE.test(next) || /^\+[ \t]*$/.test(next)) {
           break
         }
         lexer.consume()
@@ -1470,7 +1492,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // mirroring the top level: `text\n- item` folds, `# h\n- item` is a heading
     // plus a sibling list. A caption `^ …` attaches to the quote.
     if (
-      ln.trim() === '' ||
+      isBlankLine(ln) ||
       RE_CAPTION.test(ln) ||
       startsInterruptingBlock(lexer)
     ) {
@@ -1496,7 +1518,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   // Optional caption with ^
   // Allow one blank line between
   let lookahead = 0
-  while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
+  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
@@ -1535,7 +1557,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
   if (m[5]) img.attrs = parseAttrs(m[5])
   // Optional caption
   let lookahead = 0
-  while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
+  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
@@ -1686,7 +1708,7 @@ function lineOpensBlock(line: string): boolean {
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
-    RE_HR.test(line.trim()) ||
+    RE_HR.test(trimStructural(line)) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
@@ -1717,7 +1739,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
-    RE_HR.test(line.trim()) ||
+    RE_HR.test(trimStructural(line)) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
@@ -1766,7 +1788,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     state.lazyFoldable = false
     return
   }
-  if (content.trim() === '') {
+  if (isBlankLine(content)) {
     state.lazyFoldable = false
     return
   }
@@ -1795,7 +1817,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     return
   }
   // A table row, heading, or thematic break leaves no open trailing paragraph.
-  if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(content.trim())) {
+  if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(trimStructural(content))) {
     state.lazyFoldable = false
     return
   }
@@ -1847,7 +1869,7 @@ function parseList(lexer: Lexer): List {
     let k = 1
     for (; lexer.peek(k) !== undefined; k++) {
       const ln = lexer.peek(k)!
-      if (ln.trim() !== '' && indentColumns(ln) <= baseIndent) break
+      if (!isBlankLine(ln) && indentColumns(ln) <= baseIndent) break
     }
     const nextLine = lexer.peek(k)
     const nextStripped =
@@ -1866,7 +1888,7 @@ function parseList(lexer: Lexer): List {
 
   while (!lexer.eof()) {
     const line = lexer.peek()!
-    if (line.trim() === '') {
+    if (isBlankLine(line)) {
       // Blank lines between siblings are handled by the per-item collector
       // below; a stray leading blank just ends the list.
       break
@@ -1916,11 +1938,11 @@ function parseList(lexer: Lexer): List {
     // sole item content is the continuation marker, not literal text
     // (`- + text` keeps `+ text` as literal content). Lets an item start
     // directly with a table, code block, quote or div at column 0.
-    if (content.trim() === '+') {
+    if (trimStructural(content) === '+') {
       const attached: string[] = []
       while (!lexer.eof()) {
         const a = lexer.peek()!
-        if (a.trim() === '') break
+        if (isBlankLine(a)) break
         const ind = indentColumns(a)
         if (ind < baseIndent) break
         if (ind === baseIndent) {
@@ -1940,7 +1962,7 @@ function parseList(lexer: Lexer): List {
             RE_UNORDERED.test(a) ||
             RE_TASK.test(a) ||
             extractItemAttr(a) !== null
-          if (sibling || anyMarker || a.trim() === '+') break
+          if (sibling || anyMarker || trimStructural(a) === '+') break
         }
         attached.push(sliceColumns(a, baseIndent))
         lexer.consume()
@@ -1979,11 +2001,11 @@ function parseList(lexer: Lexer): List {
       fenceClose: null,
       inComment: false,
       commentLen: 0,
-      lazyFoldable: content.trim() !== '',
+      lazyFoldable: !isBlankLine(content),
     }
     while (!lexer.eof()) {
       const l = lexer.peek()!
-      if (l.trim() === '') {
+      if (isBlankLine(l)) {
         pendingBlanks++
         lexer.consume()
         continue
@@ -1993,7 +2015,7 @@ function parseList(lexer: Lexer): List {
       // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
       // injects a blank separator so the block parses on its own; the
       // compact-list rule above then keeps the item tight.
-      if (indentColumns(l) === baseIndent && l.trim() === '+') {
+      if (indentColumns(l) === baseIndent && trimStructural(l) === '+') {
         lexer.consume()
         pendingBlanks = 0
         // Mark this blank as a `+`-injected separator: it lets the attached
@@ -2005,7 +2027,7 @@ function parseList(lexer: Lexer): List {
         trackItemLazyState('', lazyState)
         while (!lexer.eof()) {
           const a = lexer.peek()!
-          if (a.trim() === '') break
+          if (isBlankLine(a)) break
           const ind = indentColumns(a)
           if (ind < baseIndent) break
           if (ind === baseIndent) {
@@ -2025,7 +2047,7 @@ function parseList(lexer: Lexer): List {
               RE_UNORDERED.test(a) ||
               RE_TASK.test(a) ||
               extractItemAttr(a) !== null
-            if (sibling || anyMarker || a.trim() === '+') break
+            if (sibling || anyMarker || trimStructural(a) === '+') break
           }
           const attached = sliceColumns(a, baseIndent)
           nested.push(attached)
@@ -2272,7 +2294,7 @@ function parseCellMarkers(src: string): {
     if (m && isValidAttrPayload(m[1]!)) {
       const attrs = parseAttrs(m[1]!)
       if (!isEmptyAttrs(attrs)) {
-        return { header: false, attrs, content: src.slice(m[0].length).trim() }
+        return { header: false, attrs, content: trimStructural(src.slice(m[0].length)) }
       }
     }
   }
@@ -2281,7 +2303,7 @@ function parseCellMarkers(src: string): {
   // It may fail to merge later (for example in column 0), but it must still
   // render as an empty structural marker cell rather than an empty left-aligned
   // cell. Non-lone prefixes such as `|< text|` remain per-cell alignment.
-  if (src.trim() === '<') return { header: false, span: 'colspan', content: '' }
+  if (trimStructural(src) === '<') return { header: false, span: 'colspan', content: '' }
 
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
@@ -2309,13 +2331,13 @@ function parseCellMarkers(src: string): {
 
   if (i > 0) {
     // A tight marker prefix was consumed; the rest is content.
-    const content = src.slice(i).trim()
+    const content = trimStructural(src.slice(i))
     return align ? { header, align, content } : { header, content }
   }
 
   // No tight prefix: a lone `^`/`<` (always spaced) is a span marker;
   // otherwise the whole trimmed text is content.
-  const trimmed = src.trim()
+  const trimmed = trimStructural(src)
   if (trimmed === '^') return { header: false, span: 'rowspan', content: '' }
   return { header: false, content: trimmed }
 }
@@ -2329,7 +2351,7 @@ interface RawCell {
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
-  !c.span && !c.attrs && /^:?-+:?$/.test(c.raw.trim())
+  !c.span && !c.attrs && /^:?-+:?$/.test(trimStructural(c.raw))
 
 const isGfmDelimiterRow = (row: RawCell[]): boolean =>
   row.length > 0 && row.every(isGfmDelimiterCell)
@@ -2376,7 +2398,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         break
       lexer.consume()
       splitTableRow(line).forEach((src, idx) => {
-        const frag = src.trim()
+        const frag = trimStructural(src)
         const target = lastRaw![idx]
         // A fragment on a span (`^`/`<`) column is skipped: the spec's
         // "Combined: Rowspan + Multi-line" example always places the `+`
@@ -2415,7 +2437,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     !isGfmDelimiterRow(rawRows[0]!)
   ) {
     const aligns = rawRows[1]!.map((c) => {
-      const t = c.raw.trim()
+      const t = trimStructural(c.raw)
       const left = t.startsWith(':')
       const right = t.endsWith(':')
       return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
@@ -2454,7 +2476,7 @@ function parseTable(lexer: Lexer): Table | Figure {
   const table: Table = { type: 'table', rows }
   // Optional caption ^ ...
   let lookahead = 0
-  while (!lexer.eof() && lexer.peek(lookahead)?.trim() === '') lookahead++
+  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
   const next = lexer.peek(lookahead)
   if (next) {
     const cap = RE_CAPTION.exec(next)
@@ -2492,7 +2514,7 @@ function splitTableRow(line: string): string[] {
     buf += ch
   }
   // Trailing content after last pipe
-  if (buf.trim() !== '') cells.push(buf)
+  if (trimStructural(buf) !== '') cells.push(buf)
   return cells
 }
 
@@ -2555,16 +2577,16 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '-':
       // thematic break only. A bullet/task does NOT interrupt a paragraph
       // (symmetric with ordered markers; a list needs a blank line, §10).
-      return RE_HR.test(ln.trim())
+      return RE_HR.test(trimStructural(ln))
     case '+':
       // `+` is the list-continuation marker, never an interrupter.
       return false
     case '*':
       // abbreviation definition (invisible) or thematic break. A bullet/task
       // does NOT interrupt (symmetric, §10).
-      return RE_ABBR_DEF.test(ln) || RE_HR.test(ln.trim())
+      return RE_ABBR_DEF.test(ln) || RE_HR.test(trimStructural(ln))
     case '_':
-      return RE_HR.test(ln.trim())
+      return RE_HR.test(trimStructural(ln))
     case ':':
       // An admonition/div/line-block that has a `:::` closer ahead (the `::: |`
       // line-block shares the bare `:::` closer). A definition-list term (`::`)
@@ -2621,7 +2643,7 @@ function parseParagraph(lexer: Lexer): Paragraph {
   const startLineIndex = lexer.pos
   while (!lexer.eof()) {
     const ln = lexer.peek()!
-    if (ln.trim() === '') break
+    if (isBlankLine(ln)) break
     // Paragraph interruption (grammar PART 9 §10): a VISIBLE block (heading,
     // list, quote, table, fence, thematic break, admonition/div) interrupts
     // an open paragraph with no blank line before it, at the top level AND
@@ -3181,7 +3203,7 @@ function scanInlineInner(
     // footnote recognition disabled.
     if (!inFootnote && c === '^' && text[i + 1] === '[' && text[i - 1] !== '^') {
       const close = bracketClose[i + 1]
-      if (close !== undefined && text.slice(i + 2, close).trim() !== '') {
+      if (close !== undefined && trimStructural(text.slice(i + 2, close)) !== '') {
         flush()
         const inner = text.slice(i + 2, close)
         const children = scanInline(inner, shiftSource(source, text, i + 2), true)
