@@ -248,7 +248,12 @@ function tableRow(
   widths: number[],
 ): string {
   const sep = style('│', DIM)
-  const parts = cells.map((cell, i) => {
+  // Drop trailing empty cells so a short/rowspan header row is ragged
+  // (`│ A │`, not `│ A │   │`); widths/borders stay full-width. Matches
+  // carve-php / carve-rs.
+  const lastFilled = cells.reduce((last, cell, i) => (cell.plain !== '' ? i : last), -1)
+  const visible = cells.slice(0, lastFilled + 1)
+  const parts = visible.map((cell, i) => {
     const padding = (widths[i] ?? 0) - width(cell.plain)
     const content = cell.isHeader
       ? style(cell.content + ' '.repeat(padding), BOLD)
