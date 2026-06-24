@@ -5,6 +5,7 @@ import {
   chart,
   codeGroup,
   details,
+  graphviz,
   mathBlock,
   mermaid,
   spoiler,
@@ -23,7 +24,16 @@ const TABS_SRC = [
   '::::',
 ].join('\n')
 
-const exts = () => [tabs(), codeGroup(), details(), spoiler(), mermaid(), chart(), mathBlock()]
+const exts = () => [
+  tabs(),
+  codeGroup(),
+  details(),
+  spoiler(),
+  mermaid(),
+  chart(),
+  graphviz(),
+  mathBlock(),
+]
 
 describe('static render mode — option plumbing', () => {
   it('rejects an unknown mode value', () => {
@@ -197,6 +207,35 @@ describe('static render mode — chart', () => {
       renderers: { chart: () => '<img alt="chart" src="chart.png">' },
     })
     expect(html).toBe('<div id="c1" class="chart boxed"><img alt="chart" src="chart.png"></div>')
+  })
+})
+
+describe('static render mode — graphviz', () => {
+  const SRC = '``` graphviz\ndigraph { A -> B }\n```'
+
+  it('static graphviz without a renderer degrades to escaped source <pre><code>', () => {
+    const html = carveToHtml(SRC, { extensions: exts(), mode: 'static' })
+    expect(html).toContain('<pre class="graphviz"><code class="language-graphviz">')
+    expect(html).toContain('digraph { A -&gt; B }')
+    expect(html).not.toContain('<script')
+  })
+
+  it('static graphviz with a stub renderer emits the injected image inside the wrapper', () => {
+    const html = carveToHtml(SRC, {
+      extensions: exts(),
+      mode: 'static',
+      renderers: { graphviz: () => '<img alt="graphviz" src="graph.svg">' },
+    })
+    expect(html).toBe('<pre class="graphviz"><img alt="graphviz" src="graph.svg"></pre>')
+  })
+
+  it('the dot alias consults the same graphviz renderer key', () => {
+    const html = carveToHtml('``` dot\ndigraph { A -> B }\n```', {
+      extensions: exts(),
+      mode: 'static',
+      renderers: { graphviz: () => '<img alt="graphviz" src="graph.svg">' },
+    })
+    expect(html).toBe('<pre class="graphviz"><img alt="graphviz" src="graph.svg"></pre>')
   })
 })
 

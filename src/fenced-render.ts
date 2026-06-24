@@ -20,13 +20,13 @@ export interface FencedRenderOptions {
   figureClass?: string
   /**
    * Which build-time renderer in the static `renderers` map produces this
-   * instance's image (`'mermaid'` or `'chart'`). When set and a `mode:
-   * "static"` render supplies that renderer, `renderStatic` emits the
+   * instance's image (`'mermaid'`, `'chart'` or `'graphviz'`). When set and a
+   * `mode: "static"` render supplies that renderer, `renderStatic` emits the
    * renderer's output (an `<svg>` / `<img>`); otherwise it falls back to the
    * source as a `<pre><code>` block. Unset means no build renderer applies and
    * static always degrades to source.
    */
-  staticRenderer?: 'mermaid' | 'chart'
+  staticRenderer?: 'mermaid' | 'chart' | 'graphviz'
 }
 
 // Text mode: escape `&` and `<` (blocking tag injection), but keep `>` so
@@ -115,7 +115,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
     staticBlockRenderers: {
       // Static render: the diagram is a client-script visual, so the engine
       // cannot draw it. If a build-time renderer is supplied for this instance
-      // (`renderers.mermaid` / `renderers.chart`), emit its output wrapped in
+      // (`renderers.mermaid` / `renderers.chart` / `renderers.graphviz`), emit its output wrapped in
       // the attributed element so author attrs survive; otherwise degrade to
       // the source as a `<pre><code class="language-…">`
       // block - never blank, and re-renderable by a host that loads the client
@@ -153,9 +153,10 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
 
 /** D2 preset (text mode, `<pre class="d2">`). */
 export const d2 = (): CarveExtension => fencedRender({ language: 'd2' })
-/** Graphviz preset (text mode); claims both `dot` and `graphviz`. */
+/** Graphviz preset (text mode); claims both `dot` and `graphviz`. In a static
+ *  render a supplied `renderers.graphviz` pre-renders the source to an image. */
 export const graphviz = (): CarveExtension =>
-  fencedRender({ language: ['dot', 'graphviz'], cssClass: 'graphviz' })
+  fencedRender({ language: ['dot', 'graphviz'], cssClass: 'graphviz', staticRenderer: 'graphviz' })
 /** WaveDrom preset (text mode, `<pre class="wavedrom">`). */
 export const wavedrom = (): CarveExtension => fencedRender({ language: 'wavedrom' })
 /** ABC music notation preset (text mode, `<pre class="abc">`). */

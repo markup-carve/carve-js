@@ -12,6 +12,8 @@ export interface StaticRenderers {
   mermaid?: (source: string) => string
   /** Chart config source -> SVG/HTML string. */
   chart?: (source: string) => string
+  /** Graphviz / DOT source -> SVG/HTML string. */
+  graphviz?: (source: string) => string
   /** Math TeX source -> MathML/HTML string. `display` flags block math. */
   math?: (tex: string, display: boolean) => string
 }
