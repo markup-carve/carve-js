@@ -49,13 +49,18 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'admonition': {
       const body = renderBlocks(node.children, ctx)
       const title = node.title !== undefined ? renderInlines(node.title, ctx) : ''
+      // Caption floor: surface an unconsumed grouping [label] as a standalone
+      // line (title first when both are present).
+      const labelLine = node.label ? `${stripControls(node.label)}\n\n` : ''
       if (title !== '') {
-        return `${title}\n\n${body}`
+        return `${title}\n\n${labelLine}${body}`
       }
-      return body
+      return `${labelLine}${body}`
     }
     case 'div':
-      return renderBlocks(node.children, ctx)
+      return node.label
+        ? `${stripControls(node.label)}\n\n${renderBlocks(node.children, ctx)}`
+        : renderBlocks(node.children, ctx)
     case 'definition-list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':

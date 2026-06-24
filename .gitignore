@@ -4,3 +4,5 @@ coverage/
 .vitest-cache/
 *.log
 .DS_Store
+# Generated demo output (regenerable via examples/static-mode-demo.mjs)
+examples/static-mode-demo.*.html
