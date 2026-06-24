@@ -1,7 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, carveToMarkdown, carveToPlainText, carveToAnsi } from '../src/index.js'
 
 describe('Severity-1 robustness', () => {
+  it('does not overflow on a large single paragraph (no array-spread DoS)', () => {
+    // ~70k inline nodes in one paragraph. resolveHeadingIds runs
+    // unconditionally in every public API; an unbounded `...spread` of the
+    // node array (splice / push) overflowed V8's call-stack argument limit
+    // (~65k), a RangeError DoS on ~140KB of input. All four APIs must return
+    // a string instead of throwing.
+    const big = 'a\n'.repeat(70000)
+    for (const api of [carveToHtml, carveToMarkdown, carveToPlainText, carveToAnsi]) {
+      let out: string | undefined
+      expect(() => {
+        out = api(big)
+      }).not.toThrow()
+      expect(typeof out).toBe('string')
+    }
+  })
+
   it('does not overflow on deeply nested inline brackets', () => {
     const links = '['.repeat(9000) + 'x' + '](u)'.repeat(9000)
     expect(() => carveToHtml(links)).not.toThrow()

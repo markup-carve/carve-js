@@ -567,9 +567,11 @@ function allChildNodes(node: NodeLike): NodeLike[] {
   if (node.type === 'definition-list') {
     const out: NodeLike[] = []
     const items = (node['items'] as { terms: NodeLike[][]; definitions: NodeLike[][] }[]) ?? []
+    // Non-spread push throughout: term/def/caption/child arrays can be
+    // unbounded, so `push(...arr)` risks a call-stack overflow on large input.
     for (const item of items) {
-      for (const term of item.terms) out.push(...term)
-      for (const def of item.definitions) out.push(...def)
+      for (const term of item.terms) for (const n of term) out.push(n)
+      for (const def of item.definitions) for (const n of def) out.push(n)
     }
     return out
   }
@@ -578,11 +580,11 @@ function allChildNodes(node: NodeLike): NodeLike[] {
     const target = node['target'] as NodeLike | undefined
     if (target) out.push(target)
     const caption = node['caption'] as NodeLike[] | undefined
-    if (caption) out.push(...caption)
+    if (caption) for (const n of caption) out.push(n)
     return out
   }
   const out: NodeLike[] = []
-  for (const { list } of childArrays(node)) out.push(...list)
+  for (const { list } of childArrays(node)) for (const n of list) out.push(n)
   return out
 }
 

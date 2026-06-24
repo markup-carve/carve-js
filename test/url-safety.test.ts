@@ -141,6 +141,28 @@ describe('URL scheme sanitization (renderer defense-in-depth)', () => {
     expect(renderHtml(linkDoc('  javascript:alert(1)'))).toBe('<p><a href="">x</a></p>')
   })
 
+  it('blocks a leading-ASCII-space javascript: scheme via the public API', () => {
+    // Requirement: ` javascript:` must never yield a javascript: href.
+    const out = h('[x]( javascript:alert(1))')
+    expect(out).not.toMatch(/href="[^"]*javascript:/)
+  })
+
+  it('blocks a NBSP-prefixed javascript: scheme on a hand-built link', () => {
+    // U+00A0 (NBSP) before the scheme: the renderer strips Unicode
+    // separators in the scheme probe, matching carve-rs / carve-php, so the
+    // scheme is recognized and blanked rather than surviving as a relative URL.
+    expect(renderHtml(linkDoc(' javascript:alert(1)'))).toBe('<p><a href="">x</a></p>')
+  })
+
+  it('blocks line/paragraph-separator-prefixed javascript: schemes', () => {
+    expect(renderHtml(linkDoc(' javascript:alert(1)'))).toBe('<p><a href="">x</a></p>')
+    expect(renderHtml(linkDoc(' javascript:alert(1)'))).toBe('<p><a href="">x</a></p>')
+  })
+
+  it('blocks a BOM/zero-width-no-break-space-prefixed javascript: scheme', () => {
+    expect(renderHtml(linkDoc('﻿javascript:alert(1)'))).toBe('<p><a href="">x</a></p>')
+  })
+
   it('passes a clean https href on a hand-built link', () => {
     expect(renderHtml(linkDoc('https://example.com'))).toBe(
       '<p><a href="https://example.com">x</a></p>',
