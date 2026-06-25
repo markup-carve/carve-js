@@ -400,6 +400,7 @@ export function resolveHeadingIds(
             type: 'link',
             href: `#${tgtId}`,
             children,
+            fromCrossref: true,
           }
           nodes[i] = link
         } else {
