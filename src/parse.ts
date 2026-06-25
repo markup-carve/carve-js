@@ -215,8 +215,12 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // (grammar.ebnf:243,251), so it is intentionally not accepted here.
 // A leading `@` label is reserved for citation defs (`[@key]: entry`, #90),
 // handled by the citations extension — never a link destination.
+// Per grammar.ebnf:738,741,755 the destination ends at the first whitespace;
+// a following quoted run is the title. Anything else after the destination is
+// ignored (not a valid title), so the definition still registers with the bare
+// token as its destination -- it is NOT rejected. carve-rs matches this.
 const RE_LINK_DEF =
-  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*$/
+  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
@@ -2826,12 +2830,21 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
 
 // Footnote reference `[^label]` (no `]` in the label).
 const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
-const RE_EXTENSION = /^:([a-zA-Z][\w-]*)\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+// extension_name = identifier = (letter|'_'){letter|digit|'_'|'-'}
+// (grammar.ebnf:968-969,1122) -- a lone `_` is a valid extension name.
+const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 // Raw inline passthrough tag, follows a verbatim span: `` `…`{=html} ``.
 const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
 // Emoji shortcode `:name:` (after extension, which needs `[`).
 const RE_EMOJI = /^:([a-zA-Z0-9][\w+-]*):/
-const RE_AUTOLINK = /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s]+|[^\s>@]+@[^\s>]+)>/
+// Autolink (grammar.ebnf:775,776,791,792,1139). Two alternatives:
+//   url_autolink   = scheme ':' {url_char}+   -- url_char excludes `<`/`>`, so
+//                    a body `<` makes the construct invalid (whole-literal).
+//   email_autolink = {email_char}+ '@' {email_char}+ '.' {letter}+ -- the
+//                    `.TLD` is MANDATORY and email_char excludes `:`/`@`, so
+//                    `<a@b>` (no TLD) and `<x@y:z>` are not autolinks.
+const RE_AUTOLINK =
+  /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s<]+|[A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+\.[A-Za-z]+)>/
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 
@@ -2978,11 +2991,18 @@ function allocateDashes(n: number): string {
   return '—'.repeat(em) + '–'.repeat(en)
 }
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
+// Adjudicated smart-quote opening context (matches carve-rs on these inputs):
+// a straight quote curls OPENING when preceded by start-of-content, Unicode
+// whitespace (incl. NBSP, handled below via the U+E000 placeholder), or one of
+// the operator/opening-punctuation chars `( [ { = : - /`. Sentence punctuation
+// (`. , ; ! ?`), letters, digits and closing brackets stay CLOSING. The en/em
+// dash also opens (a quote right after a `--` dash run opens), as does a quote
+// directly after an opening curly quote (nested-quote context).
 const isQuoteOpenContext = (prev: string) =>
   prev === '' ||
   // `=` opens a quote so an attribute-like `key="value"` / `="x"` gets an
-  // opening curly quote (matches carve-php / carve-rs).
-  /[\s([{\-–—/=]/.test(prev) ||
+  // opening curly quote; `:` opens too (`:"q"` -> `:“q”`), matching carve-rs.
+  /[\s([{\-–—/=:]/.test(prev) ||
   prev === '“' ||
   prev === '‘' ||
   // U+E000 is the internal non-breaking-space placeholder (escaped `\ ` /
