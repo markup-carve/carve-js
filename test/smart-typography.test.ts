@@ -77,3 +77,16 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
     expect(h('a "x"')).toBe('<p>a&nbsp;“x”</p>')
   })
 })
+
+describe('= opens a quote; empty link destination is literal', () => {
+  const h2 = (x) => carveToHtml(x)
+  it('opens a quote after = (attribute-like text)', () => {
+    expect(h2('="x"')).toBe('<p>=“x”</p>')
+    expect(h2('a="b"')).toBe('<p>a=“b”</p>')
+  })
+  it('keeps an empty-destination link literal but parses a real one', () => {
+    expect(h2('[a]()')).toBe('<p>[a]()</p>')
+    expect(h2('[a](u)')).toBe('<p><a href="u">a</a></p>')
+    expect(h2('[a](u "t")')).toBe('<p><a href="u" title="t">a</a></p>')
+  })
+})
