@@ -86,6 +86,26 @@ describe('color swatch extension', () => {
     expect(html).toContain('style="background-color:color-mix(in srgb, #3b82f6 12%, transparent)"')
   })
 
+  it('reveal wraps the value and makes the swatch focusable', () => {
+    expect(carveToHtml(':color[#3b82f6]', { extensions: [colorSwatch({ reveal: true })] })).toBe(
+      '<p><span class="swatch swatch-reveal" tabindex="0"><span class="swatch-chip" style="background-color:#3b82f6"></span> <span class="swatch-val">#3b82f6</span></span></p>',
+    )
+  })
+
+  it('reveal with position: after wraps the value before the chip', () => {
+    expect(
+      carveToHtml(':color[#3b82f6]', { extensions: [colorSwatch({ position: 'after', reveal: true })] }),
+    ).toBe(
+      '<p><span class="swatch swatch-reveal" tabindex="0"><span class="swatch-val">#3b82f6</span> <span class="swatch-chip" style="background-color:#3b82f6"></span></span></p>',
+    )
+  })
+
+  it('reveal is ignored when position is none', () => {
+    expect(carveToHtml(':color[#3b82f6]', { extensions: [colorSwatch({ position: 'none', reveal: true })] })).toBe(
+      '<p><span class="swatch swatch-chip-only" title="#3b82f6"><span class="swatch-chip" style="background-color:#3b82f6"></span></span></p>',
+    )
+  })
+
   it('throws on an invalid option', () => {
     expect(() => colorSwatch({ position: 'sideways' as SwatchPosition })).toThrow()
     expect(() => colorSwatch({ shape: 'triangle' as SwatchShape })).toThrow()
