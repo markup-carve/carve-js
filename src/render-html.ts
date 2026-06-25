@@ -30,6 +30,13 @@ import type {
   ExtensionRenderContext,
   StaticRenderers,
 } from './extension.js'
+import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+
+// Per-render abbreviation-expansion budget (DoS guard). Set at the top of
+// renderHtml() and reset to null when it returns, so it never leaks across
+// calls. Rendering is synchronous and single-threaded, so a module-scoped
+// tracker is safe and avoids threading a counter through every signature.
+let abbrBudget: AbbrBudget | null = null
 
 export interface RenderOptions {
   /**
@@ -229,6 +236,19 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
         `(expected "interactive" or "static")`,
     )
   }
+  // Save/restore (not clear-to-null): an extension HTML renderer may call
+  // renderHtml() recursively while the outer document renders. Restoring the
+  // previous tracker keeps the outer document's abbreviation budget intact.
+  const prevBudget = abbrBudget
+  abbrBudget = new AbbrBudget(ast.srcByteLength)
+  try {
+    return renderDocumentBody(ast, opts)
+  } finally {
+    abbrBudget = prevBudget
+  }
+}
+
+function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   const out: string[] = []
   // Section-wrapping pass (grammar PART 9 §13): every top-level heading
   // opens a <section id="{slug}"> that holds the heading and the content
@@ -1154,8 +1174,14 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       }
       return renderExtension(node.name, node.content, node.attrs, opts)
     }
-    case 'abbreviation':
+    case 'abbreviation': {
+      // DoS guard: once cumulative expansion bytes exceed the budget, degrade
+      // to plain key text (no <abbr>, no title). charge() accounts for the
+      // expansion's UTF-8 bytes.
+      const fit = abbrBudget?.charge(utf8ByteLength(node.expansion)) ?? true
+      if (!fit) return escapeHtml(node.abbr)
       return `<abbr title="${escapeAttr(node.expansion)}">${escapeHtml(node.abbr)}</abbr>`
+    }
     case 'footnote':
       // number is assigned by collectFootnotes for refs with a matching
       // definition; an unresolved ref falls back to literal source.
