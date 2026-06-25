@@ -22,11 +22,17 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
   const minLevel = opts.minLevel ?? 1
   const label = opts.label ?? 'Section'
   const crossref = opts.crossref ?? 'number-title'
+  // Idempotency: decorating mutates the document, so re-running over the same
+  // already-processed doc (a parse-once / render-twice flow) must be a no-op -
+  // otherwise spans stack up.
+  const processed = new WeakSet<Document>()
 
   return {
     name: 'headingNumbers',
 
     beforeRender(doc: Document) {
+      if (processed.has(doc)) return doc
+      processed.add(doc)
       // Pass 1: number headings in document order, decorate each `<h*>` with a
       // section-number span, and remember number + original title per id.
       // Gap-free stack numbering: `levels`/`numbers` track the current dotted

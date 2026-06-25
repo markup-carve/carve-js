@@ -114,6 +114,17 @@ describe('heading numbers: cross-references', () => {
   })
 })
 
+describe('heading numbers: idempotency', () => {
+  it('does not stack spans when beforeRender runs twice on one document', () => {
+    const ext = headingNumbers()
+    const doc = { type: 'document', children: [{ type: 'heading', level: 1, children: [{ type: 'text', value: 'A' }], attrs: { id: 'A' } }] } as never
+    ext.beforeRender!(doc)
+    ext.beforeRender!(doc)
+    const spans = JSON.stringify(doc).match(/section-number/g) ?? []
+    expect(spans.length).toBe(1)
+  })
+})
+
 describe('heading numbers: degradation', () => {
   it('without the extension, headings and crossrefs are unchanged', () => {
     const out = carveToHtml('# Parsing\n\nSee </#Parsing>.').trim()
