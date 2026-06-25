@@ -219,8 +219,11 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // a following quoted run is the title. Anything else after the destination is
 // ignored (not a valid title), so the definition still registers with the bare
 // token as its destination -- it is NOT rejected. carve-rs matches this.
+// The title groups allow a backslash-escaped quote inside (`"a\"b"`) so the run
+// does not truncate at the first inner quote; the captured value is then run
+// through unescapeAttrValue at consumption, matching the inline title path.
 const RE_LINK_DEF =
-  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?.*$/
+  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
@@ -587,7 +590,7 @@ function collectLinkDefs(lexer: Lexer) {
     if (m) {
       const def: { href: string; title?: string } = { href: m[2]! }
       const title = m[3] ?? m[4]
-      if (title !== undefined) def.title = title
+      if (title !== undefined) def.title = unescapeAttrValue(title)
       lexer.linkDefs.set(normalizeRefLabel(m[1]!), def)
       continue
     }
@@ -2847,13 +2850,14 @@ const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
 // Emoji shortcode `:name:` (after extension, which needs `[`).
 const RE_EMOJI = /^:([a-zA-Z0-9][\w+-]*):/
 // Autolink (grammar.ebnf:775,776,791,792,1139). Two alternatives:
-//   url_autolink   = scheme ':' {url_char}+   -- url_char excludes `<`/`>`, so
-//                    a body `<` makes the construct invalid (whole-literal).
+//   url_autolink   = scheme ':' {url_char}+   -- url_char excludes `<`/`>` plus
+//                    `"` `\` `` ` `` `{` `}` `|` `^`, so a body holding any of
+//                    those makes the construct invalid (whole-literal).
 //   email_autolink = {email_char}+ '@' {email_char}+ '.' {letter}+ -- the
 //                    `.TLD` is MANDATORY and email_char excludes `:`/`@`, so
 //                    `<a@b>` (no TLD) and `<x@y:z>` are not autolinks.
 const RE_AUTOLINK =
-  /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s<]+|[A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+\.[A-Za-z]+)>/
+  /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s<"\\`{}|^]+|[A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+\.[A-Za-z]+)>/
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 
