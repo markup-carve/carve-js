@@ -75,6 +75,7 @@ export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
 export { listTable } from './list-table.js'
 export { glossary } from './glossary.js'
+export { headingNumbers, type HeadingNumbersOptions } from './heading-numbers.js'
 export { index } from './index-terms.js'
 export {
   citations,
