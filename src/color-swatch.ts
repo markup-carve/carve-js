@@ -16,6 +16,9 @@ import type { CarveExtension, ExtensionRenderContext } from './extension.js'
  * - `shape`: a filled `square` (default), filled `round` dot, or hollow `ring`
  *   (the color is the chip border, not its fill).
  * - `tint`: paint a faint `color-mix()` tint of the color behind the swatch.
+ * - `reveal`: collapse the value text and reveal it on hover / keyboard focus
+ *   (pure-CSS, driven by the `swatch-reveal` class). The value stays in the DOM
+ *   for assistive tech. Ignored when `position` is `none` (already hidden).
  */
 export type SwatchPosition = 'before' | 'after' | 'none'
 export type SwatchShape = 'square' | 'round' | 'ring'
@@ -24,6 +27,7 @@ export interface ColorSwatchOptions {
   position?: SwatchPosition
   shape?: SwatchShape
   tint?: boolean
+  reveal?: boolean
 }
 
 const POSITIONS: readonly SwatchPosition[] = ['before', 'after', 'none']
@@ -33,6 +37,7 @@ export function colorSwatch(options: ColorSwatchOptions = {}): CarveExtension {
   const position = options.position ?? 'before'
   const shape = options.shape ?? 'square'
   const tint = options.tint ?? false
+  const reveal = options.reveal ?? false
   if (!POSITIONS.includes(position)) {
     throw new Error(`Invalid ColorSwatch position "${position}"; expected one of: ${POSITIONS.join(', ')}.`)
   }
@@ -46,7 +51,7 @@ export function colorSwatch(options: ColorSwatchOptions = {}): CarveExtension {
       color: (node: Extension, ctx: ExtensionRenderContext): string | undefined => {
         const value = safeColor(inlineText(node.content))
         if (value === null) return undefined
-        return renderSwatch(node.attrs, ctx, value, position, shape, tint)
+        return renderSwatch(node.attrs, ctx, value, position, shape, tint, reveal)
       },
     },
   }
@@ -59,6 +64,7 @@ function renderSwatch(
   position: SwatchPosition,
   shape: SwatchShape,
   tint: boolean,
+  reveal: boolean,
 ): string {
   const label = ctx.escapeHtml(value)
 
@@ -77,13 +83,20 @@ function renderSwatch(
   if (position === 'none') {
     // Chip only: the value is not shown inline, so surface it as the element
     // title so it stays available on hover and to assistive technology.
+    // `reveal` is meaningless here (there is no inline value) and ignored.
     attrs = addClass(attrs, 'swatch-chip-only')
     attrs = withDefaultKeyValue(attrs, 'title', value)
     inner = chip
-  } else if (position === 'after') {
-    inner = `${label} ${chip}`
   } else {
-    inner = `${chip} ${label}`
+    // When revealing, wrap the value so CSS can collapse / expand it, make the
+    // swatch keyboard-focusable, and keep the value in the DOM for AT.
+    let valueHtml = label
+    if (reveal) {
+      attrs = addClass(attrs, 'swatch-reveal')
+      attrs = withDefaultKeyValue(attrs, 'tabindex', '0')
+      valueHtml = `<span class="swatch-val">${label}</span>`
+    }
+    inner = position === 'after' ? `${valueHtml} ${chip}` : `${chip} ${valueHtml}`
   }
 
   return `<span${ctx.renderAttrs(attrs)}>${inner}</span>`
