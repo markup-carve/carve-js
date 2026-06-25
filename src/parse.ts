@@ -2841,7 +2841,9 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // `}` is the first one outside quotes (djot "don't mind braces in quotes").
 // RE_SPAN_TAIL's body is `*` so an empty `{}` matches; isValidAttrPayload then
 // decides span (valid block, possibly empty) vs literal (invalid content).
-const RE_LINK_TAIL = /^\(([^)\s]*)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+// Destination is non-empty (grammar `link_destination = {...}+`), so `[a]()`
+// is NOT a link -- it stays literal (matches carve-php / carve-rs).
+const RE_LINK_TAIL = /^\(([^)\s]+)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
@@ -2974,7 +2976,9 @@ function allocateDashes(n: number): string {
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
 const isQuoteOpenContext = (prev: string) =>
   prev === '' ||
-  /[\s([{\-–—/]/.test(prev) ||
+  // `=` opens a quote so an attribute-like `key="value"` / `="x"` gets an
+  // opening curly quote (matches carve-php / carve-rs).
+  /[\s([{\-–—/=]/.test(prev) ||
   prev === '“' ||
   prev === '‘' ||
   // U+E000 is the internal non-breaking-space placeholder (escaped `\ ` /
