@@ -280,3 +280,67 @@ describe('applyMigrationFixes — autocorrect', () => {
     expect(r.skipped).toEqual([])
   })
 })
+
+describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () => {
+  // `sameFamilyOverlap` linearly scanned a growing `taken` array, and
+  // `applyMigrationFixes` ran a full all-pairs `hits.some(crosses)` loop, both
+  // O(n^2). A 96KB input of `**a** ` repeated took ~6s; the sorted single
+  // sweep must keep both near-linear.
+  it('scans a 16000-construct document quickly', () => {
+    const src = '**a** '.repeat(16000) // ~96KB, ~16000 family-* matches
+    const t0 = performance.now()
+    const w = djotMigrationWarnings(src)
+    const ms = performance.now() - t0
+    expect(w).toHaveLength(16000)
+    expect(ms).toBeLessThan(800)
+  })
+
+  it('applies fixes on a 16000-construct document without quadratic blow-up', () => {
+    // This budget is a generous DoS ceiling, NOT a micro-benchmark. It still
+    // includes applyMigrationFixes' per-edit full-string splice (a separate,
+    // pre-existing O(edits x length) cost, sensitive to VM jitter), so the
+    // bound is loose: the old all-pairs cross scan pushed this input to seconds
+    // (~2.8s), and the near-linear scan guarantee is asserted separately below.
+    const src = '**a** '.repeat(16000)
+    const t0 = performance.now()
+    const r = applyMigrationFixes(src)
+    const ms = performance.now() - t0
+    expect(r.applied).toHaveLength(16000)
+    expect(r.skipped).toEqual([])
+    expect(ms).toBeLessThan(2500)
+  })
+
+  it('scales near-linearly with the number of constructs (scan)', () => {
+    // Measure the scan/overlap detection (the part this fix made near-linear).
+    // `applyMigrationFixes` also splices each edit into the output string,
+    // which is a separate, pre-existing per-edit string cost - so the scaling
+    // guarantee is asserted against djotMigrationWarnings, which scans only.
+    const time = (n: number): number => {
+      const src = '**a** '.repeat(n)
+      const t0 = performance.now()
+      djotMigrationWarnings(src)
+      return performance.now() - t0
+    }
+    time(2000) // warm up
+    const small = time(4000)
+    const large = time(16000) // 4x the constructs
+    // Quadratic would be ~16x; linear ~4x. Generous slack for CI noise.
+    expect(large).toBeLessThan(small * 9 + 50)
+  })
+
+  it('still detects and skips a genuine crossing collision', () => {
+    // `**_x**_` is strong over `_x` AND emphasis over `x**` - a crossing
+    // overlap that must still be reported as skipped, not auto-fixed.
+    const r = applyMigrationFixes('**_x**_')
+    expect(r.applied).toEqual([])
+    expect(r.skipped).toHaveLength(2)
+  })
+
+  it('still composes a strictly nested collision', () => {
+    // `**_x_**` is strong wrapping emphasis - nested, not crossing - so both
+    // fixes compose into single-star bold around slash emphasis.
+    const r = applyMigrationFixes('**_x_**')
+    expect(r.output).toBe('*/x/*')
+    expect(r.skipped).toEqual([])
+  })
+})

@@ -280,8 +280,13 @@ export function lintCarve(
     })
   }
 
-  collectSilentFailures(source, doc, out)
-  collectFootnoteDefinitionWarnings(source, doc, referencedFootnotes, out)
+  // Verbatim (code/raw-block) line numbers are needed by both source-line
+  // collectors below. Build the set once and share it: an O(1) membership test
+  // per line replaces a per-line scan over a growing range list (was O(n^2),
+  // and was computed twice).
+  const verbatimLines = collectVerbatimLines(doc)
+  collectSilentFailures(source, doc, verbatimLines, out)
+  collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -299,12 +304,45 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
 
 /**
+ * The set of 1-based source line numbers that fall inside a verbatim region
+ * (a code or raw block, including the captioned-figure form). Membership is
+ * O(1), so callers can skip verbatim lines without scanning a range list.
+ */
+function collectVerbatimLines(doc: Document): Set<number> {
+  const verbatim = new Set<number>()
+  const add = (pos: Positioned['pos'], endLine: number | undefined): void => {
+    if (!pos) return
+    const end = endLine ?? pos.startLine
+    for (let ln = pos.startLine; ln <= end; ln++) verbatim.add(ln)
+  }
+  walkDocument(doc, (node) => {
+    const pos = (node as Positioned).pos
+    const endLine = (pos as { endLine?: number } | undefined)?.endLine
+    if (node.type === 'code-block' || node.type === 'raw-block') {
+      add(pos, endLine)
+    } else if (node.type === 'figure') {
+      // A captioned code/raw block is a figure wrapping a position-less
+      // code-block target, so the block itself never reports a range. Use the
+      // figure's range so its verbatim body is still skipped.
+      const target = (node.target as { type?: string } | undefined)?.type
+      if (target === 'code-block' || target === 'raw-block') add(pos, endLine)
+    }
+  })
+  return verbatim
+}
+
+/**
  * Source-line checks for constructs that parsed into the wrong node. Each is
  * anchored to a parsed node so verbatim regions (code/raw blocks) are skipped
  * automatically: only real headings/paragraphs are inspected, and the
  * raw-fence scan ignores lines inside a code/raw block.
  */
-function collectSilentFailures(source: string, doc: Document, out: LintWarning[]): void {
+function collectSilentFailures(
+  source: string,
+  doc: Document,
+  verbatimLines: Set<number>,
+  out: LintWarning[],
+): void {
   const lines = source.split('\n')
   const lineStart: number[] = []
   for (let off = 0, i = 0; i < lines.length; i++) {
@@ -316,7 +354,6 @@ function collectSilentFailures(source: string, doc: Document, out: LintWarning[]
     out.push({ line: lineNo, column: col, rule, message, start, end: start + len })
   }
 
-  const verbatim: Array<[number, number]> = []
   const headings: Positioned[] = []
   const paragraphs: Positioned[] = []
   const walk = (value: unknown): void => {
@@ -326,21 +363,8 @@ function collectSilentFailures(source: string, doc: Document, out: LintWarning[]
     }
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
-    const pos = (node as Positioned).pos
-    const endLine = (pos as { endLine?: number } | undefined)?.endLine
     if (node.type === 'heading') headings.push(node as Positioned)
     else if (node.type === 'paragraph') paragraphs.push(node as Positioned)
-    else if ((node.type === 'code-block' || node.type === 'raw-block') && pos) {
-      verbatim.push([pos.startLine, endLine ?? pos.startLine])
-    } else if (node.type === 'figure' && pos) {
-      // A captioned code/raw block is a figure wrapping a *position-less*
-      // code-block target, so the block itself never reaches the branch above.
-      // Use the figure's range so the fence scan still skips its verbatim body.
-      const target = (node.target as { type?: string } | undefined)?.type
-      if (target === 'code-block' || target === 'raw-block') {
-        verbatim.push([pos.startLine, endLine ?? pos.startLine])
-      }
-    }
     for (const key of Object.keys(node)) {
       if (key !== 'pos' && key !== 'attrs') walk(node[key])
     }
@@ -368,9 +392,8 @@ function collectSilentFailures(source: string, doc: Document, out: LintWarning[]
   }
 
   // 2. Legacy `raw FORMAT` fence: never opens, and desyncs later fences.
-  const inVerbatim = (ln: number): boolean => verbatim.some(([s, e]) => ln >= s && ln <= e)
   for (let i = 0; i < lines.length; i++) {
-    if (inVerbatim(i + 1)) continue
+    if (verbatimLines.has(i + 1)) continue
     const m = LEGACY_RAW_FENCE.exec(lines[i]!)
     if (!m) continue
     push(
@@ -414,6 +437,7 @@ function collectSilentFailures(source: string, doc: Document, out: LintWarning[]
 function collectFootnoteDefinitionWarnings(
   source: string,
   doc: Document,
+  verbatimLines: Set<number>,
   referenced: Set<string>,
   out: LintWarning[],
 ): void {
@@ -424,25 +448,10 @@ function collectFootnoteDefinitionWarnings(
     off += lines[i]!.length + 1
   }
 
-  const verbatim: Array<[number, number]> = []
-  walkDocument(doc, (node) => {
-    const pos = (node as Positioned).pos
-    const endLine = (pos as { endLine?: number } | undefined)?.endLine
-    if ((node.type === 'code-block' || node.type === 'raw-block') && pos) {
-      verbatim.push([pos.startLine, endLine ?? pos.startLine])
-    } else if (node.type === 'figure' && pos) {
-      const target = (node.target as { type?: string } | undefined)?.type
-      if (target === 'code-block' || target === 'raw-block') {
-        verbatim.push([pos.startLine, endLine ?? pos.startLine])
-      }
-    }
-  })
-
-  const inVerbatim = (ln: number): boolean => verbatim.some(([s, e]) => ln >= s && ln <= e)
   const firstSites = new Map<string, { line: number; col: number; start: number; end: number }>()
 
   for (let i = 0; i < lines.length; i++) {
-    if (inVerbatim(i + 1)) continue
+    if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
     const m = FOOTNOTE_DEF.exec(line)
     if (!m) continue
