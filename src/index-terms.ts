@@ -1,4 +1,5 @@
 import type { Admonition, Attrs, BlockNode, Document, Extension, InlineNode } from './ast.js'
+import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import type {
   BlockExtensionRenderContext,
   CarveExtension,
@@ -17,6 +18,12 @@ export function index(): CarveExtension {
   const counts = new Map<string, number>() // slug → total occurrences
   const display = new Map<string, string>() // slug → first occurrence's term text
   const containers = new WeakSet<BlockNode>()
+  // Per-render output budget (DoS guard): K `::: index` blocks each re-emit the
+  // full sorted backlink list, so raw output grows K x N x ~52 bytes and can
+  // exhaust memory / V8's max string length. Mirrors AbbrBudget - reset per
+  // render in `beforeRender`, capped at max(1MB, 8 x sourceByteLength), far
+  // above any real document so the corpus is unaffected.
+  let budget = new AbbrBudget(undefined)
 
   return {
     name: 'index',
@@ -26,6 +33,7 @@ export function index(): CarveExtension {
       // nodes) are unreachable, so only the per-slug tallies need resetting.
       counts.clear()
       display.clear()
+      budget = new AbbrBudget(doc.srcByteLength)
       // Assign each `:index[…]` marker in the body a per-slug occurrence index
       // in document order. Only `doc.children` (body) is indexed: markers in
       // deferred content (footnote definitions, which the core renderer may
@@ -54,7 +62,7 @@ export function index(): CarveExtension {
     blockRenderers: {
       admonition: (node, ctx) =>
         containers.has(node) && counts.size > 0
-          ? renderIndexList(node as Admonition, ctx, counts, display)
+          ? renderIndexList(node as Admonition, ctx, counts, display, budget)
           : undefined,
     },
   }
@@ -86,16 +94,32 @@ function renderIndexList(
   ctx: BlockExtensionRenderContext,
   counts: Map<string, number>,
   display: Map<string, string>,
+  budget: AbbrBudget,
 ): string {
   const pad = ctx.indent(ctx.level)
   const inner = ctx.indent(ctx.level + 1)
   const slugs = [...counts.keys()].sort(byCodepoint)
-  const items = slugs.map((slug) => {
+  const items: string[] = []
+  // Charge cumulative emitted bytes against the per-render budget; once the
+  // next item/backlink would overflow, stop emitting further index content
+  // (graceful, no throw, no giant allocation). Re-emitted across K blocks, so
+  // the cap bounds K x N amplification.
+  for (const slug of slugs) {
+    const li = `${inner}<li>${ctx.escapeHtml(display.get(slug)!)} `
+    if (!budget.charge(utf8ByteLength(li))) break
     const links: string[] = []
-    for (let m = 1; m <= counts.get(slug)!; m++)
-      links.push(`<a href="#idx-${ctx.escapeAttr(slug)}-${m}" class="index-backref">↩</a>`)
-    return `${inner}<li>${ctx.escapeHtml(display.get(slug)!)} ${links.join(' ')}</li>`
-  })
+    let truncated = false
+    for (let m = 1; m <= counts.get(slug)!; m++) {
+      const link = `<a href="#idx-${ctx.escapeAttr(slug)}-${m}" class="index-backref">↩</a>`
+      if (!budget.charge(utf8ByteLength(link))) {
+        truncated = true
+        break
+      }
+      links.push(link)
+    }
+    items.push(`${li}${links.join(' ')}</li>`)
+    if (truncated) break
+  }
   // Carry the author's `{#id .class}` onto the <ul>, `index` stays leading.
   const ul = `${pad}<ul${ctx.renderAttrs(withBaseClass(node.attrs, 'index'))}>\n${items.join('\n')}\n${pad}</ul>`
   // Preserve any authored content inside the placeholder before the list -
@@ -111,16 +135,27 @@ function withBaseClass(attrs: Attrs | undefined, base: string): Attrs {
 }
 
 /** Ascending Unicode-codepoint order (== UTF-8 byte order), locale-independent
- *  so every implementation sorts identically. */
+ *  so every implementation sorts identically. Walks code points in place so it
+ *  is O(min(len_a,len_b)) time with O(1) allocation - no per-comparison
+ *  `Array.from` (which made sorting many long-common-prefix terms quadratic). */
 function byCodepoint(a: string, b: string): number {
-  const ca = Array.from(a)
-  const cb = Array.from(b)
-  const n = Math.min(ca.length, cb.length)
-  for (let i = 0; i < n; i++) {
-    const d = ca[i]!.codePointAt(0)! - cb[i]!.codePointAt(0)!
-    if (d !== 0) return d
+  let i = 0
+  let j = 0
+  const la = a.length
+  const lb = b.length
+  while (i < la && j < lb) {
+    const ca = a.codePointAt(i)!
+    const cb = b.codePointAt(j)!
+    if (ca !== cb) return ca - cb
+    // Advance by the code point's UTF-16 width so surrogate pairs compare by
+    // their full code point (astral chars sort after the BMP, not by unit).
+    i += ca > 0xffff ? 2 : 1
+    j += cb > 0xffff ? 2 : 1
   }
-  return ca.length - cb.length
+  // Equal common prefix: the shorter (fewer remaining units) sorts first. Both
+  // strings agreed code point by code point, so remaining-unit comparison
+  // matches remaining-code-point comparison.
+  return la - i - (lb - j)
 }
 
 /** Depth-first visit of every typed node, so a `::: index` nested in a
