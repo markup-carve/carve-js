@@ -200,3 +200,65 @@ describe('formatLintWarnings', () => {
     )
   })
 })
+
+describe('lintCarve — verbatim-scan performance (no O(n^2))', () => {
+  // Each collector used to rebuild a verbatim range list and test every source
+  // line against it with `.some(...)`, an O(lines x regions) scan run twice.
+  // The shared O(1) line set must keep lint near-linear: a document with
+  // thousands of fenced blocks must lint quickly, not in seconds.
+  it('lints a 10000-fence document without quadratic blow-up', () => {
+    // The budget is a generous DoS ceiling, not a micro-benchmark: the old
+    // O(n^2) scan took ~1.7s on this input, so a re-regression would blow far
+    // past 1000ms. The near-linear scaling guarantee lives in the next test;
+    // this one only guards against returning to seconds-scale behavior under
+    // shared CI load.
+    let src = ''
+    for (let i = 0; i < 10000; i++) src += '```\ncode\n```\n\n'
+    const t0 = performance.now()
+    const w = lintCarve(src)
+    const ms = performance.now() - t0
+    expect(w).toEqual([])
+    expect(ms).toBeLessThan(1000)
+  })
+
+  it('scales near-linearly with the number of verbatim regions', () => {
+    const build = (n: number): string => {
+      let s = ''
+      for (let i = 0; i < n; i++) s += '```\ncode\n```\n\n'
+      return s
+    }
+    const time = (src: string): number => {
+      const t0 = performance.now()
+      lintCarve(src)
+      return performance.now() - t0
+    }
+    // Warm up so JIT state is comparable across the two measured sizes.
+    time(build(2000))
+    const small = time(build(4000))
+    const large = time(build(16000)) // 4x the regions
+    // Quadratic scaling would give ~16x; linear ~4x. Allow generous slack for
+    // CI noise but stay far below the quadratic blow-up.
+    expect(large).toBeLessThan(small * 9 + 50)
+  })
+})
+
+describe('lintCarve — verbatim regions still suppress in-block warnings', () => {
+  it('does not flag a legacy raw fence inside a code block', () => {
+    // A `~~~raw html` line is a raw-block-syntax warning in prose, but inside a
+    // fenced code block it is verbatim content and must be skipped. This proves
+    // the shared verbatim set still gates both source-line collectors.
+    const inProse = lintCarve('~~~raw html\n<b>x</b>\n~~~').map((w) => w.rule)
+    expect(inProse).toContain('raw-block-syntax')
+    const inBlock = lintCarve('````\n~~~raw html\n<b>x</b>\n~~~\n````').map(
+      (w) => w.rule,
+    )
+    expect(inBlock).not.toContain('raw-block-syntax')
+  })
+
+  it('does not flag a footnote definition shape inside a code block', () => {
+    const w = lintCarve('````\n[^a]: not a real footnote def\n[^a]: dup\n````').map(
+      (x) => x.rule,
+    )
+    expect(w).not.toContain('duplicate-footnote-definition')
+  })
+})

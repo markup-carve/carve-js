@@ -371,3 +371,26 @@ describe('markdownToCarve — more block spacing', () => {
     expect(conv(md)).toBe('# Title\n\nA /para/ here.\n\n- one\n- two\n')
   })
 })
+
+describe('markdownToCarve — sentinel placeholder robustness', () => {
+  // Placeholders are NUL-wrapped (`\x00S<n>\x00` / `\x00P<n>\x00`). If such a
+  // shape appears in the INPUT with an out-of-range index, the restore must not
+  // splice the literal string "undefined" into the output - it keeps the
+  // matched text verbatim instead.
+  it('does not emit the literal string "undefined" for an injected stash sentinel', () => {
+    const out = markdownToCarve('a \x00S5\x00 b')
+    expect(out).not.toContain('undefined')
+    expect(out).toContain('\x00S5\x00')
+  })
+
+  it('does not emit "undefined" for an injected protect sentinel', () => {
+    const out = markdownToCarve('a \x00P9\x00 b')
+    expect(out).not.toContain('undefined')
+    expect(out).toContain('\x00P9\x00')
+  })
+
+  it('does not emit "undefined" when both sentinel shapes are injected', () => {
+    const out = markdownToCarve('x \x00S5\x00 y \x00P9\x00 z')
+    expect(out).not.toContain('undefined')
+  })
+})
