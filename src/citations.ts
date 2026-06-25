@@ -17,15 +17,43 @@ const ITEM_RE = new RegExp(String.raw`^(.*?)(-?)@(${KEY})(?:,\s*(.*))?$`)
  *  the references list. */
 const REFS_MARK = 'data-cite-refs'
 
+/** A CSL-JSON name object (the subset the minimal formatter reads). */
+export interface CslName {
+  family?: string
+  given?: string
+  literal?: string
+}
+
+/** A CSL-JSON bibliography entry (the subset the minimal formatter reads;
+ *  unknown fields are ignored). */
+export interface CslEntry {
+  id: string
+  author?: CslName[]
+  issued?: { 'date-parts'?: number[][]; literal?: string }
+  title?: string
+  [k: string]: unknown
+}
+
 export interface CitationsOptions {
   /** `numbered` (default) emits `[1]`; `author-date` emits `(Author Year)`. */
   mode?: 'numbered' | 'author-date'
+  /**
+   * Tier-3 Bibliography (#199): an external CSL-JSON pool. Keys resolve against
+   * in-document `[@key]:` defs first, then this pool. When supplied (even
+   * empty), in-text citations and the references list gain footnote-style
+   * back-links. The host resolves the front-matter `bibliography:` path and
+   * passes the parsed array here; the extension itself does no file I/O.
+   */
+  bibliography?: CslEntry[]
 }
 
 interface Def {
   entry: InlineNode[]
   author?: string
   year?: string
+  /** Pre-formatted entry text for a CSL-JSON-sourced def (HTML-escaped at
+   *  render time); when set, used instead of the parsed inline `entry`. */
+  cslText?: string
 }
 
 // Single-entry cache: the matcher is invoked repeatedly for the SAME inline
@@ -43,9 +71,14 @@ let lastBracketMap: Record<number, number> = {}
  */
 export function citations(opts: CitationsOptions = {}): CarveExtension {
   const mode = opts.mode ?? 'numbered'
+  // A supplied pool (even empty) activates the Tier-3 Bibliography behavior:
+  // external resolution + back-links (#199).
+  const hasBib = opts.bibliography !== undefined
+  const pool = opts.bibliography ?? []
   const defs = new Map<string, Def>()
   const numbers = new Map<string, number>()
   const order: string[] = [] // cited+defined keys in first-citation order
+  const uses = new Map<string, number>() // per-key use-site count (back-links)
 
   return {
     name: 'citations',
@@ -57,14 +90,23 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       defs.clear()
       numbers.clear()
       order.length = 0
+      uses.clear()
       doc.children = collectDefs(doc.children, defs)
+      // Seed the CSL-JSON pool: in-document defs win on collision (§6.2).
+      for (const e of pool) {
+        if (e && typeof e.id === 'string' && !defs.has(e.id)) defs.set(e.id, cslToDef(e))
+      }
       return doc
     },
 
     beforeRender(doc) {
-      // Number cited+defined keys in document order; collect them.
+      // Number cited+defined keys in document order; collect them. When a
+      // bibliography pool is active, also assign per-key use-site indexes for
+      // back-links - but only for groups that fully resolve (a group with any
+      // undefined key renders verbatim and is not a use site, §6.4).
       for (const block of doc.children)
         walkCitationGroups(block, (g) => {
+          const allResolved = g.items.every((it) => defs.has(it.key))
           for (const item of g.items) {
             if (!defs.has(item.key)) continue
             if (!numbers.has(item.key)) {
@@ -72,6 +114,11 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
               order.push(item.key)
             }
             item.number = numbers.get(item.key)!
+            if (hasBib && allResolved) {
+              const n = (uses.get(item.key) ?? 0) + 1
+              uses.set(item.key, n)
+              item.useIndex = n
+            }
           }
         })
       if (order.length === 0) return doc
@@ -95,13 +142,13 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
 
     inlineRenderers: {
       'citation-group': (node, ctx) =>
-        renderGroup(node as CitationGroup, ctx, mode, numbers, defs),
+        renderGroup(node as CitationGroup, ctx, mode, numbers, defs, hasBib),
     },
 
     blockRenderers: {
       div: (node, ctx) => {
         const kv = (node as Div).attrs?.keyValues
-        if (kv && REFS_MARK in kv) return renderRefsList(ctx, mode, order, defs)
+        if (kv && REFS_MARK in kv) return renderRefsList(ctx, mode, order, defs, uses, hasBib)
         return undefined
       },
     },
@@ -264,18 +311,57 @@ function asDefinition(kids: InlineNode[]): { key: string; value: Def } | null {
 
 // ----- render ---------------------------------------------------------------
 
+/** Build a `Def` from a CSL-JSON entry using the minimal fixed template
+ *  (§6.3): `Family, Given (Year). Title.`, missing fields + separators omitted,
+ *  trailing period when non-empty. The text is plain (HTML-escaped at render). */
+function cslToDef(e: CslEntry): Def {
+  const names = (e.author ?? []).map(formatName).filter((n) => n !== '')
+  const authors = names.join('; ')
+  const year = cslYear(e.issued)
+  let head = authors
+  if (year) head = head ? `${head} (${year})` : `(${year})`
+  const segs: string[] = []
+  if (head) segs.push(head)
+  if (typeof e.title === 'string' && e.title !== '') segs.push(e.title)
+  let cslText = segs.join('. ')
+  if (cslText) cslText += '.'
+  const def: Def = { entry: [], cslText }
+  // author/year also feed author-date mode; use the first author's family.
+  const first = e.author?.[0]
+  const author = first ? (first.literal ?? first.family) : undefined
+  if (author !== undefined) def.author = author
+  if (year) def.year = year
+  return def
+}
+
+function formatName(n: CslName): string {
+  if (n.literal) return n.literal
+  if (n.family && n.given) return `${n.family}, ${n.given}`
+  return n.family ?? ''
+}
+
+function cslYear(issued: CslEntry['issued']): string {
+  const y = issued?.['date-parts']?.[0]?.[0]
+  if (typeof y === 'number') return String(y)
+  return issued?.literal ?? ''
+}
+
 function renderGroup(
   node: CitationGroup,
   ctx: ExtensionRenderContext,
   mode: 'numbered' | 'author-date',
   numbers: Map<string, number>,
   defs: Map<string, Def>,
+  hasBib: boolean,
 ): string {
   // Any item whose key has no definition ⇒ render the source verbatim.
   if (node.items.some((it) => !defs.has(it.key))) return ctx.escapeHtml(node.raw)
 
   const pre = (it: Citation) => (it.prefix ? `${ctx.renderInlines(it.prefix)} ` : '')
   const loc = (it: Citation) => (it.locator ? `, ${ctx.renderInlines(it.locator)}` : '')
+  // Back-link anchor on the per-key item (only with a bibliography pool, §6.3).
+  const idAttr = (it: Citation) =>
+    hasBib && it.useIndex ? `id="cite-${ctx.escapeAttr(it.key)}-${it.useIndex}" ` : ''
 
   if (mode === 'author-date') {
     const parts = node.items.map((it) => {
@@ -283,13 +369,13 @@ function renderGroup(
       const label = it.suppressAuthor
         ? d.year ?? String(it.number ?? '')
         : `${d.author ?? ''} ${d.year ?? ''}`.trim() || String(it.number ?? '')
-      return `${pre(it)}<a href="#ref-${ctx.escapeAttr(it.key)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
+      return `${pre(it)}<a ${idAttr(it)}href="#ref-${ctx.escapeAttr(it.key)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
     })
     return `(${parts.join('; ')})`
   }
   const parts = node.items.map((it) => {
     const n = numbers.get(it.key)
-    return `${pre(it)}<a href="#ref-${ctx.escapeAttr(it.key)}">${n}</a>${loc(it)}`
+    return `${pre(it)}<a ${idAttr(it)}href="#ref-${ctx.escapeAttr(it.key)}">${n}</a>${loc(it)}`
   })
   return `[${parts.join(', ')}]`
 }
@@ -299,6 +385,8 @@ function renderRefsList(
   mode: 'numbered' | 'author-date',
   order: string[],
   defs: Map<string, Def>,
+  uses: Map<string, number>,
+  hasBib: boolean,
 ): string {
   const pad = ctx.indent(ctx.level)
   const keys = [...order]
@@ -308,10 +396,20 @@ function renderRefsList(
   // Both modes use a list element so the markup is valid; numbered is ordered.
   const tag = mode === 'author-date' ? 'ul' : 'ol'
   const items = keys
-    .map(
-      (k) =>
-        `${pad}  <li id="ref-${ctx.escapeAttr(k)}">${ctx.renderInlines(defs.get(k)!.entry)}</li>`,
-    )
+    .map((k) => {
+      const d = defs.get(k)!
+      // A CSL-sourced entry is plain text (escaped); an in-doc def is inline AST.
+      const body = d.cslText !== undefined ? ctx.escapeHtml(d.cslText) : ctx.renderInlines(d.entry)
+      let backlinks = ''
+      if (hasBib) {
+        const n = uses.get(k) ?? 0
+        const links: string[] = []
+        for (let m = 1; m <= n; m++)
+          links.push(`<a href="#cite-${ctx.escapeAttr(k)}-${m}" class="ref-backref">↩</a>`)
+        if (links.length) backlinks = (body ? ' ' : '') + links.join(' ')
+      }
+      return `${pad}  <li id="ref-${ctx.escapeAttr(k)}">${body}${backlinks}</li>`
+    })
     .join('\n')
   return `${pad}<${tag} class="references">\n${items}\n${pad}</${tag}>`
 }

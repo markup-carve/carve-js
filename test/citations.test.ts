@@ -136,3 +136,96 @@ describe('citations: references placement', () => {
     expect(out).toMatch(/<div class="references">[\s\S]*<ol class="references">/)
   })
 })
+
+// ----- Tier-3 Bibliography (#199) -------------------------------------------
+
+const SMITH = {
+  id: 'smith2020',
+  author: [{ family: 'Smith', given: 'John' }],
+  issued: { 'date-parts': [[2020]] },
+  title: 'A Study',
+}
+const hb = (s: string, bib: unknown[]) =>
+  carveToHtml(s, { extensions: [citations({ bibliography: bib })] }).trim()
+
+describe('bibliography: external CSL-JSON resolution', () => {
+  it('resolves a key from the pool and renders the formatted entry', () => {
+    const out = hb('See [@smith2020].', [SMITH])
+    expect(out).toContain('<a id="cite-smith2020-1" href="#ref-smith2020">1</a>')
+    expect(out).toContain(
+      '<li id="ref-smith2020">Smith, John (2020). A Study. ' +
+        '<a href="#cite-smith2020-1" class="ref-backref">↩</a></li>',
+    )
+  })
+
+  it('in-document def overrides the CSL pool', () => {
+    const out = hb('See [@smith2020].\n\n[@smith2020]: In-doc entry.', [SMITH])
+    expect(out).toContain('<li id="ref-smith2020">In-doc entry.')
+    expect(out).not.toContain('A Study')
+  })
+
+  it('emits one back-link per use site', () => {
+    const out = hb('[@smith2020] then [@smith2020] again.', [SMITH])
+    expect(out).toContain('<a id="cite-smith2020-1" href="#ref-smith2020">1</a>')
+    expect(out).toContain('<a id="cite-smith2020-2" href="#ref-smith2020">1</a>')
+    expect(out).toContain('<a href="#cite-smith2020-1" class="ref-backref">↩</a>')
+    expect(out).toContain('<a href="#cite-smith2020-2" class="ref-backref">↩</a>')
+  })
+
+  it('anchors each key of a multi-key group separately', () => {
+    const out = hb('[@a; @b]', [
+      { id: 'a', title: 'Alpha' },
+      { id: 'b', title: 'Beta' },
+    ])
+    expect(out).toContain('<a id="cite-a-1" href="#ref-a">1</a>')
+    expect(out).toContain('<a id="cite-b-1" href="#ref-b">2</a>')
+  })
+
+  it('renders an unresolved key verbatim with no anchors', () => {
+    const out = hb('[@nope]', [SMITH])
+    expect(out).toContain('[@nope]')
+    expect(out).not.toContain('cite-nope')
+    expect(out).not.toContain('class="references"')
+  })
+
+  it('escapes CSL entry text as plain data', () => {
+    const out = hb('[@x]', [{ id: 'x', title: '<b>raw</b> & co' }])
+    expect(out).toContain('&lt;b&gt;raw&lt;/b&gt; &amp; co.')
+  })
+})
+
+describe('bibliography: minimal CSL formatter', () => {
+  const entry = (csl: Record<string, unknown>) => {
+    const out = hb('[@x]', [{ id: 'x', ...csl }])
+    const m = out.match(/<li id="ref-x">([\s\S]*?) <a href="#cite-x-1"/)
+    return m?.[1] ?? out.match(/<li id="ref-x">([\s\S]*?)<\/li>/)?.[1]
+  }
+  it('author + year + title', () => {
+    expect(entry({ author: [{ family: 'Smith', given: 'John' }], issued: { 'date-parts': [[2020]] }, title: 'T' })).toBe(
+      'Smith, John (2020). T.',
+    )
+  })
+  it('author only', () => {
+    expect(entry({ author: [{ family: 'Doe' }] })).toBe('Doe.')
+  })
+  it('year + title, no author', () => {
+    expect(entry({ issued: { 'date-parts': [[1999]] }, title: 'T' })).toBe('(1999). T.')
+  })
+  it('multiple authors joined with semicolons', () => {
+    expect(entry({ author: [{ family: 'A', given: 'X' }, { family: 'B', given: 'Y' }], title: 'T' })).toBe(
+      'A, X; B, Y. T.',
+    )
+  })
+  it('literal name and literal year', () => {
+    expect(entry({ author: [{ literal: 'WHO' }], issued: { literal: 'n.d.' }, title: 'T' })).toBe('WHO (n.d.). T.')
+  })
+})
+
+describe('bibliography: no pool keeps Tier-2 behavior', () => {
+  it('does not add back-links when no bibliography is supplied', () => {
+    const out = h('[@a].\n\n[@a]: A.')
+    expect(out).toContain('<li id="ref-a">A.</li>')
+    expect(out).not.toContain('ref-backref')
+    expect(out).not.toContain('id="cite-a-1"')
+  })
+})
