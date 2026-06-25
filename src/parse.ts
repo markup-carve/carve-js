@@ -1565,6 +1565,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     if (
       isBlankLine(ln) ||
       RE_CAPTION.test(ln) ||
+      colonFenceShapeEndsLazyContinuation(ln) ||
       startsInterruptingBlock(lexer)
     ) {
       break
@@ -1795,20 +1796,19 @@ function lineOpensBlock(line: string): boolean {
   )
 }
 
-function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
+function lazyContinuationEndsList(line: string): boolean {
   return (
     RE_RAW_FENCE.test(line) ||
     RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
-    // A typed admonition ends the list only when it actually opens one — i.e.
-    // a closer exists ahead (same guard as the block dispatch + the bare div).
-    // An unterminated `::: note` is not a block, so it folds as lazy text.
-    (RE_ADMONITION_OPEN.test(line) &&
-      !RE_ADMONITION_CLOSE.test(line) &&
-      divHasCloser(lexer)) ||
-    (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) ||
-    (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) ||
-    (RE_HARDBREAKS_OPEN.test(line) && hardBreaksHasCloser(lexer)) ||
+    // A flush-left colon-fence shaped line ends list lazy continuation
+    // regardless of outer-stream closer lookahead. If the line belongs to the
+    // item, it must be indented and parsed by the item sub-lexer; otherwise a
+    // later flush-left `:::` can be incorrectly pulled in as the item's closer.
+    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
+    RE_DIV_OPEN.test(line) ||
+    RE_LINE_BLOCK_OPEN.test(line) ||
+    RE_HARDBREAKS_OPEN.test(line) ||
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
@@ -1822,6 +1822,15 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     extractItemAttr(line) !== null ||
     isTableRow(line) ||
     isBlockImageLine(line)
+  )
+}
+
+function colonFenceShapeEndsLazyContinuation(line: string): boolean {
+  return (
+    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
+    RE_DIV_OPEN.test(line) ||
+    RE_LINE_BLOCK_OPEN.test(line) ||
+    RE_HARDBREAKS_OPEN.test(line)
   )
 }
 
@@ -2203,7 +2212,7 @@ function parseList(lexer: Lexer): List {
         // an inline-verbatim run that is part of the paragraph, so a dedented
         // line folds into it (matching the §10 closer-lookahead rule).
         (((lazyState.lazyFoldable || lazyState.inFence) &&
-          !lazyContinuationEndsList(l, lexer)) ||
+          !lazyContinuationEndsList(l)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
           // symmetric §10 no list marker interrupts a paragraph, so on the

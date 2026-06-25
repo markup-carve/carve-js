@@ -49,4 +49,20 @@ describe('list lazy continuation', () => {
       '<ul>\n  <li>a</li>\n</ul>\n<blockquote><p>q</p></blockquote>',
     )
   })
+
+  it('a flush-left bare div fence does not close an item-local opener', () => {
+    expect(html('- :::\n:::')).toBe('<ul>\n  <li>:::</li>\n</ul>\n<p>:::</p>')
+  })
+
+  it('a flush-left div closer ends lazy continuation after an item-local typed opener', () => {
+    expect(html('- ::: note\nbody\n:::')).toBe(
+      '<ul>\n  <li>::: note\nbody</li>\n</ul>\n<p>:::</p>',
+    )
+  })
+
+  it('an indented admonition still nests inside the list item', () => {
+    expect(html('- ::: note\n  body\n  :::')).toBe(
+      '<ul>\n  <li>\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
+    )
+  })
 })
