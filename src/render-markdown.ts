@@ -11,6 +11,7 @@ import type {
   Table,
   Text,
 } from './ast.js'
+import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 
 export interface MarkdownRenderOptions {}
 
@@ -33,7 +34,14 @@ export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {})
     })
   })
 
-  const ctx = { headingIds, referencedHeadingIds, listDepth: 0, blockDepth: 0, inlineDepth: 0 }
+  const ctx: MarkdownContext = {
+    headingIds,
+    referencedHeadingIds,
+    listDepth: 0,
+    blockDepth: 0,
+    inlineDepth: 0,
+    abbrBudget: new AbbrBudget(ast.srcByteLength),
+  }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return normalize(`${out}${footnotes}`)
@@ -45,6 +53,8 @@ interface MarkdownContext {
   listDepth: number
   blockDepth: number
   inlineDepth: number
+  /** Per-render abbreviation-expansion budget (DoS guard). */
+  abbrBudget: AbbrBudget
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
@@ -272,11 +282,14 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Markdown has no abbreviation syntax; emit an HTML `<abbr>` so the title
       // survives (markdown allows inline HTML), matching carve-php. Dropping it
       // to plain text would lose the expansion.
-      const title = stripControls(node.expansion).replace(/[&<>"]/g, (c) =>
-        c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
-      )
       const text = stripControls(node.abbr).replace(/[&<>]/g, (c) =>
         c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;',
+      )
+      // DoS guard: once cumulative expansion bytes exceed the budget, degrade
+      // to the plain key text only (no <abbr>, no title).
+      if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return text
+      const title = stripControls(node.expansion).replace(/[&<>"]/g, (c) =>
+        c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
       )
       return `<abbr title="${title}">${text}</abbr>`
     }

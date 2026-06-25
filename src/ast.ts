@@ -62,6 +62,14 @@ export interface Document extends BaseNode {
    * emits the endnotes section; an unreferenced definition is dropped.
    */
   footnoteDefs?: Record<string, BlockNode[]>
+  /**
+   * UTF-8 byte length of the source this document was parsed from. Used by the
+   * renderers to size the abbreviation-expansion budget (DoS guard) so a tiny
+   * input with a huge `*[KEY]: EXPANSION` def cannot amplify output without
+   * bound. Absent when the document was constructed directly (not via parse);
+   * renderers then fall back to the base budget.
+   */
+  srcByteLength?: number
 }
 
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6

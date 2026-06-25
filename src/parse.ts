@@ -53,6 +53,7 @@ import type {
 } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
 import type { AsciiHeadingIdMode } from './heading-ids.js'
+import { utf8ByteLength } from './abbr-budget.js'
 
 export interface ParseOptions {
   positions?: boolean
@@ -388,6 +389,9 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   try {
     const children = parseBlocks(lexer, 0)
     const doc: Document = { type: 'document', children }
+    // Record the source byte length so renderers can size the
+    // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
+    doc.srcByteLength = utf8ByteLength(source)
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     return doc

@@ -1,4 +1,5 @@
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
+import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 
 export interface AnsiRenderOptions {}
 
@@ -25,7 +26,14 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, _opts: AnsiRenderOptions = {}): string {
-  const ctx: AnsiContext = { listDepth: 0, blockQuoteDepth: 0, ordered: [], blockDepth: 0, inlineDepth: 0 }
+  const ctx: AnsiContext = {
+    listDepth: 0,
+    blockQuoteDepth: 0,
+    ordered: [],
+    blockDepth: 0,
+    inlineDepth: 0,
+    abbrBudget: new AbbrBudget(ast.srcByteLength),
+  }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return normalize(`${out}${footnotes}`)
@@ -37,6 +45,8 @@ interface AnsiContext {
   ordered: number[]
   blockDepth: number
   inlineDepth: number
+  /** Per-render abbreviation-expansion budget (DoS guard). */
+  abbrBudget: AbbrBudget
 }
 
 function style(text: string, codes: string): string {
@@ -351,8 +361,13 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return `#${stripControls(node.name)}`
     case 'extension':
       return renderInlines(node.content, ctx)
-    case 'abbreviation':
+    case 'abbreviation': {
+      // DoS guard: once cumulative expansion bytes exceed the budget, degrade
+      // to the plain key text only (no ` (EXPANSION)` suffix).
+      if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion)))
+        return stripControls(node.abbr)
       return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
+    }
     case 'footnote':
       return node.inline
         ? `(${renderInlines(node.inline, ctx)})`
