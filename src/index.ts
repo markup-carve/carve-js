@@ -97,6 +97,7 @@ export {
 } from './fenced-render.js'
 export { mathBlock, type MathBlockOptions } from './math-block.js'
 export { spoiler } from './spoiler.js'
+export { colorSwatch } from './color-swatch.js'
 export { wikilinks, type WikilinksOptions } from './wikilinks.js'
 export { autolink, type AutolinkOptions } from './autolink.js'
 export { externalLinks, type ExternalLinksOptions } from './external-links.js'

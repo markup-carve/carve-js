@@ -1169,7 +1169,10 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
             if (out !== undefined) return out
           }
           const fn = e.renderers?.[node.name]
-          if (fn) return fn(node, ctx)
+          if (fn) {
+            const out = fn(node, ctx)
+            if (out !== undefined) return out
+          }
         }
       }
       return renderExtension(node.name, node.content, node.attrs, opts)

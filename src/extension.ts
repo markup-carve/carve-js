@@ -34,7 +34,7 @@ export interface ExtensionRenderContext {
 export type ExtensionRenderer = (
   node: Extension,
   ctx: ExtensionRenderContext,
-) => string
+) => string | undefined
 
 /**
  * Render helpers passed to a block-node renderer. `renderChildren` and
