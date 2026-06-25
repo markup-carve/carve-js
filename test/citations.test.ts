@@ -188,6 +188,16 @@ describe('bibliography: external CSL-JSON resolution', () => {
     expect(out).not.toContain('class="references"')
   })
 
+  it('a partially-resolved group is fully verbatim: its keys are not cited', () => {
+    // [@smith2020; @missing] renders raw, so the defined key is NOT numbered,
+    // listed, or a use site - no orphan reference entry (§6.2/§6.4).
+    const out = hb('[@smith2020; @missing]', [SMITH])
+    expect(out).toContain('[@smith2020; @missing]')
+    expect(out).not.toContain('href="#ref-smith2020"')
+    expect(out).not.toContain('id="ref-smith2020"')
+    expect(out).not.toContain('class="references"')
+  })
+
   it('escapes CSL entry text as plain data', () => {
     const out = hb('[@x]', [{ id: 'x', title: '<b>raw</b> & co' }])
     expect(out).toContain('&lt;b&gt;raw&lt;/b&gt; &amp; co.')

@@ -106,15 +106,17 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       // undefined key renders verbatim and is not a use site, §6.4).
       for (const block of doc.children)
         walkCitationGroups(block, (g) => {
-          const allResolved = g.items.every((it) => defs.has(it.key))
+          // A group with any unresolved key renders verbatim (§6.4): its keys are
+          // literal text, not citations, so they are neither numbered, listed,
+          // nor a back-link use site. Skip the whole group.
+          if (!g.items.every((it) => defs.has(it.key))) return
           for (const item of g.items) {
-            if (!defs.has(item.key)) continue
             if (!numbers.has(item.key)) {
               numbers.set(item.key, numbers.size + 1)
               order.push(item.key)
             }
             item.number = numbers.get(item.key)!
-            if (hasBib && allResolved) {
+            if (hasBib) {
               const n = (uses.get(item.key) ?? 0) + 1
               uses.set(item.key, n)
               item.useIndex = n
