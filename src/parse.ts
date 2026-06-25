@@ -2847,13 +2847,14 @@ const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
 // Emoji shortcode `:name:` (after extension, which needs `[`).
 const RE_EMOJI = /^:([a-zA-Z0-9][\w+-]*):/
 // Autolink (grammar.ebnf:775,776,791,792,1139). Two alternatives:
-//   url_autolink   = scheme ':' {url_char}+   -- url_char excludes `<`/`>`, so
-//                    a body `<` makes the construct invalid (whole-literal).
+//   url_autolink   = scheme ':' {url_char}+   -- url_char excludes `<`/`>` plus
+//                    `"` `\` `` ` `` `{` `}` `|` `^`, so a body holding any of
+//                    those makes the construct invalid (whole-literal).
 //   email_autolink = {email_char}+ '@' {email_char}+ '.' {letter}+ -- the
 //                    `.TLD` is MANDATORY and email_char excludes `:`/`@`, so
 //                    `<a@b>` (no TLD) and `<x@y:z>` are not autolinks.
 const RE_AUTOLINK =
-  /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s<]+|[A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+\.[A-Za-z]+)>/
+  /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s<"\\`{}|^]+|[A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+\.[A-Za-z]+)>/
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 
