@@ -388,6 +388,9 @@ export interface Citation {
   suppressAuthor: boolean
   /** Assigned during resolve (numbered mode); undefined if key undefined. */
   number?: number
+  /** Per-key, document-wide use-site index (1-based), assigned when a
+   *  bibliography pool is supplied; drives back-link anchors (#199). */
+  useIndex?: number
 }
 
 /** A `[…@key…]` citation, possibly several `;`-separated items (#90, Tier-2). */

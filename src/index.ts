@@ -74,7 +74,12 @@ export {
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
 export { listTable } from './list-table.js'
-export { citations, type CitationsOptions } from './citations.js'
+export {
+  citations,
+  type CitationsOptions,
+  type CslEntry,
+  type CslName,
+} from './citations.js'
 export {
   fencedRender,
   mermaid,
