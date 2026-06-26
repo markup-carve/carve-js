@@ -164,18 +164,96 @@ describe('resolveHeadingIds', () => {
     expect(para.children[0]?.href).toBe('#target')
   })
 
-  it('clones finalized target children for refs that precede the target', () => {
+  it('clones target text one level for refs that precede the target', () => {
     // A body crossref appears BEFORE its target heading, and that heading
-    // itself contains a nested crossref. The clone cache must capture the
-    // resolved nested text, for the early ref AND a later one.
+    // itself contains a nested crossref (`# Title </#b>`). Crossref resolution
+    // is strictly ONE LEVEL (matching carve-php / carve-rs): `</#a>` shows
+    // `Title ` -- the target's own text, with the nested `</#b>` flattened
+    // away, NOT expanded into `Title Bee`. The target heading still renders its
+    // own `</#b>` as a one-level link. The clone cache shares this resolved
+    // one-level text across the early ref AND the later one.
     const src = ['See </#a>.', '', '{#a}', '# Title </#b>', '', '{#b}', '# Bee', '', 'Again </#a>.'].join(
       '\n',
     )
     const html = carveToHtml(src)
     expect(html).not.toContain('&lt;/#b&gt;')
     expect(html).not.toContain('</#b>')
-    // Both references resolve to the same finalized nested text "Title Bee".
-    const matches = html.match(/Title Bee/g) ?? []
-    expect(matches.length).toBe(2)
+    // Both references resolve to the same one-level text `Title `.
+    expect((html.match(/<a href="#a">Title <\/a>/g) ?? []).length).toBe(2)
+    expect(html).not.toContain('Title Bee')
+    // The target heading itself still renders its own crossref one level deep.
+    expect(html).toContain('<h1>Title <a href="#b">Bee</a></h1>')
+  })
+
+  // A crossref CYCLE used to overflow the call stack (`RangeError: Maximum
+  // call stack size exceeded`) in `enforceNoNesting`, crashing every public
+  // API on tiny untrusted input. Cycles must now resolve to a one-level link
+  // (the target's bare text), matching carve-php / carve-rs.
+  describe('crossref cycles (no stack overflow)', () => {
+    it('resolves a self-referencing crossref to a one-level link', () => {
+      // `# A </#a>`: the heading title cross-references its OWN id.
+      const html = carveToHtml('# A </#a>')
+      expect(html).toBe(
+        ['<section id="A">', '  <h1>A <a href="#A">A </a></h1>', '</section>'].join('\n'),
+      )
+    })
+
+    it('resolves a mutual A<->B crossref cycle without recursion', () => {
+      const html = carveToHtml('# A </#b>\n\n# B </#a>')
+      expect(html).toBe(
+        [
+          '<section id="A">',
+          '  <h1>A <a href="#B">B </a></h1>',
+          '</section>',
+          '<section id="B">',
+          '  <h1>B <a href="#A">A </a></h1>',
+          '</section>',
+        ].join('\n'),
+      )
+    })
+
+    it('breaks a heading + paragraph self-reference cycle', () => {
+      const html = carveToHtml('# T </#t>\n\nsee </#t>')
+      expect(html).toBe(
+        [
+          '<section id="T">',
+          '  <h1>T <a href="#T">T </a></h1>',
+          '  <p>see <a href="#T">T </a></p>',
+          '</section>',
+        ].join('\n'),
+      )
+    })
+
+    it('does not throw on a longer (3-node) crossref cycle', () => {
+      const src = '# A </#b>\n\n# B </#c>\n\n# C </#a>'
+      expect(() => carveToHtml(src)).not.toThrow()
+      const html = carveToHtml(src)
+      // Each link href points at the next node; the back-edge to a node already
+      // on the resolution stack is dropped (no infinite expansion).
+      expect(html).toContain('<a href="#B">')
+      expect(html).toContain('<a href="#C">')
+      expect(html).toContain('<a href="#A">')
+      expect(html).not.toContain('</#')
+    })
+
+    it('does not throw or blow up on a large (5000-node) crossref ring', () => {
+      // Resolution is one-level and non-recursive in the crossref graph, so a
+      // long ring is bounded -- no O(n) recursion depth (stack overflow) and no
+      // O(n^2) expansion around the ring.
+      const parts: string[] = []
+      const n = 5000
+      for (let i = 0; i < n; i++) parts.push(`# H${i} </#h${(i + 1) % n}>`)
+      expect(() => carveToHtml(parts.join('\n\n'))).not.toThrow()
+    })
+
+    it('resolves a NON-cyclic crossref chain to one-level links', () => {
+      // A->B->C is a one-way chain. Crossref resolution is strictly one level
+      // (matching carve-php / carve-rs): A's link to B shows B's own text, and
+      // B's own `</#c>` is NOT recursively expanded into A's link text.
+      const html = carveToHtml('# A </#b>\n\n# B </#c>\n\n# C')
+      expect(html).toContain('<h1>A <a href="#B">B </a></h1>')
+      expect(html).toContain('<h1>B <a href="#C">C</a></h1>')
+      expect(html).toContain('<h1>C</h1>')
+    })
   })
 })
