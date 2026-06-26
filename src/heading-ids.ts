@@ -67,6 +67,24 @@ function deTypography(s: string): string {
 }
 
 /**
+ * Trojan-Source hardening for generated ids. Two pre-slug transforms make an id
+ * deterministic and free of dangerous/invisible Unicode (CVE-2021-42574 class):
+ *
+ *  - NFC normalization, so a precomposed `é` (U+00E9) and a decomposed
+ *    `e`+U+0301 produce the SAME id.
+ *  - Stripping bidi-override / isolate controls (U+202A..U+202E, U+2066..U+2069)
+ *    and zero-width characters (U+200B, U+200C, U+200D, U+2060, U+FEFF, U+00AD)
+ *    so none of these can ever appear inside an `id="..."`.
+ *
+ * Applied before the slug run so the remaining text slugs as usual.
+ */
+const ID_STRIP_RE =
+  /[\u202A-\u202E\u2066-\u2069\u200B\u200C\u200D\u2060\uFEFF\u00AD]/gu
+function sanitizeIdSource(s: string): string {
+  return s.normalize('NFC').replace(ID_STRIP_RE, '')
+}
+
+/**
  * jgm/djot#393 slug step: replace each maximal run of non-alphanumeric ASCII with a
  * single '-' and trim. Non-ASCII characters and letter case are preserved.
  */
@@ -130,7 +148,7 @@ export function slugify(
   plainText: string,
   opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
 ): string {
-  let s = slugRun(deTypography(plainText))
+  let s = slugRun(deTypography(sanitizeIdSource(plainText)))
   if (opts.asciiFold || opts.asciiStrict) {
     // Transliterate runs in both modes so Latin/Cyrillic become letters rather
     // than separators. Strict then uses slugRunAscii to drop unmappable
