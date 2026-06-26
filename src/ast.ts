@@ -401,8 +401,6 @@ export interface Citation {
   suffix?: InlineNode[]
   /** `-@key` suppresses the author in author-date mode. */
   suppressAuthor: boolean
-  /** `+@key` integral (author-in-text) mode; absent = non-integral (parenthetical). */
-  mode?: 'integral'
   /** Assigned during resolve (numbered mode); undefined if key undefined. */
   number?: number
   /** Per-key, document-wide use-site index (1-based), assigned when a
@@ -414,6 +412,8 @@ export interface Citation {
 export interface CitationGroup extends BaseNode {
   type: 'citation-group'
   items: Citation[]
+  /** Citation-level mode; set by a leading '+' after '['. Absent = non-integral (parenthetical). CSL/Citum CitationMode vocabulary. */
+  mode?: 'integral'
   /** Verbatim source `[…]` for the undefined-key literal fallback. */
   raw: string
 }

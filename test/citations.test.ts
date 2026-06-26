@@ -242,10 +242,11 @@ describe('bibliography: no pool keeps Tier-2 behavior', () => {
 
 // Local helper: runs the parser and returns the first citation-group node.
 function parseFirstCitationGroup(src: string): {
+  mode?: string
   items: {
     key: string
     suppressAuthor: boolean
-    mode?: string
+    prefix?: unknown[]
     locatorLabel?: string
     locatorValue?: string
     suffix?: unknown[]
@@ -261,31 +262,55 @@ function parseFirstCitationGroup(src: string): {
 }
 
 describe('citation item parse (marker + typed locator)', () => {
-  it('+ marker sets integral mode', () => {
+  it('[+@k]: group mode integral, item has no mode field and no prefix', () => {
     const g = parseFirstCitationGroup('[+@k]')
-    expect(g.items[0]!.mode).toBe('integral')
+    expect(g.mode).toBe('integral')
     expect(g.items[0]!.suppressAuthor).toBe(false)
+    // mode field no longer exists on Citation; ensure it is absent
+    expect(('mode' in (g.items[0] as object))).toBe(false)
   })
-  it('one-slot marker: +-@k = prefix "+" + suppressAuthor', () => {
+  it('[+-@k]: group mode integral, item suppressAuthor (- after stripping leading +)', () => {
     const g = parseFirstCitationGroup('[+-@k]')
+    expect(g.mode).toBe('integral')
     expect(g.items[0]!.suppressAuthor).toBe(true)
-    expect(g.items[0]!.mode).toBeUndefined()
   })
-  it('-+ symmetric marker: suppressAuthor + integral mode', () => {
+  it('[-+@k]: group mode undefined; leading "-" is not "+", so "-+" becomes item prefix', () => {
+    // Pinned: [-+@k] -> group.mode=undefined, item key=k, suppressAuthor=false, prefix="-+"
     const g = parseFirstCitationGroup('[-+@k]')
+    expect(g.mode).toBeUndefined()
+    expect(g.items[0]!.key).toBe('k')
     expect(g.items[0]!.suppressAuthor).toBe(false)
-    expect(g.items[0]!.mode).toBe('integral')
+    const prefixText = flattenInlineText(g.items[0]!.prefix as unknown[] ?? [])
+    expect(prefixText).toBe('-+')
   })
-  it('key containing +: @foo+bar treated as key, not mode marker', () => {
+  it('[foo+@k]: group mode undefined; "foo+" becomes item prefix', () => {
+    // Pinned: [foo+@k] -> group.mode=undefined, item key=k, prefix="foo+"
+    const g = parseFirstCitationGroup('[foo+@k]')
+    expect(g.mode).toBeUndefined()
+    expect(g.items[0]!.key).toBe('k')
+    expect(g.items[0]!.suppressAuthor).toBe(false)
+    const prefixText = flattenInlineText(g.items[0]!.prefix as unknown[] ?? [])
+    expect(prefixText).toBe('foo+')
+  })
+  it('key containing +: [@foo+bar] treated as key, group mode undefined', () => {
     const g = parseFirstCitationGroup('[@foo+bar]')
     expect(g.items[0]!.key).toBe('foo+bar')
-    expect(g.items[0]!.mode).toBeUndefined()
+    expect(g.mode).toBeUndefined()
     expect(g.items[0]!.suppressAuthor).toBe(false)
   })
-  it('key containing + with prefix: +@foo+bar', () => {
+  it('[+@foo+bar]: group mode integral, key is foo+bar', () => {
     const g = parseFirstCitationGroup('[+@foo+bar]')
+    expect(g.mode).toBe('integral')
     expect(g.items[0]!.key).toBe('foo+bar')
-    expect(g.items[0]!.mode).toBe('integral')
+  })
+  it('[@a; +@b]: group mode undefined; item[1] prefix flattens to "+"', () => {
+    // Pinned: [@a; +@b] -> group.mode=undefined, item[1] key=b prefix="+"
+    const g = parseFirstCitationGroup('[@a; +@b]')
+    expect(g.mode).toBeUndefined()
+    expect(g.items[0]!.key).toBe('a')
+    expect(g.items[1]!.key).toBe('b')
+    const prefixText = flattenInlineText(g.items[1]!.prefix as unknown[] ?? [])
+    expect(prefixText).toBe('+')
   })
   it('typed locator fields', () => {
     const g = parseFirstCitationGroup('[@k, pp. 33-35, 38 and *passim*]')
@@ -318,12 +343,21 @@ const htmlCite = (src: string) => carveToHtml(src, { extensions: [citations()] }
 const DEFS = '\n\n[@k]: {author="K" year="2020"} K. (2020). Work.'
 
 describe('citation data-* render', () => {
-  it('integral marker -> data-cite-mode', () => {
+  it('integral group marker -> span wrapper with data-cite-mode, anchor has no data-cite-mode', () => {
     const out = htmlCite('[+@k]' + DEFS)
-    expect(out).toContain('data-cite-mode="integral"')
+    // The span wrapper carries data-cite-mode="integral"
+    expect(out).toContain('<span class="citation" data-cite-mode="integral">')
     expect(out).toContain('data-cite-key="k"')
+    // The anchor itself must NOT carry data-cite-mode
+    const anchorMatch = out.match(/<a [^>]*data-cite-key="k"[^>]*>/)
+    expect(anchorMatch?.[0]).not.toContain('data-cite-mode')
   })
-  it('suppress -> data-suppress-author, no mode', () => {
+  it('non-integral [@k] -> no span wrapper, no data-cite-mode', () => {
+    const out = htmlCite('[@k]' + DEFS)
+    expect(out).not.toContain('data-cite-mode')
+    expect(out).not.toContain('<span class="citation"')
+  })
+  it('suppress -> data-suppress-author, no data-cite-mode on anchor', () => {
     const out = htmlCite('[-@k]' + DEFS)
     expect(out).toContain('data-suppress-author="true"')
     expect(out).not.toContain('data-cite-mode')

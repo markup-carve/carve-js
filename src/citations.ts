@@ -9,9 +9,9 @@ import type {
 
 /** Citation key characters (Pandoc-compatible). */
 const KEY = String.raw`[\w][\w:.#$%&+?<>~/-]*`
-// One `;`-item: optional prefix, optional single `+`/`-` marker, `@key`,
+// One `;`-item: optional prefix, optional single `-` marker, `@key`,
 // optional `, locator`. The marker is exactly one sign directly before `@`.
-const ITEM_RE = new RegExp(String.raw`^(.*?)([+-]?)@(${KEY})(?:,\s*(.*))?$`)
+const ITEM_RE = new RegExp(String.raw`^(.*?)(-?)@(${KEY})(?:,\s*(.*))?$`)
 
 /** Fixed citeproc locator vocabulary: canonical -> matchers. Flattened and
  *  sorted longest-first so global longest-match wins. ASCII case-insensitive. */
@@ -258,9 +258,7 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
   const m = ITEM_RE.exec(raw.trim())
   if (!m) return null
   const prefixText = m[1]!.replace(/\s+$/, '')
-  const marker = m[2]
-  const item: Citation = { key: m[3]!, suppressAuthor: marker === '-' }
-  if (marker === '+') item.mode = 'integral'
+  const item: Citation = { key: m[3]!, suppressAuthor: m[2] === '-' }
   if (prefixText !== '') item.prefix = ctx.parseInlines(prefixText)
   const locRaw = m[4]
   if (locRaw !== undefined && locRaw.trim() !== '') {
@@ -279,8 +277,13 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
   if (close === undefined) return null
   const after = text[close + 1]
   if (after === '(' || after === '[' || after === '{') return null
-  const inner = text.slice(pos + 1, close)
+  let inner = text.slice(pos + 1, close)
   if (!inner.includes('@')) return null
+  let mode: 'integral' | undefined
+  if (inner[0] === '+') {
+    mode = 'integral'
+    inner = inner.slice(1)
+  }
   const items: Citation[] = []
   for (const part of inner.split(';')) {
     const item = parseItem(part, ctx)
@@ -289,6 +292,7 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
   }
   if (items.length === 0) return null
   const node: CitationGroup = { type: 'citation-group', items, raw: text.slice(pos, close + 1) }
+  if (mode) node.mode = mode
   return { node: node as InlineNode, end: close + 1 }
 }
 
@@ -452,7 +456,6 @@ function renderGroup(
   const dataAttrs = (it: Citation) => {
     const a: string[] = [`data-cite-key="${ctx.escapeAttr(it.key)}"`]
     if (it.suppressAuthor) a.push('data-suppress-author="true"')
-    if (it.mode === 'integral') a.push('data-cite-mode="integral"')
     const pfx = flattenText(it.prefix)
     if (pfx) a.push(`data-cite-prefix="${ctx.escapeAttr(pfx)}"`)
     if (it.locatorLabel) a.push(`data-locator-label="${ctx.escapeAttr(it.locatorLabel)}"`)
@@ -462,6 +465,11 @@ function renderGroup(
     return a.join(' ') + ' '
   }
 
+  const wrap = (s: string) =>
+    node.mode === 'integral'
+      ? `<span class="citation" data-cite-mode="integral">${s}</span>`
+      : s
+
   if (mode === 'author-date') {
     const parts = node.items.map((it) => {
       const d = defs.get(it.key)!
@@ -470,13 +478,15 @@ function renderGroup(
         : `${d.author ?? ''} ${d.year ?? ''}`.trim() || String(it.number ?? '')
       return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#ref-${ctx.escapeAttr(it.key)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
     })
-    return `(${parts.join('; ')})`
+    const out = `(${parts.join('; ')})`
+    return wrap(out)
   }
   const parts = node.items.map((it) => {
     const n = numbers.get(it.key)
     return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#ref-${ctx.escapeAttr(it.key)}">${n}</a>${loc(it)}`
   })
-  return `[${parts.join(', ')}]`
+  const out = `[${parts.join(', ')}]`
+  return wrap(out)
 }
 
 function renderRefsList(
