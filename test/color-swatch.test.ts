@@ -52,6 +52,12 @@ describe('color swatch extension', () => {
     )
   })
 
+  it('contrast declines fully transparent colors and falls back to the normal swatch', () => {
+    expect(carveToHtml(':color[#00000000]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch"><span class="swatch-chip" style="background-color:#00000000"></span> #00000000</span></p>',
+    )
+  })
+
   it('contrast lets an explicit author style win without emitting a duplicate style', () => {
     expect(carveToHtml(':color[#fff]{contrast style="opacity:0.5"}', { extensions: [colorSwatch()] })).toBe(
       '<p><span style="opacity:0.5" class="swatch-label">#fff</span></p>',

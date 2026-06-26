@@ -178,10 +178,22 @@ function safeColor(s: string): string | null {
 }
 
 function contrastText(value: string): '#000' | '#fff' | null {
+  // A fully transparent color paints no background, so a computed text color
+  // would sit on the page itself and could be unreadable. Decline the contrast
+  // label (fall back to the normal swatch) instead of guessing.
+  if (isFullyTransparentHex(value)) return null
   const rgb = parseIntegerRgb(value)
   if (rgb === null) return null
   const brightness = Math.floor((rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000)
   return brightness >= 128 ? '#000' : '#fff'
+}
+
+/** True for hex colors whose alpha channel is fully zero (e.g. `#0000`, `#00000000`). */
+function isFullyTransparentHex(value: string): boolean {
+  const hex = /^#([0-9a-fA-F]{4}|[0-9a-fA-F]{8})$/.exec(value)
+  if (!hex) return false
+  const alpha = hex[1].length === 4 ? hex[1][3] : hex[1].slice(6, 8)
+  return /^0+$/.test(alpha)
 }
 
 function parseIntegerRgb(value: string): [number, number, number] | null {
