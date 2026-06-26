@@ -23,6 +23,7 @@ import {
   formatLintWarnings,
   carveToHtml,
   carveToMarkdown,
+  carveToCarve,
   carveToPlainText,
   carveToAnsi,
   type MigrationWarning,
@@ -46,7 +47,8 @@ const HELP = `carve - Carve markup tooling
 
 Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
-  carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI
+  carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
+  carve fmt [-w|--check] [files...] Format Carve source canonically
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
 
@@ -58,7 +60,14 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --markdown     Markdown
     --plain        plain text
     --ansi         ANSI-colored terminal text
+    --carve        canonical Carve source
 
+fmt - format Carve source canonically.
+
+  fmt options:
+    -w, --write    Rewrite the given files in place
+        --check    Exit 1 if any file is not formatted (no writes)
+        --stdout   Print formatted output to stdout (single file or stdin)
 
 fix - rewrite Djot/Markdown delimiter collisions to their Carve equivalents,
 constructs that otherwise silently mis-render under Carve (e.g. **bold**
@@ -198,14 +207,103 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
 const RENDERERS = {
   html: carveToHtml,
   markdown: carveToMarkdown,
+  carve: carveToCarve,
   plain: carveToPlainText,
   ansi: carveToAnsi,
 } as const
+
+async function runFmt(args: string[], io: CliIO): Promise<number> {
+  let values: { write?: boolean; check?: boolean; stdout?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        write: { type: 'boolean', short: 'w' },
+        check: { type: 'boolean' },
+        stdout: { type: 'boolean' },
+        help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve fmt: ${(e as Error).message}\n`)
+    return 2
+  }
+
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const modes = [values.write, values.check, values.stdout].filter(Boolean).length
+  if (modes > 1) {
+    io.writeErr('carve fmt: choose at most one of --write, --check, --stdout\n')
+    return 2
+  }
+
+  const files = positionals
+
+  if (files.length === 0) {
+    if (values.write) {
+      io.writeErr('carve fmt: --write requires file arguments\n')
+      return 2
+    }
+    const src = await io.readStdin()
+    const out = carveToCarve(src)
+    if (values.check) return out === src ? 0 : 1
+    io.write(out)
+    return 0
+  }
+
+  if (values.stdout && files.length > 1) {
+    io.writeErr('carve fmt: --stdout takes a single file\n')
+    return 2
+  }
+
+  const mode: 'write' | 'stdout' | 'check' = values.write
+    ? 'write'
+    : values.check
+      ? 'check'
+      : 'stdout'
+
+  let changed = 0
+  let hadError = false
+
+  for (const file of files) {
+    let src: string
+    try {
+      src = io.readFile(file)
+    } catch {
+      io.writeErr(`carve fmt: cannot read ${file}\n`)
+      hadError = true
+      continue
+    }
+    const out = carveToCarve(src)
+    if (mode === 'stdout') {
+      io.write(out)
+      continue
+    }
+    if (out === src) continue
+    changed++
+    if (mode === 'write') {
+      io.writeFile(file, out)
+    } else {
+      io.writeErr(`${file}\n`)
+    }
+  }
+
+  if (hadError) return 2
+  return mode === 'check' && changed > 0 ? 1 : 0
+}
 
 async function runRender(args: string[], io: CliIO): Promise<number> {
   let values: {
     html?: boolean
     markdown?: boolean
+    carve?: boolean
     plain?: boolean
     ansi?: boolean
     help?: boolean
@@ -217,6 +315,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       options: {
         html: { type: 'boolean' },
         markdown: { type: 'boolean' },
+        carve: { type: 'boolean' },
         plain: { type: 'boolean' },
         ansi: { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
@@ -235,9 +334,9 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     return 0
   }
 
-  const chosen = (['html', 'markdown', 'plain', 'ansi'] as const).filter((f) => values[f])
+  const chosen = (['html', 'markdown', 'plain', 'ansi', 'carve'] as const).filter((f) => values[f])
   if (chosen.length > 1) {
-    io.writeErr('carve render: choose at most one of --html, --markdown, --plain, --ansi\n')
+    io.writeErr('carve render: choose at most one of --html, --markdown, --plain, --ansi, --carve\n')
     return 2
   }
   if (positionals.length > 1) {
@@ -280,6 +379,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   // stdin is an interactive TTY (see the wrapper at the bottom of this file).
   if (sub === undefined) return runRender([], io)
   if (sub === 'render') return runRender(rest, io)
+  if (sub === 'fmt') return runFmt(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   // Default action is render, so the `render` subcommand is optional:

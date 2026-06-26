@@ -6,3 +6,6 @@ coverage/
 .DS_Store
 # Generated demo output (regenerable via examples/static-mode-demo.mjs)
 examples/static-mode-demo.*.html
+
+# Working design docs - never committed
+docs/superpowers/
