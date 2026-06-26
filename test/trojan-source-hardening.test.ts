@@ -75,50 +75,37 @@ describe('Change 1: heading-id Trojan-Source hardening', () => {
   })
 })
 
-describe('Change 2: escape bidi controls in rendered text and code', () => {
-  it('escapes U+202E in inline text to a numeric reference', () => {
-    expect(carveToHtml(`a${BIDI.RLO}b`)).toBe('<p>a&#x202e;b</p>')
+describe('Change 2: strip bidi controls from rendered text and code', () => {
+  it('strips U+202E from inline text (DOM-inert)', () => {
+    expect(carveToHtml(`a${BIDI.RLO}b`)).toBe('<p>ab</p>')
   })
 
-  it('escapes U+202E in a code span (inert)', () => {
-    expect(carveToHtml(`\`a${BIDI.RLO}b\``)).toBe('<p><code>a&#x202e;b</code></p>')
+  it('strips U+202E from a code span (inert)', () => {
+    expect(carveToHtml(`\`a${BIDI.RLO}b\``)).toBe('<p><code>ab</code></p>')
   })
 
-  it('escapes a bidi override inside a fenced code listing (inert)', () => {
+  it('strips a bidi override inside a fenced code listing (inert)', () => {
     const out = carveToHtml(`\`\`\`\nif (access)${BIDI.RLO} // ok\n\`\`\``)
-    expect(out).toContain('&#x202e;')
     expect(out).not.toContain(BIDI.RLO)
+    // Stripped, not entity-encoded: an HTML parser would decode &#x202e; back to
+    // the raw control, so the only DOM-inert representation is removal.
+    expect(out).not.toContain('&#x202')
   })
 
-  it('escapes every bidi-override / isolate control once', () => {
-    const codes: Record<string, string> = {
-      [BIDI.LRE]: '&#x202a;',
-      [BIDI.RLE]: '&#x202b;',
-      [BIDI.PDF]: '&#x202c;',
-      [BIDI.LRO]: '&#x202d;',
-      [BIDI.RLO]: '&#x202e;',
-      [BIDI.LRI]: '&#x2066;',
-      [BIDI.RLI]: '&#x2067;',
-      [BIDI.FSI]: '&#x2068;',
-      [BIDI.PDI]: '&#x2069;',
-    }
-    for (const [ch, ref] of Object.entries(codes)) {
-      expect(carveToHtml(`x${ch}y`)).toBe(`<p>x${ref}y</p>`)
+  it('strips every bidi-override / isolate control', () => {
+    for (const ch of Object.values(BIDI)) {
+      expect(carveToHtml(`x${ch}y`)).toBe('<p>xy</p>')
     }
   })
 
-  it('does NOT escape the directional marks LRM / RLM (legitimate RTL)', () => {
+  it('does NOT strip the directional marks LRM / RLM (legitimate RTL)', () => {
     expect(carveToHtml(`a${LRM}b`)).toBe(`<p>a${LRM}b</p>`)
     expect(carveToHtml(`a${RLM}b`)).toBe(`<p>a${RLM}b</p>`)
   })
 
-  it('does NOT escape zero-width characters in text', () => {
+  it('does NOT strip zero-width characters in text', () => {
     expect(carveToHtml(`a${ZW.ZWSP}b`)).toBe(`<p>a${ZW.ZWSP}b</p>`)
     expect(carveToHtml(`a${ZW.ZWJ}b`)).toBe(`<p>a${ZW.ZWJ}b</p>`)
-  })
-
-  it('does not double-escape (the reference keeps a single &)', () => {
-    expect(carveToHtml(`${BIDI.RLO}`)).not.toContain('&amp;#x')
   })
 })
 

@@ -1279,27 +1279,25 @@ const HTML_ESCAPE: Record<string, string> = {
 /**
  * Bidi-override / isolate controls (CVE-2021-42574, "Trojan Source"). These can
  * silently reorder the visual order of rendered text/code so the displayed
- * source differs from what executes. We escape each to a numeric character
- * reference (e.g. `&#x202e;`) wherever it appears in rendered TEXT or CODE: the
- * control then renders inert AND is visible in the page source. The directional
- * MARKS U+200E / U+200F (LRM / RLM) are NOT escaped \u2014 they are legitimate for
- * laying out genuine right-to-left text and do not reorder surrounding runs the
- * way the overrides/isolates do. Zero-width characters are likewise left as-is
- * in text (they are only stripped from generated ids; see heading-ids.ts).
+ * source differs from what executes. We STRIP each wherever it appears in
+ * rendered TEXT or CODE. Stripping (not escaping to a numeric reference) is the
+ * mitigation that actually holds: an HTML parser DECODES `&#x202e;` back to the
+ * raw control, so an entity-escaped override still reorders the live DOM \u2014 only
+ * removing the character is DOM-inert. The directional MARKS U+200E / U+200F
+ * (LRM / RLM) are NOT stripped \u2014 they are legitimate for laying out genuine
+ * right-to-left text and do not reorder surrounding runs the way the
+ * overrides/isolates do. Zero-width characters are likewise left as-is in text
+ * (they are only stripped from generated ids; see heading-ids.ts).
  */
 const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/g
-function escapeBidiControls(s: string): string {
-  return s.replace(
-    BIDI_CONTROL_RE,
-    (c) => `&#x${c.codePointAt(0)!.toString(16)};`,
-  )
+function stripBidiControls(s: string): string {
+  return s.replace(BIDI_CONTROL_RE, '')
 }
 
 function escapeHtml(s: string): string {
-  // Escape the structural HTML metacharacters FIRST, then the bidi controls.
-  // The bidi step emits numeric references like `&#x202e;`; doing it last keeps
-  // their leading `&` from being re-escaped to `&amp;#x202e;`.
-  return escapeBidiControls(s.replace(/[&<>\u00a0\ue000]/g, (c) => HTML_ESCAPE[c]!))
+  // Strip the Trojan-Source bidi controls, then escape the structural HTML
+  // metacharacters.
+  return stripBidiControls(s).replace(/[&<>\u00a0\ue000]/g, (c) => HTML_ESCAPE[c]!)
 }
 
 function escapeAttr(s: string): string {
