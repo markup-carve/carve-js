@@ -22,6 +22,54 @@ describe('color swatch extension', () => {
     )
   })
 
+  it('contrast renders a dark hex value as a labeled swatch with white text', () => {
+    expect(carveToHtml(':color[#0d1117]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch-label" style="background:#0d1117;color:#fff">#0d1117</span></p>',
+    )
+  })
+
+  it('contrast renders a mid hex value as a labeled swatch with black text', () => {
+    expect(carveToHtml(':color[#58a6ff]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch-label" style="background:#58a6ff;color:#000">#58a6ff</span></p>',
+    )
+  })
+
+  it('contrast renders a light hex value as a labeled swatch with black text', () => {
+    expect(carveToHtml(':color[#f0f6fc]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch-label" style="background:#f0f6fc;color:#000">#f0f6fc</span></p>',
+    )
+  })
+
+  it('contrast computes text color from integer rgb functions', () => {
+    expect(carveToHtml(':color[rgb(240,246,252)]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch-label" style="background:rgb(240,246,252);color:#000">rgb(240,246,252)</span></p>',
+    )
+  })
+
+  it('contrast preserves author class and id while consuming the contrast attribute', () => {
+    expect(carveToHtml(':color[#fff]{contrast .x #y}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch-label x" id="y" style="background:#fff;color:#000">#fff</span></p>',
+    )
+  })
+
+  it('contrast declines fully transparent colors and falls back to the normal swatch', () => {
+    expect(carveToHtml(':color[#00000000]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch"><span class="swatch-chip" style="background-color:#00000000"></span> #00000000</span></p>',
+    )
+  })
+
+  it('contrast lets an explicit author style win without emitting a duplicate style', () => {
+    expect(carveToHtml(':color[#fff]{contrast style="opacity:0.5"}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span style="opacity:0.5" class="swatch-label">#fff</span></p>',
+    )
+  })
+
+  it('contrast falls back to the normal swatch for named colors and consumes the contrast attribute', () => {
+    expect(carveToHtml(':color[rebeccapurple]{contrast}', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch"><span class="swatch-chip" style="background-color:rebeccapurple"></span> rebeccapurple</span></p>',
+    )
+  })
+
   it('inline merges author classes onto the outer span and strips event handlers', () => {
     expect(carveToHtml(':color[#fff]{#x .y onclick="z"}', { extensions: [colorSwatch()] })).toBe(
       '<p><span id="x" class="swatch y"><span class="swatch-chip" style="background-color:#fff"></span> #fff</span></p>',
@@ -31,6 +79,12 @@ describe('color swatch extension', () => {
   it('inline falls back to ext-color span without the extension', () => {
     expect(carveToHtml(':color[rebeccapurple]')).toBe(
       '<p><span class="ext-color">rebeccapurple</span></p>',
+    )
+  })
+
+  it('contrast leaves the default swatch unchanged when absent', () => {
+    expect(carveToHtml(':color[#ff8800]', { extensions: [colorSwatch()] })).toBe(
+      '<p><span class="swatch"><span class="swatch-chip" style="background-color:#ff8800"></span> #ff8800</span></p>',
     )
   })
 
