@@ -9,9 +9,9 @@ import type {
 
 /** Citation key characters (Pandoc-compatible). */
 const KEY = String.raw`[\w][\w:.#$%&+?<>~/-]*`
-// One `;`-item: optional prefix, optional `-` (suppress author), `@key`,
-// optional `, locator`. Prefix is lazy so it stops at the `-?@key`.
-const ITEM_RE = new RegExp(String.raw`^(.*?)(-?)@(${KEY})(?:,\s*(.*))?$`)
+// One `;`-item: optional prefix, optional single `+`/`-` marker, `@key`,
+// optional `, locator`. The marker is exactly one sign directly before `@`.
+const ITEM_RE = new RegExp(String.raw`^(.*?)([+-]?)@(${KEY})(?:,\s*(.*))?$`)
 
 /** Fixed citeproc locator vocabulary: canonical -> matchers. Flattened and
  *  sorted longest-first so global longest-match wins. ASCII case-insensitive. */
@@ -258,10 +258,18 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
   const m = ITEM_RE.exec(raw.trim())
   if (!m) return null
   const prefixText = m[1]!.replace(/\s+$/, '')
-  const item: Citation = { key: m[3]!, suppressAuthor: m[2] === '-' }
+  const marker = m[2]
+  const item: Citation = { key: m[3]!, suppressAuthor: marker === '-' }
+  if (marker === '+') item.mode = 'narrative'
   if (prefixText !== '') item.prefix = ctx.parseInlines(prefixText)
-  const locText = m[4]?.trim()
-  if (locText) item.locator = ctx.parseInlines(locText)
+  const locRaw = m[4]
+  if (locRaw !== undefined && locRaw.trim() !== '') {
+    item.locator = ctx.parseInlines(locRaw.trim())     // raw, printed as-is
+    const p = parseLocator(locRaw)                      // parse the RAW substring
+    if (p.label !== undefined) item.locatorLabel = p.label
+    if (p.value !== undefined) item.locatorValue = p.value
+    if (p.suffixText !== undefined) item.suffix = ctx.parseInlines(p.suffixText)
+  }
   return item
 }
 

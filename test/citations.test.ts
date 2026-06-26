@@ -240,6 +240,47 @@ describe('bibliography: no pool keeps Tier-2 behavior', () => {
   })
 })
 
+// Local helper: runs the parser and returns the first citation-group node.
+function parseFirstCitationGroup(src: string): {
+  items: {
+    key: string
+    suppressAuthor: boolean
+    mode?: string
+    locatorLabel?: string
+    locatorValue?: string
+    suffix?: unknown[]
+  }[]
+} {
+  const doc = parse(src, { extensions: [citations()] })
+  const p = doc.children.find((b) => b.type === 'paragraph') as
+    | { children: { type: string }[] }
+    | undefined
+  const cg = p?.children.find((n) => n.type === 'citation-group')
+  if (!cg) throw new Error(`No citation-group found in: ${src}`)
+  return cg as never
+}
+
+describe('citation item parse (marker + typed locator)', () => {
+  it('+ marker sets narrative mode', () => {
+    const g = parseFirstCitationGroup('[+@k]')
+    expect(g.items[0]!.mode).toBe('narrative')
+    expect(g.items[0]!.suppressAuthor).toBe(false)
+  })
+  it('one-slot marker: +-@k = prefix "+" + suppressAuthor', () => {
+    const g = parseFirstCitationGroup('[+-@k]')
+    expect(g.items[0]!.suppressAuthor).toBe(true)
+    expect(g.items[0]!.mode).toBeUndefined()
+  })
+  it('typed locator fields', () => {
+    const g = parseFirstCitationGroup('[@k, pp. 33-35, 38 and *passim*]')
+    expect(g.items[0]!.locatorLabel).toBe('page')
+    expect(g.items[0]!.locatorValue).toBe('33-35, 38')
+    // suffix is inline nodes; assert the array is non-empty (contains "passim")
+    expect(g.items[0]!.suffix).toBeDefined()
+    expect((g.items[0]!.suffix as unknown[]).length).toBeGreaterThan(0)
+  })
+})
+
 describe('parseLocator', () => {
   it('typed page', () => {
     expect(parseLocator('p. 4')).toEqual({ label: 'page', value: '4' })
@@ -278,5 +319,12 @@ describe('parseLocator', () => {
   })
   it('label-less suffix', () => {
     expect(parseLocator('see the note')).toEqual({ suffixText: 'see the note' })
+  })
+  it('pilcrow label prefix', () => {
+    expect(parseLocator('¶ 7')).toEqual({ label: 'paragraph', value: '7' })
+    expect(parseLocator('¶¶ 7-9')).toEqual({ label: 'paragraph', value: '7-9' })
+  })
+  it('tab boundary', () => {
+    expect(parseLocator('p.\t4')).toEqual({ label: 'page', value: '4' })
   })
 })
