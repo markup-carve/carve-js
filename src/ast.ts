@@ -390,10 +390,19 @@ export interface Citation {
   key: string
   /** Inline prefix text before the `@` (e.g. "see "). */
   prefix?: InlineNode[]
-  /** Inline locator after ", " (e.g. "p. 33"). */
+  /** Raw inline locator after ", " (e.g. "p. 33"); what the built-in
+   *  formatter prints. Retained for byte-stable visible output. */
   locator?: InlineNode[]
+  /** Canonical citeproc locator label (e.g. "page"), parsed from `locator`. */
+  locatorLabel?: string
+  /** Locator value (plain text, e.g. "33-35, 38"), parsed from `locator`. */
+  locatorValue?: string
+  /** Inline suffix after the locator value (e.g. "and <em>passim</em>"). */
+  suffix?: InlineNode[]
   /** `-@key` suppresses the author in author-date mode. */
   suppressAuthor: boolean
+  /** `+@key` narrative/integral mode; absent = parenthetical. */
+  mode?: 'narrative'
   /** Assigned during resolve (numbered mode); undefined if key undefined. */
   number?: number
   /** Per-key, document-wide use-site index (1-based), assigned when a
