@@ -368,6 +368,12 @@ describe('citation data-* render', () => {
     expect(out).toContain('data-locator="33-35, 38"')
     expect(out).toContain('data-suffix="and passim"')
   })
+  it('trailing comma with empty locator -> normal citation, no locator (carve#227)', () => {
+    const out = htmlCite('[@k,]' + DEFS)
+    expect(out).toContain('href="#ref-k">1</a>')
+    expect(out).not.toContain('[@k,]')
+    expect(out).not.toContain('data-locator')
+  })
 })
 
 describe('parseLocator', () => {
