@@ -13,9 +13,10 @@ import { slugify } from '../src/heading-ids.js'
  * slug.
  *
  * The fold now PRESERVES case (it is orthogonal to the opt-in `lowercase`
- * transform): `Über` -> `Uber`, not `uber`. There is NO Unicode (NFC)
- * normalization in any path. The default (no fold) keeps non-ASCII verbatim
- * and preserves case; see heading-ids.test.ts. These tests pin the fold
+ * transform): `Über` -> `Uber`, not `uber`. Every slug is NFC-normalized first
+ * (Trojan-Source hardening) so a precomposed `é` and a decomposed
+ * `e`+combining-acute produce the SAME id. The default (no fold) keeps non-ASCII
+ * verbatim and preserves case; see heading-ids.test.ts. These tests pin the fold
  * path (case kept).
  */
 describe('heading id transliteration (opt-in ASCII safety)', () => {
@@ -65,13 +66,13 @@ describe('heading id transliteration (opt-in ASCII safety)', () => {
     expect(slugify('Café', { asciiFold: true, lowercase: true })).toBe('cafe')
   })
 
-  it('does NOT Unicode-normalize: decomposed (NFD) and precomposed (NFC) differ', () => {
-    // No NFC step: a precomposed `é` (NFC) folds via the baked map to `e`,
-    // but a decomposed base+combining-acute (NFD) keeps the (unmapped)
-    // combining mark verbatim, so the two inputs slug differently.
+  it('Unicode-normalizes (NFC): decomposed and precomposed slug identically', () => {
+    // Trojan-Source hardening: the slug source is NFC-normalized first, so a
+    // precomposed `é` (NFC) and a decomposed base+combining-acute (NFD) produce
+    // the SAME id rather than two different anchors for the same visible text.
     const nfc = slugify('résumé'.normalize('NFC'), { asciiFold: true })
     const nfd = slugify('résumé'.normalize('NFD'), { asciiFold: true })
     expect(nfc).toBe('resume')
-    expect(nfd).not.toBe(nfc)
+    expect(nfd).toBe(nfc)
   })
 })
