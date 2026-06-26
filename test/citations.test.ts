@@ -271,6 +271,22 @@ describe('citation item parse (marker + typed locator)', () => {
     expect(g.items[0]!.suppressAuthor).toBe(true)
     expect(g.items[0]!.mode).toBeUndefined()
   })
+  it('-+ symmetric marker: suppressAuthor + integral mode', () => {
+    const g = parseFirstCitationGroup('[-+@k]')
+    expect(g.items[0]!.suppressAuthor).toBe(false)
+    expect(g.items[0]!.mode).toBe('integral')
+  })
+  it('key containing +: @foo+bar treated as key, not mode marker', () => {
+    const g = parseFirstCitationGroup('[@foo+bar]')
+    expect(g.items[0]!.key).toBe('foo+bar')
+    expect(g.items[0]!.mode).toBeUndefined()
+    expect(g.items[0]!.suppressAuthor).toBe(false)
+  })
+  it('key containing + with prefix: +@foo+bar', () => {
+    const g = parseFirstCitationGroup('[+@foo+bar]')
+    expect(g.items[0]!.key).toBe('foo+bar')
+    expect(g.items[0]!.mode).toBe('integral')
+  })
   it('typed locator fields', () => {
     const g = parseFirstCitationGroup('[@k, pp. 33-35, 38 and *passim*]')
     expect(g.items[0]!.locatorLabel).toBe('page')
@@ -278,8 +294,25 @@ describe('citation item parse (marker + typed locator)', () => {
     // suffix is inline nodes; assert the array is non-empty (contains "passim")
     expect(g.items[0]!.suffix).toBeDefined()
     expect((g.items[0]!.suffix as unknown[]).length).toBeGreaterThan(0)
+    // Verify the flattened text of suffix contains "passim"
+    const suffixText = flattenInlineText(g.items[0]!.suffix as unknown[])
+    expect(suffixText).toContain('passim')
   })
 })
+
+// Helper: flatten inline node array to plain text
+function flattenInlineText(nodes: unknown[]): string {
+  return nodes
+    .map((n) => {
+      const node = n as { type?: string; value?: string; children?: unknown[] }
+      if (node.type === 'text' && node.value) return node.value
+      if (node.type === 'emph' && node.children) return flattenInlineText(node.children)
+      if (node.type === 'strong' && node.children) return flattenInlineText(node.children)
+      if (node.children) return flattenInlineText(node.children)
+      return ''
+    })
+    .join('')
+}
 
 describe('parseLocator', () => {
   it('typed page', () => {
