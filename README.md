@@ -93,18 +93,29 @@ carve README.crv > README.html   # HTML (default)
 carve --markdown README.crv      # Markdown
 carve --plain README.crv         # plain text
 carve --ansi README.crv          # ANSI-colored terminal text
+carve --carve README.crv         # canonical Carve source (formatter)
 echo '# Hello' | carve           # render from stdin
 ```
 
-`--html` / `--markdown` (`--md`) / `--plain` (`--plain-text`) / `--ansi` select
-the format (the explicit `render` subcommand also works: `carve render --ansi`).
-Two more subcommands round out the tooling:
+`--html` / `--markdown` (`--md`) / `--plain` (`--plain-text`) / `--ansi` /
+`--carve` select the format (the explicit `render` subcommand also works:
+`carve render --ansi`). Three more subcommands round out the tooling:
 
 ```bash
-carve fix  file.crv   # auto-fix Djot/Markdown delimiter collisions
-carve lint file.crv   # validate: collisions + silent-failure problems
+carve fmt  file.crv        # print canonically formatted Carve to stdout
+carve fmt -w   file.crv    # format in place
+carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate)
+carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
+carve lint file.crv        # validate: collisions + silent-failure problems
 carve --help
 ```
+
+`carve fmt` rewrites Carve into a canonical form: it strips trailing whitespace,
+collapses blank-line runs, normalizes list markers (`-`), heading hashes, fence
+lengths, and attribute spacing. It is conservative (no reflow, no reference/inline
+link conversion, no list renumbering) and semantic-preserving - the rendered HTML
+is byte-identical before and after - so it is safe to run on a whole tree. The
+same canonical serializer is available programmatically as `carveToCarve(src)`.
 
 `carve lint` is a validator for problems that *parse* but render as the wrong
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
@@ -140,7 +151,7 @@ carve-js/
 │   ├── render-ansi.ts      AST → ANSI-styled renderer
 │   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
 │   ├── markdown-migrate.ts Markdown → Carve source transform
-│   ├── cli.ts              `carve` binary (render, fix, lint)
+│   ├── cli.ts              `carve` binary (render, fmt, fix, lint)
 │   └── index.ts            Public API
 ├── test/                   Vitest suites + the spec corpus runner
 ├── spec/                   git submodule → markup-carve/carve

@@ -35,6 +35,10 @@ import {
   type MarkdownRenderOptions,
 } from './render-markdown.js'
 import {
+  renderCarve as renderCarveImpl,
+  type CarveRenderOptions,
+} from './render-carve.js'
+import {
   renderPlainText as renderPlainTextImpl,
   type PlainTextRenderOptions,
 } from './render-plain.js'
@@ -44,6 +48,7 @@ export * from './ast.js'
 export type { ParseOptions } from './parse.js'
 export type { RenderOptions } from './render-html.js'
 export type { MarkdownRenderOptions } from './render-markdown.js'
+export type { CarveRenderOptions } from './render-carve.js'
 export type { PlainTextRenderOptions } from './render-plain.js'
 export type { AnsiRenderOptions } from './render-ansi.js'
 export type {
@@ -198,6 +203,11 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   return renderMarkdownImpl(ast, opts)
 }
 
+/** Render a resolved Carve AST to canonical Carve source. */
+export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
+  return renderCarveImpl(ast, opts)
+}
+
 /** Render a resolved Carve AST to plain text. */
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
   return renderPlainTextImpl(ast, opts)
@@ -276,6 +286,24 @@ export function carveToMarkdown(
   )
   doc = runProfile(doc, source, opts)
   return renderMarkdown(doc, opts)
+}
+
+/**
+ * Convenience: parse + render canonical Carve source in one call.
+ *
+ * Unlike the other `carveToX` helpers, the formatter deliberately does NOT run
+ * `resolve()` / extension transforms / profiles. Those are render-time
+ * enrichments (auto heading ids, footnote/crossref numbering, default
+ * attributes) and baking them back into the source would make the formatter
+ * non-conservative - it must format what the author wrote, not the resolved
+ * output. The semantic invariant still holds because `carveToHtml` re-applies
+ * resolution on the formatted source.
+ */
+export function carveToCarve(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions = {},
+): string {
+  return renderCarve(parse(source, opts), opts)
 }
 
 /** Convenience: parse + resolve + render plain text in one call. */
