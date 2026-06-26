@@ -130,13 +130,18 @@ const DANGEROUS_URL_SCHEMES = ['javascript', 'vbscript', 'data', 'file']
  */
 /**
  * Characters dropped before scheme detection: C0 controls + ASCII space
- * (U+0000..U+0020), plus Unicode whitespace/separators that some contexts
- * tolerate around a scheme - NBSP (U+00A0), line/paragraph separators
- * (U+2028 / U+2029) and the BOM / zero-width no-break space (U+FEFF).
- * Stripping these defeats obfuscated schemes like " javascript:" with a
- * leading NBSP and keeps the probe aligned with carve-rs / carve-php.
+ * plus ALL Unicode whitespace/separators that some contexts tolerate around a
+ * scheme. The `\s` class (with the `u` flag) covers every Unicode space
+ * separator - NBSP (U+00A0), NARROW NO-BREAK SPACE (U+202F), the U+2000..U+200A
+ * spaces, MEDIUM MATHEMATICAL SPACE (U+205F), IDEOGRAPHIC SPACE (U+3000), OGHAM
+ * SPACE MARK (U+1680), line/paragraph separators (U+2028 / U+2029), the BOM /
+ * zero-width no-break space (U+FEFF), and ASCII whitespace - while the explicit
+ * C0 ranges still strip the non-whitespace controls `\s` omits (U+0000..U+0008,
+ * U+000E..U+001F). This is the most thorough strip: it defeats obfuscated
+ * schemes like " javascript:" prefixed with a NARROW NO-BREAK SPACE (U+202F)
+ * that the previous fixed list would have missed.
  */
-const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0020\u00a0\u2028\u2029\ufeff]+/g
+const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0008\u000e-\u001f\s]+/gu
 
 function sanitizeUrl(url: string, opts: RenderOptions): string {
   if (opts.sanitizeUrls === false) return url
