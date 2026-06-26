@@ -50,11 +50,41 @@ export function colorSwatch(options: ColorSwatchOptions = {}): CarveExtension {
     renderers: {
       color: (node: Extension, ctx: ExtensionRenderContext): string | undefined => {
         const value = safeColor(inlineText(node.content))
-        if (value === null) return undefined
-        return renderSwatch(node.attrs, ctx, value, position, shape, tint, reveal)
+        const contrast = hasKeyValue(node.attrs, 'contrast')
+        const attrs = contrast ? stripKeyValue(node.attrs, 'contrast') : node.attrs
+        if (value === null) {
+          return contrast ? renderGenericColor(node, attrs, ctx) : undefined
+        }
+        const text = contrastText(value)
+        if (contrast && text !== null) return renderContrastLabel(attrs, ctx, value, text)
+        return renderSwatch(attrs, ctx, value, position, shape, tint, reveal)
       },
     },
   }
+}
+
+function renderContrastLabel(
+  nodeAttrs: Attrs | undefined,
+  ctx: ExtensionRenderContext,
+  value: string,
+  text: string,
+): string {
+  const attrs = withBaseClass(nodeAttrs, 'swatch-label')
+  // The computed colors go last so author attributes keep their source order; an
+  // explicit author `style` wins and suppresses ours (which also avoids emitting
+  // a duplicate `style` attribute).
+  const style = hasKeyValue(nodeAttrs, 'style')
+    ? ''
+    : ` style="${ctx.escapeAttr(`background:${value};color:${text}`)}"`
+  return `<span${ctx.renderAttrs(attrs)}${style}>${ctx.escapeHtml(value)}</span>`
+}
+
+function renderGenericColor(
+  node: Extension,
+  attrs: Attrs | undefined,
+  ctx: ExtensionRenderContext,
+): string {
+  return `<span${ctx.renderAttrs(withBaseClass(attrs, `ext-${node.name}`))}>${ctx.renderInlines(node.content)}</span>`
 }
 
 function renderSwatch(
@@ -147,6 +177,36 @@ function safeColor(s: string): string | null {
   return null
 }
 
+function contrastText(value: string): '#000' | '#fff' | null {
+  const rgb = parseIntegerRgb(value)
+  if (rgb === null) return null
+  const brightness = Math.floor((rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000)
+  return brightness >= 128 ? '#000' : '#fff'
+}
+
+function parseIntegerRgb(value: string): [number, number, number] | null {
+  const hex = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(value)
+  if (hex) {
+    const h = hex[1]
+    if (h.length === 3 || h.length === 4) {
+      return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)]
+    }
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+  }
+
+  const rgb = /^rgba?\((.*)\)$/.exec(value)
+  if (!rgb) return null
+  const tokens = rgb[1].trim().split(/[\s,/]+/).filter(Boolean)
+  if (tokens.length < 3) return null
+  const channels = tokens.slice(0, 3)
+  if (!channels.every((t) => /^[+-]?\d+$/.test(t))) return null
+  return channels.map((t) => clampByte(Number.parseInt(t, 10))) as [number, number, number]
+}
+
+function clampByte(n: number): number {
+  return Math.min(255, Math.max(0, n))
+}
+
 /** Merge a base class ahead of the author classes (a fresh Attrs copy). */
 function withBaseClass(attrs: Attrs | undefined, base: string): Attrs {
   const a: Attrs = attrs ? { ...attrs } : {}
@@ -166,6 +226,24 @@ function withDefaultKeyValue(attrs: Attrs, key: string, value: string): Attrs {
   const keyValues = attrs.keyValues ?? {}
   if (key in keyValues) return attrs
   return { ...attrs, keyValues: { ...keyValues, [key]: value } }
+}
+
+function hasKeyValue(attrs: Attrs | undefined, key: string): boolean {
+  return attrs?.keyValues?.[key] !== undefined
+}
+
+function stripKeyValue(attrs: Attrs | undefined, key: string): Attrs | undefined {
+  if (!attrs?.keyValues || attrs.keyValues[key] === undefined) return attrs
+  const keyValues = { ...attrs.keyValues }
+  delete keyValues[key]
+  const out: Attrs = { ...attrs }
+  if (Object.keys(keyValues).length > 0) {
+    out.keyValues = keyValues
+  } else {
+    delete out.keyValues
+  }
+  if (out.order) out.order = out.order.filter((slot) => slot !== key)
+  return out
 }
 
 /** Flatten an inline tree to its text content. */
