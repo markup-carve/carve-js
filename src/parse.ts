@@ -267,13 +267,18 @@ const RE_COMMENT_LINE = /^%%/
 // paragraph-interruption closer lookahead's negative cache (§10).
 const RE_FENCE_CLOSER = /^\s{0,3}(`{3,}|~{3,})\s*$/
 
-// Maximum block-container nesting depth. Each level of blockquote / div / list /
-// footnote recurses parseBlocks -> parseBlock -> parseContainer -> parseBlocks,
-// so unbounded nesting (e.g. `> ` repeated thousands of times) overflows the
-// call stack. Past this depth, container openers degrade to literal paragraph
-// text instead of crashing. Far above any real document; only adversarial input
-// reaches it.
-const MAX_NESTING_DEPTH = 200
+// Maximum block-container nesting depth, applied UNIFORMLY to blockquote, list,
+// fenced-div / admonition (and footnote) nesting. Each level recurses
+// parseBlocks -> parseBlock -> parseContainer -> parseBlocks, so unbounded
+// nesting (e.g. `> ` repeated thousands of times, a deeply indented list, or a
+// stack of varied-length `:::` fences) would overflow the call stack. Every
+// container sub-lexer carries `depth = parent.depth + 1` and re-enters
+// parseBlockInner, where this single gate degrades the opener to literal
+// paragraph text past the cap - so all container kinds flatten the same way
+// rather than crashing. The same constant also bounds the inline recursion
+// (see scanInline). Far above any real document; only adversarial input reaches
+// it. Exported so callers/tests can assert the exact, shared cap.
+export const MAX_NESTING_DEPTH = 200
 
 class Lexer {
   lines: string[]
