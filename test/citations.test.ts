@@ -57,7 +57,7 @@ describe('citation matcher', () => {
 describe('citations: defs + numbered rendering', () => {
   it('drops the [@key]: definition paragraph and numbers the citation', () => {
     const out = h('See [@smith2020].\n\n[@smith2020]: Smith, J. (2020). Title.')
-    expect(out).toContain('[<a href="#ref-smith2020">1</a>]')
+    expect(out).toContain('[<a data-cite-key="smith2020" href="#ref-smith2020">1</a>]')
     expect(out).not.toContain('<p>Smith, J. (2020). Title.</p>')
   })
 
@@ -75,7 +75,7 @@ describe('citations: defs + numbered rendering', () => {
 
   it('renders locator and prefix inside the brackets', () => {
     const out = h('[see @a, p. 3].\n\n[@a]: A.')
-    expect(out).toContain('[see <a href="#ref-a">1</a>, p. 3]')
+    expect(out).toContain('[see <a data-cite-key="a" data-cite-prefix="see" data-locator-label="page" data-locator="3" href="#ref-a">1</a>, p. 3]')
   })
 
   it('renders an undefined key verbatim', () => {
@@ -110,7 +110,7 @@ describe('citations: consecutive definition lines', () => {
 describe('citations: author-date mode', () => {
   it('renders (Author Year) from the entry attrs', () => {
     const out = ha('See [@s].\n\n[@s]: {author="Smith" year="2020"} Smith, J.')
-    expect(out).toContain('(<a href="#ref-s">Smith 2020</a>)')
+    expect(out).toContain('(<a data-cite-key="s" href="#ref-s">Smith 2020</a>)')
   })
 
   it('suppresses the author with -@key', () => {
@@ -151,7 +151,7 @@ const hb = (s: string, bib: unknown[]) =>
 describe('bibliography: external CSL-JSON resolution', () => {
   it('resolves a key from the pool and renders the formatted entry', () => {
     const out = hb('See [@smith2020].', [SMITH])
-    expect(out).toContain('<a id="cite-smith2020-1" href="#ref-smith2020">1</a>')
+    expect(out).toContain('<a id="cite-smith2020-1" data-cite-key="smith2020" href="#ref-smith2020">1</a>')
     expect(out).toContain(
       '<li id="ref-smith2020">Smith, John (2020). A Study. ' +
         '<a href="#cite-smith2020-1" class="ref-backref">↩</a></li>',
@@ -166,8 +166,8 @@ describe('bibliography: external CSL-JSON resolution', () => {
 
   it('emits one back-link per use site', () => {
     const out = hb('[@smith2020] then [@smith2020] again.', [SMITH])
-    expect(out).toContain('<a id="cite-smith2020-1" href="#ref-smith2020">1</a>')
-    expect(out).toContain('<a id="cite-smith2020-2" href="#ref-smith2020">1</a>')
+    expect(out).toContain('<a id="cite-smith2020-1" data-cite-key="smith2020" href="#ref-smith2020">1</a>')
+    expect(out).toContain('<a id="cite-smith2020-2" data-cite-key="smith2020" href="#ref-smith2020">1</a>')
     expect(out).toContain('<a href="#cite-smith2020-1" class="ref-backref">↩</a>')
     expect(out).toContain('<a href="#cite-smith2020-2" class="ref-backref">↩</a>')
   })
@@ -177,8 +177,8 @@ describe('bibliography: external CSL-JSON resolution', () => {
       { id: 'a', title: 'Alpha' },
       { id: 'b', title: 'Beta' },
     ])
-    expect(out).toContain('<a id="cite-a-1" href="#ref-a">1</a>')
-    expect(out).toContain('<a id="cite-b-1" href="#ref-b">2</a>')
+    expect(out).toContain('<a id="cite-a-1" data-cite-key="a" href="#ref-a">1</a>')
+    expect(out).toContain('<a id="cite-b-1" data-cite-key="b" href="#ref-b">2</a>')
   })
 
   it('renders an unresolved key verbatim with no anchors', () => {
@@ -313,6 +313,28 @@ function flattenInlineText(nodes: unknown[]): string {
     })
     .join('')
 }
+
+const htmlCite = (src: string) => carveToHtml(src, { extensions: [citations()] })
+const DEFS = '\n\n[@k]: {author="K" year="2020"} K. (2020). Work.'
+
+describe('citation data-* render', () => {
+  it('integral marker -> data-cite-mode', () => {
+    const out = htmlCite('[+@k]' + DEFS)
+    expect(out).toContain('data-cite-mode="integral"')
+    expect(out).toContain('data-cite-key="k"')
+  })
+  it('suppress -> data-suppress-author, no mode', () => {
+    const out = htmlCite('[-@k]' + DEFS)
+    expect(out).toContain('data-suppress-author="true"')
+    expect(out).not.toContain('data-cite-mode')
+  })
+  it('typed locator -> data-locator-label/locator/suffix', () => {
+    const out = htmlCite('[@k, pp. 33-35, 38 and *passim*]' + DEFS)
+    expect(out).toContain('data-locator-label="page"')
+    expect(out).toContain('data-locator="33-35, 38"')
+    expect(out).toContain('data-suffix="and passim"')
+  })
+})
 
 describe('parseLocator', () => {
   it('typed page', () => {

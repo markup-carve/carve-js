@@ -449,19 +449,32 @@ function renderGroup(
   const idAttr = (it: Citation) =>
     hasBib && it.useIndex ? `id="cite-${ctx.escapeAttr(it.key)}-${it.useIndex}" ` : ''
 
+  const dataAttrs = (it: Citation) => {
+    const a: string[] = [`data-cite-key="${ctx.escapeAttr(it.key)}"`]
+    if (it.suppressAuthor) a.push('data-suppress-author="true"')
+    if (it.mode === 'integral') a.push('data-cite-mode="integral"')
+    const pfx = flattenText(it.prefix)
+    if (pfx) a.push(`data-cite-prefix="${ctx.escapeAttr(pfx)}"`)
+    if (it.locatorLabel) a.push(`data-locator-label="${ctx.escapeAttr(it.locatorLabel)}"`)
+    if (it.locatorValue) a.push(`data-locator="${ctx.escapeAttr(it.locatorValue)}"`)
+    const sfx = flattenText(it.suffix)
+    if (sfx) a.push(`data-suffix="${ctx.escapeAttr(sfx)}"`)
+    return a.join(' ') + ' '
+  }
+
   if (mode === 'author-date') {
     const parts = node.items.map((it) => {
       const d = defs.get(it.key)!
       const label = it.suppressAuthor
         ? d.year ?? String(it.number ?? '')
         : `${d.author ?? ''} ${d.year ?? ''}`.trim() || String(it.number ?? '')
-      return `${pre(it)}<a ${idAttr(it)}href="#ref-${ctx.escapeAttr(it.key)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
+      return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#ref-${ctx.escapeAttr(it.key)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
     })
     return `(${parts.join('; ')})`
   }
   const parts = node.items.map((it) => {
     const n = numbers.get(it.key)
-    return `${pre(it)}<a ${idAttr(it)}href="#ref-${ctx.escapeAttr(it.key)}">${n}</a>${loc(it)}`
+    return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#ref-${ctx.escapeAttr(it.key)}">${n}</a>${loc(it)}`
   })
   return `[${parts.join(', ')}]`
 }
@@ -501,6 +514,18 @@ function renderRefsList(
 }
 
 // ----- helpers --------------------------------------------------------------
+
+/** Plain-text flatten of an inline run for a lossy data-* attribute mirror. */
+function flattenText(nodes: InlineNode[] | undefined): string {
+  if (!nodes) return ''
+  let out = ''
+  for (const n of nodes) {
+    if (n.type === 'text') out += (n as Text).value
+    else if ('children' in n && Array.isArray((n as { children?: InlineNode[] }).children))
+      out += flattenText((n as { children: InlineNode[] }).children)
+  }
+  return out
+}
 
 function hasClass(b: BlockNode, cls: string): boolean {
   const attrs = (b as { attrs?: { classes?: string[] } }).attrs
