@@ -261,9 +261,9 @@ function parseFirstCitationGroup(src: string): {
 }
 
 describe('citation item parse (marker + typed locator)', () => {
-  it('+ marker sets narrative mode', () => {
+  it('+ marker sets integral mode', () => {
     const g = parseFirstCitationGroup('[+@k]')
-    expect(g.items[0]!.mode).toBe('narrative')
+    expect(g.items[0]!.mode).toBe('integral')
     expect(g.items[0]!.suppressAuthor).toBe(false)
   })
   it('one-slot marker: +-@k = prefix "+" + suppressAuthor', () => {

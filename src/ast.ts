@@ -401,8 +401,8 @@ export interface Citation {
   suffix?: InlineNode[]
   /** `-@key` suppresses the author in author-date mode. */
   suppressAuthor: boolean
-  /** `+@key` narrative/integral mode; absent = parenthetical. */
-  mode?: 'narrative'
+  /** `+@key` integral (author-in-text) mode; absent = non-integral (parenthetical). */
+  mode?: 'integral'
   /** Assigned during resolve (numbered mode); undefined if key undefined. */
   number?: number
   /** Per-key, document-wide use-site index (1-based), assigned when a

@@ -260,7 +260,7 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
   const prefixText = m[1]!.replace(/\s+$/, '')
   const marker = m[2]
   const item: Citation = { key: m[3]!, suppressAuthor: marker === '-' }
-  if (marker === '+') item.mode = 'narrative'
+  if (marker === '+') item.mode = 'integral'
   if (prefixText !== '') item.prefix = ctx.parseInlines(prefixText)
   const locRaw = m[4]
   if (locRaw !== undefined && locRaw.trim() !== '') {
