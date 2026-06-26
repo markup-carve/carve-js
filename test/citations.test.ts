@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml, parse } from '../src/index.js'
-import { citations } from '../src/citations.js'
+import { citations, parseLocator } from '../src/citations.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [citations()] }).trim()
 const ha = (s: string) =>
@@ -237,5 +237,46 @@ describe('bibliography: no pool keeps Tier-2 behavior', () => {
     expect(out).toContain('<li id="ref-a">A.</li>')
     expect(out).not.toContain('ref-backref')
     expect(out).not.toContain('id="cite-a-1"')
+  })
+})
+
+describe('parseLocator', () => {
+  it('typed page', () => {
+    expect(parseLocator('p. 4')).toEqual({ label: 'page', value: '4' })
+  })
+  it('abbrev range + suffix', () => {
+    expect(parseLocator('pp. 33-35, 38 and *passim*')).toEqual({
+      label: 'page', value: '33-35, 38', suffixText: 'and *passim*',
+    })
+  })
+  it('non-page labels', () => {
+    expect(parseLocator('chap. 2')).toEqual({ label: 'chapter', value: '2' })
+    expect(parseLocator('§ 5')).toEqual({ label: 'section', value: '5' })
+    expect(parseLocator('§5')).toEqual({ label: 'section', value: '5' })
+    expect(parseLocator('vol.2')).toEqual({ label: 'volume', value: '2' })
+  })
+  it('default page on digit only', () => {
+    expect(parseLocator('4')).toEqual({ label: 'page', value: '4' })
+    expect(parseLocator('iv')).toEqual({ suffixText: 'iv' })
+  })
+  it('label boundary', () => {
+    expect(parseLocator('pageant')).toEqual({ suffixText: 'pageant' })
+    expect(parseLocator('voli')).toEqual({ suffixText: 'voli' })
+    expect(parseLocator('s.v.foo')).toEqual({ suffixText: 's.v.foo' })
+  })
+  it('roman via space boundary', () => {
+    expect(parseLocator('p. iv')).toEqual({ label: 'page', value: 'iv' })
+  })
+  it('comma-before-suffix trim', () => {
+    expect(parseLocator('p. 4, see also')).toEqual({
+      label: 'page', value: '4', suffixText: 'see also',
+    })
+  })
+  it('empty value after label', () => {
+    expect(parseLocator('p.')).toEqual({ label: 'page' })
+    expect(parseLocator('chap. *two*')).toEqual({ label: 'chapter', suffixText: '*two*' })
+  })
+  it('label-less suffix', () => {
+    expect(parseLocator('see the note')).toEqual({ suffixText: 'see the note' })
   })
 })

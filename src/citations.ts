@@ -13,6 +13,75 @@ const KEY = String.raw`[\w][\w:.#$%&+?<>~/-]*`
 // optional `, locator`. Prefix is lazy so it stops at the `-?@key`.
 const ITEM_RE = new RegExp(String.raw`^(.*?)(-?)@(${KEY})(?:,\s*(.*))?$`)
 
+/** Fixed citeproc locator vocabulary: canonical -> matchers. Flattened and
+ *  sorted longest-first so global longest-match wins. ASCII case-insensitive. */
+const LOCATOR_VOCAB: Array<[string, string[]]> = [
+  ['book', ['book', 'bk.']],
+  ['chapter', ['chapter', 'chaps.', 'chap.']],
+  ['column', ['column', 'cols.', 'col.']],
+  ['figure', ['figure', 'figs.', 'fig.']],
+  ['folio', ['folio', 'fols.', 'fol.']],
+  ['issue', ['issue', 'no.']],
+  ['line', ['line', 'll.', 'l.']],
+  ['note', ['note', 'nn.', 'n.']],
+  ['opus', ['opus', 'opp.', 'op.']],
+  ['page', ['pages', 'page', 'pp.', 'p.']],
+  ['paragraph', ['paragraph', 'paras.', 'para.', '¶¶', '¶']],
+  ['part', ['part', 'pts.', 'pt.']],
+  ['section', ['section', 'secs.', 'sec.', '§§', '§']],
+  ['sub verbo', ['sub verbo', 's.vv.', 's.v.']],
+  ['verse', ['verse', 'vv.', 'v.']],
+  ['volume', ['volume', 'vols.', 'vol.']],
+]
+const FLAT_TERMS: Array<[string, string]> = LOCATOR_VOCAB.flatMap(([canon, ms]) =>
+  ms.map((m) => [m, canon] as [string, string]),
+).sort((a, b) => b[0].length - a[0].length)
+
+const VALUE_CHAR = /[0-9IVXLCDMivxlcdm.,&\- ]/
+
+/** True when `ch` ends a label term (boundary). Roman letters are NOT a
+ *  boundary; a roman value is only reachable through whitespace/`.`. */
+function isLabelBoundary(ch: string | undefined): boolean {
+  if (ch === undefined || ch === ' ' || ch === '\t') return true
+  if (ch >= '0' && ch <= '9') return true
+  return ch === '§' || ch === '¶'
+}
+
+export interface ParsedLocator {
+  label?: string
+  value?: string
+  suffixText?: string
+}
+
+/** Parse a raw locator substring into label / value / suffix. Pure; never
+ *  throws. See the design spec "Locator parsing" section. */
+export function parseLocator(loc: string): ParsedLocator {
+  const s = loc.replace(/^\s+/, '')
+  const lower = s.toLowerCase()
+  let label: string | undefined
+  let rest = s
+  for (const [m, canon] of FLAT_TERMS) {
+    if (lower.startsWith(m.toLowerCase()) && isLabelBoundary(s[m.length])) {
+      label = canon
+      rest = s.slice(m.length).replace(/^[ \t]+/, '')
+      break
+    }
+  }
+  if (label === undefined) {
+    const c = rest[0]
+    if (c !== undefined && c >= '0' && c <= '9') label = 'page'
+  }
+  if (label === undefined) return s === '' ? {} : { suffixText: s }
+  let i = 0
+  while (i < rest.length && VALUE_CHAR.test(rest[i]!)) i++
+  const value = rest.slice(0, i).replace(/[ ,&\-.]+$/, '')
+  const suffixText = rest.slice(i).replace(/^[ \t]+/, '')
+  const out: ParsedLocator = { label }
+  if (value !== '') out.value = value
+  if (suffixText !== '') out.suffixText = suffixText
+  return out
+}
+
 /** Private marker key on the carrier div that the block renderer turns into
  *  the references list. */
 const REFS_MARK = 'data-cite-refs'
