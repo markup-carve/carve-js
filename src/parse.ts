@@ -2314,13 +2314,36 @@ function parseList(lexer: Lexer): List {
       // merges/absorbs like the plain one.
       extractItemAttr(content) !== null
 
+    // When the lead is a colon-fence opener (`::: word` admonition or a bare
+    // `:::` div) whose matching closer line sits among the collected nested
+    // lines, the body in between -- including a nested LIST -- belongs to the
+    // container. The `firstBlockIdx` split (which exists to let an indented
+    // ordered sub-list nest instead of folding) would otherwise sever the
+    // opener from its body, leaving `::: word` literal and the closer as
+    // trailing text. Keep the whole stream together so the admonition/div
+    // opener captures its nested-list body and finds its closer (matching
+    // carve-rs / the grammar `admonition = open, {block}, close`). The closer
+    // must be one of the collected (item-content-column) lines: a closer at
+    // column 0 dedents out of the item and is not in `nested`, so this guard
+    // does not fire and the opener correctly stays literal.
+    const leadOpensColonFence =
+      (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
+      RE_DIV_OPEN.test(content)
+    const colonFenceLen = leadOpensColonFence ? /^(:{3,})/.exec(content)![1]!.length : 0
+    const colonFenceHasBodyCloser =
+      leadOpensColonFence &&
+      nested.some((ln) => {
+        const c = RE_ADMONITION_CLOSE.exec(ln)
+        return c !== null && c[1]!.length >= colonFenceLen
+      })
+
     // Parse the lead text together with its continuation/nested lines as one
     // block sequence (lazy continuation merges into the lead paragraph). An
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
-    const leadLines = firstBlockIdx === -1 || leadIsMarker ? nested : nested.slice(0, firstBlockIdx)
-    const blockLines =
-      firstBlockIdx === -1 || leadIsMarker ? [] : nested.slice(firstBlockIdx)
+    const keepStreamWhole = firstBlockIdx === -1 || leadIsMarker || colonFenceHasBodyCloser
+    const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
+    const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
     const mkSub = (text: string): Lexer => {
       const s = new Lexer(text)
       s.abbrDefs = lexer.abbrDefs
