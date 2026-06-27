@@ -28,6 +28,8 @@ import {
   carveToAnsi,
   type MigrationWarning,
 } from './index.js'
+import { stampCarve, type StampForm } from './stamp.js'
+import { LIB_VERSION } from './version.js'
 
 /** Injectable I/O so `run` is testable without real fs / stdin / exit. */
 export interface CliIO {
@@ -48,7 +50,7 @@ const HELP = `carve - Carve markup tooling
 Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
-  carve fmt [-w|--check] [files...] Format Carve source canonically
+  carve fmt [-w|--check] [--stamp] [files...] Format Carve source canonically
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
 
@@ -68,6 +70,10 @@ fmt - format Carve source canonically.
     -w, --write    Rewrite the given files in place
         --check    Exit 1 if any file is not formatted (no writes)
         --stdout   Print formatted output to stdout (single file or stdin)
+        --stamp    Append a provenance marker (a comment recording the spec
+                   version and engine) at the end of the document; replaces an
+                   existing one. Deterministic (no timestamp); renders nothing.
+        --stamp-block  Like --stamp but writes the multi-line %%% block form.
 
 fix - rewrite Djot/Markdown delimiter collisions to their Carve equivalents,
 constructs that otherwise silently mis-render under Carve (e.g. **bold**
@@ -213,7 +219,14 @@ const RENDERERS = {
 } as const
 
 async function runFmt(args: string[], io: CliIO): Promise<number> {
-  let values: { write?: boolean; check?: boolean; stdout?: boolean; help?: boolean }
+  let values: {
+    write?: boolean
+    check?: boolean
+    stdout?: boolean
+    stamp?: boolean
+    'stamp-block'?: boolean
+    help?: boolean
+  }
   let positionals: string[]
   try {
     const parsed = parseArgs({
@@ -222,6 +235,8 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
         write: { type: 'boolean', short: 'w' },
         check: { type: 'boolean' },
         stdout: { type: 'boolean' },
+        stamp: { type: 'boolean' },
+        'stamp-block': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -244,6 +259,14 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
     return 2
   }
 
+  // `--stamp` writes a one-liner provenance marker; `--stamp-block` the block
+  // form. Format, then stamp, so the marker lands on canonical output.
+  const stampForm: StampForm | null = values['stamp-block'] ? 'block' : values.stamp ? 'line' : null
+  const format = (src: string): string => {
+    const out = carveToCarve(src)
+    return stampForm ? stampCarve(out, `carve-js ${LIB_VERSION}`, stampForm) : out
+  }
+
   const files = positionals
 
   if (files.length === 0) {
@@ -252,7 +275,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
       return 2
     }
     const src = await io.readStdin()
-    const out = carveToCarve(src)
+    const out = format(src)
     if (values.check) return out === src ? 0 : 1
     io.write(out)
     return 0
@@ -281,7 +304,7 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
       hadError = true
       continue
     }
-    const out = carveToCarve(src)
+    const out = format(src)
     if (mode === 'stdout') {
       io.write(out)
       continue

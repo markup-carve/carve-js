@@ -105,6 +105,7 @@ echo '# Hello' | carve           # render from stdin
 carve fmt  file.crv        # print canonically formatted Carve to stdout
 carve fmt -w   file.crv    # format in place
 carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate)
+carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
 carve --help
@@ -116,6 +117,21 @@ lengths, and attribute spacing. It is conservative (no reflow, no reference/inli
 link conversion, no list renumbering) and semantic-preserving - the rendered HTML
 is byte-identical before and after - so it is safe to run on a whole tree. The
 same canonical serializer is available programmatically as `carveToCarve(src)`.
+
+`carve fmt --stamp` additionally appends a *provenance marker* - a comment at the
+end of the document recording the Carve spec version it was processed under and
+the engine that wrote it:
+
+```
+%% carve-version: 0.1; generated-by: carve-js 0.1.0
+```
+
+It is deterministic (no timestamp) and replace-in-place, so re-stamping is
+idempotent; it renders nothing and a plain `carve fmt` preserves it. Use
+`--stamp-block` for the multi-line `%%%` block form. The marker records which
+spec version a document was last processed under, so future tooling can flag
+documents predating a breaking spec change. The same logic is available as
+`stampCarve(formatted, 'carve-js 0.1.0')`.
 
 `carve lint` is a validator for problems that *parse* but render as the wrong
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
