@@ -2,6 +2,8 @@
 
 Reference TypeScript implementation of the [Carve](https://github.com/markup-carve/carve) markup language.
 
+Implements **Carve spec 0.1** (see [Versioning & Changelog](https://markup-carve.github.io/carve/versioning)).
+
 > **Status:** the parser, renderers, and migration tooling are implemented and pass the spec corpus. Not yet published to npm.
 
 ## What this is
