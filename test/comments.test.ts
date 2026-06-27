@@ -36,4 +36,14 @@ describe('trailing line comments', () => {
     // i===0 guard fires and the whole title is a comment.
     expect(carveToHtml('# %% all').trim()).toBe('<section id="s">\n  <h1></h1>\n</section>')
   })
+
+  it('treats an indented comment-only line as a comment (no empty paragraph)', () => {
+    // Leading whitespace before %% does not matter; matches carve-php / carve-rs.
+    expect(carveToHtml('  %% indented comment').trim()).toBe('')
+    expect(carveToHtml('before\n\n  %% c\n\nafter').trim()).toBe('<p>before</p>\n<p>after</p>')
+  })
+
+  it('an indented comment line interrupts an open paragraph', () => {
+    expect(carveToHtml('x\n  %% c\ny').trim()).toBe('<p>x</p>\n<p>y</p>')
+  })
 })
