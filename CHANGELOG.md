@@ -1,0 +1,96 @@
+# Changelog
+
+All notable changes to carve-js are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - YYYY-MM-DD
+
+Initial release of the **reference TypeScript implementation** of the
+[Carve](https://github.com/markup-carve/carve) markup language.
+carve-js is the spec oracle: the JS output is the ground truth that all other
+implementations are byte-matched against.
+
+### Core parsing and rendering
+
+- Linear-time block and inline parser producing a typed `Document` AST
+- Full Tier-1 feature set: headings (H1-H4), paragraphs, emphasis (`/italic/`,
+  `*bold*`, `_underline_`, `~strikethrough~`, `^super^`, `,sub,`, `=highlight=`,
+  `/*bold-italic*/`), blockquotes with attribution captions, unordered and ordered
+  lists, task lists, tables (with colspan/rowspan), inline code and fenced code
+  blocks, images (inline and block with captions), horizontal rules, hard breaks,
+  YAML frontmatter, admonitions (`::: note`/`tip`/`warning`/`danger`), abbreviations
+  (`*[ABBR]:`), mentions (`@user`), hashtags (`#tag`), display and inline math
+  (`$$`/`` $` ``), inline extensions (`:type[...]`), attribute blocks (`{#id .class
+  key=val}`), raw HTML passthrough (`=html`), comment lines (`%%`), and reference
+  links/images
+- Inline footnotes (`^[...]`) and block footnote definitions
+- CriticMarkup (`{++add++}`, `{--del--}`, `{~~sub~~}`, `{==hl==}`, `{>>comment<<}`)
+- Smart typography: curly quotes, em/en dashes, ellipsis
+- HTML renderer (`renderHtml` / `carveToHtml`) producing canonical output matched
+  by all other implementations
+- Markdown renderer (`carveToMarkdown`), plain-text renderer (`carveToPlainText`),
+  ANSI-colored renderer (`carveToAnsi`)
+- Static render mode (`{ mode: 'static' }`) for self-contained HTML without
+  client-side scripts; interactive constructs degrade gracefully
+
+### Tier-2 extensions (always-on)
+
+- `mathBlock` - fenced ` ```math ` block rendered as `<div class="math display">`
+  with author-attribute passthrough
+
+### Tier-2 opt-in extensions
+
+- `citations` - `[@key]` reference citations with typed locators, explicit
+  suffixes, and integral/group-level markers (§22)
+- `codeCallouts` - annotated callout markers inside fenced code blocks
+
+### Tier-3 opt-in extensions
+
+- `bibliography` - CSL-JSON pool with cite-ordered `<ol>` rendering and back-links
+- `glossary` - `::: glossary` blocks with `:term[word]` inline markers linking to
+  `gloss-{slug}` anchors
+- `index` - `:index[term]` invisible span markers with a sorted `::: index` block
+  collecting back-links
+- `headingNumbers` - opt-in section auto-numbering (`1.`, `1.1.`, ...) and
+  numbered `</#id>` cross-references via `<span class="section-number">`
+- `colorSwatch` - `:color[value]` inline showing a color preview chip; validates
+  against the CSS named-color set; configurable position, shape, and tint; auto-
+  contrast label variant
+- `spoiler` - `:spoiler[text]` inline and `::: spoiler` block (native
+  `<details class="spoiler">`)
+- `details` - `::: details "Title"` rendered as HTML5 `<details>/<summary>`
+- `fencedRender` - generic client-render factory with presets for Mermaid, D2,
+  Graphviz, WaveDrom, ABC, Vega-Lite, and Chart.js
+- `listTable` - `::: list-table` converts nested lists to `<table>` with full
+  block content in cells; supports header-rows/cols and span markers
+- `tableOfContents`, `headingPermalinks`, `autolink`, `externalLinks`,
+  `wikilinks`, `tabNormalize` - standard document-enhancement extensions
+
+### CLI and tooling
+
+- `carve` binary: `render` (default), `fmt`, `fix`, `lint` subcommands
+- `carve fmt` - canonical formatter; semantic-preserving rewrite (trailing
+  whitespace, blank-line runs, list markers, fence lengths, attribute spacing);
+  `-w` in-place and `--check` CI-gate mode; `carveToCarve(src)` programmatic API
+- `carve lint` - validator for broken cross-references, duplicate heading ids,
+  unresolved reference links, missing/duplicate footnotes, misplaced attribute
+  blocks, and legacy fence syntax; exits non-zero for CI use
+- `carve fix` - auto-corrects Djot/Markdown delimiter collisions
+- `markdownToCarve` migration helper and `djotToCarve` collision warnings
+
+### Security (always-on, §25-§26)
+
+- URL scheme denylist covering `javascript:`, `data:`, `vbscript:`, and OS
+  protocol-handler schemes
+- Dangerous attribute stripping (`on*`, `srcdoc`, `formaction`) on all elements
+- CSS `expression()` and `url()` neutralization in style attributes
+- Trojan-Source hardening: NFC normalization of heading/footnote ids; bidi and
+  zero-width Unicode control characters stripped from text and code content (§26)
+- Uniform nesting depth cap of 200
+
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/markup-carve/carve-js/releases/tag/v0.1.0
