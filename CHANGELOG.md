@@ -38,20 +38,19 @@ implementations are byte-matched against.
 - Static render mode (`{ mode: 'static' }`) for self-contained HTML without
   client-side scripts; interactive constructs degrade gracefully
 
-### Tier-2 extensions (always-on)
-
-- `mathBlock` - fenced ` ```math ` block rendered as `<div class="math display">`
-  with author-attribute passthrough
-
 ### Tier-2 opt-in extensions
 
+- `mathBlock` - fenced ` ```math ` block rendered as `<div class="math display">`
+  with author-attribute passthrough (core `$$` display math is always-on Tier-1)
 - `citations` - `[@key]` reference citations with typed locators, explicit
   suffixes, and integral/group-level markers (§22)
 - `codeCallouts` - annotated callout markers inside fenced code blocks
 
 ### Tier-3 opt-in extensions
 
-- `bibliography` - CSL-JSON pool with cite-ordered `<ol>` rendering and back-links
+- citations `bibliography` option - supplying a CSL-JSON pool renders a
+  cite-ordered `<ol>` with back-links (a citations capability, not a standalone
+  extension)
 - `glossary` - `::: glossary` blocks with `:term[word]` inline markers linking to
   `gloss-{slug}` anchors
 - `index` - `:index[term]` invisible span markers with a sorted `::: index` block
@@ -93,5 +92,5 @@ implementations are byte-matched against.
   zero-width Unicode control characters stripped from text and code content (§26)
 - Uniform nesting depth cap of 200
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/markup-carve/carve-js/releases/tag/v0.1.0
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/markup-carve/carve-js/releases/tag/0.1.0
