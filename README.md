@@ -4,7 +4,7 @@ Reference TypeScript implementation of the [Carve](https://github.com/markup-car
 
 Implements **Carve spec 0.1** (see [Versioning & Changelog](https://markup-carve.github.io/carve/versioning)).
 
-> **Status:** the parser, renderers, and migration tooling are implemented and pass the spec corpus. Not yet published to npm.
+> **Status:** the parser, renderers, and migration tooling are implemented and pass the spec corpus.
 
 ## What this is
 
@@ -32,7 +32,7 @@ to fetch the spec corpus.
 import { carveToHtml } from '@markup-carve/carve'
 
 carveToHtml('# Hello\n\nThis is /italic/ and *bold*.')
-// <section id="hello">
+// <section id="Hello">
 //   <h1>Hello</h1>
 //   <p>This is <em>italic</em> and <strong>bold</strong>.</p>
 // </section>
@@ -146,11 +146,11 @@ through [carve-lsp](https://github.com/markup-carve/carve-lsp).
 
 ## Documentation
 
-- [Extensions](./docs/extensions.md) - opt-in extensions (`tabNormalize`,
+- [Extensions](https://github.com/markup-carve/carve-js/blob/main/docs/extensions.md) - opt-in extensions (`tabNormalize`,
   `details`, `mermaid`, `wikilinks`, `externalLinks`, `headingPermalinks`,
   `tableOfContents`, `autolink`) and how to add your own syntax with
   parse-stage matchers.
-- [Migration and linting](./docs/migration.md) - `markdownToCarve`,
+- [Migration and linting](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md) - `markdownToCarve`,
   Djot collision warnings + `carve fix`, and `lintCarve` / `carve lint`.
 
 Try Carve live in the [playground](https://markup-carve.github.io/carve/playground),

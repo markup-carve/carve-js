@@ -4,6 +4,9 @@
   "type": "module",
   "description": "Reference TypeScript implementation of the Carve markup language",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "author": "Mark Scherer",
   "homepage": "https://markup-carve.github.io/carve/",
   "repository": {

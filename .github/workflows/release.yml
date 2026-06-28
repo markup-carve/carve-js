@@ -13,6 +13,8 @@ jobs:
       id-token: write # OIDC for npm Trusted Publishing + provenance
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive # spec corpus submodule; npm test needs it
 
       - uses: actions/setup-node@v4
         with:
