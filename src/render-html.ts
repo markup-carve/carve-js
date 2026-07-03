@@ -31,12 +31,18 @@ import type {
   StaticRenderers,
 } from './extension.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
 // calls. Rendering is synchronous and single-threaded, so a module-scoped
 // tracker is safe and avoids threading a counter through every signature.
 let abbrBudget: AbbrBudget | null = null
+
+// Per-render document id namespace (extensions contract §2.6): seeded with
+// every explicit / heading id in the resolved AST, consumed by extensions via
+// ctx.uniqueId(). Same save/restore discipline as abbrBudget above.
+let docIds: DocumentIdRegistry | null = null
 
 export interface RenderOptions {
   /**
@@ -294,11 +300,14 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   // renderHtml() recursively while the outer document renders. Restoring the
   // previous tracker keeps the outer document's abbreviation budget intact.
   const prevBudget = abbrBudget
+  const prevDocIds = docIds
   abbrBudget = new AbbrBudget(ast.srcByteLength)
+  docIds = collectDocumentIds(ast)
   try {
     return renderDocumentBody(ast, opts)
   } finally {
     abbrBudget = prevBudget
+    docIds = prevDocIds
   }
 }
 
@@ -627,6 +636,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
     escapeHtml,
     escapeAttr,
     renderAttrs,
+    uniqueId,
     mode: opts.mode ?? 'interactive',
     renderers: opts.renderers ?? {},
   }
@@ -639,9 +649,17 @@ function inlineCtx(opts: RenderOptions): ExtensionRenderContext {
     escapeHtml,
     escapeAttr,
     renderAttrs,
+    uniqueId,
     mode: opts.mode ?? 'interactive',
     renderers: opts.renderers ?? {},
   }
+}
+
+/** Reserve an id in the per-render document id namespace (ctx.uniqueId). A
+ *  render always installs a registry; the bare fallback only covers an
+ *  extension calling a saved ctx outside renderHtml(). */
+function uniqueId(baseId: string): string {
+  return docIds ? docIds.uniqueId(baseId) : baseId
 }
 
 // Let an extension render a top-level heading's <h*> element via a

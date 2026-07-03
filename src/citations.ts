@@ -148,6 +148,23 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
   const numbers = new Map<string, number>()
   const order: string[] = [] // cited+defined keys in first-citation order
   const uses = new Map<string, number>() // per-key use-site count (back-links)
+  // Deduplicated DOM ids (extensions contract §2.6): `cite-{key}-{n}` use-site
+  // anchors and `ref-{key}` entries join the document id namespace, so an
+  // explicit {#cite-foo-1} or a colliding heading slug bumps them. Reserved
+  // once per render, keyed so anchors and back-links stay consistent.
+  const citeIds = new Map<string, string>()
+  const refIds = new Map<string, string>()
+  let idsReserved = false
+  const reserveIds = (ctx: ExtensionRenderContext): void => {
+    if (idsReserved) return
+    for (const [key, count] of uses) {
+      for (let n = 1; n <= count; n++) {
+        citeIds.set(`${key}-${n}`, ctx.uniqueId(`cite-${key}-${n}`))
+      }
+    }
+    for (const key of order) refIds.set(key, ctx.uniqueId(`ref-${key}`))
+    idsReserved = true
+  }
 
   return {
     name: 'citations',
@@ -160,6 +177,9 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       numbers.clear()
       order.length = 0
       uses.clear()
+      citeIds.clear()
+      refIds.clear()
+      idsReserved = false
       doc.children = collectDefs(doc.children, defs)
       // Seed the CSL-JSON pool: in-document defs win on collision (§6.2).
       for (const e of pool) {
@@ -212,14 +232,19 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
     },
 
     inlineRenderers: {
-      'citation-group': (node, ctx) =>
-        renderGroup(node as CitationGroup, ctx, mode, numbers, defs, hasBib),
+      'citation-group': (node, ctx) => {
+        reserveIds(ctx)
+        return renderGroup(node as CitationGroup, ctx, mode, numbers, defs, hasBib, citeIds, refIds)
+      },
     },
 
     blockRenderers: {
       div: (node, ctx) => {
         const kv = (node as Div).attrs?.keyValues
-        if (kv && REFS_MARK in kv) return renderRefsList(ctx, mode, order, defs, uses, hasBib)
+        if (kv && REFS_MARK in kv) {
+          reserveIds(ctx)
+          return renderRefsList(ctx, mode, order, defs, uses, hasBib, citeIds, refIds)
+        }
         return undefined
       },
     },
@@ -443,6 +468,8 @@ function renderGroup(
   numbers: Map<string, number>,
   defs: Map<string, Def>,
   hasBib: boolean,
+  citeIds: Map<string, string>,
+  refIds: Map<string, string>,
 ): string {
   // Any item whose key has no definition ⇒ render the source verbatim.
   if (node.items.some((it) => !defs.has(it.key))) return ctx.escapeHtml(node.raw)
@@ -451,7 +478,11 @@ function renderGroup(
   const loc = (it: Citation) => (it.locator ? `, ${ctx.renderInlines(it.locator)}` : '')
   // Back-link anchor on the per-key item (only with a bibliography pool, §6.3).
   const idAttr = (it: Citation) =>
-    hasBib && it.useIndex ? `id="cite-${ctx.escapeAttr(it.key)}-${it.useIndex}" ` : ''
+    hasBib && it.useIndex
+      ? `id="${ctx.escapeAttr(citeIds.get(`${it.key}-${it.useIndex}`) ?? `cite-${it.key}-${it.useIndex}`)}" `
+      : ''
+  const refHref = (it: Citation) =>
+    ctx.escapeAttr(refIds.get(it.key) ?? `ref-${it.key}`)
 
   const dataAttrs = (it: Citation) => {
     const a: string[] = [`data-cite-key="${ctx.escapeAttr(it.key)}"`]
@@ -476,14 +507,14 @@ function renderGroup(
       const label = it.suppressAuthor
         ? d.year ?? String(it.number ?? '')
         : `${d.author ?? ''} ${d.year ?? ''}`.trim() || String(it.number ?? '')
-      return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#ref-${ctx.escapeAttr(it.key)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
+      return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#${refHref(it)}">${ctx.escapeHtml(label)}</a>${loc(it)}`
     })
     const out = `(${parts.join('; ')})`
     return wrap(out)
   }
   const parts = node.items.map((it) => {
     const n = numbers.get(it.key)
-    return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#ref-${ctx.escapeAttr(it.key)}">${n}</a>${loc(it)}`
+    return `${pre(it)}<a ${idAttr(it)}${dataAttrs(it)}href="#${refHref(it)}">${n}</a>${loc(it)}`
   })
   const out = `[${parts.join(', ')}]`
   return wrap(out)
@@ -496,6 +527,8 @@ function renderRefsList(
   defs: Map<string, Def>,
   uses: Map<string, number>,
   hasBib: boolean,
+  citeIds: Map<string, string>,
+  refIds: Map<string, string>,
 ): string {
   const pad = ctx.indent(ctx.level)
   const keys = [...order]
@@ -514,10 +547,12 @@ function renderRefsList(
         const n = uses.get(k) ?? 0
         const links: string[] = []
         for (let m = 1; m <= n; m++)
-          links.push(`<a href="#cite-${ctx.escapeAttr(k)}-${m}" class="ref-backref">↩</a>`)
+          links.push(
+            `<a href="#${ctx.escapeAttr(citeIds.get(`${k}-${m}`) ?? `cite-${k}-${m}`)}" class="ref-backref">↩</a>`,
+          )
         if (links.length) backlinks = (body ? ' ' : '') + links.join(' ')
       }
-      return `${pad}  <li id="ref-${ctx.escapeAttr(k)}">${body}${backlinks}</li>`
+      return `${pad}  <li id="${ctx.escapeAttr(refIds.get(k) ?? `ref-${k}`)}">${body}${backlinks}</li>`
     })
     .join('\n')
   return `${pad}<${tag} class="references">\n${items}\n${pad}</${tag}>`
