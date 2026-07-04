@@ -157,6 +157,26 @@ function navAttrs(attrs: Attrs | undefined): Attrs {
   return a
 }
 
+/** Depth-first, document-order collection of every heading with a resolved id,
+ *  recursing into container blocks. Stops at a heading (its inline children hold
+ *  no headings). Skips `pos` metadata. */
+function collectPlacementHeadings(node: unknown, out: TocEntry[]): void {
+  if (!node || typeof node !== 'object') return
+  const typed = node as { type?: string }
+  if (typed.type === 'heading') {
+    const h = node as Heading
+    const id = h.attrs?.id
+    if (id !== undefined) out.push({ level: h.level, text: inlineText(h.children), id })
+    return
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    if (key === 'pos') continue
+    const value = (node as Record<string, unknown>)[key]
+    if (Array.isArray(value)) for (const el of value) collectPlacementHeadings(el, out)
+    else if (value && typeof value === 'object') collectPlacementHeadings(value, out)
+  }
+}
+
 function renderToc(
   node: Admonition,
   ctx: BlockExtensionRenderContext,
@@ -211,13 +231,12 @@ export function tocPlacement(): CarveExtension {
     name: 'toc',
     beforeRender(doc) {
       entries = []
-      for (const node of doc.children) {
-        if (node.type !== 'heading') continue
-        const h = node as Heading
-        const id = h.attrs?.id
-        if (id === undefined) continue
-        entries.push({ level: h.level, text: inlineText(h.children), id })
-      }
+      // Walk the whole body in document order so headings nested in containers
+      // (`::: note`, blockquotes, lists, divs) are included - they render with
+      // id anchors, so they belong in the TOC. Footnote definitions live in
+      // `doc.footnoteDefs`, not `doc.children`, so their headings (which get no
+      // id) are naturally excluded.
+      for (const node of doc.children) collectPlacementHeadings(node, entries)
       return doc
     },
     blockRenderers: {
