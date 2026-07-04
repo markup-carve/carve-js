@@ -328,9 +328,28 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
 
   // Number footnote refs by document reference order before rendering.
   const footnotes = collectFootnotes(ast)
+  // `::: footnotes` placement directive: when present, the endnotes section is
+  // flushed at the marker instead of at document end (see the intercept below).
+  let footnotesPlaced = false
 
   for (const node of ast.children) {
     if (node.type === 'abbreviation-def') continue
+    // `::: footnotes` flushes the endnotes section HERE instead of at document
+    // end. Only the first marker in a document that actually has footnotes
+    // places; any other `::: footnotes` (or one in a document with no notes)
+    // falls through to its default typed-div rendering. A document without the
+    // marker is byte-identical to the previous behavior (default end append).
+    if (isFootnotePlacement(node) && footnotes.order.length && !footnotesPlaced) {
+      // Preserve any blocks authored inside the placeholder before flushing.
+      for (const child of (node as Admonition).children) {
+        const r = renderBlock(child, opts, sectionStack.length)
+        if (r !== '') out.push(r)
+      }
+      closeTo(1) // emit the endnotes at top level, byte-identical to the default
+      out.push(renderFootnoteSection(ast, footnotes, opts))
+      footnotesPlaced = true
+      continue
+    }
     if (node.type === 'heading') {
       closeTo(node.level)
       const depth = sectionStack.length
@@ -368,8 +387,14 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     if (rendered !== '') out.push(rendered)
   }
   closeTo(1) // close any sections still open at end of document
-  if (footnotes.order.length) out.push(renderFootnoteSection(ast, footnotes, opts))
+  if (footnotes.order.length && !footnotesPlaced) out.push(renderFootnoteSection(ast, footnotes, opts))
   return out.join('\n')
+}
+
+/** A `::: footnotes` placement directive (typed admonition, kind `footnotes`):
+ *  marks where the endnotes section should render instead of at document end. */
+function isFootnotePlacement(node: BlockNode): boolean {
+  return node.type === 'admonition' && (node as Admonition).kind === 'footnotes'
 }
 
 interface FootnoteEntry {

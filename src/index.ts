@@ -113,7 +113,7 @@ export {
 export { wikilinks, type WikilinksOptions } from './wikilinks.js'
 export { autolink, type AutolinkOptions } from './autolink.js'
 export { externalLinks, type ExternalLinksOptions } from './external-links.js'
-export { tableOfContents, type TableOfContentsOptions } from './table-of-contents.js'
+export { tableOfContents, tocPlacement, type TableOfContentsOptions } from './table-of-contents.js'
 export { headingPermalinks, type HeadingPermalinksOptions } from './heading-permalinks.js'
 export { codeGroup, type CodeGroupOptions } from './code-group.js'
 export { tabs, type TabsOptions, type TabsMode } from './tabs.js'
