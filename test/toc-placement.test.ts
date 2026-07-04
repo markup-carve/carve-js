@@ -75,4 +75,10 @@ describe('::: toc placement directive', () => {
     expect(out).toContain('class="toc"')
     expect(out).not.toContain('<nav')
   })
+
+  it('includes headings nested in containers (they render with id anchors)', () => {
+    const out = h('::: toc\n:::\n\n# Top\n\n::: note\n## InNote\n:::\n\n> ## InQuote\n')
+    expect(out).toContain('<a href="#InNote">InNote</a>')
+    expect(out).toContain('<a href="#InQuote">InQuote</a>')
+  })
 })
