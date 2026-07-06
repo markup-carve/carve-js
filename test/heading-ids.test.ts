@@ -257,3 +257,16 @@ describe('resolveHeadingIds', () => {
     })
   })
 })
+
+describe('heading id vs explicit non-heading id', () => {
+  it('bumps a heading auto-slug that collides with an explicit {#id} (no duplicate DOM id)', () => {
+    const out = carveToHtml('# Foo\n\n[x]{#Foo}\n')
+    expect((out.match(/id="Foo"/g) || []).length).toBe(1)
+    expect(out).toContain('id="Foo-2"')
+  })
+  it('yields regardless of document order', () => {
+    const out = carveToHtml('[x]{#Foo}\n\n# Foo\n')
+    expect((out.match(/id="Foo"/g) || []).length).toBe(1)
+    expect(out).toContain('id="Foo-2"')
+  })
+})
