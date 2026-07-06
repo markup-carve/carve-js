@@ -1,4 +1,5 @@
 import type { Admonition, Attrs, Heading, RawBlock } from './ast.js'
+import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { inlineText } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 
@@ -30,6 +31,12 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/** Strip Trojan-Source bidi-override / isolate controls (§26), matching the
+ *  core's heading-text handling so a TOC link can't visually spoof its target. */
+function stripBidi(s: string): string {
+  return s.replace(/[\u202A-\u202E\u2066-\u2069]/g, '')
+}
+
 // Build a nested list from a flat, document-order entry list. This is a
 // byte-faithful port of carve-php's TableOfContentsExtension::renderTocList so
 // the TOC HTML is identical across implementations: one tag per line, and a
@@ -55,6 +62,11 @@ function buildList(entries: TocEntry[], listType: 'ul' | 'ol'): string {
           depth--
         }
         html += '</li>\n'
+        // Record the current entry's (shallower) level so a later deeper
+        // heading nests under IT, not under the stale level of the list it
+        // reused. Without this, e.g. `# A / ### B / ## C / ### D` flattens D as
+        // a sibling of C instead of nesting it under C.
+        levelStack[depth - 1] = e.level
       }
     }
     html += `<li><a href="#${escapeHtml(e.id)}">${escapeHtml(e.text)}</a>`
@@ -102,7 +114,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
         const h = node as Heading
         const id = h.attrs?.id
         if (!id || h.level < minLevel || h.level > maxLevel) continue
-        entries.push({ level: h.level, text: inlineText(h.children), id })
+        entries.push({ level: h.level, text: stripBidi(inlineText(h.children)), id })
       }
       if (entries.length === 0) return doc
 
@@ -146,7 +158,8 @@ function tocWindow(attrs: Attrs | undefined): { minLevel: number; maxLevel: numb
  *  author's `{#id .class}`, and drop the directive-only `depth`/`from`/`to`
  *  keys so they never render as HTML attributes. */
 function navAttrs(attrs: Attrs | undefined): Attrs {
-  const a: Attrs = { classes: ['toc', ...(attrs?.classes ?? [])] }
+  // `toc` leads; drop any author-supplied `toc` so `{.toc}` never doubles it.
+  const a: Attrs = { classes: ['toc', ...(attrs?.classes ?? []).filter((c) => c !== 'toc')] }
   if (attrs?.id !== undefined) a.id = attrs.id
   const kv = attrs?.keyValues
   if (kv) {
@@ -166,7 +179,7 @@ function collectPlacementHeadings(node: unknown, out: TocEntry[]): void {
   if (typed.type === 'heading') {
     const h = node as Heading
     const id = h.attrs?.id
-    if (id !== undefined) out.push({ level: h.level, text: inlineText(h.children), id })
+    if (id !== undefined) out.push({ level: h.level, text: stripBidi(inlineText(h.children)), id })
     return
   }
   for (const key of Object.keys(node as Record<string, unknown>)) {
@@ -181,20 +194,25 @@ function renderToc(
   node: Admonition,
   ctx: BlockExtensionRenderContext,
   entries: TocEntry[],
+  budget: AbbrBudget,
 ): string {
-  const { minLevel, maxLevel } = tocWindow(node.attrs)
-  const picked = entries.filter((e) => e.level >= minLevel && e.level <= maxLevel)
   const attrs = ctx.renderAttrs(navAttrs(node.attrs))
-  // Newlined, column-0 nav matching carve-php byte-for-byte; empty window
-  // degrades to a single-line empty nav.
-  const nav =
-    picked.length === 0
-      ? `<nav${attrs}></nav>`
-      : `<nav${attrs}>\n${buildList(picked, 'ul')}</nav>`
+  const emptyNav = `<nav${attrs}></nav>`
   // Preserve any authored blocks written inside the placeholder before the nav,
   // never silently drop them (mirrors the index/glossary directives).
-  if (node.children.length === 0) return nav
-  return `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`
+  const wrap = (nav: string): string =>
+    node.children.length === 0 ? nav : `${ctx.renderChildren(node.children, ctx.level)}\n${nav}`
+
+  const { minLevel, maxLevel } = tocWindow(node.attrs)
+  const picked = entries.filter((e) => e.level >= minLevel && e.level <= maxLevel)
+  if (picked.length === 0) return wrap(emptyNav)
+  // Newlined, column-0 nav matching carve-php byte-for-byte.
+  const nav = `<nav${attrs}>\n${buildList(picked, 'ul')}</nav>`
+  // Bound cumulative nav bytes across all `::: toc` blocks in one render: K
+  // blocks x N headings would otherwise amplify output ~K*N. Once the
+  // per-render budget is exhausted, further blocks degrade to an empty nav.
+  if (!budget.charge(utf8ByteLength(nav))) return wrap(emptyNav)
+  return wrap(nav)
 }
 
 /**
@@ -227,10 +245,12 @@ function renderToc(
  */
 export function tocPlacement(): CarveExtension {
   let entries: TocEntry[] = []
+  let budget = new AbbrBudget(undefined)
   return {
     name: 'toc',
     beforeRender(doc) {
       entries = []
+      budget = new AbbrBudget(doc.srcByteLength)
       // Walk the whole body in document order so headings nested in containers
       // (`::: note`, blockquotes, lists, divs) are included - they render with
       // id anchors, so they belong in the TOC. Footnote definitions live in
@@ -242,7 +262,7 @@ export function tocPlacement(): CarveExtension {
     blockRenderers: {
       admonition: (node, ctx) => {
         const a = node as Admonition
-        return a.kind === 'toc' ? renderToc(a, ctx, entries) : undefined
+        return a.kind === 'toc' ? renderToc(a, ctx, entries, budget) : undefined
       },
     },
   }

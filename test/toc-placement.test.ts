@@ -82,3 +82,36 @@ describe('::: toc placement directive', () => {
     expect(out).toContain('<a href="#InQuote">InQuote</a>')
   })
 })
+
+describe('::: toc placement — audit fixes', () => {
+  const t = (s: string) => carveToHtml(s, { extensions: [tocPlacement()] })
+
+  it('nests a deeper heading under a shallower predecessor (non-monotonic levels)', () => {
+    // # A / ### B / ## C / ### D: D must nest under C, not flatten as its sibling.
+    const out = t('::: toc\n:::\n\n# A\n\n### B\n\n## C\n\n### D\n')
+    const nav = out.slice(out.indexOf('<nav'), out.indexOf('</nav>') + 6)
+    expect(nav).toContain('<a href="#C">C</a>\n<ul>\n<li><a href="#D">D</a></li>')
+  })
+
+  it('dedupes the toc class when the author writes {.toc}', () => {
+    expect(t('{.toc}\n::: toc\n:::\n\n# A')).toContain('<nav class="toc">')
+    expect(t('{.toc}\n::: toc\n:::\n\n# A')).not.toContain('class="toc toc"')
+  })
+
+  it('strips Trojan-Source bidi controls from TOC link text', () => {
+    const out = t('::: toc\n:::\n\n# A‮evil\n')
+    const nav = out.slice(out.indexOf('<nav'), out.indexOf('</nav>'))
+    expect(nav).not.toContain('‮')
+  })
+
+  it('bounds output amplification from many ::: toc blocks (budget)', () => {
+    let doc = ''
+    for (let i = 0; i < 50; i++) doc += `# Heading number ${i} with length\n\n`
+    let blocks = ''
+    for (let i = 0; i < 5000; i++) blocks += '::: toc\n:::\n\n'
+    const src = blocks + doc
+    const out = carveToHtml(src, { extensions: [tocPlacement()] })
+    // Bounded to ~max(1MB, 8*input); without the budget this is ~KxN unbounded.
+    expect(out.length).toBeLessThan(Math.max(1_000_000, 8 * src.length) * 1.3)
+  })
+})
