@@ -345,7 +345,9 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
         const r = renderBlock(child, opts, sectionStack.length)
         if (r !== '') out.push(r)
       }
-      closeTo(1) // emit the endnotes at top level, byte-identical to the default
+      // Flush the endnotes in place at the marker. Do NOT close open sections:
+      // that would drop any following content out of its section (and diverged
+      // from carve-php / carve-rs, which insert the section at the marker).
       out.push(renderFootnoteSection(ast, footnotes, opts))
       footnotesPlaced = true
       continue

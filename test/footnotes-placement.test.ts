@@ -39,3 +39,14 @@ describe('::: footnotes placement directive', () => {
     expect(out.indexOf('Notes:')).toBeLessThan(out.indexOf('role="doc-endnotes"'))
   })
 })
+
+describe('::: footnotes placement — audit fix', () => {
+  it('keeps content after a mid-section marker inside its section', () => {
+    // ::: footnotes inside section A must not close A; B stays nested under A.
+    const out = carveToHtml('# A\n\nx[^a].\n\n::: footnotes\n:::\n\n## B\n\n[^a]: n\n').trim()
+    expect(out).toContain('<section id="A">')
+    // B renders as a nested section after A's heading, not a top-level sibling.
+    expect(/<h1>A<\/h1>[\s\S]*<section id="B">/.test(out)).toBe(true)
+    expect(out).not.toContain('</section>\n<section id="B">')
+  })
+})
