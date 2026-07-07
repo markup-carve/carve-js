@@ -576,7 +576,9 @@ function renderAttrs(attrs?: Attrs): string {
   const parts: string[] = []
   const classAttr = () =>
     attrs.classes && attrs.classes.length
-      ? `class="${attrs.classes.map(escapeAttr).join(' ')}"`
+      ? // Merge into one class attribute, deduping repeats keeping first-
+        // occurrence order (`{.a .a}` -> `class="a"`), matching carve-php (§15).
+        `class="${[...new Set(attrs.classes)].map(escapeAttr).join(' ')}"`
       : ''
   // Escape the id value: an `#id` is identifier-restricted (escaping is a
   // no-op), but `id=value` (which now also feeds this slot, last-wins §15) can
@@ -1229,7 +1231,10 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     case 'emoji':
       return opts.emoji?.[node.name] ?? escapeHtml(`:${node.name}:`)
     case 'autolink': {
-      const display = node.href.startsWith('mailto:') ? node.href.slice(7) : node.href
+      // Display the raw autolink content (a URI autolink keeps its scheme);
+      // fall back to stripping an auto-added `mailto:` for nodes without `text`.
+      const display =
+        node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
       // The structural href always wins; never re-emit an author-supplied
       // `href` from an attribute block (it would duplicate the attribute).
       const href = escapeAttr(sanitizeUrl(node.href, opts))
