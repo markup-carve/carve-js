@@ -30,8 +30,9 @@ describe('block attribute lines (§15)', () => {
     )
   })
 
-  it('accumulates classes with no de-duplication', () => {
-    expect(h('{.a .b}\n{.b .c}\nText')).toBe('<p class="a b b c">Text</p>')
+  it('accumulates classes, deduping repeats (§15, matches carve-php)', () => {
+    expect(h('{.a .b}\n{.b .c}\nText')).toBe('<p class="a b c">Text</p>')
+    expect(h('[x]{.a .a}')).toBe('<p><span class="a">x</span></p>')
   })
 
   it('floats across a blank line to the next block', () => {
