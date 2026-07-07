@@ -354,7 +354,9 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
     case 'emoji':
       return `:${escapeIdentifier(node.name)}:`
     case 'autolink':
-      return withAttrs(`<${escapeAutolinkHref(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)}>`)
+      // Emit the raw autolink content verbatim (keeps a URI scheme like
+      // `mailto:`); fall back to the href for nodes without `text`.
+      return withAttrs(`<${escapeAutolinkHref(node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href))}>`)
     case 'mention':
       return `@${escapeName(node.user)}`
     case 'tag':
@@ -562,7 +564,12 @@ function escapeImageAlt(text: string): string {
 function escapeDestination(text: string): string {
   const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
   const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
-  return text.replace(/[\\\s]/g, (ch) => (ch === ' ' ? '%20' : `\\${ch}`)).replace(/[()]/g, (ch) => (sanitizeBlank ? (ch === '(' ? '%28' : '%29') : ch))
+  // A backslash is a literal destination character (no destination escapes),
+  // so it is emitted verbatim -- escaping it would double on re-parse.
+  // Whitespace is percent-encoded (it would otherwise end the destination).
+  return text
+    .replace(/\s/g, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
+    .replace(/[()]/g, (ch) => (sanitizeBlank ? (ch === '(' ? '%28' : '%29') : ch))
 }
 
 function escapeQuoted(text: string): string {
