@@ -3407,10 +3407,15 @@ function scanInlineInner(
           if (title !== undefined) link.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
-            const a = parseAttrs(ml[4])
-            // An empty-attr trailing `{…}` is literal, not consumed.
-            if (isEmptyAttrs(a)) len -= ml[4].length + 2
-            else link.attrs = a
+            // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
+            // empty-attr `{…}` is literal too -- neither is consumed.
+            if (!isValidAttrPayload(ml[4])) {
+              len -= ml[4].length + 2
+            } else {
+              const a = parseAttrs(ml[4])
+              if (isEmptyAttrs(a)) len -= ml[4].length + 2
+              else link.attrs = a
+            }
           }
           out.push(withPos(link, source, text, i, i + len))
           i += len
@@ -3424,10 +3429,15 @@ function scanInlineInner(
           let len = close + 1 + mref[0].length
           let attrs: Attrs | undefined
           if (mref[2]) {
-            const a = parseAttrs(mref[2])
-            // An empty-attr trailing `{…}` is literal, not consumed.
-            if (isEmptyAttrs(a)) len -= mref[2].length + 2
-            else attrs = a
+            // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
+            // empty-attr `{…}` is literal too -- neither is consumed.
+            if (!isValidAttrPayload(mref[2])) {
+              len -= mref[2].length + 2
+            } else {
+              const a = parseAttrs(mref[2])
+              if (isEmptyAttrs(a)) len -= mref[2].length + 2
+              else attrs = a
+            }
           }
           const refLink: Link = {
             type: 'link',
@@ -3528,8 +3538,10 @@ function scanInlineInner(
         // Optional trailing {attrs} (djot): `<url>{.c}`. An explicit
         // `href` in the block is ignored -- the structural href wins
         // (djot + carve-php), so it never produces a duplicate attribute.
+        // A digit-first / invalid payload (`{#1a}`) is literal (§14), not an
+        // attribute block -- leave it for normal text processing.
         const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
-        if (am) {
+        if (am && isValidAttrPayload(am[1]!)) {
           const attrs = parseAttrs(am[1]!)
           if (!isEmptyAttrs(attrs)) {
             // A real attribute block: consume it (so it is not
