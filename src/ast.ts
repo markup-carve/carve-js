@@ -465,11 +465,13 @@ export interface HardBreak extends BaseNode {
 export interface CriticInsert extends BaseNode {
   type: 'critic-insert'
   children: InlineNode[]
+  attrs?: Attrs
 }
 
 export interface CriticDelete extends BaseNode {
   type: 'critic-delete'
   children: InlineNode[]
+  attrs?: Attrs
 }
 
 export interface CriticSubstitute extends BaseNode {
