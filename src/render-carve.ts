@@ -374,9 +374,9 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
     case 'hard-break':
       return '\\\n'
     case 'critic-insert':
-      return `{+${renderInlines(node.children, ctx)}+}`
+      return `{+${renderInlines(node.children, ctx)}+}${renderAttrs(node.attrs)}`
     case 'critic-delete':
-      return `{-${renderInlines(node.children, ctx)}-}`
+      return `{-${renderInlines(node.children, ctx)}-}${renderAttrs(node.attrs)}`
     case 'critic-substitute':
       return `{~${escapeCriticText(node.oldText)}~>${escapeCriticText(node.newText)}~}`
     case 'critic-comment':
