@@ -86,4 +86,40 @@ describe('tableOfContents extension', () => {
   it('is inert without the extension', () => {
     expect(carveToHtml('# A')).toBe('<section id="A">\n  <h1>A</h1>\n</section>')
   })
+
+  it('wraps the TOC in a closed <details> when collapsible', () => {
+    const src = '# One\n\n## Two'
+    const html = carveToHtml(src, { extensions: [tableOfContents({ collapsible: true })] })
+    // Closed by default, list directly inside <details>, no <nav>.
+    expect(
+      html.startsWith(
+        '<details class="toc">\n<summary>Table of Contents</summary>\n<ul>\n' +
+          '<li><a href="#One">One</a>\n<ul>\n<li><a href="#Two">Two</a></li>\n</ul>\n</li>\n' +
+          '</ul>\n</details>',
+      ),
+    ).toBe(true)
+    expect(html).not.toContain('<nav')
+    expect(html).not.toContain('<details class="toc" open')
+  })
+
+  it('honors open and a custom summary when collapsible', () => {
+    const html = carveToHtml('# One', {
+      extensions: [tableOfContents({ collapsible: true, summary: 'Contents', open: true })],
+    })
+    expect(html.startsWith('<details class="toc" open>\n<summary>Contents</summary>')).toBe(true)
+  })
+
+  it('escapes the collapsible summary', () => {
+    const html = carveToHtml('# One', {
+      extensions: [tableOfContents({ collapsible: true, summary: 'A & <b>B</b>' })],
+    })
+    expect(html).toContain('<summary>A &amp; &lt;b&gt;B&lt;/b&gt;</summary>')
+    expect(html).not.toContain('<b>B</b>')
+  })
+
+  it('leaves the plain nav unchanged when not collapsible', () => {
+    const html = carveToHtml('# One', { extensions: [tableOfContents()] })
+    expect(html.startsWith('<nav class="toc">')).toBe(true)
+    expect(html).not.toContain('<details')
+  })
 })

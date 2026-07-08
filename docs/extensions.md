@@ -375,6 +375,19 @@ TOC at the document `top` (default) or `bottom`. Configurable `minLevel`,
 `maxLevel`, `listType` (`ul`/`ol`), `cssClass`, and `position`. The generated
 markup is raw HTML, so it is inert when raw HTML output is stripped.
 
+Set `collapsible: true` to wrap the TOC in a `<details>`/`<summary>` disclosure
+(closed unless `open: true`), with the label from `summary` (default
+`'Table of Contents'`). When off (the default) the output is the unchanged
+`<nav class="toc">`.
+
+```ts
+carveToHtml('# One\n\n## Two', { extensions: [tableOfContents({ collapsible: true })] })
+// <details class="toc">
+// <summary>Table of Contents</summary>
+// <ul> … </ul>
+// </details>
+```
+
 ## autolink
 
 `autolink()` linkifies bare URLs and email addresses (carve core leaves them
