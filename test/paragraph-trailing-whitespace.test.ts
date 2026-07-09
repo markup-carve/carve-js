@@ -12,7 +12,7 @@ const h = (s: string) => carveToHtml(s)
  * line trailing whitespace before a soft break is KEPT verbatim, because in
  * Carve two trailing spaces are NOT a hard break (only a backslash at end of
  * line is). A backslash hard break is never affected. Verified against
- * carve-php (the reference implementation).
+ * carve-php.
  */
 describe('paragraph trailing whitespace', () => {
   it('strips a single trailing space', () => {
