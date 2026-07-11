@@ -44,6 +44,21 @@ function stripBidi(s: string): string {
   return s.replace(/[\u202A-\u202E\u2066-\u2069]/g, '')
 }
 
+// TOC entry text = the heading's visible text WITHOUT the presentational
+// `<span class="section-number">` that HeadingNumbers injects (the auto number
+// is chrome, not part of the derived nav text), trimmed of the surrounding
+// space. Matches carve-php / carve-rs.
+function tocHeadingText(children: Heading['children']): string {
+  const filtered = children.filter(
+    (c) =>
+      !(
+        c.type === 'span' &&
+        (c as { attrs?: Attrs }).attrs?.classes?.includes('section-number')
+      ),
+  )
+  return stripBidi(inlineText(filtered)).trim()
+}
+
 // Build a nested list from a flat, document-order entry list. This is a
 // byte-faithful port of carve-php's TableOfContentsExtension::renderTocList so
 // the TOC HTML is identical across implementations: one tag per line, and a
@@ -126,7 +141,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
         const h = node as Heading
         const id = h.attrs?.id
         if (!id || h.level < minLevel || h.level > maxLevel) continue
-        entries.push({ level: h.level, text: stripBidi(inlineText(h.children)), id })
+        entries.push({ level: h.level, text: tocHeadingText(h.children), id })
       }
       if (entries.length === 0) return doc
 
@@ -198,7 +213,7 @@ function collectPlacementHeadings(node: unknown, out: TocEntry[]): void {
   if (typed.type === 'heading') {
     const h = node as Heading
     const id = h.attrs?.id
-    if (id !== undefined) out.push({ level: h.level, text: stripBidi(inlineText(h.children)), id })
+    if (id !== undefined) out.push({ level: h.level, text: tocHeadingText(h.children), id })
     return
   }
   for (const key of Object.keys(node as Record<string, unknown>)) {
