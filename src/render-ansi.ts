@@ -352,7 +352,9 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return `:${stripControls(node.name)}:`
     case 'autolink':
       return style(
-        stripControls(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
+        stripControls(
+          node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
+        ),
         UNDERLINE + FG_BLUE,
       )
     case 'mention':
