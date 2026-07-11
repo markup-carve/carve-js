@@ -85,6 +85,23 @@ describe('renderCarve targeted canonicalization', () => {
     )
   })
 
+  it('keeps a quoted admonition title stable across fmt passes (issue 295)', () => {
+    const src = '::: note "A titled call-out"\nBody.\n:::\n'
+    const f1 = carveToCarve(src)
+    const f2 = carveToCarve(f1)
+    expect(f2).toBe(f1)
+    expect(carveToHtml(f1)).toBe(carveToHtml(src))
+  })
+
+  it('keeps a code-fence header with a backslash stable across fmt passes (issue 295)', () => {
+    const src = '``` php "src\\Auth.php"\ncode\n```\n'
+    const f1 = carveToCarve(src)
+    const f2 = carveToCarve(f1)
+    expect(f2).toBe(f1)
+    expect(carveToHtml(f1)).toBe(carveToHtml(src))
+    expect(f1).toContain('"src\\Auth.php"')
+  })
+
   it('escapes literal inline delimiter characters in text', () => {
     const src = String.raw`\* \\/ \[`
     const formatted = carveToCarve(src)
