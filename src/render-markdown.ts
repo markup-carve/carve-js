@@ -269,7 +269,9 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'emoji':
       return `:${stripControls(node.name)}:`
     case 'autolink': {
-      const label = stripControls(node.href)
+      // Visible text is the raw autolink content (an email autolink shows the
+      // address, not the `mailto:` href); fall back to href for older nodes.
+      const label = stripControls(node.text ?? node.href)
       return `[${label}](${markdownDestination(node.href)})`
     }
     case 'mention':

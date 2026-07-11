@@ -186,7 +186,11 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'emoji':
       return `:${stripControls(node.name)}:`
     case 'autolink':
-      return stripControls(node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
+      // Raw autolink content: a URI autolink keeps its scheme, an email shows
+      // the address; fall back to stripping an auto-added `mailto:`.
+      return stripControls(
+        node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
+      )
     case 'mention':
       return `@${stripControls(node.user)}`
     case 'tag':
