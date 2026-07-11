@@ -13,6 +13,14 @@ export interface HeadingPermalinksOptions {
   levels?: number[]
   /** Place the anchor before the heading text instead of after. Default false. */
   prepend?: boolean
+  /**
+   * Only reveal the anchor on heading hover: wrap it in a
+   * `<span class="permalink-wrapper permalink-hover">` the host stylesheet
+   * targets via `h*:hover > .permalink-hover`. Default false (bare anchor).
+   */
+  showOnHover?: boolean
+  /** Add a `data-permalink-copy` hook the host JS can use to copy the URL. Default false. */
+  copyToClipboard?: boolean
 }
 
 // The heading id lives on the wrapping <section>, so drop it from the <h*>'s
@@ -36,7 +44,8 @@ function stripId(attrs: Attrs | undefined): Attrs | undefined {
  * // </section>
  * ```
  *
- * Configurable `symbol`, `cssClass`, `ariaLabel`, `levels`, and `prepend`.
+ * Configurable `symbol`, `cssClass`, `ariaLabel`, `levels`, `prepend`,
+ * `showOnHover`, and `copyToClipboard`.
  */
 export function headingPermalinks(opts: HeadingPermalinksOptions = {}): CarveExtension {
   const symbol = opts.symbol ?? '¶'
@@ -44,6 +53,8 @@ export function headingPermalinks(opts: HeadingPermalinksOptions = {}): CarveExt
   const ariaLabel = opts.ariaLabel ?? 'Permalink'
   const levels = opts.levels ?? [1, 2, 3, 4, 5, 6]
   const prepend = opts.prepend ?? false
+  const showOnHover = opts.showOnHover ?? false
+  const copyToClipboard = opts.copyToClipboard ?? false
 
   return {
     name: 'heading-permalinks',
@@ -56,10 +67,16 @@ export function headingPermalinks(opts: HeadingPermalinksOptions = {}): CarveExt
         // Defer when out of the configured levels or there is no id to link to.
         if (!id || !levels.includes(h.level)) return undefined
         const inner = ctx.renderInlines(h.children)
+        const copyAttr = copyToClipboard ? ' data-permalink-copy=""' : ''
         const anchor =
           `<a href="#${ctx.escapeAttr(id)}" class="${ctx.escapeAttr(cssClass)}"` +
-          ` aria-label="${ctx.escapeAttr(ariaLabel)}">${ctx.escapeHtml(symbol)}</a>`
-        const body = prepend ? `${anchor} ${inner}` : `${inner} ${anchor}`
+          ` aria-label="${ctx.escapeAttr(ariaLabel)}"${copyAttr}>${ctx.escapeHtml(symbol)}</a>`
+        // showOnHover wraps the anchor so the hover CSS (`h*:hover >
+        // .permalink-hover`) has a child to target; default is the bare anchor.
+        const marker = showOnHover
+          ? `<span class="permalink-wrapper permalink-hover">${anchor}</span>`
+          : anchor
+        const body = prepend ? `${marker} ${inner}` : `${inner} ${marker}`
         return `${ctx.indent(ctx.level)}<h${h.level}${ctx.renderAttrs(stripId(h.attrs))}>${body}</h${h.level}>`
       },
     },
