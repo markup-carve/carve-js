@@ -173,17 +173,38 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
   const rows: string[] = []
   let columns = 0
+  // Per-column alignment, taken from the first non-header row (matching
+  // carve-php), so the Markdown separator preserves `:---` / `:---:` / `---:`
+  // instead of dropping alignment.
+  const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
     const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
     columns = Math.max(columns, cells.length)
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) header = rendered
-    else rows.push(rendered)
+    else {
+      rows.push(rendered)
+      row.cells.forEach((cell, i) => {
+        if (aligns[i] === undefined) aligns[i] = cell.align
+      })
+    }
+  }
+  const separator = (i: number): string => {
+    switch (aligns[i]) {
+      case 'left':
+        return ':---'
+      case 'center':
+        return ':---:'
+      case 'right':
+        return '---:'
+      default:
+        return '---'
+    }
   }
   let out = ''
   if (header !== undefined) {
     out += `${header}\n`
-    out += `| ${Array.from({ length: columns }, () => '---').join(' | ')} |\n`
+    out += `| ${Array.from({ length: columns }, (_, i) => separator(i)).join(' | ')} |\n`
   }
   out += `${rows.join('\n')}\n\n`
   return out
