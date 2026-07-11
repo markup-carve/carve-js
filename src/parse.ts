@@ -235,10 +235,15 @@ const RE_TABLE_ROW = /^\|/
 // trailing pipe, not just a leading one. A row may carry an attribute block
 // GLUED to its closing pipe (`| a |{.x}` -> <tr class="x">); rowAttrsFromLine
 // validates and strips it, so the gate allows an optional trailing `{...}`.
-const isTableRow = (line: string): boolean =>
-  RE_TABLE_ROW.test(line) &&
-  (/\|[ \t]*$/.test(line) || rowAttrsFromLine(line).attrs !== undefined) &&
-  splitTableRow(rowAttrsFromLine(line).body).some((cell) => cell.length > 0)
+const isTableRow = (line: string): boolean => {
+  if (!RE_TABLE_ROW.test(line)) return false
+  if (!/\|[ \t]*$/.test(line) && rowAttrsFromLine(line).attrs === undefined) return false
+  const cells = splitTableRow(rowAttrsFromLine(line).body)
+  // A row needs a non-empty cell OR at least two cells: `|||` (two empty cells)
+  // is a valid all-empty body row, but `||` (a single empty cell) is not a
+  // table. Matches carve-php / carve-rs.
+  return cells.some((cell) => cell.length > 0) || cells.length >= 2
+}
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed
