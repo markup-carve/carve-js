@@ -76,10 +76,6 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
     }
     case 'paragraph':
-      if (isLegacyDefinitionParagraph(node)) {
-        const [term, def] = legacyDefinitionParts(node)
-        return `**${escapeText(term)}**\n: ${escapeText(def)}\n\n`
-      }
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'code-block': {
       const content = stripControls(node.content)
@@ -445,22 +441,7 @@ function cleanEscapedText(node: Text): string {
   return node.value
 }
 
-function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {
-  return (
-    node.children.length === 3 &&
-    node.children[0]?.type === 'text' &&
-    node.children[0].value.startsWith(': ') &&
-    node.children[1]?.type === 'soft-break' &&
-    node.children[2]?.type === 'text'
-  )
-}
 
-function legacyDefinitionParts(node: { children: InlineNode[] }): [string, string] {
-  return [
-    ((node.children[0] as Text).value).slice(2),
-    (node.children[2] as Text).value,
-  ]
-}
 
 function normalize(text: string): string {
   // The internal non-breaking-space placeholder (U+E000) becomes a literal

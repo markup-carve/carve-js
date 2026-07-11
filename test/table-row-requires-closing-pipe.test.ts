@@ -9,10 +9,14 @@ describe('a table row needs a closing pipe', () => {
     expect(html('| a | b')).toBe('<p>| a | b</p>')
   })
 
-  it('pipe-only lines are paragraph text, not empty tables', () => {
+  it('a single empty cell is paragraph text, but two empty cells are a table', () => {
+    // `|` / `||` (zero or one empty cell) stay paragraphs; `|||` (two empty
+    // cells) is a valid all-empty body row, matching carve-php / carve-rs.
     expect(html('|')).toBe('<p>|</p>')
     expect(html('||')).toBe('<p>||</p>')
-    expect(html('|||')).toBe('<p>|||</p>')
+    expect(html('|||')).toBe(
+      '<table>\n  <tbody>\n    <tr><td></td><td></td></tr>\n  </tbody>\n</table>',
+    )
   })
 
   it('a complete row (opens and closes with `|`) is a table', () => {
