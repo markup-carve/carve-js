@@ -217,7 +217,9 @@ function renderTable(node: Table, ctx: AnsiContext): string {
     return Array.from({ length: cols }, (_, i) => {
       const cell = row.cells[i]
       const content = cell ? trimNonNbsp(renderInlines(cell.children, ctx)) : ''
-      return { content, plain: stripAnsi(content), isHeader }
+      // `padding` marks a SYNTHETIC cell (a column this row does not have),
+      // as opposed to a genuine empty cell the row authored.
+      return { content, plain: stripAnsi(content), isHeader, padding: cell === undefined }
     })
   })
   const widths: number[] = []
@@ -250,15 +252,16 @@ function tableBorder(widths: number[], pos: 'top' | 'middle' | 'bottom'): string
 }
 
 function tableRow(
-  cells: Array<{ content: string; plain: string; isHeader: boolean }>,
+  cells: Array<{ content: string; plain: string; isHeader: boolean; padding: boolean }>,
   widths: number[],
 ): string {
   const sep = style('│', DIM)
-  // Drop trailing empty cells so a short/rowspan header row is ragged
-  // (`│ A │`, not `│ A │   │`); widths/borders stay full-width. Matches
-  // carve-php / carve-rs.
-  const lastFilled = cells.reduce((last, cell, i) => (cell.plain !== '' ? i : last), -1)
-  const visible = cells.slice(0, lastFilled + 1)
+  // Drop only SYNTHETIC trailing padding (columns this row does not have, so a
+  // short/rowspan row stays ragged: `│ A │`, not `│ A │   │`), but KEEP a
+  // genuine trailing empty cell the row authored so the box stays well-formed
+  // (`| x || ` -> `│ x │   │`); widths/borders stay full-width. Matches carve-rs.
+  const lastGenuine = cells.reduce((last, cell, i) => (!cell.padding ? i : last), -1)
+  const visible = cells.slice(0, lastGenuine + 1)
   const parts = visible.map((cell, i) => {
     const padding = (widths[i] ?? 0) - width(cell.plain)
     const content = cell.isHeader
