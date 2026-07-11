@@ -59,4 +59,33 @@ describe('headingPermalinks extension', () => {
       '<section id="My-Heading">\n  <h1>My Heading</h1>\n</section>',
     )
   })
+
+  it('showOnHover wraps the anchor in a permalink-wrapper span', () => {
+    const html = carveToHtml('# Title', { extensions: [headingPermalinks({ showOnHover: true })] })
+    expect(html).toContain(
+      '<h1>Title <span class="permalink-wrapper permalink-hover">' +
+        '<a href="#Title" class="permalink" aria-label="Permalink">¶</a></span></h1>',
+    )
+  })
+
+  it('copyToClipboard adds a data-permalink-copy hook on the anchor', () => {
+    const html = carveToHtml('# Title', {
+      extensions: [headingPermalinks({ copyToClipboard: true })],
+    })
+    expect(html).toContain(
+      '<h1>Title <a href="#Title" class="permalink" aria-label="Permalink" ' +
+        'data-permalink-copy="">¶</a></h1>',
+    )
+  })
+
+  it('showOnHover and copyToClipboard combine on the wrapped anchor', () => {
+    const html = carveToHtml('# Title', {
+      extensions: [headingPermalinks({ showOnHover: true, copyToClipboard: true })],
+    })
+    expect(html).toContain(
+      '<h1>Title <span class="permalink-wrapper permalink-hover">' +
+        '<a href="#Title" class="permalink" aria-label="Permalink" data-permalink-copy="">' +
+        '¶</a></span></h1>',
+    )
+  })
 })
