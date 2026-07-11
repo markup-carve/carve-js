@@ -32,10 +32,6 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'heading':
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'paragraph':
-      if (isLegacyDefinitionParagraph(node)) {
-        const [term, def] = legacyDefinitionParts(node)
-        return `${stripControls(term)}\n  ${stripControls(def)}\n\n`
-      }
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'code-block':
       return `${stripControls(node.content)}\n\n`
@@ -251,19 +247,4 @@ function stripControls(s: string): string {
   return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
-function isLegacyDefinitionParagraph(node: { children: InlineNode[] }): boolean {
-  return (
-    node.children.length === 3 &&
-    node.children[0]?.type === 'text' &&
-    node.children[0].value.startsWith(': ') &&
-    node.children[1]?.type === 'soft-break' &&
-    node.children[2]?.type === 'text'
-  )
-}
 
-function legacyDefinitionParts(node: { children: InlineNode[] }): [string, string] {
-  return [
-    ((node.children[0] as Text).value).slice(2),
-    (node.children[2] as Text).value,
-  ]
-}

@@ -181,8 +181,8 @@
     },
     "definition-list": {
         "carve": ": Term\n  Definition text.\n",
-        "markdown": "**Term**\n: Definition text.\n",
-        "plain": "Term\n  Definition text.\n",
-        "ansi": "\u001b[1m\u001b[33mTerm\u001b[0m\n  Definition text.\n"
+        "markdown": ": Term\nDefinition text.\n",
+        "plain": ": Term Definition text.\n",
+        "ansi": ": Term Definition text.\n"
     }
 }
