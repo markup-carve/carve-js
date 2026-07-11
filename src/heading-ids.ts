@@ -203,6 +203,9 @@ export function inlineText(nodes: InlineNode[]): string {
         out += inlineText(n.children)
         break
       case 'extension':
+        // An `:index[term]` marker is invisible (§8.1): it emits no visible
+        // text, so its term must not feed a heading slug or any derived text.
+        if (n.name === 'index') break
         out += inlineText(n.content)
         break
       case 'critic-substitute':
