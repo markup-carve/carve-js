@@ -79,7 +79,12 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'table':
       return withAttrs(renderTable(node, ctx))
     case 'admonition': {
-      const title = node.title !== undefined ? ` "${escapeQuoted(renderInlines(node.title, ctx))}"` : ''
+      // The quoted title is re-parsed as a quoted_title token (which admits
+      // no escapes and cannot contain a quote), so the inline serialization
+      // must be emitted verbatim: wrapping it in escapeQuoted doubles the
+      // backslashes renderInlines already produced and compounds on every
+      // fmt pass (issue 295).
+      const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
       const body = renderBlocks(node.children, ctx)
       const fence = colonFenceFor(node.children)
@@ -453,7 +458,10 @@ function renderCode(content: string): string {
 function codeFenceInfo(lang: string | undefined, header: string | undefined, label: string | undefined): string {
   const parts: string[] = []
   if (lang) parts.push(escapeFenceToken(lang))
-  if (header !== undefined) parts.push(`"${escapeQuoted(header)}"`)
+  // The fence header is a LITERAL quoted_title token: no escape processing
+  // on parse, and it cannot contain a quote. Emit it verbatim - escaping a
+  // backslash here would round-trip to a doubled backslash (issue 295).
+  if (header !== undefined) parts.push(`"${header}"`)
   if (label !== undefined) parts.push(`[${escapeBracketText(label)}]`)
   return parts.length ? ` ${parts.join(' ')}` : ''
 }
