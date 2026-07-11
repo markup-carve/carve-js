@@ -110,9 +110,10 @@ function renderTable(node: Table, ctx: PlainContext): string {
     for (let i = 0; i < cols; i++) {
       cells.push(i < row.cells.length ? trimNonNbsp(renderInlines(row.cells[i]!.children, ctx)) : '')
     }
-    // Drop trailing empty cells so a short/rowspan header row is ragged
-    // (`A`, not `A | `), matching carve-php / carve-rs.
-    while (cells.length && cells[cells.length - 1] === '') cells.pop()
+    // Drop only SYNTHETIC trailing padding (columns this row does not have, so
+    // a short/rowspan row stays ragged: `A`, not `A | `), but KEEP a genuine
+    // trailing empty cell the row authored (`| x || ` -> `x |`). Matches carve-rs.
+    while (cells.length > row.cells.length && cells[cells.length - 1] === '') cells.pop()
     out += `${cells.join(' | ')}\n`
   }
   if (node.caption) out = `${trimEndNonNbsp(out)}\n${renderInlines(node.caption, ctx)}\n`
