@@ -859,7 +859,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   )
     return parseList(lexer)
   if (isTableRow(line)) return parseTable(lexer)
-  if (isBlockImageLine(line)) return parseBlockImage(lexer)
+  if (isBlockImageLine(line) && imageIsBlock(lexer)) return parseBlockImage(lexer)
   // Extension block matchers run after every core construct, before the
   // paragraph fallback: extensions add syntax, they never hijack core.
   if (activeMatchers.length) {
@@ -1649,6 +1649,26 @@ function isBlockImageLine(line: string): boolean {
     m !== null &&
     (m[5] === undefined || (isValidAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
+}
+
+// A bare image line is parsed as a block image (or a figure) ONLY when it
+// stands alone — the next line is blank / EOF, a `^ ` caption, or a paragraph
+// interrupter (heading/quote/table/fence/div/thematic break). When the next
+// line FOLDS instead (plain text, a list marker, another bare image), the image
+// stays an inline image inside a paragraph with that content, per grammar
+// §1722 I3 ("an image is not a block of its own; it stays inline in the
+// paragraph") — a sole-image paragraph is still promoted to a bare block image
+// afterwards (promoteBlockImages).
+function imageIsBlock(lexer: Lexer): boolean {
+  const next = lexer.peek(1)
+  if (next === undefined || isBlankLine(next) || RE_CAPTION.test(next)) return true
+  // Peek-1 interruption: advance past the image line, reuse the paragraph
+  // interruption test, then rewind.
+  const saved = lexer.pos
+  lexer.pos++
+  const interrupts = startsInterruptingBlock(lexer)
+  lexer.pos = saved
+  return interrupts
 }
 
 function parseBlockImage(lexer: Lexer): Image | Figure {
