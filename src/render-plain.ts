@@ -63,7 +63,9 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'figure':
       return renderFigure(node, ctx)
     case 'image':
-      return stripControls(node.alt)
+      // Block-level (standalone) image: emit the trailing block separator so a
+      // following block is not glued to it, matching carve-php / carve-rs.
+      return `${stripControls(node.alt)}\n\n`
     case 'raw-block':
     case 'abbreviation-def':
     case 'comment':

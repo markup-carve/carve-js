@@ -415,6 +415,12 @@ function renderLink(node: Link, ctx: CarveContext): string {
 }
 
 function renderImage(node: Image): string {
+  // An unresolved reference image round-trips via its verbatim source, exactly
+  // like an unresolved reference link (renderLink); `![alt]()` would change the
+  // rendered text and break the carveToHtml(fmt(x)) == carveToHtml(x) invariant.
+  if (node.ref !== undefined && node.rawRef !== undefined) {
+    return node.rawRef
+  }
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
   return `![${escapeImageAlt(node.alt)}](${escapeDestination(node.src)}${title})${renderAttrs(node.attrs)}`
 }
