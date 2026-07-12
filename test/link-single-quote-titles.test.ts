@@ -43,7 +43,10 @@ describe('single-quote link/image titles', () => {
   })
 
   it('accepts an escaped quote inside an image title', () => {
-    expect(h('![a](i "t\\"i")')).toBe('<p><img src="i" alt="a" title="t&quot;i"></p>')
+    // A standalone image is a block image (no <p>), even when its title holds
+    // an escaped quote the syntactic block-image regex doesn't recognize -- the
+    // post-resolve single-image-paragraph promotion catches it, matching carve-php.
+    expect(h('![a](i "t\\"i")')).toBe('<img src="i" alt="a" title="t&quot;i">')
   })
 
   it('preserves explicit empty link and image titles', () => {

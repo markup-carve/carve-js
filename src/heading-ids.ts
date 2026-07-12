@@ -382,6 +382,13 @@ export function resolveHeadingIds(
           continue
         }
       }
+      if (n.type === 'image' && n.ref !== undefined) {
+        // A reference image resolves only against explicit `[label]: url`
+        // defs (applyLinkDefs); an unresolved one is literal source. It never
+        // matches heading text like a link ref does.
+        nodes[i] = { type: 'text', value: n.rawRef ?? '' } as Text
+        continue
+      }
       switch (n.type) {
         case 'italic':
         case 'strong':
@@ -753,5 +760,37 @@ export function resolveHeadingIds(
   }
   for (const block of doc.children) walkBlock(block, applyNoNesting)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, applyNoNesting)
+
+  // Promote a paragraph whose sole child is a (resolved) image to a block-level
+  // image, matching the standalone inline-image rule and carve-php. A reference
+  // image resolves AFTER the syntactic block-image check, so it arrives here as
+  // a one-image paragraph; an unresolved ref already became a Text node, so its
+  // paragraph is left untouched (renders as a literal `<p>`).
+  const promoteBlockImages = (blocks: BlockNode[]): void => {
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i]!
+      if (b.type === 'paragraph' && b.children.length === 1 && b.children[0]!.type === 'image') {
+        blocks[i] = b.children[0] as unknown as BlockNode
+        continue
+      }
+      switch (b.type) {
+        case 'blockquote':
+        case 'admonition':
+        case 'div':
+          promoteBlockImages(b.children)
+          break
+        case 'list':
+          for (const item of b.items) promoteBlockImages(item.children)
+          break
+        case 'definition-list':
+          for (const it of b.items) for (const d of it.definitions) promoteBlockImages(d)
+          break
+        default:
+          break
+      }
+    }
+  }
+  promoteBlockImages(doc.children)
+  for (const body of footnoteBodies) promoteBlockImages(body)
   return doc
 }
