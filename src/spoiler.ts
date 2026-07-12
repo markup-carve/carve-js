@@ -42,14 +42,14 @@ export function spoiler(): CarveExtension {
         if (adm.kind !== 'spoiler') return undefined
         const pad = ctx.indent(ctx.level)
         const innerPad = ctx.indent(ctx.level + 1)
-        const title = adm.title ? inlineText(adm.title) : ''
-        const summary = title.trim() === '' ? 'Spoiler' : title
+        const rendered = adm.title ? ctx.renderInlines(adm.title).trim() : ''
+        const summary = rendered !== '' ? rendered : 'Spoiler'
         const attrs: Attrs = withBaseClass(adm.attrs, 'spoiler')
         const open = `<details${ctx.renderAttrs(attrs)}>`
         const body = ctx.renderChildren(adm.children, ctx.level + 1)
         return (
           `${pad}${open}\n` +
-          `${innerPad}<summary>${ctx.escapeHtml(summary)}</summary>\n` +
+          `${innerPad}<summary>${summary}</summary>\n` +
           `${body}\n` +
           `${pad}</details>`
         )
@@ -73,8 +73,8 @@ export function spoiler(): CarveExtension {
         if (adm.kind !== 'spoiler') return undefined
         const pad = ctx.indent(ctx.level)
         const innerPad = ctx.indent(ctx.level + 1)
-        const title = adm.title ? inlineText(adm.title) : ''
-        const summary = title.trim() === '' ? 'Spoiler' : title
+        const rendered = adm.title ? ctx.renderInlines(adm.title).trim() : ''
+        const summary = rendered !== '' ? rendered : 'Spoiler'
         const attrs: Attrs = withBaseClass(adm.attrs, 'spoiler spoiler-revealed')
         const open = `<section${ctx.renderAttrs(attrs)}>`
         const body = ctx.renderChildren(adm.children, ctx.level + 1)
@@ -86,7 +86,7 @@ export function spoiler(): CarveExtension {
           : ''
         return (
           `${pad}${open}\n` +
-          `${innerPad}<h3 class="spoiler-title">${ctx.escapeHtml(summary)}</h3>\n` +
+          `${innerPad}<h3 class="spoiler-title">${summary}</h3>\n` +
           labelLine +
           `${body}\n` +
           `${pad}</section>`
@@ -103,14 +103,3 @@ function withBaseClass(attrs: Attrs | undefined, base: string): Attrs {
   return a
 }
 
-/** Flatten an inline tree to its text content (titles only). */
-function inlineText(nodes: InlineNode[]): string {
-  let s = ''
-  for (const node of nodes) {
-    const n = node as unknown as Record<string, unknown>
-    if (typeof n.value === 'string') s += n.value
-    const kids = n.children ?? n.content
-    if (Array.isArray(kids)) s += inlineText(kids as InlineNode[])
-  }
-  return s
-}

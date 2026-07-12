@@ -25,6 +25,12 @@ describe('spoiler extension', () => {
     )
   })
 
+  it('renders inline markup in the summary (phrasing content)', () => {
+    expect(
+      carveToHtml('::: spoiler "a *b*"\nHidden.\n:::', { extensions: [spoiler()] }),
+    ).toContain('<summary>a <strong>b</strong></summary>')
+  })
+
   it('block without a title defaults the summary to "Spoiler"', () => {
     expect(carveToHtml('::: spoiler\nHidden.\n:::', { extensions: [spoiler()] })).toBe(
       '<details class="spoiler">\n  <summary>Spoiler</summary>\n  <p>Hidden.</p>\n</details>',
