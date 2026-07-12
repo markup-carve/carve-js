@@ -124,7 +124,9 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'figure':
       return renderFigure(node, ctx)
     case 'image':
-      return renderImage(node)
+      // Block-level (standalone) image: emit the trailing block separator so a
+      // following block is not glued to it, matching carve-php / carve-rs.
+      return `${renderImage(node)}\n\n`
     case 'raw-block':
       return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
     case 'abbreviation-def':

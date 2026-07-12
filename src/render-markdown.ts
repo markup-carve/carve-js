@@ -117,7 +117,9 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'figure':
       return renderFigure(node, ctx)
     case 'image':
-      return renderImage(node)
+      // Block-level (standalone) image: emit the trailing block separator so a
+      // following block is not glued to it, matching carve-php / carve-rs.
+      return `${renderImage(node)}\n\n`
     case 'raw-block':
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
       return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
