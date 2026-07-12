@@ -60,6 +60,25 @@ describe('code-fence header and grouping label', () => {
     expect(html).not.toContain('label="First"')
   })
 
+  it('keeps the quoted opener title inside the tab panel', () => {
+    // The title is CONTENT (the [label] is the tab name): it must survive
+    // inside the panel as the admonition-title line, not vanish.
+    const html = carveToHtml(
+      ':::: tabs\n::: tab "Inner Title" [First]\nContent one.\n:::\n::::',
+      { extensions: [tabs()] },
+    )
+    expect(html).toContain('>First</label>')
+    expect(html).toContain('<p class="admonition-title">Inner Title</p>')
+  })
+
+  it('keeps a title-only tab panel titled (name still falls back)', () => {
+    const html = carveToHtml(':::: tabs\n::: tab "Only Title"\nBody.\n:::\n::::', {
+      extensions: [tabs()],
+    })
+    expect(html).toContain('>Tab 1</label>')
+    expect(html).toContain('<p class="admonition-title">Only Title</p>')
+  })
+
   it('preserves a real content heading when an opener label is present', () => {
     const html = carveToHtml(
       ':::: tabs\n::: tab [First]\n### Visible Heading\nContent one.\n:::\n::::',
