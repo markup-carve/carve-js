@@ -57,4 +57,30 @@ describe('reference images ![alt][ref]', () => {
       '<p><a href="/u">alt</a> and <img src="/u" alt="alt"></p>',
     )
   })
+
+  it('a resolved reference image + caption becomes a <figure>', () => {
+    expect(h('![a][r]\n^ cap\n\n[r]: /u')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption>cap</figcaption>\n</figure>',
+    )
+  })
+
+  it('the caption keeps its inline markup', () => {
+    expect(h('![a][r]\n^ *b* c\n\n[r]: /u')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption><strong>b</strong> c</figcaption>\n</figure>',
+    )
+  })
+
+  it('a collapsed reference image + caption becomes a <figure>', () => {
+    expect(h('![a][]\n^ cap\n\n[a]: /u')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption>cap</figcaption>\n</figure>',
+    )
+  })
+
+  it('an unresolved reference image + caption stays literal (no figure)', () => {
+    expect(h('![a][nope]\n^ cap')).toBe('<p>![a][nope]\n^ cap</p>')
+  })
+
+  it('leading text before the image is not a figure', () => {
+    expect(h('x ![a][r]\n^ cap\n\n[r]: /u')).toBe('<p>x <img src="/u" alt="a">\n^ cap</p>')
+  })
 })
