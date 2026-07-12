@@ -910,7 +910,7 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
     return {
       type: 'figure',
       target: para,
-      caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
     } as Figure
   }
   // Non-blank, non-caption text immediately follows: let parseParagraph fold
@@ -1030,7 +1030,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
       return {
         type: 'figure',
         target: cb,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -1626,7 +1626,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       return {
         type: 'figure',
         target: bq,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -1671,7 +1671,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
       return {
         type: 'figure',
         target: img,
-        caption: parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
       } as Figure
     }
   }
@@ -2621,7 +2621,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = parseInline(cap[1]!, lexer.abbrDefs, lexer.linkDefs, undefined, true)
+      table.caption = parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true)
     }
   }
   return table
@@ -2762,6 +2762,26 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
 // them and starts a sibling list -- unlike paragraph interruption, where a list
 // marker FOLDS in (symmetric §10): a list folds into a PARAGRAPH but ends a
 // heading/quote, matching djot. Every paragraph-interrupter ends them too.
+// Consume a caption's continuation lines. A caption is multi-line inline
+// content, so it folds following lines exactly like a PARAGRAPH (§10), NOT like
+// a heading: a list marker FOLDS in (djot — a list needs a blank line to
+// interrupt), while a heading / blockquote / table / fenced code / `:::` div /
+// thematic break / `%%%` comment interrupts and ends the caption. A blank line
+// or a further `^ ` caption line also ends it. Continuation lines join with
+// `\n`. The lexer is positioned on the line AFTER the caption's first line;
+// `firstLine` is that first line's already-extracted text (`cap[1]`).
+function readCaptionText(lexer: Lexer, firstLine: string): string {
+  let text = firstLine
+  while (!lexer.eof()) {
+    const next = lexer.peek()!
+    if (isBlankLine(next) || RE_CAPTION.test(next)) break
+    if (startsInterruptingBlock(lexer)) break
+    text += '\n' + next
+    lexer.consume()
+  }
+  return text
+}
+
 function endsHeadingOrQuote(lexer: Lexer): boolean {
   const ln = lexer.peek()
   if (
