@@ -185,6 +185,49 @@ describe('lintCarve — block marker leaked as text', () => {
   })
 })
 
+describe('lintCarve — fence opener title syntax', () => {
+  it('flags an unquoted trailing title with a quoted suggestion', () => {
+    const w = lintCarve('::: note Custom Title\nbody\n:::')
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
+    expect(w[0]!.message).toContain('::: note "Custom Title"')
+  })
+
+  it('flags typographic quotes with a straight-quote suggestion', () => {
+    const w = lintCarve('::: tab “Overview”\nbody\n:::')
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
+    expect(w[0]!.message).toContain('smart quote')
+    expect(w[0]!.message).toContain('::: tab "Overview"')
+  })
+
+  it('keeps a trailing [label] out of the suggested title', () => {
+    const w = lintCarve('::: tab Overview [API]\nbody\n:::')
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
+    expect(w[0]!.message).toContain('::: tab "Overview" [API]')
+  })
+
+  it('echoes the actual fence length in the suggestion', () => {
+    const w = lintCarve(':::: note Custom Title\nbody\n::::')
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
+    expect(w[0]!.message).toContain(':::: note "Custom Title"')
+  })
+
+  it('flags a trailing {…} with a preceding-line hint', () => {
+    const w = lintCarve('::: note {#id}\nbody\n:::')
+    expect(w.map((x) => x.rule)).toEqual(['fence-title-syntax'])
+    expect(w[0]!.message).toContain('own line')
+  })
+
+  it('keeps the generic warning for other broken fence lines', () => {
+    const w = lintCarve('::: note "unterminated\nbody\n:::')
+    expect(w.map((x) => x.rule)).toEqual(['block-marker-as-text'])
+  })
+
+  it('does not flag valid title and label forms', () => {
+    expect(lintCarve('::: tip "Pro Tip" [Build]\nbody\n:::')).toEqual([])
+    expect(lintCarve('::: tab [Overview]\nbody\n:::')).toEqual([])
+  })
+})
+
 describe('lintCarve — clean input', () => {
   it('returns nothing for an empty or plain document', () => {
     expect(lintCarve('')).toEqual([])
