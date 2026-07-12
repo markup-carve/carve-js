@@ -13,6 +13,8 @@ import type {
   BlockNode,
   CaptionNumber,
   Document,
+  Figure,
+  Image,
   InlineNode,
   Link,
   Text,
@@ -771,6 +773,32 @@ export function resolveHeadingIds(
       const b = blocks[i]!
       if (b.type === 'paragraph' && b.children.length === 1 && b.children[0]!.type === 'image') {
         blocks[i] = b.children[0] as unknown as BlockNode
+        continue
+      }
+      // A resolved reference image on its own line followed by a `^ ` caption
+      // becomes a <figure>, matching a direct-image figure and carve-php. The
+      // syntactic block-image/caption pass runs at PARSE time and only knows the
+      // inline `![…](…)` form, so a reference image arrives here as a paragraph
+      // `[Image, soft-break, "^ caption…"]`. An unresolved ref is a Text node
+      // (not an Image), so its paragraph is left literal. The caption inlines
+      // are already parsed; strip the `^ ` marker from the leading Text. Only a
+      // single-line caption (no further soft break) figure-izes, matching the
+      // one-line direct caption.
+      if (
+        b.type === 'paragraph' &&
+        b.children.length >= 3 &&
+        b.children[0]!.type === 'image' &&
+        b.children[1]!.type === 'soft-break' &&
+        b.children[2]!.type === 'text' &&
+        /^\^\s+/.test((b.children[2] as Text).value) &&
+        !b.children.slice(2).some((c) => c.type === 'soft-break')
+      ) {
+        const caption = b.children.slice(2)
+        const first = caption[0] as Text
+        const stripped = first.value.replace(/^\^\s+/, '')
+        if (stripped === '') caption.shift()
+        else caption[0] = { ...first, value: stripped }
+        blocks[i] = { type: 'figure', target: b.children[0] as Image, caption } as Figure as unknown as BlockNode
         continue
       }
       switch (b.type) {
