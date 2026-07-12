@@ -127,14 +127,14 @@
     },
     "numbered-figure": {
         "carve": "{#fig}\n![A sunset](sun.jpg)\n^ Figure #: A sunset\n",
-        "markdown": "![A sunset](sun.jpg)Figure 1: A sunset\n",
-        "plain": "A sunsetFigure 1: A sunset\n",
+        "markdown": "![A sunset](sun.jpg)\nFigure 1: A sunset\n",
+        "plain": "A sunset\nFigure 1: A sunset\n",
         "ansi": "\u001b[35m[img:\u001b[0m A sunset\u001b[35m]\u001b[0m\n\u001b[3m\u001b[2mFigure 1: A sunset\u001b[0m\n"
     },
     "numbered-figure-crossref": {
         "carve": "{#fig}\n![A sunset](sun.jpg)\n^ Figure #: A sunset\n\nSee </#fig>.\n",
-        "markdown": "![A sunset](sun.jpg)Figure 1: A sunsetSee Figure 1.\n",
-        "plain": "A sunsetFigure 1: A sunsetSee Figure 1.\n",
+        "markdown": "![A sunset](sun.jpg)\nFigure 1: A sunset\n\nSee Figure 1.\n",
+        "plain": "A sunset\nFigure 1: A sunset\n\nSee Figure 1.\n",
         "ansi": "\u001b[35m[img:\u001b[0m A sunset\u001b[35m]\u001b[0m\n\u001b[3m\u001b[2mFigure 1: A sunset\u001b[0m\n\nSee \u001b[4m\u001b[34mFigure 1\u001b[0m.\n"
     },
     "footnote": {

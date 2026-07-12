@@ -125,15 +125,13 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
       : node.target.type === 'table'
         ? trimNonNbsp(renderTable(node.target, ctx))
         : trimNonNbsp(renderBlock(node.target, ctx))
-  // A block-level target (a code-block listing or a display-math equation)
-  // keeps the caption on its own line; an inline image target stays adjacent.
+  // The caption sits on its own line directly under the figure (`\n`) - an
+  // image target used to glue it on. A blockquote target keeps the blank-line
+  // separation; a table drops the caption entirely. End with the block
+  // separator so a following block is not glued (matching carve-php).
   const sep =
-    node.target.type === 'blockquote'
-      ? '\n\n'
-      : node.target.type === 'code-block' || node.target.type === 'paragraph'
-        ? '\n'
-        : ''
-  return `${target}${sep}${renderInlines(node.caption, ctx)}`
+    node.target.type === 'blockquote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
+  return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
