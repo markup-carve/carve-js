@@ -3333,10 +3333,12 @@ function scanInlineInner(
       const closeAbs = bracketClose[i + 1]
       const close = closeAbs === undefined ? -1 : closeAbs - i
       if (close > 1) {
-        const ml = RE_LINK_TAIL.exec(rest.slice(close + 1))
+        const alt = rest.slice(2, close)
+        const tail = rest.slice(close + 1)
+        const ml = RE_LINK_TAIL.exec(tail)
         if (ml) {
           flush()
-          const img: Image = { type: 'image', src: ml[1]!, alt: rest.slice(2, close) }
+          const img: Image = { type: 'image', src: ml[1]!, alt }
           const title = ml[2] ?? ml[3]
           if (title !== undefined) img.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
@@ -3351,6 +3353,38 @@ function scanInlineInner(
               else img.attrs = a
             }
           }
+          out.push(withPos(img, source, text, i, i + len))
+          i += len
+          continue
+        }
+        // Reference image `![alt][ref]{attrs}`; collapsed `![alt][]` reuses the
+        // alt as the label. The image form of a reference link — same explicit
+        // `[label]: url` resolution (applyLinkDefs), src instead of href. Alt
+        // must be non-empty (as for a reference link's text).
+        const mref = RE_REF_TAIL.exec(tail)
+        // Full `![alt][ref]` allows an empty alt (`![][ref]`, label = ref);
+        // collapsed `![alt][]` needs a non-empty alt to use as the label.
+        if (mref && (mref[1]! !== '' || alt !== '')) {
+          flush()
+          let len = close + 1 + mref[0].length
+          let attrs: Attrs | undefined
+          if (mref[2]) {
+            if (!isValidAttrPayload(mref[2])) {
+              len -= mref[2].length + 2
+            } else {
+              const a = parseAttrs(mref[2])
+              if (isEmptyAttrs(a)) len -= mref[2].length + 2
+              else attrs = a
+            }
+          }
+          const img: Image = {
+            type: 'image',
+            src: '',
+            alt,
+            ref: mref[1]! !== '' ? mref[1]! : alt,
+            rawRef: rest.slice(0, len),
+          }
+          if (attrs) img.attrs = attrs
           out.push(withPos(img, source, text, i, i + len))
           i += len
           continue
@@ -4002,6 +4036,19 @@ function applyLinkDefs(
       // against the document's parsed headings, or finalize it to
       // literal text. Falling back here would lose the link node
       // before that pass ever sees it.
+      out.push(node)
+      continue
+    }
+    if (node.type === 'image' && node.ref !== undefined) {
+      const def = defs.get(normalizeRefLabel(node.ref))
+      if (def) {
+        node.src = def.href
+        if (def.title !== undefined) node.title = def.title
+        delete node.ref
+        delete node.rawRef
+      }
+      // Unresolved image refs do NOT match heading text; the resolve pass
+      // finalizes any survivor to literal source (rawRef).
       out.push(node)
       continue
     }
