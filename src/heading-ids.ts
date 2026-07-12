@@ -781,17 +781,16 @@ export function resolveHeadingIds(
       // inline `![…](…)` form, so a reference image arrives here as a paragraph
       // `[Image, soft-break, "^ caption…"]`. An unresolved ref is a Text node
       // (not an Image), so its paragraph is left literal. The caption inlines
-      // are already parsed; strip the `^ ` marker from the leading Text. Only a
-      // single-line caption (no further soft break) figure-izes, matching the
-      // one-line direct caption.
+      // are already parsed (paragraph interruption already stopped the caption
+      // at a block opener, so a multi-line caption keeps its interior soft
+      // breaks); strip the `^ ` marker from the leading Text.
       if (
         b.type === 'paragraph' &&
         b.children.length >= 3 &&
         b.children[0]!.type === 'image' &&
         b.children[1]!.type === 'soft-break' &&
         b.children[2]!.type === 'text' &&
-        /^\^\s+/.test((b.children[2] as Text).value) &&
-        !b.children.slice(2).some((c) => c.type === 'soft-break')
+        /^\^\s+/.test((b.children[2] as Text).value)
       ) {
         const caption = b.children.slice(2)
         const first = caption[0] as Text
