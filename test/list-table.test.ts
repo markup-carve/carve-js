@@ -198,6 +198,11 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
+  it('renders inline markup in the caption (phrasing content)', () => {
+    const src = '::: list-table "Q *totals* `2026`"\n- - A\n:::'
+    expect(h(src)).toContain('<caption>Q <strong>totals</strong> <code>2026</code></caption>')
+  })
+
   it('escapes HTML-special characters in the caption', () => {
     const src = ['::: list-table "Tom & Jerry"', '- - A', ':::'].join('\n')
     expect(h(src)).toContain('<caption>Tom &amp; Jerry</caption>')

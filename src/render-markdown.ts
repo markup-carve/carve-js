@@ -98,7 +98,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // leading bold line, then an unconsumed grouping [label] (also bold, the
       // caption floor; title first when both are present), then the body.
       const body = renderBlocks(node.children, ctx)
-      const title = node.title !== undefined ? renderInlines(node.title, ctx) : ''
+      const title =
+        node.title !== undefined ? renderInlines(unwrapStrong(node.title), ctx) : ''
       // Escape the label the same way text is escaped (HTML + Markdown
       // metacharacters), not just strip controls: a label like `[<img …>]`
       // must not emit live HTML when the Markdown is re-rendered.
@@ -547,4 +548,19 @@ function walkInlines(nodes: InlineNode[], visit: (node: InlineNode) => void): vo
         break
     }
   }
+}
+
+/**
+ * The admonition-title line is emitted inside a bold wrapper; nested `strong`
+ * nodes would produce degenerate output (`**a **b****` in Markdown, a
+ * mid-title SGR reset in ANSI), and bold-in-bold is visually a no-op anyway,
+ * so strong nodes unwrap to their children inside the title only.
+ */
+function unwrapStrong(nodes: InlineNode[]): InlineNode[] {
+  return nodes.flatMap((n): InlineNode[] => {
+    const kids = (n as { children?: InlineNode[] }).children
+    if (n.type === 'strong') return unwrapStrong(kids ?? [])
+    if (Array.isArray(kids)) return [{ ...n, children: unwrapStrong(kids) } as InlineNode]
+    return [n]
+  })
 }
