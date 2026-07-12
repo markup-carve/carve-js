@@ -2,7 +2,6 @@ import type {
   Admonition,
   Attrs,
   BlockNode,
-  InlineNode,
   List,
   ListItem,
   Paragraph,
@@ -166,9 +165,13 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
 
   const lines: string[] = []
 
-  const title = node.title ? inlineText(node.title) : ''
-  if (title.trim() !== '') {
-    lines.push(`${pad}  <caption>${ctx.escapeHtml(title)}</caption>`)
+  // <caption> holds phrasing content: the title renders through the inline
+  // pipeline (a plain-text flatten would silently drop the author's markup).
+  // Emptiness is judged on the RENDERED inlines so an image-only or
+  // emoji-only title still produces a caption.
+  const caption = node.title ? ctx.renderInlines(node.title).trim() : ''
+  if (caption !== '') {
+    lines.push(`${pad}  <caption>${caption}</caption>`)
   }
 
   const renderRow = (gridRow: GridEntry[], rowIndex: number): string => {
@@ -549,14 +552,3 @@ function headerCount(value: string | undefined): number {
   return Math.max(0, toInt(value))
 }
 
-/** Flatten an inline tree to its text content (titles only). */
-function inlineText(nodes: InlineNode[]): string {
-  let s = ''
-  for (const node of nodes) {
-    const n = node as unknown as Record<string, unknown>
-    if (typeof n.value === 'string') s += n.value
-    const kids = n.children ?? n.content
-    if (Array.isArray(kids)) s += inlineText(kids as InlineNode[])
-  }
-  return s
-}

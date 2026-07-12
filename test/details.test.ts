@@ -28,8 +28,11 @@ describe('details disclosure extension', () => {
     )
   })
 
-  it('flattens inline markup in the title to plain text', () => {
-    expect(h('::: details "see /here/"\nx\n:::')).toContain('<summary>see here</summary>')
+  it('renders inline markup in the title (summary is phrasing content)', () => {
+    expect(h('::: details "see /here/"\nx\n:::')).toContain('<summary>see <em>here</em></summary>')
+    expect(h('::: details "a *b* `c`"\nx\n:::')).toContain(
+      '<summary>a <strong>b</strong> <code>c</code></summary>',
+    )
   })
 
   it('keeps multiple block children inside the disclosure', () => {

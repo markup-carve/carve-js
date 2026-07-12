@@ -93,7 +93,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return renderTable(node, ctx)
     case 'admonition': {
       const body = renderBlocks(node.children, ctx)
-      const title = node.title !== undefined ? renderInlines(node.title, ctx) : ''
+      const title =
+        node.title !== undefined ? renderInlines(unwrapStrong(node.title), ctx) : ''
       // Carry the blockquote `│` prefix onto a bold line, matching how the
       // paragraph renderer prefixes body content in a quote. `styled` is
       // already a styled string (title) or raw label text.
@@ -540,4 +541,17 @@ function stripControls(s: string): string {
   return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
-
+/**
+ * The admonition-title line is emitted inside a bold wrapper; nested `strong`
+ * nodes would produce degenerate output (`**a **b****` in Markdown, a
+ * mid-title SGR reset in ANSI), and bold-in-bold is visually a no-op anyway,
+ * so strong nodes unwrap to their children inside the title only.
+ */
+function unwrapStrong(nodes: InlineNode[]): InlineNode[] {
+  return nodes.flatMap((n): InlineNode[] => {
+    const kids = (n as { children?: InlineNode[] }).children
+    if (n.type === 'strong') return unwrapStrong(kids ?? [])
+    if (Array.isArray(kids)) return [{ ...n, children: unwrapStrong(kids) } as InlineNode]
+    return [n]
+  })
+}
