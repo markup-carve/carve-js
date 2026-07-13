@@ -84,4 +84,15 @@ describe('caption whitespace mirrors the heading delimiter', () => {
       '<figure>\n  <img src="/u" alt="a">\n  <figcaption>&nbsp;</figcaption>\n</figure>',
     )
   })
+
+  // \u00a7756: a caption strips its final line's trailing whitespace and keeps a
+  // leading tab as content, exactly like a heading first line.
+  it('strips caption trailing whitespace, keeps a leading tab', () => {
+    expect(h('![a](/u)\n^ x ')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption>x</figcaption>\n</figure>',
+    )
+    expect(h('![a](/u)\n^ \tx')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption>\tx</figcaption>\n</figure>',
+    )
+  })
 })

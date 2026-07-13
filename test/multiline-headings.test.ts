@@ -87,4 +87,20 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
       '<section id="id">\n  <h1>Title\nmore</h1>\n</section>',
     )
   })
+
+  // §756 (NORMATIVE): the FINAL line's trailing whitespace is stripped; interior
+  // trailing (before a soft break) is kept. A leading TAB after the delimiter is
+  // content (kept), unlike leading spaces which fold into the delimiter.
+  it('strips the final line trailing whitespace', () => {
+    expect(html('# x ')).toBe('<section id="x">\n  <h1>x</h1>\n</section>')
+  })
+
+  it('keeps a leading tab as content (only spaces fold into the delimiter)', () => {
+    expect(html('# \tx')).toBe('<section id="x">\n  <h1>\tx</h1>\n</section>')
+  })
+
+  it('keeps interior trailing whitespace but strips the final line', () => {
+    expect(html('# a \nb')).toBe('<section id="a-b">\n  <h1>a \nb</h1>\n</section>')
+    expect(html('# a\nb ')).toBe('<section id="a-b">\n  <h1>a\nb</h1>\n</section>')
+  })
 })
