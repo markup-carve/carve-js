@@ -41,3 +41,47 @@ describe('a bare image followed by folding content stays in a paragraph', () => 
     )
   })
 })
+
+// The caption delimiter mirrors a heading's first line (§4/§553): `^` + one-or-
+// more literal SPACES (not a tab) + non-empty content. `^ ` alone, `^\t…`, or a
+// `^ ` whose content only appears on a later folded line is NOT a caption, just
+// as `# ` / `#\t…` is not a heading.
+describe('caption whitespace mirrors the heading delimiter', () => {
+  it('an empty caption (`^ ` alone) is not a caption', () => {
+    expect(h('![a](/u)\n^ ')).toBe('<p><img src="/u" alt="a">\n^</p>')
+  })
+
+  it('`^ ` with content only on a later line is not a caption', () => {
+    expect(h('![a](/u)\n^ \nmore')).toBe(
+      '<p><img src="/u" alt="a">\n^ \nmore</p>',
+    )
+  })
+
+  it('a tab after `^` is not a caption delimiter', () => {
+    expect(h('![a](/u)\n^\tx')).toBe('<p><img src="/u" alt="a">\n^\tx</p>')
+  })
+
+  it('extra leading spaces after `^ ` are folded into the delimiter', () => {
+    expect(h('![a](/u)\n^  x')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption>x</figcaption>\n</figure>',
+    )
+  })
+
+  it('a reference-image empty caption is not promoted to a figure', () => {
+    expect(h('![a][r]\n^ \n\n[r]: /u')).toBe('<p><img src="/u" alt="a">\n^</p>')
+  })
+
+  it('a reference-image caption whose content is inline markup is a figure', () => {
+    expect(h('![a][r]\n^ *b* c\n\n[r]: /u')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption><strong>b</strong> c</figcaption>\n</figure>',
+    )
+  })
+
+  // A non-breaking space is content everywhere else in the parser, so `^  `
+  // IS a caption -- "content" excludes only ASCII whitespace, not NBSP.
+  it('a non-breaking space is caption content', () => {
+    expect(h('![a](/u)\n^ \u00a0')).toBe(
+      '<figure>\n  <img src="/u" alt="a">\n  <figcaption>&nbsp;</figcaption>\n</figure>',
+    )
+  })
+})

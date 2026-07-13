@@ -25,6 +25,7 @@ import { parse as parseImpl, type ParseOptions } from './parse.js'
 import {
   resolveHeadingIds,
   headingIdSlugOpts,
+  promoteBlockImages,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { Profile } from './profile.js'
@@ -300,12 +301,25 @@ export function carveToMarkdown(
  * non-conservative - it must format what the author wrote, not the resolved
  * output. The semantic invariant still holds because `carveToHtml` re-applies
  * resolution on the formatted source.
+ *
+ * The one structural pass it DOES run is `promoteBlockImages`: a reference
+ * image with a caption parses as a paragraph `[Image, SoftBreak, "^ …"]`, and
+ * without promoting it to a <figure> the serializer would escape the caption's
+ * leading `^` to `\^` (only carve-js's lenient parser reads that back as a
+ * caption; carve-rs / carve-php lose the figure). Promoting first yields a
+ * portable, unescaped `^ …` caption line, matching carve-php and carve-rs. This
+ * is representation, not enrichment - it changes no author-visible content.
  */
 export function carveToCarve(
   source: string,
   opts: ParseOptions & CarveRenderOptions = {},
 ): string {
-  return renderCarve(parse(source, opts), opts)
+  const doc = parse(source, opts)
+  promoteBlockImages(doc.children, true)
+  if (doc.footnoteDefs) {
+    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
+  }
+  return renderCarve(doc, opts)
 }
 
 /** Convenience: parse + resolve + render plain text in one call. */
