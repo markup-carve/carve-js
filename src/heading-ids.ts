@@ -19,7 +19,7 @@ import type {
   Link,
   Text,
 } from './ast.js'
-import { normalizeRefLabel } from './parse.js'
+import { normalizeRefLabel, mergeAttrs } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
 
 /**
@@ -828,7 +828,13 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // the parse-only formatter path, where the unresolved Image survives).
       !(b.children[0] as Image).ref
     ) {
-      blocks[i] = b.children[0] as unknown as BlockNode
+      const img = b.children[0] as Image
+      // A leading block-attribute line (`{#id}`) landed on the paragraph; carry
+      // it onto the promoted block image (its own inline attrs win on conflict,
+      // §15), matching a direct block image `{#id}\n![…](…)`. Otherwise the id
+      // would be lost when the paragraph wrapper is dropped.
+      if (b.attrs) img.attrs = mergeAttrs(b.attrs, img.attrs ?? {})
+      blocks[i] = img as unknown as BlockNode
       continue
     }
     // A resolved reference image on its own line followed by a `^ ` caption
