@@ -235,6 +235,11 @@ const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
 // whitespace only ([ \t\n\r\f]) -- a non-breaking space (U+00A0) is content
 // here, as it is everywhere else in the parser, so `^  ` IS a caption.
 const RE_CAPTION = /^\^ +(.*[^ \t\n\r\f].*)$/
+// §756 (NORMATIVE): trailing whitespace on a block's final line is stripped
+// before rendering. ASCII whitespace only ([ \t\f\r]) so a trailing NBSP (which
+// is content everywhere else) survives; the trailing `\n` is excluded so a
+// multi-line block only loses its FINAL line's trailing run.
+const RE_TRAILING_WS = /[ \t\f\r]+$/
 const RE_TABLE_ROW = /^\|/
 // A complete standard table row opens AND closes with `|` (grammar
 // standard_row). A stray leading `|` with no closing `|` (`| a`) is ordinary
@@ -980,6 +985,9 @@ function parseHeading(lexer: Lexer): Heading {
     text += '\n' + next
     lexer.consume()
   }
+  // §756 (NORMATIVE): strip the final line's trailing whitespace (ASCII only,
+  // so a trailing NBSP stays content), matching a paragraph and carve-rs/-php.
+  text = text.replace(RE_TRAILING_WS, '')
 
   const node: Heading = { type: 'heading', level, children: [] }
   // djot-strict: a heading takes its attributes on the PRECEDING block-
@@ -2806,7 +2814,9 @@ function readCaptionText(lexer: Lexer, firstLine: string): string {
     text += '\n' + next
     lexer.consume()
   }
-  return text
+  // §756 (NORMATIVE): trailing whitespace on the block's final line is stripped
+  // before rendering. ASCII whitespace only -- a trailing NBSP is content.
+  return text.replace(RE_TRAILING_WS, '')
 }
 
 function endsHeadingOrQuote(lexer: Lexer): boolean {
