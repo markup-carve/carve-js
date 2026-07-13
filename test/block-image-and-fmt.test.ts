@@ -64,4 +64,19 @@ describe('fmt emits an unescaped figure caption (portable round-trip)', () => {
     expect(carveToCarve('![a][nope]\n^ cap').trim()).toBe('![a][nope]\n\\^ cap')
     inv('![a][nope]\n^ cap')
   })
+
+  it('a leading block-attribute line is kept on a promoted reference figure', () => {
+    expect(carveToCarve('{#f}\n![a][r]\n^ cap\n\n[r]: /u').trim()).toBe('{#f}\n![a](/u)\n^ cap')
+    inv('{#f}\n![a][r]\n^ cap\n\n[r]: /u')
+  })
+
+  it('a leading block-attribute line survives a captionless reference image', () => {
+    // The sole-image -> block-image promotion is skipped when formatting, so the
+    // paragraph keeps the `{#f}` line a bare block image could not carry. Byte
+    // output matches carve-rs / carve-php. (No `inv()` here: an attributed
+    // reference sole-image has a PRE-EXISTING carve-js/-rs HTML divergence -- the
+    // `{#f}` is dropped on the reference form but kept on the resolved direct
+    // form -- so the round-trip changes the id independently of this change.)
+    expect(carveToCarve('{#f}\n![a][r]\n\n[r]: /u').trim()).toBe('{#f}\n![a](/u)')
+  })
 })

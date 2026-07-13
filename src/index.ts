@@ -315,9 +315,9 @@ export function carveToCarve(
   opts: ParseOptions & CarveRenderOptions = {},
 ): string {
   const doc = parse(source, opts)
-  promoteBlockImages(doc.children)
+  promoteBlockImages(doc.children, true)
   if (doc.footnoteDefs) {
-    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body)
+    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
   }
   return renderCarve(doc, opts)
 }

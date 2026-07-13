@@ -809,10 +809,16 @@ function captionFirstLineHasContent(children: InlineNode[]): boolean {
  * losing the figure). Emitting the promoted figure yields a portable
  * unescaped `^ …` line, matching carve-php.
  */
-export function promoteBlockImages(blocks: BlockNode[]): void {
+export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): void {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
+    // The sole-image -> block-image promotion is skipped in `figuresOnly` mode
+    // (the formatter): a paragraph and a bare block image serialize identically,
+    // so the only effect there would be dropping a leading block-attribute line
+    // (`{#id}`) that the paragraph carries but a bare block image cannot. The
+    // formatter keeps it a paragraph so those attrs survive.
     if (
+      !figuresOnly &&
       b.type === 'paragraph' &&
       b.children.length === 1 &&
       b.children[0]!.type === 'image' &&
@@ -855,20 +861,25 @@ export function promoteBlockImages(blocks: BlockNode[]): void {
       const stripped = first.value.replace(/^\^ +/, '')
       if (stripped === '') caption.shift()
       else caption[0] = { ...first, value: stripped }
-      blocks[i] = { type: 'figure', target: b.children[0] as Image, caption } as Figure as unknown as BlockNode
+      // Carry a leading block-attribute line (`{#id}` etc.) from the paragraph
+      // onto the figure, matching a direct-image figure (which takes the attrs
+      // at parse time) and carve-php -- otherwise `carve fmt` would drop it.
+      const figure: Figure = { type: 'figure', target: b.children[0] as Image, caption }
+      if (b.attrs) figure.attrs = b.attrs
+      blocks[i] = figure as unknown as BlockNode
       continue
     }
     switch (b.type) {
       case 'blockquote':
       case 'admonition':
       case 'div':
-        promoteBlockImages(b.children)
+        promoteBlockImages(b.children, figuresOnly)
         break
       case 'list':
-        for (const item of b.items) promoteBlockImages(item.children)
+        for (const item of b.items) promoteBlockImages(item.children, figuresOnly)
         break
       case 'definition-list':
-        for (const it of b.items) for (const d of it.definitions) promoteBlockImages(d)
+        for (const it of b.items) for (const d of it.definitions) promoteBlockImages(d, figuresOnly)
         break
       default:
         break
