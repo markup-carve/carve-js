@@ -860,6 +860,9 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // on a later folded line is not a caption, matching a heading's `#` +
       // space + non-empty rule.
       /^\^ +/.test((b.children[2] as Text).value) &&
+      // A leading caret that was ESCAPED in the source (`\^`) is literal, not a
+      // caption marker -- `![a](/u)\n\^ cap` stays a paragraph (carve-rs/-php).
+      !(b.children[2] as Text).escapedLeadingCaret &&
       captionFirstLineHasContent(b.children)
     ) {
       const caption = b.children.slice(2)
