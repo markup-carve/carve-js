@@ -768,6 +768,26 @@ export function resolveHeadingIds(
   // image resolves AFTER the syntactic block-image check, so it arrives here as
   // a one-image paragraph; an unresolved ref already became a Text node, so its
   // paragraph is left untouched (renders as a literal `<p>`).
+  // Whether a `[Image, soft-break, "^ …", …]` paragraph's caption carries any
+  // content on its FIRST line: text after the `^ ` marker on the marker node,
+  // or any following inline node before the first soft break (e.g. `^ *b*`,
+  // where the marker node is just `"^ "` and the content is a Strong sibling).
+  // Rejects an empty first-line caption (`^ ` with content only on later lines).
+  // "Content" is any non-ASCII-whitespace character ([ \t\n\r\f]); a
+  // non-breaking space (U+00A0) counts as content, matching RE_CAPTION and the
+  // parser's NBSP handling elsewhere. (String.trim() is Unicode-aware and would
+  // wrongly drop NBSP, so test against this class instead.)
+  const RE_HAS_CONTENT = /[^ \t\n\r\f]/
+  const captionFirstLineHasContent = (children: InlineNode[]): boolean => {
+    const afterMarker = (children[2] as Text).value.replace(/^\^ +/, '')
+    if (RE_HAS_CONTENT.test(afterMarker)) return true
+    for (let k = 3; k < children.length; k++) {
+      const c = children[k]!
+      if (c.type === 'soft-break') break
+      if (c.type !== 'text' || RE_HAS_CONTENT.test((c as Text).value)) return true
+    }
+    return false
+  }
   const promoteBlockImages = (blocks: BlockNode[]): void => {
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i]!
@@ -790,11 +810,18 @@ export function resolveHeadingIds(
         b.children[0]!.type === 'image' &&
         b.children[1]!.type === 'soft-break' &&
         b.children[2]!.type === 'text' &&
-        /^\^\s+/.test((b.children[2] as Text).value)
+        // Mirror the caption delimiter (§4/§553): `^` + one-or-more spaces (a
+        // space, not a tab). The FIRST line must carry content -- either text
+        // after the marker on this node, or a following inline node on the same
+        // line (before the first soft-break). `^ ` alone, `^\t…`, or content
+        // only on a later folded line is not a caption, matching a heading's
+        // `#` + space + non-empty rule.
+        /^\^ +/.test((b.children[2] as Text).value) &&
+        captionFirstLineHasContent(b.children)
       ) {
         const caption = b.children.slice(2)
         const first = caption[0] as Text
-        const stripped = first.value.replace(/^\^\s+/, '')
+        const stripped = first.value.replace(/^\^ +/, '')
         if (stripped === '') caption.shift()
         else caption[0] = { ...first, value: stripped }
         blocks[i] = { type: 'figure', target: b.children[0] as Image, caption } as Figure as unknown as BlockNode

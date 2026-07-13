@@ -227,7 +227,14 @@ const RE_LINK_DEF =
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
-const RE_CAPTION = /^\^\s+(.+)$/
+// A caption line mirrors a heading's first line (§4/§553): `^` + one-or-more
+// literal spaces (the grammar delimiter is a space, not a tab) + content that
+// carries at least one non-ASCII-whitespace character. Leading spaces are
+// folded into the delimiter; `^ ` alone (or `^\t…`) is not a caption, exactly
+// as `# ` / `#\t…` is not a heading. "Content" is tested against ASCII
+// whitespace only ([ \t\n\r\f]) -- a non-breaking space (U+00A0) is content
+// here, as it is everywhere else in the parser, so `^  ` IS a caption.
+const RE_CAPTION = /^\^ +(.*[^ \t\n\r\f].*)$/
 const RE_TABLE_ROW = /^\|/
 // A complete standard table row opens AND closes with `|` (grammar
 // standard_row). A stray leading `|` with no closing `|` (`| a`) is ordinary
