@@ -36,3 +36,32 @@ describe('fmt of an unresolved reference image round-trips verbatim', () => {
     inv('![alt][ref]\n\n[ref]: /u "t"')
   })
 })
+
+// A figure caption must serialize as an UNESCAPED `^ …` line: escaping the
+// caret to `\^` only round-trips in carve-js's lenient parser; carve-rs and
+// carve-php read `\^` as literal text and lose the figure. carveToCarve runs
+// promoteBlockImages so every image+caption (direct, resolved-ref, or one with
+// a tricky title) becomes a <figure> whose caption is emitted verbatim.
+describe('fmt emits an unescaped figure caption (portable round-trip)', () => {
+  const inv = (src: string) => expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
+
+  it('resolved reference image + caption', () => {
+    expect(carveToCarve('![a][r]\n^ cap\n\n[r]: /u').trim()).toBe('![a](/u)\n^ cap')
+    inv('![a][r]\n^ cap\n\n[r]: /u')
+  })
+
+  it('reference image with attributes + caption', () => {
+    expect(carveToCarve('![a][r]{.c}\n^ cap\n\n[r]: /u').trim()).toBe('![a](/u){.c}\n^ cap')
+    inv('![a][r]{.c}\n^ cap\n\n[r]: /u')
+  })
+
+  it('direct image with an escaped-quote title + caption', () => {
+    expect(carveToCarve('![a](/u "t\\"i")\n^ cap').trim()).toBe('![a](/u "t\\"i")\n^ cap')
+    inv('![a](/u "t\\"i")\n^ cap')
+  })
+
+  it('an UNresolved reference image is not a figure: its caret stays escaped', () => {
+    expect(carveToCarve('![a][nope]\n^ cap').trim()).toBe('![a][nope]\n\\^ cap')
+    inv('![a][nope]\n^ cap')
+  })
+})
