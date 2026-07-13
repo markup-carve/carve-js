@@ -42,6 +42,38 @@ describe('a bare image followed by folding content stays in a paragraph', () => 
   })
 })
 
+// A leading block-attribute line (`{#id}`) before a sole block image lands on
+// the promoted bare `<img>` (§15) -- consistent with an inline `![…](…){#id}`
+// and with the fact that a sole image renders bare (no `<p>` wrapper). It does
+// NOT wrap the image in a `<p>`.
+describe('a leading attribute line attaches to a bare block image', () => {
+  it('direct image', () => {
+    expect(h('{#f}\n![a](/u)')).toBe('<img src="/u" alt="a" id="f">')
+  })
+
+  it('resolved reference image', () => {
+    expect(h('{#f}\n![a][r]\n\n[r]: /u')).toBe('<img src="/u" alt="a" id="f">')
+  })
+
+  it('merges with the image’s own inline attributes (§15 order)', () => {
+    expect(h('{#f}\n![a][r]{.c}\n\n[r]: /u')).toBe(
+      '<img src="/u" alt="a" id="f" class="c">',
+    )
+  })
+
+  it('a following caption still puts the id on the <figure>, not the <img>', () => {
+    expect(h('{#f}\n![a](/u)\n^ cap')).toBe(
+      '<figure id="f">\n  <img src="/u" alt="a">\n  <figcaption>cap</figcaption>\n</figure>',
+    )
+  })
+
+  it('two images stay a paragraph (attr on the <p>)', () => {
+    expect(h('{#f}\n![a](/u)\n![b](/u)')).toBe(
+      '<p id="f"><img src="/u" alt="a">\n<img src="/u" alt="b"></p>',
+    )
+  })
+})
+
 // The caption delimiter mirrors a heading's first line (§4/§553): `^` + one-or-
 // more literal SPACES (not a tab) + non-empty content. `^ ` alone, `^\t…`, or a
 // `^ ` whose content only appears on a later folded line is NOT a caption, just

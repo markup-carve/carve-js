@@ -4222,7 +4222,7 @@ export function parseAttrs(src: string): Attrs {
   return attrs
 }
 
-function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
+export function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   if (!a) return b
   const out: Attrs = { ...a }
   // `!== undefined`, not truthiness: an explicit `id=""` in a later block wins
