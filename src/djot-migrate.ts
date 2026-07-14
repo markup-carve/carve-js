@@ -27,6 +27,15 @@ export interface MigrationWarning {
   column: number
   /** Stable rule id, e.g. "djot-emphasis-underline". */
   rule: string
+  /**
+   * Whether the construct produces objectively wrong Carve output
+   * (`carve-breakage`) or is valid Carve that merely means something
+   * different than it did in Djot/Markdown (`djot-shift`). `carve lint`
+   * reports only `carve-breakage` by default — a `djot-shift` such as
+   * `_x_` (underline) is intentional in hand-written Carve, so surfacing
+   * it there is noise. `--from-djot` opts the shifts back in.
+   */
+  category: MigrationCategory
   /** Human-readable explanation of the silent mis-render. */
   message: string
   /**
@@ -46,8 +55,20 @@ export interface MigrationWarning {
   end: number
 }
 
+/**
+ * `carve-breakage`: the construct mis-renders in Carve regardless of origin
+ * (leaked literal delimiters, a bullet that degrades to a paragraph) — always
+ * worth flagging, even in hand-written Carve.
+ *
+ * `djot-shift`: valid Carve whose meaning merely differs from Djot/Markdown
+ * (`_x_` is underline, not emphasis). Only relevant when migrating FROM Djot,
+ * so `carve lint` hides it unless `--from-djot` is given.
+ */
+export type MigrationCategory = 'carve-breakage' | 'djot-shift'
+
 interface Rule {
   id: string
+  category: MigrationCategory
   /** Must be a global regex with at least one capture group for content. */
   pattern: RegExp
   /**
@@ -79,6 +100,7 @@ const RULES: Rule[] = [
   // and never the delimiter char `x`.
   {
     id: 'markdown-strong-double-star',
+    category: 'carve-breakage',
     family: '*',
     pattern: /\*\*(?!\s)((?:(?!\n[ \t]*\n)[^*])+?)(?<!\s)\*\*/gd,
     message: () =>
@@ -88,6 +110,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'markdown-strikethrough-double-tilde',
+    category: 'carve-breakage',
     family: '~',
     pattern: /~~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~~/gd,
     message: () =>
@@ -97,6 +120,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'djot-subscript-tilde',
+    category: 'djot-shift',
     family: '~',
     pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~/gd,
     message: () =>
@@ -108,6 +132,9 @@ const RULES: Rule[] = [
   },
   {
     id: 'djot-superscript-caret',
+    // Breakage: `^x^` silently drops the superscript (Carve superscript is the
+    // braced `{^x^}`), so the intended markup never renders.
+    category: 'carve-breakage',
     family: '^',
     // Exclude `^[` (a Carve inline footnote, not a superscript opener), the
     // braced `{^x^}` form, which is valid in both languages, and carets that
@@ -121,6 +148,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'djot-emphasis-underscore',
+    category: 'djot-shift',
     family: '_',
     pattern:
       /(?<![A-Za-z0-9_])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?![A-Za-z0-9_])/gd,
@@ -131,6 +159,7 @@ const RULES: Rule[] = [
   },
   {
     id: 'djot-highlight-braces',
+    category: 'djot-shift',
     family: '{',
     pattern: /\{=(?!\s)((?:(?!\n[ \t]*\n)[\s\S])+?)(?<!\s)=\}/gd,
     message: () => 'Djot highlight `{=x=}` is also Carve highlight (`{=x=}`).',
@@ -146,6 +175,7 @@ const RULES: Rule[] = [
   // IS the Carve continuation marker and is intentional.
   {
     id: 'djot-plus-bullet',
+    category: 'carve-breakage',
     family: 'plus-bullet',
     pattern: /(?<=^[ \t]*)(\+)(?=[ \t]+\S)/gmd,
     message: () =>
@@ -260,6 +290,7 @@ function stripHit(h: ScanHit): MigrationWarning {
     line: h.line,
     column: h.column,
     rule: h.rule,
+    category: h.category,
     message: h.message,
     suggestion: h.suggestion,
     start: h.start,
@@ -396,6 +427,7 @@ function scanHits(source: string): ScanHit[] {
         line,
         column,
         rule: rule.id,
+        category: rule.category,
         message: rule.message(m),
         suggestion,
         start,
