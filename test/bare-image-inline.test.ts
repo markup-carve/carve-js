@@ -117,6 +117,35 @@ describe('caption whitespace mirrors the heading delimiter', () => {
     )
   })
 
+  // An ESCAPED caret (`\^`) is a literal `^`, not a caption marker, so the
+  // image stays inline in a paragraph (matching carve-rs / carve-php) rather
+  // than being promoted to a figure.
+  it('an escaped caret after an image is not a caption', () => {
+    expect(h('![a](/u)\n\\^ cap')).toBe('<p><img src="/u" alt="a">\n^ cap</p>')
+  })
+
+  it('an escaped caret after a reference image is not a caption', () => {
+    expect(h('![a][r]\n\\^ cap\n\n[r]: /u')).toBe(
+      '<p><img src="/u" alt="a">\n^ cap</p>',
+    )
+  })
+
+  it('an escaped caret is not a caption even with a trailing inline comment', () => {
+    // The `%%` inline-comment path flushes the buffer directly; the escaped-
+    // caret flag must survive it, so this stays a paragraph.
+    expect(h('![a](/u)\n\\^ cap %% note')).toBe(
+      '<p><img src="/u" alt="a">\n^ cap</p>',
+    )
+  })
+
+  it('an escaped caret is not a caption even when the text is an abbreviation', () => {
+    // applyAbbreviations splits the flagged text node; the leading fragment must
+    // keep the escaped-caret flag, so this stays a paragraph.
+    expect(h('*[ABC]: Expansion\n\n![a](/u)\n\\^ ABC')).toBe(
+      '<p><img src="/u" alt="a">\n^ <abbr title="Expansion">ABC</abbr></p>',
+    )
+  })
+
   // \u00a7756: a caption strips its final line's trailing whitespace and keeps a
   // leading tab as content, exactly like a heading first line.
   it('strips caption trailing whitespace, keeps a leading tab', () => {
