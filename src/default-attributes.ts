@@ -26,7 +26,7 @@ export interface DefaultAttributesOptions {
 // `div` default applies to BOTH a bare div and an admonition (carve-php has one
 // Div node covering both; carve-js splits them), so `div` maps to both. Emphasis
 // kinds map to the carve-js emphasis `type`: `emphasis` -> italic (`/x/`),
-// `superscript` -> super (`^x^`), `strike` -> strike (`~x~`).
+// `superscript` -> super (`{^x^}`), `strike` -> strike (`~x~`).
 const TYPE_MAP: Record<string, string[]> = {
   paragraph: ['paragraph'],
   heading: ['heading'],
