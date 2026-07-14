@@ -145,10 +145,28 @@ describe('carve lint', () => {
   })
 
   it('reports both collision and semantic warnings together', async () => {
-    const t = makeIO({ stdin: '# A\n\n_em_ and </#ghost>' })
+    const t = makeIO({ stdin: '# A\n\n**strong** and </#ghost>' })
     expect(await run(['lint'], t.io)).toBe(1)
-    expect(t.out).toContain('djot-emphasis-underscore')
+    expect(t.out).toContain('markdown-strong-double-star')
     expect(t.out).toContain('broken-crossref')
+  })
+
+  it('hides djot-shift constructs by default (valid Carve)', async () => {
+    const t = makeIO({ stdin: '_x_ and ~y~ and {=z=}' })
+    expect(await run(['lint'], t.io)).toBe(0)
+    expect(t.out).toBe('')
+  })
+
+  it('flags djot-shift constructs with --from-djot', async () => {
+    const t = makeIO({ stdin: '_x_' })
+    expect(await run(['lint', '--from-djot'], t.io)).toBe(1)
+    expect(t.out).toContain('djot-emphasis-underscore')
+  })
+
+  it('still flags carve-breakage without --from-djot', async () => {
+    const t = makeIO({ stdin: '+ item' })
+    expect(await run(['lint'], t.io)).toBe(1)
+    expect(t.out).toContain('djot-plus-bullet')
   })
 
   it('exits 0 on a clean document', async () => {

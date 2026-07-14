@@ -69,6 +69,7 @@ export {
   formatMigrationWarnings,
   applyMigrationFixes,
   type MigrationWarning,
+  type MigrationCategory,
   type MigrationFixResult,
 } from './djot-migrate.js'
 export { markdownToCarve } from './markdown-migrate.js'
