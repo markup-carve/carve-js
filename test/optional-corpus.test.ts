@@ -27,7 +27,7 @@ const featureRunners: Record<string, (source: string) => string> = {
     }),
   'emoji-map': (source) =>
     carveToHtml(source, {
-      emoji: {
+      symbols: {
         rocket: '🚀',
         tada: '🎉',
       },

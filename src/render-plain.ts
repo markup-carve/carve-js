@@ -180,7 +180,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return stripControls(node.content)
     case 'raw-inline':
       return ''
-    case 'emoji':
+    case 'symbol':
       return `:${stripControls(node.name)}:`
     case 'autolink':
       // Raw autolink content: a URI autolink keeps its scheme, an email shows
@@ -251,5 +251,4 @@ function cleanEscapedText(node: Text): string {
 function stripControls(s: string): string {
   return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
-
 

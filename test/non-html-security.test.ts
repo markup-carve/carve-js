@@ -150,7 +150,7 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
     }
   })
 
-  it('strips controls from mention, tag, and emoji names in non-HTML renderers', () => {
+  it('strips controls from mention, tag, and symbol names in non-HTML renderers', () => {
     const doc: Document = {
       type: 'document',
       children: [
@@ -161,7 +161,7 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
             { type: 'text', value: ' ' },
             { type: 'tag', name: 'ne\x07ws' },
             { type: 'text', value: ' ' },
-            { type: 'emoji', name: 'ro\x1bcket' },
+            { type: 'symbol', name: 'ro\x1bcket' },
           ],
         },
       ],

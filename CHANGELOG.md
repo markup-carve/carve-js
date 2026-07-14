@@ -7,6 +7,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+- BREAKING: Rename symbol shortcodes from `emoji` to `symbol` in the AST
+  (`type: 'emoji'` -> `type: 'symbol'`), HTML renderer option (`emoji` ->
+  `symbols`), and profile construct name.
+- Add a leading word-boundary guard for symbol shortcodes so text such as
+  `a:b:c`, `10:30: x`, and `word:rocket:` stays literal.
+- Preserve attributes on HTML-rendered symbol shortcodes by wrapping mapped or
+  literal output in a `<span>` when attributes are present.
+
 ## [0.1.0] - YYYY-MM-DD
 
 Initial release of the **reference TypeScript implementation** of the
