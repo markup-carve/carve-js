@@ -25,11 +25,13 @@ const featureRunners: Record<string, (source: string) => string> = {
       mentionUrl: '/users/{name}',
       tagUrl: '/topics/{name}',
     }),
-  'emoji-map': (source) =>
+  'symbol-map': (source) =>
     carveToHtml(source, {
       symbols: {
         rocket: '🚀',
         tada: '🎉',
+        '+1': '👍',
+        UPPER: '⬆️',
       },
     }),
   'citations-numbered': (source) => carveToHtml(source, { extensions: [citations()] }),

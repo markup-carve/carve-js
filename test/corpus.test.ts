@@ -83,7 +83,7 @@ const IMPLEMENTED = new Set([
   '48-hard-line-breaks',
   '49-non-breaking-space',
   '50-raw-inline',
-  '51-emoji',
+  '51-symbols',
   '52-ordered-list-start-and-delimiter',
   '53-ordered-list-dialects',
   '54-ordered-marker-vs-prose',
