@@ -64,8 +64,11 @@ describe('Profile: canonical type mapping', () => {
 
   it('returns undefined for types with no canonical mapping', () => {
     expect(canonicalType('crossref')).toBeUndefined()
-    expect(canonicalType('emoji')).toBeUndefined()
     expect(canonicalType('caption-number')).toBeUndefined()
+  })
+
+  it('maps symbol as a canonical inline feature', () => {
+    expect(canonicalType('symbol')).toBe('symbol')
   })
 })
 

@@ -83,7 +83,7 @@ const INLINE_SET: ReadonlySet<string> = new Set(CANONICAL_INLINE_TYPES)
  * Map a carve-js internal `node.type` to its canonical snake_case name.
  *
  * Returns `undefined` for types that have no canonical mapping (e.g.
- * `crossref`, `caption-number`, `emoji`, `abbreviation-def`, `critic-*`);
+ * `crossref`, `caption-number`, `abbreviation-def`, `critic-*`);
  * such nodes are denied-by-default by the profile resolver, matching
  * carve-php's "unknown type -> denied" rule. The exception is `document`,
  * which the resolver always treats as allowed.
@@ -176,12 +176,14 @@ export function canonicalType(type: string): string | undefined {
       return 'insert'
     case 'critic-delete':
       return 'delete'
+    case 'symbol':
+      return 'symbol'
     case 'math':
       return 'math'
     case 'abbreviation':
       return 'abbreviation'
     default:
-      // 'emoji', 'crossref', 'caption-number', 'abbreviation-def',
+      // 'crossref', 'caption-number', 'abbreviation-def',
       // 'critic-substitute', 'critic-comment', 'bold-italic' (handled below)
       return undefined
   }

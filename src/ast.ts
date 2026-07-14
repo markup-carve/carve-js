@@ -372,12 +372,12 @@ export interface RawInline extends BaseNode {
 }
 
 /**
- * Emoji shortcode `:name:` (djot symbols). Resolved against a
+ * Symbol shortcode `:name:` (commonly used for emoji). Resolved against a
  * processor-supplied name->glyph map at render time; an unmapped name
  * renders literally as `:name:`.
  */
-export interface Emoji extends BaseNode {
-  type: 'emoji'
+export interface SymbolInline extends BaseNode {
+  type: 'symbol'
   name: string
 }
 
@@ -512,7 +512,7 @@ export type InlineNode =
   | Span
   | Math
   | RawInline
-  | Emoji
+  | SymbolInline
   | AutoLink
   | CrossRef
   | CaptionNumber

@@ -350,7 +350,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
     case 'raw-inline':
       return ''
-    case 'emoji':
+    case 'symbol':
       return `:${stripControls(node.name)}:`
     case 'autolink':
       return style(

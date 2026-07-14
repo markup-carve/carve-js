@@ -56,6 +56,10 @@ const doc = resolve(parse(source)) // typed Document AST
 const html = renderHtml(doc)       // same as carveToHtml(source)
 ```
 
+HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
+mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes
+render literally.
+
 ### Heading ids
 
 Every heading gets an automatic id derived from its text. Ids are

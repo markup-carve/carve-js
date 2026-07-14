@@ -1,9 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import type { InlineNode } from '../src/index.js'
 
 const h = (s: string, o = {}) => carveToHtml(s, o)
 
-describe('inline extras (nbsp, raw inline, emoji)', () => {
+function collectInlineTypes(nodes: InlineNode[]): string[] {
+  const out: string[] = []
+  for (const node of nodes) {
+    out.push(node.type)
+    if ('children' in node && Array.isArray(node.children)) {
+      out.push(...collectInlineTypes(node.children as InlineNode[]))
+    }
+    if (node.type === 'footnote' && node.inline) out.push(...collectInlineTypes(node.inline))
+  }
+  return out
+}
+
+function inlineTypes(src: string): string[] {
+  const doc = parse(src)
+  const para = doc.children[0]
+  if (!para || para.type !== 'paragraph') return []
+  return collectInlineTypes(para.children)
+}
+
+describe('inline extras (nbsp, raw inline, symbols)', () => {
   it('backslash-space is a non-breaking space', () => {
     expect(h('10\\ kg')).toBe('<p>10&nbsp;kg</p>')
   })
@@ -20,23 +40,74 @@ describe('inline extras (nbsp, raw inline, emoji)', () => {
     expect(h('`x + y`')).toBe('<p><code>x + y</code></p>')
   })
 
-  it('emoji renders literally when no map is supplied', () => {
+  it('symbol renders literally when no map is supplied', () => {
     expect(h('hi :rocket: there')).toBe('<p>hi :rocket: there</p>')
   })
 
-  it('emoji resolves against a processor-supplied map', () => {
-    expect(h(':rocket: :tada:', { emoji: { rocket: '🚀', tada: '🎉' } })).toBe(
+  it('symbol resolves against a processor-supplied map', () => {
+    expect(h(':rocket: :tada:', { symbols: { rocket: '🚀', tada: '🎉' } })).toBe(
       '<p>🚀 🎉</p>',
     )
   })
 
-  it('an unmapped emoji name stays literal even with a map', () => {
-    expect(h(':rocket: :nope:', { emoji: { rocket: '🚀' } })).toBe(
+  it('an unmapped symbol name stays literal even with a map', () => {
+    expect(h(':rocket: :nope:', { symbols: { rocket: '🚀' } })).toBe(
       '<p>🚀 :nope:</p>',
     )
   })
 
-  it('keeps `:type[content]` as an extension, not an emoji', () => {
+  it('inserts mapped symbol output as trusted raw HTML', () => {
+    expect(h(':rocket:', { symbols: { rocket: '<b>go</b>' } })).toBe('<p><b>go</b></p>')
+  })
+
+  it('wraps symbol output when attributes are attached', () => {
+    expect(h(':rocket:{.big}', { symbols: { rocket: '🚀' } })).toBe(
+      '<p><span class="big">🚀</span></p>',
+    )
+    expect(h(':rocket:{.big}')).toBe('<p><span class="big">:rocket:</span></p>')
+  })
+
+  it('lets a registered inline renderer resolve symbols before the map', () => {
+    const ext = {
+      name: 'sym',
+      inlineRenderers: {
+        symbol: (node: { name: string }) =>
+          node.name === 'rocket' ? '<b>ROCKET</b>' : undefined,
+      },
+    }
+    // handler wins over the map
+    expect(h(':rocket:', { extensions: [ext], symbols: { rocket: 'MAP' } })).toBe(
+      '<p><b>ROCKET</b></p>',
+    )
+    // returning undefined defers to the map, then to the literal
+    expect(h(':tada:', { extensions: [ext], symbols: { tada: 'MAP' } })).toBe('<p>MAP</p>')
+    expect(h(':none:', { extensions: [ext] })).toBe('<p>:none:</p>')
+    // attributes still wrap the handler output
+    expect(h(':rocket:{.c}', { extensions: [ext] })).toBe(
+      '<p><span class="c"><b>ROCKET</b></span></p>',
+    )
+  })
+
+  it('uses the symbol AST type and enforces the leading boundary guard', () => {
+    for (const src of ['a:b:c', '10:30: x', 'word:rocket:', ':+1:', ':_x:']) {
+      expect(inlineTypes(src)).not.toContain('symbol')
+    }
+    for (const src of ['(:tada:)', 'start :rocket:']) {
+      expect(inlineTypes(src)).toContain('symbol')
+    }
+  })
+
+  it('keeps `:type[content]` as an extension, not a symbol', () => {
     expect(h(':kbd[Esc]')).toBe('<p><kbd>Esc</kbd></p>')
+    expect(inlineTypes(':kbd[Ctrl]')).toContain('extension')
+    expect(inlineTypes(':kbd[Ctrl]')).not.toContain('symbol')
+  })
+
+  it('keeps symbol-related fmt round-trips stable', () => {
+    for (const src of [':rocket:{.big}', 'a \\:rocket: b', 'a:b:c']) {
+      const formatted = carveToCarve(src)
+      expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+      expect(carveToCarve(formatted)).toBe(formatted)
+    }
   })
 })
