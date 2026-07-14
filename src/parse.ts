@@ -3465,13 +3465,13 @@ function scanInlineInner(
     }
 
     // Inline footnote `^[content]` (pandoc-style; design §2-§5). The caret must
-    // immediately precede `[`, must not itself follow a `^` (`^^[` is suppressed
-    // by same-delimiter adjacency), and must not be inside footnote content
-    // (no notes inside notes, §3.1). The matching `]` is the balanced close from
-    // bracketClose (escape/code-span aware). Empty or whitespace-only content is
-    // literal. Ranked above superscript. Content is inline-only, parsed with
-    // footnote recognition disabled.
-    if (!inFootnote && c === '^' && text[i + 1] === '[' && text[i - 1] !== '^') {
+    // immediately precede `[` and must not be inside footnote content (no notes
+    // inside notes, §3.1). A `^` anywhere else is literal text (there is no bare
+    // superscript), so `^^[x]` is a literal `^` followed by a note. The matching
+    // `]` is the balanced close from bracketClose (escape/code-span aware).
+    // Empty or whitespace-only content is literal. Content is inline-only,
+    // parsed with footnote recognition disabled.
+    if (!inFootnote && c === '^' && text[i + 1] === '[') {
       const close = bracketClose[i + 1]
       if (close !== undefined && trimStructural(text.slice(i + 2, close)) !== '') {
         flush()
@@ -3833,17 +3833,17 @@ function matchEmphasis(
       }
     }
   }
-  // Single-char delimiters. Highlight `=` and subscript `,` are single-char
-  // like the rest; a doubled `==`/`,,` is therefore literal by same-delimiter
-  // adjacency (handled below), exactly like `**x**`.
+  // Single-char delimiters. Highlight `=` is single-char like the rest; a
+  // doubled `==` is therefore literal by same-delimiter adjacency (handled
+  // below), exactly like `**x**`. There is NO bare `^`/`,` delimiter:
+  // superscript and subscript exist only in the braced forms `{^x^}`/`{,x,}`
+  // (grammar PART 9 §9 rationale note) -- a bare caret or comma is literal.
   const pairs: Array<[string, Emphasis['type']]> = [
     ['/', 'italic'],
     ['*', 'strong'],
     ['_', 'underline'],
     ['~', 'strike'],
-    ['^', 'super'],
     ['=', 'highlight'],
-    [',', 'sub'],
   ]
   for (const [delim, type] of pairs) {
     if (c === delim) {
@@ -3853,8 +3853,8 @@ function matchEmphasis(
       if (!after || after === ' ' || after === '\n') continue
       // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
       // same delimiter (before OR after) does not open, so a doubled
-      // delimiter is literal text. `**x**`, `~~x~~`, `^^x^^`, `==x==`, `,,x,,`
-      // stay literal, uniformly with `//x//` and `__x__`. Applies to all seven.
+      // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
+      // uniformly with `//x//` and `__x__`. Applies to all five.
       if (after === delim || before === delim) continue
       // Word-boundary opener (spec §9): every bare delimiter can't open after
       // an alphanumeric or `_`, keeping paths/identifiers/numbers literal

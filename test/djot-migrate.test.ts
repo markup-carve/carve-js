@@ -46,11 +46,18 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
   it('does not warn on Carve-native syntax', () => {
     expect(
       djotMigrationWarnings(
-        '/italic/ *bold* _underline_is fine when not paired_? ,sub, =hl= ^sup^',
+        '/italic/ *bold* _underline_is fine when not paired_? {,sub,} =hl= {^sup^}',
       ).filter((w) => w.rule !== 'djot-emphasis-underscore'),
     ).toEqual([])
     // Genuinely Carve-only line: no warnings at all.
-    expect(djotMigrationWarnings('/italic/ and *bold* and ,x, and =y=')).toEqual([])
+    expect(djotMigrationWarnings('/italic/ and *bold* and {,x,} and =y=')).toEqual([])
+  })
+
+  it('warns on djot superscript ^x^ (literal in Carve) and suggests the braced form', () => {
+    const w = djotMigrationWarnings('an area of 10^6^ km')
+    expect(w).toHaveLength(1)
+    expect(w[0]!.rule).toBe('djot-superscript-caret')
+    expect(w[0]!.suggestion).toBe('{^6^}')
   })
 
   it('does not warn inside inline code spans', () => {

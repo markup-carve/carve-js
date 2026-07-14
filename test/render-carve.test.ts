@@ -80,8 +80,16 @@ describe('renderCarve targeted canonicalization', () => {
   })
 
   it('emits Carve inline delimiters', () => {
-    expect(carveToCarve('/i/ *b* _u_ ~s~ ^sup^ ,sub, =mark=')).toBe(
-      '/i/ *b* _u_ ~s~ ^sup^ ,sub, =mark=\n',
+    expect(carveToCarve('/i/ *b* _u_ ~s~ {^sup^} {,sub,} =mark=')).toBe(
+      '/i/ *b* _u_ ~s~ {^sup^} {,sub,} =mark=\n',
+    )
+  })
+
+  it('keeps a literal caret escaped and a literal comma unescaped', () => {
+    // `^sup^` / `,sub,` are plain text (no bare sup/sub delimiter): the comma
+    // needs no escape; the caret keeps one (footnote/caption channels).
+    expect(carveToCarve('^sup^ ,sub, stays literal')).toBe(
+      '\\^sup\\^ ,sub, stays literal\n',
     )
   })
 

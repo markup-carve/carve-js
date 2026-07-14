@@ -60,8 +60,9 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('a ==hot== word')).toBe('a =hot= word')
   })
 
-  it('leaves ^superscript^ unchanged (same in Carve)', () => {
-    expect(conv('x^2^ end')).toBe('x^2^ end')
+  it('converts ^superscript^ to the braced {^x^} (Carve has no bare superscript)', () => {
+    expect(conv('x^2^ end')).toBe('x{^2^} end')
+    expect(conv('a ^up^ end')).toBe('a {^up^} end')
   })
 
   it('converts inline math $x$ to $`x`', () => {
@@ -188,14 +189,15 @@ describe('markdownToCarve — HTML inline tags', () => {
     expect(conv('a <mark>hot</mark> day')).toBe('a =hot= day')
   })
 
-  it('converts a whitespace-separated <sup>/<sub> to the bare ^x^ / ,x,', () => {
-    expect(conv('a <sup>up</sup> and <sub>down</sub>')).toBe('a ^up^ and ,down,')
+  it('converts <sup>/<sub> to the braced forms (Carve has no bare sup/sub)', () => {
+    expect(conv('a <sup>up</sup> and <sub>down</sub>')).toBe('a {^up^} and {,down,}')
   })
 
-  it('brace-forces highlight/sub/sup when intraword (bare form would be literal)', () => {
+  it('brace-forces highlight when intraword; sub/sup are always braced', () => {
     expect(conv('H<sub>2</sub>O')).toBe('H{,2,}O')
     expect(conv('x<sup>2</sup>')).toBe('x{^2^}')
     expect(conv('foo<mark>bar</mark>baz')).toBe('foo{=bar=}baz')
+    expect(conv('a <mark>hot</mark> day')).toBe('a =hot= day')
   })
 
   it('always brace-forces <ins> (Carve has no bare + delimiter)', () => {

@@ -42,9 +42,12 @@ describe('inline footnotes ^[content]', () => {
     expect(out).not.toContain('doc-noteref')
   })
 
-  it('suppresses the opener after another caret (^^[x])', () => {
+  it('opens a note after a literal caret (^^[x] = literal ^ + note)', () => {
+    // There is no bare superscript, so a `^` is plain text and the second
+    // `^[` opens a note as anywhere else.
     const out = h('a^^[x] b\n')
-    expect(out).not.toContain('doc-noteref')
+    expect(out).toContain('doc-noteref')
+    expect(out).toContain('a^<a')
   })
 
   it('keeps the opener escapable with a backslash', () => {
@@ -80,11 +83,11 @@ describe('inline footnotes ^[content]', () => {
     expect(out).not.toContain('{.c}')
   })
 
-  it('keeps superscript working when no bracket follows the caret', () => {
-    // `^2^` (caret + non-bracket) is superscript, not a footnote. Bare
-    // superscript needs a word boundary, so the caret sits at line start;
-    // intraword sup (`x^2^`) is literal and uses the forced `{^2^}` form.
-    expect(h('^2^ y\n')).toContain('<sup>2</sup>')
+  it('keeps a caret with no following bracket literal', () => {
+    // There is no bare superscript: `^2^` is literal text; superscript is
+    // the braced `{^2^}` form only.
+    expect(h('^2^ y\n')).toContain('^2^ y')
+    expect(h('{^2^} y\n')).toContain('<sup>2</sup>')
   })
 
   it('resolves an implicit heading reference inside note content', () => {
