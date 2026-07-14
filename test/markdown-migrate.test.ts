@@ -65,6 +65,10 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('a ^up^ end')).toBe('a {^up^} end')
   })
 
+  it('does not pair footnote-reference carets into a superscript span', () => {
+    expect(conv('a [^x] b [^y]')).toBe('a [^x] b [^y]')
+  })
+
   it('converts inline math $x$ to $`x`', () => {
     expect(conv('value $a+b$ here')).toBe('value $`a+b` here')
   })

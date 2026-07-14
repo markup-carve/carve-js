@@ -60,6 +60,11 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.suggestion).toBe('{^6^}')
   })
 
+  it('does not pair footnote-reference carets into a superscript warning', () => {
+    const w = djotMigrationWarnings('a [^x] b [^y]').filter((x) => x.rule === 'djot-superscript-caret')
+    expect(w).toEqual([])
+  })
+
   it('does not warn inside inline code spans', () => {
     expect(djotMigrationWarnings('`_not emphasis_` and `H~2~O`')).toEqual([])
   })
