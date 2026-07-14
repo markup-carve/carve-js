@@ -56,6 +56,29 @@ describe('inline extras (nbsp, raw inline, symbols)', () => {
     )
   })
 
+  it('a name may start with + or - (the reaction shortcodes)', () => {
+    expect(h('Vote :+1: or :-1:.', { symbols: { '+1': '👍', '-1': '👎' } })).toBe(
+      '<p>Vote 👍 or 👎.</p>',
+    )
+  })
+
+  it('a name may not start with _ (it would steal from underline)', () => {
+    expect(h(':_x:', { symbols: { _x: 'A' } })).toBe('<p>:_x:</p>')
+    // With a leading `_` allowed, this would be the symbol `_x_` instead.
+    expect(h(':_x_:', { symbols: { _x_: 'B' } })).toBe('<p>:<u>x</u>:</p>')
+  })
+
+  it('a symbol beats smart typography inside the colons', () => {
+    // `:+-:` is the symbol `+-`, not a `±` between colons; the typographic
+    // form still applies where no symbol opens (no boundary, or no colons).
+    expect(h('Tolerance :+-: here', { symbols: { '+-': '±' } })).toBe(
+      '<p>Tolerance ± here</p>',
+    )
+    expect(h('a +- b and word:+-:', { symbols: { '+-': 'SYM' } })).toBe(
+      '<p>a ± b and word:±:</p>',
+    )
+  })
+
   it('inserts mapped symbol output as trusted raw HTML', () => {
     expect(h(':rocket:', { symbols: { rocket: '<b>go</b>' } })).toBe('<p><b>go</b></p>')
   })
@@ -89,10 +112,13 @@ describe('inline extras (nbsp, raw inline, symbols)', () => {
   })
 
   it('uses the symbol AST type and enforces the leading boundary guard', () => {
-    for (const src of ['a:b:c', '10:30: x', 'word:rocket:', ':+1:', ':_x:']) {
+    // The guard is what keeps a time, a ratio, or any word-glued colon run
+    // from becoming a symbol once a map is active — `word:+-:` is the same
+    // shape as `10:30:` and must behave the same. `:_x:` fails on name shape.
+    for (const src of ['a:b:c', '10:30: x', 'word:rocket:', 'word:+-:', ':_x:']) {
       expect(inlineTypes(src)).not.toContain('symbol')
     }
-    for (const src of ['(:tada:)', 'start :rocket:']) {
+    for (const src of ['(:tada:)', 'start :rocket:', ':+1:', ':-1:', ':+-:']) {
       expect(inlineTypes(src)).toContain('symbol')
     }
   })
