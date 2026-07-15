@@ -157,6 +157,38 @@ describe('Profile: maxLength', () => {
     const p = new Profile().setMaxLength(100)
     expect(carveToHtml('hi', { profile: p })).toBe('<p>hi</p>')
   })
+
+  it('untrusted presets carry a default length cap', () => {
+    expect(Profile.comment().getMaxLength()).toBe(Profile.COMMENT_MAX_LENGTH)
+    expect(Profile.minimal().getMaxLength()).toBe(Profile.MINIMAL_MAX_LENGTH)
+    // The trusted presets stay unlimited.
+    expect(Profile.full().getMaxLength()).toBe(0)
+    expect(Profile.article().getMaxLength()).toBe(0)
+  })
+
+  it('the comment preset rejects an over-cap body and accepts one within', () => {
+    const tooLong = 'a'.repeat(Profile.COMMENT_MAX_LENGTH + 1)
+    expect(() => carveToHtml(tooLong, { profile: Profile.comment() })).toThrow(/maximum length/)
+    expect(carveToHtml('hi there', { profile: Profile.comment() })).toBe('<p>hi there</p>')
+  })
+
+  it('a preset cap is overridable with setMaxLength(0)', () => {
+    const p = Profile.minimal().setMaxLength(0)
+    const long = 'word '.repeat(Profile.MINIMAL_MAX_LENGTH)
+    expect(() => carveToHtml(long, { profile: p })).not.toThrow()
+  })
+
+  it('the length guard runs pre-parse: an over-cap input is rejected without parsing it', () => {
+    // A tiny cap with a large, otherwise-valid input. If the check were still
+    // post-parse, the parser would chew through the whole input before throwing;
+    // pre-parse it rejects in ~no time. The generous bound only fails if the
+    // check regresses back behind parse().
+    const p = new Profile().setMaxLength(5)
+    const huge = '[a]('.repeat(1_000_000) // ~4 MB
+    const start = performance.now()
+    expect(() => carveToHtml(huge, { profile: p })).toThrow(/maximum length/)
+    expect(performance.now() - start).toBeLessThan(100)
+  })
 })
 
 describe('LinkPolicy', () => {

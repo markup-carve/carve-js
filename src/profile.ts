@@ -399,6 +399,18 @@ export class Profile {
   static readonly ACTION_TO_TEXT: DisallowedAction = 'to_text'
   static readonly ACTION_ERROR: DisallowedAction = 'error'
 
+  /**
+   * Default maximum input length (UTF-8 bytes) for the untrusted `comment`
+   * preset - a DoS backstop enforced pre-parse. Generous for a comment body;
+   * override with `setMaxLength(0)` to disable or another value to retune.
+   */
+  static readonly COMMENT_MAX_LENGTH = 100_000
+  /**
+   * Default maximum input length (UTF-8 bytes) for the untrusted `minimal`
+   * preset (chat / micro-posts). Override with `setMaxLength(...)` as needed.
+   */
+  static readonly MINIMAL_MAX_LENGTH = 10_000
+
   private name = 'custom'
   private description = ''
   private featureReasons: Record<string, string> = {}
@@ -460,6 +472,7 @@ export class Profile {
         LinkPolicy.unrestricted().addRelAttribute('nofollow').addRelAttribute('ugc'),
       )
       .setMaxNesting(4)
+      .setMaxLength(Profile.COMMENT_MAX_LENGTH)
     p.featureReasons = {
       heading: 'Headings are disabled in comments to prevent disrupting page structure.',
       image: 'Images are disabled to prevent spam, inappropriate content, and bandwidth abuse.',
@@ -508,6 +521,7 @@ export class Profile {
     ])
       .allowBlock(['paragraph', 'list', 'list_item'])
       .setMaxNesting(2)
+      .setMaxLength(Profile.MINIMAL_MAX_LENGTH)
     p.featureReasons = {
       link: 'Links are disabled in this minimal context.',
       highlight: 'Highlighting is disabled in this minimal context.',

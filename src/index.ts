@@ -162,14 +162,15 @@ export interface ProfileOptions {
 }
 
 /**
- * Apply a profile to a resolved document in the shared pipeline position
- * (after resolve, before render). Enforces maxLength on the source bytes
- * first (matching carve-php, which checks the input length pre-parse and
- * throws). Mutates and returns `doc`.
+ * Enforce the profile's maximum input length BEFORE parsing, so an oversize
+ * untrusted input is rejected without the parser doing any work (a giant input
+ * is otherwise linear parse work even after the O(n) inline fixes). No-op when
+ * no profile is set or its maxLength is 0 (unlimited). Length is measured in
+ * UTF-8 bytes, matching carve-php's pre-parse strlen() check.
  */
-function runProfile(doc: Document, source: string, opts: ProfileOptions): Document {
+function enforceProfileMaxLength(source: string, opts: ProfileOptions): void {
   const profile = opts.profile
-  if (!profile) return doc
+  if (!profile) return
   const maxLength = profile.getMaxLength()
   if (maxLength > 0 && byteLength(source) > maxLength) {
     throw new RangeError(
@@ -177,6 +178,19 @@ function runProfile(doc: Document, source: string, opts: ProfileOptions): Docume
         `(got ${byteLength(source)} bytes).`,
     )
   }
+}
+
+/**
+ * Apply a profile's feature / link / nesting restrictions to a resolved
+ * document (after resolve, before render). Mutates and returns `doc`.
+ *
+ * Input-length enforcement is NOT done here - it runs pre-parse via
+ * {@link enforceProfileMaxLength} in the `carveToX` entry points, so an oversize
+ * input is rejected before the parser runs.
+ */
+function runProfile(doc: Document, opts: ProfileOptions): Document {
+  const profile = opts.profile
+  if (!profile) return doc
   return applyProfileImpl(doc, profile, opts.profileBaseHost ?? null).doc
 }
 
@@ -241,6 +255,7 @@ export function carveToHtml(
   source: string,
   opts: ParseOptions & RenderOptions & ProfileOptions = {},
 ): string {
+  enforceProfileMaxLength(source, opts)
   const exts: CarveExtension[] = opts.extensions ?? []
   // `sourceLine` rendering needs block positions, so enable parsing them.
   // Extensions are forwarded to the parse so their matchers add syntax.
@@ -256,7 +271,7 @@ export function carveToHtml(
     }),
     exts,
   )
-  doc = runProfile(doc, source, opts)
+  doc = runProfile(doc, opts)
   return renderHtml(doc, opts)
 }
 
@@ -281,6 +296,7 @@ export function carveToMarkdown(
   source: string,
   opts: ParseOptions & MarkdownRenderOptions & ProfileOptions = {},
 ): string {
+  enforceProfileMaxLength(source, opts)
   let doc = applyTransforms(
     resolve(parse(source, opts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
@@ -288,7 +304,7 @@ export function carveToMarkdown(
     }),
     opts.extensions,
   )
-  doc = runProfile(doc, source, opts)
+  doc = runProfile(doc, opts)
   return renderMarkdown(doc, opts)
 }
 
@@ -328,6 +344,7 @@ export function carveToPlainText(
   source: string,
   opts: ParseOptions & PlainTextRenderOptions & ProfileOptions = {},
 ): string {
+  enforceProfileMaxLength(source, opts)
   let doc = applyTransforms(
     resolve(parse(source, opts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
@@ -335,7 +352,7 @@ export function carveToPlainText(
     }),
     opts.extensions,
   )
-  doc = runProfile(doc, source, opts)
+  doc = runProfile(doc, opts)
   return renderPlainText(doc, opts)
 }
 
@@ -344,6 +361,7 @@ export function carveToAnsi(
   source: string,
   opts: ParseOptions & AnsiRenderOptions & ProfileOptions = {},
 ): string {
+  enforceProfileMaxLength(source, opts)
   let doc = applyTransforms(
     resolve(parse(source, opts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
@@ -351,6 +369,6 @@ export function carveToAnsi(
     }),
     opts.extensions,
   )
-  doc = runProfile(doc, source, opts)
+  doc = runProfile(doc, opts)
   return renderAnsi(doc, opts)
 }
