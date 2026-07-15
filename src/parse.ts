@@ -752,8 +752,20 @@ function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
 
 function parseBlockAttributeRun(src: string): Attrs | null {
   let i = 0
-  let out: Attrs | null = null
-  let sawBlock = false
+  let count = 0
+  // The first block's parsed Attrs is returned as-is for a single-block run so
+  // that common path stays byte-identical to the pre-optimization fold (which
+  // never called mergeAttrs for one block). For 2+ blocks the values below
+  // accumulate into a single mutable builder in ONE pass, avoiding the
+  // per-block `mergeAttrs` array recopy that was O(n^2) on runs like
+  // `{.c}{.c}{.c}…`. The builder reproduces mergeAttrs' semantics exactly:
+  // classes append (no dedup), id/keyValues last-wins, first-seen source order.
+  let first: Attrs | null = null
+  let id: string | undefined
+  const classes: string[] = []
+  let keyValues: Record<string, string> | undefined
+  const order: string[] = []
+  const orderSeen = new Set<string>()
 
   while (i < src.length) {
     while (i < src.length && /\s/.test(src[i]!)) i++
@@ -791,12 +803,35 @@ function parseBlockAttributeRun(src: string): Attrs | null {
     if (!isValidAttrPayload(inner)) return null
     const attrs = parseAttrs(inner)
     if (isEmptyAttrs(attrs)) return null
-    out = out ? mergeAttrs(out, attrs) : attrs
-    sawBlock = true
+
+    count++
+    if (count === 1) first = attrs
+    // Accumulate this block into the builder (mirrors mergeAttrs field rules).
+    if (attrs.id !== undefined) id = attrs.id
+    if (attrs.classes) for (const c of attrs.classes) classes.push(c)
+    if (attrs.keyValues) {
+      if (!keyValues) keyValues = {}
+      for (const [k, v] of Object.entries(attrs.keyValues)) keyValues[k] = v
+    }
+    if (attrs.order) {
+      for (const slot of attrs.order) {
+        if (!orderSeen.has(slot)) {
+          orderSeen.add(slot)
+          order.push(slot)
+        }
+      }
+    }
     i++
   }
 
-  return sawBlock ? out : null
+  if (count === 0) return null
+  if (count === 1) return first
+  const out: Attrs = {}
+  if (id !== undefined) out.id = id
+  if (classes.length) out.classes = classes
+  if (keyValues) out.keyValues = keyValues
+  if (order.length) out.order = order
+  return out
 }
 
 function parseBlock(lexer: Lexer): BlockNode | null {
@@ -3037,6 +3072,39 @@ function buildBracketMap(s: string): Record<number, number> {
   }
   return map
 }
+
+// Suffix-existence tables used to skip the inline tail regexes when their
+// mandatory close delimiter is absent from the rest of the input. Each tail
+// pattern (RE_LINK_TAIL, RE_SPAN_TAIL, the critic and forced-emphasis
+// patterns) requires a specific literal (`)`, `}`, `+}`, `-}`) inside its
+// match; if no such literal occurs at or after the position where the regex
+// would be anchored, the regex CANNOT match, so running it is pure wasted work.
+// Without this guard those patterns backtrack to end-of-input at O(n) distinct
+// positions — quadratic on adversarial runs like `![x](`×n, `[x](`×n or
+// `{+`×n. `suf[k] === 1` iff the delimiter occurs at some index >= k; built in
+// one backward O(n) pass, so each guard is O(1). Skipping only ever elides a
+// call that would have failed, keeping output byte-identical.
+function suffixHasChar(s: string, ch: string): Uint8Array {
+  const n = s.length
+  const suf = new Uint8Array(n + 1)
+  let seen = 0
+  for (let k = n - 1; k >= 0; k--) {
+    if (s[k] === ch) seen = 1
+    suf[k] = seen
+  }
+  return suf
+}
+
+function suffixHasPair(s: string, a: string, b: string): Uint8Array {
+  const n = s.length
+  const suf = new Uint8Array(n + 1)
+  let seen = 0
+  for (let k = n - 1; k >= 0; k--) {
+    if (s[k] === a && s[k + 1] === b) seen = 1
+    suf[k] = seen
+  }
+  return suf
+}
 // Content runs to the delimiter-specific closer (`+}` / `-}`), so a nested
 // span of a DIFFERENT type whose `}` would otherwise abort an `[^}]*` class is
 // kept inside and recursed into: `{+a {-b-} c+}` -> ins(a, del(b), c). Matches
@@ -3237,6 +3305,15 @@ function scanInlineInner(
   // branches resolve the close bracket in O(1); see buildBracketMap.
   const bracketClose = text.includes('[') ? buildBracketMap(text) : {}
 
+  // Suffix tables so a tail regex is only run when its mandatory close
+  // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
+  // fail. See suffixHasChar/suffixHasPair. Built only when the delimiter is
+  // present at all, mirroring the bracketClose guard above.
+  const rparenSuf = text.includes(')') ? suffixHasChar(text, ')') : null
+  const rbraceSuf = text.includes('}') ? suffixHasChar(text, '}') : null
+  const insSuf = text.includes('+}') ? suffixHasPair(text, '+', '}') : null
+  const delSuf = text.includes('-}') ? suffixHasPair(text, '-', '}') : null
+
   // Whether the current buffer's FIRST character is an escaped caret (`\^`),
   // which is literal and must not be read as a caption marker downstream.
   let bufEscapedCaret = false
@@ -3411,7 +3488,8 @@ function scanInlineInner(
       if (close > 1) {
         const alt = rest.slice(2, close)
         const tail = rest.slice(close + 1)
-        const ml = RE_LINK_TAIL.exec(tail)
+        // A link/image tail needs a literal `)`; skip when none lies ahead.
+        const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
         if (ml) {
           flush()
           const img: Image = { type: 'image', src: ml[1]!, alt }
@@ -3510,7 +3588,7 @@ function scanInlineInner(
           continue
         }
         // Inline link [text](url "title"){attrs}
-        const ml = RE_LINK_TAIL.exec(tail)
+        const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
         if (ml) {
           flush()
           const link: Link = {
@@ -3587,7 +3665,9 @@ function scanInlineInner(
       // `{=y=}`) is not an attribute block, so it stays literal.
       if (close > 0) {
         const innerText = rest.slice(1, close)
-        const ms = RE_SPAN_TAIL.exec(rest.slice(close + 1))
+        // A span tail needs a literal `}`; skip when none lies ahead.
+        const ms =
+          rbraceSuf && rbraceSuf[i + close + 1] ? RE_SPAN_TAIL.exec(rest.slice(close + 1)) : null
         if (ms && isValidAttrPayload(ms[1]!)) {
           flush()
           out.push({
@@ -3678,7 +3758,12 @@ function scanInlineInner(
 
     // CriticMarkup family
     if (c === '{') {
-      const sub = RE_CRITIC_SUB.exec(rest)
+      // Each `{…}` tail regex requires its own literal close (`}`, `+}`, `-}`);
+      // skip it when that delimiter is absent from the rest of the input, which
+      // would otherwise force a backtrack to EOF at every `{` (quadratic on
+      // runs like `{+`×n or `{~`×n). O(1) suffix lookups; output-identical.
+      const hasBrace = !!(rbraceSuf && rbraceSuf[i])
+      const sub = hasBrace ? RE_CRITIC_SUB.exec(rest) : null
       if (sub) {
         flush()
         out.push({
@@ -3690,21 +3775,21 @@ function scanInlineInner(
         i += sub[0].length
         continue
       }
-      const ins = RE_CRITIC_INS.exec(rest)
+      const ins = insSuf && insSuf[i] ? RE_CRITIC_INS.exec(rest) : null
       if (ins) {
         flush()
         out.push(withPos({ type: 'critic-insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, i + ins[0].length))
         i += ins[0].length
         continue
       }
-      const del = RE_CRITIC_DEL.exec(rest)
+      const del = delSuf && delSuf[i] ? RE_CRITIC_DEL.exec(rest) : null
       if (del) {
         flush()
         out.push(withPos({ type: 'critic-delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, i + del[0].length))
         i += del[0].length
         continue
       }
-      const cmt = RE_CRITIC_CMT.exec(rest)
+      const cmt = hasBrace ? RE_CRITIC_CMT.exec(rest) : null
       if (cmt) {
         flush()
         out.push(withPos({ type: 'critic-comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
@@ -3713,7 +3798,7 @@ function scanInlineInner(
       }
       // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
       // bare delimiter, but with no word-boundary condition.
-      const forced = RE_FORCED_EMPHASIS.exec(rest)
+      const forced = hasBrace ? RE_FORCED_EMPHASIS.exec(rest) : null
       if (forced) {
         flush()
         out.push(withPos({ type: FORCED_TYPE[forced[1]!]!, children: scanInline(forced[2]!, shiftSource(source, text, i + 2), inFootnote) } as Emphasis, source, text, i, i + forced[0].length))
@@ -3724,7 +3809,7 @@ function scanInlineInner(
       // a non-empty `buf` means unflushed text (e.g. a space) sits between the
       // preceding node and the `{`, so the block is NOT attached -- it stays
       // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
-      const attr = !buf ? RE_INLINE_ATTR.exec(rest) : null
+      const attr = !buf && hasBrace ? RE_INLINE_ATTR.exec(rest) : null
       // A digit-first / otherwise invalid payload (`{#1a}`, `{2=v}`) makes the
       // whole block literal (§14), same strict rule as block/span attrs — so
       // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
