@@ -63,3 +63,64 @@ describe('parser perf regression (near-linear scaling)', () => {
     })
   }
 })
+
+// C) The "far-brace" span-attribute shape: a `[x]{` run whose closing `}` IS
+//    present but far away, and where the `{…}` content can never validate. Unlike
+//    the "no closing brace" case above (which the suffix table already handles),
+//    RE_SPAN_TAIL here found the delimiter suffix present and scanned `[^}"'\n]*`
+//    to the single far `}` at EVERY `[` -> O(n^2). spanAttrProvablyInvalid bails
+//    at the first invalid token char, so a doomed payload is O(1) per opener.
+//    Covers the bare `[x]{`×n, a valid-first-token variant `[x]{a[x]{`×n, and
+//    `[x]{.a [x]{`×n / `[x]{k= [x]{`×n which the pre-scan also rejects early.
+const farBraceShapes: Array<{ name: string; unit: string }> = [
+  { name: 'far-brace span (one distant closing brace)', unit: '[x]{' },
+  { name: 'far-brace span, valid first token', unit: '[x]{a[x]{' },
+  { name: 'far-brace span, leading class token', unit: '[x]{.a [x]{' },
+  { name: 'far-brace span, empty key= value', unit: '[x]{k= [x]{' },
+]
+
+describe('parser perf regression: far-brace span attributes', () => {
+  for (const { name, unit } of farBraceShapes) {
+    it(`${name} scales near-linearly`, () => {
+      const n = 50000
+      // A SINGLE trailing `}` far away: the delimiter exists, so the old suffix
+      // guard passed and the flat regex scanned to it at every `[`.
+      const small = unit.repeat(n) + '}'
+      const large = unit.repeat(n * 2) + '}'
+
+      carveToHtml(unit.repeat(1000) + '}')
+
+      const tSmall = timeMin(() => void carveToHtml(small))
+      const tLarge = timeMin(() => void carveToHtml(large))
+
+      expect(tSmall).toBeLessThan(2000)
+      expect(tLarge).toBeLessThan(2000)
+      if (tSmall > 20) {
+        expect(tLarge / tSmall).toBeLessThan(3)
+      }
+    })
+  }
+})
+
+describe('span-attribute output is preserved (bounding elides only failures)', () => {
+  // The bound must never change output: it only skips RE_SPAN_TAIL runs that
+  // would have failed. Pathological far-brace input renders as literal text
+  // (its `[x]` become empty spans / text, never a span carrying a bogus attr).
+  it('renders the pathological far-brace input as literal-ish text, no bogus span', () => {
+    // `[x]{[x]{[x]{}`: only the trailing `[x]{}` is a VALID empty span; the two
+    // never-validating leading blocks stay literal — no attribute is invented.
+    expect(carveToHtml('[x]{[x]{[x]{}')).toBe('<p>[x]{[x]{<span>x</span></p>')
+    // No attribute could be parsed off the never-validating content.
+    expect(carveToHtml('[x]{[x]{[x]{}')).not.toContain('class=')
+  })
+
+  it('valid span attributes still parse (unchanged by the bound)', () => {
+    expect(carveToHtml('[x]{.a}')).toContain('<span class="a">x</span>')
+    expect(carveToHtml('[x]{#id .c key=v}')).toContain(
+      '<span id="id" class="c" key="v">x</span>',
+    )
+    expect(carveToHtml('[x]{}')).toContain('<span>x</span>')
+    // A bare value stops at the first `}` (flat span-tail): value is `[a]{b`.
+    expect(carveToHtml('[x]{k=[a]{b}}')).toContain('k="[a]{b"')
+  })
+})

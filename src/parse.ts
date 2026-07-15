@@ -3105,6 +3105,83 @@ function suffixHasPair(s: string, a: string, b: string): Uint8Array {
   }
   return suf
 }
+
+// A `[text]{…}` span only forms when the `{…}` content is a valid attribute
+// payload (see isValidAttrPayload). RE_SPAN_TAIL scans `[^}"'\n]*` forward to
+// the first unquoted `}`; on a run like `[x]{[x]{…}` — or `[x]{a[x]{…}`,
+// `[x]{.a [x]{…}` — where one far `}` exists but the content can NEVER validate,
+// that scan runs to the far `}` at every `[`, so N brackets do O(n) work each:
+// O(n^2). This walks the SAME attribute-token grammar and bails at the first
+// character that cannot continue a valid token, rejecting a doomed payload in
+// O(1) per opener instead of O(n). It is a pure SKIP filter: it returns true
+// ONLY when the payload is provably invalid (so the elided RE_SPAN_TAIL would
+// have failed too); on reaching a `}` (a candidate close) or any construct whose
+// validity is subtle — a quote, an escape, a `key=<value>`, a newline, or rare
+// whitespace — it returns false and the unchanged RE_SPAN_TAIL + isValidAttrPayload
+// path runs, so every accepted span (and its output) is byte-identical. Because
+// a nested `{`/`[` (or any other invalid boundary char) ends the walk, each
+// character is visited by O(1) walks, keeping the total O(n). `brace` is the
+// index of the opening `{`.
+// Whitespace RE_SPAN_TAIL content may contain: any `\s` except `\n` (which its
+// class `[^}"'\n]` excludes). Matches isValidAttrPayload's `\s+` on those chars.
+const WS_NO_NL = /[^\S\n]/
+function isIdentStart(c: string): boolean {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '_'
+}
+function isIdentPart(c: string): boolean {
+  return isIdentStart(c) || (c >= '0' && c <= '9') || c === '-'
+}
+function spanAttrProvablyInvalid(text: string, brace: number): boolean {
+  const n = text.length
+  let i = brace + 1
+  while (i < n) {
+    const c = text[i]!
+    // A candidate close at a token boundary: let the real regex decide/parse.
+    if (c === '}') return false
+    // A newline is the ONLY whitespace RE_SPAN_TAIL's content class excludes
+    // (`[^}"'\n]`), so it ends the content run — defer (the regex stops here, no
+    // far scan). Every OTHER `\s` (space, tab, NBSP, other Unicode spaces) is a
+    // valid token separator for isValidAttrPayload's `\s+`, so skip it.
+    if (c === '\n') return false
+    if (WS_NO_NL.test(c)) {
+      i++
+      continue
+    }
+    // Quotes and escapes are subtle — defer to RE_SPAN_TAIL rather than skip.
+    if (c === '"' || c === "'" || c === '\\') return false
+    if (c === '#' || c === '.') {
+      // `#id` / `.class`: an identifier (letter or `_`, then `[\w-]`) MUST
+      // follow, else the token — and the whole payload — is invalid (§14).
+      const d = text[i + 1]
+      if (d === undefined || !isIdentStart(d)) return true
+      i += 2
+      while (i < n && isIdentPart(text[i]!)) i++
+      continue
+    }
+    if (isIdentStart(c)) {
+      // A bareword: a boolean attribute, or the name of a `key=value`.
+      i++
+      while (i < n && isIdentPart(text[i]!)) i++
+      if (text[i] === '=') {
+        const v = text[i + 1]
+        // `key=` with an EMPTY value (EOF, `}`, or any whitespace follows) leaves
+        // a dangling `=` and is invalid — a bare value is `\S+` (>=1 non-space)
+        // and a quoted value starts with `"`/`'`. Otherwise (quoted or bare value)
+        // defer to the regex (a valid bare value is consumed whole -> linear).
+        if (v === undefined || v === '}' || /\s/.test(v)) {
+          return true
+        }
+        return false
+      }
+      continue
+    }
+    // Any other character cannot begin a valid attribute token at a boundary
+    // (`[`, `{`, `(`, a digit, `-`, `+`, `=`, `,`, …): the payload is invalid.
+    return true
+  }
+  // Ran off the end without a closing `}`: RE_SPAN_TAIL would fail too.
+  return true
+}
 // Content runs to the delimiter-specific closer (`+}` / `-}`), so a nested
 // span of a DIFFERENT type whose `}` would otherwise abort an `[^}]*` class is
 // kept inside and recursed into: `{+a {-b-} c+}` -> ins(a, del(b), c). Matches
@@ -3665,9 +3742,14 @@ function scanInlineInner(
       // `{=y=}`) is not an attribute block, so it stays literal.
       if (close > 0) {
         const innerText = rest.slice(1, close)
-        // A span tail needs a literal `}`; skip when none lies ahead.
+        // A span tail needs a literal `}` ahead; and its `{…}` content must be
+        // able to form a valid attribute payload. Skip RE_SPAN_TAIL (which would
+        // otherwise scan to a far `}` at every `[` -> O(n^2) on `[x]{[x]{…}`)
+        // when no `}` lies ahead or the payload is provably invalid.
         const ms =
-          rbraceSuf && rbraceSuf[i + close + 1] ? RE_SPAN_TAIL.exec(rest.slice(close + 1)) : null
+          rbraceSuf && rbraceSuf[i + close + 1] && !spanAttrProvablyInvalid(text, i + close + 1)
+            ? RE_SPAN_TAIL.exec(rest.slice(close + 1))
+            : null
         if (ms && isValidAttrPayload(ms[1]!)) {
           flush()
           out.push({
