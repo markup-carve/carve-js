@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-15
+
 - BREAKING: Rename symbol shortcodes from `emoji` to `symbol` in the AST
   (`type: 'emoji'` -> `type: 'symbol'`), HTML renderer option (`emoji` ->
   `symbols`), and profile construct name.
@@ -14,6 +16,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `a:b:c`, `10:30: x`, and `word:rocket:` stays literal.
 - Preserve attributes on HTML-rendered symbol shortcodes by wrapping mapped or
   literal output in a `<span>` when attributes are present.
+- Gate the Djot-semantic-shift migration warnings in `carve lint` behind a new
+  `--from-djot` flag. By default `carve lint` reports only constructs that
+  mis-render in Carve (`**bold**`, `~~strike~~`, `^sup^`, `+` bullets); valid
+  Carve that merely differs from Djot (`_x_`, `~x~`, `{=x=}`) surfaces only with
+  `--from-djot`. `MigrationWarning` gains a `category` field and
+  `MigrationCategory` is exported.
 
 ## [0.1.0] - YYYY-MM-DD
 
