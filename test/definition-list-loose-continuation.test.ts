@@ -119,3 +119,23 @@ describe('terms fold continuation lines like a heading (no data loss)', () => {
     )
   })
 })
+
+describe('a blank line may separate a term from its definition (djot parity)', () => {
+  it('a blank between term and `:  def` keeps the definition', () => {
+    expect(html(':: term\n\n:  def')).toBe(
+      '<dl>\n  <dt>term</dt>\n  <dd>def</dd>\n</dl>',
+    )
+  })
+
+  it('a blank between two definitions keeps both', () => {
+    expect(html(':: term\n:  a\n\n:  b')).toBe(
+      '<dl>\n  <dt>term</dt>\n  <dd>a</dd>\n  <dd>b</dd>\n</dl>',
+    )
+  })
+
+  it('a blank then a non-definition line still ends the list', () => {
+    expect(html(':: term\n\nplain para')).toBe(
+      '<dl>\n  <dt>term</dt>\n</dl>\n<p>plain para</p>',
+    )
+  })
+})
