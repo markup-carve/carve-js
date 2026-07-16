@@ -71,6 +71,22 @@ describe('definition descriptions continue like list items (loose + `+`)', () =>
       '<dl>\n  <dt>term</dt>\n  <dd>def</dd>\n</dl>\n<p>after blank</p>',
     )
   })
+
+  it('first-block: `:  +` opens a definition whose body is the following flush-left block', () => {
+    expect(html(':: t\n:  +\n> a quote')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>a quote</p></blockquote>\n  </dd>\n</dl>',
+    )
+  })
+
+  it('first-block: `:  +` with a code block', () => {
+    expect(html(':: t\n:  +\n```\ncode\n```')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>code\n</code></pre>\n  </dd>\n</dl>',
+    )
+  })
+
+  it('an escaped `:  \\+` keeps a literal plus as content', () => {
+    expect(html(':: t\n:  \\+')).toBe('<dl>\n  <dt>t</dt>\n  <dd>+</dd>\n</dl>')
+  })
 })
 
 describe('footnote definitions accept the `+` pull-left continuation', () => {
