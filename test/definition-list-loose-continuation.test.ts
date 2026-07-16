@@ -99,3 +99,23 @@ describe('footnote definitions accept the `+` pull-left continuation', () => {
     )
   })
 })
+
+describe('terms fold continuation lines like a heading (no data loss)', () => {
+  it('a wrapped term line folds into the term and keeps the definition', () => {
+    expect(html(':: Term that\nwraps\n:  def')).toBe(
+      '<dl>\n  <dt>Term that\nwraps</dt>\n  <dd>def</dd>\n</dl>',
+    )
+  })
+
+  it('consecutive `::` lines are still separate terms', () => {
+    expect(html(':: t1\n:: t2\n:  d')).toBe(
+      '<dl>\n  <dt>t1</dt>\n  <dt>t2</dt>\n  <dd>d</dd>\n</dl>',
+    )
+  })
+
+  it('a block opener after a term ends the term (does not fold)', () => {
+    expect(html(':: term\n> quote')).toBe(
+      '<dl>\n  <dt>term</dt>\n</dl>\n<blockquote><p>quote</p></blockquote>',
+    )
+  })
+})
