@@ -46,9 +46,29 @@ describe('definition descriptions continue like list items (loose + `+`)', () =>
     )
   })
 
-  it('`+ text` (with content) is not a continuation marker and ends the list', () => {
+  it('`+ text` (with content) is not the `+` marker; it lazily continues the definition', () => {
+    // A bare `+` on its own line is the continuation marker; `+ text` is plain
+    // paragraph text, so it lazily folds into the open <dd> (like a list item).
     expect(html(':: term\n:  a\n+ not a marker')).toBe(
-      '<dl>\n  <dt>term</dt>\n  <dd>a</dd>\n</dl>\n<p>+ not a marker</p>',
+      '<dl>\n  <dt>term</dt>\n  <dd>a\n+ not a marker</dd>\n</dl>',
+    )
+  })
+
+  it('a flush-left line lazily continues the open definition paragraph', () => {
+    expect(html(':: term\n:  a wrapped message that\ncontinues on the next line')).toBe(
+      '<dl>\n  <dt>term</dt>\n  <dd>a wrapped message that\ncontinues on the next line</dd>\n</dl>',
+    )
+  })
+
+  it('a block opener (not a marker) ends the definition instead of folding', () => {
+    expect(html(':: term\n:  def\n# heading')).toBe(
+      '<dl>\n  <dt>term</dt>\n  <dd>def</dd>\n</dl>\n<section id="heading">\n  <h1>heading</h1>\n</section>',
+    )
+  })
+
+  it('a blank line closes the paragraph, so a later flush-left line ends the definition', () => {
+    expect(html(':: term\n:  def\n\nafter blank')).toBe(
+      '<dl>\n  <dt>term</dt>\n  <dd>def</dd>\n</dl>\n<p>after blank</p>',
     )
   })
 })
