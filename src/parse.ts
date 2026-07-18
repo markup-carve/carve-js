@@ -2590,6 +2590,7 @@ function parseList(lexer: Lexer): List {
     if (orderedStart !== 1) list.start = orderedStart
     const t = olTypeOf(orderedKind)
     if (t) list.olType = t
+    if (orderedDelim === '.' || orderedDelim === ')') list.delim = orderedDelim
   }
   return list
 }

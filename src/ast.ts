@@ -97,6 +97,13 @@ export interface List extends BaseNode {
   start?: number
   /** Ordered-list type attribute: a/A (alpha) or i/I (roman); absent = decimal. */
   olType?: 'a' | 'A' | 'i' | 'I'
+  /**
+   * Ordered-marker delimiter as authored: `.` (`1.`) or `)` (`1)`).
+   * Source-style metadata for AST consumers (e.g. format converters); it does
+   * not affect HTML output, and `renderCarve` deliberately ignores it - fmt's
+   * canonical form stays `1.` (byte-parity with the other implementations).
+   */
+  delim?: '.' | ')'
   tight: boolean
   items: ListItem[]
 }
