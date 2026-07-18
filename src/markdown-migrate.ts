@@ -306,6 +306,16 @@ function convertInline(input: string): string {
 const RE_TABLE_DELIMITER = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$/
 
 /**
+ * A Markdown/CommonMark thematic break: up to 3 leading spaces, then 3+ of the
+ * same `-`, `*`, or `_`, which may be separated by spaces/tabs (`***`, `- - -`,
+ * `_ _ _`, ` ***`), and nothing else on the line. Carve's canonical thematic
+ * break is a contiguous col-0 `---`, so every Markdown form is normalized to
+ * `---` on migration; without this a loose/indented `* * *` would parse as a
+ * list or paragraph in Carve and the horizontal rule would be lost.
+ */
+const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+
+/**
  * Split a pipe-delimited table row into trimmed cell texts, honoring `\|`
  * escapes and dropping the empty cells produced by a leading/trailing pipe.
  */
@@ -454,6 +464,11 @@ export function markdownToCarve(markdown: string): string {
       !isHeading &&
       !isBlockquote &&
       !isList &&
+      // A line that is ITSELF a Markdown thematic break (`***`, `---`, …) is a
+      // rule, not a setext heading text line. CommonMark: `***\n---` is two
+      // thematic breaks, not an h2 titled `***`; guard so the rule falls
+      // through to the thematic-break normalization below.
+      !RE_MD_THEMATIC.test(line) &&
       (/^=+$/.test(underline) || /^-+$/.test(underline))
     ) {
       if (prevType !== 'blank' && prevType !== 'heading') out.push('')
@@ -461,6 +476,35 @@ export function markdownToCarve(markdown: string): string {
       i++ // consume the underline line
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
       prevType = 'heading'
+      continue
+    }
+
+    // Markdown thematic break (`***`, `- - -`, `_ _ _`, indented ` ***`, …) ->
+    // Carve's canonical contiguous col-0 `---`. Placed AFTER the setext block: a
+    // contiguous `---` UNDER a paragraph is consumed there as a setext h2
+    // (CommonMark: setext wins over a thematic break under a paragraph), while a
+    // rule line that is not a setext underline for a preceding paragraph falls
+    // through to here (the setext guard above skips rule lines themselves).
+    if (RE_MD_THEMATIC.test(line)) {
+      if (prevType !== 'blank' && out.length > 0) out.push('')
+      out.push('---')
+      if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
+      prevType = 'blank'
+      continue
+    }
+
+    // A thematic break wrapped in blockquote markers (`> * * *`, `> > ___`).
+    // Strip the `>`-marker prefix; if the remainder is a Markdown rule, re-emit
+    // the same quote depth with Carve's canonical `---` so the rule survives
+    // inside the quote (a stricter Carve parser would otherwise read the spaced
+    // form as a nested list). Rules nested inside LIST items are a known
+    // limitation — the line-based migrator does not restructure item indent.
+    const bqRule = line.match(/^ {0,3}((?:>[ \t]?){1,})(.*)$/)
+    if (bqRule && RE_MD_THEMATIC.test(bqRule[2]!)) {
+      const depth = (bqRule[1]!.match(/>/g) ?? []).length
+      if (prevType !== 'blank' && prevType !== 'blockquote' && out.length > 0) out.push('')
+      out.push('> '.repeat(depth) + '---')
+      prevType = 'blockquote'
       continue
     }
 
@@ -497,6 +541,20 @@ export function markdownToCarve(markdown: string): string {
     else if (isList) prevType = 'list'
     else if (isBlockquote) prevType = 'blockquote'
     else prevType = 'text'
+  }
+
+  // Frontmatter-collision guard: Carve reads a line-0 `---` as a frontmatter
+  // OPEN fence (frontmatter is recognized only on the first line) and, with a
+  // later closer, swallows everything between as opaque metadata — ignoring any
+  // code fences in that span, since frontmatter is stripped before block
+  // parsing. A document that OPENS with a thematic break (`***\n\n***` ->
+  // `---\n\n---`), or one whose body holds a bare `---` line (e.g. inside a code
+  // block), would otherwise vanish. A leading blank keeps line 0 off `---` so
+  // frontmatter never triggers and every rule stays a rule. The closer test
+  // mirrors Carve's `/^---\s*$/` (trailing whitespace allowed, so `---   ` in a
+  // code fence counts too); the opener is always the exact `---` we emit.
+  if (out[0] === '---' && out.slice(1).some((l) => /^---\s*$/.test(l))) {
+    out.unshift('')
   }
 
   // Collapse 3+ consecutive blank lines to 2.
