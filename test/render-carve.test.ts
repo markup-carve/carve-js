@@ -117,4 +117,46 @@ describe('renderCarve targeted canonicalization', () => {
     expect(formatted).toContain(String.raw`\*`)
     expect(formatted).toContain(String.raw`\[`)
   })
+
+  describe('verbatim content survives document normalization (issue 340)', () => {
+    it('keeps trailing whitespace inside code-block content', () => {
+      const src = '```\ntrailing   \nalso\t\t\n```\n'
+      const f1 = carveToCarve(src)
+      expect(f1).toBe(src)
+      expect(carveToHtml(f1)).toBe(carveToHtml(src))
+    })
+
+    it('keeps blank-line runs inside code-block content', () => {
+      const src = '```\na\n\n\n\nb\n```\n'
+      const f1 = carveToCarve(src)
+      expect(f1).toBe(src)
+      expect(carveToHtml(f1)).toBe(carveToHtml(src))
+    })
+
+    it('keeps raw-block content byte-exact', () => {
+      const src = '```=html\n<pre>x   \n\n\n\ny</pre>\n```\n'
+      const f1 = carveToCarve(src)
+      expect(f1).toBe(src)
+      expect(carveToHtml(f1)).toBe(carveToHtml(src))
+    })
+
+    it('keeps blank lines and trailing spaces in frontmatter and block comments', () => {
+      const src = '---\ntitle: X\n\n\n\nnote: kept\n---\n\n%%%\nc   \n\n\n\nd\n%%%\n\nbody\n'
+      const f1 = carveToCarve(src)
+      expect(f1).toBe(src)
+      expect(carveToHtml(f1)).toBe(carveToHtml(src))
+    })
+
+    it('code block with trailing-space + blank-line content stays stable inside a blockquote and a list', () => {
+      for (const src of [
+        '> ```\n> a   \n>\n>\n>\n> b\n> ```\n',
+        '- item\n\n  ```\n  a   \n\n\n\n  b\n  ```\n',
+      ]) {
+        const f1 = carveToCarve(src)
+        const f2 = carveToCarve(f1)
+        expect(f2).toBe(f1)
+        expect(carveToHtml(f1)).toBe(carveToHtml(src))
+      }
+    })
+  })
 })
