@@ -4126,12 +4126,28 @@ function matchEmphasis(
 
   // Bold-italic /*...*/  (priority over /italic/ and *bold*)
   if (c === '/' && text[i + 1] === '*') {
-    const close = findClose(text, i + 2, '*/')
-    if (close !== -1) {
-      const inner = text.slice(i + 2, close)
-      return {
-        node: { type: 'bold-italic', children: scanInline(inner, shiftSource(source, text, i + 2), inFootnote) },
-        end: close + 2,
+    const start = i + 2
+    // A bold-italic span requires a non-whitespace char right after `/*`
+    // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
+    // (`/* x*/`) content is not bold-italic and falls through to `/` emphasis,
+    // matching carve-php parseBoldItalic.
+    if (start < text.length && !/\s/.test(text[start]!)) {
+      let searchPos = start
+      for (;;) {
+        const close = findClose(text, searchPos, '*/')
+        if (close === -1) break
+        const inner = text.slice(start, close)
+        // The content must not end in whitespace (nor be empty). A trailing
+        // space closer like `/*x */` is not bold-italic; skip this `*/` and
+        // look for a later one before giving up (parity with carve-php).
+        if (inner === '' || /\s/.test(inner[inner.length - 1]!)) {
+          searchPos = close + 1
+          continue
+        }
+        return {
+          node: { type: 'bold-italic', children: scanInline(inner, shiftSource(source, text, start), inFootnote) },
+          end: close + 2,
+        }
       }
     }
   }
