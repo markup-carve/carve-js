@@ -91,11 +91,15 @@ let activeMatchers: CarveExtension[] = []
 let activeMatcherCtx: MatcherContext | null = null
 
 const RE_HEADING = /^(#{1,6}) +(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
-// Thematic break: a line of 3+ of the same `-`, `*`, or `_`, optionally
-// separated by spaces/tabs (`---`, `- - -`, `* * *`); nothing else on the line
-// (grammar thematic_break). A run alone on a line can't be emphasis (no
-// content). The chars must all match, so a mixed `-*-` is not a break.
-const RE_HR = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+// Thematic break: a COL-0 line of 3+ CONTIGUOUS identical `-`, `*`, or `_`
+// (`---`, `***`, `___`, `----`), followed only by optional trailing
+// whitespace and end of line (grammar §262 thematic_break). No leading
+// indent and no internal spaces: a spaced/indented `* * *` / ` ***` is NOT a
+// break and falls through to normal parsing (list / paragraph). The chars
+// must all match, so a mixed `-*-` is not a break. Matches the executable-
+// spec oracle `/^(-{3,}|\*{3,}|_{3,})[ \t]*$/`. Tested against the RAW line
+// (NOT trimStructural), so leading whitespace correctly disqualifies it.
+const RE_HR = /^([-*_])\1{2,}[ \t]*$/
 // Info string is a single language token, optionally followed by a bracketed
 // `[label]` (structured metadata; e.g. ```php [NPM] or ```[NPM]). The charset
 // covers real-world tags with punctuation (c++, c#, f#, asp.net, text/html).
@@ -890,7 +894,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     lexer.consume()
     return null
   }
-  if (RE_HR.test(trimStructural(line))) {
+  if (RE_HR.test(line)) {
     lexer.consume()
     return { type: 'thematic-break' } as ThematicBreak
   }
@@ -1655,7 +1659,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
   // `# h\n- item` is a heading plus a sibling list at the top level, and as
   // `> a\n> # h\n- item` is a quote (para + heading) plus a sibling list.
   // Mirrors trackItemLazyState.
-  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(trimStructural(content))) {
+  if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content)) {
     state.paragraphOpen = false
     return
   }
@@ -2012,7 +2016,7 @@ function lineOpensBlock(line: string): boolean {
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
-    RE_HR.test(trimStructural(line)) ||
+    RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
@@ -2044,7 +2048,7 @@ function lazyContinuationEndsList(line: string): boolean {
     RE_ABBR_DEF.test(line) ||
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
-    RE_HR.test(trimStructural(line)) ||
+    RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
@@ -2131,7 +2135,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     return
   }
   // A table row, heading, or thematic break leaves no open trailing paragraph.
-  if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(trimStructural(content))) {
+  if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(content)) {
     state.lazyFoldable = false
     return
   }
@@ -2915,16 +2919,16 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '-':
       // thematic break only. A bullet/task does NOT interrupt a paragraph
       // (symmetric with ordered markers; a list needs a blank line, §10).
-      return RE_HR.test(trimStructural(ln))
+      return RE_HR.test(ln)
     case '+':
       // `+` is the list-continuation marker, never an interrupter.
       return false
     case '*':
       // abbreviation definition (invisible) or thematic break. A bullet/task
       // does NOT interrupt (symmetric, §10).
-      return RE_ABBR_DEF.test(ln) || RE_HR.test(trimStructural(ln))
+      return RE_ABBR_DEF.test(ln) || RE_HR.test(ln)
     case '_':
-      return RE_HR.test(trimStructural(ln))
+      return RE_HR.test(ln)
     case ':':
       // An admonition/div/line-block that has a `:::` closer ahead (the `::: |`
       // line-block shares the bare `:::` closer). A definition-list term (`::`)
