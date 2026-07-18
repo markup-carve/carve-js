@@ -37,6 +37,31 @@ describe('ordered sub-list nesting', () => {
 describe('ordered list indentation (Model A: content column)', () => {
   const h = (s: string) => carveToHtml(s).trim()
 
+  it('continues an ordered item with a two-space sublist after a blank', () => {
+    expect(h('1. one\n\n  - sub a\n  - sub b\n\n1. two\n')).toBe(
+      '<ol>\n' +
+        '  <li><p>one</p>\n' +
+        '    <ul>\n' +
+        '      <li>sub a</li>\n' +
+        '      <li>sub b</li>\n' +
+        '    </ul>\n' +
+        '  </li>\n' +
+        '  <li><p>two</p></li>\n' +
+        '</ol>',
+    )
+  })
+
+  it('continues an ordered item with a two-space paragraph after a blank', () => {
+    expect(h('1. one\n\n  para\n\n1. two\n')).toBe(
+      '<ol>\n' +
+        '  <li><p>one</p>\n' +
+        '    <p>para</p>\n' +
+        '  </li>\n' +
+        '  <li><p>two</p></li>\n' +
+        '</ol>',
+    )
+  })
+
   it('folds an ordered child BELOW the content column (no blank, §10)', () => {
     // `  1. b` is at column 2, below `1. `'s content column (3); ordered does
     // not interrupt a paragraph, so it is lazy continuation, not a sub-list.
@@ -93,6 +118,21 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
 
   it('still folds an ordered child below the content column (two spaces, no §10 interrupt)', () => {
     expect(h('1. a\n  1. b')).toBe('<ol>\n  <li>a\n1. b</li>\n</ol>')
+  })
+
+  it('keeps the spec tight two-space ordered marker fold unchanged', () => {
+    expect(h('1. outer\n  1. inner\n')).toBe('<ol>\n  <li>outer\n1. inner</li>\n</ol>')
+  })
+
+  it('continues a wide ordered marker item after a blank at two spaces', () => {
+    expect(h('10. one\n\n  para\n\n11. two\n')).toBe(
+      '<ol start="10">\n' +
+        '  <li><p>one</p>\n' +
+        '    <p>para</p>\n' +
+        '  </li>\n' +
+        '  <li><p>two</p></li>\n' +
+        '</ol>',
+    )
   })
 
   it('keeps a base-column ordered dialect change as a new list (§11)', () => {
