@@ -279,11 +279,24 @@ function decodeCssEscapes(value: string): string {
 }
 
 /** Inject `data-source-line` into the first opening tag of a rendered block. */
+/**
+ * Inject `data-source-line` into the first opening tag of a rendered block,
+ * placed after any author attributes (immediately before the closing `>` or
+ * `/>`), byte-for-byte with carve-php and carve-rs which append it last.
+ */
 function withSourceLine(html: string, line: number | undefined): string {
   if (line === undefined) return html
   const open = /^\s*<[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?>/.exec(html)?.[0]
   if (open && /\sdata-source-line(?:\s|=|>)/i.test(open)) return html
-  return html.replace(/^(\s*<[A-Za-z][A-Za-z0-9-]*)/, `$1 data-source-line="${line}"`)
+  // $1 = `<tag` + author attrs, $2 = the closing `>` or ` />`. The attr scan
+  // steps over quoted values so a `>` inside a quoted attribute (possible in
+  // extension-rendered raw HTML, e.g. `<div title="a > b">`) is not mistaken
+  // for the end of the tag. Core output escapes `>` in values, so this only
+  // matters for extension HTML.
+  return html.replace(
+    /^(\s*<[A-Za-z][A-Za-z0-9-]*(?:"[^"]*"|'[^']*'|[^>"'])*?)(\s*\/?>)/,
+    `$1 data-source-line="${line}"$2`,
+  )
 }
 
 function hasAuthoredSourceLine(attrs?: Attrs): boolean {
@@ -391,7 +404,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       const inner = renderInlines(node.children, opts)
       const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
       out.push(
-        `${indent(depth + 1)}<h${node.level}${slAttr}${renderAttrs(headingAttrs)}>${inner}</h${node.level}>`,
+        `${indent(depth + 1)}<h${node.level}${renderAttrs(headingAttrs)}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -783,21 +796,21 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
   switch (node.type) {
     case 'heading': {
       const inner = renderInlines(node.children, opts)
-      return `${pad}<h${node.level}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>${inner}</h${node.level}>`
+      return `${pad}<h${node.level}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
       const inner = renderInlines(node.children, opts)
-      return `${pad}<p${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>${inner}</p>`
+      return `${pad}<p${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</p>`
     }
     case 'thematic-break':
-      return `${pad}<hr${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>`
+      return `${pad}<hr${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
     case 'code-block': {
       // The opener "header" is resolved to a `title` attribute at parse time
       // (see parseBlocks), so it renders here AND wherever else a code block is
       // emitted (e.g. inside a code-group).
       const langAttr = node.lang ? ` class="language-${node.lang}"` : ''
       const escaped = escapeHtml(node.content)
-      return `${pad}<pre${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}><code${langAttr}>${escaped}\n</code></pre>`
+      return `${pad}<pre${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}><code${langAttr}>${escaped}\n</code></pre>`
     }
     case 'blockquote':
       return renderBlockQuote(node, opts, level)
@@ -812,7 +825,7 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
     case 'admonition':
       return renderAdmonition(node, opts, level)
     case 'div': {
-      const open = `${pad}<div${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>`
+      const open = `${pad}<div${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
       // Core caption floor (graceful degradation): a grouping `[label]` that
       // no extension consumed must not be silently dropped. Surface it as a
       // `<p class="div-label">` at the start of the div content. (A group
@@ -827,7 +840,7 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
     }
     case 'definition-list': {
       const lines = [
-        `${pad}<dl${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>`,
+        `${pad}<dl${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`,
       ]
       for (const it of node.items) {
         for (const t of it.terms)
@@ -877,7 +890,7 @@ function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number):
   if (node.children.length === 1 && node.children[0]!.type === 'paragraph') {
     const para = node.children[0] as Paragraph
     const inner = renderInlines(para.children, opts)
-    return `${pad}<blockquote${attrs}><p${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}${renderAttrs(para.attrs)}>${inner}</p></blockquote>`
+    return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
   }
   const inner = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
   return `${pad}<blockquote${attrs}>\n${inner}\n${pad}</blockquote>`
@@ -896,7 +909,7 @@ function renderList(node: List, opts: RenderOptions, level: number): string {
   const items = node.items
     .map((it) => renderListItem(it, opts, level + 1, node.tight))
     .join('\n')
-  return `${pad}<${tag}${typeAttr}${startAttr}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>\n${items}\n${pad}</${tag}>`
+  return `${pad}<${tag}${typeAttr}${startAttr}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${items}\n${pad}</${tag}>`
 }
 
 function renderListItem(
@@ -923,18 +936,18 @@ function renderListItem(
     // carrying its own attributes (e.g. a leading block-attribute line, §15)
     // must keep the <p> so the attributes survive.
     if (tight && isLead && !p.attrs) return inner
-    return `<p${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}${renderAttrs(p.attrs)}>${inner}</p>`
+    return `<p${renderAttrs(p.attrs)}${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}>${inner}</p>`
   }
 
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
   if (item.children.length === 1 && item.children[0]!.type === 'paragraph') {
-    return `${pad}<li${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}${renderAttrs(item.attrs)}>${checkbox}${wrapPara(item.children[0] as Paragraph, true)}</li>`
+    return `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}${wrapPara(item.children[0] as Paragraph, true)}</li>`
   }
 
   // Mixed content (e.g. a lead paragraph followed by a nested list): the
   // first paragraph sits on the <li> line; remaining blocks go below,
   // indented one level deeper, with the closing </li> back at item indent.
-  let head = `${pad}<li${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}${renderAttrs(item.attrs)}>${checkbox}`
+  let head = `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}`
   const body: string[] = []
   // A paragraph that immediately follows the lead paragraph (a consecutive
   // run from index 0, e.g. a `+`-attached second paragraph -- Bug B) renders as
@@ -964,7 +977,7 @@ function renderListItem(
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const lines: string[] = [
-    `${pad}<table${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>`,
+    `${pad}<table${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`,
   ]
   if (node.caption) {
     lines.push(`${pad}  <caption>${renderInlines(node.caption, opts)}</caption>`)
@@ -1185,7 +1198,7 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   } else {
     inner = renderTable(node.target, opts, level + 1)
   }
-  return `${pad}<figure${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}${renderAttrs(node.attrs)}>\n${inner}\n${pad}  <figcaption>${renderInlines(
+  return `${pad}<figure${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${inner}\n${pad}  <figcaption>${renderInlines(
     node.caption,
     opts,
   )}</figcaption>\n${pad}</figure>`

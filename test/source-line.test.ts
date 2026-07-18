@@ -143,7 +143,7 @@ describe('sourceLine render option', () => {
 
   it('stamps standalone block images', () => {
     expect(h('intro\n\n![alt](x.png)')).toBe(
-      '<p data-source-line="1">intro</p>\n<img data-source-line="3" src="x.png" alt="alt">',
+      '<p data-source-line="1">intro</p>\n<img src="x.png" alt="alt" data-source-line="3">',
     )
   })
 
