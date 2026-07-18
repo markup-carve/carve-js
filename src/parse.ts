@@ -2401,6 +2401,7 @@ function parseList(lexer: Lexer): List {
     let firstBlockIdx = -1
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
+    let postBlankContinuationOpen = false
     // Indices in `nested` that hold a `+`-injected blank separator. These keep
     // the attached block parsing standalone but never loosen the list (Bug B).
     const plusSeparators = new Set<number>()
@@ -2418,6 +2419,7 @@ function parseList(lexer: Lexer): List {
       if (isBlankLine(l)) {
         pendingBlanks++
         pendingBlankLineNumbers.push(lexer.lineNumber(lexer.pos))
+        postBlankContinuationOpen = false
         lexer.consume()
         continue
       }
@@ -2503,7 +2505,13 @@ function parseList(lexer: Lexer): List {
           !RE_ADMONITION_OPEN.test(d0) &&
           lineOpensBlock(d0)
       }
-      if (lw >= contentCol || belowColBlockOpener) {
+      // After a real blank line, carve-php/carve-rs accept any line indented at
+      // least two columns as continuation content for the still-open item. This
+      // is intentionally looser than tight same-paragraph nesting, where a list
+      // marker below the marker's content column still folds as literal text.
+      const postBlankContinuation: boolean =
+        (pendingBlanks > 0 || postBlankContinuationOpen) && lw >= baseIndent + 2
+      if (lw >= contentCol || postBlankContinuation || belowColBlockOpener) {
         for (let k = 0; k < pendingBlanks; k++) {
           nested.push('')
           nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
@@ -2534,6 +2542,7 @@ function parseList(lexer: Lexer): List {
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         trackItemLazyState(dedented, lazyState)
+        postBlankContinuationOpen = postBlankContinuation
         lexer.consume()
       } else if (
         pendingBlanks === 0 &&
@@ -2567,6 +2576,7 @@ function parseList(lexer: Lexer): List {
         nested.push(l)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         trackItemLazyState(l, lazyState)
+        postBlankContinuationOpen = false
         lexer.consume()
       } else {
         break

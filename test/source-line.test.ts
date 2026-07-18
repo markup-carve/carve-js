@@ -42,6 +42,20 @@ describe('sourceLine render option', () => {
     )
   })
 
+  it('matches php source lines for a two-space post-blank ordered-item sublist', () => {
+    expect(h('1. one\n\n  - sub a\n  - sub b\n\n1. two\n')).toBe(
+      '<ol data-source-line="1">\n' +
+        '  <li data-source-line="1"><p data-source-line="1">one</p>\n' +
+        '    <ul data-source-line="3">\n' +
+        '      <li data-source-line="3">sub a</li>\n' +
+        '      <li data-source-line="4">sub b</li>\n' +
+        '    </ul>\n' +
+        '  </li>\n' +
+        '  <li data-source-line="6"><p data-source-line="6">two</p></li>\n' +
+        '</ol>',
+    )
+  })
+
   it('stamps a plus-attached list block on its real source line after blanks', () => {
     expect(h('- first\n\n+\nquote')).toBe(
       '<ul data-source-line="1">\n' +
