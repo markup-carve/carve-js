@@ -1623,6 +1623,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
   while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
     const terms: InlineNode[][] = []
     const definitions: BlockNode[][] = []
+    const definitionLines: number[] = []
     while (!lexer.eof()) {
       const t = RE_DEFLIST_TERM.exec(lexer.peek()!)
       if (!t) break
@@ -1668,9 +1669,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       const d = RE_DEFLIST_DEF.exec(lexer.peek()!)
       if (!d) break
       lexer.consume()
+      definitionLines.push(lexer.lineNumber(defLineIndex))
       definitions.push(parseDefBody(d[1]!, defLineIndex))
     }
-    items.push({ terms, definitions })
+    items.push({ terms, definitions, definitionLines })
     // Allow a single blank line before the next entry's `:: term`.
     if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
       let look = 1

@@ -130,11 +130,13 @@ describe('sourceLine render option', () => {
     )
   })
 
-  it('stamps first-block definition bodies on the following block line', () => {
+  it('anchors first-block definitions at their marker line', () => {
+    // The dd anchors at its `:  +` marker line (carve-php parity); the body
+    // block inside keeps its own later line.
     expect(h(':: term\n:  +\nbody')).toBe(
       '<dl data-source-line="1">\n' +
         '  <dt data-source-line="1">term</dt>\n' +
-        '  <dd data-source-line="3">body</dd>\n' +
+        '  <dd data-source-line="2">body</dd>\n' +
         '</dl>',
     )
   })

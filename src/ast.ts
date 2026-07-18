@@ -215,6 +215,13 @@ export interface Div extends BaseNode {
 export interface DefinitionItem {
   terms: InlineNode[][]
   definitions: BlockNode[][]
+  /**
+   * 1-based source line of each definition's `:  ` marker line, parallel to
+   * `definitions`. Only populated when parsing with positions; used to stamp
+   * `<dd>` with its marker line (the body may start on a later line, e.g. the
+   * `:  +` first-block form).
+   */
+  definitionLines?: number[]
 }
 
 export interface DefinitionList extends BaseNode {

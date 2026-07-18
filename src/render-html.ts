@@ -555,6 +555,8 @@ function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOpt
       body.push(`${indent(3)}<p>${blink}</p>`)
     }
     lines.push(
+      // The endnote item carries the definition's source line so editor
+      // integrations can map the rendered footnote back to its source.
       `${indent(2)}<li id="fn${number}"${sourceLineAttr(opts, entry.sourceLine)}>`,
       ...body,
       `${indent(2)}</li>`,
@@ -830,8 +832,10 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       for (const it of node.items) {
         for (const t of it.terms)
           lines.push(`${pad}  <dt${sourceLineAttr(opts, t[0]?.pos?.startLine)}>${renderInlines(t, opts)}</dt>`)
-        for (const d of it.definitions) {
-          const ddLine = d[0]?.pos?.startLine
+        for (const [di, d] of it.definitions.entries()) {
+          // The dd anchors at its `:  ` marker line (the body may start
+          // later, e.g. the `:  +` first-block form), matching carve-php.
+          const ddLine = it.definitionLines?.[di] ?? d[0]?.pos?.startLine
           if (d.length === 1 && d[0]!.type === 'paragraph') {
             lines.push(
               `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((d[0] as Paragraph).children, opts)}</dd>`,
