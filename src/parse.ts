@@ -1059,12 +1059,20 @@ function parseHeading(lexer: Lexer): Heading {
   // -- only plain text folds.
   let text = line.replace(/^#{1,6} +/, '')
   const sameLevel = new RegExp(`^#{${level}} +(.+)$`)
+  const sameLevelBare = new RegExp(`^#{${level}}[ ]*$`)
   while (!lexer.eof()) {
     const next = lexer.peek()!
     if (isBlankLine(next)) break
     const cont = sameLevel.exec(next)
     if (cont) {
       text += '\n' + cont[1]!
+      lexer.consume()
+      continue
+    }
+    // A bare same-level marker line (`#` for a level-1 heading) continues the
+    // heading but contributes no content, so the surrounding marker lines join
+    // with a single newline (djot; carve heading rule "same number ... or none").
+    if (sameLevelBare.test(next)) {
       lexer.consume()
       continue
     }
@@ -3658,6 +3666,15 @@ function scanInlineInner(
       flush()
       out.push(withPos({ type: 'hard-break' }, source, text, i, i + 2))
       i += 2
+      continue
+    }
+    // A backslash at the very end of the content (no following character) is
+    // still a hard break, mirroring the `\`-before-newline rule at end of
+    // input (`para\` at EOF -> `<br>`), matching djot and carve's cheatsheet.
+    if (c === '\\' && i + 1 >= text.length) {
+      flush()
+      out.push(withPos({ type: 'hard-break' }, source, text, i, i + 1))
+      i++
       continue
     }
     // Non-breaking space: a backslash followed by a space (djot). Emit the
