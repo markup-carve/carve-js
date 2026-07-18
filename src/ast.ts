@@ -111,11 +111,18 @@ export interface List extends BaseNode {
   olType?: 'a' | 'A' | 'i' | 'I'
   /**
    * Ordered-marker delimiter as authored: `.` (`1.`) or `)` (`1)`).
-   * Source-style metadata for AST consumers (e.g. format converters); it does
-   * not affect HTML output, and `renderCarve` deliberately ignores it - fmt's
-   * canonical form stays `1.` (byte-parity with the other implementations).
+   * The marker is semantic (section 11: a sibling with a different delimiter
+   * starts a new list), so `renderCarve` preserves it - normalizing would
+   * merge adjacent lists on re-parse (carve issue 286). Absent (e.g. on a
+   * programmatically built AST) fmt falls back to `.`.
    */
   delim?: '.' | ')'
+  /**
+   * Bullet character as authored: `-` or `*` (unordered lists only). Same
+   * §11 semantics as {@link delim}: preserved by `renderCarve` so adjacent
+   * lists separated only by their bullet stay separate. Absent -> `-`.
+   */
+  bulletChar?: '-' | '*'
   tight: boolean
   items: ListItem[]
 }
