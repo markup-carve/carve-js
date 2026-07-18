@@ -10,6 +10,18 @@
  * blocks attach to whatever node they immediately follow.
  */
 
+/**
+ * Source position of a node, attached when parsing with `{ positions: true }`.
+ *
+ * Line numbers are always in ORIGINAL-document coordinates, including for
+ * blocks nested inside containers (block quotes, divs, list items, footnote
+ * and definition bodies), whose content is re-parsed from a transformed
+ * snippet. Columns and offsets are NOT remapped for such nested blocks: they
+ * remain relative to the container's snippet (the container itself carries
+ * document-space offsets). Consumers needing document-exact positions should
+ * rely on lines; snippet-space offsets of nested blocks may be remapped in a
+ * future version.
+ */
 export interface Position {
   /** 1-based line number, inclusive */
   startLine: number
@@ -203,6 +215,13 @@ export interface Div extends BaseNode {
 export interface DefinitionItem {
   terms: InlineNode[][]
   definitions: BlockNode[][]
+  /**
+   * 1-based source line of each definition's `:  ` marker line, parallel to
+   * `definitions`. Only populated when parsing with positions; used to stamp
+   * `<dd>` with its marker line (the body may start on a later line, e.g. the
+   * `:  +` first-block form).
+   */
+  definitionLines?: number[]
 }
 
 export interface DefinitionList extends BaseNode {
