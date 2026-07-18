@@ -278,10 +278,22 @@ function decodeCssEscapes(value: string): string {
   })
 }
 
-/** Inject `data-source-line` into the first opening tag of a rendered block. */
+/**
+ * Inject `data-source-line` into the first opening tag of a rendered block,
+ * placed after any author attributes (immediately before the closing `>` or
+ * `/>`), byte-for-byte with carve-php and carve-rs which append it last.
+ */
 function withSourceLine(html: string, line: number | undefined): string {
   if (line === undefined) return html
-  return html.replace(/^(\s*<[A-Za-z][A-Za-z0-9]*)/, `$1 data-source-line="${line}"`)
+  // $1 = `<tag` + author attrs, $2 = the closing `>` or ` />`. The attr scan
+  // steps over quoted values so a `>` inside a quoted attribute (possible in
+  // extension-rendered raw HTML, e.g. `<div title="a > b">`) is not mistaken
+  // for the end of the tag. Core output escapes `>` in values, so this only
+  // matters for extension HTML.
+  return html.replace(
+    /^(\s*<[A-Za-z][A-Za-z0-9]*(?:"[^"]*"|'[^']*'|[^>"'])*?)(\s*\/?>)/,
+    `$1 data-source-line="${line}"$2`,
+  )
 }
 
 /** Allowed render modes. `"print"` / `"email"` are reserved, not yet valid. */
@@ -373,10 +385,12 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       }
       const headingAttrs = stripId(node.attrs)
       const inner = renderInlines(node.children, opts)
+      // data-source-line renders after author attributes, matching carve-php
+      // and carve-rs (which append it last in attribute order).
       const slAttr =
         opts.sourceLine && node.pos ? ` data-source-line="${node.pos.startLine}"` : ''
       out.push(
-        `${indent(depth + 1)}<h${node.level}${slAttr}${renderAttrs(headingAttrs)}>${inner}</h${node.level}>`,
+        `${indent(depth + 1)}<h${node.level}${renderAttrs(headingAttrs)}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
