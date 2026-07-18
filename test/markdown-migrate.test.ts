@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { markdownToCarve } from '../src/markdown-migrate.js'
+import { carveToHtml } from '../src/index.js'
 
 const conv = (md: string) => markdownToCarve(md)
 
@@ -242,6 +243,62 @@ describe('markdownToCarve — GFM tables', () => {
     // `a | b` (2 cols) over `---` (1 col) is not a GFM table; it is a setext
     // h2, so the delimiter must not be eaten into a bogus table.
     expect(conv('a | b\n---')).toBe('## a | b')
+  })
+})
+
+describe('markdownToCarve — thematic breaks', () => {
+  it('normalizes every Markdown thematic-break form to canonical ---', () => {
+    for (const md of ['* * *', '- - -', '_ _ _', '***', '___', '---', '----', ' ***', '  ---']) {
+      expect(conv(md)).toBe('---')
+    }
+  })
+
+  it('a normalized break renders as an <hr> after round-trip', () => {
+    for (const md of ['* * *', '- - -', '_ _ _', '***']) {
+      expect(carveToHtml(conv(md))).toBe('<hr>')
+    }
+  })
+
+  it('keeps the rule as its own block between paragraphs', () => {
+    expect(conv('text\n\n* * *\n\nmore')).toBe('text\n\n---\n\nmore')
+  })
+
+  it('a contiguous --- underline stays a setext heading, not a rule', () => {
+    // CommonMark: setext wins over a thematic break under a paragraph.
+    expect(conv('para\n---')).toBe('## para')
+  })
+
+  it('a rule line is not itself consumed as setext heading text', () => {
+    // CommonMark: `***\n---` is two thematic breaks, not an h2 titled `***`.
+    expect(carveToHtml(conv('***\n---'))).toBe('<hr>\n<hr>')
+    expect(carveToHtml(conv('---\n---'))).toBe('<hr>\n<hr>')
+  })
+
+  it('a document that opens with a rule does not vanish into frontmatter', () => {
+    // `---\n\n---` on line 0 would read as an empty frontmatter fence; the
+    // migrator keeps both rules by guarding line 0.
+    expect(carveToHtml(conv('***\n\n***'))).toBe('<hr>\n<hr>')
+    expect(carveToHtml(conv('* * *\n\n* * *'))).toBe('<hr>\n<hr>')
+    expect(carveToHtml(conv('***\n\ntext\n\n***'))).toBe('<hr>\n<p>text</p>\n<hr>')
+  })
+
+  it('a bare --- inside a code block cannot close a phantom frontmatter fence', () => {
+    // Carve strips frontmatter before block parsing, so a `---   ` line inside a
+    // fence would otherwise close a line-0 `---` — the guard keeps the rule and
+    // the code block intact.
+    const md = ['***', '', '```', '---   ', '```', '', 'text'].join('\n')
+    expect(carveToHtml(conv(md))).toBe('<hr>\n<pre><code>---   \n</code></pre>\n<p>text</p>')
+  })
+
+  it('normalizes a thematic break wrapped in blockquote markers', () => {
+    expect(conv('> * * *')).toBe('> ---')
+    expect(conv('> > _ _ _')).toBe('> > ---')
+    // Markdown allows up to 3 spaces before the blockquote marker.
+    expect(conv('  > * * *')).toBe('> ---')
+    expect(carveToHtml(conv('> * * *'))).toBe('<blockquote>\n  <hr>\n</blockquote>')
+    expect(carveToHtml(conv('> a\n> ***\n> b'))).toBe(
+      '<blockquote>\n  <p>a</p>\n  <hr>\n  <p>b</p>\n</blockquote>',
+    )
   })
 })
 
