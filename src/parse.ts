@@ -2715,6 +2715,8 @@ function parseList(lexer: Lexer): List {
     const t = olTypeOf(orderedKind)
     if (t) list.olType = t
     if (orderedDelim === '.' || orderedDelim === ')') list.delim = orderedDelim
+  } else if (firstMarkerChar === '-' || firstMarkerChar === '*') {
+    list.bulletChar = firstMarkerChar
   }
   return list
 }

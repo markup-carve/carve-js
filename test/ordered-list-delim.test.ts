@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToCarve, parse } from '../src/index.js'
+import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 import type { List } from '../src/ast.js'
 
 const firstList = (src: string): List => {
@@ -27,9 +27,26 @@ describe('ordered-list delimiter in the AST', () => {
     expect(firstList('- a\n- b').delim).toBeUndefined()
   })
 
-  it('does not change fmt output - canonical form stays 1.', () => {
-    // Byte-parity with the other implementations: renderCarve deliberately
-    // ignores the source delimiter (metadata for AST consumers only).
-    expect(carveToCarve('1) a\n2) b')).toBe('1. a\n2. b\n')
+  it('records the bullet character on unordered lists', () => {
+    expect(firstList('- a\n- b').bulletChar).toBe('-')
+    expect(firstList('* a\n* b').bulletChar).toBe('*')
+    expect(firstList('1. a').bulletChar).toBeUndefined()
+  })
+
+  it('adjacent sibling lists separated only by their marker stay separate (issue 286)', () => {
+    // fmt invariant: toHtml(fmt(x)) === toHtml(x). Before marker
+    // preservation these merged into one list on re-parse.
+    for (const src of ['1. a\n1) b', '1. a\n\n1) b', '- a\n* b', '- a\n\n* b']) {
+      const formatted = carveToCarve(src)
+      expect(carveToCarve(formatted)).toBe(formatted)
+      expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    }
+  })
+
+  it('fmt preserves the authored delimiter (issue 286)', () => {
+    // The delimiter is semantic (§11): normalizing `1)` to `1.` would merge
+    // adjacent lists separated only by their delimiter.
+    expect(carveToCarve('1) a\n2) b')).toBe('1) a\n2) b\n')
+    expect(carveToCarve('1. a\n2. b')).toBe('1. a\n2. b\n')
   })
 })

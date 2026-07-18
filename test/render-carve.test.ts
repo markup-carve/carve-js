@@ -46,8 +46,11 @@ describe('renderCarve targeted canonicalization', () => {
     expect(carveToCarve('a\n\n\n\nb')).toBe('a\n\nb\n')
   })
 
-  it('normalizes bullet markers to dashes', () => {
-    expect(carveToCarve('* a\n* b')).toBe('- a\n- b\n')
+  it('preserves the authored bullet marker (issue 286)', () => {
+    // The marker is semantic (§11): normalizing `*` to `-` would merge
+    // adjacent lists separated only by their bullet char.
+    expect(carveToCarve('* a\n* b')).toBe('* a\n* b\n')
+    expect(carveToCarve('- a\n- b')).toBe('- a\n- b\n')
   })
 
   it('sizes code fences around inner backticks', () => {
