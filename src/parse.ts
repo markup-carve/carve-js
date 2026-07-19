@@ -211,7 +211,13 @@ const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
 // DEFINITION line is a colon + two-or-more spaces + text.
 const RE_DEFLIST_TERM = /^::(?!:)\s+(.+)$/
 const RE_DEFLIST_DEF = /^: {2,}(.+)$/
-const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
+// A definition marker's separator must START with a literal space (U+0020),
+// not a tab (#288) -- matching carve-rs and every marker whose grammar
+// delimiter is `space` (heading `# `, list bullets, task `[ ]`). The `]: \s*`
+// requires that first space, then folds any further whitespace into the
+// separator; `\s+` alone would wrongly accept a leading tab. A tab after the
+// colon therefore forms no definition and the line stays a paragraph.
+const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]: \s*(.+)$/
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
@@ -227,10 +233,10 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // does not truncate at the first inner quote; the captured value is then run
 // through unescapeAttrValue at consumption, matching the inline title path.
 const RE_LINK_DEF =
-  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
+  /^[^\S ]*\[(?!@)([^\]]+)\]: [^\S ]*(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: \s*(.+)$/
 // A caption line mirrors a heading's first line (§4/§553): `^` + one-or-more
 // literal spaces (the grammar delimiter is a space, not a tab) + content that
 // carries at least one non-ASCII-whitespace character. Leading spaces are
