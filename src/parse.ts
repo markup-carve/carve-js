@@ -211,7 +211,7 @@ const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
 // DEFINITION line is a colon + two-or-more spaces + text.
 const RE_DEFLIST_TERM = /^::(?!:)\s+(.+)$/
 const RE_DEFLIST_DEF = /^: {2,}(.+)$/
-const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
+const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]: +(.+)$/
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
@@ -219,18 +219,20 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]:\s+(.+)$/
 // (grammar.ebnf:243,251), so it is intentionally not accepted here.
 // A leading `@` label is reserved for citation defs (`[@key]: entry`, #90),
 // handled by the citations extension — never a link destination.
-// Per grammar.ebnf:738,741,755 the destination ends at the first whitespace;
-// a following quoted run is the title. Anything else after the destination is
-// ignored (not a valid title), so the definition still registers with the bare
-// token as its destination -- it is NOT rejected. carve-rs matches this.
+// Per grammar.ebnf:738,741,755 the destination ends at the first ASCII
+// whitespace; a following quoted run is the title. Anything else after the
+// destination is ignored (not a valid title), so the definition still registers
+// with the bare token as its destination -- it is NOT rejected. carve-rs
+// matches this. Unicode whitespace after the required space belongs to the
+// destination and is handled by URL sanitization (corpus 119).
 // The title groups allow a backslash-escaped quote inside (`"a\"b"`) so the run
 // does not truncate at the first inner quote; the captured value is then run
 // through unescapeAttrValue at consumption, matching the inline title path.
 const RE_LINK_DEF =
-  /^[^\S ]*\[(?!@)([^\]]+)\]:[^\S ]+(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
+  /^[^\S ]*\[(?!@)([^\]]+)\]: +([^ \t\r\n\f]+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
 // A caption line mirrors a heading's first line (§4/§553): `^` + one-or-more
 // literal spaces (the grammar delimiter is a space, not a tab) + content that
 // carries at least one non-ASCII-whitespace character. Leading spaces are

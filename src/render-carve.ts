@@ -611,8 +611,10 @@ function escapeImageAlt(text: string): string {
 }
 
 function escapeDestination(text: string): string {
-  const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
+  const probe = text.replace(/[\u0000-\u0008\u000e-\u001f\s]+/gu, '')
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)?.[1]?.toLowerCase()
   const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
+  if (sanitizeBlank) text = probe
   // A backslash is a literal destination character (no destination escapes),
   // so it is emitted verbatim -- escaping it would double on re-parse.
   // Whitespace is percent-encoded (it would otherwise end the destination).
