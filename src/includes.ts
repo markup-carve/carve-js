@@ -106,7 +106,8 @@ interface Directive {
   path: string
   section?: string
   lines?: { start: number; end: number }
-  shift: number
+  /** Literal signed offset, or "auto" to derive it from the include site. */
+  shift: number | 'auto'
 }
 
 interface State {
@@ -122,6 +123,17 @@ interface State {
   usedHeadingIds: Set<string>
   /** Include targets in first-encounter order; value is the resolved flag. */
   dependencies: Map<string, boolean>
+  /**
+   * Spec I8 context level C for `@shift:auto`: the level of the nearest
+   * preceding heading in the directive's own block container or an enclosing
+   * one, 0 when there is none. Containers save and restore it on entry/exit,
+   * so a sibling container that has already closed does not set context.
+   *
+   * Held in the coordinate system of the content currently being expanded: a
+   * child that will later be shifted by N sees C - N here, so that once the
+   * shift lands the effective context is the parent's actual level again.
+   */
+  contextLevel: number
 }
 
 const DIRECTIVE_SCAN_RE = /\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}/g
@@ -164,7 +176,7 @@ function parseDirective(raw: string, onInvalidOption?: (part: string) => void): 
   const sectionPart = m[4]?.trim()
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']
-  let shift = 0
+  let shift: number | 'auto' = 0
   const rest = m[5]?.trim()
   if (rest) {
     for (const part of rest.split(/\s+/)) {
@@ -183,8 +195,10 @@ function parseDirective(raw: string, onInvalidOption?: (part: string) => void): 
         lines = { start: Number(lm[1]), end: Number(lm[2]) }
         if (lines.end < lines.start) return invalid()
       } else if (key === 'shift') {
-        if (!/^[+-]?\d+$/.test(value!)) return invalid()
-        shift = Number(value)
+        // Spec I8: a signed integer or the literal "auto", never both forms.
+        if (value === 'auto') shift = 'auto'
+        else if (!/^[+-]?\d+$/.test(value!)) return invalid()
+        else shift = Number(value)
       } else {
         return invalid()
       }
@@ -342,18 +356,60 @@ function expandChild(d: Directive, state: State, node: Text): Document | null {
     child.children = selected
   }
   renameChildHeadingIds(child, state)
+  const auto = d.shift === 'auto'
+  const stated = auto ? 0 : (d.shift as number)
   state.stack.push(resolved.id)
   state.depth++
   state.docs.push(child)
+  // The child is shifted only after its own includes are expanded, so inside
+  // it the inherited context is expressed in pre-shift coordinates: a stated
+  // shift is known now and translated out, and once it lands a nested "auto"
+  // sits where the assembled document says it should.
+  //
+  // "auto" is not translated because its offset is not known yet - it is
+  // measured over the assembled content below, which is exactly what makes it
+  // self-consistent: whatever level the nested content settles at is the level
+  // the measurement then reads.
+  const outerContext = state.contextLevel
+  state.contextLevel = outerContext - stated
   expandBlocks(child.children, state)
   if (child.footnoteDefs) {
-    for (const body of Object.values(child.footnoteDefs)) expandBlocks(body, state)
+    // A footnote body is its own container: no heading precedes it.
+    for (const body of Object.values(child.footnoteDefs)) {
+      state.contextLevel = 0
+      expandBlocks(body, state)
+    }
   }
+  state.contextLevel = outerContext
   state.docs.pop()
   state.depth--
   state.stack.pop()
-  shiftBlocks(child.children, d.shift, state)
+  // Measured after expansion so a child that only passes through to nested
+  // includes is levelled by the headings those actually contributed.
+  shiftBlocks(child.children, auto ? autoShift(child, state) : stated, state)
   return child
+}
+
+/**
+ * Spec I8 `@shift:auto`: N = (C + 1) - T, where C is the context level at the
+ * include site and T the minimum heading level in the resolved content.
+ *
+ * The minimum rather than the first heading's level, so the child's internal
+ * relative structure survives: a child whose h1 is followed by an h2 keeps
+ * that one-level gap wherever it lands. Content with no headings is a no-op
+ * (N = 0) and warns about nothing, which also covers inline includes, whose
+ * content cannot contain a heading.
+ *
+ * Called after the child's own includes are expanded, so headings a child
+ * contributes only by including another file still count.
+ */
+function autoShift(child: Document, state: State): number {
+  let top: number | null = null
+  walkBlocks(child.children, (block) => {
+    if (block.type === 'heading' && (top === null || block.level < top)) top = block.level
+  })
+  if (top === null) return 0
+  return state.contextLevel + 1 - top
 }
 
 /**
@@ -616,6 +672,10 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
 }
 
 function expandBlocks(blocks: BlockNode[], state: State): void {
+  // Spec I8: this block list is one container. Headings in it set the context
+  // for later blocks and for containers nested inside it, but the entry value
+  // is restored on exit so a closed sibling container never sets context.
+  const entryContext = state.contextLevel
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!
     let replacement: BlockNode[] | null = null
@@ -641,6 +701,7 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
         break
       case 'heading':
         block.children = expandInlines(block.children, state)
+        state.contextLevel = block.level
         break
       case 'table':
         if (block.caption) block.caption = expandInlines(block.caption, state)
@@ -650,8 +711,15 @@ function expandBlocks(blocks: BlockNode[], state: State): void {
     if (replacement) {
       blocks.splice(i, 1, ...replacement)
       i += replacement.length - 1
+      // The merged blocks are now part of this container, so a heading they
+      // contribute at this level sets the context for what follows - "the
+      // document as assembled" (spec I8).
+      for (const merged of replacement) {
+        if (merged.type === 'heading') state.contextLevel = merged.level
+      }
     }
   }
+  state.contextLevel = entryContext
 }
 
 function walkBlocks(blocks: BlockNode[], fn: (block: BlockNode) => void): void {
@@ -699,6 +767,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     docs: [doc],
     usedHeadingIds: new Set(),
     dependencies: new Map(),
+    contextLevel: 0,
   }
   // Recognition needs a parse, but a document whose source contains no "{{"
   // at all cannot contain a directive in any position, so the AST walk is
@@ -712,7 +781,11 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     })
     expandBlocks(doc.children, state)
     if (doc.footnoteDefs) {
-      for (const body of Object.values(doc.footnoteDefs)) expandBlocks(body, state)
+      // Each footnote body is its own container, with no preceding heading.
+      for (const body of Object.values(doc.footnoteDefs)) {
+        state.contextLevel = 0
+        expandBlocks(body, state)
+      }
     }
   }
   return {

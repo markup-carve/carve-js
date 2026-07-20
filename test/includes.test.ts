@@ -187,18 +187,6 @@ describe('expandIncludes', () => {
     expect(result.html).toContain('<h2>B</h2>')
   })
 
-  it('leaves the reserved @shift:auto value unexpanded with a warning', () => {
-    // Spec 19 I8 reserves "auto" for a future version: Carve headings are a
-    // flat stream, so inferring the include-site level is deferred. Until it
-    // is specified, a known key with a reserved value must degrade like any
-    // other invalid option (I1/I7) rather than gain ad-hoc semantics here.
-    const source = '{{ child @shift:auto }}'
-    const result = expand(source, { child: '# Heading' })
-    expect(result.warnings.map((w) => w.rule)).toEqual(['include-unknown-option'])
-    expect(result.html).not.toContain('<h1>')
-    expect(result.html).toBe(renderHtml(resolve(parse(source))))
-  })
-
   it('warns on an unknown option and leaves the directive literal', () => {
     const source = '{{ child @nope:1 }}'
     const result = expand(source, { child: 'text' })
@@ -398,5 +386,239 @@ describe('expandIncludes', () => {
     } finally {
       rmSync(base, { recursive: true, force: true })
     }
+  })
+})
+
+/**
+ * Coverage keyed to the normative include rules (spec 19, I1-I11). Rules also
+ * exercised by the tests above are cross-referenced rather than duplicated.
+ */
+describe('include rules', () => {
+  it('I1 syntax: a malformed value on a known option warns and stays literal', () => {
+    const source = '{{ child @shift:x }}'
+    const result = expand(source, { child: 'body' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-unknown-option'])
+    expect(result.html).toBe(renderHtml(resolve(parse(source))))
+  })
+
+  it('I1 syntax: an inverted line range warns and stays literal', () => {
+    const source = '{{ child @lines:3-1 }}'
+    const result = expand(source, { child: 'a\nb\nc' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-unknown-option'])
+    expect(result.html).toBe(renderHtml(resolve(parse(source))))
+  })
+
+  it('I2 block vs inline: a directive alone on a line merges as blocks', () => {
+    const result = expand('{{ child }}', { child: '# Head\n\nBody.' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h1>Head</h1>')
+    expect(result.html).toContain('<p>Body.</p>')
+  })
+
+  it('I2 block vs inline: a directive inside a sentence merges as inline', () => {
+    const result = expand('Before {{ child }} after.', { child: 'middle' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toBe('<p>Before middle after.</p>')
+  })
+
+  it('I3 resolver model: no resolver attempts no resolution at all', () => {
+    const source = 'See {{ child }}.'
+    const doc = parse(source, { positions: true })
+    const result = expandIncludes(doc, source)
+    expect(result.warnings).toEqual([])
+    expect(result.dependencies).toEqual([])
+    expect(renderHtml(resolve(result.doc))).toBe('<p>See {{ child }}.</p>')
+  })
+
+  it('I3 resolver model: a shielded directive is never handed to the resolver', () => {
+    const calls: string[] = []
+    const source = '`{{ child }}`\n\n```txt\n{{ child }}\n```'
+    const doc = parse(source, { positions: true })
+    expandIncludes(doc, source, {
+      resolve: (p) => {
+        calls.push(p)
+        return 'expanded'
+      },
+    })
+    expect(calls).toEqual([])
+  })
+
+  it('I5 collisions: reference-definition labels resolve per file without renaming', () => {
+    // Divergence note: ids and footnote labels are renamed at merge time, but
+    // reference definitions are resolved inside their own document before the
+    // merge, so a label reused by parent and child keeps each file pointing at
+    // its own target and no rename warning is emitted.
+    const result = expand('Parent [p][ref].\n\n[ref]: https://parent.example\n\n{{ child }}', {
+      child: 'Child [c][ref].\n\n[ref]: https://child.example',
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('href="https://parent.example"')
+    expect(result.html).toContain('href="https://child.example"')
+  })
+
+  it('I6 limits: a file including itself is caught as a cycle', () => {
+    const result = expand('{{ a }}', { a: 'Self.\n\n{{ a }}' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-cycle'])
+    expect(result.html).toContain('{{ a }}')
+  })
+
+  it('I7 errors: binary content warns and stays literal', () => {
+    const source = '{{ child }}'
+    const result = expand(source, { child: 'binary\u0000payload' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-non-text'])
+    expect(result.html).toBe(renderHtml(resolve(parse(source))))
+    expect(result.html).not.toContain('payload')
+  })
+
+  it('I8 shift: a negative shift raises heading levels', () => {
+    const result = expand('{{ child @shift:-1 }}', { child: '## A\n\n### B' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h1>A</h1>')
+    expect(result.html).toContain('<h2>B</h2>')
+  })
+
+  it('I8 shift: clamps at level 1, warns, and keeps the heading', () => {
+    const result = expand('{{ child @shift:-2 }}', { child: '# A' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-heading-clamp'])
+    expect(result.html).toContain('<h1>A</h1>')
+  })
+
+  it('I8 shift: ids and slugs are unchanged so a crossref into a shifted heading resolves', () => {
+    const result = expand('{{ child @shift:2 }}', { child: '# Alpha\n\nSee </#Alpha>.' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3>Alpha</h3>')
+    expect(result.html).toContain('id="Alpha"')
+    expect(result.html).toContain('href="#Alpha"')
+  })
+
+  it('I8 auto: no preceding heading gives C=0 and leaves levels alone', () => {
+    const result = expand('{{ child @shift:auto }}', { child: '# Top\n\n## Sub' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h1>Top</h1>')
+    expect(result.html).toContain('<h2>Sub</h2>')
+  })
+
+  it('I8 auto: C=2 with child top level 1 shifts by 2', () => {
+    const result = expand('# One\n\n## Two\n\n{{ child @shift:auto }}', { child: '# Top\n\n## Sub' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3>Top</h3>')
+    expect(result.html).toContain('<h4>Sub</h4>')
+  })
+
+  it('I8 auto: uses the minimum child level, not the first heading', () => {
+    // Child starts at h3 but contains an h2; T is the minimum, so the h2
+    // becomes the child's top and the internal gap is preserved.
+    const result = expand('# One\n\n{{ child @shift:auto }}', { child: '### Deep\n\n## Shallow' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3>Deep</h3>')
+    expect(result.html).toContain('<h2>Shallow</h2>')
+  })
+
+  it('I8 auto: child without headings is a no-op and warns about nothing', () => {
+    const result = expand('# One\n\n## Two\n\n{{ child @shift:auto }}', { child: 'Just a paragraph.' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<p>Just a paragraph.</p>')
+  })
+
+  it('I8 auto: composes with #section, using the selected subtree top level', () => {
+    const result = expand('# One\n\n## Two\n\n{{ child #pick @shift:auto }}', {
+      child: '# Skipped\n\n{#pick}\n## Picked\n\n### Under',
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3>Picked</h3>')
+    expect(result.html).toContain('<h4>Under</h4>')
+    expect(result.html).not.toContain('Skipped')
+  })
+
+  it('I8 auto: a closed sibling container does not set the context level', () => {
+    // The h2 lives inside a blockquote that has closed by the time the
+    // directive is reached, so C falls back to the enclosing h1.
+    const result = expand('# One\n\n> ## Quoted\n\n{{ child @shift:auto }}', { child: '# Top' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h2>Top</h2>')
+  })
+
+  it('I8 auto: an enclosing container heading does set the context level', () => {
+    const result = expand('# One\n\n::: note\n## Inner\n\n{{ child @shift:auto }}\n:::', { child: '# Top' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3 id="Top">Top</h3>')
+  })
+
+  it('I8 auto: resolves against the document as assembled under a numeric parent shift', () => {
+    // Parent include shifts the child by 1, so the child h1 lands at h2; the
+    // grandchild's auto must land one level below that, at h3.
+    const result = expand('{{ child @shift:1 }}', {
+      child: '# ChildTop\n\n{{ grand @shift:auto }}',
+      grand: '# GrandTop',
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h2>ChildTop</h2>')
+    expect(result.html).toContain('<h3>GrandTop</h3>')
+  })
+
+  it('I8 auto: counts headings a child contributes only through a nested include', () => {
+    // The child has no headings of its own; everything comes from the
+    // grandchild. Measuring before expansion would see none and no-op, leaving
+    // the grandchild h1 under an h2.
+    const result = expand('# One\n\n## Two\n\n{{ child @shift:auto }}', {
+      child: '{{ grand }}',
+      grand: '# GrandTop\n\n## GrandSub',
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3>GrandTop</h3>')
+    expect(result.html).toContain('<h4>GrandSub</h4>')
+  })
+
+  it('I8 auto: a stated parent shift still places a nested auto by the assembled level', () => {
+    // The child is shifted by 1 explicitly and has no headings of its own, so
+    // the grandchild's auto must key off the parent h1 as assembled, landing
+    // at h2 rather than being pushed twice.
+    const result = expand('# One\n\n{{ child @shift:1 }}', {
+      child: '{{ grand @shift:auto }}',
+      grand: '# GrandTop',
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h2>GrandTop</h2>')
+  })
+
+  it('I8 auto: a heading merged by an earlier include sets the context for a later one', () => {
+    const result = expand('{{ first }}\n\n{{ second @shift:auto }}', {
+      first: '# First\n\n## Deeper',
+      second: '# SecondTop',
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h3>SecondTop</h3>')
+  })
+
+  it('I8 auto: is a no-op for an inline include, whose content has no headings', () => {
+    const result = expand('# One\n\n## Two\n\nSee {{ child @shift:auto }} here.', { child: 'a fragment' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<p>See a fragment here.</p>')
+  })
+
+  it('I9 verbatim: a raw block keeps a directive literal', () => {
+    const result = expand('```=html\n{{ child }}\n```', { child: 'EXPANDED' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('{{ child }}')
+    expect(result.html).not.toContain('EXPANDED')
+  })
+
+  it('I9 verbatim: a fence with an info string shields, a plain directive still expands', () => {
+    const result = expand('```js\n{{ child }}\n```\n\n{{ child }}', { child: 'EXPANDED' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<code class="language-js">{{ child }}')
+    expect(result.html).toContain('<p>EXPANDED</p>')
+  })
+
+  it('I4 source mapping: merged blocks currently keep the child file positions', () => {
+    // Pinning actual behavior, not endorsing it: included blocks carry the
+    // positions they had in the child source and warnings carry no file
+    // identity, so a host cannot yet attribute either to the child file.
+    const source = 'Parent.\n\n{{ child }}'
+    const doc = parse(source, { positions: true })
+    const result = expandIncludes(doc, source, { resolve: () => 'Child.' })
+    expect(result.warnings).toEqual([])
+    const positions = result.doc.children.map((b) => b.pos?.startOffset)
+    expect(positions).toEqual([0, 0])
   })
 })

@@ -89,10 +89,21 @@ re-render. Targets that failed to resolve - missing files, and paths denied by
 root containment - are reported with `resolved: false` rather than omitted, so
 a watcher still fires when a missing chapter is finally created.
 
-Supported directive options are `#section`, `@lines:N-M`, and `@shift:N`.
-`#section` selects the heading subtree by explicit id or auto slug, `@lines`
-selects an inclusive physical line range before parsing, and `@shift` shifts
-included heading levels with clamping to `h1`...`h6`.
+Supported directive options are `#section`, `@lines:N-M`, and
+`@shift:N` / `@shift:auto`. `#section` selects the heading subtree by explicit
+id or auto slug, `@lines` selects an inclusive physical line range before
+parsing, and `@shift` shifts included heading levels with clamping to
+`h1`...`h6`.
+
+`@shift:auto` derives the offset from the include site instead of stating it:
+the content is placed one level below the nearest preceding heading in the
+directive's own container or an enclosing one (a heading in a sibling container
+that has already closed does not count). The offset is
+`(context level + 1) - (minimum heading level in the included content)`, so the
+child's internal structure is preserved and a file written with an `h1` title
+slots in wherever it is included. Content with no headings is left alone.
+Heading ids and slugs never change, so cross-references into shifted headings
+keep resolving.
 
 Resolvers are deliberately host-supplied. Do not enable includes for untrusted
 input unless the resolver canonicalizes paths, rejects root escapes, and applies
