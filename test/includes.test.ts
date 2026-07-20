@@ -758,4 +758,105 @@ describe('include rules', () => {
     })
   })
 
+  describe('a rejected directive has no side effects', () => {
+    /**
+     * Byte-identity check: the document with the directive must render exactly
+     * as the same document with that directive written as literal text from the
+     * start. The control substitutes an inert placeholder for the directive and
+     * puts the directive's own text back, so any difference elsewhere - a
+     * suffixed heading id, a renamed footnote label - fails.
+     */
+    const expectNoSideEffects = (
+      directive: string,
+      rest: string,
+      files: Record<string, string>,
+      options: Omit<IncludeOptions, 'resolve'> = {},
+    ) => {
+      const withDirective = expand(`Text ${directive} text.\n\n${rest}`, files, options)
+      const literal = expand(`Text PLACEHOLDER text.\n\n${rest}`, files, options)
+      // The directive's own paragraph is left literal either way and renders
+      // its tokens (a "#section" is a tag) differently from the placeholder;
+      // everything AFTER it must be byte-identical.
+      const tail = (html: string) => html.slice(html.indexOf('\n') + 1)
+      expect(tail(withDirective.html)).toBe(tail(literal.html))
+      expect(withDirective.html.split('\n')[0]).toContain(directive.slice(0, 9))
+    }
+
+    const later = '{{ later }}'
+    const laterFiles = { later: '{#dup}\n# Later\n\nSee [^note].\n\n[^note]: Later note.' }
+
+    it('an unresolvable include reserves nothing', () => {
+      expectNoSideEffects('{{ missing }}', later, laterFiles)
+    })
+
+    it('a binary include reserves nothing', () => {
+      expectNoSideEffects('{{ bin }}', later, { ...laterFiles, bin: 'a\0b' })
+    })
+
+    it('an include with both selections reserves nothing', () => {
+      expectNoSideEffects('{{ child #s @lines:1-2 }}', later, {
+        ...laterFiles,
+        child: '{#dup}\n# S',
+      })
+    })
+
+    it('a missing section reserves nothing', () => {
+      expectNoSideEffects('{{ child #nope }}', later, {
+        ...laterFiles,
+        child: '{#dup}\n# S\n\nBody.',
+      })
+    })
+
+    it('a cyclic include reserves nothing', () => {
+      expectNoSideEffects('{{ a }}', later, {
+        ...laterFiles,
+        a: '{#dup}\n# A\n\n{{ a }}',
+      })
+    })
+
+    it('a depth-exceeded include reserves nothing', () => {
+      expectNoSideEffects(
+        '{{ a }}',
+        later,
+        { ...laterFiles, a: '{#dup}\n# A\n\n{{ b }}', b: '{#dup2}\n# B' },
+        { maxDepth: 0 },
+      )
+    })
+
+    it('a size-exceeded include reserves nothing', () => {
+      expectNoSideEffects(
+        '{{ big }}',
+        later,
+        { ...laterFiles, big: `{#dup}\n# Big\n\n${'x'.repeat(200)}` },
+        { maxBytes: 8 },
+      )
+    })
+
+    it('an inline include of block content reserves no heading id', () => {
+      // The found case: the rejected child never reaches the document, yet its
+      // explicit id used to be claimed, suffixing the next legitimate heading.
+      const result = expand('See {{ a }}.\n\n{{ later }}', {
+        ...laterFiles,
+        a: '{#dup}\n# A\n\nMore.',
+      })
+      expect(result.warnings.map((w) => w.rule)).toEqual(['include-block-in-inline'])
+      expect(result.html).toContain('<section id="dup">')
+      expect(result.html).not.toContain('dup-2')
+      expectNoSideEffects('{{ a }}', later, { ...laterFiles, a: '{#dup}\n# A\n\nMore.' })
+    })
+
+    it('an inline include of block content reserves no footnote label', () => {
+      const result = expand('See {{ a }}.\n\n{{ later }}', {
+        ...laterFiles,
+        a: 'One [^note].\n\nTwo.\n\n[^note]: Rejected note.',
+      })
+      expect(result.warnings.map((w) => w.rule)).toEqual(['include-block-in-inline'])
+      expect(result.html).toContain('Later note.')
+      expect(result.html).not.toContain('Rejected note.')
+      expectNoSideEffects('{{ a }}', later, {
+        ...laterFiles,
+        a: 'One [^note].\n\nTwo.\n\n[^note]: Rejected note.',
+      })
+    })
+  })
 })

@@ -313,6 +313,81 @@ function shiftBlocks(blocks: BlockNode[], shift: number, state: State): void {
   blocks.forEach(visit)
 }
 
+/**
+ * Snapshot of every identifier namespace an include can reserve from, taken
+ * before a child is processed so a REJECTED directive can give them back.
+ */
+interface Reservations {
+  headingIds: Set<string>
+  target: Document
+  footnoteDefs: Record<string, BlockNode[]> | undefined
+  warnings: number
+}
+
+function beginReservations(state: State): Reservations {
+  const target = state.docs[state.docs.length - 1]!
+  return {
+    headingIds: new Set(state.usedHeadingIds),
+    target,
+    footnoteDefs: target.footnoteDefs ? { ...target.footnoteDefs } : undefined,
+    warnings: state.warnings.length,
+  }
+}
+
+/**
+ * Undo the reservations a rejected include made. Rejection reasons that carry
+ * their own warning (unresolved, cycle, depth, budget, ...) keep it - it is
+ * the diagnostic the author needs - but a rename warning is dropped along
+ * with the rename it reported, since neither survives into the document.
+ */
+function rollbackReservations(state: State, snap: Reservations): void {
+  state.usedHeadingIds.clear()
+  for (const id of snap.headingIds) state.usedHeadingIds.add(id)
+  if (snap.footnoteDefs === undefined) delete snap.target.footnoteDefs
+  else snap.target.footnoteDefs = snap.footnoteDefs
+  const dropped = new Set(['include-heading-id-rename', 'include-footnote-rename'])
+  if (state.warnings.length > snap.warnings) {
+    state.warnings.splice(
+      snap.warnings,
+      state.warnings.length - snap.warnings,
+      ...state.warnings.slice(snap.warnings).filter((w) => !dropped.has(w.rule)),
+    )
+  }
+}
+
+/**
+ * Expand one directive and merge its content, as a transaction.
+ *
+ * A rejected directive must leave NO observable trace: the document has to
+ * come out byte-identical to the same document with that directive written as
+ * literal text from the start. Rejection can happen before the child is even
+ * read (unresolvable, cycle, depth, budget, both selections) or only at merge
+ * time (block content at an inline position), and by then the child's explicit
+ * heading ids are already reserved - which silently suffixed a later, entirely
+ * legitimate heading. Reserving inside a transaction that only commits when
+ * `merge` actually takes the content covers every such path by construction,
+ * including ones added later, rather than special-casing the one found.
+ *
+ * `merge` returns null to reject; it must emit no warning of its own, so the
+ * caller can report the rejection after the rollback has run.
+ *
+ * The byte budget is deliberately NOT rolled back: those bytes were really
+ * read and parsed, and refunding them would let a rejected include be
+ * repeated without limit.
+ */
+function includeChild<T>(
+  d: Directive,
+  state: State,
+  node: Text,
+  merge: (child: Document, file: string) => T | null,
+): T | null {
+  const snap = beginReservations(state)
+  const expanded = expandChild(d, state, node)
+  const merged = expanded === null ? null : merge(expanded.doc, expanded.file)
+  if (merged === null) rollbackReservations(state, snap)
+  return merged
+}
+
 function expandChild(
   d: Directive,
   state: State,
@@ -487,16 +562,21 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
     )
     if (!d) continue
-    const expanded = expandChild(d, state, anchor)
-    if (!expanded) continue
-    const child = expanded.doc
-    if (child.children.length === 0 || (child.children.length === 1 && child.children[0]!.type === 'paragraph')) {
-      const replacement = child.children.length === 1 ? (child.children[0] as Paragraph).children : []
-      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, expanded.file)
-      spans.push({ start: m.index, end: m.index + raw.length, replacement })
-    } else {
+    let blockInInline = false
+    const replacement = includeChild(d, state, anchor, (child, file) => {
+      if (child.children.length > 1 || (child.children.length === 1 && child.children[0]!.type !== 'paragraph')) {
+        blockInInline = true
+        return null
+      }
+      const inlines = child.children.length === 1 ? (child.children[0] as Paragraph).children : []
+      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file)
+      return inlines
+    })
+    if (blockInInline) {
       warn(state, 'include-block-in-inline', `Inline include "${d.path}" resolved to block content.`, anchor)
     }
+    if (replacement === null) continue
+    spans.push({ start: m.index, end: m.index + raw.length, replacement })
   }
   if (spans.length === 0) return run
   const out: InlineNode[] = []
@@ -646,14 +726,13 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text),
     )
     if (d) {
-      const expanded = expandChild(d, state, text)
-      if (!expanded) {
-        // Degrade to literal: the original inline nodes render exactly as the
-        // core does with no resolver (spec I7).
-        return [block]
-      }
-      mergeFootnotes(state.docs[state.docs.length - 1]!, expanded.doc, state, expanded.file)
-      return expanded.doc.children
+      const merged = includeChild(d, state, text, (child, file) => {
+        mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, file)
+        return child.children
+      })
+      // Degrade to literal: the original inline nodes render exactly as the
+      // core does with no resolver (spec I7).
+      return merged ?? [block]
     }
     // A whole-paragraph directive that failed to parse was already reported
     // here; skip the inline scan so it is not warned about twice.
