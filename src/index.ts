@@ -98,6 +98,7 @@ export {
   graphviz,
   wavedrom,
   abc,
+  plantuml,
   vegaLite,
   chart,
   presets,

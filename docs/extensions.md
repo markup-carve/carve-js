@@ -173,7 +173,8 @@ carveToHtml('```dot\na->b\n```', { extensions: [fencedRender({ language: ['dot',
 ```
 
 Built-in presets: `mermaid()`, `d2()`, `graphviz()` (claims `dot` + `graphviz`),
-`wavedrom()`, `abc()`, `vegaLite()`, `chart()`. `presets()` returns all seven as
+`wavedrom()`, `abc()`, `plantuml()` (claims `plantuml` + `puml`), `vegaLite()`,
+`chart()`. `presets()` returns all eight as
 an array to spread straight into `extensions`
 (`carveToHtml(src, { extensions: [...presets(), mathBlock()] })`); note it claims
 every preset fence word, so a literal code sample in one of those languages

@@ -161,6 +161,11 @@ export const graphviz = (): CarveExtension =>
 export const wavedrom = (): CarveExtension => fencedRender({ language: 'wavedrom' })
 /** ABC music notation preset (text mode, `<pre class="abc">`). */
 export const abc = (): CarveExtension => fencedRender({ language: 'abc' })
+/** PlantUML preset (text mode); claims both `plantuml` and `puml`. Covers the
+ *  UML shapes Mermaid does not (use case, component, deployment, timing). Load
+ *  a client-side PlantUML build (`@plantuml/core`) to render the diagrams. */
+export const plantuml = (): CarveExtension =>
+  fencedRender({ language: ['plantuml', 'puml'], cssClass: 'plantuml' })
 /** Vega-Lite preset (json mode, `<div class="vega-lite"><script ...>`). */
 export const vegaLite = (): CarveExtension =>
   fencedRender({ language: 'vega-lite', contentMode: 'json' })
@@ -184,7 +189,8 @@ export const mermaid = (
  *     carveToHtml(src, { extensions: [...presets(), mathBlock()] })
  *
  * This claims every preset fence word (`mermaid`, `d2`, `dot`, `graphviz`,
- * `wavedrom`, `abc`, `vega-lite`, `chart`), so a literal code sample in one of
+ * `wavedrom`, `abc`, `plantuml`, `puml`, `vega-lite`, `chart`), so a literal code
+ * sample in one of
  * those languages becomes a hydration element; include only the presets whose
  * client library you actually load if that matters.
  */
@@ -194,6 +200,7 @@ export const presets = (): CarveExtension[] => [
   graphviz(),
   wavedrom(),
   abc(),
+  plantuml(),
   vegaLite(),
   chart(),
 ]
