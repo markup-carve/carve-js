@@ -350,6 +350,11 @@ function expandChild(d: Directive, state: State, node: Text): Document | null {
   if (d.section) {
     const selected = selectSection(child, d.section)
     if (!selected) {
+      // Same attempt, not a second one: the file was read but the include did
+      // not expand, so the entry is forced back to unresolved rather than
+      // going through note()'s upgrade rule. A host must still watch the
+      // target and must not treat the include as having succeeded.
+      state.dependencies.set(resolved.id, false)
       warn(state, 'include-section', `Include "${d.path}" has no section "#${d.section}".`, node)
       return null
     }

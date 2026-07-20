@@ -101,6 +101,12 @@ describe('expandIncludes', () => {
     expect(result.html).toContain('<h6>B</h6>')
   })
 
+  it('a missing section marks the dependency attempted, not resolved', () => {
+    const result = expand('{{ child #nope }}', { child: '# Real' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-section'])
+    expect(result.dependencies).toEqual([{ id: 'child', resolved: false }])
+  })
+
   it('#section plus @lines warns and stays literal', () => {
     const source = '{{ child #x @lines:1-1 }}'
     const result = expand(source, { child: '# X' })
