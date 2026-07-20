@@ -195,14 +195,11 @@ describe('inline literal: carve serialization (fmt)', () => {
 })
 
 describe('inline literal under profiles', () => {
-  // An inline literal reports its own canonical type `literal_inline` rather
-  // than aliasing onto `text`. Its content is escaped, so its trust level does
-  // match a text node -- but with attributes it renders a <span>, and the
-  // allowlist presets deliberately exclude `span`. Aliasing to `text` let
-  // untrusted input smuggle <span class="..."> past `comment` / `minimal`.
-  it('reports a distinct canonical type', () => {
-    expect(canonicalType('literal-inline')).toBe('literal_inline')
-    expect(CANONICAL_INLINE_TYPES).toContain('literal_inline')
+  // An inline literal is a code span with the wrapper dropped, so it is
+  // classified as the `code` profile type: allowed exactly where code is,
+  // carrying the same attribute surface an attributed code span already does.
+  it('is classified as the code profile type', () => {
+    expect(canonicalType('literal-inline')).toBe('code')
   })
 
   const render = (src: string, profile: Profile) => {
@@ -210,26 +207,14 @@ describe('inline literal under profiles', () => {
     return renderHtml((result as { doc?: Document }).doc ?? (result as unknown as Document))
   }
 
-  it('is denied by the allowlist presets, exactly like a span', () => {
-    for (const profile of [Profile.comment(), Profile.minimal()]) {
-      // attributed literal must NOT smuggle a span past the allowlist
-      expect(render('`x`{! .evil}', profile)).toBe('<p>x</p>')
-      // same treatment the equivalent span already gets
-      expect(render('[x]{.evil}', profile)).toBe('<p>x</p>')
-      // content is preserved, only the element and attributes are dropped
-      expect(render('`/kaet/`{! .ipa}', profile)).toBe('<p>/kaet/</p>')
-    }
-  })
-
-  it('is allowed where spans are allowed', () => {
-    for (const profile of [Profile.article(), Profile.full()]) {
-      expect(render('`x`{! .evil}', profile)).toBe('<p><span class="evil">x</span></p>')
-    }
-  })
-
-  it('a bare literal is plain escaped text in every preset', () => {
+  it('is allowed wherever a code span is allowed (all four presets)', () => {
+    // code is in every preset's allowlist, so the literal rides along and its
+    // attributes render exactly as an attributed code span's would
     for (const profile of [Profile.comment(), Profile.minimal(), Profile.article(), Profile.full()]) {
+      expect(render('`x`{! .ipa}', profile)).toBe('<p><span class="ipa">x</span></p>')
       expect(render('`x`{!}', profile)).toBe('<p>x</p>')
+      // parity: the attributed code span it is a variant of is likewise allowed
+      expect(render('`x`{.ipa}', profile)).toBe('<p><code class="ipa">x</code></p>')
     }
   })
 })
