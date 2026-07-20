@@ -66,9 +66,32 @@ export interface IncludeOptions {
   maxBytes?: number
 }
 
+/**
+ * One include target touched during expansion. Hosts key file watchers off
+ * `id`, so unresolved targets are reported too: a preview that watched only
+ * successful reads would never notice a missing `{{ chapter-3.crv }}` being
+ * created and would stay stale.
+ */
+export interface IncludeDependency {
+  /**
+   * The resolver's canonical id when it supplied one (the identity the cycle
+   * guard uses), otherwise the directive path as written.
+   */
+  id: string
+  /** True when the resolver produced source text for this target. */
+  resolved: boolean
+}
+
 export interface IncludeResult {
   doc: Document
   warnings: IncludeWarning[]
+  /**
+   * Every include target touched during the whole recursive expansion,
+   * nested children included, de-duplicated and in first-encounter order.
+   * Intended for preview invalidation: re-run the expansion when any of
+   * these paths changes. Empty when no resolver was supplied.
+   */
+  dependencies: IncludeDependency[]
 }
 
 export interface FileSystemResolverOptions {
@@ -97,6 +120,8 @@ interface State {
   depth: number
   docs: Document[]
   usedHeadingIds: Set<string>
+  /** Include targets in first-encounter order; value is the resolved flag. */
+  dependencies: Map<string, boolean>
 }
 
 const DIRECTIVE_SCAN_RE = /\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}/g
@@ -190,6 +215,15 @@ function childContext(state: State): IncludeContext {
   return ctx
 }
 
+/**
+ * Record an include target for host file watching. Deduplicated by id, first
+ * encounter fixes the order, and a later successful read upgrades an entry
+ * that was first seen unresolved.
+ */
+function note(state: State, id: string, resolved: boolean): void {
+  if (resolved || !state.dependencies.has(id)) state.dependencies.set(id, resolved)
+}
+
 function resolveChild(d: Directive, state: State, node: Text): { source: string; id: string } | null {
   if (!state.opts.resolve) return null
   if (d.section && d.lines) {
@@ -197,6 +231,9 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
     return null
   }
   if (state.depth >= state.maxDepth) {
+    // Never handed to the resolver, but still a target the host may want to
+    // watch, so it is reported as unresolved rather than dropped.
+    note(state, d.path, false)
     warn(state, 'include-depth', `Include depth limit of ${state.maxDepth} exceeded for "${d.path}".`, node)
     return null
   }
@@ -205,10 +242,14 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
   try {
     resolved = state.opts.resolve(d.path, childContext(state))
   } catch (e) {
+    note(state, d.path, false)
     warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved: ${(e as Error).message}`, node)
     return null
   }
   if (resolved === null || resolved === undefined) {
+    // Covers missing files and containment denials alike: the resolver reports
+    // both as null, and a host wants to re-check either if the tree changes.
+    note(state, d.path, false)
     warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved.`, node)
     return null
   }
@@ -216,9 +257,11 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
   const id =
     typeof resolved === 'string' ? d.path : ((resolved as { id?: unknown }).id as string | undefined) ?? d.path
   if (typeof source !== 'string' || source.includes('\0')) {
+    note(state, id, false)
     warn(state, 'include-non-text', `Include "${d.path}" did not resolve to text.`, node)
     return null
   }
+  note(state, id, true)
   // The cycle guard compares canonical ids after resolution, so a resolver
   // that supplies ids catches "b.crv" vs "./b.crv" spellings of one file.
   if (state.stack.includes(id)) {
@@ -655,6 +698,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     depth: 0,
     docs: [doc],
     usedHeadingIds: new Set(),
+    dependencies: new Map(),
   }
   // Recognition needs a parse, but a document whose source contains no "{{"
   // at all cannot contain a directive in any position, so the AST walk is
@@ -671,7 +715,11 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
       for (const body of Object.values(doc.footnoteDefs)) expandBlocks(body, state)
     }
   }
-  return { doc, warnings: state.warnings }
+  return {
+    doc,
+    warnings: state.warnings,
+    dependencies: [...state.dependencies].map(([id, resolved]) => ({ id, resolved })),
+  }
 }
 
 /** Filesystem resolver with canonical root-containment checks for trusted hosts. */
@@ -680,9 +728,24 @@ export function fileSystemResolver(
   opts: FileSystemResolverOptions = {},
 ): IncludeResolver {
   const rootReal = realpathSync(root)
+  /**
+   * Canonicalize-then-contain: the candidate is resolved to its real path
+   * (symlinks followed) and only then compared against the real root.
+   *
+   * Deliberately NOT a lexical ban on "..", which is both too strict and too
+   * weak. Too strict: "../shared/glossary.crv" from chapters/ch1.crv is a
+   * normal book layout whose canonical target is inside the root, and must
+   * resolve. Too weak: a symlink inside the root pointing out of it, or an
+   * absolute path, escapes without containing ".." at all. Canonical
+   * containment subsumes both cases.
+   */
   const contains = (candidate: string): boolean => {
     const rel = path.relative(rootReal, candidate)
-    return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel))
+    if (rel === '') return true
+    if (!rel || path.isAbsolute(rel)) return false
+    // Segment-wise, so a directory legitimately named "..foo" is not read as
+    // an escape the way a `startsWith('..')` prefix test would.
+    return rel.split(path.sep)[0] !== '..'
   }
   return (includePath, ctx) => {
     if (!opts.allowAbsolute && path.isAbsolute(includePath)) return null

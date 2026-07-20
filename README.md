@@ -81,6 +81,14 @@ for (const warning of expanded.warnings) console.warn(warning.message)
 const html = renderHtml(resolve(expanded.doc))
 ```
 
+`expanded.dependencies` lists every include target touched by the whole
+recursive expansion (`{ id, resolved }`, de-duplicated, in first-encounter
+order). `id` is the resolver's canonical id when it supplies one, otherwise the
+directive path. Editors and preview servers watch these paths to know when to
+re-render. Targets that failed to resolve - missing files, and paths denied by
+root containment - are reported with `resolved: false` rather than omitted, so
+a watcher still fires when a missing chapter is finally created.
+
 Supported directive options are `#section`, `@lines:N-M`, and `@shift:N`.
 `#section` selects the heading subtree by explicit id or auto slug, `@lines`
 selects an inclusive physical line range before parsing, and `@shift` shifts
@@ -90,8 +98,17 @@ Resolvers are deliberately host-supplied. Do not enable includes for untrusted
 input unless the resolver canonicalizes paths, rejects root escapes, and applies
 the same parsing and sanitization policy as the parent document. A Node helper,
 `fileSystemResolver(root)`, enforces canonical root containment and rejects
-absolute include paths by default. The CLI exposes this with
-`carve --include-root docs input.crv`.
+absolute include paths by default. Containment is checked on the canonical
+(symlink-resolved) path, so `../shared/glossary.crv` from `chapters/ch1.crv`
+resolves while symlinks, absolute paths, and dot-dot chains leaving the root do
+not. Relative paths resolve against the including file; the containment root
+stays the single top-level root for nested includes.
+
+The CLI exposes this on `carve render`. For file input the root defaults to the
+input file's directory, so `carve input.crv` already resolves includes beside
+it; pass `--include-root docs` to widen the root to a shared docs tree (or to
+narrow it). Stdin has no path context, so includes there stay literal unless
+`--include-root` is given.
 
 ### Heading ids
 

@@ -124,6 +124,7 @@ export {
   expandIncludes,
   fileSystemResolver,
   type IncludeContext,
+  type IncludeDependency,
   type IncludeOptions,
   type IncludeResult,
   type IncludeWarning,
