@@ -60,6 +60,39 @@ HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
 mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes
 render literally.
 
+### Includes
+
+File inclusion is an opt-in processor pass. The core parser leaves `{{ path }}`
+literal unless you call `expandIncludes` with a resolver:
+
+```ts
+import { expandIncludes, parse, resolve, renderHtml } from '@markup-carve/carve'
+
+const source = 'Intro\n\n{{ chapter.crv @shift:1 }}'
+const expanded = expandIncludes(parse(source, { positions: true }), source, {
+  resolve(path, ctx) {
+    // Return the child source string, throw, or return null when unresolvable.
+    // `ctx.sourcePath` and `ctx.stack` let hosts resolve relative paths.
+    return files.get(path) ?? null
+  },
+})
+
+for (const warning of expanded.warnings) console.warn(warning.message)
+const html = renderHtml(resolve(expanded.doc))
+```
+
+Supported directive options are `#section`, `@lines:N-M`, and `@shift:N`.
+`#section` selects the heading subtree by explicit id or auto slug, `@lines`
+selects an inclusive physical line range before parsing, and `@shift` shifts
+included heading levels with clamping to `h1`...`h6`.
+
+Resolvers are deliberately host-supplied. Do not enable includes for untrusted
+input unless the resolver canonicalizes paths, rejects root escapes, and applies
+the same parsing and sanitization policy as the parent document. A Node helper,
+`fileSystemResolver(root)`, enforces canonical root containment and rejects
+absolute include paths by default. The CLI exposes this with
+`carve --include-root docs input.crv`.
+
 ### Heading ids
 
 Every heading gets an automatic id derived from its text. Ids are

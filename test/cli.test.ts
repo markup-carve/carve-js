@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { run, type CliIO } from '../src/cli.js'
 
 /**
@@ -281,5 +284,15 @@ describe('carve render', () => {
     const t = makeIO({ stdin: SRC })
     expect(await run(['--markdown'], t.io)).toBe(0)
     expect(t.out).toContain('# Hi')
+  })
+
+  it('expands includes with --include-root', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Included.</p>\n')
+    expect(t.err).toBe('')
   })
 })

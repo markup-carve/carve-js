@@ -120,6 +120,17 @@ export { headingPermalinks, type HeadingPermalinksOptions } from './heading-perm
 export { codeGroup, type CodeGroupOptions } from './code-group.js'
 export { tabs, type TabsOptions, type TabsMode } from './tabs.js'
 export { headingLevelShift, type HeadingLevelShiftOptions } from './heading-level-shift.js'
+export {
+  expandIncludes,
+  fileSystemResolver,
+  type IncludeContext,
+  type IncludeOptions,
+  type IncludeResult,
+  type IncludeWarning,
+  type IncludeResolver,
+  type IncludeResolved,
+  type FileSystemResolverOptions,
+} from './includes.js'
 export { headingReference, type HeadingReferenceOptions } from './heading-reference.js'
 export {
   defaultAttributes,
