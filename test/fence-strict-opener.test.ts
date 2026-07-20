@@ -85,13 +85,14 @@ describe('fenced code: definition prepass uses the same column rule', () => {
   })
 })
 
-// Markdown tolerates a 1-3 space indent on a fence opener; Carve does not.
-// The migrator must drop it, or valid Markdown code blocks migrate into prose.
-describe('markdownToCarve normalizes indented fence openers', () => {
-  it('emits a column-0 opener for an indented Markdown fence', async () => {
+// A Markdown fence indented as a list item's content stays in the item after
+// migration: its indent is the content column, and a strict Carve fence opens
+// AT that column. Dedenting to 0 would lift the code out of the list.
+describe('markdownToCarve keeps a list-nested fence in its item', () => {
+  it('preserves the content-column indent of a list-nested fence', async () => {
     const { markdownToCarve } = await import('../src/index.js')
-    const out = markdownToCarve(' ```js\nx\n ```\n')
-    expect(out.startsWith('```js')).toBe(true)
-    expect(carveToHtml(out)).toContain('<pre><code class="language-js">x\n</code></pre>')
+    const out = markdownToCarve('- item\n  ```\n  code\n  ```\n')
+    // fence stays at the item content column, so it renders inside the <li>
+    expect(carveToHtml(out)).toContain('<li>item\n    <pre><code>code\n</code></pre>')
   })
 })
