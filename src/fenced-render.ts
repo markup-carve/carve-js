@@ -26,7 +26,7 @@ export interface FencedRenderOptions {
    * source as a `<pre><code>` block. Unset means no build renderer applies and
    * static always degrades to source.
    */
-  staticRenderer?: 'mermaid' | 'chart' | 'graphviz'
+  staticRenderer?: 'mermaid' | 'chart' | 'graphviz' | 'plantuml'
 }
 
 // Text mode: escape `&` and `<` (blocking tag injection), but keep `>` so
@@ -165,7 +165,7 @@ export const abc = (): CarveExtension => fencedRender({ language: 'abc' })
  *  UML shapes Mermaid does not (use case, component, deployment, timing). Load
  *  a client-side PlantUML build (`@plantuml/core`) to render the diagrams. */
 export const plantuml = (): CarveExtension =>
-  fencedRender({ language: ['plantuml', 'puml'], cssClass: 'plantuml' })
+  fencedRender({ language: ['plantuml', 'puml'], cssClass: 'plantuml', staticRenderer: 'plantuml' })
 /** Vega-Lite preset (json mode, `<div class="vega-lite"><script ...>`). */
 export const vegaLite = (): CarveExtension =>
   fencedRender({ language: 'vega-lite', contentMode: 'json' })

@@ -6,6 +6,7 @@ import {
   codeGroup,
   details,
   graphviz,
+  plantuml,
   mathBlock,
   mermaid,
   spoiler,
@@ -32,6 +33,7 @@ const exts = () => [
   mermaid(),
   chart(),
   graphviz(),
+  plantuml(),
   mathBlock(),
 ]
 
@@ -236,6 +238,34 @@ describe('static render mode — graphviz', () => {
       renderers: { graphviz: () => '<img alt="graphviz" src="graph.svg">' },
     })
     expect(html).toBe('<pre class="graphviz"><img alt="graphviz" src="graph.svg"></pre>')
+  })
+})
+
+describe('static render mode — plantuml', () => {
+  const SRC = '``` plantuml\n@startuml\nA -> B\n@enduml\n```'
+
+  it('static plantuml without a renderer degrades to escaped source <pre><code>', () => {
+    const html = carveToHtml(SRC, { extensions: exts(), mode: 'static' })
+    expect(html).toContain('<pre class="plantuml"><code class="language-plantuml">')
+    expect(html).not.toContain('<script')
+  })
+
+  it('static plantuml with a stub renderer emits the injected image inside the wrapper', () => {
+    const html = carveToHtml(SRC, {
+      extensions: exts(),
+      mode: 'static',
+      renderers: { plantuml: () => '<img alt="plantuml" src="uml.svg">' },
+    })
+    expect(html).toBe('<pre class="plantuml"><img alt="plantuml" src="uml.svg"></pre>')
+  })
+
+  it('the puml alias consults the same plantuml renderer key', () => {
+    const html = carveToHtml('``` puml\nA -> B\n```', {
+      extensions: exts(),
+      mode: 'static',
+      renderers: { plantuml: () => '<img alt="plantuml" src="uml.svg">' },
+    })
+    expect(html).toBe('<pre class="plantuml"><img alt="plantuml" src="uml.svg"></pre>')
   })
 })
 

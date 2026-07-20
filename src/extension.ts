@@ -14,6 +14,8 @@ export interface StaticRenderers {
   chart?: (source: string) => string
   /** Graphviz / DOT source -> SVG/HTML string. */
   graphviz?: (source: string) => string
+  /** PlantUML source -> SVG/HTML string. */
+  plantuml?: (source: string) => string
   /** Math TeX source -> MathML/HTML string. `display` flags block math. */
   math?: (tex: string, display: boolean) => string
 }
