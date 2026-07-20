@@ -383,9 +383,12 @@ describe('markdownToCarve — block spacing', () => {
 })
 
 describe('markdownToCarve — code protection edge cases', () => {
-  it('does not convert inside an indented fenced code block', () => {
+  it('leaves an indented fenced code block opaque, re-basing it to column 0', () => {
+    // A document-level fence carries no container, so its 1-3 space Markdown
+    // indent is re-based to column 0 (a strict Carve fence opens only there).
+    // The sample text stays opaque: `*a*` / `_b_` are not converted.
     const md = ['  ```', '  const x = *a* + _b_', '  ```'].join('\n')
-    expect(conv(md)).toBe(md)
+    expect(conv(md)).toBe(['```', 'const x = *a* + _b_', '```'].join('\n'))
   })
 
   it('does not convert inside a multi-backtick code span', () => {

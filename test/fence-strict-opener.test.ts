@@ -85,14 +85,27 @@ describe('fenced code: definition prepass uses the same column rule', () => {
   })
 })
 
-// A Markdown fence indented as a list item's content stays in the item after
-// migration: its indent is the content column, and a strict Carve fence opens
-// AT that column. Dedenting to 0 would lift the code out of the list.
-describe('markdownToCarve keeps a list-nested fence in its item', () => {
-  it('preserves the content-column indent of a list-nested fence', async () => {
+// migration re-bases a Markdown fence to its container's content column: a
+// document-level fence dedents to column 0, a list-nested fence stays at the
+// item's content column. Either way the migrated fence opens under strict Carve.
+describe('markdownToCarve re-bases a fence to its container content column', () => {
+  it('dedents a document-level indented fence to column 0', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    const out = markdownToCarve('  ```js\n  x\n  ```\n')
+    expect(out.startsWith('```js')).toBe(true)
+    expect(carveToHtml(out)).toContain('<pre><code class="language-js">x\n</code></pre>')
+  })
+
+  it('keeps a list-nested fence at the item content column', async () => {
     const { markdownToCarve } = await import('../src/index.js')
     const out = markdownToCarve('- item\n  ```\n  code\n  ```\n')
-    // fence stays at the item content column, so it renders inside the <li>
+    expect(carveToHtml(out)).toContain('<li>item\n    <pre><code>code\n</code></pre>')
+  })
+
+  it('strips only the slack above the content column on an over-indented list fence', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // item content column is 2, fence indented 3 -> one space of slack removed
+    const out = markdownToCarve('- item\n   ```\n   code\n   ```\n')
     expect(carveToHtml(out)).toContain('<li>item\n    <pre><code>code\n</code></pre>')
   })
 })
