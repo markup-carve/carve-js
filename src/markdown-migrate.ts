@@ -355,9 +355,17 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
 export function markdownToCarve(markdown: string): string {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const out: string[] = []
+  // strip up to `indent` leading spaces (Markdown already treats them as the
+  // fence's own indentation, not as part of the code sample)
+  const dedentFence = (line: string, indent: string): string =>
+    indent === '' ? line : line.replace(new RegExp(`^ {0,${indent.length}}`), '')
   let inCode = false
   let fenceChar = ''
   let fenceLen = 0
+  // indent of the open Markdown fence: dropped from the opener and stripped
+  // from the body/closer, so the migrated block sits at column 0 with its
+  // sample text unchanged
+  let fenceIndent = ''
   let prevType: 'blank' | 'heading' | 'list' | 'blockquote' | 'code_fence' | 'code' | 'text' =
     'blank'
 
@@ -378,7 +386,13 @@ export function markdownToCarve(markdown: string): string {
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
       const info = open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? ''
-      out.push(open[1]! + open[2]! + info)
+      // Markdown tolerates a 1-3 space indent on the opener; Carve does not
+      // (a fence opens only AT its container's content column), so drop it --
+      // keeping it would migrate a valid Markdown code block into prose. The
+      // same indent comes off the body and closer, since Markdown already
+      // strips it from the sample.
+      fenceIndent = open[1]!
+      out.push(open[2]! + info)
       prevType = 'code_fence'
       continue
     }
@@ -390,11 +404,12 @@ export function markdownToCarve(markdown: string): string {
         inCode = false
         fenceChar = ''
         fenceLen = 0
-        out.push(line)
+        out.push(dedentFence(line, fenceIndent))
+        fenceIndent = ''
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'code_fence'
       } else {
-        out.push(line)
+        out.push(dedentFence(line, fenceIndent))
         prevType = 'code'
       }
       continue

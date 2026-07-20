@@ -115,7 +115,7 @@ const RE_HR = /^([-*_])\1{2,}[ \t]*$/
 // before this; a leading `=` therefore never starts a language token.
 // Groups: 3 lang, 4|6 header (quoted, incl. quotes), 5|7|8 label (incl. brackets).
 const RE_FENCE =
-  /^(\s*)(`{3,}|~{3,})\s*(?:([a-zA-Z0-9_+#/.-]+)(?:\s+("[^"]*"))?(?:\s+(\[[^\]]*\]))?|("[^"]*")(?:\s+(\[[^\]]*\]))?|(\[[^\]]*\]))?\s*$/
+  /^()(`{3,}|~{3,})\s*(?:([a-zA-Z0-9_+#/.-]+)(?:\s+("[^"]*"))?(?:\s+(\[[^\]]*\]))?|("[^"]*")(?:\s+(\[[^\]]*\]))?|(\[[^\]]*\]))?\s*$/
 // Bullets are `-` and `*` only. Unlike Markdown/djot, `+` is not a Carve bullet
 // -- it is reserved as the list-continuation marker (PART 9 §17), so a lone `+`
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
@@ -296,7 +296,7 @@ const RE_COMMENT_BLOCK = /^%{3,}\s*$/
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
-const RE_FENCE_CLOSER = /^\s{0,3}(`{3,}|~{3,})\s*$/
+const RE_FENCE_CLOSER = /^(`{3,}|~{3,})\s*$/
 
 // Maximum block-container nesting depth, applied UNIFORMLY to blockquote, list,
 // fenced-div / admonition (and footnote) nesting. Each level recurses
@@ -612,7 +612,7 @@ export function normalizeRefLabel(label: string): string {
  * near-impossible input, and skipping the strip avoids the more common false
  * positive of fabricating a def from ordinary prose).
  */
-function stripContainerPrefixes(raw: string): string {
+function stripContainerPrefixesKeepIndent(raw: string): string {
   let line = raw
   let prev: string
   do {
@@ -621,7 +621,12 @@ function stripContainerPrefixes(raw: string): string {
       .replace(/^[^\S\u00a0]*>[^\S\u00a0]?/, '') // blockquote (NBSP is content)
       .replace(/^[^\S\u00a0]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP is content)
   } while (line !== prev)
-  return line.replace(/^[^\S\u00a0]+/, '') // residual indentation (keep a content NBSP)
+  return line
+}
+
+function stripContainerPrefixes(raw: string): string {
+  // residual indentation (keep a content NBSP)
+  return stripContainerPrefixesKeepIndent(raw).replace(/^[^\S\u00a0]+/, '')
 }
 
 /**
@@ -660,12 +665,22 @@ function collectLinkDefs(lexer: Lexer) {
     const raw = lexer.lines[idx]!
     const line = stripContainerPrefixes(raw)
     if (fence) {
-      const close = line.match(/^ {0,3}([`~]{3,})\s*$/)
+      const close = line.match(/^([`~]{3,})\s*$/)
       if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
         fence = null
       continue // definitions inside fenced code are literal samples
     }
-    const open = RE_FENCE.exec(line)
+    // A fence OPENER is column-exact (PART 2), but this prepass is line-based
+    // and does not know the container's content column, so it cannot fully
+    // agree with the block parser. It errs on the side of NOT opening: a
+    // definition inside a fence nested at a container's content column is
+    // still collected here, so a later reference to it resolves when it
+    // should not. That is a spurious link; the opposite error (opening a
+    // fence the parser never opened) silently swallows every later
+    // definition, which is content loss. See the known-limitation test.
+    // The sound fix is to collect definitions during block parsing, where the
+    // container columns are known.
+    const open = RE_FENCE.exec(stripContainerPrefixesKeepIndent(raw))
     if (open) {
       fence = { ch: open[2]![0]!, len: open[2]!.length }
       continue
@@ -1122,7 +1137,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
   const labelRaw = m[5] ?? m[7] ?? m[8]
   const header = headerRaw ? headerRaw.slice(1, -1) : undefined
   const label = labelRaw ? labelRaw.slice(1, -1) : undefined
-  const closeRe = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+  const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
   const lines: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -1165,7 +1180,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   const m = RE_RAW_FENCE.exec(lexer.consume())!
   const marker = m[1]!
   const format = m[2]!
-  const closeRe = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+  const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
   const lines: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -1760,7 +1775,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     if (fence) {
       const marker = fence[2]!
       state.inFence = true
-      state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+      state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
       state.paragraphOpen = false
       return
     }
@@ -1768,7 +1783,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     if (raw) {
       const marker = raw[1]!
       state.inFence = true
-      state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+      state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
       state.paragraphOpen = false
       return
     }
@@ -2209,7 +2224,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (fence) {
     const marker = fence[2]!
     state.inFence = true
-    state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+    state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
     state.lazyFoldable = false
     return
   }
@@ -2217,7 +2232,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (raw) {
     const marker = raw[1]!
     state.inFence = true
-    state.fenceClose = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+    state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
     state.lazyFoldable = false
     return
   }
@@ -2999,7 +3014,7 @@ function splitTableRow(line: string): string[] {
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
   const start = lexer.pos + 1
   if (start >= lexer.noFenceCloserFrom) return false // memo: no closer ahead
-  const closeRe = new RegExp(`^\\s{0,3}${marker[0]}{${marker.length},}\\s*$`)
+  const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
   let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
     const l = lexer.lines[i]!
