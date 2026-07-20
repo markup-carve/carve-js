@@ -38,6 +38,42 @@ describe('expandIncludes', () => {
     expect(renderHtml(resolve(result.doc))).toBe('<p>See {{ child.crv }} here.</p>')
   })
 
+  describe('an empty or path-less run is not a directive', () => {
+    // The maintainer ruled that "{{ }}", whitespace-only braces, and a run
+    // that carries only a #section or an @option with no path are ORDINARY
+    // literal text - no warning, no dependency - at expansion and formatting.
+    // This pins behavior that until now existed only implicitly.
+    const fmt = (source: string) => renderCarve(parse(source, { positions: true }))
+    const cases: Array<[string, string]> = [
+      ['empty braces', '{{ }}'],
+      ['whitespace-only braces', '{{   }}'],
+      ['section only, no path', '{{ #intro }}'],
+      ['option only, no path', '{{ @lines:2-4 }}'],
+    ]
+
+    for (const [name, source] of cases) {
+      it(`treats ${name} as literal text with no warning or dependency`, () => {
+        const result = expand(source, { '': 'X', '#intro': 'X', '@lines:2-4': 'X' })
+        expect(result.warnings).toEqual([])
+        expect(result.dependencies).toEqual([])
+        // The literal braces reach the rendered output verbatim.
+        expect(result.html).toContain('{{')
+        expect(result.html).toContain('}}')
+      })
+
+      it(`keeps ${name} literal across a format pass`, () => {
+        // Not a directive, so fmt takes the ordinary escaping path rather than
+        // the verbatim channel: the braces are emitted escaped, which renders
+        // to the SAME literal text and is idempotent.
+        const formatted = fmt(source)
+        expect(fmt(formatted)).toBe(formatted)
+        const before = renderHtml(resolve(parse(source, { positions: true })))
+        const after = renderHtml(resolve(parse(formatted, { positions: true })))
+        expect(after).toBe(before)
+      })
+    }
+  })
+
   it('verbatim shielding keeps directives literal in fenced blocks and inline code spans', () => {
     const source = '```txt\n{{ child }}\n```\n\nUse `{{ child }}`.'
     const result = expand(source, { child: 'expanded' })

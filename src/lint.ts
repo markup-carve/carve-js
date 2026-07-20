@@ -289,6 +289,7 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
+  collectEmptyIncludePathWarnings(source, doc, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -538,6 +539,140 @@ function collectFootnoteDefinitionWarnings(
       end: site?.end ?? 0,
     })
   }
+}
+
+/**
+ * A brace pair with no nested brace. The include directive shape is
+ * `{{ … }}`, and a directive body never contains a brace, so this bounds the
+ * candidate exactly as the parser's own shape check (DIRECTIVE_SHAPE_RE) does.
+ */
+const BRACE_PAIR = /\{\{([^{}]*)\}\}/g
+
+/**
+ * True when a `{{ … }}` shape carries NO path token, i.e. it looks like an
+ * include directive but names nothing: an empty or whitespace-only body
+ * ("{{ }}"), or a body that is only a `#section` / `@option` with no path in
+ * front of it ("{{ #intro }}", "{{ @lines:2-4 }}"). The `#`/`@` forms require
+ * the directive's leading whitespace so a bracey template token with no space
+ * ("{{#if}}") is left alone.
+ *
+ * A real path never starts with `#` or `@` (the bare path token excludes
+ * both) and a quoted path starts with a quote, so a genuine directive - even
+ * a mistyped one like "{{ chapter.crv @bogus:1 }}" - is never matched here.
+ */
+function isEmptyIncludePath(inner: string): boolean {
+  const lead = /^[ \t]*/.exec(inner)![0]
+  const body = inner.slice(lead.length).replace(/[ \t]+$/, '')
+  if (body === '') return true
+  return lead.length > 0 && (body[0] === '#' || body[0] === '@')
+}
+
+/** Inline nodes the include scanner reassembles a directive run from. */
+function isRunNodeType(node: unknown): node is { type: string; value?: string; user?: string; name?: string } {
+  const t = (node as { type?: unknown })?.type
+  return t === 'text' || t === 'mention' || t === 'tag'
+}
+
+function runNodeSource(node: { type: string; value?: string; user?: string; name?: string }): string {
+  if (node.type === 'text') return node.value ?? ''
+  return node.type === 'mention' ? `@${node.user}` : `#${node.name}`
+}
+
+/**
+ * Advisory: a `{{ … }}` run that has the include-directive shape but no path.
+ * The language treats it as ordinary literal text with no warning (an empty
+ * path is not a directive), so the "did you mean an include?" hint has to live
+ * in the linter.
+ *
+ * Recognition works on reassembled runs of text/mention/tag nodes, exactly as
+ * the include expander does: a code span is a `code` node and a code/raw block
+ * keeps its body in a string field, so neither contributes run text and both
+ * are skipped - the same I9 verbatim contexts the parser honors, without a
+ * source-line scan that would misfire inside an inline code span.
+ */
+function collectEmptyIncludePathWarnings(
+  source: string,
+  doc: Document,
+  out: LintWarning[],
+): void {
+  const lineStart: number[] = []
+  {
+    const lines = source.split('\n')
+    for (let off = 0, i = 0; i < lines.length; i++) {
+      lineStart[i] = off
+      off += lines[i]!.length + 1
+    }
+  }
+  const lineColFor = (offset: number): { line: number; column: number } => {
+    let lo = 0
+    let hi = lineStart.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (lineStart[mid]! <= offset) lo = mid
+      else hi = mid - 1
+    }
+    return { line: lo + 1, column: offset - lineStart[lo]! + 1 }
+  }
+
+  const scanRun = (run: Array<{ type: string; pos?: Positioned['pos'] } & Record<string, unknown>>): void => {
+    const full = run.map((n) => runNodeSource(n as never)).join('')
+    if (!full.includes('{{')) return
+    // Absolute source offset of each run node, so a match maps back to source.
+    const spans: Array<{ runStart: number; len: number; offset: number | undefined }> = []
+    let runOff = 0
+    for (const node of run) {
+      const len = runNodeSource(node as never).length
+      spans.push({ runStart: runOff, len, offset: node.pos?.startOffset })
+      runOff += len
+    }
+    const re = new RegExp(BRACE_PAIR.source, 'g')
+    for (let m = re.exec(full); m; m = re.exec(full)) {
+      if (!isEmptyIncludePath(m[1]!)) continue
+      const at = m.index
+      // "{{" is always text, so the match start lands in a run node whose
+      // reassembled text equals its source - the offset maps back exactly.
+      const covering = spans.find((s) => at >= s.runStart && at < s.runStart + s.len) ?? spans[0]
+      const startOffset = covering?.offset === undefined ? at : covering.offset + (at - covering.runStart)
+      const { line, column } = lineColFor(startOffset)
+      out.push({
+        line,
+        column,
+        rule: 'empty-include-path',
+        message:
+          `This "${m[0]}" looks like an include directive with no path, so it renders as ` +
+          `literal text. Add a path (for example {{ chapter.crv }}) or remove the braces.`,
+        start: startOffset,
+        end: startOffset + m[0].length,
+      })
+    }
+  }
+
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      // Reassemble every maximal run of text/mention/tag siblings and scan it;
+      // a non-run node (code span, emphasis, link, …) ends the current run.
+      let i = 0
+      while (i < value.length) {
+        if (!isRunNodeType(value[i])) {
+          i++
+          continue
+        }
+        let j = i
+        while (j < value.length && isRunNodeType(value[j])) j++
+        scanRun(value.slice(i, j) as never)
+        i = j
+      }
+      for (const item of value) visit(item)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    for (const key of Object.keys(value as Record<string, unknown>)) {
+      if (key === 'pos' || key === 'attrs') continue
+      visit((value as Record<string, unknown>)[key])
+    }
+  }
+  visit(doc.children)
+  if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
 }
 
 /** Format lint warnings as `file:line:col rule — message`. */
