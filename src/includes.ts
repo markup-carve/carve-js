@@ -29,6 +29,18 @@ export interface IncludeWarning {
   start: number
   /** 0-based end offset in the parent source, exclusive. */
   end: number
+  /**
+   * Identity of the file the warning arose in: the canonical id a resolver
+   * returned for that file, or the raw directive path when the resolver
+   * returned plain source. A directive that failed to resolve is attributed
+   * to the document that contains it, not to the target it names; a warning
+   * raised while expanding a child (a heading clamp, a rename, a nested
+   * cycle) is attributed to that child.
+   *
+   * Absent for the top-level document when the caller supplied no
+   * `sourcePath` - there is no identity to report, and none is invented.
+   */
+  file?: string
 }
 
 export interface IncludeContext {
@@ -119,6 +131,13 @@ interface State {
   stack: string[]
   /** Directive nesting depth; separate from stack, which may hold the root id. */
   depth: number
+  /**
+   * Identity of the document whose content is currently being expanded, used
+   * to attribute warnings ({@link IncludeWarning.file}). Undefined only for a
+   * top-level document the caller gave no `sourcePath` for. Always present as
+   * a key so `exactOptionalPropertyTypes` keeps the "unknown" case explicit.
+   */
+  file: string | undefined
   docs: Document[]
   usedHeadingIds: Set<string>
   /** Include targets in first-encounter order; value is the resolved flag. */
@@ -161,8 +180,13 @@ function warn(
   rule: string,
   message: string,
   node?: { pos?: { startLine: number; startColumn?: number; startOffset?: number; endOffset?: number } },
+  /** Overrides the attributed file when the warning is about content the
+   * caller already merged out of its own document (see mergeFootnotes). */
+  file: string | undefined = state.file,
 ): void {
-  state.warnings.push({ ...locate(node ?? {}), rule, message })
+  const warning: IncludeWarning = { ...locate(node ?? {}), rule, message }
+  if (file !== undefined) warning.file = file
+  state.warnings.push(warning)
 }
 
 function unescapeQuotedPath(path: string): string {
@@ -341,7 +365,11 @@ function shiftBlocks(blocks: BlockNode[], shift: number, state: State): void {
   blocks.forEach(visit)
 }
 
-function expandChild(d: Directive, state: State, node: Text): Document | null {
+function expandChild(
+  d: Directive,
+  state: State,
+  node: Text,
+): { doc: Document; file: string } | null {
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
   const child = parse(resolved.source, { positions: true })
@@ -360,6 +388,10 @@ function expandChild(d: Directive, state: State, node: Text): Document | null {
     }
     child.children = selected
   }
+  // Everything from here on operates on the child's own content, so warnings
+  // it raises name the child rather than the document that included it.
+  const outerFile = state.file
+  state.file = resolved.id
   renameChildHeadingIds(child, state)
   const auto = d.shift === 'auto'
   const stated = auto ? 0 : (d.shift as number)
@@ -392,7 +424,8 @@ function expandChild(d: Directive, state: State, node: Text): Document | null {
   // Measured after expansion so a child that only passes through to nested
   // includes is levelled by the headings those actually contributed.
   shiftBlocks(child.children, auto ? autoShift(child, state) : stated, state)
-  return child
+  state.file = outerFile
+  return { doc: child, file: resolved.id }
 }
 
 /**
@@ -506,11 +539,12 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
     )
     if (!d) continue
-    const child = expandChild(d, state, anchor)
-    if (!child) continue
+    const expanded = expandChild(d, state, anchor)
+    if (!expanded) continue
+    const child = expanded.doc
     if (child.children.length === 0 || (child.children.length === 1 && child.children[0]!.type === 'paragraph')) {
       const replacement = child.children.length === 1 ? (child.children[0] as Paragraph).children : []
-      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state)
+      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state, expanded.file)
       spans.push({ start: m.index, end: m.index + raw.length, replacement })
     } else {
       warn(state, 'include-block-in-inline', `Inline include "${d.path}" resolved to block content.`, anchor)
@@ -633,7 +667,12 @@ function renameInBlocks(blocks: BlockNode[], footnotes: Map<string, string>, hea
   })
 }
 
-function mergeFootnotes(target: Document, child: Document, state: State): void {
+/**
+ * `childFile` is the child's identity: the renamed label is the child's own,
+ * and the merge runs after expansion has already restored the parent as the
+ * current file, so attribution is passed in explicitly.
+ */
+function mergeFootnotes(target: Document, child: Document, state: State, childFile: string): void {
   if (!child.footnoteDefs) return
   target.footnoteDefs = target.footnoteDefs ?? {}
   const rename = new Map<string, string>()
@@ -644,7 +683,7 @@ function mergeFootnotes(target: Document, child: Document, state: State): void {
     const finalLabel = taken ? nextFree(label, new Set(Object.keys(target.footnoteDefs))) : label
     if (finalLabel !== label) {
       rename.set(label, finalLabel)
-      warn(state, 'include-footnote-rename', `Footnote label "${label}" was renamed to "${finalLabel}".`)
+      warn(state, 'include-footnote-rename', `Footnote label "${label}" was renamed to "${finalLabel}".`, undefined, childFile)
     }
     target.footnoteDefs[finalLabel] = child.footnoteDefs[label]!
   }
@@ -659,14 +698,14 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text),
     )
     if (d) {
-      const child = expandChild(d, state, text)
-      if (!child) {
+      const expanded = expandChild(d, state, text)
+      if (!expanded) {
         // Degrade to literal: the original inline nodes render exactly as the
         // core does with no resolver (spec I7).
         return [block]
       }
-      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state)
-      return child.children
+      mergeFootnotes(state.docs[state.docs.length - 1]!, expanded.doc, state, expanded.file)
+      return expanded.doc.children
     }
     // A whole-paragraph directive that failed to parse was already reported
     // here; skip the inline scan so it is not warned about twice.
@@ -769,6 +808,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     usedBytes: 0,
     stack: options.sourcePath ? [options.sourcePath] : [],
     depth: 0,
+    file: options.sourcePath,
     docs: [doc],
     usedHeadingIds: new Set(),
     dependencies: new Map(),

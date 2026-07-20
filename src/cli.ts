@@ -249,7 +249,9 @@ const AST_RENDERERS = {
 
 function formatIncludeWarnings(warnings: IncludeWarning[], file: string): string {
   return warnings
-    .map((w) => `${file}:${w.line}:${w.column} ${w.rule} - ${w.message}`)
+    // A warning raised inside an included file names that file, so the
+    // location points at the source the reader has to edit.
+    .map((w) => `${w.file ?? file}:${w.line}:${w.column} ${w.rule} - ${w.message}`)
     .join('\n')
 }
 

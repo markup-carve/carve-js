@@ -77,9 +77,25 @@ const expanded = expandIncludes(parse(source, { positions: true }), source, {
   },
 })
 
-for (const warning of expanded.warnings) console.warn(warning.message)
+for (const warning of expanded.warnings) {
+  console.warn(`${warning.file ?? '<input>'}:${warning.line} ${warning.message}`)
+}
 const html = renderHtml(resolve(expanded.doc))
 ```
+
+Each warning carries a `file` naming the document it arose in, so a host can
+route a diagnostic to the right editor buffer. A directive that failed to
+resolve is attributed to the document containing it, not to the target it
+names; a warning raised while expanding a child - a heading clamp, an id or
+footnote rename, a cycle found deeper in the chain - is attributed to that
+child. The value is the resolver's canonical id when it supplies one, and the
+`sourcePath` option for the top-level document. It is **absent** when the
+top-level document has no `sourcePath`: no placeholder path is invented.
+
+`line` / `column` / `start` / `end` are positions in that `file`'s own source.
+Positions on merged AST nodes are not yet remapped into the assembled
+document - see the follow-up on source-position remapping (spec section 19,
+I4).
 
 `expanded.dependencies` lists every include target touched by the whole
 recursive expansion (`{ id, resolved }`, de-duplicated, in first-encounter

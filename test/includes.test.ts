@@ -618,13 +618,59 @@ describe('include rules', () => {
 
   it('I4 source mapping: merged blocks currently keep the child file positions', () => {
     // Pinning actual behavior, not endorsing it: included blocks carry the
-    // positions they had in the child source and warnings carry no file
-    // identity, so a host cannot yet attribute either to the child file.
+    // positions they had in the child source, so a host still cannot map a
+    // location in the assembled document back to a file and offset. Warning
+    // attribution is covered separately by the `file` field below; position
+    // remapping is the remaining half of I4.
     const source = 'Parent.\n\n{{ child }}'
     const doc = parse(source, { positions: true })
     const result = expandIncludes(doc, source, { resolve: () => 'Child.' })
     expect(result.warnings).toEqual([])
     const positions = result.doc.children.map((b) => b.pos?.startOffset)
     expect(positions).toEqual([0, 0])
+  })
+
+  describe('I4 attribution: warnings name the file they arose in', () => {
+    it('attributes an unresolvable directive to the top-level document', () => {
+      const result = expand('{{ missing }}', {}, { sourcePath: 'book.crv' })
+      expect(result.warnings.map((w) => [w.rule, w.file])).toEqual([
+        ['include-unresolved', 'book.crv'],
+      ])
+    })
+
+    it('attributes a warning raised while expanding a child to the child', () => {
+      // The clamp happens on a heading that lives in child.crv, even though
+      // the directive that pulled it in lives in the parent.
+      const result = expand('{{ child.crv @shift:1 }}', { 'child.crv': '###### Deep' }, {
+        sourcePath: 'book.crv',
+      })
+      expect(result.warnings.map((w) => [w.rule, w.file])).toEqual([
+        ['include-heading-clamp', 'child.crv'],
+      ])
+    })
+
+    it('attributes a grandchild warning to the grandchild, not an ancestor', () => {
+      // Only the innermost file has a directive that fails, so attribution
+      // must walk the whole chain rather than stopping at the root or at the
+      // file that owns the outermost include.
+      const result = expand(
+        '{{ chapter.crv }}',
+        {
+          'chapter.crv': 'Chapter.\n\n{{ section.crv }}',
+          'section.crv': 'Section.\n\n{{ missing.crv }}',
+        },
+        { sourcePath: 'book.crv' },
+      )
+      expect(result.warnings.map((w) => [w.rule, w.file])).toEqual([
+        ['include-unresolved', 'section.crv'],
+      ])
+    })
+
+    it('omits the file entirely when the top-level document has no sourcePath', () => {
+      const result = expand('{{ missing }}', {})
+      expect(result.warnings.map((w) => w.rule)).toEqual(['include-unresolved'])
+      expect(result.warnings[0]!.file).toBeUndefined()
+      expect('file' in result.warnings[0]!).toBe(false)
+    })
   })
 })
