@@ -6,6 +6,12 @@ import {
   carveToPlainText,
   carveToAnsi,
   parse,
+  applyProfile,
+  Profile,
+  renderHtml,
+  canonicalType,
+  CANONICAL_INLINE_TYPES,
+  type Document,
 } from '../src/index.js'
 
 const h = (s: string) => carveToHtml(s)
@@ -184,6 +190,46 @@ describe('inline literal: carve serialization (fmt)', () => {
       '[t](/u){!}',
     ]) {
       expect(h(carveToCarve(src))).toBe(h(src))
+    }
+  })
+})
+
+describe('inline literal under profiles', () => {
+  // An inline literal reports its own canonical type `literal_inline` rather
+  // than aliasing onto `text`. Its content is escaped, so its trust level does
+  // match a text node -- but with attributes it renders a <span>, and the
+  // allowlist presets deliberately exclude `span`. Aliasing to `text` let
+  // untrusted input smuggle <span class="..."> past `comment` / `minimal`.
+  it('reports a distinct canonical type', () => {
+    expect(canonicalType('literal-inline')).toBe('literal_inline')
+    expect(CANONICAL_INLINE_TYPES).toContain('literal_inline')
+  })
+
+  const render = (src: string, profile: Profile) => {
+    const result = applyProfile(parse(src), profile)
+    return renderHtml((result as { doc?: Document }).doc ?? (result as unknown as Document))
+  }
+
+  it('is denied by the allowlist presets, exactly like a span', () => {
+    for (const profile of [Profile.comment(), Profile.minimal()]) {
+      // attributed literal must NOT smuggle a span past the allowlist
+      expect(render('`x`{! .evil}', profile)).toBe('<p>x</p>')
+      // same treatment the equivalent span already gets
+      expect(render('[x]{.evil}', profile)).toBe('<p>x</p>')
+      // content is preserved, only the element and attributes are dropped
+      expect(render('`/kaet/`{! .ipa}', profile)).toBe('<p>/kaet/</p>')
+    }
+  })
+
+  it('is allowed where spans are allowed', () => {
+    for (const profile of [Profile.article(), Profile.full()]) {
+      expect(render('`x`{! .evil}', profile)).toBe('<p><span class="evil">x</span></p>')
+    }
+  })
+
+  it('a bare literal is plain escaped text in every preset', () => {
+    for (const profile of [Profile.comment(), Profile.minimal(), Profile.article(), Profile.full()]) {
+      expect(render('`x`{!}', profile)).toBe('<p>x</p>')
     }
   })
 })

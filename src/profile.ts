@@ -74,6 +74,7 @@ export const CANONICAL_INLINE_TYPES = [
   'symbol',
   'math',
   'abbreviation',
+  'literal_inline',
 ] as const
 
 const BLOCK_SET: ReadonlySet<string> = new Set(CANONICAL_BLOCK_TYPES)
@@ -159,11 +160,15 @@ export function canonicalType(type: string): string | undefined {
     case 'raw-inline':
       return 'raw_inline'
     case 'literal-inline':
-      // An inline literal is escaped prose (§27), not raw passthrough and not
-      // code -- it carries exactly the trust level of a text node, so it maps
-      // onto the existing `text` vocabulary rather than adding a canonical
-      // type name that the other implementations do not know yet.
-      return 'text'
+      // An inline literal gets its OWN canonical type rather than aliasing
+      // onto `text`. Its content is escaped, so its trust level does match a
+      // text node -- but when it carries attributes it renders a `<span>`, and
+      // the `comment` / `minimal` presets deliberately exclude `span` from
+      // their allowlists. Reporting it as `text` therefore let untrusted input
+      // smuggle `<span class="...">` past those presets. A distinct type keeps
+      // the allowlists fail-closed (an unknown type is denied, §profiles) and
+      // lets a host allow or deny the construct on purpose.
+      return 'literal_inline'
     case 'footnote':
       // Inline footnote (`^[...]`) carries `inline`; a reference (`[^id]`)
       // does not. carve-php denies both under the footnote family, so the
