@@ -158,6 +158,12 @@ export function canonicalType(type: string): string | undefined {
       return 'hard_break'
     case 'raw-inline':
       return 'raw_inline'
+    case 'literal-inline':
+      // An inline literal is escaped prose (§27), not raw passthrough and not
+      // code -- it carries exactly the trust level of a text node, so it maps
+      // onto the existing `text` vocabulary rather than adding a canonical
+      // type name that the other implementations do not know yet.
+      return 'text'
     case 'footnote':
       // Inline footnote (`^[...]`) carries `inline`; a reference (`[^id]`)
       // does not. carve-php denies both under the footnote family, so the

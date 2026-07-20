@@ -361,6 +361,14 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return withAttrs(renderMath(node.display, node.content))
     case 'raw-inline':
       return `${renderCode(node.content)}{=${escapeFormat(node.format)}}`
+    case 'literal-inline': {
+      // §27: `content`{!} — the sigil is always first, further attributes
+      // follow it separated by a space (the grammar requires that separation).
+      // renderCode widens the backtick fence when the content holds backticks.
+      const attrs = renderAttrs(node.attrs)
+      const inner = attrs ? `! ${attrs.slice(1, -1)}` : '!'
+      return `${renderCode(node.content)}{${inner}}`
+    }
     case 'symbol':
       return withAttrs(`:${escapeSymbolName(node.name)}:`)
     case 'autolink':

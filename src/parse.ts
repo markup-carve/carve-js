@@ -42,6 +42,7 @@ import type {
   Position,
   RawBlock,
   RawInline,
+  LiteralInline,
   Span,
   SymbolInline,
   Table,
@@ -3246,6 +3247,14 @@ const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
 const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 // Raw inline passthrough tag, follows a verbatim span: `` `…`{=html} ``.
 const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
+// Inline literal sigil block, follows a verbatim span: `` `…`{!} `` (grammar
+// PART 9 §27, ohm `litInline = code "{" attrSp* "!" (attrSp+ attrItem)* attrSp*
+// "}"`). The `!` MUST be the first token, and every further attribute must be
+// separated from it by whitespace -- so `{!.ipa}` does not match here and, `!`
+// being an invalid attribute identifier, stays literal text via the strict
+// attribute rule (§14). Group 1 is the remaining attribute payload (possibly
+// empty), validated with the same strict payload check as any other block.
+const RE_LIT_INLINE = /^\{[ \t]*!((?:[ \t](?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)?)\}/
 // Symbol shortcode `:name:` (after extension, which needs `[`).
 // The first name char is a letter, digit, `+` or `-` (so `:+1:` / `:-1:`
 // parse), but never `_` — `:_x_:` would steal from underline. Scanning the
@@ -3802,10 +3811,24 @@ function scanInlineInner(
         const len = end - i + raw[0].length
         out.push(withPos({ type: 'raw-inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
         i += len
-      } else {
-        out.push(withPos({ type: 'code', value: inner }, source, text, i, end))
-        i = end
+        continue
       }
+      // A verbatim span tagged `{!…}` is an inline literal (§27): same
+      // verbatim capture as a code span, but the `<code>` wrapper is dropped
+      // and the content is escaped-and-always-emitted rather than
+      // target-routed like raw passthrough.
+      const lit = RE_LIT_INLINE.exec(text.slice(end))
+      if (lit && isValidAttrPayload(lit[1] ?? '')) {
+        const node = { type: 'literal-inline', content: inner } as LiteralInline
+        const parsed = parseAttrs(lit[1] ?? '')
+        if (!isEmptyAttrs(parsed)) node.attrs = parsed
+        const len = end - i + lit[0].length
+        out.push(withPos(node, source, text, i, i + len))
+        i += len
+        continue
+      }
+      out.push(withPos({ type: 'code', value: inner }, source, text, i, end))
+      i = end
       continue
     }
 
