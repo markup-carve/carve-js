@@ -184,6 +184,17 @@ through `renderAttrs`, which applies the always-on attribute hardening (strips
 values), so a `{onclick="…"}` fence can never reach the output.
 
 > [!NOTE]
+> **PlantUML payload vs Mermaid.** Both hydrate fully offline (load the file
+> locally, no CDN). `@plantuml/core` is roughly **~2 MB gzipped** - about double
+> Mermaid's **~0.95 MB** - because it bundles Graphviz (`viz.js`, ~0.6 MB gz) to
+> lay out class / component / deployment diagrams; `plantuml.js` itself is
+> ~1.4 MB gz. Sequence diagrams render to SVG without the layout engine, so a
+> sequence-only page is lighter. Load PlantUML only on pages that use the UML
+> types Mermaid cannot draw (use case, component, deployment, timing); prefer
+> Mermaid where it suffices. (Sizes are the shipped browser builds, not npm's
+> `unpackedSize`, which is dominated by source maps and inverts the comparison.)
+
+> [!NOTE]
 > **json mode emits a `<script type="application/json">`.** If you sanitize the
 > HTML *after* converting (e.g. DOMPurify), that inert script is typically
 > stripped. Either whitelist `<script type="application/json">` in your
