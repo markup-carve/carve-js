@@ -656,7 +656,10 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     docs: [doc],
     usedHeadingIds: new Set(),
   }
-  if (options.resolve) {
+  // Recognition needs a parse, but a document whose source contains no "{{"
+  // at all cannot contain a directive in any position, so the AST walk is
+  // skipped outright. This keeps directive-free documents at parse cost.
+  if (options.resolve && source.includes('{{')) {
     // Parent explicit ids are claimed first (spec I5: parent before child), so
     // an included duplicate is the one renamed - even against a parent heading
     // after the include site.
