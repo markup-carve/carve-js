@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { findDirectives } from './include-directive.js'
+import { DIRECTIVE_FULL_RE, findDirectives } from './include-directive.js'
 
 export interface CarveRenderOptions {}
 
@@ -365,6 +365,34 @@ function escapeDirective(text: string): string {
   return text.replace(/"/g, '\\$&')
 }
 
+/**
+ * Serialize one preserved directive, undoing the damage smart typography has
+ * already done to a quoted path.
+ *
+ * The parser curls the delimiters of `{{ "my chapter.crv" }}` before the
+ * serializer ever sees them, so echoing the AST text emits the CURLED form.
+ * carve-js still resolves that to the same path -- the directive grammar
+ * accepts a curly-delimited path too -- but the output is no longer
+ * byte-identical to the input, and engines that accept only the plain form
+ * would read a formatted document differently. So the path is rebuilt from
+ * its parsed part rather than echoed: the delimiters go back to plain quotes
+ * and any quote INSIDE the path is re-escaped, which is exactly the form the
+ * author wrote.
+ *
+ * Everything outside the path keeps the previous verbatim-plus-quote-escape
+ * treatment, so a run that does not carry a curly-quoted path is unaffected.
+ */
+function emitDirective(raw: string): string {
+  const m = DIRECTIVE_FULL_RE.exec(raw)
+  const curled = m?.[2]
+  if (curled === undefined) return escapeDirective(raw)
+  const delimited = `“${curled}”`
+  const at = raw.indexOf(delimited)
+  if (at === -1) return escapeDirective(raw)
+  const plain = `"${curled.replace(/["\\]/g, '\\$&')}"`
+  return escapeDirective(raw.slice(0, at)) + plain + escapeDirective(raw.slice(at + delimited.length))
+}
+
 function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
   const overrides = new Map<number, string>()
   let i = 0
@@ -394,9 +422,12 @@ function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
         let cursor = start
         for (const span of covering) {
           if (span.start > cursor) out += escapeText(text.slice(cursor - start, span.start - start))
-          const to = Math.min(span.end, offset)
-          out += escapeDirective(text.slice(Math.max(span.start, start) - start, to - start))
-          cursor = to
+          // The whole directive is emitted once, by the node where it STARTS.
+          // A later node that the same span merely runs THROUGH contributes
+          // nothing, which is what lets the emitted form differ in length
+          // from the source it replaces (a rebuilt quoted path does).
+          if (span.start >= start) out += emitDirective(span.raw)
+          cursor = Math.min(span.end, offset)
         }
         out += escapeText(text.slice(cursor - start))
         overrides.set(i + k, out)

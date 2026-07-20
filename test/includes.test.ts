@@ -715,9 +715,30 @@ describe('include rules', () => {
       expect(fmt('{{ chapter.crv }}')).toBe('{{ chapter.crv }}\n')
     })
 
-    it('preserves a quoted path with spaces', () => {
-      // The core smart-quotes the delimiters; the curly form is a directive too.
-      expect(fmt('{{ "my chapter.crv" }}')).toBe('{{ “my chapter.crv” }}\n')
+    it('preserves a quoted path with spaces using PLAIN quotes', () => {
+      // The core smart-quotes the delimiters before the serializer sees them.
+      // carve-js resolves the curled form to the same path, so nothing broke
+      // here, but the output must still be byte-identical to the input:
+      // engines that accept only the plain form have to read a formatted
+      // document the same way this one does.
+      expect(fmt('{{ "my chapter.crv" }}')).toBe('{{ "my chapter.crv" }}\n')
+    })
+
+    it('keeps a quoted path naming the same file after a format', () => {
+      // String equality alone would not catch a path that changed and still
+      // looked plausible, so this asserts through an actual resolver.
+      const files = { 'my chapter.crv': 'Chapter body.' }
+      const source = '{{ "my chapter.crv" }}'
+      const formatted = fmt(source)
+      expect(fmt(formatted)).toBe(formatted)
+      expect(expand(formatted.trim(), files).html).toBe(expand(source, files).html)
+      expect(expand(formatted.trim(), files).dependencies).toEqual(
+        expand(source, files).dependencies,
+      )
+    })
+
+    it('preserves two quoted paths in one run with plain quotes', () => {
+      expect(fmt('{{ "a b.crv" }} and {{ "c d.crv" }}')).toBe('{{ "a b.crv" }} and {{ "c d.crv" }}\n')
     })
 
     it('preserves a section selection', () => {
@@ -747,6 +768,58 @@ describe('include rules', () => {
       expect(span).toBe('Use `{{ chapter.crv }}` here\\.\n')
       const fence = fmt('```txt\n{{ chapter.crv }}\n```')
       expect(fence).toBe('``` txt\n{{ chapter.crv }}\n```\n')
+    })
+
+    it('preserves two directives separated by prose', () => {
+      // Every fixture used to carry a SINGLE directive, which made a
+      // "first one only" defect invisible - carve-php had exactly that bug.
+      expect(fmt('a {{ x.crv }} b {{ y.crv }} c')).toBe('a {{ x.crv }} b {{ y.crv }} c\n')
+    })
+
+    it('preserves three or more directives in one run', () => {
+      expect(fmt('{{ a.crv }} p {{ b.crv }} q {{ c.crv }}')).toBe(
+        '{{ a.crv }} p {{ b.crv }} q {{ c.crv }}\n',
+      )
+      expect(fmt('w {{ a.crv }} x {{ b.crv }} y {{ c.crv }} z {{ d.crv }}')).toBe(
+        'w {{ a.crv }} x {{ b.crv }} y {{ c.crv }} z {{ d.crv }}\n',
+      )
+    })
+
+    it('preserves adjacent directives with no prose between them', () => {
+      expect(fmt('{{ a.crv }}{{ b.crv }}')).toBe('{{ a.crv }}{{ b.crv }}\n')
+      expect(fmt('{{ a.crv }} {{ b.crv }}')).toBe('{{ a.crv }} {{ b.crv }}\n')
+    })
+
+    it('preserves a directive at the very start and one at the very end of a run', () => {
+      expect(fmt('{{ a.crv }} middle prose {{ b.crv }}')).toBe(
+        '{{ a.crv }} middle prose {{ b.crv }}\n',
+      )
+    })
+
+    it('preserves multiple directives carrying #section and options', () => {
+      // These parse into extra tag and mention nodes, so the run has to be
+      // reassembled across node boundaries before the scan can see them.
+      expect(fmt('a {{ x.crv #intro }} b {{ y.crv #outro }} c')).toBe(
+        'a {{ x.crv #intro }} b {{ y.crv #outro }} c\n',
+      )
+      expect(fmt('a {{ x.crv @shift:1 }} b {{ y.crv @lines:2-4 }} c')).toBe(
+        'a {{ x.crv @shift:1 }} b {{ y.crv @lines:2-4 }} c\n',
+      )
+      expect(fmt('{{ x.crv #intro @shift:auto }} p {{ y.crv @lines:1-2 }}')).toBe(
+        '{{ x.crv #intro @shift:auto }} p {{ y.crv @lines:1-2 }}\n',
+      )
+    })
+
+    it('escapes a shape-invalid run without disturbing valid ones around it', () => {
+      expect(fmt('a {{ x.crv }} b {{ }} c {{ y.crv }} d')).toBe(
+        'a {{ x.crv }} b \\{\\{ \\}\\} c {{ y.crv }} d\n',
+      )
+    })
+
+    it('preserves directives across separate paragraphs and block positions', () => {
+      const source =
+        '{{ a.crv }}\n\nprose {{ b.crv }} prose\n\n> quoted {{ c.crv }} here\n\n- item {{ d.crv }} tail\n'
+      expect(fmt(source)).toBe(source)
     })
 
     it('still escapes a run that is not shape-well-formed', () => {
@@ -809,6 +882,48 @@ describe('include rules', () => {
       expect(formatted.dependencies).toEqual(original.dependencies)
       expect(original.dependencies.map((d) => d.id)).toEqual(['a.crv', 'b.crv', 'c d.crv'])
       expect(original.html).toContain('Body.')
+    })
+
+    it('expanding a formatted document matches when one run holds several directives', () => {
+      // The case above spreads its directives one per inline run, so a
+      // "first directive in a run survives, the rest are escaped" defect
+      // (carve-php had exactly that) would slip straight through it. Here
+      // every form that shares a run is exercised at once: plain, sectioned,
+      // optioned, quoted, and adjacent.
+      const files = {
+        'a.crv': 'A body.',
+        'b.crv': 'B body.',
+        'c.crv': '# Intro\n\nC intro.\n\n# Outro\n\nC outro.',
+        'd.crv': 'D body.',
+        'e f.crv': 'EF body.',
+        'g h.crv': 'GH body.',
+      }
+      const source = [
+        'start {{ a.crv }} mid {{ b.crv }} end',
+        '',
+        'sec {{ c.crv #Intro }} and {{ c.crv #Outro }} done',
+        '',
+        'opt {{ a.crv @shift:1 }} and {{ b.crv @lines:1-1 }} done',
+        '',
+        'quoted {{ "e f.crv" }} and {{ "g h.crv" }} done',
+        '',
+        '{{ a.crv }}{{ d.crv }}',
+      ].join('\n')
+      const original = expand(source, files)
+      const formatted = expand(fmt(source), files)
+      expect(formatted.html).toBe(original.html)
+      expect(formatted.dependencies).toEqual(original.dependencies)
+      // Guards the assertion itself: if preservation regressed to the first
+      // directive per run, these later targets would drop out entirely.
+      expect(original.dependencies.map((d) => d.id)).toEqual([
+        'a.crv',
+        'b.crv',
+        'c.crv',
+        'e f.crv',
+        'g h.crv',
+        'd.crv',
+      ])
+      expect(fmt(fmt(source))).toBe(fmt(source))
     })
   })
 
