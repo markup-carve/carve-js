@@ -13,10 +13,12 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
+import { findDirectives } from './include-directive.js'
 
 export interface CarveRenderOptions {}
 
 const MAX_RENDER_DEPTH = 200
+const CONTROL_RE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 interface CarveContext {
@@ -316,12 +318,99 @@ function renderFootnoteDefs(ast: Document, ctx: CarveContext): string {
   return out.join('\n\n')
 }
 
+/**
+ * Source text of an inline node that the core produces while parsing an
+ * include directive as plain text. The core never gives a directive its own
+ * node type: "{{ a #s @shift:1 }}" arrives as text plus tag and mention
+ * nodes, so recognizing one means reassembling that run first -- exactly as
+ * the expander does.
+ */
+function directiveRunText(node: InlineNode): string | null {
+  if (node.type === 'text') return node.value
+  if (node.type === 'mention') return `@${node.user}`
+  if (node.type === 'tag') return `#${node.name}`
+  return null
+}
+
+/**
+ * Per-node serializations that must be emitted VERBATIM because the node is
+ * covered, whole or in part, by a well-formed include directive (spec I1).
+ *
+ * Without this the serializer escapes a directive like any other punctuation-
+ * bearing text ("\{\{ a \}\}"), which still renders as the same literal text
+ * today but is inert once a resolver is wired up -- formatting a document
+ * would silently delete every include. A directive that is not well-formed
+ * ("{{ oops") is left to the normal escaping path.
+ *
+ * A serializer cannot tell an authored literal "{{" from a directive, because
+ * "\{\{" and "{{" parse to the same text. That is accepted: spec I9 makes the
+ * directive inert inside code, which is where an author who needs a
+ * guaranteed literal puts it.
+ */
+/**
+ * The one escape a preserved directive still needs: a straight quote inside
+ * a quoted path reaches the AST unescaped, and emitting it bare would let
+ * smart typography curl it on the next parse -- which changes the path and
+ * un-recognizes the directive. Backslash-escaping it round-trips to the same
+ * text and keeps fmt idempotent.
+ */
+function escapeDirective(text: string): string {
+  return text.replace(/"/g, '\\$&')
+}
+
+function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
+  const overrides = new Map<number, string>()
+  let i = 0
+  while (i < nodes.length) {
+    if (directiveRunText(nodes[i]!) === null) {
+      i++
+      continue
+    }
+    let end = i
+    while (end < nodes.length && directiveRunText(nodes[end]!) !== null) end++
+    const texts = nodes.slice(i, end).map((node) => directiveRunText(node)!)
+    const full = texts.join('')
+    // A control character would be stripped by escapeText but survives a
+    // verbatim emit, so such a run keeps the (already degenerate) old path.
+    // Fast path: a run with no "{{" cannot hold a directive, so the common
+    // (directive-free) document never pays for the scan.
+    const spans = !full.includes('{{') || CONTROL_RE.test(full) ? [] : findDirectives(full)
+    if (spans.length) {
+      let offset = 0
+      for (let k = 0; k < texts.length; k++) {
+        const text = texts[k]!
+        const start = offset
+        offset += text.length
+        const covering = spans.filter((s) => s.start < offset && s.end > start)
+        if (covering.length === 0) continue
+        let out = ''
+        let cursor = start
+        for (const span of covering) {
+          if (span.start > cursor) out += escapeText(text.slice(cursor - start, span.start - start))
+          const to = Math.min(span.end, offset)
+          out += escapeDirective(text.slice(Math.max(span.start, start) - start, to - start))
+          cursor = to
+        }
+        out += escapeText(text.slice(cursor - start))
+        overrides.set(i + k, out)
+      }
+    }
+    i = end
+  }
+  return overrides
+}
+
 function renderInlines(nodes: InlineNode[], ctx: CarveContext): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
   ctx.inlineDepth++
   try {
+    const overrides = directiveOverrides(nodes)
     return nodes
-      .map((node, idx) => renderInline(node, ctx, lastBoundary(nodes[idx - 1]), firstBoundary(nodes[idx + 1])))
+      .map(
+        (node, idx) =>
+          overrides.get(idx) ??
+          renderInline(node, ctx, lastBoundary(nodes[idx - 1]), firstBoundary(nodes[idx + 1])),
+      )
       .join('')
   } finally {
     ctx.inlineDepth--
@@ -599,7 +688,7 @@ function cleanEscapedText(node: Text): string {
   // `{,` opener is neutralized by the `{` escape. `^` stays escaped for the
   // inline-footnote (`^[`) and caption (line-leading `^`) channels.
 function escapeText(text: string): string {
-  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '').replace(/[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g, '\\$&')
+  return text.replace(new RegExp(CONTROL_RE.source, 'g'), '').replace(/[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g, '\\$&')
 }
 
 function escapePlainLine(text: string): string {

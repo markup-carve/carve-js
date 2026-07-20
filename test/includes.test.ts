@@ -673,4 +673,89 @@ describe('include rules', () => {
       expect('file' in result.warnings[0]!).toBe(false)
     })
   })
+  describe('formatting preserves directives (spec I1)', () => {
+    const fmt = (source: string) => renderCarve(parse(source, { positions: true }))
+
+    it('emits a well-formed directive verbatim instead of escaping it', () => {
+      expect(fmt('{{ chapter.crv }}')).toBe('{{ chapter.crv }}\n')
+    })
+
+    it('preserves a quoted path with spaces', () => {
+      // The core smart-quotes the delimiters; the curly form is a directive too.
+      expect(fmt('{{ "my chapter.crv" }}')).toBe('{{ “my chapter.crv” }}\n')
+    })
+
+    it('preserves a section selection', () => {
+      expect(fmt('{{ chapter.crv #intro }}')).toBe('{{ chapter.crv #intro }}\n')
+    })
+
+    it('preserves a line range', () => {
+      expect(fmt('{{ chapter.crv @lines:2-40 }}')).toBe('{{ chapter.crv @lines:2-40 }}\n')
+    })
+
+    it('preserves a stated shift', () => {
+      expect(fmt('{{ chapter.crv @shift:+1 }}')).toBe('{{ chapter.crv @shift:+1 }}\n')
+    })
+
+    it('preserves an auto shift', () => {
+      expect(fmt('{{ chapter.crv @shift:auto }}')).toBe('{{ chapter.crv @shift:auto }}\n')
+    })
+
+    it('preserves a directive that sits inside a sentence', () => {
+      expect(fmt('See {{ chapter.crv }} for more.')).toBe('See {{ chapter.crv }} for more\\.\n')
+    })
+
+    it('keeps a directive in a code span or fenced block escaped exactly as the core produces it', () => {
+      // Spec I9: code is where a directive is inert, so the serializer must not
+      // "helpfully" unescape it there - the verbatim channels already round-trip.
+      const span = fmt('Use `{{ chapter.crv }}` here.')
+      expect(span).toBe('Use `{{ chapter.crv }}` here\\.\n')
+      const fence = fmt('```txt\n{{ chapter.crv }}\n```')
+      expect(fence).toBe('``` txt\n{{ chapter.crv }}\n```\n')
+    })
+
+    it('still escapes a malformed directive', () => {
+      expect(fmt('{{ oops')).toBe('\\{\\{ oops\n')
+      expect(fmt('{{ chapter.crv @bogus:1 }}')).toBe('\\{\\{ chapter\\.crv @bogus\\:1 \\}\\}\n')
+    })
+
+    it('keeps a quoted path with an embedded quote resolving after a format', () => {
+      // The inner quote arrives unescaped in the AST; emitted bare, smart
+      // typography would curl it on the next parse and change the path.
+      const files = { 'a"b.crv': 'Body.' }
+      const source = '{{ "a\\"b.crv" }}'
+      const formatted = fmt(source)
+      expect(fmt(formatted)).toBe(formatted)
+      expect(expand(formatted, files).html).toBe(expand(source, files).html)
+      expect(expand(formatted, files).html).toBe('<p>Body.</p>')
+    })
+
+    it('is idempotent over a document full of directives', () => {
+      const source =
+        '{{ a.crv }}\n\nSee {{ b.crv #intro }} and {{ "c d.crv" @shift:auto }}.\n\n```txt\n{{ e.crv }}\n```\n'
+      const once = fmt(source)
+      expect(fmt(once)).toBe(once)
+    })
+
+    it('expanding a formatted document matches expanding the original', () => {
+      // The formatter's standing invariant - carveToHtml(fmt(x)) === carveToHtml(x)
+      // - cannot see this bug: an escaped directive renders as the same literal
+      // text, so the invariant holds while every include is silently destroyed.
+      // The assertion that catches it is about INTENT: the formatted document
+      // must still include the same content, with the same dependency set.
+      const files = {
+        'a.crv': '# Chapter\n\nBody.',
+        'b.crv': 'inline bit',
+        'c d.crv': '## Quoted path',
+      }
+      const source = '{{ a.crv }}\n\nSee {{ b.crv }} and here:\n\n{{ "c d.crv" @shift:auto }}'
+      const original = expand(source, files)
+      const formatted = expand(fmt(source), files)
+      expect(formatted.html).toBe(original.html)
+      expect(formatted.dependencies).toEqual(original.dependencies)
+      expect(original.dependencies.map((d) => d.id)).toEqual(['a.crv', 'b.crv', 'c d.crv'])
+      expect(original.html).toContain('Body.')
+    })
+  })
+
 })

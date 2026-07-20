@@ -12,6 +12,12 @@ import type {
 import { utf8ByteLength } from './abbr-budget.js'
 import { inlineText, slugify } from './heading-ids.js'
 import { parse, normalizeRefLabel } from './parse.js'
+import {
+  DIRECTIVE_SCAN_RE,
+  DIRECTIVE_SHAPE_RE,
+  parseDirective,
+  type Directive,
+} from './include-directive.js'
 import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 
@@ -113,14 +119,6 @@ export interface FileSystemResolverOptions {
 
 export type IncludeResolver = (path: string, ctx: IncludeContext) => IncludeResolved | null
 
-interface Directive {
-  raw: string
-  path: string
-  section?: string
-  lines?: { start: number; end: number }
-  /** Literal signed offset, or "auto" to derive it from the include site. */
-  shift: number | 'auto'
-}
 
 interface State {
   opts: IncludeOptions
@@ -155,11 +153,6 @@ interface State {
   contextLevel: number
 }
 
-const DIRECTIVE_SCAN_RE = /\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}/g
-const DIRECTIVE_FULL_RE = /^\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}$/
-const OPTION_RE = /^@([A-Za-z_][\w-]*):([^#@}\s]+)$/
-/** Loose directive shape: one whole-paragraph token, valid options or not. */
-const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
 const MIN_BUDGET = 1024 * 1024
 
 function locate(node: { pos?: { startLine: number; startColumn?: number; startOffset?: number; endOffset?: number } }): Pick<
@@ -187,51 +180,6 @@ function warn(
   const warning: IncludeWarning = { ...locate(node ?? {}), rule, message }
   if (file !== undefined) warning.file = file
   state.warnings.push(warning)
-}
-
-function unescapeQuotedPath(path: string): string {
-  return path.replace(/\\(["\\])/g, '$1')
-}
-
-function parseDirective(raw: string, onInvalidOption?: (part: string) => void): Directive | null {
-  const m = DIRECTIVE_FULL_RE.exec(raw)
-  if (!m) return null
-  const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2] ?? m[3]!
-  const sectionPart = m[4]?.trim()
-  const section = sectionPart ? sectionPart.slice(1) : undefined
-  let lines: Directive['lines']
-  let shift: number | 'auto' = 0
-  const rest = m[5]?.trim()
-  if (rest) {
-    for (const part of rest.split(/\s+/)) {
-      const opt = OPTION_RE.exec(part)
-      const invalid = (): null => {
-        // Spec I1: an unrecognized (or malformed) option makes the directive
-        // unresolvable - Warning + literal, never silent.
-        if (part.startsWith('@')) onInvalidOption?.(part)
-        return null
-      }
-      if (!opt) return invalid()
-      const [, key, value] = opt
-      if (key === 'lines') {
-        const lm = /^([1-9]\d*)-([1-9]\d*)$/.exec(value!)
-        if (!lm) return invalid()
-        lines = { start: Number(lm[1]), end: Number(lm[2]) }
-        if (lines.end < lines.start) return invalid()
-      } else if (key === 'shift') {
-        // Spec I8: a signed integer or the literal "auto", never both forms.
-        if (value === 'auto') shift = 'auto'
-        else if (!/^[+-]?\d+$/.test(value!)) return invalid()
-        else shift = Number(value)
-      } else {
-        return invalid()
-      }
-    }
-  }
-  const directive: Directive = { raw, path, shift }
-  if (section !== undefined) directive.section = section
-  if (lines !== undefined) directive.lines = lines
-  return directive
 }
 
 function sourceLines(source: string): string[] {
