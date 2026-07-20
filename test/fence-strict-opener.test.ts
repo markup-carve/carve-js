@@ -108,4 +108,46 @@ describe('markdownToCarve re-bases a fence to its container content column', () 
     const out = markdownToCarve('- item\n   ```\n   code\n   ```\n')
     expect(carveToHtml(out)).toContain('<li>item\n    <pre><code>code\n</code></pre>')
   })
+
+  it('measures a task item column by marker width, not the checkbox', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // content column is 2 (the `- `), not 6 (past `[ ] `); the col-2 fence stays in
+    const out = markdownToCarve('- [ ] task\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<pre><code>code\n</code></pre>')
+    expect(carveToHtml(out)).not.toContain('</ul>\n<pre>') // not lifted to top level
+  })
+
+  it('re-bases a fence to the parent column after a nested child list', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // fence sits at the OUTER item content column (2) after an inner list
+    const out = markdownToCarve('- outer\n  - inner\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<pre><code>code\n</code></pre>')
+    expect(carveToHtml(out)).not.toContain('</ul>\n<pre>') // not lifted to top level
+  })
+
+  it('keeps the item column across a lazy paragraph continuation', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // `continued` at column 0 with NO blank is lazy continuation: the item
+    // stays open, so the col-2 fence is still inside it.
+    const out = markdownToCarve('- item\ncontinued\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<pre><code>code\n</code></pre>')
+    expect(carveToHtml(out)).not.toContain('</ul>\n<pre>')
+  })
+
+  it('dedents a fence to column 0 once a blank ends the list', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // blank + column-0 text + blank ends the list, so the fence is document-level
+    const out = markdownToCarve('- item\n\ntext\n\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toMatch(/(^|\n)<pre>/) // top-level pre: the list ended
+  })
+
+  it('dedents a fence after a block starter ends the list without a blank', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // a heading interrupts the item (no blank needed), so the later fence is
+    // document-level and dedents to column 0
+    const out = markdownToCarve('- item\n# heading\n\n  ```\n  code\n  ```\n')
+    // fence re-based to column 0 (the heading ended the list)
+    expect(out).toContain('\n```\ncode\n```')
+    expect(out).not.toContain('  ```')
+  })
 })
