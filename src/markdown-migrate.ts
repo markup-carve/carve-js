@@ -355,23 +355,54 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
 export function markdownToCarve(markdown: string): string {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const out: string[] = []
-  // strip up to `indent` leading spaces (Markdown already treats them as the
-  // fence's own indentation, not as part of the code sample)
-  const dedentFence = (line: string, indent: string): string =>
-    indent === '' ? line : line.replace(new RegExp(`^ {0,${indent.length}}`), '')
   let inCode = false
   let fenceChar = ''
   let fenceLen = 0
-  // indent of the open Markdown fence: dropped from the opener and stripped
-  // from the body/closer, so the migrated block sits at column 0 with its
-  // sample text unchanged
-  let fenceIndent = ''
+  // How many leading spaces to strip from the open fence's opener/body/closer,
+  // so the migrated fence sits at its container's content column. See the
+  // opener handler for how it is derived.
+  let fenceStrip = 0
+  // Stack of enclosing list items' content columns (outermost first), so a
+  // fence is re-based to the DEEPEST item that still contains it. A Markdown
+  // fence indented to a list item's content stays in the item (strip nothing);
+  // a document-level 1-3 space fence dedents to column 0.
+  const listCols: number[] = []
+  // was the previous line blank? A dedented line only leaves a list item when a
+  // blank precedes it; without a blank it is lazy paragraph continuation and
+  // the item stays open (CommonMark).
+  let prevBlank = true
   let prevType: 'blank' | 'heading' | 'list' | 'blockquote' | 'code_fence' | 'code' | 'text' =
     'blank'
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     const trimmed = line.trim()
+    const wasPrevBlank = prevBlank
+    prevBlank = trimmed === ''
+
+    // Maintain the list-item content-column stack. A marker opens an item whose
+    // content starts after the marker (the task checkbox is content, so its
+    // width is NOT part of the column); a blank line is transparent (a loose
+    // item continues); a non-blank line pops items whose content starts to its
+    // right. Code content never changes list tracking.
+    if (!inCode) {
+      const marker = line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
+      const indent = line.length - line.replace(/^[ \t]+/, '').length
+      // A dedented line leaves a list item when a blank precedes it OR the line
+      // itself starts a block (heading, block quote, fence, thematic break) --
+      // those interrupt lazy paragraph continuation, so the item ends (§10).
+      const startsBlock =
+        /^#{1,6}([ \t]|$)/.test(trimmed) ||
+        trimmed.startsWith('>') ||
+        /^(`{3,}|~{3,})/.test(trimmed) ||
+        /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)
+      if (marker && /\S/.test(line.slice(marker[0].length))) {
+        while (listCols.length && listCols[listCols.length - 1]! > marker[1]!.length) listCols.pop()
+        listCols.push(marker[0].length)
+      } else if (trimmed !== '' && (wasPrevBlank || startsBlock)) {
+        while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
+      }
+    }
 
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
     // Markdown rule). Carve accepts a single language token over a real-world
@@ -386,13 +417,16 @@ export function markdownToCarve(markdown: string): string {
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
       const info = open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? ''
-      // Markdown tolerates a 1-3 space indent on the opener; Carve does not
-      // (a fence opens only AT its container's content column), so drop it --
-      // keeping it would migrate a valid Markdown code block into prose. The
-      // same indent comes off the body and closer, since Markdown already
-      // strips it from the sample.
-      fenceIndent = open[1]!
-      out.push(open[2]! + info)
+      // Re-base the fence to its container's content column: strip only the
+      // indentation ABOVE that column. At document level the column is 0, so a
+      // 1-3 space Markdown fence dedents fully; inside a list item the fence's
+      // own indent IS the content column, so nothing is stripped and it stays
+      // in the item. The same strip comes off the body and closer, since
+      // Markdown already treats that indent as the fence's, not the sample's.
+      const openerIndent = open[1]!.length
+      const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
+      fenceStrip = Math.max(0, openerIndent - contentCol)
+      out.push(open[1]!.slice(fenceStrip) + open[2]! + info)
       prevType = 'code_fence'
       continue
     }
@@ -400,16 +434,17 @@ export function markdownToCarve(markdown: string): string {
     // Inside a fence — a closer is a run of the same char at least as long as
     // the opener (indented by at most 3 spaces); a shorter inner run is code.
     if (inCode) {
+      const dedented = fenceStrip > 0 ? line.replace(new RegExp(`^ {0,${fenceStrip}}`), '') : line
       if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(line)) {
         inCode = false
         fenceChar = ''
         fenceLen = 0
-        out.push(dedentFence(line, fenceIndent))
-        fenceIndent = ''
+        fenceStrip = 0
+        out.push(dedented)
         if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
         prevType = 'code_fence'
       } else {
-        out.push(dedentFence(line, fenceIndent))
+        out.push(dedented)
         prevType = 'code'
       }
       continue

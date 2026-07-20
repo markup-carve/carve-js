@@ -383,11 +383,10 @@ describe('markdownToCarve — block spacing', () => {
 })
 
 describe('markdownToCarve — code protection edge cases', () => {
-  // Carve opens a fence only AT its container's content column, so an indented
-  // Markdown fence is dedented to column 0 on migration -- keeping the indent
-  // would turn a valid code block into prose. The sample text itself is
-  // untouched: `*a*` / `_b_` stay literal.
-  it('does not convert inside an indented fenced code block (dedents the block)', () => {
+  it('leaves an indented fenced code block opaque, re-basing it to column 0', () => {
+    // A document-level fence carries no container, so its 1-3 space Markdown
+    // indent is re-based to column 0 (a strict Carve fence opens only there).
+    // The sample text stays opaque: `*a*` / `_b_` are not converted.
     const md = ['  ```', '  const x = *a* + _b_', '  ```'].join('\n')
     expect(conv(md)).toBe(['```', 'const x = *a* + _b_', '```'].join('\n'))
   })

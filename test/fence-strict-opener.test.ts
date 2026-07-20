@@ -85,13 +85,69 @@ describe('fenced code: definition prepass uses the same column rule', () => {
   })
 })
 
-// Markdown tolerates a 1-3 space indent on a fence opener; Carve does not.
-// The migrator must drop it, or valid Markdown code blocks migrate into prose.
-describe('markdownToCarve normalizes indented fence openers', () => {
-  it('emits a column-0 opener for an indented Markdown fence', async () => {
+// migration re-bases a Markdown fence to its container's content column: a
+// document-level fence dedents to column 0, a list-nested fence stays at the
+// item's content column. Either way the migrated fence opens under strict Carve.
+describe('markdownToCarve re-bases a fence to its container content column', () => {
+  it('dedents a document-level indented fence to column 0', async () => {
     const { markdownToCarve } = await import('../src/index.js')
-    const out = markdownToCarve(' ```js\nx\n ```\n')
+    const out = markdownToCarve('  ```js\n  x\n  ```\n')
     expect(out.startsWith('```js')).toBe(true)
     expect(carveToHtml(out)).toContain('<pre><code class="language-js">x\n</code></pre>')
+  })
+
+  it('keeps a list-nested fence at the item content column', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    const out = markdownToCarve('- item\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<li>item\n    <pre><code>code\n</code></pre>')
+  })
+
+  it('strips only the slack above the content column on an over-indented list fence', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // item content column is 2, fence indented 3 -> one space of slack removed
+    const out = markdownToCarve('- item\n   ```\n   code\n   ```\n')
+    expect(carveToHtml(out)).toContain('<li>item\n    <pre><code>code\n</code></pre>')
+  })
+
+  it('measures a task item column by marker width, not the checkbox', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // content column is 2 (the `- `), not 6 (past `[ ] `); the col-2 fence stays in
+    const out = markdownToCarve('- [ ] task\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<pre><code>code\n</code></pre>')
+    expect(carveToHtml(out)).not.toContain('</ul>\n<pre>') // not lifted to top level
+  })
+
+  it('re-bases a fence to the parent column after a nested child list', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // fence sits at the OUTER item content column (2) after an inner list
+    const out = markdownToCarve('- outer\n  - inner\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<pre><code>code\n</code></pre>')
+    expect(carveToHtml(out)).not.toContain('</ul>\n<pre>') // not lifted to top level
+  })
+
+  it('keeps the item column across a lazy paragraph continuation', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // `continued` at column 0 with NO blank is lazy continuation: the item
+    // stays open, so the col-2 fence is still inside it.
+    const out = markdownToCarve('- item\ncontinued\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toContain('<pre><code>code\n</code></pre>')
+    expect(carveToHtml(out)).not.toContain('</ul>\n<pre>')
+  })
+
+  it('dedents a fence to column 0 once a blank ends the list', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // blank + column-0 text + blank ends the list, so the fence is document-level
+    const out = markdownToCarve('- item\n\ntext\n\n  ```\n  code\n  ```\n')
+    expect(carveToHtml(out)).toMatch(/(^|\n)<pre>/) // top-level pre: the list ended
+  })
+
+  it('dedents a fence after a block starter ends the list without a blank', async () => {
+    const { markdownToCarve } = await import('../src/index.js')
+    // a heading interrupts the item (no blank needed), so the later fence is
+    // document-level and dedents to column 0
+    const out = markdownToCarve('- item\n# heading\n\n  ```\n  code\n  ```\n')
+    // fence re-based to column 0 (the heading ended the list)
+    expect(out).toContain('\n```\ncode\n```')
+    expect(out).not.toContain('  ```')
   })
 })
