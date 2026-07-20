@@ -4,7 +4,9 @@ import type {
   Heading,
   HeadingLevel,
   InlineNode,
+  Mention,
   Paragraph,
+  Tag,
   Text,
 } from './ast.js'
 import { utf8ByteLength } from './abbr-budget.js'
@@ -97,9 +99,11 @@ interface State {
   usedHeadingIds: Set<string>
 }
 
-const DIRECTIVE_SCAN_RE = /\{\{\s+(?:"((?:\\.|[^"\\])*)"|([^#@}\s"]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}/g
-const DIRECTIVE_FULL_RE = /^\{\{\s+(?:"((?:\\.|[^"\\])*)"|([^#@}\s"]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}$/
+const DIRECTIVE_SCAN_RE = /\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}/g
+const DIRECTIVE_FULL_RE = /^\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}$/
 const OPTION_RE = /^@([A-Za-z_][\w-]*):([^#@}\s]+)$/
+/** Loose directive shape: one whole-paragraph token, valid options or not. */
+const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
 const MIN_BUDGET = 1024 * 1024
 
 function locate(node: { pos?: { startLine: number; startColumn?: number; startOffset?: number; endOffset?: number } }): Pick<
@@ -128,30 +132,36 @@ function unescapeQuotedPath(path: string): string {
   return path.replace(/\\(["\\])/g, '$1')
 }
 
-function parseDirective(raw: string): Directive | null {
+function parseDirective(raw: string, onInvalidOption?: (part: string) => void): Directive | null {
   const m = DIRECTIVE_FULL_RE.exec(raw)
   if (!m) return null
-  const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2]!
-  const sectionPart = m[3]?.trim()
+  const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2] ?? m[3]!
+  const sectionPart = m[4]?.trim()
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']
   let shift = 0
-  const rest = m[4]?.trim()
+  const rest = m[5]?.trim()
   if (rest) {
     for (const part of rest.split(/\s+/)) {
       const opt = OPTION_RE.exec(part)
-      if (!opt) return null
+      const invalid = (): null => {
+        // Spec I1: an unrecognized (or malformed) option makes the directive
+        // unresolvable - Warning + literal, never silent.
+        if (part.startsWith('@')) onInvalidOption?.(part)
+        return null
+      }
+      if (!opt) return invalid()
       const [, key, value] = opt
       if (key === 'lines') {
         const lm = /^([1-9]\d*)-([1-9]\d*)$/.exec(value!)
-        if (!lm) return null
+        if (!lm) return invalid()
         lines = { start: Number(lm[1]), end: Number(lm[2]) }
-        if (lines.end < lines.start) return null
+        if (lines.end < lines.start) return invalid()
       } else if (key === 'shift') {
-        if (!/^[+-]?\d+$/.test(value!)) return null
+        if (!/^[+-]?\d+$/.test(value!)) return invalid()
         shift = Number(value)
       } else {
-        return null
+        return invalid()
       }
     }
   }
@@ -337,37 +347,95 @@ function textFrom(value: string, like: Text): Text {
   return { ...like, value }
 }
 
-function expandInlineText(node: Text, state: State): InlineNode[] {
+type RunNode = Text | Mention | Tag
+
+function isRunNode(node: InlineNode): node is RunNode {
+  return node.type === 'text' || node.type === 'mention' || node.type === 'tag'
+}
+
+function runNodeText(node: RunNode): string {
+  if (node.type === 'text') return node.value
+  return node.type === 'mention' ? `@${node.user}` : `#${node.name}`
+}
+
+/**
+ * Return the run nodes covering [from, to) of the run's reassembled text.
+ * Directive matches start with "{{" and end with "}}", which the core always
+ * parses as text, so a boundary can only fall inside a text node; mention and
+ * tag nodes are either fully kept or fully consumed by a directive span.
+ */
+function sliceRun(run: RunNode[], from: number, to: number): InlineNode[] {
   const out: InlineNode[] = []
-  let last = 0
-  const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
-  for (let m = re.exec(node.value); m; m = re.exec(node.value)) {
-    if (m.index > last) out.push(textFrom(node.value.slice(last, m.index), node))
-    const raw = m[0]
-    const d = parseDirective(raw)
-    const child = d ? expandChild(d, state, node) : null
-    if (child && (child.children.length === 0 || (child.children.length === 1 && child.children[0]!.type === 'paragraph'))) {
-      if (child.children.length === 1) out.push(...(child.children[0] as Paragraph).children)
-      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state)
-    } else {
-      if (child) warn(state, 'include-block-in-inline', `Inline include "${d!.path}" resolved to block content.`, node)
-      out.push(textFrom(raw, node))
+  let offset = 0
+  for (const node of run) {
+    const text = runNodeText(node)
+    const start = offset
+    const end = offset + text.length
+    offset = end
+    if (end <= from || start >= to) continue
+    if (node.type !== 'text') {
+      out.push(node)
+      continue
     }
-    last = m.index + raw.length
+    const value = text.slice(Math.max(from, start) - start, Math.min(to, end) - start)
+    if (value === text) out.push(node)
+    else if (value !== '') out.push(textFrom(value, node))
   }
-  if (last === 0) return [node]
-  if (last < node.value.length) out.push(textFrom(node.value.slice(last), node))
+  return out
+}
+
+/**
+ * Scan a contiguous run of text-like inline nodes (text, mention, tag) for
+ * directives. The core splits "{{ x #s @shift:1 }}" into text plus tag and
+ * mention nodes, so recognition reassembles the run before matching. Failed
+ * directives keep their original nodes, rendering exactly as the core does
+ * with no resolver.
+ */
+function expandRun(run: RunNode[], state: State): InlineNode[] {
+  const full = run.map(runNodeText).join('')
+  const anchor = run.find((n): n is Text => n.type === 'text') ?? ({ type: 'text', value: full } as Text)
+  const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
+  const spans: { start: number; end: number; replacement: InlineNode[] }[] = []
+  for (let m = re.exec(full); m; m = re.exec(full)) {
+    const raw = m[0]
+    const d = parseDirective(raw, (part) =>
+      warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
+    )
+    if (!d) continue
+    const child = expandChild(d, state, anchor)
+    if (!child) continue
+    if (child.children.length === 0 || (child.children.length === 1 && child.children[0]!.type === 'paragraph')) {
+      const replacement = child.children.length === 1 ? (child.children[0] as Paragraph).children : []
+      mergeFootnotes(state.docs[state.docs.length - 1]!, child, state)
+      spans.push({ start: m.index, end: m.index + raw.length, replacement })
+    } else {
+      warn(state, 'include-block-in-inline', `Inline include "${d.path}" resolved to block content.`, anchor)
+    }
+  }
+  if (spans.length === 0) return run
+  const out: InlineNode[] = []
+  let cursor = 0
+  for (const span of spans) {
+    out.push(...sliceRun(run, cursor, span.start))
+    out.push(...span.replacement)
+    cursor = span.end
+  }
+  out.push(...sliceRun(run, cursor, full.length))
   return out
 }
 
 function expandInlines(nodes: InlineNode[], state: State): InlineNode[] {
   const out: InlineNode[] = []
-  for (const node of nodes) {
-    if (node.type === 'text') {
-      // A bare-path directive containing active inline markers is split by the
-      // core parser and is intentionally not recognized (corpus pin:
-      // "bare-path directive with no active inline markers").
-      out.push(...expandInlineText(node, state))
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]!
+    if (isRunNode(node)) {
+      // A directive split across other inline structures (emphasis, links)
+      // stays literal by design (corpus pin: "bare-path directive with no
+      // active inline markers"); only text/mention/tag runs reassemble.
+      let j = i
+      while (j < nodes.length && isRunNode(nodes[j]!)) j++
+      out.push(...expandRun(nodes.slice(i, j) as RunNode[], state))
+      i = j - 1
     } else {
       switch (node.type) {
         case 'italic':
@@ -483,7 +551,9 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
   const source = directiveSource(block.children)
   if (source !== null) {
     const text = block.children.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: source } as Text)
-    const d = parseDirective(source)
+    const d = parseDirective(source, (part) =>
+      warn(state, 'include-unknown-option', `Unknown include option "${part}".`, text),
+    )
     if (d) {
       const child = expandChild(d, state, text)
       if (!child) {
@@ -494,6 +564,9 @@ function expandParagraph(block: Paragraph, state: State): BlockNode[] {
       mergeFootnotes(state.docs[state.docs.length - 1]!, child, state)
       return child.children
     }
+    // A whole-paragraph directive that failed to parse was already reported
+    // here; skip the inline scan so it is not warned about twice.
+    if (DIRECTIVE_SHAPE_RE.test(source.trim())) return [block]
   }
   block.children = expandInlines(block.children, state)
   return [block]

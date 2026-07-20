@@ -175,6 +175,31 @@ describe('expandIncludes', () => {
     }
   })
 
+  it('expands a directive mid-sentence and keeps the surrounding text', () => {
+    const result = expand('Intro: {{ child }} tail.', { child: 'a /short/ fragment' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toBe('<p>Intro: a <em>short</em> fragment tail.</p>')
+  })
+
+  it('recognizes options the core split into tag and mention nodes', () => {
+    const result = expand('{{ child #pick @shift:1 }}', { child: '{#pick}\n# B\n\nyes' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toContain('<h2>B</h2>')
+  })
+
+  it('warns on an unknown option and leaves the directive literal', () => {
+    const source = '{{ child @nope:1 }}'
+    const result = expand(source, { child: 'text' })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-unknown-option'])
+    expect(result.html).toBe(renderHtml(resolve(parse(source))))
+  })
+
+  it('resolves a quoted path after the core rewrites it to typographic quotes', () => {
+    const result = expand('{{ "my chapter.crv" }}', { 'my chapter.crv': 'spaced path body' })
+    expect(result.warnings).toEqual([])
+    expect(result.html).toBe('<p>spaced path body</p>')
+  })
+
   it('fileSystemResolver rejects symlink and dot-dot escapes from the root', () => {
     const base = mkdtempSync(join(tmpdir(), 'carve-includes-'))
     try {
