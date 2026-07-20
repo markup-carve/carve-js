@@ -250,7 +250,9 @@ const AST_RENDERERS = {
 function formatIncludeWarnings(warnings: IncludeWarning[], file: string): string {
   return warnings
     // A warning raised inside an included file names that file, so the
-    // location points at the source the reader has to edit.
+    // location points at the source the reader has to edit. `w.detail` (the
+    // raw resolver error, which can carry absolute host paths) is
+    // deliberately NOT printed here -- see IncludeWarning.detail, spec I7.
     .map((w) => `${w.file ?? file}:${w.line}:${w.column} ${w.rule} - ${w.message}`)
     .join('\n')
 }

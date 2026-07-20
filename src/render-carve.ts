@@ -334,13 +334,20 @@ function directiveRunText(node: InlineNode): string | null {
 
 /**
  * Per-node serializations that must be emitted VERBATIM because the node is
- * covered, whole or in part, by a well-formed include directive (spec I1).
+ * covered, whole or in part, by a SHAPE-well-formed include directive.
  *
  * Without this the serializer escapes a directive like any other punctuation-
  * bearing text ("\{\{ a \}\}"), which still renders as the same literal text
  * today but is inert once a resolver is wired up -- formatting a document
- * would silently delete every include. A directive that is not well-formed
- * ("{{ oops") is left to the normal escaping path.
+ * would silently delete every include.
+ *
+ * Preservation deliberately requires only the SHAPE (opens "{{", closes "}}",
+ * non-empty path), not a valid section or valid options. Escaping a directive
+ * whose option is merely misspelled ("{{ a.crv @bogus:1 }}") would freeze a
+ * one-character typo into permanent literal text and destroy the
+ * include-unknown-option warning that would have explained it. Section and
+ * option validity stay expansion-time diagnostics. A run that is not
+ * shape-well-formed ("{{ oops", "{{ }}") is left to the normal escaping path.
  *
  * A serializer cannot tell an authored literal "{{" from a directive, because
  * "\{\{" and "{{" parse to the same text. That is accepted: spec I9 makes the

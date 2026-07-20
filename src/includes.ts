@@ -31,6 +31,15 @@ export interface IncludeWarning {
   rule: string
   /** Human-readable explanation of the include degradation or rename. */
   message: string
+  /**
+   * Raw underlying error text, when one exists. Kept OUT of `message` on
+   * purpose: spec I7 requires a processor-generated message naming the
+   * failure class, because a resolver's own error commonly embeds absolute
+   * filesystem paths -- rendering those into a hosted preview leaks host
+   * layout. Tools that want the raw text (a local CLI behind a verbose flag,
+   * a log sink) can opt into it here; default output must not print it.
+   */
+  detail?: string
   /** 0-based start offset in the parent source, inclusive. */
   start: number
   /** 0-based end offset in the parent source, exclusive. */
@@ -176,9 +185,12 @@ function warn(
   /** Overrides the attributed file when the warning is about content the
    * caller already merged out of its own document (see mergeFootnotes). */
   file: string | undefined = state.file,
+  /** Raw underlying error text; never folded into `message` (spec I7). */
+  detail?: string,
 ): void {
   const warning: IncludeWarning = { ...locate(node ?? {}), rule, message }
   if (file !== undefined) warning.file = file
+  if (detail !== undefined) warning.detail = detail
   state.warnings.push(warning)
 }
 
@@ -229,7 +241,18 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
     resolved = state.opts.resolve(d.path, childContext(state))
   } catch (e) {
     note(state, d.path, false)
-    warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved: ${(e as Error).message}`, node)
+    // Spec I7: the message is OURS and names the failure class plus the path
+    // as written. The resolver's own error goes to `detail` instead -- a
+    // filesystem resolver's message routinely carries an absolute path, and
+    // echoing that into rendered output discloses host layout.
+    warn(
+      state,
+      'include-unresolved',
+      `Include "${d.path}" could not be resolved.`,
+      node,
+      state.file,
+      (e as Error)?.message,
+    )
     return null
   }
   if (resolved === null || resolved === undefined) {
@@ -401,11 +424,11 @@ function expandChild(
   if (d.section) {
     const selected = selectSection(child, d.section)
     if (!selected) {
-      // Same attempt, not a second one: the file was read but the include did
-      // not expand, so the entry is forced back to unresolved rather than
-      // going through note()'s upgrade rule. A host must still watch the
-      // target and must not treat the include as having succeeded.
-      state.dependencies.set(resolved.id, false)
+      // The dependency stays RESOLVED (spec I11): `resolved` reflects only
+      // whether the source was READ, and it was. The host must keep watching
+      // the target so that editing the child to ADD the missing section
+      // invalidates the preview -- which a downgrade to unresolved would not
+      // change, but which would misreport a successful read as a failed one.
       warn(state, 'include-section', `Include "${d.path}" has no section "#${d.section}".`, node)
       return null
     }

@@ -75,16 +75,35 @@ export function parseDirective(raw: string, onInvalidOption?: (part: string) => 
 }
 
 /**
- * Locate the WELL-FORMED directive spans inside a reassembled inline run, in
- * source order. A candidate that fails {@link parseDirective} is not reported,
- * so it keeps being treated as ordinary text.
+ * True when a candidate token has the SHAPE of a directive: it opens with
+ * "{{", closes with "}}", and carries a non-empty path token. Section and
+ * option validity are deliberately NOT considered -- those are expansion-time
+ * diagnostics, not recognition criteria.
+ */
+export function isDirectiveShape(raw: string): boolean {
+  const m = DIRECTIVE_FULL_RE.exec(raw)
+  if (!m) return false
+  const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2] ?? m[3]!
+  return path !== ''
+}
+
+/**
+ * Locate the SHAPE-well-formed directive spans inside a reassembled inline
+ * run, in source order.
+ *
+ * The bar is deliberately lower than {@link parseDirective}: the serializer
+ * uses this to decide what to emit verbatim, and escaping a directive that is
+ * merely mis-OPTIONED ("{{ a.crv @bogus:1 }}") would turn a fixable typo into
+ * permanent literal text -- destroying the very warning that explains it. A
+ * run that is not shape-well-formed ("{{ oops", "{{ }}") is not reported and
+ * keeps being treated as ordinary text.
  */
 export function findDirectives(text: string): { start: number; end: number; raw: string }[] {
   const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
   const spans: { start: number; end: number; raw: string }[] = []
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const raw = m[0]
-    if (parseDirective(raw) === null) continue
+    if (!isDirectiveShape(raw)) continue
     spans.push({ start: m.index, end: m.index + raw.length, raw })
   }
   return spans

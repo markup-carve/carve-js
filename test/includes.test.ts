@@ -101,10 +101,24 @@ describe('expandIncludes', () => {
     expect(result.html).toContain('<h6>B</h6>')
   })
 
-  it('a missing section marks the dependency attempted, not resolved', () => {
+  it('a missing section keeps the dependency resolved and warns', () => {
+    // Spec I11: `resolved` reflects only whether the source was READ. It was -
+    // the section simply was not in it. Reporting unresolved here would
+    // misdescribe a successful read as a failed one.
     const result = expand('{{ child #nope }}', { child: '# Real' })
     expect(result.warnings.map((w) => w.rule)).toEqual(['include-section'])
-    expect(result.dependencies).toEqual([{ id: 'child', resolved: false }])
+    expect(result.dependencies).toEqual([{ id: 'child', resolved: true }])
+  })
+
+  it('a depth-exceeded target stays unresolved because nothing was read', () => {
+    // The dividing line for `resolved` is strictly "did a read happen": the
+    // depth guard fires BEFORE the resolver is called, so nothing was read.
+    const result = expand('{{ a }}', { a: '{{ b }}', b: 'Deep.' }, { maxDepth: 1 })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-depth'])
+    expect(result.dependencies).toEqual([
+      { id: 'a', resolved: true },
+      { id: 'b', resolved: false },
+    ])
   })
 
   it('#section plus @lines warns and stays literal', () => {
@@ -236,6 +250,27 @@ describe('expandIncludes', () => {
   it('reports no dependencies without a resolver', () => {
     const source = '{{ child }}'
     expect(expandIncludes(parse(source, { positions: true }), source).dependencies).toEqual([])
+  })
+
+  it('keeps a throwing resolver error text out of the warning message', () => {
+    // Spec I7: the message must be processor-generated and name the failure
+    // class. A filesystem resolver's own error routinely embeds an ABSOLUTE
+    // path, and echoing it into rendered output discloses host layout.
+    const secret = '/home/someone/private/vault/child.crv'
+    const source = '{{ child.crv }}'
+    const doc = parse(source, { positions: true })
+    const result = expandIncludes(doc, source, {
+      resolve: () => {
+        throw new Error(`ENOENT: no such file or directory, open '${secret}'`)
+      },
+    })
+    expect(result.warnings.map((w) => w.rule)).toEqual(['include-unresolved'])
+    const warning = result.warnings[0]!
+    expect(warning.message).toBe('Include "child.crv" could not be resolved.')
+    expect(warning.message).not.toContain(secret)
+    expect(warning.message).not.toContain('ENOENT')
+    // The raw text is not discarded, just moved off the rendered channel.
+    expect(warning.detail).toContain(secret)
   })
 
   it('reports a containment-denied target as an unresolved dependency', () => {
@@ -714,9 +749,28 @@ describe('include rules', () => {
       expect(fence).toBe('``` txt\n{{ chapter.crv }}\n```\n')
     })
 
-    it('still escapes a malformed directive', () => {
+    it('still escapes a run that is not shape-well-formed', () => {
+      // No closing "}}" and an empty path token: neither is a directive at
+      // all, so both keep the ordinary escaping path.
       expect(fmt('{{ oops')).toBe('\\{\\{ oops\n')
-      expect(fmt('{{ chapter.crv @bogus:1 }}')).toBe('\\{\\{ chapter\\.crv @bogus\\:1 \\}\\}\n')
+      expect(fmt('{{ }}')).toBe('\\{\\{ \\}\\}\n')
+    })
+
+    it('preserves a shape-well-formed directive with an invalid option', () => {
+      // Escaping this would freeze a one-character typo into permanent
+      // literal text and destroy the warning that explains it.
+      expect(fmt('{{ chapter.crv @bogus:1 }}')).toBe('{{ chapter.crv @bogus:1 }}\n')
+    })
+
+    it('preserves a shape-well-formed directive with a malformed section', () => {
+      expect(fmt('{{ chapter.crv #1bad }}')).toBe('{{ chapter.crv #1bad }}\n')
+    })
+
+    it('a preserved invalid-option directive still warns on re-parse', () => {
+      // The point of preserving it: the diagnostic survives the format.
+      const formatted = fmt('{{ chapter.crv @bogus:1 }}')
+      const result = expand(formatted.trim(), { 'chapter.crv': 'Body.' })
+      expect(result.warnings.map((w) => w.rule)).toContain('include-unknown-option')
     })
 
     it('keeps a quoted path with an embedded quote resolving after a format', () => {
