@@ -264,6 +264,10 @@ function inlineText(nodes: InlineNode[]): string {
   for (const node of nodes) {
     const n = node as unknown as Record<string, unknown>
     if (typeof n.value === 'string') s += n.value
+    // A code span (`.value`) and an inline literal (`.content`, a string) both
+    // carry verbatim text; the literal form is the natural way to pass a color
+    // whose `#` would otherwise parse as a tag, e.g. `` :color[!`#ff8800`] ``.
+    if (n.type === 'literal-inline' && typeof n.content === 'string') s += n.content
     if (typeof n.name === 'string' && n.type === 'tag') s += `#${n.name}`
     const kids = n.children ?? n.content
     if (Array.isArray(kids)) s += inlineText(kids as InlineNode[])

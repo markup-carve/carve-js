@@ -180,6 +180,9 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return stripControls(node.content)
     case 'raw-inline':
       return ''
+    case 'literal-inline':
+      // §27: always emitted (unlike raw passthrough above), as plain prose.
+      return stripControls(node.content)
     case 'symbol':
       return `:${stripControls(node.name)}:`
     case 'autolink':

@@ -361,6 +361,11 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return withAttrs(renderMath(node.display, node.content))
     case 'raw-inline':
       return `${renderCode(node.content)}{=${escapeFormat(node.format)}}`
+    case 'literal-inline':
+      // §27: `!` prefix on a verbatim span. A trailing attribute block is the
+      // ordinary inline attribute block (same as a code span carries).
+      // renderCode widens the backtick fence when the content holds backticks.
+      return `!${renderCode(node.content)}${renderAttrs(node.attrs)}`
     case 'symbol':
       return withAttrs(`:${escapeSymbolName(node.name)}:`)
     case 'autolink':
@@ -467,9 +472,16 @@ function renderEmphasis(delim: string, content: string, prevChar: string, nextCh
 
 function renderCode(content: string): string {
   const fence = safeFence(content, 1)
-  return content.startsWith('`') || content.endsWith('`')
-    ? `${fence} ${content} ${fence}`
-    : `${fence}${content}${fence}`
+  // The parser removes one leading and one trailing space from a verbatim span
+  // whose content BOTH begins and ends with a space, and also strips a single
+  // space around backtick-adjacent content. Emit a padding space in those cases
+  // so the strip is reversible and fmt stays idempotent; the padding sits INSIDE
+  // the fence, so a trailing attribute block still attaches to the closing run.
+  const needsPad =
+    content.startsWith('`') ||
+    content.endsWith('`') ||
+    (content.startsWith(' ') && content.endsWith(' '))
+  return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
 function codeFenceInfo(lang: string | undefined, header: string | undefined, label: string | undefined): string {
