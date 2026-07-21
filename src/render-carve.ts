@@ -475,9 +475,16 @@ function renderEmphasis(delim: string, content: string, prevChar: string, nextCh
 
 function renderCode(content: string): string {
   const fence = safeFence(content, 1)
-  return content.startsWith('`') || content.endsWith('`')
-    ? `${fence} ${content} ${fence}`
-    : `${fence}${content}${fence}`
+  // The parser removes one leading and one trailing space from a verbatim span
+  // whose content BOTH begins and ends with a space, and also strips a single
+  // space around backtick-adjacent content. Emit a padding space in those cases
+  // so the strip is reversible and fmt stays idempotent; the padding sits INSIDE
+  // the fence, so a trailing attribute block still attaches to the closing run.
+  const needsPad =
+    content.startsWith('`') ||
+    content.endsWith('`') ||
+    (content.startsWith(' ') && content.endsWith(' '))
+  return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
 function codeFenceInfo(lang: string | undefined, header: string | undefined, label: string | undefined): string {
