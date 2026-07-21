@@ -466,6 +466,62 @@ describe('expandIncludes', () => {
   })
 })
 
+describe('an include inside a heading expands and the id comes from the resolved text', () => {
+  // The invariant (maintainer ruling): a heading whose text comes from an
+  // expanded include is "as if the content were inline" - its auto id is the
+  // slug of the FINAL, post-expansion heading text, computed after expansion
+  // (and after any @shift), exactly like a normal heading. carve-js and
+  // carve-rs agree byte-for-byte here. This whole case was untested, which is
+  // why a stale mischaracterization of the behavior survived; these lock it.
+  it('slugs a heading built entirely from an include off the resolved text', () => {
+    const result = expand('# {{ title.crv }}', { 'title.crv': 'My Title' })
+    expect(result.html).toContain('<h1>My Title</h1>')
+    expect(result.html).toContain('<section id="My-Title">')
+  })
+
+  it('slugs a heading mixing prose and two includes off the full resolved text', () => {
+    const result = expand('# a {{ x.crv }} b {{ y.crv }}', { 'x.crv': 'Xtext', 'y.crv': 'Ytext' })
+    expect(result.html).toContain('<h1>a Xtext b Ytext</h1>')
+    // The id is the slug of the POST-expansion text, not of the "{{ … }}" source.
+    expect(result.html).toContain('<section id="a-Xtext-b-Ytext">')
+  })
+
+  it('slugs a heading with prose and one include off the resolved text', () => {
+    const result = expand('# a {{ x.crv }} b', { 'x.crv': 'Xtext' })
+    expect(result.html).toContain('<h1>a Xtext b</h1>')
+    expect(result.html).toContain('<section id="a-Xtext-b">')
+  })
+
+  it('lets an explicit {#id} win over the resolved-text slug', () => {
+    const result = expand('{#custom}\n# a {{ x.crv }} b', { 'x.crv': 'Xtext' })
+    expect(result.html).toContain('<h1>a Xtext b</h1>')
+    expect(result.html).toContain('<section id="custom">')
+  })
+
+  it('leaves a heading with no include byte-unchanged', () => {
+    const withIncludes = expand('# plain heading no include', { 'x.crv': 'Xtext' })
+    // Same document rendered with the include pipeline vs. plain resolve().
+    const plain = renderHtml(resolve(parse('# plain heading no include', { positions: true })))
+    expect(withIncludes.html).toBe(plain)
+    expect(withIncludes.html).toContain('<section id="plain-heading-no-include">')
+  })
+
+  it('resolves a </#id> crossref into an expansion-sourced heading', () => {
+    const result = expand('# {{ title.crv }}\n\nSee </#My-Title>.', { 'title.crv': 'My Title' })
+    expect(result.html).toContain('<a href="#My-Title">My Title</a>')
+  })
+
+  it('keeps an unresolved directive literal in the heading and slugs that literal', () => {
+    // Edge: no file resolves, so the directive is NOT expanded - it stays
+    // literal text in the heading, and the id is the slug of that literal
+    // (measured, not assumed). `expand(_, {})` serves an empty file map, so
+    // every path misses -> the include-unresolved / literal path.
+    const result = expand('# a {{ gone.crv }} b', {})
+    expect(result.html).toContain('<h1>a {{ gone.crv }} b</h1>')
+    expect(result.html).toContain('<section id="a-gone-crv-b">')
+  })
+})
+
 /**
  * Coverage keyed to the normative include rules (spec 19, I1-I11). Rules also
  * exercised by the tests above are cross-referenced rather than duplicated.
