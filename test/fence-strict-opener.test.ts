@@ -71,18 +71,26 @@ describe('fenced code: definition prepass uses the same column rule', () => {
     expect(out).not.toContain('<a href="/u">')
   })
 
-  // KNOWN LIMITATION, pinned so it is visible rather than folklore.
-  // The prepass is line-based and has no container-column context, so a
-  // definition inside a fence nested at a LIST ITEM's content column is still
-  // collected and a later reference resolves. This errs deliberately: the
-  // opposite error (opening a fence the block parser never opened) swallows
-  // every later definition, which is content loss. The sound fix is to collect
-  // definitions during block parsing.
-  it('over-resolves a definition inside a fence nested in a list item', () => {
+  // The prepass tracks the enclosing list item's content column, so a fence
+  // nested at that column is recognized and a definition inside it is NOT
+  // collected -- the reference stays unresolved, matching the block parser.
+  it('does not resolve a definition inside a fence nested in a list item', () => {
     const out = carveToHtml('- one\n  ```\n  [r]: /u\n  ```\n\n[r][]\n')
-    expect(out).toContain('<pre><code>[r]: /u\n</code></pre>') // still literal in the block
-    expect(out).toContain('<a href="/u">') // but the reference resolves -- the limitation
+    expect(out).toContain('<pre><code>[r]: /u\n</code></pre>') // literal in the block
+    expect(out).not.toContain('<a href="/u">') // and NOT a resolved reference
   })
+
+  it('does not resolve a definition inside a fence nested two lists deep', () => {
+    const out = carveToHtml('- a\n  - b\n    ```\n    [r]: /u\n    ```\n\n[r][]\n')
+    expect(out).not.toContain('<a href="/u">')
+  })
+
+  for (const marker of ['1.', 'a.', 'i.']) {
+    it(`does not resolve a definition inside a fence in a "${marker}" ordered item`, () => {
+      const out = carveToHtml(`${marker} one\n   ${'```'}\n   [r]: /u\n   ${'```'}\n\n[r][]\n`)
+      expect(out).not.toContain('<a href="/u">')
+    })
+  }
 })
 
 // migration re-bases a Markdown fence to its container's content column: a
@@ -150,4 +158,18 @@ describe('markdownToCarve re-bases a fence to its container content column', () 
     expect(out).toContain('\n```\ncode\n```')
     expect(out).not.toContain('  ```')
   })
+})
+
+
+// A fence delimiter is a continuation line of pure indentation, never a marker
+// line, so a literal marker-prefixed fence line inside a doc-level code sample
+// must not be mistaken for a closer (which would end the prepass fence early and
+// collect a later definition from code).
+describe('fenced code: literal marker lines inside a code sample are not closers', () => {
+  for (const lead of ['- ', '> ', '1. ']) {
+    it('does not close on a literal marker+fence line inside a doc-level fence: ' + lead, () => {
+      const out = carveToHtml('```\n' + lead + '```\n[r]: /u\n```\n\n[r][]\n')
+      expect(out).not.toContain('<a href="/u">') // the def is still inside the code block
+    })
+  }
 })
