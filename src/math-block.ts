@@ -52,7 +52,7 @@ export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
   return {
     name: 'math-block',
     blockRenderers: {
-      'code-block': (node, ctx) => {
+      'code_block': (node, ctx) => {
         const code = node as CodeBlock
         if (code.lang !== language) return undefined
         // Merge the `math display` base class ahead of author classes and copy
@@ -67,7 +67,7 @@ export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
     // (MathML / HTML) inside the `math display` div so the page is
     // self-contained; otherwise keep the `\[…\]` source - never blank.
     staticBlockRenderers: {
-      'code-block': (node, ctx) => {
+      'code_block': (node, ctx) => {
         const code = node as CodeBlock
         if (code.lang !== language) return undefined
         const open = `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(mathAttrs(code))}>`

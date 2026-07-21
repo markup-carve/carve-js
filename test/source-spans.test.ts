@@ -42,7 +42,7 @@ describe('source spans', () => {
         },
       ],
       [
-        'italic',
+        'emphasis',
         {
           startLine: 1,
           endLine: 1,
@@ -75,7 +75,7 @@ describe('source spans', () => {
         },
       ],
       [
-        'soft-break',
+        'soft_break',
         {
           startLine: 1,
           endLine: 2,

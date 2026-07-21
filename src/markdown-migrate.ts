@@ -371,7 +371,7 @@ export function markdownToCarve(markdown: string): string {
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
   let prevBlank = true
-  let prevType: 'blank' | 'heading' | 'list' | 'blockquote' | 'code_fence' | 'code' | 'text' =
+  let prevType: 'blank' | 'heading' | 'list' | 'block_quote' | 'code_fence' | 'code' | 'text' =
     'blank'
 
   for (let i = 0; i < lines.length; i++) {
@@ -552,17 +552,17 @@ export function markdownToCarve(markdown: string): string {
     const bqRule = line.match(/^ {0,3}((?:>[ \t]?){1,})(.*)$/)
     if (bqRule && RE_MD_THEMATIC.test(bqRule[2]!)) {
       const depth = (bqRule[1]!.match(/>/g) ?? []).length
-      if (prevType !== 'blank' && prevType !== 'blockquote' && out.length > 0) out.push('')
+      if (prevType !== 'blank' && prevType !== 'block_quote' && out.length > 0) out.push('')
       out.push('> '.repeat(depth) + '---')
-      prevType = 'blockquote'
+      prevType = 'block_quote'
       continue
     }
 
     if (isHeading && prevType !== 'blank' && prevType !== 'heading') out.push('')
-    if (isBlockquote && prevType !== 'blank' && prevType !== 'blockquote') out.push('')
+    if (isBlockquote && prevType !== 'blank' && prevType !== 'block_quote') out.push('')
     // A blockquote ends at the first non-`>` line; Carve needs a blank line
     // between it and the following paragraph to keep them separate blocks.
-    if (!isBlockquote && !isHeading && !isList && prevType === 'blockquote') out.push('')
+    if (!isBlockquote && !isHeading && !isList && prevType === 'block_quote') out.push('')
     // A top-level list needs a blank line before it. A list line right after
     // another list item is a sibling/nested item — Carve already handles both
     // by indentation, so no blank there (it would wrongly make the list loose).
@@ -589,7 +589,7 @@ export function markdownToCarve(markdown: string): string {
 
     if (isHeading) prevType = 'heading'
     else if (isList) prevType = 'list'
-    else if (isBlockquote) prevType = 'blockquote'
+    else if (isBlockquote) prevType = 'block_quote'
     else prevType = 'text'
   }
 

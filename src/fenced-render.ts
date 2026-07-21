@@ -82,7 +82,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
   return {
     name: 'fenced-render',
     blockRenderers: {
-      'code-block': (node, ctx) => {
+      'code_block': (node, ctx) => {
         const code = node as CodeBlock
         if (!languages.includes(code.lang ?? '')) return undefined
         // Merge the cssClass ahead of author classes; renderAttrs hardens the
@@ -109,7 +109,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
       // element so author attrs survive; otherwise degrade to the source as a
       // `<pre><code class="language-…">` block - never blank, and re-renderable
       // by a host that loads the client library.
-      'code-block': (node, ctx) => {
+      'code_block': (node, ctx) => {
         const code = node as CodeBlock
         if (!languages.includes(code.lang ?? '')) return undefined
         const pad = ctx.indent(ctx.level)

@@ -52,7 +52,7 @@ describe('inlineText', () => {
   it('flattens emphasis, keeps code, ignores images/breaks', () => {
     const nodes: InlineNode[] = [
       { type: 'text', value: 'Why ' },
-      { type: 'italic', children: [{ type: 'text', value: 'Carve' }] },
+      { type: 'emphasis', children: [{ type: 'text', value: 'Carve' }] },
       { type: 'text', value: '?' },
     ]
     expect(inlineText(nodes)).toBe('Why Carve?')
@@ -73,9 +73,9 @@ describe('crossref parsing', () => {
     const para = doc.children[0]
     expect(para.type).toBe('paragraph')
     const kids = (para as { children: InlineNode[] }).children
-    expect(kids.map((n) => n.type)).toContain('crossref')
-    const cr = kids.find((n) => n.type === 'crossref') as {
-      type: 'crossref'
+    expect(kids.map((n) => n.type)).toContain('heading_ref')
+    const cr = kids.find((n) => n.type === 'heading_ref') as {
+      type: 'heading_ref'
       target: string
     }
     expect(cr.target).toBe('intro')

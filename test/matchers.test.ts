@@ -76,7 +76,7 @@ describe('extension inline matchers', () => {
         const m = /^\{\{(\w+)\}\}/.exec(text.slice(pos))
         if (!m) return null
         return {
-          node: { type: 'extension', name: 'kbd', content: [{ type: 'text', value: m[1]! }] },
+          node: { type: 'inline_extension', name: 'kbd', content: [{ type: 'text', value: m[1]! }] },
           end: pos + m[0].length,
         }
       },
@@ -161,7 +161,7 @@ describe('extension block matchers', () => {
         while (end < lines.length && lines[end] !== '@@@') end++
         const inner = lines.slice(start + 1, end).join('\n')
         return {
-          node: { type: 'blockquote', children: ctx.parseBlocks(inner) },
+          node: { type: 'block_quote', children: ctx.parseBlocks(inner) },
           linesConsumed: end - start + 1,
         }
       },
@@ -195,7 +195,7 @@ describe('extension block matchers', () => {
         let end = start + 1
         while (end < lines.length && lines[end] !== '@@@') end++
         const inner = lines.slice(start + 1, end).join('\n')
-        return { node: { type: 'blockquote', children: ctx.parseBlocks(inner) }, linesConsumed: end - start + 1 }
+        return { node: { type: 'block_quote', children: ctx.parseBlocks(inner) }, linesConsumed: end - start + 1 }
       },
     }
     carveToHtml('@@@\n§X§\n\n*[X]: local-def\n@@@', { extensions: [wrap, probe] })
@@ -213,7 +213,7 @@ describe('extension block matchers', () => {
         let end = start + 1
         while (end < lines.length && lines[end] !== '@@@') end++
         const inner = lines.slice(start + 1, end).join('\n')
-        return { node: { type: 'blockquote', children: ctx.parseBlocks(inner) }, linesConsumed: end - start + 1 }
+        return { node: { type: 'block_quote', children: ctx.parseBlocks(inner) }, linesConsumed: end - start + 1 }
       },
     }
     const depth = 400
@@ -230,7 +230,7 @@ describe('extension block matchers', () => {
         while (end < lines.length && lines[end] !== '@@@') end++
         const inner = lines.slice(start + 1, end).join('\n')
         return {
-          node: { type: 'blockquote', children: ctx.parseBlocks(inner) },
+          node: { type: 'block_quote', children: ctx.parseBlocks(inner) },
           linesConsumed: end - start + 1,
         }
       },

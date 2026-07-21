@@ -26,7 +26,7 @@ describe('deep nesting does not overflow the stack', () => {
 
     let node = parse('> > > x').children[0]
     let depth = 0
-    while (node && node.type === 'blockquote') {
+    while (node && node.type === 'block_quote') {
       depth++
       node = node.children?.[0]
     }

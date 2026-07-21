@@ -97,7 +97,7 @@ function normalizeHeadingRefLabel(label: string): string {
 function collectCrossrefs(doc: Document): Array<{ target: string; node: Positioned }> {
   const found: Array<{ target: string; node: Positioned }> = []
   walkDocument(doc, (node) => {
-    if (node.type === 'crossref' && typeof node.target === 'string') {
+    if (node.type === 'heading_ref' && typeof node.target === 'string') {
       found.push({ target: node.target, node: node as Positioned })
     }
   })
@@ -136,7 +136,7 @@ function captionHasNumber(value: unknown): boolean {
       (node) =>
         node &&
         typeof node === 'object' &&
-        (node as { type?: string }).type === 'caption-number',
+        (node as { type?: string }).type === 'caption_number',
     )
   )
 }
@@ -211,7 +211,7 @@ export function lintCarve(
           }
           break
         }
-        case 'blockquote':
+        case 'block_quote':
           indexHeadings(block.children, true)
           break
         case 'admonition':
@@ -221,12 +221,12 @@ export function lintCarve(
         case 'list':
           for (const it of block.items) indexHeadings(it.children, inBlockquote)
           break
-        case 'definition-list':
+        case 'definition_list':
           for (const it of block.items)
             for (const d of it.definitions) indexHeadings(d, inBlockquote)
           break
         case 'figure':
-          if (block.target.type === 'blockquote')
+          if (block.target.type === 'block_quote')
             indexHeadings(block.target.children, true)
           break
         default:
@@ -324,14 +324,14 @@ function collectVerbatimLines(doc: Document): Set<number> {
   walkDocument(doc, (node) => {
     const pos = (node as Positioned).pos
     const endLine = (pos as { endLine?: number } | undefined)?.endLine
-    if (node.type === 'code-block' || node.type === 'raw-block') {
+    if (node.type === 'code_block' || node.type === 'raw_block') {
       add(pos, endLine)
     } else if (node.type === 'figure') {
       // A captioned code/raw block is a figure wrapping a position-less
       // code-block target, so the block itself never reports a range. Use the
       // figure's range so its verbatim body is still skipped.
       const target = (node.target as { type?: string } | undefined)?.type
-      if (target === 'code-block' || target === 'raw-block') add(pos, endLine)
+      if (target === 'code_block' || target === 'raw_block') add(pos, endLine)
     }
   })
   return verbatim

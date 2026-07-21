@@ -240,7 +240,7 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
     },
 
     inlineRenderers: {
-      'citation-group': (node, ctx) => {
+      'citation_group': (node, ctx) => {
         reserveIds(ctx)
         return renderGroup(node as CitationGroup, ctx, mode, numbers, defs, hasBib, citeIds, refIds)
       },
@@ -324,7 +324,7 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
     items.push(item)
   }
   if (items.length === 0) return null
-  const node: CitationGroup = { type: 'citation-group', items, raw: text.slice(pos, close + 1) }
+  const node: CitationGroup = { type: 'citation_group', items, raw: text.slice(pos, close + 1) }
   if (mode) node.mode = mode
   return { node: node as InlineNode, end: close + 1 }
 }
@@ -368,7 +368,7 @@ function collectDefs(blocks: BlockNode[], defs: Map<string, Def>): BlockNode[] {
 function splitOnSoftBreaks(nodes: InlineNode[]): InlineNode[][] {
   const lines: InlineNode[][] = [[]]
   for (const n of nodes) {
-    if (n.type === 'soft-break') lines.push([])
+    if (n.type === 'soft_break') lines.push([])
     else lines[lines.length - 1]!.push(n)
   }
   return lines
@@ -378,7 +378,7 @@ function splitOnSoftBreaks(nodes: InlineNode[]): InlineNode[][] {
 function joinWithSoftBreaks(lines: InlineNode[][]): InlineNode[] {
   const out: InlineNode[] = []
   lines.forEach((line, i) => {
-    if (i > 0) out.push({ type: 'soft-break' } as InlineNode)
+    if (i > 0) out.push({ type: 'soft_break' } as InlineNode)
     // Non-spread push: a single soft-break-delimited segment can be unbounded.
     for (const n of line) out.push(n)
   })
@@ -387,7 +387,7 @@ function joinWithSoftBreaks(lines: InlineNode[][]): InlineNode[] {
 
 function asDefinition(kids: InlineNode[]): { key: string; value: Def } | null {
   const g = kids[0]
-  if (!g || g.type !== 'citation-group') return null
+  if (!g || g.type !== 'citation_group') return null
   const cg = g as CitationGroup
   if (cg.items.length !== 1) return null
   const it = cg.items[0]!
@@ -590,7 +590,7 @@ function hasClass(b: BlockNode, cls: string): boolean {
  *  citation-groups, so this yields correct first-citation order. */
 function walkCitationGroups(node: unknown, fn: (g: CitationGroup) => void): void {
   if (!node || typeof node !== 'object') return
-  if ((node as { type?: string }).type === 'citation-group') {
+  if ((node as { type?: string }).type === 'citation_group') {
     fn(node as CitationGroup)
     return
   }

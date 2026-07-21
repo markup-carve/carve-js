@@ -175,7 +175,7 @@ function walkBlocks(node: unknown, fn: (b: BlockNode) => void): void {
  *  order. Generic field walk; skips `pos` metadata. */
 function walkExtensions(node: unknown, name: string, fn: (ext: Extension) => void): void {
   if (!node || typeof node !== 'object') return
-  if ((node as { type?: string }).type === 'extension' && (node as Extension).name === name) {
+  if ((node as { type?: string }).type === 'inline_extension' && (node as Extension).name === name) {
     fn(node as Extension)
     return
   }

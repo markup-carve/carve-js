@@ -47,7 +47,7 @@ function extractItems(node: Admonition | Div): GroupItem[] {
   const items: GroupItem[] = []
   let position = 0
   for (const child of node.children) {
-    if (child.type !== 'code-block') continue
+    if (child.type !== 'code_block') continue
     position++
     const cb = child as CodeBlock
     const language = cb.lang && cb.lang !== '' ? cb.lang : undefined

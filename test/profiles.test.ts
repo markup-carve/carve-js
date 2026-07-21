@@ -41,20 +41,20 @@ describe('Profile: type resolution', () => {
 
 describe('Profile: canonical type mapping', () => {
   it('maps carve-js internal types to canonical snake_case', () => {
-    expect(canonicalType('code-block')).toBe('code_block')
-    expect(canonicalType('blockquote')).toBe('block_quote')
-    expect(canonicalType('list-item')).toBe('list_item')
-    expect(canonicalType('soft-break')).toBe('soft_break')
-    expect(canonicalType('hard-break')).toBe('hard_break')
-    expect(canonicalType('thematic-break')).toBe('thematic_break')
-    expect(canonicalType('raw-block')).toBe('raw_block')
-    expect(canonicalType('raw-inline')).toBe('raw_inline')
-    expect(canonicalType('definition-list')).toBe('definition_list')
-    expect(canonicalType('italic')).toBe('emphasis')
-    expect(canonicalType('super')).toBe('superscript')
-    expect(canonicalType('sub')).toBe('subscript')
-    expect(canonicalType('critic-insert')).toBe('insert')
-    expect(canonicalType('critic-delete')).toBe('delete')
+    expect(canonicalType('code_block')).toBe('code_block')
+    expect(canonicalType('block_quote')).toBe('block_quote')
+    expect(canonicalType('list_item')).toBe('list_item')
+    expect(canonicalType('soft_break')).toBe('soft_break')
+    expect(canonicalType('hard_break')).toBe('hard_break')
+    expect(canonicalType('thematic_break')).toBe('thematic_break')
+    expect(canonicalType('raw_block')).toBe('raw_block')
+    expect(canonicalType('raw_inline')).toBe('raw_inline')
+    expect(canonicalType('definition_list')).toBe('definition_list')
+    expect(canonicalType('emphasis')).toBe('emphasis')
+    expect(canonicalType('superscript')).toBe('superscript')
+    expect(canonicalType('subscript')).toBe('subscript')
+    expect(canonicalType('insert')).toBe('insert')
+    expect(canonicalType('delete')).toBe('delete')
   })
 
   it('maps tag and autolink under their feature families', () => {
@@ -63,8 +63,8 @@ describe('Profile: canonical type mapping', () => {
   })
 
   it('returns undefined for types with no canonical mapping', () => {
-    expect(canonicalType('crossref')).toBeUndefined()
-    expect(canonicalType('caption-number')).toBeUndefined()
+    expect(canonicalType('heading_ref')).toBeUndefined()
+    expect(canonicalType('caption_number')).toBeUndefined()
   })
 
   it('maps symbol as a canonical inline feature', () => {

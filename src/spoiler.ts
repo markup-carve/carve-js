@@ -60,7 +60,7 @@ export function spoiler(): CarveExtension {
     // Block: the disclosure is expanded into a flat `<section>` with the title
     // as a heading.
     staticInlineRenderers: {
-      extension: (node: InlineNode, ctx: ExtensionRenderContext): string | undefined => {
+      inline_extension: (node: InlineNode, ctx: ExtensionRenderContext): string | undefined => {
         const ext = node as Extension
         if (ext.name !== 'spoiler') return undefined
         const attrs: Attrs = withBaseClass(ext.attrs, 'spoiler spoiler-revealed')

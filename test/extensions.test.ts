@@ -81,7 +81,7 @@ describe('block renderers', () => {
     const wrap: CarveExtension = {
       name: 'wrap',
       blockRenderers: {
-        blockquote: (_node, ctx) => `${ctx.indent(ctx.level)}<aside>!</aside>`,
+        block_quote: (_node, ctx) => `${ctx.indent(ctx.level)}<aside>!</aside>`,
       },
     }
     expect(carveToHtml('> hi', { extensions: [wrap] }).trim()).toBe('<aside>!</aside>')

@@ -15,22 +15,22 @@ function captionTypes(src: string): string[] {
 
 describe('parse: caption number placeholder', () => {
   it('emits a caption-number node for a bare # in a caption', () => {
-    expect(captionTypes('![x](x.jpg)\n^ Figure #: A')).toContain('caption-number')
+    expect(captionTypes('![x](x.jpg)\n^ Figure #: A')).toContain('caption_number')
   })
 
   it('does not emit one for an escaped \\#', () => {
-    expect(captionTypes('![x](x.jpg)\n^ Cost \\# units')).not.toContain('caption-number')
+    expect(captionTypes('![x](x.jpg)\n^ Cost \\# units')).not.toContain('caption_number')
   })
 
   it('keeps #word as a tag, not a placeholder', () => {
     const types = captionTypes('![x](x.jpg)\n^ See #news')
     expect(types).toContain('tag')
-    expect(types).not.toContain('caption-number')
+    expect(types).not.toContain('caption_number')
   })
 
   it('only the first bare # becomes a placeholder', () => {
     const types = captionTypes('![x](x.jpg)\n^ Figure #: a # b')
-    expect(types.filter((t) => t === 'caption-number')).toHaveLength(1)
+    expect(types.filter((t) => t === 'caption_number')).toHaveLength(1)
   })
 })
 

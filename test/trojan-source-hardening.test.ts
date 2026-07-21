@@ -161,7 +161,7 @@ describe('Change 3: uniform MAX_NESTING_DEPTH = 200', () => {
   it('caps a 250-deep blockquote at 200 (same shared gate)', () => {
     const src = '> '.repeat(250) + 'x'
     const doc = parse(src)
-    expect(maxDepth(doc.children, 'blockquote')).toBe(MAX_NESTING_DEPTH)
+    expect(maxDepth(doc.children, 'block_quote')).toBe(MAX_NESTING_DEPTH)
   })
 })
 

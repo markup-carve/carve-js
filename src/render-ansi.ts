@@ -73,12 +73,12 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       if (prefix) content = prefixLines(content, prefix)
       return `${content}\n\n`
     }
-    case 'code-block':
+    case 'code_block':
       return renderCodeBlock(
         stripControls(node.content),
         node.lang ? stripControls(node.lang) : node.lang,
       )
-    case 'blockquote':
+    case 'block_quote':
       ctx.blockQuoteDepth++
       {
         const out = renderBlocks(node.children, ctx)
@@ -87,7 +87,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       }
     case 'list':
       return renderList(node, ctx)
-    case 'thematic-break':
+    case 'thematic_break':
       return `${style('─'.repeat(40), DIM)}\n\n`
     case 'table':
       return renderTable(node, ctx)
@@ -120,7 +120,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       const labelLine = prefix ? prefixLines(styled, prefix) : styled
       return `${labelLine}\n\n${renderBlocks(node.children, ctx)}`
     }
-    case 'definition-list':
+    case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
@@ -128,9 +128,9 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
       return `${renderImage(node)}\n\n`
-    case 'raw-block':
+    case 'raw_block':
       return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
-    case 'abbreviation-def':
+    case 'abbreviation_def':
     case 'comment':
       return ''
     default: {
@@ -282,7 +282,7 @@ function renderFigure(node: Figure, ctx: AnsiContext): string {
       : node.target.type === 'table'
         ? trimEndNonNbsp(renderTable(node.target, ctx))
         : trimEndNonNbsp(renderBlock(node.target, ctx))
-  const sep = node.target.type === 'blockquote' ? '\n\n' : '\n'
+  const sep = node.target.type === 'block_quote' ? '\n\n' : '\n'
   return `${target}${sep}${renderCaption(node.caption, ctx)}`
 }
 
@@ -313,7 +313,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
-    case 'italic':
+    case 'emphasis':
       return style(renderInlines(node.children, ctx), ITALIC)
     case 'strong':
       return style(renderInlines(node.children, ctx), BOLD)
@@ -321,16 +321,14 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return style(renderInlines(node.children, ctx), UNDERLINE)
     case 'strike':
       return style(renderInlines(node.children, ctx), STRIKE)
-    case 'sub':
+    case 'subscript':
       // Subscript is NOT strikethrough; map to Unicode subscripts (mirrors
       // super), unmapped chars pass through.
       return toSubscript(renderInlines(node.children, ctx))
-    case 'super':
+    case 'superscript':
       return toSuperscript(renderInlines(node.children, ctx))
     case 'highlight':
       return style(renderInlines(node.children, ctx), '\x1b[7m' + FG_YELLOW)
-    case 'bold-italic':
-      return style(renderInlines(node.children, ctx), BOLD + ITALIC)
     case 'code':
       return style(stripControls(node.value), FG_BRIGHT_YELLOW)
     case 'link': {
@@ -348,9 +346,9 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return renderInlines(node.children, ctx)
     case 'math':
       return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
-    case 'raw-inline':
+    case 'raw_inline':
       return ''
-    case 'literal-inline':
+    case 'literal_inline':
       // §27: always emitted (unlike raw passthrough above). It is prose, not
       // code, so it carries no code styling.
       return stripControls(node.content)
@@ -367,7 +365,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return `@${stripControls(node.user)}`
     case 'tag':
       return `#${stripControls(node.name)}`
-    case 'extension':
+    case 'inline_extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation': {
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
@@ -380,15 +378,15 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return node.inline
         ? `(${renderInlines(node.inline, ctx)})`
         : style(`[${stripControls(node.id ?? '')}]`, FG_CYAN + BOLD)
-    case 'soft-break':
+    case 'soft_break':
       return ' '
-    case 'hard-break':
+    case 'hard_break':
       return '\n'
-    case 'critic-insert':
+    case 'insert':
       return style(renderInlines(node.children, ctx), FG_GREEN + UNDERLINE)
-    case 'critic-delete':
+    case 'delete':
       return style(renderInlines(node.children, ctx), STRIKE + '\x1b[31m')
-    case 'critic-substitute':
+    case 'substitution':
       // Show BOTH sides; dropping oldText loses content.
       return (
         style(stripControls(node.oldText), STRIKE + '\x1b[31m') +
@@ -396,11 +394,11 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       )
     case 'critic-comment':
       return ''
-    case 'crossref':
+    case 'heading_ref':
       return `</#${stripControls(node.target)}>`
-    case 'caption-number':
+    case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)
-    case 'citation-group':
+    case 'citation_group':
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
       return stripControls(node.raw)
     case 'comment':

@@ -797,9 +797,9 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
       // rendered by every code-block path, including inside a code-group or a
       // caption figure (where parseFence returns a Figure wrapping the block).
       const cb =
-        node.type === 'code-block'
+        node.type === 'code_block'
           ? node
-          : node.type === 'figure' && node.target.type === 'code-block'
+          : node.type === 'figure' && node.target.type === 'code_block'
             ? (node.target as CodeBlock)
             : undefined
       // An explicit {title=} wins: for a captioned block it merged onto the
@@ -1030,7 +1030,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   }
   if (RE_HR.test(line)) {
     lexer.consume()
-    return { type: 'thematic-break' } as ThematicBreak
+    return { type: 'thematic_break' } as ThematicBreak
   }
   if (RE_HEADING.test(line)) return parseHeading(lexer)
   // Definition list starts on a `:: term` line (two colons, not three).
@@ -1209,7 +1209,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
     // Strip the common indent of the opening fence (Djot rule)
     lines.push(ln.slice(Math.min(indent, leadingWhitespace(ln))))
   }
-  const cb: CodeBlock = { type: 'code-block', content: lines.join('\n') }
+  const cb: CodeBlock = { type: 'code_block', content: lines.join('\n') }
   if (lang) cb.lang = lang
   if (header !== undefined) cb.header = header
   if (label !== undefined) cb.label = label
@@ -1251,7 +1251,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
     lexer.consume()
     lines.push(ln)
   }
-  return { type: 'raw-block', format, content: lines.join('\n') }
+  return { type: 'raw_block', format, content: lines.join('\n') }
 }
 
 // Block comment: a `%%%`+ opener, closed by a line of the SAME length
@@ -1438,7 +1438,7 @@ function parseLineBlock(lexer: Lexer): Div {
   const children = stanzas.map<Paragraph>((lines) => ({
     type: 'paragraph',
     children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs).map((node) =>
-      node.type === 'soft-break' ? ({ type: 'hard-break' } as InlineNode) : node,
+      node.type === 'soft_break' ? ({ type: 'hard_break' } as InlineNode) : node,
     ),
   }))
   // No inline opener attributes (strict djot); a preceding block-attribute
@@ -1514,7 +1514,7 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
   for (const child of children) {
     if (child.type === 'paragraph') {
       child.children = child.children.map((node) =>
-        node.type === 'soft-break' ? ({ type: 'hard-break' } as InlineNode) : node,
+        node.type === 'soft_break' ? ({ type: 'hard_break' } as InlineNode) : node,
       )
     }
   }
@@ -1771,13 +1771,13 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       else break
     }
   }
-  return { type: 'definition-list', items }
+  return { type: 'definition_list', items }
 }
 
 function parseAbbrDef(lexer: Lexer): AbbreviationDef {
   const line = lexer.consume()
   const m = RE_ABBR_DEF.exec(line)!
-  return { type: 'abbreviation-def', abbr: m[1]!, expansion: m[2]! }
+  return { type: 'abbreviation_def', abbr: m[1]!, expansion: m[2]! }
 }
 
 interface BlockQuoteLazyState {
@@ -1965,7 +1965,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   }
   const subLexer = nestedSubLexer(lexer, inner.join('\n'), firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)
-  const bq: BlockQuote = { type: 'blockquote', children }
+  const bq: BlockQuote = { type: 'block_quote', children }
   // Optional caption with ^
   // Allow one blank line between
   let lookahead = 0
@@ -2462,7 +2462,7 @@ function parseList(lexer: Lexer): List {
       }
       const sub = nestedSubLexer(lexer, attached.join('\n'), attachedStartLineIndex, attachedLineNumbers)
       const fbChildren = parseBlocks(sub, 0)
-      const fbItem: ListItem = { type: 'list-item', children: fbChildren }
+      const fbItem: ListItem = { type: 'list_item', children: fbChildren }
       attachBlockPos(lexer, fbItem, itemStartLineIndex, lexer.pos)
       if (checked !== undefined) fbItem.checked = checked
       if (itemAttrs) fbItem.attrs = itemAttrs
@@ -2783,7 +2783,7 @@ function parseList(lexer: Lexer): List {
       )
     }
 
-    const item: ListItem = { type: 'list-item', children }
+    const item: ListItem = { type: 'list_item', children }
     attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
     if (checked !== undefined) item.checked = checked
     if (itemAttrs) item.attrs = itemAttrs
@@ -3000,10 +3000,10 @@ function parseTable(lexer: Lexer): Table | Figure {
   }
   const rows: TableRow[] = rawRows.map((rc, idx) => {
     const row: TableRow = {
-      type: 'table-row',
+      type: 'table_row',
       cells: rc.map((c) => {
         const cell: TableCell = {
-          type: 'table-cell',
+          type: 'table_cell',
           header: c.header,
           children: c.span
             ? []
@@ -3538,11 +3538,11 @@ const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
 // e.g. `{=html}`) does not match here.
 const RE_FORCED_EMPHASIS = /^\{([/*_^,~=])([\s\S]+?)\1\}/
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
-  '/': 'italic',
+  '/': 'emphasis',
   '*': 'strong',
   _: 'underline',
-  '^': 'super',
-  ',': 'sub',
+  '^': 'superscript',
+  ',': 'subscript',
   '~': 'strike',
   '=': 'highlight',
 }
@@ -3757,7 +3757,7 @@ function scanInlineInner(
     // Hard line break: a backslash at end of line (before a newline).
     if (c === '\\' && text[i + 1] === '\n') {
       flush()
-      out.push(withPos({ type: 'hard-break' }, source, text, i, i + 2))
+      out.push(withPos({ type: 'hard_break' }, source, text, i, i + 2))
       i += 2
       continue
     }
@@ -3766,7 +3766,7 @@ function scanInlineInner(
     // input (`para\` at EOF -> `<br>`), matching djot and carve's cheatsheet.
     if (c === '\\' && i + 1 >= text.length) {
       flush()
-      out.push(withPos({ type: 'hard-break' }, source, text, i, i + 1))
+      out.push(withPos({ type: 'hard_break' }, source, text, i, i + 1))
       i++
       continue
     }
@@ -3875,7 +3875,7 @@ function scanInlineInner(
       const raw = RE_RAW_INLINE.exec(text.slice(end))
       if (raw) {
         const len = end - i + raw[0].length
-        out.push(withPos({ type: 'raw-inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
+        out.push(withPos({ type: 'raw_inline', format: raw[1]!, content: inner } as RawInline, source, text, i, i + len))
         i += len
         continue
       }
@@ -3916,7 +3916,7 @@ function scanInlineInner(
       if (closed) {
         flush()
         const content = text.slice(i + 1 + openLen, end - openLen).replace(/^ (.*) $/, '$1')
-        out.push(withPos({ type: 'literal-inline', content } as LiteralInline, source, text, i, end))
+        out.push(withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
         i = end
         continue
       }
@@ -4136,7 +4136,7 @@ function scanInlineInner(
       if (m) {
         flush()
         const ext: Extension = {
-          type: 'extension',
+          type: 'inline_extension',
           name: m[1]!,
           content: scanInline(m[2]!, shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote),
         }
@@ -4160,7 +4160,7 @@ function scanInlineInner(
       const cr = RE_CROSSREF.exec(rest)
       if (cr) {
         flush()
-        const cref: CrossRef = { type: 'crossref', target: cr[1]! }
+        const cref: CrossRef = { type: 'heading_ref', target: cr[1]! }
         cref.pos = sourcePos(source, text, i, i + cr[0].length)
         out.push(cref)
         i += cr[0].length
@@ -4215,7 +4215,7 @@ function scanInlineInner(
       if (sub) {
         flush()
         out.push({
-          type: 'critic-substitute',
+          type: 'substitution',
           oldText: sub[1]!,
           newText: sub[2]!,
           pos: sourcePos(source, text, i, i + sub[0].length),
@@ -4226,14 +4226,14 @@ function scanInlineInner(
       const ins = insSuf && insSuf[i] ? RE_CRITIC_INS.exec(rest) : null
       if (ins) {
         flush()
-        out.push(withPos({ type: 'critic-insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, i + ins[0].length))
+        out.push(withPos({ type: 'insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, i + ins[0].length))
         i += ins[0].length
         continue
       }
       const del = delSuf && delSuf[i] ? RE_CRITIC_DEL.exec(rest) : null
       if (del) {
         flush()
-        out.push(withPos({ type: 'critic-delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, i + del[0].length))
+        out.push(withPos({ type: 'delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, i + del[0].length))
         i += del[0].length
         continue
       }
@@ -4302,7 +4302,7 @@ function scanInlineInner(
       // `\#` never reaches here (the escape branch consumes it as literal).
       if (captionContext && !captionNumberEmitted) {
         flush()
-        out.push(withPos({ type: 'caption-number' } as CaptionNumber, source, text, i, i + 1))
+        out.push(withPos({ type: 'caption_number' } as CaptionNumber, source, text, i, i + 1))
         captionNumberEmitted = true
         i += 1
         continue
@@ -4321,7 +4321,7 @@ function scanInlineInner(
     // Soft break (single newline inside paragraph)
     if (c === '\n') {
       flush()
-      out.push(withPos({ type: 'soft-break' }, source, text, i, i + 1))
+      out.push(withPos({ type: 'soft_break' }, source, text, i, i + 1))
       i++
       continue
     }
@@ -4359,7 +4359,7 @@ function matchEmphasis(
 ): EmphasisMatch | null {
   const c = text[i]!
 
-  // Bold-italic /*...*/  (priority over /italic/ and *bold*)
+  // Bold-italic /*...*/  (priority over /emphasis/ and *bold*)
   if (c === '/' && text[i + 1] === '*') {
     const start = i + 2
     // A bold-italic span requires a non-whitespace char right after `/*`
@@ -4379,8 +4379,9 @@ function matchEmphasis(
           searchPos = close + 1
           continue
         }
+        const children = scanInline(inner, shiftSource(source, text, start), inFootnote)
         return {
-          node: { type: 'bold-italic', children: scanInline(inner, shiftSource(source, text, start), inFootnote) },
+          node: { type: 'strong', children: [{ type: 'emphasis', children }] },
           end: close + 2,
         }
       }
@@ -4392,7 +4393,7 @@ function matchEmphasis(
   // superscript and subscript exist only in the braced forms `{^x^}`/`{,x,}`
   // (grammar PART 9 §9 rationale note) -- a bare caret or comma is literal.
   const pairs: Array<[string, Emphasis['type']]> = [
-    ['/', 'italic'],
+    ['/', 'emphasis'],
     ['*', 'strong'],
     ['_', 'underline'],
     ['~', 'strike'],

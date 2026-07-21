@@ -59,7 +59,7 @@ describe('Markdown renderer is safe-by-default', () => {
   it('keeps only the first fenced-code info token, dropping injection', () => {
     const doc: Document = {
       type: 'document',
-      children: [{ type: 'code-block', lang: 'js\n```break', content: 'x' }],
+      children: [{ type: 'code_block', lang: 'js\n```break', content: 'x' }],
     }
 
     // First whitespace-delimited token (`js`) survives; the `\n```break`
@@ -123,7 +123,7 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
             { type: 'code', value: `code${osc('CODE')}` },
             { type: 'footnote', id: `fn${osc('ID')}` },
             {
-              type: 'critic-substitute',
+              type: 'substitution',
               oldText: `old${osc('OLD')}`,
               newText: `new${osc('NEW')}`,
             },

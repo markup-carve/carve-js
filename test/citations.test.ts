@@ -12,7 +12,7 @@ function group(src: string): { items: { key: string; suppressAuthor: boolean }[]
   const p = doc.children.find((b) => b.type === 'paragraph') as
     | { children: { type: string }[] }
     | undefined
-  return p?.children.find((n) => n.type === 'citation-group') as never
+  return p?.children.find((n) => n.type === 'citation_group') as never
 }
 
 describe('citation matcher', () => {
@@ -37,7 +37,7 @@ describe('citation matcher', () => {
   it('parses a locator', () => {
     const g = parse('[@smith2020, p. 33]', { extensions: [citations()] })
     const p = g.children[0] as { children: { type: string; locator?: unknown[] }[] }
-    const cg = p.children.find((n) => n.type === 'citation-group') as never as {
+    const cg = p.children.find((n) => n.type === 'citation_group') as never as {
       items: { key: string; locator?: unknown[] }[]
     }
     expect(cg.items[0]!.key).toBe('smith2020')
@@ -256,7 +256,7 @@ function parseFirstCitationGroup(src: string): {
   const p = doc.children.find((b) => b.type === 'paragraph') as
     | { children: { type: string }[] }
     | undefined
-  const cg = p?.children.find((n) => n.type === 'citation-group')
+  const cg = p?.children.find((n) => n.type === 'citation_group')
   if (!cg) throw new Error(`No citation-group found in: ${src}`)
   return cg as never
 }

@@ -401,7 +401,7 @@ describe('static render mode — dispatch & attribute correctness', () => {
     const customMermaid = {
       name: 'custom-mermaid',
       blockRenderers: {
-        'code-block': (node: { type: string; lang?: string }) =>
+        'code_block': (node: { type: string; lang?: string }) =>
           node.lang === 'mermaid' ? '<div class="custom-diagram">claimed</div>' : undefined,
       },
     }

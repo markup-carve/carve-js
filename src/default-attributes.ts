@@ -30,22 +30,22 @@ export interface DefaultAttributesOptions {
 const TYPE_MAP: Record<string, string[]> = {
   paragraph: ['paragraph'],
   heading: ['heading'],
-  code_block: ['code-block'],
-  block_quote: ['blockquote'],
+  code_block: ['code_block'],
+  block_quote: ['block_quote'],
   list: ['list'],
   table: ['table'],
   div: ['div', 'admonition'],
-  thematic_break: ['thematic-break'],
+  thematic_break: ['thematic_break'],
   link: ['link'],
   image: ['image'],
   span: ['span'],
   code: ['code'],
   footnote: ['footnote'],
   footnote_ref: ['footnote'],
-  emphasis: ['italic'],
+  emphasis: ['emphasis'],
   strong: ['strong'],
-  superscript: ['super'],
-  subscript: ['sub'],
+  superscript: ['superscript'],
+  subscript: ['subscript'],
   strike: ['strike'],
 }
 
@@ -114,7 +114,7 @@ function visit(node: AnyNode, byType: Map<string, Record<string, string>>): void
       for (const it of (block as unknown as { items: { children: AnyNode[] }[] }).items)
         for (const c of it.children) visit(c, byType)
       break
-    case 'definition-list':
+    case 'definition_list':
       for (const it of (block as unknown as {
         items: { terms: InlineNode[][]; definitions: BlockNode[][] }[]
       }).items) {
@@ -131,7 +131,7 @@ function visit(node: AnyNode, byType: Map<string, Record<string, string>>): void
     case 'figure':
       visit((block as unknown as { target: AnyNode }).target, byType)
       break
-    case 'blockquote': {
+    case 'block_quote': {
       const attribution = (block as unknown as { attribution?: InlineNode[] }).attribution
       if (attribution) for (const c of attribution) visit(c, byType)
       break

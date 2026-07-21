@@ -98,7 +98,7 @@ export interface Paragraph extends BaseNode {
 }
 
 export interface BlockQuote extends BaseNode {
-  type: 'blockquote'
+  type: 'block_quote'
   children: BlockNode[]
   attribution?: InlineNode[]
 }
@@ -128,14 +128,14 @@ export interface List extends BaseNode {
 }
 
 export interface ListItem extends BaseNode {
-  type: 'list-item'
+  type: 'list_item'
   /** undefined = plain bullet, true/false = task list (checked / unchecked) */
   checked?: boolean
   children: BlockNode[]
 }
 
 export interface CodeBlock extends BaseNode {
-  type: 'code-block'
+  type: 'code_block'
   lang?: string
   /**
    * Optional quoted "header" from the info string (```php "src/Auth.php").
@@ -154,7 +154,7 @@ export interface CodeBlock extends BaseNode {
 }
 
 export interface ThematicBreak extends BaseNode {
-  type: 'thematic-break'
+  type: 'thematic_break'
 }
 
 export interface Table extends BaseNode {
@@ -164,12 +164,12 @@ export interface Table extends BaseNode {
 }
 
 export interface TableRow extends BaseNode {
-  type: 'table-row'
+  type: 'table_row'
   cells: TableCell[]
 }
 
 export interface TableCell extends BaseNode {
-  type: 'table-cell'
+  type: 'table_cell'
   header: boolean
   /** undefined = normal cell, 'rowspan' = `^`, 'colspan' = `<` */
   span?: 'rowspan' | 'colspan'
@@ -232,7 +232,7 @@ export interface DefinitionItem {
 }
 
 export interface DefinitionList extends BaseNode {
-  type: 'definition-list'
+  type: 'definition_list'
   items: DefinitionItem[]
 }
 
@@ -243,13 +243,13 @@ export interface Figure extends BaseNode {
 }
 
 export interface AbbreviationDef extends BaseNode {
-  type: 'abbreviation-def'
+  type: 'abbreviation_def'
   abbr: string
   expansion: string
 }
 
 export interface RawBlock extends BaseNode {
-  type: 'raw-block'
+  type: 'raw_block'
   format: string
   content: string
 }
@@ -293,24 +293,22 @@ export interface Text extends BaseNode {
 }
 
 // Emphasis kinds:
-//   italic       = /text/
+//   emphasis     = /text/
 //   strong       = *text*
 //   underline    = _text_
 //   strike       = ~text~
-//   super        = ^text^
-//   sub          = ,,text,,
-//   highlight    = ==text==
-//   bold-italic  = slash-star-text-star-slash
+//   superscript  = {^text^}
+//   subscript    = {,text,}
+//   highlight    = =text=
 export interface Emphasis extends BaseNode {
   type:
-    | 'italic'
+    | 'emphasis'
     | 'strong'
     | 'underline'
     | 'strike'
-    | 'super'
-    | 'sub'
+    | 'superscript'
+    | 'subscript'
     | 'highlight'
-    | 'bold-italic'
   children: InlineNode[]
 }
 
@@ -399,7 +397,7 @@ export interface Math extends BaseNode {
  * renderer's output (html), dropped otherwise.
  */
 export interface RawInline extends BaseNode {
-  type: 'raw-inline'
+  type: 'raw_inline'
   format: string
   content: string
 }
@@ -418,7 +416,7 @@ export interface RawInline extends BaseNode {
  * text.
  */
 export interface LiteralInline extends BaseNode {
-  type: 'literal-inline'
+  type: 'literal_inline'
   content: string
 }
 
@@ -441,7 +439,7 @@ export interface AutoLink extends BaseNode {
 }
 
 export interface CrossRef extends BaseNode {
-  type: 'crossref'
+  type: 'heading_ref'
   /** Raw id between `</#` and `>`. */
   target: string
 }
@@ -452,7 +450,7 @@ export interface CrossRef extends BaseNode {
  * Renders as the number text.
  */
 export interface CaptionNumber extends BaseNode {
-  type: 'caption-number'
+  type: 'caption_number'
   /** Assigned during resolve; undefined until then. */
   n?: number
 }
@@ -482,7 +480,7 @@ export interface Citation {
 
 /** A `[…@key…]` citation, possibly several `;`-separated items (#90, Tier-2). */
 export interface CitationGroup extends BaseNode {
-  type: 'citation-group'
+  type: 'citation_group'
   items: Citation[]
   /** Citation-level mode; set by a leading '+' after '['. Absent = non-integral (parenthetical). CSL/Citum CitationMode vocabulary. */
   mode?: 'integral'
@@ -501,7 +499,7 @@ export interface Tag extends BaseNode {
 }
 
 export interface Extension extends BaseNode {
-  type: 'extension'
+  type: 'inline_extension'
   name: string
   content: InlineNode[]
 }
@@ -524,27 +522,27 @@ export interface Footnote extends BaseNode {
 }
 
 export interface SoftBreak extends BaseNode {
-  type: 'soft-break'
+  type: 'soft_break'
 }
 
 export interface HardBreak extends BaseNode {
-  type: 'hard-break'
+  type: 'hard_break'
 }
 
 export interface CriticInsert extends BaseNode {
-  type: 'critic-insert'
+  type: 'insert'
   children: InlineNode[]
   attrs?: Attrs
 }
 
 export interface CriticDelete extends BaseNode {
-  type: 'critic-delete'
+  type: 'delete'
   children: InlineNode[]
   attrs?: Attrs
 }
 
 export interface CriticSubstitute extends BaseNode {
-  type: 'critic-substitute'
+  type: 'substitution'
   oldText: string
   newText: string
 }

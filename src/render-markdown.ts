@@ -77,19 +77,19 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     }
     case 'paragraph':
       return `${renderInlines(node.children, ctx)}\n\n`
-    case 'code-block': {
+    case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
       const info = markdownFenceInfo(node.lang, node.header)
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
-    case 'blockquote': {
+    case 'block_quote': {
       const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
       return `${lines.map((line) => `> ${line}`).join('\n')}\n\n`
     }
     case 'list':
       return renderList(node, ctx)
-    case 'thematic-break':
+    case 'thematic_break':
       return '---\n\n'
     case 'table':
       return renderTable(node, ctx)
@@ -113,7 +113,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return node.label
         ? `**${escapeText(node.label)}**\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
-    case 'definition-list':
+    case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
@@ -121,10 +121,10 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
       return `${renderImage(node)}\n\n`
-    case 'raw-block':
+    case 'raw_block':
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
       return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
-    case 'abbreviation-def':
+    case 'abbreviation_def':
     case 'comment':
       return ''
     default: {
@@ -224,7 +224,7 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
   // image target used to glue it on (`![a](/u)cap`). A blockquote target keeps
   // the blank-line separation; a table drops the caption entirely.
   const sep =
-    node.target.type === 'blockquote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
+    node.target.type === 'block_quote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
   // End with the block separator so a following block is not glued to the
   // caption (matching every other block renderer and carve-php).
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
@@ -254,7 +254,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'text':
       if (/^<\/#[^>]+>$/.test(node.value)) return node.value
       return escapeText(cleanEscapedText(node))
-    case 'italic':
+    case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
     case 'strong':
       return `**${renderInlines(node.children, ctx)}**`
@@ -262,15 +262,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return `<u>${renderInlines(node.children, ctx)}</u>`
     case 'strike':
       return `~~${renderInlines(node.children, ctx)}~~`
-    case 'sub':
+    case 'subscript':
       // Subscript is NOT strikethrough; mirror super's inline-HTML fallback.
       return `<sub>${renderInlines(node.children, ctx)}</sub>`
-    case 'super':
+    case 'superscript':
       return `<sup>${renderInlines(node.children, ctx)}</sup>`
     case 'highlight':
       return `<mark>${renderInlines(node.children, ctx)}</mark>`
-    case 'bold-italic':
-      return `***${renderInlines(node.children, ctx)}***`
     case 'code':
       return renderCode(stripControls(node.value))
     case 'link':
@@ -283,9 +281,9 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return node.display
         ? `$$${stripControls(node.content)}$$`
         : `$${stripControls(node.content)}$`
-    case 'raw-inline':
+    case 'raw_inline':
       return node.format === 'html' ? escapeMdHtml(stripControls(node.content)) : ''
-    case 'literal-inline':
+    case 'literal_inline':
       // §27: emitted by EVERY renderer, never dropped. It is prose, not code,
       // so no code fence -- the content becomes literal text, with Markdown
       // metacharacters escaped so `*not bold*` stays visible as authored.
@@ -302,7 +300,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return `@${stripControls(node.user)}`
     case 'tag':
       return escapeText(`#${stripControls(node.name)}`)
-    case 'extension':
+    case 'inline_extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation': {
       // Markdown has no abbreviation syntax; emit an HTML `<abbr>` so the title
@@ -323,24 +321,24 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return node.inline
         ? `^[${renderInlines(node.inline, ctx)}]`
         : `[^${stripControls(node.id ?? '')}]`
-    case 'soft-break':
+    case 'soft_break':
       return '\n'
-    case 'hard-break':
+    case 'hard_break':
       return '  \n'
-    case 'critic-insert':
+    case 'insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
-    case 'critic-delete':
+    case 'delete':
       return `<del>${renderInlines(node.children, ctx)}</del>`
-    case 'critic-substitute':
+    case 'substitution':
       // Emit BOTH sides like the HTML renderer; dropping oldText loses content.
       return `<del>${escapeText(node.oldText)}</del><ins>${escapeText(node.newText)}</ins>`
     case 'critic-comment':
       return ''
-    case 'crossref':
+    case 'heading_ref':
       return `</#${stripControls(node.target)}>`
-    case 'caption-number':
+    case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)
-    case 'citation-group':
+    case 'citation_group':
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
       return stripControls(node.raw)
     case 'comment':
@@ -496,7 +494,7 @@ function walkBlocks(
       case 'paragraph':
         visit(block, block.children)
         break
-      case 'blockquote':
+      case 'block_quote':
       case 'admonition':
       case 'div':
         walkBlocks(block.children, visit)
@@ -504,7 +502,7 @@ function walkBlocks(
       case 'list':
         for (const item of block.items) walkBlocks(item.children, visit)
         break
-      case 'definition-list':
+      case 'definition_list':
         for (const item of block.items) {
           for (const term of item.terms) visit(block, term)
           for (const def of item.definitions) walkBlocks(def, visit)
@@ -516,7 +514,7 @@ function walkBlocks(
         break
       case 'figure':
         visit(block, block.caption)
-        if (block.target.type === 'blockquote') walkBlocks(block.target.children, visit)
+        if (block.target.type === 'block_quote') walkBlocks(block.target.children, visit)
         else if (block.target.type === 'table') walkBlocks([block.target], visit)
         break
       default:
@@ -529,21 +527,20 @@ function walkInlines(nodes: InlineNode[], visit: (node: InlineNode) => void): vo
   for (const node of nodes) {
     visit(node)
     switch (node.type) {
-      case 'italic':
+      case 'emphasis':
       case 'strong':
       case 'underline':
       case 'strike':
-      case 'super':
-      case 'sub':
+      case 'superscript':
+      case 'subscript':
       case 'highlight':
-      case 'bold-italic':
       case 'link':
       case 'span':
-      case 'critic-insert':
-      case 'critic-delete':
+      case 'insert':
+      case 'delete':
         walkInlines(node.children, visit)
         break
-      case 'extension':
+      case 'inline_extension':
         walkInlines(node.content, visit)
         break
       case 'footnote':
