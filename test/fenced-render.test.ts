@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   abc,
+  plantuml,
   carveToHtml,
   chart,
   d2,
@@ -91,6 +92,26 @@ describe('fencedRender factory', () => {
     )
   })
 
+  it('plantuml preset renders a text-mode pre and claims puml too', () => {
+    expect(carveToHtml('``` plantuml\n@startuml\nA -> B\n@enduml\n```', { extensions: [plantuml()] })).toBe(
+      '<pre class="plantuml">@startuml\nA -> B\n@enduml</pre>',
+    )
+    expect(carveToHtml('``` puml\nA -> B\n```', { extensions: [plantuml()] })).toBe(
+      '<pre class="plantuml">A -> B</pre>',
+    )
+  })
+
+  it('plantuml escapes `<` but keeps `>`, so `<|--` and `-->` both survive', () => {
+    // PlantUML leans on `<` far harder than Mermaid (`<|--` inheritance,
+    // `<<stereotype>>`). Text mode escapes `&` and `<` only, so a hydration
+    // script reading textContent gets the original source back.
+    expect(
+      carveToHtml('``` plantuml\nA <|-- B\nC <<actor>> D\nE --> F\n```', {
+        extensions: [plantuml()],
+      }),
+    ).toBe('<pre class="plantuml">A &lt;|-- B\nC &lt;&lt;actor>> D\nE --> F</pre>')
+  })
+
   it('mermaid is a text-mode preset (byte-identical to mermaid())', () => {
     const src = '``` mermaid\ngraph TD; A-->B\n```'
     expect(carveToHtml(src, { extensions: [fencedRender({ language: 'mermaid' })] })).toBe(
@@ -104,7 +125,7 @@ describe('fencedRender factory', () => {
 
   it('presets() registers every bundled fence language at once', () => {
     const exts = presets()
-    expect(exts).toHaveLength(7)
+    expect(exts).toHaveLength(8)
 
     expect(carveToHtml('``` mermaid\ngraph TD; A-->B\n```', { extensions: exts })).toBe(
       '<pre class="mermaid">graph TD; A-->B</pre>',
@@ -114,6 +135,9 @@ describe('fencedRender factory', () => {
     )
     expect(carveToHtml('``` chart\n{"type":"bar"}\n```', { extensions: exts })).toBe(
       '<div class="chart"><script type="application/json">{"type":"bar"}</script></div>',
+    )
+    expect(carveToHtml('``` puml\nA -> B\n```', { extensions: exts })).toBe(
+      '<pre class="plantuml">A -> B</pre>',
     )
   })
 })
