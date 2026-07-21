@@ -43,3 +43,34 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  mxss:
+    name: browser mutation-XSS (svg fence)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Playwright + chromium are needed only for this job, so install them here
+      # rather than as a project devDependency (keeps the main matrix light).
+      - name: Install Playwright chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Browser mutation-XSS check
+        run: npm run test:mxss
