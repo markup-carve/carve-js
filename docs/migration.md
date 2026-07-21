@@ -124,6 +124,7 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `heading-trailing-attribute` | a trailing `{#id}` / `{.class}` on a heading line; under heading-strict this is literal text, so the attributes never attach (put them on a `{…}` line *above* the heading) |
 | `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
 | `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
+| `fence-delimiter-indentation` | an indented fenced-code delimiter (`` ``` `` / `~~~`); a Carve fence is column-exact and must sit at its container's content column (column 0 at the top level), so an indented run does not open a code block - it renders as inline code with the body as plain text |
 
 The `carve lint` CLI reports both the collision warnings and these lint
 findings as `file:line:col rule - message`, and exits non-zero if anything is

@@ -305,3 +305,51 @@ describe('lintCarve — verbatim regions still suppress in-block warnings', () =
     expect(w).not.toContain('duplicate-footnote-definition')
   })
 })
+
+describe('lintCarve — indented fenced-code delimiter', () => {
+  const rulesOf = (src) => lintCarve(src).map((w) => w.rule)
+
+  it('flags an indented fence opener at the top level', () => {
+    const w = lintCarve('  ```\n  code\n  ```\n')
+    expect(w.map((x) => x.rule)).toContain('fence-delimiter-indentation')
+    expect(w[0].message).toContain('column-exact')
+    expect(w[0].line).toBe(1)
+  })
+
+  it('flags an indented tilde fence', () => {
+    expect(rulesOf(' ~~~\n x\n ~~~\n')).toContain('fence-delimiter-indentation')
+  })
+
+  it('does not flag a column-0 fence', () => {
+    expect(rulesOf('```\ncode\n```\n')).not.toContain('fence-delimiter-indentation')
+  })
+
+  it('does not flag a fence at a list item content column', () => {
+    expect(rulesOf('- one\n  ```\n  code\n  ```\n')).not.toContain('fence-delimiter-indentation')
+  })
+
+  it('does not flag a fence inside a block quote', () => {
+    expect(rulesOf('> ```\n> code\n> ```\n')).not.toContain('fence-delimiter-indentation')
+  })
+
+  it('does not flag an indented ``` shown as sample text inside a fence', () => {
+    expect(rulesOf('````\n  ```\nsample\n  ```\n````\n')).not.toContain(
+      'fence-delimiter-indentation',
+    )
+  })
+
+  it('does not double-flag a legacy raw fence (rule 2 owns it)', () => {
+    const w = lintCarve('  ``` raw html\nx\n  ```\n').filter(
+      (x) => x.line === 1,
+    )
+    expect(w.map((x) => x.rule)).not.toContain('fence-delimiter-indentation')
+  })
+})
+
+describe('lintCarve — indented fence rule inline-span guard', () => {
+  it('does not flag an indented inline code span (complete on one line)', () => {
+    const rulesOf = (src) => lintCarve(src).map((w) => w.rule)
+    expect(rulesOf('  ```not a fence```\n')).not.toContain('fence-delimiter-indentation')
+    expect(rulesOf('  ```foo bar```\n')).not.toContain('fence-delimiter-indentation')
+  })
+})
