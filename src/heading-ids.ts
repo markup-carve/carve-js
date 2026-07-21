@@ -189,7 +189,7 @@ export function inlineText(nodes: InlineNode[]): string {
         break
       case 'math':
       // An inline literal renders as visible prose (§27), so it contributes
-      // its content to the heading text -- otherwise `` # `Cat`{!} `` would
+      // its content to the heading text -- otherwise `` # !`Cat` `` would
       // slug to the empty fallback and `</#cat>` could never resolve.
       case 'literal-inline':
         out += n.content

@@ -169,7 +169,7 @@ describe('verbatim spans with surrounding spaces stay fmt-idempotent', () => {
   // by one space on each side at parse; fmt must pad it back so the strip is
   // reversible. Applies to plain code spans, attributed ones, and inline
   // literals alike (all share the serializer).
-  const cases = ['``  x  ``', '``  x  ``{.foo}', '``  x  ``{!}', '`` x``{!}', '``x ``{!}', '``   ``{!}']
+  const cases = ['``  x  ``', '``  x  ``{.foo}', '!``  x  ``', '!`` x``', '!``x ``', '!``   ``']
   for (const src of cases) {
     it(`round-trips ${JSON.stringify(src)}`, () => {
       const once = carveToCarve(src)

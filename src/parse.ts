@@ -3247,14 +3247,6 @@ const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
 const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 // Raw inline passthrough tag, follows a verbatim span: `` `…`{=html} ``.
 const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
-// Inline literal sigil block, follows a verbatim span: `` `…`{!} `` (grammar
-// PART 9 §27, ohm `litInline = code "{" attrSp* "!" (attrSp+ attrItem)* attrSp*
-// "}"`). The `!` MUST be the first token, and every further attribute must be
-// separated from it by whitespace -- so `{!.ipa}` does not match here and, `!`
-// being an invalid attribute identifier, stays literal text via the strict
-// attribute rule (§14). Group 1 is the remaining attribute payload (possibly
-// empty), validated with the same strict payload check as any other block.
-const RE_LIT_INLINE = /^\{[ \t]*!((?:[ \t](?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)?)\}/
 // Symbol shortcode `:name:` (after extension, which needs `[`).
 // The first name char is a letter, digit, `+` or `-` (so `:+1:` / `:-1:`
 // parse), but never `_` — `:_x_:` would steal from underline. Scanning the
@@ -3813,20 +3805,6 @@ function scanInlineInner(
         i += len
         continue
       }
-      // A verbatim span tagged `{!…}` is an inline literal (§27): same
-      // verbatim capture as a code span, but the `<code>` wrapper is dropped
-      // and the content is escaped-and-always-emitted rather than
-      // target-routed like raw passthrough.
-      const lit = RE_LIT_INLINE.exec(text.slice(end))
-      if (lit && isValidAttrPayload(lit[1] ?? '')) {
-        const node = { type: 'literal-inline', content: inner } as LiteralInline
-        const parsed = parseAttrs(lit[1] ?? '')
-        if (!isEmptyAttrs(parsed)) node.attrs = parsed
-        const len = end - i + lit[0].length
-        out.push(withPos(node, source, text, i, i + len))
-        i += len
-        continue
-      }
       out.push(withPos({ type: 'code', value: inner }, source, text, i, end))
       i = end
       continue
@@ -3849,6 +3827,24 @@ function scanInlineInner(
           i += len
           continue
         }
+      }
+    }
+
+    // Inline literal (§27): a `!` prefix on a verbatim code span, mirroring
+    // the `$`-math prefix above. The span content is captured verbatim, later
+    // HTML-escaped and emitted by every renderer with the `<code>` wrapper
+    // dropped; a trailing `{…}` attaches below as an ordinary inline attribute
+    // block (no special first-token sigil). Like math it requires a CLOSED
+    // span — a bare `!` before an unclosed run stays literal text and the run
+    // becomes an ordinary (unclosed) code span.
+    if (c === '!' && text[i + 1] === '`') {
+      const { end, closed, openLen } = verbatimSpanEnd(text, i + 1)
+      if (closed) {
+        flush()
+        const content = text.slice(i + 1 + openLen, end - openLen).replace(/^ (.*) $/, '$1')
+        out.push(withPos({ type: 'literal-inline', content } as LiteralInline, source, text, i, end))
+        i = end
+        continue
       }
     }
 

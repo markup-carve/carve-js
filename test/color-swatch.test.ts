@@ -14,7 +14,7 @@ describe('color swatch extension', () => {
     // `#ff8800` would otherwise parse as a tag; the literal form is the natural
     // way to pass it, and must render the same swatch as the bare form.
     const bare = carveToHtml(':color[#ff8800]', { extensions: [colorSwatch()] })
-    const lit = carveToHtml(':color[`#ff8800`{!}]', { extensions: [colorSwatch()] })
+    const lit = carveToHtml(':color[!`#ff8800`]', { extensions: [colorSwatch()] })
     expect(lit).toContain('swatch-chip')
     expect(lit).toBe(bare)
   })
