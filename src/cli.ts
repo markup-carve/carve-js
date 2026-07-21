@@ -12,6 +12,7 @@
  * real process I/O and invokes it only when executed as the binary.
  */
 import { readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
@@ -26,6 +27,16 @@ import {
   carveToCarve,
   carveToPlainText,
   carveToAnsi,
+  parse,
+  resolve,
+  renderHtml,
+  renderMarkdown,
+  renderCarve,
+  renderPlainText,
+  renderAnsi,
+  expandIncludes,
+  fileSystemResolver,
+  type IncludeWarning,
   type MigrationWarning,
 } from './index.js'
 import { stampCarve, type StampForm } from './stamp.js'
@@ -63,6 +74,10 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --plain        plain text
     --ansi         ANSI-colored terminal text
     --carve        canonical Carve source
+    --include-root <dir>
+                   Containment root for {{ path }} includes. Defaults to the
+                   input file's directory; pass this to widen it to a docs
+                   root or narrow it. Required to enable includes on stdin.
 
 fmt - format Carve source canonically.
 
@@ -224,6 +239,24 @@ const RENDERERS = {
   ansi: carveToAnsi,
 } as const
 
+const AST_RENDERERS = {
+  html: renderHtml,
+  markdown: renderMarkdown,
+  carve: renderCarve,
+  plain: renderPlainText,
+  ansi: renderAnsi,
+} as const
+
+function formatIncludeWarnings(warnings: IncludeWarning[], file: string): string {
+  return warnings
+    // A warning raised inside an included file names that file, so the
+    // location points at the source the reader has to edit. `w.detail` (the
+    // raw resolver error, which can carry absolute host paths) is
+    // deliberately NOT printed here -- see IncludeWarning.detail, spec I7.
+    .map((w) => `${w.file ?? file}:${w.line}:${w.column} ${w.rule} - ${w.message}`)
+    .join('\n')
+}
+
 async function runFmt(args: string[], io: CliIO): Promise<number> {
   let values: {
     write?: boolean
@@ -335,6 +368,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     carve?: boolean
     plain?: boolean
     ansi?: boolean
+    'include-root'?: string
     help?: boolean
   }
   let positionals: string[]
@@ -347,6 +381,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         carve: { type: 'boolean' },
         plain: { type: 'boolean' },
         ansi: { type: 'boolean' },
+        'include-root': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -375,18 +410,67 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   const render = RENDERERS[chosen[0] ?? 'html']
 
   let src: string
+  let file = '<stdin>'
   if (positionals.length === 0) {
     src = await io.readStdin()
   } else {
+    file = positionals[0]!
     try {
-      src = io.readFile(positionals[0]!)
+      src = io.readFile(file)
     } catch {
-      io.writeErr(`carve render: cannot read ${positionals[0]}\n`)
+      io.writeErr(`carve render: cannot read ${file}\n`)
       return 2
     }
   }
 
-  let out = render(src)
+  // Containment root: an explicit --include-root wins, otherwise a file input
+  // supplies its own directory. Never the process cwd - the root has to come
+  // from a path the caller actually named, or includes stay off. Stdin/string
+  // input has no path context, so it gets no default root and directives stay
+  // literal unless --include-root is passed.
+  const inputPath = positionals[0] !== undefined ? resolvePath(positionals[0]) : undefined
+  const includeRoot = values['include-root'] ?? (inputPath !== undefined ? dirname(inputPath) : undefined)
+  // The implicit root only engages for sources that actually carry a
+  // directive, so directive-free files keep the plain source render path.
+  const useIncludes =
+    includeRoot !== undefined && (values['include-root'] !== undefined || src.includes('{{'))
+
+  // fileSystemResolver canonicalizes its root eagerly, so a root that is not a
+  // real directory throws. With the implicit root that is reachable without the
+  // user asking for includes at all (an injected CliIO, or a path whose parent
+  // was removed), so an unusable root degrades to the plain render path instead
+  // of failing the render. An explicit --include-root is a user request and
+  // still reports.
+  let resolver: ReturnType<typeof fileSystemResolver> | undefined
+  if (useIncludes) {
+    try {
+      resolver = fileSystemResolver(includeRoot!)
+    } catch {
+      if (values['include-root'] !== undefined) {
+        io.writeErr(`carve render: cannot use include root ${includeRoot}\n`)
+        return 2
+      }
+    }
+  }
+
+  let out: string
+  if (resolver) {
+    const doc = parse(src, { positions: true })
+    const includeOptions = {
+      resolve: resolver,
+      // Absolute, so the resolver's parent-relative lookup starts from the
+      // input file's real directory instead of re-prefixing a relative path
+      // with the root.
+      ...(inputPath !== undefined ? { sourcePath: inputPath } : {}),
+    }
+    const expanded = expandIncludes(doc, src, includeOptions)
+    if (expanded.warnings.length) io.writeErr(formatIncludeWarnings(expanded.warnings, file) + '\n')
+    const format = chosen[0] ?? 'html'
+    const renderedDoc = format === 'carve' ? expanded.doc : resolve(expanded.doc)
+    out = AST_RENDERERS[format](renderedDoc)
+  } else {
+    out = render(src)
+  }
   if (!out.endsWith('\n')) out += '\n'
   io.write(out)
   return 0

@@ -45,6 +45,7 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:includes": "vitest run test/include-conformance.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

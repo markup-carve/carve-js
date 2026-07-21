@@ -305,3 +305,57 @@ describe('lintCarve — verbatim regions still suppress in-block warnings', () =
     expect(w).not.toContain('duplicate-footnote-definition')
   })
 })
+
+describe('lintCarve — empty-include-path advisory', () => {
+  const emptyRules = (src: string) =>
+    lintCarve(src)
+      .filter((w) => w.rule === 'empty-include-path')
+
+  it('flags empty braces that look like an include with no path', () => {
+    const w = emptyRules('{{ }}')
+    expect(w).toHaveLength(1)
+    expect(w[0]!.message).toContain('include directive with no path')
+    expect(w[0]!.message).toContain('literal text')
+  })
+
+  it('flags a run carrying only a #section', () => {
+    const w = emptyRules('{{ #intro }}')
+    expect(w).toHaveLength(1)
+  })
+
+  it('flags a run carrying only an @option', () => {
+    expect(emptyRules('{{ @lines:2-4 }}')).toHaveLength(1)
+  })
+
+  it('flags an empty-path shape mid-paragraph and points at the braces', () => {
+    const w = emptyRules('See {{ }} here.')
+    expect(w).toHaveLength(1)
+    expect(w[0]!.column).toBe(5)
+  })
+
+  it('does not flag a valid include directive', () => {
+    expect(emptyRules('{{ x.crv }}')).toEqual([])
+  })
+
+  it('does not flag a directive whose only fault is a bad option', () => {
+    // That is an expansion-time diagnostic, not an empty path.
+    expect(emptyRules('{{ chapter.crv @bogus:1 }}')).toEqual([])
+  })
+
+  it('does not flag an empty-path shape inside an inline code span', () => {
+    // Spec I9: code is verbatim, so a literal "{{ }}" there is intentional.
+    expect(emptyRules('Use `{{ }}` literally.')).toEqual([])
+  })
+
+  it('does not flag an empty-path shape inside a fenced code block', () => {
+    expect(emptyRules('```txt\n{{ }}\n```')).toEqual([])
+  })
+
+  it('does not flag ordinary prose with no braces', () => {
+    expect(emptyRules('Just a normal sentence.')).toEqual([])
+  })
+
+  it('does not flag a spaceless bracey token (e.g. a template helper)', () => {
+    expect(emptyRules('{{#if x}}y{{/if}}')).toEqual([])
+  })
+})

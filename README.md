@@ -60,6 +60,83 @@ HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
 mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes
 render literally.
 
+### Includes
+
+File inclusion is an opt-in processor pass. The core parser leaves `{{ path }}`
+literal unless you call `expandIncludes` with a resolver:
+
+```ts
+import { expandIncludes, parse, resolve, renderHtml } from '@markup-carve/carve'
+
+const source = 'Intro\n\n{{ chapter.crv @shift:1 }}'
+const expanded = expandIncludes(parse(source, { positions: true }), source, {
+  resolve(path, ctx) {
+    // Return the child source string, throw, or return null when unresolvable.
+    // `ctx.sourcePath` and `ctx.stack` let hosts resolve relative paths.
+    return files.get(path) ?? null
+  },
+})
+
+for (const warning of expanded.warnings) {
+  console.warn(`${warning.file ?? '<input>'}:${warning.line} ${warning.message}`)
+}
+const html = renderHtml(resolve(expanded.doc))
+```
+
+Each warning carries a `file` naming the document it arose in, so a host can
+route a diagnostic to the right editor buffer. A directive that failed to
+resolve is attributed to the document containing it, not to the target it
+names; a warning raised while expanding a child - a heading clamp, an id or
+footnote rename, a cycle found deeper in the chain - is attributed to that
+child. The value is the resolver's canonical id when it supplies one, and the
+`sourcePath` option for the top-level document. It is **absent** when the
+top-level document has no `sourcePath`: no placeholder path is invented.
+
+`line` / `column` / `start` / `end` are positions in that `file`'s own source.
+Positions on merged AST nodes are not yet remapped into the assembled
+document - see the follow-up on source-position remapping (spec section 19,
+I4).
+
+`expanded.dependencies` lists every include target touched by the whole
+recursive expansion (`{ id, resolved }`, de-duplicated, in first-encounter
+order). `id` is the resolver's canonical id when it supplies one, otherwise the
+directive path. Editors and preview servers watch these paths to know when to
+re-render. Targets that failed to resolve - missing files, and paths denied by
+root containment - are reported with `resolved: false` rather than omitted, so
+a watcher still fires when a missing chapter is finally created.
+
+Supported directive options are `#section`, `@lines:N-M`, and
+`@shift:N` / `@shift:auto`. `#section` selects the heading subtree by explicit
+id or auto slug, `@lines` selects an inclusive physical line range before
+parsing, and `@shift` shifts included heading levels with clamping to
+`h1`...`h6`.
+
+`@shift:auto` derives the offset from the include site instead of stating it:
+the content is placed one level below the nearest preceding heading in the
+directive's own container or an enclosing one (a heading in a sibling container
+that has already closed does not count). The offset is
+`(context level + 1) - (minimum heading level in the included content)`, so the
+child's internal structure is preserved and a file written with an `h1` title
+slots in wherever it is included. Content with no headings is left alone.
+Heading ids and slugs never change, so cross-references into shifted headings
+keep resolving.
+
+Resolvers are deliberately host-supplied. Do not enable includes for untrusted
+input unless the resolver canonicalizes paths, rejects root escapes, and applies
+the same parsing and sanitization policy as the parent document. A Node helper,
+`fileSystemResolver(root)`, enforces canonical root containment and rejects
+absolute include paths by default. Containment is checked on the canonical
+(symlink-resolved) path, so `../shared/glossary.crv` from `chapters/ch1.crv`
+resolves while symlinks, absolute paths, and dot-dot chains leaving the root do
+not. Relative paths resolve against the including file; the containment root
+stays the single top-level root for nested includes.
+
+The CLI exposes this on `carve render`. For file input the root defaults to the
+input file's directory, so `carve input.crv` already resolves includes beside
+it; pass `--include-root docs` to widen the root to a shared docs tree (or to
+narrow it). Stdin has no path context, so includes there stay literal unless
+`--include-root` is given.
+
 ### Heading ids
 
 Every heading gets an automatic id derived from its text. Ids are

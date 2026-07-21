@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { run, type CliIO } from '../src/cli.js'
 
 /**
@@ -281,5 +284,72 @@ describe('carve render', () => {
     const t = makeIO({ stdin: SRC })
     expect(await run(['--markdown'], t.io)).toBe(0)
     expect(t.out).toContain('# Hi')
+  })
+
+  it('expands includes with --include-root', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Included.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('defaults the include root to the input file directory when --include-root is omitted', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Included.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('does not resolve includes reaching outside the default input-file root', async () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    const root = path.join(base, 'docs')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(path.join(base, 'secret.crv'), 'TOP SECRET', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ ../secret.crv }}' } })
+    expect(await run(['render', input], t.io)).toBe(0)
+    expect(t.out).not.toContain('TOP SECRET')
+    expect(t.err).toContain('include-unresolved')
+  })
+
+  it('widens the include root past the input file directory with --include-root', async () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    const root = path.join(base, 'docs')
+    mkdirSync(path.join(root, 'chapters'), { recursive: true })
+    mkdirSync(path.join(root, 'shared'), { recursive: true })
+    writeFileSync(path.join(root, 'shared/glossary.crv'), 'Glossary body.', 'utf8')
+    const input = path.join(root, 'chapters', 'ch1.crv')
+    const t = makeIO({ files: { [input]: '{{ ../shared/glossary.crv }}' } })
+    expect(await run(['render', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Glossary body.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('renders normally when the implicit include root is not a real directory', async () => {
+    const input = path.join(tmpdir(), 'carve-no-such-dir-xyz', 'main.crv')
+    const t = makeIO({ files: { [input]: 'Body {{ child.crv }} tail.' } })
+    expect(await run(['render', input], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.err).toBe('')
+  })
+
+  it('reports an explicit --include-root that is not a real directory', async () => {
+    const input = path.join(tmpdir(), 'carve-no-such-dir-xyz', 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', '--include-root', path.join(tmpdir(), 'carve-nope-xyz'), input], t.io)).toBe(2)
+    expect(t.err).toContain('cannot use include root')
+  })
+
+  it('leaves include directives literal on stdin without --include-root', async () => {
+    const t = makeIO({ stdin: '{{ child.crv }}' })
+    expect(await run(['render'], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.err).toBe('')
   })
 })
