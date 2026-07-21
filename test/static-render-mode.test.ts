@@ -7,6 +7,7 @@ import {
   details,
   graphviz,
   plantuml,
+  fencedRender,
   mathBlock,
   mermaid,
   spoiler,
@@ -266,6 +267,27 @@ describe('static render mode — plantuml', () => {
       renderers: { plantuml: () => '<img alt="plantuml" src="uml.svg">' },
     })
     expect(html).toBe('<pre class="plantuml"><img alt="plantuml" src="uml.svg"></pre>')
+  })
+})
+
+describe('static render mode — open map: a custom fence word is static-capable', () => {
+  it('a custom fence class is keyed against the open renderers map', () => {
+    // No spec change, no canonical key: a custom `myuml` fence renders
+    // statically via its css class, exactly like the canonical presets.
+    const ext = fencedRender({ language: 'myuml' })
+    const html = carveToHtml('``` myuml\nA -> B\n```', {
+      extensions: [ext],
+      mode: 'static',
+      renderers: { myuml: () => '<img alt="myuml" src="my.svg">' },
+    })
+    expect(html).toBe('<pre class="myuml"><img alt="myuml" src="my.svg"></pre>')
+  })
+
+  it('a custom fence with no matching renderer degrades to escaped source', () => {
+    const ext = fencedRender({ language: 'myuml' })
+    const html = carveToHtml('``` myuml\nA -> B\n```', { extensions: [ext], mode: 'static' })
+    expect(html).toContain('<pre class="myuml"><code class="language-myuml">')
+    expect(html).not.toContain('<img')
   })
 })
 
