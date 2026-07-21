@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   test:
-    name: typecheck + corpus
+    name: typecheck + corpus + include-conformance
     runs-on: ubuntu-latest
 
     strategy:
@@ -40,6 +40,9 @@ jobs:
 
       - name: Corpus tests
         run: npm test
+
+      - name: Include-conformance gate (spec §19 vectors)
+        run: npm run test:includes
 
       - name: Build
         run: npm run build
