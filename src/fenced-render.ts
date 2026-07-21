@@ -122,11 +122,12 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         // MathRenderer (2-arg); a diagram fence never keys it, so narrow here.
         const build = ctx.renderers[cssClass] as DiagramRenderer | undefined
         if (build) {
-          // Wrap the renderer's output (an `<svg>` / `<img>`) in the same
-          // element + author attributes the interactive path emits, so the
-          // fence's id / classes / other attrs land on the wrapping element
-          // instead of being dropped.
-          const element = `<${tag}${ctx.renderAttrs(attrs)}>${build(code.content)}</${tag}>`
+          // Wrap the renderer's output (an `<svg>` / `<img>`) in a `<div>` with
+          // the fence's merged attributes (cssClass + author `{#id .class}`), so
+          // the class/attrs survive and the wrapper is identical across engines
+          // (carve#302). A `<div>` - not the interactive `<pre>`/`<div>` tag -
+          // because the output is a rendered image, not source text.
+          const element = `<div${ctx.renderAttrs(attrs)}>${build(code.content)}</div>`
           if (opts.wrapInFigure) {
             return `${pad}<figure class="${ctx.escapeAttr(figureClass)}">\n${pad}${element}\n${pad}</figure>`
           }
