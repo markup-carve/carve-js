@@ -10,6 +10,15 @@ describe('color swatch extension', () => {
     )
   })
 
+  it('inline :color[...] flattens an inline-literal value (a hex color written literally)', () => {
+    // `#ff8800` would otherwise parse as a tag; the literal form is the natural
+    // way to pass it, and must render the same swatch as the bare form.
+    const bare = carveToHtml(':color[#ff8800]', { extensions: [colorSwatch()] })
+    const lit = carveToHtml(':color[`#ff8800`{!}]', { extensions: [colorSwatch()] })
+    expect(lit).toContain('swatch-chip')
+    expect(lit).toBe(bare)
+  })
+
   it('inline :color[...] renders a swatch for named colors', () => {
     expect(carveToHtml(':color[rebeccapurple]', { extensions: [colorSwatch()] })).toBe(
       '<p><span class="swatch"><span class="swatch-chip" style="background-color:rebeccapurple"></span> rebeccapurple</span></p>',
