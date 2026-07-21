@@ -655,7 +655,7 @@ function stripContainerPrefixes(raw: string): string {
  * pathological and intentionally not special-cased.
  */
 function collectLinkDefs(lexer: Lexer) {
-  let fence: { ch: string; len: number } | null = null
+  let fence: { ch: string; len: number; contentCol: number; quoted: boolean } | null = null
   // Track the enclosing list item's content column so a fenced-code delimiter
   // is tested at its container's content column (PART 2), not blindly at
   // column 0. Without this the prepass cannot tell a real fence nested at a
@@ -707,36 +707,41 @@ function collectLinkDefs(lexer: Lexer) {
     // strip the enclosing content column so a fence delimiter at that column
     // is recognized (kept-indent view keeps residual indent after markers)
     const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
-    const kept = stripContainerPrefixesKeepIndent(raw)
-    const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
-    // Only re-base a line that reaches the content column; a shallower line is
-    // not at the item's fence column, so it keeps its indentation and a strict
-    // (anchored) RE_FENCE will not match it.
-    //
-    // RESIDUAL (this prepass is a line-based approximation of block structure):
-    //  - indent is char-counted, so a tab in the marker vs a space-aligned
-    //    fence is a rare mismatch;
-    //  - the post-blank continuation rule (a block attaches at baseIndent+2 even
-    //    below a wide marker's content column, §17) is not modeled, so a fence
-    //    at that narrower column inside an ordered item is missed here;
-    //  - a list nested inside a blockquote, and blockquote lazy continuation,
-    //    are not fully modeled (the marker view is blockquote-stripped).
-    // In both, a definition inside such a fence is still collected (a spurious
-    // link) rather than lost. The sound fix is collecting defs during block
-    // parsing; this covers the common cases without that refactor.
-    const deIndented = keptIndent >= contentCol ? kept.slice(contentCol) : kept
+    // A fence is quoted if a blockquote prefix leads the line, possibly behind a
+    // single list marker (`- > ```), so its closer is blockquote-stripped. Deeper
+    // list/quote mixing is a documented residual.
+    const afterMarker = raw.replace(
+      /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +(?:\[[ xX\-_>?]\] +)?/,
+      '',
+    )
+    const rawIsQuoted = /^(?:[^\S ]*>[^\S ]?)+/.test(raw) || /^(?:[^\S ]*>[^\S ]?)+/.test(afterMarker)
     if (fence) {
-      const close = deIndented.match(/^([`~]{3,})\s*$/)
+      // CLOSER: strip a blockquote prefix only when the fence is quoted, and
+      // NEVER a list marker -- a fence delimiter is a continuation line of pure
+      // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
+      // is not a closer. Re-base to the column the fence opened at.
+      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>[^\S ]?)+/, '') : raw
+      const ki = k.length - k.replace(/^[ \t]+/, '').length
+      const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
+      const close = d.match(/^([`~]{3,})\s*$/)
       if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
         fence = null
       continue // definitions inside fenced code are literal samples
     }
-    // A fence OPENER is column-exact (PART 2): tested at the container's
-    // content column via `deIndented`. A definition inside a fence nested at a
-    // list item's content column is now correctly skipped, not collected.
+    // OPENER: strip container prefixes (blockquote AND list marker) and re-base
+    // to the content column, so a fence on a list item marker line (`- ```) or a
+    // continuation line at the content column both open. RESIDUAL (line-based
+    // approximation): tab-vs-space marker alignment, the post-blank baseIndent+2
+    // rule, and lists nested in blockquotes are not modeled -- each errs toward a
+    // spurious link (or, for a quoted fence in a deeply/exotically nested list,
+    // an unresolved reference). The sound fix is collecting defs during block
+    // parsing.
+    const kept = stripContainerPrefixesKeepIndent(raw)
+    const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
+    const deIndented = keptIndent >= contentCol ? kept.slice(contentCol) : kept
     const open = RE_FENCE.exec(deIndented)
     if (open) {
-      fence = { ch: open[2]![0]!, len: open[2]!.length }
+      fence = { ch: open[2]![0]!, len: open[2]!.length, contentCol, quoted: rawIsQuoted }
       continue
     }
     // An abbreviation def (`*[ABBR]: ...`) is not a link def.

@@ -159,3 +159,17 @@ describe('markdownToCarve re-bases a fence to its container content column', () 
     expect(out).not.toContain('  ```')
   })
 })
+
+
+// A fence delimiter is a continuation line of pure indentation, never a marker
+// line, so a literal marker-prefixed fence line inside a doc-level code sample
+// must not be mistaken for a closer (which would end the prepass fence early and
+// collect a later definition from code).
+describe('fenced code: literal marker lines inside a code sample are not closers', () => {
+  for (const lead of ['- ', '> ', '1. ']) {
+    it('does not close on a literal marker+fence line inside a doc-level fence: ' + lead, () => {
+      const out = carveToHtml('```\n' + lead + '```\n[r]: /u\n```\n\n[r][]\n')
+      expect(out).not.toContain('<a href="/u">') // the def is still inside the code block
+    })
+  }
+})
