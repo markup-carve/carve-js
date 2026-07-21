@@ -8,11 +8,32 @@ import { sanitizeSvg, type SanitizeSvgOptions } from './svg-sanitize.js'
 export interface ImgFenceOptions extends SanitizeSvgOptions {
   /** Fence info word(s) this instance claims. Default `['img', 'image']`. */
   language?: string | string[]
+  /**
+   * Permit **inline** rendering (a live `<svg>` in the page DOM) for fences that
+   * carry an `{inline}` attribute. Default `false`: every fence is rendered in
+   * the browser-sandboxed `data:image/svg+xml` `<img>` mode, and `{inline}` is
+   * ignored.
+   *
+   * ⚠️ SECURITY: inline mode injects live SVG into the DOM, where the only thing
+   * standing between a hostile SVG and script execution is this extension's
+   * hand-rolled sanitizer — NOT a browser-grade parser. It is suitable for
+   * TRUSTED author content, but is not a hardened XSS boundary for
+   * attacker-controlled input (parser-differential / mutation-XSS cannot be
+   * ruled out for a string sanitizer). For untrusted input, leave this `false`
+   * so everything stays sandboxed, or post-process inline output with a
+   * browser-based sanitizer (e.g. DOMPurify's SVG profile).
+   *
+   * This is a HOST decision on purpose: the fence body and its attributes come
+   * from the same author, so a per-fence `{inline}` alone must never be able to
+   * self-elevate out of the sandbox — only the host, by setting this, opts in.
+   */
+  allowInline?: boolean
 }
 
-// Fence attributes the extension consumes rather than emitting: the mode flag
-// and the sandbox `alt` text.
-const CONSUMED_KEYS = new Set(['sandbox', 'alt'])
+// Fence attributes the extension consumes rather than emitting: the inline mode
+// flag, the `alt` text, and the now-redundant `sandbox` marker (sandbox is the
+// default; kept consumed so an explicit `{sandbox}` doesn't leak as an attribute).
+const CONSUMED_KEYS = new Set(['inline', 'alt', 'sandbox'])
 
 // Case-insensitive lookup of a consumed key in a keyValues map, matching how
 // authorAttrs() strips them — so `{Sandbox}` / `{ALT=…}` are honored, not
@@ -85,29 +106,36 @@ function sourceFallback(code: CodeBlock, ctx: { indent(l: number): string; escap
  * showing it as verbatim source. `svg` / `xml` are deliberately NOT claimed, so
  * an author can still syntax-highlight SVG source with those words.
  *
- * Two emit modes:
+ * Two emit modes, **sandbox by default**:
  *
- * - **inline (default):** the sanitized `<svg>` goes straight into the DOM, so
- *   `currentColor`, CSS classes and dark-mode all apply.
+ * - **sandbox (default):** the sanitized SVG is encoded into a
+ *   `data:image/svg+xml` URI on an `<img>`, which the browser sandboxes — no
+ *   script, no fetch, no DOM leakage — regardless of the sanitizer. This is the
+ *   safe path for untrusted input. `{alt=…}` sets the alt text.
  *
  *       ```img
- *       <svg viewBox="0 0 24 24"><path d="…" fill="currentColor"/></svg>
+ *       <svg viewBox="0 0 24 24"><path d="…"/></svg>
  *       ```
  *
- * - **sandbox:** a `{sandbox}` boolean fence attribute encodes the sanitized
- *   SVG into a `data:image/svg+xml` URI on an `<img>`, which the browser
- *   sandboxes (no script, no fetch, no DOM leakage). `{alt=…}` sets the alt.
+ * - **inline (opt-in):** with `imgFence({ allowInline: true })`, a fence marked
+ *   `{inline}` renders a live `<svg>` in the DOM, so `currentColor`, CSS classes
+ *   and dark-mode apply. See the ⚠️ security note on {@link ImgFenceOptions.allowInline}
+ *   — this is for TRUSTED content. Without `allowInline`, `{inline}` is ignored
+ *   and the fence stays sandboxed.
  *
- *       ```img {sandbox alt="a logo"}
- *       <svg …>…</svg>
+ *       // host: imgFence({ allowInline: true })
+ *       {inline}
+ *       ```img
+ *       <svg viewBox="0 0 24 24"><path d="…" fill="currentColor"/></svg>
  *       ```
  *
  * The sanitizer ({@link sanitizeSvg}) drops `<script>`, `<foreignObject>`,
  * event handlers, `javascript:`/external URLs and active CSS. A body that is
  * not a single `<svg>` root degrades to an escaped code block.
  *
- * Author `{#id .class}` on the fence merge onto the root `<svg>` (inline) or the
- * `<img>` (sandbox), hardened by the core `ctx.renderAttrs`.
+ * Author `{#id .class}` on the fence merge onto the `<img>` (sandbox) or the
+ * root `<svg>` (inline), hardened by the core `ctx.renderAttrs` and — for inline
+ * — re-run through the SVG sanitizer.
  */
 export function imgFence(opts: ImgFenceOptions = {}): CarveExtension {
   const languages = (Array.isArray(opts.language) ? opts.language : opts.language ? [opts.language] : ['img', 'image']).filter(
@@ -126,10 +154,14 @@ export function imgFence(opts: ImgFenceOptions = {}): CarveExtension {
       if (!ok) return sourceFallback(code, ctx)
 
       const pad = ctx.indent(ctx.level)
-      const sandbox = consumedValue(code.attrs, 'sandbox') !== undefined
       const cleanAttrs = authorAttrs(code.attrs)
+      // Inline is a HOST capability: the `{inline}` fence flag only takes effect
+      // when the host opted in with `allowInline`. Otherwise (the default, and
+      // the safe posture for untrusted input) the fence is sandboxed and
+      // `{inline}` is ignored — an author cannot self-elevate out of the sandbox.
+      const inline = opts.allowInline === true && consumedValue(code.attrs, 'inline') !== undefined
 
-      if (sandbox) {
+      if (!inline) {
         const alt = consumedValue(code.attrs, 'alt') ?? ''
         const src = `data:image/svg+xml,${encodeURIComponent(svg)}`
         // Sandbox mode promises no fetches: drop any author source-selection
