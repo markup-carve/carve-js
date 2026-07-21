@@ -67,7 +67,7 @@ const files = readdirSync(vectorDir)
 describe('include-conformance vectors (spec §19)', () => {
   // A misvendored or empty corpus must fail the gate, not silently pass.
   it('vendors the full vector corpus', () => {
-    expect(files.length).toBeGreaterThanOrEqual(90)
+    expect(files.length).toBeGreaterThanOrEqual(94)
   })
 
   for (const file of files) {
