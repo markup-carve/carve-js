@@ -178,3 +178,47 @@ describe('verbatim spans with surrounding spaces stay fmt-idempotent', () => {
     })
   }
 })
+
+describe('all-space verbatim content is never stripped or padded', () => {
+  // Regression: the strip skips content that consists ENTIRELY of spaces (the
+  // CommonMark rule, and what the executable spec's codeText() does). Stripping
+  // it produced an empty verbatim span, which has no representable Carve source
+  // -- a bare `` `` `` reparses as a two-backtick opener -- so `!`  `` degraded
+  // to `!``` and then to `\!```, changing the document on every fmt pass. The
+  // serializer must mirror the parser and NOT pad all-space content either,
+  // otherwise each pass grew the span by two spaces.
+  const cases = [
+    '` `',
+    '`  `',
+    '`   `',
+    '!` `',
+    '!`  `',
+    '!`   `',
+    '$` x `',
+    '$`  `',
+    '``  ``',
+    '!``  ``',
+    '`a b`',
+    '` a `',
+  ]
+  for (const src of cases) {
+    it(`round-trips ${JSON.stringify(src)}`, () => {
+      const once = carveToCarve(src)
+      expect(carveToHtml(once)).toBe(carveToHtml(src)) // invariant
+      expect(carveToCarve(once)).toBe(once) // idempotent
+    })
+  }
+
+  it('preserves all-space content verbatim rather than collapsing it', () => {
+    // Two spaces must survive as two spaces; previously they stripped to empty.
+    expect(carveToHtml('`  `')).toBe('<p><code>  </code></p>')
+    expect(carveToHtml('`   `')).toBe('<p><code>   </code></p>')
+    // ... while a non-all-space span still gets the single-space strip.
+    expect(carveToHtml('` a `')).toBe('<p><code>a</code></p>')
+  })
+
+  it('keeps an all-space inline literal a literal across fmt', () => {
+    // The bug turned this into an escaped bang plus an unclosed code span.
+    expect(carveToCarve('!`  `').trim()).toBe('!`  `')
+  })
+})
