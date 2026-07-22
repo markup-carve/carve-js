@@ -7,6 +7,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Inline literal** via the `` !`…` `` prefix (#359). A `!` immediately before
+  a verbatim backtick span renders its content as escaped prose with no
+  `<code>` wrapper, so notation that collides with the bare emphasis
+  delimiters - phonemic transcription `/kaet/`, glob patterns, paths - needs no
+  per-character escaping. It mirrors the `$`-math prefix: content is captured
+  verbatim, HTML-escaped, and emitted by every renderer, and a trailing `{…}`
+  is the ordinary inline attribute block. A literal `!` immediately before a
+  backtick span is written `\!`.
+- **Lint rule for indented fenced-code delimiters** (`fence-delimiter-indentation`)
+  (#367).
+
 ### Changed
 
 - **BREAKING: AST node type discriminants now follow the spec node-type
