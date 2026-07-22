@@ -68,6 +68,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   discriminant still using kebab-case, even though the three sibling
   `critic-*` nodes were renamed. It is unchanged in this release.
 
+### Fixed
+
+- **`carve fmt` no longer corrupts verbatim spans whose content is entirely
+  spaces.** The parser's single-space strip now skips all-space content, and
+  the serializer pads only where the parser strips. Previously `` `  ` ``
+  stripped to an empty verbatim span, which has no representable Carve source
+  (a bare `` `` `` reparses as a two-backtick opener), so an all-space inline
+  literal degraded across successive `fmt` passes - `` !`  ` `` became
+  `` !`` `` and then `` \!`` ``, silently changing the document and breaking
+  both the `carveToHtml(fmt(x)) === carveToHtml(x)` invariant and idempotence.
+  All-space content is now preserved verbatim: `` `  ` `` renders
+  `<code>  </code>` rather than `<code></code>`. The all-space guard matches
+  the executable spec's `codeText()` and the CommonMark rule it derives from.
+
 ## [0.1.1] - 2026-07-15
 
 - BREAKING: Rename symbol shortcodes from `emoji` to `symbol` in the AST

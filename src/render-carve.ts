@@ -483,15 +483,18 @@ function renderEmphasis(
 
 function renderCode(content: string): string {
   const fence = safeFence(content, 1)
-  // The parser removes one leading and one trailing space from a verbatim span
-  // whose content BOTH begins and ends with a space, and also strips a single
-  // space around backtick-adjacent content. Emit a padding space in those cases
-  // so the strip is reversible and fmt stays idempotent; the padding sits INSIDE
-  // the fence, so a trailing attribute block still attaches to the closing run.
+  // Pad exactly when the parser will strip, so the strip is reversible and fmt
+  // stays idempotent; the padding sits INSIDE the fence, so a trailing attribute
+  // block still attaches to the closing run. The parser strips one leading and
+  // one trailing space when the content BOTH begins and ends with a space but is
+  // NOT entirely spaces (see stripVerbatimPadding in parse.ts), and needs a space
+  // around backtick-adjacent content. All-space content must therefore NOT be
+  // padded: it is emitted verbatim and read back unchanged. Padding it instead
+  // grew the span by two spaces on every fmt pass.
   const needsPad =
     content.startsWith('`') ||
     content.endsWith('`') ||
-    (content.startsWith(' ') && content.endsWith(' '))
+    (content.startsWith(' ') && content.endsWith(' ') && content.trim() !== '')
   return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 

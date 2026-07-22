@@ -3364,6 +3364,20 @@ const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
  * `[[[[...` (with or without a trailing `]`). Unbalanced `[` are absent from
  * the map.
  */
+// The closed-verbatim-span single-space strip: one leading and one trailing
+// space are removed when the content BOTH begins and ends with a space — but
+// NOT when it consists entirely of spaces. The all-space guard matches the
+// executable spec's `codeText()` and the CommonMark rule it derives from
+// ("...but does not consist entirely of space characters"). Without the guard
+// `` `  ` `` stripped to the empty string, and an empty verbatim span has no
+// representable Carve source (a bare `` `` `` reparses as a two-backtick
+// opener), so `carve fmt` could not round-trip it. Shared by the code-span,
+// math and inline-literal scanners so the three cannot drift apart.
+function stripVerbatimPadding(content: string): string {
+  if (content.trim() === '') return content
+  return content.replace(/^ (.*) $/, '$1')
+}
+
 // Resolve the verbatim (code) span opening at `i` (a backtick). The opener is
 // the MAXIMAL run of backticks (`openLen`); it closes on a run of EXACTLY that
 // length. An opener with no equal-length closer is opaque to the end of the
@@ -3870,7 +3884,7 @@ function scanInlineInner(
         i = text.length
         continue
       }
-      const inner = text.slice(i + openLen, end - openLen).replace(/^ (.*) $/, '$1')
+      const inner = stripVerbatimPadding(text.slice(i + openLen, end - openLen))
       // A verbatim span tagged `{=format}` is raw inline passthrough.
       const raw = RE_RAW_INLINE.exec(text.slice(end))
       if (raw) {
@@ -3895,7 +3909,7 @@ function scanInlineInner(
         const innerEnd = end - openLen
         if (closed && text[end] !== '`' && innerEnd > tick + openLen && text[innerEnd - 1] !== '`') {
           flush()
-          const content = text.slice(tick + openLen, innerEnd).replace(/^ (.*) $/, '$1')
+          const content = stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
           const len = end - i
           out.push(withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
           i += len
@@ -3915,7 +3929,7 @@ function scanInlineInner(
       const { end, closed, openLen } = verbatimSpanEnd(text, i + 1)
       if (closed) {
         flush()
-        const content = text.slice(i + 1 + openLen, end - openLen).replace(/^ (.*) $/, '$1')
+        const content = stripVerbatimPadding(text.slice(i + 1 + openLen, end - openLen))
         out.push(withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
         i = end
         continue
