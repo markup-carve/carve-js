@@ -170,6 +170,7 @@ const IMPLEMENTED = new Set([
   '135-abbreviation-definition-separator-must-be-a-space',
   '136-unclaimed-openers-stay-literal',
   '137-inline-literal',
+  '138-all-space-verbatim-content',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
