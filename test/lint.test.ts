@@ -270,18 +270,31 @@ describe('lintCarve — verbatim-scan performance (no O(n^2))', () => {
       for (let i = 0; i < n; i++) s += '```\ncode\n```\n\n'
       return s
     }
-    const time = (src: string): number => {
+    // Cost PER REGION, not total elapsed: "linear" means this stays flat as the
+    // input grows, so the metric is ~1 for a healthy scan and ~4 (the size
+    // multiple) if quadratic scanning returns.
+    const perRegion = (n: number): number => {
+      const src = build(n)
       const t0 = performance.now()
       lintCarve(src)
-      return performance.now() - t0
+      return (performance.now() - t0) / n
     }
-    // Warm up so JIT state is comparable across the two measured sizes.
-    time(build(2000))
-    const small = time(build(4000))
-    const large = time(build(16000)) // 4x the regions
-    // Quadratic scaling would give ~16x; linear ~4x. Allow generous slack for
-    // CI noise but stay far below the quadratic blow-up.
-    expect(large).toBeLessThan(small * 9 + 50)
+    const median = (xs: number[]): number =>
+      [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!
+
+    perRegion(2000) // warm up so JIT state is comparable across sizes
+
+    // Interleave the two sizes so a runner that is busy for only part of the
+    // run cannot skew one sample relative to the other, and take the median so
+    // a single stall is discarded (a mean would still be dragged by it).
+    const smalls: number[] = []
+    const larges: number[] = []
+    for (let round = 0; round < 5; round++) {
+      smalls.push(perRegion(4000))
+      larges.push(perRegion(16000)) // 4x the regions
+    }
+    // Linear -> ~1; quadratic -> ~4 at 4x input. 2 sits clear of both.
+    expect(median(larges) / median(smalls)).toBeLessThan(2)
   })
 })
 
