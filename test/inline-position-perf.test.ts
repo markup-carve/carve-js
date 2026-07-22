@@ -14,12 +14,18 @@ describe('inline position mapping (perf + correctness)', () => {
     }
     const source = lines.join('\n')
 
+    // Warm up first: the cold call carries JIT compilation (measured ~2.8x the
+    // steady-state cost here), and under parallel-worker contention that was
+    // enough to push a healthy linear parse past the bound and flake the suite.
+    // Every other perf guard in this repo warms up for the same reason.
+    parse(source)
+
     const start = performance.now()
     const doc = parse(source)
     const elapsed = performance.now() - start
 
     expect(doc.children).toHaveLength(1)
-    // Linear parse is single-digit ms; the previous quadratic took ~1s+ at this
+    // Linear parse is tens of ms warm; the previous quadratic took ~1s+ at this
     // size, so a generous bound separates them without timing flakiness.
     expect(elapsed).toBeLessThan(500)
   })

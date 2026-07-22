@@ -327,17 +327,31 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
     // `applyMigrationFixes` also splices each edit into the output string,
     // which is a separate, pre-existing per-edit string cost - so the scaling
     // guarantee is asserted against djotMigrationWarnings, which scans only.
-    const time = (n: number): number => {
+    // Cost PER CONSTRUCT, not total elapsed: "linear" means this stays flat as
+    // the input grows, so the metric is ~1 for a healthy scan and ~4 (the size
+    // multiple) if quadratic scanning returns.
+    const perConstruct = (n: number): number => {
       const src = '**a** '.repeat(n)
       const t0 = performance.now()
       djotMigrationWarnings(src)
-      return performance.now() - t0
+      return (performance.now() - t0) / n
     }
-    time(2000) // warm up
-    const small = time(4000)
-    const large = time(16000) // 4x the constructs
-    // Quadratic would be ~16x; linear ~4x. Generous slack for CI noise.
-    expect(large).toBeLessThan(small * 9 + 50)
+    const median = (xs: number[]): number =>
+      [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!
+
+    perConstruct(2000) // warm up
+
+    // Interleave the two sizes so a runner that is busy for only part of the
+    // run cannot skew one sample relative to the other, and take the median so
+    // a single stall is discarded (a mean would still be dragged by it).
+    const smalls: number[] = []
+    const larges: number[] = []
+    for (let round = 0; round < 5; round++) {
+      smalls.push(perConstruct(4000))
+      larges.push(perConstruct(16000)) // 4x the constructs
+    }
+    // Linear -> ~1; quadratic -> ~4 at 4x input. 2 sits clear of both.
+    expect(median(larges) / median(smalls)).toBeLessThan(2)
   })
 
   it('still detects and skips a genuine crossing collision', () => {

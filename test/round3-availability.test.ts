@@ -165,21 +165,46 @@ describe('Fix 4: autolink EMAIL scans near-linearly and still matches valid emai
   const match = (text: string, pos: number) =>
     (ext.matchInline as (t: string, p: number) => { end: number } | null)(text, pos)
 
-  const scanCost = (n: number): number => {
+  // Cost PER SCANNED POSITION, not total elapsed. That normalization is what
+  // makes the assertion meaningful: "linear" means the per-position cost is
+  // constant as the input grows, so the metric is ~flat for a healthy scan and
+  // grows in proportion to n if the quadratic scan returns.
+  const perPositionCost = (n: number): number => {
     const s = 'x@' + 'a.'.repeat(n) + 'z'
-    const t0 = Date.now()
+    const t0 = performance.now()
     for (let i = 0; i < s.length; i++) match(s, i)
-    return Date.now() - t0
+    return (performance.now() - t0) / s.length
   }
 
+  const median = (xs: number[]): number =>
+    [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!
+
   it('scales near-linearly on the quadratic input shape', () => {
-    // Warm up the JIT so the ratio reflects steady-state, not first-call cost.
-    scanCost(2000)
-    const small = Math.max(1, scanCost(20000))
-    const big = scanCost(80000) // 4x the input
-    // Quadratic would be ~16x; allow generous slack for timing noise but well
-    // below the quadratic blow-up.
-    expect(big).toBeLessThan(small * 6)
+    // Warm up the JIT so the samples reflect steady-state, not first-call cost.
+    perPositionCost(2000)
+
+    const SMALL = 20_000
+    const BIG = 80_000 // 4x the input
+
+    // INTERLEAVED sampling: the previous version timed `small` once, then `big`
+    // once, so a runner that was busy during only one of them produced a bogus
+    // ratio -- the actual cause of the flakes (observed 6-7x for a scan that
+    // measures a flat 4x when unloaded). Alternating the two sizes means load
+    // drift hits both samples, and the median discards individual stalls (a
+    // mean would still be skewed by one bad slice).
+    const smalls: number[] = []
+    const bigs: number[] = []
+    for (let round = 0; round < 5; round++) {
+      smalls.push(perPositionCost(SMALL))
+      bigs.push(perPositionCost(BIG))
+    }
+
+    // Linear scan  -> per-position cost is constant     -> ratio ~1.
+    // Quadratic    -> per-position cost grows with n    -> ratio ~4 at 4x input.
+    // 2.0 sits far from both, so contention cannot reach it but a regression
+    // sails past it.
+    const ratio = median(bigs) / median(smalls)
+    expect(ratio).toBeLessThan(2)
   })
 
   it('still autolinks valid email addresses', () => {
