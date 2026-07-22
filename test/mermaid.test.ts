@@ -51,7 +51,7 @@ describe('mermaid extension', () => {
     const highlight: CarveExtension = {
       name: 'highlight',
       blockRenderers: {
-        'code-block': (node) => {
+        'code_block': (node) => {
           const code = node as CodeBlock
           return code.lang === 'js' ? `<pre class="hl">${code.content}</pre>` : undefined
         },

@@ -59,12 +59,12 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     }
     case 'paragraph':
       return withAttrs(renderInlines(node.children, ctx))
-    case 'code-block': {
+    case 'code_block': {
       const fence = safeFence(node.content, 3)
       const info = codeFenceInfo(node.lang, node.header, node.label)
       return withAttrs(`${fence}${info}\n${protectVerbatim(node.content)}\n${fence}`)
     }
-    case 'blockquote': {
+    case 'block_quote': {
       const inner = renderBlocks(node.children, ctx)
       const body = inner
         .split('\n')
@@ -74,7 +74,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     }
     case 'list':
       return withAttrs(renderList(node, ctx))
-    case 'thematic-break':
+    case 'thematic_break':
       return withAttrs('---')
     case 'table':
       return withAttrs(renderTable(node, ctx))
@@ -101,17 +101,17 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       const fence = colonFenceFor(node.children)
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
     }
-    case 'definition-list':
+    case 'definition_list':
       return withAttrs(renderDefinitionList(node.items, ctx))
     case 'figure':
       return withAttrs(renderFigure(node, ctx))
     case 'image':
       return renderImage(node)
-    case 'raw-block': {
+    case 'raw_block': {
       const fence = safeFence(node.content, 3)
       return withAttrs(`${fence}=${escapeFormat(node.format)}\n${protectVerbatim(node.content)}\n${fence}`)
     }
-    case 'abbreviation-def':
+    case 'abbreviation_def':
       return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
     case 'comment':
       return node.block ? renderBlockComment(node.content) : `%% ${node.content}`
@@ -333,22 +333,24 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
   switch (node.type) {
     case 'text':
       return escapeText(cleanEscapedText(node))
-    case 'italic':
+    case 'emphasis':
       return withAttrs(renderEmphasis('/', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'strong':
+      // Bold-italic has no node of its own: it is whichever of strong and
+      // emphasis the author wrote outermost, nested. Serializing the nesting
+      // literally is therefore exact - `*/y/*` and `/*y*/` differ only in
+      // which mark is outer, and each re-parses to the shape it came from.
       return withAttrs(renderEmphasis('*', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'underline':
       return withAttrs(renderEmphasis('_', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'strike':
       return withAttrs(renderEmphasis('~', renderInlines(node.children, ctx), prevChar, nextChar))
-    case 'super':
+    case 'superscript':
       return withAttrs(renderForcedEmphasis('^', renderInlines(node.children, ctx)))
-    case 'sub':
+    case 'subscript':
       return withAttrs(renderForcedEmphasis(',', renderInlines(node.children, ctx)))
     case 'highlight':
       return withAttrs(renderEmphasis('=', renderInlines(node.children, ctx), prevChar, nextChar))
-    case 'bold-italic':
-      return withAttrs(`/*${renderInlines(node.children, ctx)}*/`)
     case 'code':
       return withAttrs(renderCode(node.value))
     case 'link':
@@ -359,9 +361,9 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return `[${renderInlines(node.children, ctx)}]${renderAttrs(node.attrs) || '{}'}`
     case 'math':
       return withAttrs(renderMath(node.display, node.content))
-    case 'raw-inline':
+    case 'raw_inline':
       return `${renderCode(node.content)}{=${escapeFormat(node.format)}}`
-    case 'literal-inline':
+    case 'literal_inline':
       // §27: `!` prefix on a verbatim span. A trailing attribute block is the
       // ordinary inline attribute block (same as a code span carries).
       // renderCode widens the backtick fence when the content holds backticks.
@@ -376,7 +378,7 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return `@${escapeName(node.user)}`
     case 'tag':
       return `#${escapeName(node.name)}`
-    case 'extension':
+    case 'inline_extension':
       return withAttrs(`:${escapeIdentifier(node.name)}[${renderInlines(node.content, ctx)}]`)
     case 'abbreviation':
       return escapeText(node.abbr)
@@ -384,23 +386,23 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return withAttrs(node.inline
         ? `^[${renderInlines(node.inline, ctx)}]`
         : `[^${escapeFootnoteLabel(node.id ?? '')}]`)
-    case 'soft-break':
+    case 'soft_break':
       return '\n'
-    case 'hard-break':
+    case 'hard_break':
       return '\\\n'
-    case 'critic-insert':
+    case 'insert':
       return `{+${renderInlines(node.children, ctx)}+}${renderAttrs(node.attrs)}`
-    case 'critic-delete':
+    case 'delete':
       return `{-${renderInlines(node.children, ctx)}-}${renderAttrs(node.attrs)}`
-    case 'critic-substitute':
+    case 'substitution':
       return `{~${escapeCriticText(node.oldText)}~>${escapeCriticText(node.newText)}~}`
     case 'critic-comment':
       return `{#${escapeCriticText(node.text)}#}`
-    case 'crossref':
+    case 'heading_ref':
       return `</#${escapeCrossrefTarget(node.target)}>`
-    case 'caption-number':
+    case 'caption_number':
       return '#'
-    case 'citation-group':
+    case 'citation_group':
       return node.raw
     case 'comment':
       return ` %% ${node.content}`
@@ -458,17 +460,26 @@ function renderForcedEmphasis(delim: string, content: string): string {
   return `{${delim}${content}${delim}}`
 }
 
-function renderEmphasis(delim: string, content: string, prevChar: string, nextChar: string): string {
+function renderEmphasis(
+  delim: string,
+  content: string,
+  prevChar: string,
+  nextChar: string,
+  closeDelim: string = delim,
+): string {
   const needsForced =
     /[A-Za-z0-9_]/.test(prevChar) ||
     /[A-Za-z0-9_]/.test(nextChar) ||
     content.startsWith(delim) ||
-    content.endsWith(delim) ||
+    content.endsWith(closeDelim) ||
     content.startsWith(' ') ||
     content.endsWith(' ') ||
     content === ''
-  return needsForced ? `{${delim}${content}${delim}}` : `${delim}${content}${delim}`
+  return needsForced
+    ? `{${delim}${content}${closeDelim}}`
+    : `${delim}${content}${closeDelim}`
 }
+
 
 function renderCode(content: string): string {
   const fence = safeFence(content, 1)
@@ -702,8 +713,8 @@ function firstBoundary(node: InlineNode | undefined): string {
   switch (node.type) {
     case 'text':
       return node.value[0] ?? ''
-    case 'soft-break':
-    case 'hard-break':
+    case 'soft_break':
+    case 'hard_break':
       return '\n'
     case 'code':
       return node.value[0] ?? ''
@@ -721,8 +732,8 @@ function lastBoundary(node: InlineNode | undefined): string {
   switch (node.type) {
     case 'text':
       return node.value[node.value.length - 1] ?? ''
-    case 'soft-break':
-    case 'hard-break':
+    case 'soft_break':
+    case 'hard_break':
       return '\n'
     case 'code':
       return node.value[node.value.length - 1] ?? ''

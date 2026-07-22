@@ -21,7 +21,7 @@ export function codeCallouts(): CarveExtension {
     },
 
     blockRenderers: {
-      'code-block': (node, ctx) => renderCode(node as CodeBlock, ctx),
+      'code_block': (node, ctx) => renderCode(node as CodeBlock, ctx),
       paragraph: (node, ctx) =>
         calloutLists.has(node) ? renderCalloutList(node as Paragraph, ctx) : undefined,
     },
@@ -39,7 +39,7 @@ function bindBlocks(blocks: BlockNode[], calloutLists: WeakSet<BlockNode>): void
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
     descend(b, calloutLists)
-    if (b.type !== 'code-block' || !hasMarkers((b as CodeBlock).content)) continue
+    if (b.type !== 'code_block' || !hasMarkers((b as CodeBlock).content)) continue
     const next = blocks[i + 1]
     if (next && next.type === 'paragraph' && isCalloutCandidate(next as Paragraph)) {
       calloutLists.add(next)
@@ -120,7 +120,7 @@ function listAttrs(attrs: Attrs | undefined): Attrs {
 function splitLines(nodes: InlineNode[]): InlineNode[][] {
   const lines: InlineNode[][] = [[]]
   for (const n of nodes) {
-    if (n.type === 'soft-break') lines.push([])
+    if (n.type === 'soft_break') lines.push([])
     else lines[lines.length - 1]!.push(n)
   }
   return lines.filter((l) => l.length > 0)

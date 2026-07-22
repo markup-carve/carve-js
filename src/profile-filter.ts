@@ -37,17 +37,12 @@ type NodeLike = { type: string; attrs?: Attrs } & Record<string, unknown>
 
 /**
  * Resolve a node to its canonical type for the allow/deny check, accounting
- * for shape-dependent types (footnote ref vs inline footnote) and the
- * bold-italic emphasis variant.
+ * for shape-dependent types (footnote ref vs inline footnote).
  */
 function resolveCanonical(node: NodeLike): string | undefined {
   if (node.type === 'footnote') {
     // `^[...]` (inline) carries `inline`; `[^id]` is a reference.
     return node['inline'] !== undefined ? 'inline_footnote' : 'footnote_ref'
-  }
-  if (node.type === 'bold-italic') {
-    // Nested strong+emphasis; gate it under `strong` (the outer feature).
-    return 'strong'
   }
   return canonicalType(node.type)
 }
@@ -69,14 +64,14 @@ interface ChildSlot {
    * throws. carve-php's renderer is lenient and emits a bare paragraph; this
    * is a deliberate structural divergence to keep js output valid.
    */
-  wrap?: 'list-item' | 'table-row' | 'table-cell'
+  wrap?: 'list_item' | 'table_row' | 'table_cell'
 }
 
 /** A child array view: the live array + whether it holds block children. */
 interface ChildArray {
   list: NodeLike[]
   block: boolean
-  wrap?: 'list-item' | 'table-row' | 'table-cell'
+  wrap?: 'list_item' | 'table_row' | 'table_cell'
 }
 
 /**
@@ -89,7 +84,7 @@ function childArrays(node: NodeLike): ChildArray[] {
   const push = (
     v: unknown,
     block: boolean,
-    wrap?: 'list-item' | 'table-row' | 'table-cell',
+    wrap?: 'list_item' | 'table_row' | 'table_cell',
   ): void => {
     if (Array.isArray(v)) {
       arrays.push(wrap ? { list: v as NodeLike[], block, wrap } : { list: v as NodeLike[], block })
@@ -100,22 +95,22 @@ function childArrays(node: NodeLike): ChildArray[] {
       push(node['children'], true)
       break
     case 'list':
-      push(node['items'], true, 'list-item')
+      push(node['items'], true, 'list_item')
       break
-    case 'list-item':
+    case 'list_item':
       push(node['children'], true)
       break
     case 'table':
-      push(node['rows'], true, 'table-row')
+      push(node['rows'], true, 'table_row')
       if (node['caption']) push(node['caption'], false)
       break
-    case 'table-row':
-      push(node['cells'], true, 'table-cell')
+    case 'table_row':
+      push(node['cells'], true, 'table_cell')
       break
-    case 'table-cell':
+    case 'table_cell':
       push(node['children'], false)
       break
-    case 'definition-list':
+    case 'definition_list':
       // items is DefinitionItem[]; handled specially in filterDefinitionList.
       break
     case 'figure':
@@ -125,14 +120,14 @@ function childArrays(node: NodeLike): ChildArray[] {
       // Inline footnote content is inline.
       if (node['inline']) push(node['inline'], false)
       break
-    case 'extension':
+    case 'inline_extension':
       push(node['content'], false)
       break
     case 'admonition':
       if (node['title']) push(node['title'], false)
       push(node['children'], true)
       break
-    case 'blockquote':
+    case 'block_quote':
       push(node['children'], true)
       if (node['attribution']) push(node['attribution'], false)
       break
@@ -185,18 +180,18 @@ const BLOCK_CANONICAL = new Set([
 const BLOCK_JS_TYPES = new Set([
   'heading',
   'paragraph',
-  'blockquote',
+  'block_quote',
   'list',
-  'code-block',
-  'thematic-break',
+  'code_block',
+  'thematic_break',
   'table',
   'admonition',
   'div',
-  'definition-list',
+  'definition_list',
   'figure',
   'image',
-  'abbreviation-def',
-  'raw-block',
+  'abbreviation_def',
+  'raw_block',
   'comment',
 ])
 
@@ -243,7 +238,7 @@ class ProfileFilter {
    * to_text/strip removals don't shift the walk.
    */
   private filterChildArrays(parent: NodeLike, profile: Profile, depth: number): void {
-    if (parent.type === 'definition-list') {
+    if (parent.type === 'definition_list') {
       this.filterDefinitionList(parent, profile, depth)
       return
     }
@@ -261,7 +256,7 @@ class ProfileFilter {
     profile: Profile,
     depth: number,
     block: boolean,
-    wrap?: 'list-item' | 'table-row' | 'table-cell',
+    wrap?: 'list_item' | 'table_row' | 'table_cell',
   ): void {
     const snapshot = [...list]
     for (const child of snapshot) {
@@ -456,23 +451,23 @@ class ProfileFilter {
   private wrapForContainer(
     para: NodeLike,
     textContent: string,
-    wrap?: 'list-item' | 'table-row' | 'table-cell',
+    wrap?: 'list_item' | 'table_row' | 'table_cell',
   ): NodeLike {
     switch (wrap) {
-      case 'list-item':
-        return { type: 'list-item', children: [para] }
-      case 'table-cell':
+      case 'list_item':
+        return { type: 'list_item', children: [para] }
+      case 'table_cell':
         return {
-          type: 'table-cell',
+          type: 'table_cell',
           header: false,
           children: textWithBreaks(textContent) as unknown as NodeLike[],
         }
-      case 'table-row':
+      case 'table_row':
         return {
-          type: 'table-row',
+          type: 'table_row',
           cells: [
             {
-              type: 'table-cell',
+              type: 'table_cell',
               header: false,
               children: textWithBreaks(textContent) as unknown as NodeLike[],
             },
@@ -486,7 +481,7 @@ class ProfileFilter {
   // ---- empty-container cleanup (mirrors carve-php) ----
 
   private cleanupEmptyContainers(parent: NodeLike): void {
-    if (parent.type === 'definition-list') {
+    if (parent.type === 'definition_list') {
       const items = parent['items'] as
         | { terms: InlineNode[][]; definitions: BlockNode[][] }[]
         | undefined
@@ -524,7 +519,7 @@ class ProfileFilter {
     if (node.type === 'text') return (node['value'] as string) === ''
 
     // Nodes storing raw content directly are non-empty if they have content.
-    const contentTypes = ['code-block', 'raw-block', 'raw-inline', 'literal-inline', 'math', 'code', 'comment']
+    const contentTypes = ['code_block', 'raw_block', 'raw_inline', 'literal_inline', 'math', 'code', 'comment']
     if (contentTypes.includes(node.type)) {
       const content = (node['content'] as string | undefined) ?? (node['value'] as string | undefined) ?? ''
       if (content !== '') return false
@@ -534,7 +529,7 @@ class ProfileFilter {
 
     if (allChildren.length === 0) {
       // Structural elements preserved even when empty.
-      if (node.type === 'thematic-break' || node.type === 'table-cell') return false
+      if (node.type === 'thematic_break' || node.type === 'table_cell') return false
       // Self-contained value/leaf nodes are not "empty containers".
       if (
         node.type === 'image' ||
@@ -542,10 +537,10 @@ class ProfileFilter {
         node.type === 'tag' ||
         node.type === 'symbol' ||
         node.type === 'abbreviation' ||
-        node.type === 'crossref' ||
-        node.type === 'caption-number' ||
-        node.type === 'soft-break' ||
-        node.type === 'hard-break' ||
+        node.type === 'heading_ref' ||
+        node.type === 'caption_number' ||
+        node.type === 'soft_break' ||
+        node.type === 'hard_break' ||
         contentTypes.includes(node.type)
       ) {
         return false
@@ -564,7 +559,7 @@ class ProfileFilter {
  * `childArrays` deliberately skips (they need bespoke walking elsewhere).
  */
 function allChildNodes(node: NodeLike): NodeLike[] {
-  if (node.type === 'definition-list') {
+  if (node.type === 'definition_list') {
     const out: NodeLike[] = []
     const items = (node['items'] as { terms: NodeLike[][]; definitions: NodeLike[][] }[]) ?? []
     // Non-spread push throughout: term/def/caption/child arrays can be
@@ -595,7 +590,7 @@ function textWithBreaks(content: string): NodeLike[] {
   const last = lines.length - 1
   lines.forEach((line, idx) => {
     if (line !== '') out.push({ type: 'text', value: line })
-    if (idx < last) out.push({ type: 'hard-break' })
+    if (idx < last) out.push({ type: 'hard_break' })
   })
   return out
 }
@@ -617,7 +612,7 @@ function extractTextContent(node: NodeLike): string {
       for (const child of (node['children'] as NodeLike[]) ?? []) text += extractTextContent(child)
       return prefix + text
     }
-    case 'code-block': {
+    case 'code_block': {
       const content = (node['content'] as string) ?? ''
       if (content.includes('\n')) return '```\n' + content + '\n```'
       return '`' + content + '`'
@@ -633,7 +628,7 @@ function extractTextContent(node: NodeLike): string {
     case 'table': {
       const rows: string[] = []
       for (const row of (node['rows'] as NodeLike[]) ?? []) {
-        if (row.type === 'table-row') {
+        if (row.type === 'table_row') {
           const cells: string[] = []
           for (const cell of (row['cells'] as NodeLike[]) ?? []) cells.push(extractTextContent(cell))
           rows.push(cells.join(' | '))
@@ -641,7 +636,7 @@ function extractTextContent(node: NodeLike): string {
       }
       return rows.join('\n')
     }
-    case 'blockquote': {
+    case 'block_quote': {
       const paras: string[] = []
       for (const child of (node['children'] as NodeLike[]) ?? []) {
         const t = extractTextContent(child)
@@ -649,7 +644,7 @@ function extractTextContent(node: NodeLike): string {
       }
       return paras.join('\n')
     }
-    case 'definition-list': {
+    case 'definition_list': {
       const parts: string[] = []
       const items = (node['items'] as { terms: NodeLike[][]; definitions: NodeLike[][] }[]) ?? []
       for (const item of items) {
@@ -674,7 +669,7 @@ function extractTextContent(node: NodeLike): string {
       const ordered = node['ordered'] === true
       let index = (node['start'] as number | undefined) ?? 1
       for (const it of (node['items'] as NodeLike[]) ?? []) {
-        if (it.type === 'list-item') {
+        if (it.type === 'list_item') {
           const t = extractTextContent(it)
           if (t !== '') {
             items.push((ordered ? `${index}. ` : '- ') + t)
@@ -696,7 +691,7 @@ function extractTextContent(node: NodeLike): string {
       for (const child of (node['inline'] as NodeLike[]) ?? []) t += extractTextContent(child)
       return t
     }
-    case 'thematic-break':
+    case 'thematic_break':
       return '---'
     case 'text':
       return (node['value'] as string) ?? ''
@@ -704,13 +699,13 @@ function extractTextContent(node: NodeLike): string {
       return (node['value'] as string) ?? ''
     case 'math':
       return (node['content'] as string) ?? ''
-    case 'raw-block':
-    case 'raw-inline':
-    case 'literal-inline':
+    case 'raw_block':
+    case 'raw_inline':
+    case 'literal_inline':
       return (node['content'] as string) ?? ''
-    case 'soft-break':
+    case 'soft_break':
       return ' '
-    case 'hard-break':
+    case 'hard_break':
       return '\n'
     case 'mention':
       return '@' + (node['user'] as string)
@@ -741,18 +736,17 @@ function extractTextContent(node: NodeLike): string {
 
 // Inline container types whose child text concatenates with no separator.
 const INLINE_CONCAT = new Set([
-  'italic',
+  'emphasis',
   'strong',
   'underline',
   'strike',
-  'super',
-  'sub',
+  'superscript',
+  'subscript',
   'highlight',
-  'bold-italic',
   'span',
-  'critic-insert',
-  'critic-delete',
-  'extension',
+  'insert',
+  'delete',
+  'inline_extension',
   'paragraph',
 ])
 

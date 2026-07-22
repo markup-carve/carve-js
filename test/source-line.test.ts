@@ -200,7 +200,7 @@ describe('sourceLine render option', () => {
         while (end < lines.length && lines[end] !== '@@@') end++
         const inner = lines.slice(start + 1, end).join('\n')
         return {
-          node: { type: 'blockquote', children: ctx.parseBlocks(inner) },
+          node: { type: 'block_quote', children: ctx.parseBlocks(inner) },
           linesConsumed: end - start + 1,
         }
       },
@@ -216,7 +216,7 @@ describe('sourceLine render option', () => {
       matchBlock(lines, start, ctx) {
         if (lines[start] !== '@@@') return null
         return {
-          node: { type: 'blockquote', children: ctx.parseBlocks('generated') },
+          node: { type: 'block_quote', children: ctx.parseBlocks('generated') },
           linesConsumed: 1,
         }
       },

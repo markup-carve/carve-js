@@ -30,7 +30,7 @@ export function tabNormalize(width = 2): CarveExtension {
     if (node === null || typeof node !== 'object') return
     const n = node as Record<string, unknown>
     // Only code CONTENT carries expandable tabs.
-    if (n.type === 'code-block' && typeof n.content === 'string') {
+    if (n.type === 'code_block' && typeof n.content === 'string') {
       n.content = expand(n.content)
     } else if (n.type === 'code' && typeof n.value === 'string') {
       n.value = expand(n.value)

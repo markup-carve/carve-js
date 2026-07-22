@@ -153,7 +153,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
         ? `<details class="${escapeHtml(cssClass)}"${open ? ' open' : ''}>\n` +
           `<summary>${escapeHtml(summary)}</summary>\n${list}</details>`
         : `<nav class="${escapeHtml(cssClass)}">\n${list}</nav>`
-      const toc: RawBlock = { type: 'raw-block', format: 'html', content: html }
+      const toc: RawBlock = { type: 'raw_block', format: 'html', content: html }
       if (position === 'top') doc.children.unshift(toc)
       else doc.children.push(toc)
       return doc

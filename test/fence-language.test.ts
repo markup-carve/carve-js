@@ -40,7 +40,7 @@ describe('fenced code language tags with punctuation', () => {
   it('exposes the label on the AST node (not in the language)', () => {
     const doc = parse('```php [NPM]\nx\n```')
     const cb = doc.children[0] as { type: string; lang?: string; label?: string }
-    expect(cb.type).toBe('code-block')
+    expect(cb.type).toBe('code_block')
     expect(cb.lang).toBe('php')
     expect(cb.label).toBe('NPM')
   })

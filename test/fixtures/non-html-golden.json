@@ -77,19 +77,19 @@
         "plain": "- todo\n- done\n",
         "ansi": "\u001b[90m\u2610\u001b[0m todo\n\u001b[32m\u2611\u001b[0m done\n"
     },
-    "blockquote": {
+    "block_quote": {
         "carve": "> quoted line\n> second line\n",
         "markdown": "> quoted line\n> second line\n",
         "plain": "\"quoted line second line\"\n",
         "ansi": "\u001b[36m\u001b[2m\u2502\u001b[0m quoted line second line\n"
     },
-    "code-block": {
+    "code_block": {
         "carve": "```js\nconst x = 1;\n```\n",
         "markdown": "```js\nconst x = 1;\n```\n",
         "plain": "const x = 1;\n",
         "ansi": "\u001b[2m\u250c\u2500\u2500 js \u001b[0m\n\u001b[97m  const x = 1;\u001b[0m\n"
     },
-    "thematic-break": {
+    "thematic_break": {
         "carve": "above\n\n---\n\nbelow\n",
         "markdown": "above\n\n---\n\nbelow\n",
         "plain": "above\n\n---\n\nbelow\n",
@@ -179,7 +179,7 @@
         "plain": "Watch out.\n",
         "ansi": "Watch out.\n"
     },
-    "definition-list": {
+    "definition_list": {
         "carve": ": Term\n  Definition text.\n",
         "markdown": ": Term\nDefinition text.\n",
         "plain": ": Term Definition text.\n",

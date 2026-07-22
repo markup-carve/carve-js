@@ -74,7 +74,7 @@ function isGlossary(b: BlockNode): boolean {
 
 function defListsOf(b: BlockNode): DefinitionList[] {
   return (b as Admonition).children.filter(
-    (c) => c.type === 'definition-list',
+    (c) => c.type === 'definition_list',
   ) as DefinitionList[]
 }
 
@@ -117,7 +117,7 @@ function renderGlossary(
   let firstDl = true
   const parts: string[] = []
   for (const child of node.children) {
-    if (child.type !== 'definition-list') {
+    if (child.type !== 'definition_list') {
       parts.push(ctx.renderChildren([child], ctx.level))
       continue
     }

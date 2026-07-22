@@ -57,7 +57,7 @@ describe('inline literal (!`…`, grammar PART 9 §27)', () => {
     const doc = parse('!`/kaet/`{.ipa}')
     const para = doc.children[0] as { children: Array<Record<string, unknown>> }
     const node = para.children[0]!
-    expect(node['type']).toBe('literal-inline')
+    expect(node['type']).toBe('literal_inline')
     expect(node['content']).toBe('/kaet/')
     expect((node['attrs'] as { classes: string[] }).classes).toEqual(['ipa'])
   })
@@ -206,7 +206,7 @@ describe('inline literal under profiles', () => {
   // classified as the `code` profile type: allowed exactly where code is,
   // carrying the same attribute surface an attributed code span already does.
   it('is classified as the code profile type', () => {
-    expect(canonicalType('literal-inline')).toBe('code')
+    expect(canonicalType('literal_inline')).toBe('code')
   })
 
   const render = (src: string, profile: Profile) => {
