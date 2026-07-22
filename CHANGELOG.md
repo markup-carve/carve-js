@@ -7,6 +7,54 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: AST node type discriminants now follow the spec node-type
+  vocabulary** (#369). The AST is public API (`export * from './ast.js'`), so
+  any code that matches on `node.type` must be migrated. Twenty discriminants
+  were renamed:
+
+  ```text
+  abbreviation-def    -> abbreviation_def
+  blockquote          -> block_quote
+  caption-number      -> caption_number
+  citation-group      -> citation_group
+  code-block          -> code_block
+  critic-delete       -> delete
+  critic-insert       -> insert
+  critic-substitute   -> substitution
+  crossref            -> heading_ref
+  definition-list     -> definition_list
+  extension           -> inline_extension
+  hard-break          -> hard_break
+  list-item           -> list_item
+  literal-inline      -> literal_inline
+  raw-block           -> raw_block
+  raw-inline          -> raw_inline
+  soft-break          -> soft_break
+  table-cell          -> table_cell
+  table-row           -> table_row
+  thematic-break      -> thematic_break
+  ```
+
+  A mechanical hyphen-to-underscore replacement is **not** sufficient. Five
+  nodes were given genuinely new names (`crossref`, `extension`, and the three
+  `critic-*` nodes), and `blockquote` contains no hyphen at all, so a naive
+  replacement leaves it untouched and silently broken.
+
+  **This fails at runtime, not at compile time.** Consumers that type the
+  discriminant as a plain `string` rather than a union get no compiler error
+  from a stale name - the branch simply never matches, and the node is silently
+  dropped. Two downstream repositories were already broken this way: both
+  carve-lsp and pandoc-carve had migrated to the new vocabulary while still
+  resolving the published carve-js 0.1.1 (which ships the old names), leaving
+  their default branches red. When upgrading, migrate the names and the
+  dependency together.
+
+  Known inconsistency: `critic-comment` was left unchanged and is now the only
+  discriminant still using kebab-case, even though the three sibling
+  `critic-*` nodes were renamed. It is unchanged in this release.
+
 ## [0.1.1] - 2026-07-15
 
 - BREAKING: Rename symbol shortcodes from `emoji` to `symbol` in the AST
