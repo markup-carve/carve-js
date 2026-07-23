@@ -44,6 +44,29 @@ describe('imgFence — sandbox mode (default)', () => {
     expect(out).not.toContain('alt=""')
   })
 
+  it('falls back to the SVG <title> for alt when {alt=…} is absent', () => {
+    const out = carveToHtml(fence('', '<svg viewBox="0 0 1 1"><title>A red square</title><rect width="1" height="1" fill="red"/></svg>'), {
+      extensions: ext,
+    })
+    expect(out).toContain('alt="A red square"')
+    expect(out).not.toContain('alt=""')
+  })
+
+  it('prefers an explicit {alt=…} over the SVG <title>', () => {
+    const out = carveToHtml(fence(' {alt="author alt"}', '<svg viewBox="0 0 1 1"><title>title text</title><rect width="1" height="1"/></svg>'), {
+      extensions: ext,
+    })
+    expect(out).toContain('alt="author alt"')
+    expect(out).not.toContain('title text')
+  })
+
+  it('emits an empty alt when there is neither {alt=…} nor a <title>', () => {
+    const out = carveToHtml(fence('', '<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>'), {
+      extensions: ext,
+    })
+    expect(out).toContain('alt=""')
+  })
+
   it('strips src/srcset overrides (no external fetch)', () => {
     const out = carveToHtml(fence(' {srcset="https://attacker.example/x.svg 1x"}', '<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>'), {
       extensions: ext,

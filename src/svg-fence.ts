@@ -92,6 +92,25 @@ function mergeIntoRoot(svg: string, attrStr: string): string {
   })
 }
 
+// Fall back to the SVG's own `<title>` for the `<img>` alt text when the author
+// gave no `{alt=…}`, so a sandboxed image is described to assistive tech instead
+// of being silently decorative (empty alt). The svg passed here is already
+// sanitized, so this is a plain extraction; the result is escaped again on
+// output. Returns undefined when there is no non-empty title.
+function svgTitle(svg: string): string | undefined {
+  const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(svg)
+  if (!m) return undefined
+  const text = m[1]
+    .replace(/<[^>]*>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#3[49];/g, "'")
+    .replace(/&amp;/g, '&')
+    .trim()
+  return text === '' ? undefined : text
+}
+
 // A self-contained escaped code-block fallback, mirroring FencedRender's
 // degradation: never blank, never raw.
 function sourceFallback(code: CodeBlock, ctx: { indent(l: number): string; escapeHtml(s: string): string; level: number }): string {
@@ -146,7 +165,7 @@ export function imgFence(opts: ImgFenceOptions = {}): CarveExtension {
   }
 
   const render: CarveExtension['blockRenderers'] = {
-    'code-block': (node, ctx) => {
+    'code_block': (node, ctx) => {
       const code = node as CodeBlock
       if (!languages.includes(code.lang ?? '')) return undefined
 
@@ -162,7 +181,7 @@ export function imgFence(opts: ImgFenceOptions = {}): CarveExtension {
       const inline = opts.allowInline === true && consumedValue(code.attrs, 'inline') !== undefined
 
       if (!inline) {
-        const alt = consumedValue(code.attrs, 'alt') ?? ''
+        const alt = consumedValue(code.attrs, 'alt') ?? svgTitle(svg) ?? ''
         const src = `data:image/svg+xml,${encodeURIComponent(svg)}`
         // Sandbox mode promises no fetches: drop any author source-selection
         // attribute (`src`, `srcset`) so it cannot override the sanitized data
