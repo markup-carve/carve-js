@@ -70,6 +70,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A post-blank block attached to a nested list item no longer loosens the
+  outer item (#322). List looseness is decided per level; a descendant's
+  looseness (from a post-blank block or an inner-list blank) no longer
+  propagates up to an ancestor item. Matches carve-php and carve-rs.
+
 - **Post-blank list continuation now uses the content-column model** (carve#295).
   A block opener (quote, heading, fence, table, thematic break) or a sublist
   marker must reach the parent item's content column to belong to the item: at
