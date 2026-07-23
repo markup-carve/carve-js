@@ -105,6 +105,8 @@ export {
   type FencedRenderOptions,
   type FencedRenderContentMode,
 } from './fenced-render.js'
+export { imgFence, type ImgFenceOptions } from './svg-fence.js'
+export { sanitizeSvg, type SanitizeSvgOptions, type SanitizeResult } from './svg-sanitize.js'
 export { mathBlock, type MathBlockOptions } from './math-block.js'
 export { spoiler } from './spoiler.js'
 export {
