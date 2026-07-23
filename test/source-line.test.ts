@@ -42,16 +42,20 @@ describe('sourceLine render option', () => {
     )
   })
 
-  it('matches php source lines for a two-space post-blank ordered-item sublist', () => {
+  it('stamps a two-space post-blank ordered continuation that detaches below the content column', () => {
+    // `1. `'s content column is 3; a two-space sublist is below it, so under the
+    // content-column model the item ends and the sublist parses at document
+    // level, each block keeping its own source line.
     expect(h('1. one\n\n  - sub a\n  - sub b\n\n1. two\n')).toBe(
       '<ol data-source-line="1">\n' +
-        '  <li data-source-line="1"><p data-source-line="1">one</p>\n' +
-        '    <ul data-source-line="3">\n' +
-        '      <li data-source-line="3">sub a</li>\n' +
-        '      <li data-source-line="4">sub b</li>\n' +
-        '    </ul>\n' +
-        '  </li>\n' +
-        '  <li data-source-line="6"><p data-source-line="6">two</p></li>\n' +
+        '  <li data-source-line="1">one</li>\n' +
+        '</ol>\n' +
+        '<ul data-source-line="3">\n' +
+        '  <li data-source-line="3">sub a</li>\n' +
+        '  <li data-source-line="4">sub b</li>\n' +
+        '</ul>\n' +
+        '<ol data-source-line="6">\n' +
+        '  <li data-source-line="6">two</li>\n' +
         '</ol>',
     )
   })
