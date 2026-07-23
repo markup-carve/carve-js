@@ -70,6 +70,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Post-blank list continuation now uses the content-column model** (carve#295).
+  A block opener (quote, heading, fence, table, thematic break) or a sublist
+  marker must reach the parent item's content column to belong to the item: at
+  the content column it nests, below it lazily continues (no blank) or ends the
+  item and parses at document level (after a blank), and above it folds in as
+  lazy paragraph text. This holds whether or not a blank line precedes the
+  child - the blank only decides tight vs loose. It is an intentional divergence
+  from djot, which attaches a block opener at any indent past the marker, and
+  resolves the B1-B4 divergence classes in carve#295.
+
 - **`carve fmt` no longer corrupts verbatim spans whose content is entirely
   spaces.** The parser's single-space strip now skips all-space content, and
   the serializer pads only where the parser strips. Previously `` `  ` ``

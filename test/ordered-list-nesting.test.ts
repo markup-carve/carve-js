@@ -37,27 +37,32 @@ describe('ordered sub-list nesting', () => {
 describe('ordered list indentation (Model A: content column)', () => {
   const h = (s: string) => carveToHtml(s).trim()
 
-  it('continues an ordered item with a two-space sublist after a blank', () => {
+  it('detaches a two-space sublist below an ordered item content column (col 2 < 3)', () => {
+    // Content-column model: after a blank the same content-column rule applies
+    // as without a blank. `1. `'s content column is 3; a sublist at column 2 is
+    // below it, so the item body ends and the sublist parses at document level.
     expect(h('1. one\n\n  - sub a\n  - sub b\n\n1. two\n')).toBe(
       '<ol>\n' +
-        '  <li><p>one</p>\n' +
-        '    <ul>\n' +
-        '      <li>sub a</li>\n' +
-        '      <li>sub b</li>\n' +
-        '    </ul>\n' +
-        '  </li>\n' +
-        '  <li><p>two</p></li>\n' +
+        '  <li>one</li>\n' +
+        '</ol>\n' +
+        '<ul>\n' +
+        '  <li>sub a</li>\n' +
+        '  <li>sub b</li>\n' +
+        '</ul>\n' +
+        '<ol>\n' +
+        '  <li>two</li>\n' +
         '</ol>',
     )
   })
 
-  it('continues an ordered item with a two-space paragraph after a blank', () => {
+  it('detaches a two-space paragraph below an ordered item content column (col 2 < 3)', () => {
     expect(h('1. one\n\n  para\n\n1. two\n')).toBe(
       '<ol>\n' +
-        '  <li><p>one</p>\n' +
-        '    <p>para</p>\n' +
-        '  </li>\n' +
-        '  <li><p>two</p></li>\n' +
+        '  <li>one</li>\n' +
+        '</ol>\n' +
+        '<p>para</p>\n' +
+        '<ol>\n' +
+        '  <li>two</li>\n' +
         '</ol>',
     )
   })
@@ -124,13 +129,17 @@ describe('list indentation: tab stops and below-content-column nesting', () => {
     expect(h('1. outer\n  1. inner\n')).toBe('<ol>\n  <li>outer\n1. inner</li>\n</ol>')
   })
 
-  it('continues a wide ordered marker item after a blank at two spaces', () => {
+  it('detaches below a wide ordered marker content column after a blank (col 2 < 4)', () => {
+    // `10. `'s content column is 4; a two-space continuation is below it, so the
+    // content-column model ends the item and the paragraph parses at document
+    // level (no `baseIndent + 2` relaxation).
     expect(h('10. one\n\n  para\n\n11. two\n')).toBe(
       '<ol start="10">\n' +
-        '  <li><p>one</p>\n' +
-        '    <p>para</p>\n' +
-        '  </li>\n' +
-        '  <li><p>two</p></li>\n' +
+        '  <li>one</li>\n' +
+        '</ol>\n' +
+        '<p>para</p>\n' +
+        '<ol start="11">\n' +
+        '  <li>two</li>\n' +
         '</ol>',
     )
   })
