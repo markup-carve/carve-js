@@ -174,6 +174,7 @@ const IMPLEMENTED = new Set([
   '139-trailing-whitespace-boundaries',
   '140-table-row-closing-pipe',
   '141-post-blank-list-continuation-content-column-model',
+  '142-nested-item-looseness-does-not-propagate-to-the-outer-item',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
