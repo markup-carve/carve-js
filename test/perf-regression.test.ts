@@ -132,3 +132,22 @@ describe('span-attribute output is preserved (bounding elides only failures)', (
     expect(carveToHtml('[x]{k=[a]{b}}')).toContain('k="[a]{b"')
   })
 })
+
+// D) Deeply-indented list staircase: each line indented one column more than the
+//    last (`- x`, ` - x`, `  - x`, …). This drives the list dedent / content-column
+//    re-basing path (reworked for carve#295/#322) to its maximum nesting. NOTE the
+//    input BYTES grow quadratically with LINE COUNT (line i carries i leading
+//    spaces), so a per-line measurement looks O(n^2); per BYTE it is LINEAR (a
+//    pre-release audit flagged the line-count view as a false quadratic). This
+//    guard pins the linear-in-bytes behavior: a ~177 KB staircase parses well
+//    under the cap; a true quadratic-in-bytes regression would take many seconds.
+describe('parser perf regression: deeply-indented list staircase', () => {
+  it('nested-list dedent stays linear in input bytes', () => {
+    const mk = (n: number) => Array.from({ length: n }, (_, i) => ' '.repeat(i) + '- x').join('\n')
+    carveToHtml(mk(150)) // warm up
+    const t = timeMin(() => void carveToHtml(mk(600)), 3)
+    // ~250ms locally at 177 KB; a quadratic-in-bytes regression is multiple
+    // seconds. Absolute cap (not a ratio) per this file's noise-robust convention.
+    expect(t).toBeLessThan(2000)
+  })
+})
