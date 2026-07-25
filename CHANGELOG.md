@@ -70,6 +70,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A definition-list term (`::`) is now a first-class block opener** (carve#295).
+  It interrupts an open paragraph or heading like a heading/quote/fence does, so
+  `text` / `:: term` opens a definition list and a `:: term` at a list item's
+  content column nests a definition list inside the item (previously it folded
+  into the item as lazy text). An INDENTED `:: term` below the content column
+  still folds, matching heading/quote at the same position. Aligns carve-js with
+  carve-rs/carve-php and resolves a cross-engine divergence.
 - A post-blank block attached to a nested list item no longer loosens the
   outer item (#322). List looseness is decided per level; a descendant's
   looseness (from a post-blank block or an inner-list blank) no longer
