@@ -3346,6 +3346,13 @@ const RE_AUTOLINK =
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 
+// Inline node types a trailing `{...}` must NOT attach to: their renderers emit
+// no attributes, so an attached block would be silently dropped. `text` is
+// literal by the §14 rule; `soft_break`/`hard_break` are whitespace; `mention`
+// and `tag` are inert stable spans that do not take attributes. After any of
+// these the `{...}` stays literal text (matches carve-rs / carve-php).
+const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 'tag'])
+
 // Tail patterns parsed after a `[…]` (or `![…]`) whose close bracket was
 // found by balance (buildBracketMap), so the inner text may hold nested
 // brackets the [^\]]* regexes can't span. Link/image titles accept double OR
@@ -4289,7 +4296,12 @@ function scanInlineInner(
         // §15), not an empty attribute block to attach. Without this guard a
         // payload like `{=hl=}`, `{ }`, or `{???}` after a non-text node is
         // silently consumed and dropped.
-        if (prev.type !== 'text' && !isEmptyAttrs(parsed)) {
+        // The block also stays literal after an inert node whose renderer emits
+        // NO attributes -- a soft/hard break, a mention, or a tag -- otherwise
+        // the attrs attach and are silently discarded at render (mentions/tags
+        // are stable inert spans that do not take attributes). Matches
+        // carve-rs / carve-php, which keep the `{...}` literal in these cases.
+        if (!ATTR_INERT_PREV.has(prev.type) && !isEmptyAttrs(parsed)) {
           ;(prev as { attrs?: Attrs }).attrs = mergeAttrs(
             (prev as { attrs?: Attrs }).attrs,
             parsed,
