@@ -2275,6 +2275,14 @@ interface ItemLazyState {
   // plain text inside an open div/admonition; false after a code fence, table,
   // heading, thematic break, a just-opened div, or a blank line.
   lazyFoldable: boolean
+  // Whether the item currently has an OPEN definition list (a `:: term` or
+  // `:  def` marker was the last structural line, possibly across a separator
+  // blank). Used so an UNDER-indented (below content-column) def/term marker
+  // line re-aligns to the term instead of folding as lazy prose: rs/php attach
+  // an under-indented `:  def` as a `<dd>`, and carve-js must match (decision
+  // D, "lenient - still a definition"). An OVER-indented marker still folds
+  // (it reaches the item via sliceColumns, not this lazy path).
+  inDefList: boolean
 }
 
 /**
@@ -2293,15 +2301,26 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     const c = /^(%{3,})\s*$/.exec(content)
     if (c && c[1]!.length >= state.commentLen) state.inComment = false
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   if (state.inFence) {
     if (state.fenceClose!.test(content)) state.inFence = false
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   if (isBlankLine(content)) {
+    // A blank is a separator; a `:  def` may follow it (djot allows a blank
+    // between a term and its definition), so leave inDefList unchanged.
     state.lazyFoldable = false
+    return
+  }
+  // A definition-list term or definition marker opens (or continues) a def
+  // list in this item, and leaves an open paragraph for its body.
+  if (RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content)) {
+    state.inDefList = true
+    state.lazyFoldable = true
     return
   }
   // A code fence or raw fence opens a verbatim block with no open paragraph.
@@ -2311,6 +2330,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     state.inFence = true
     state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   const raw = RE_RAW_FENCE.exec(content)
@@ -2319,6 +2339,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     state.inFence = true
     state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   const comment = /^(%{3,})\s*$/.exec(content)
@@ -2326,17 +2347,20 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     state.inComment = true
     state.commentLen = comment[1]!.length
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   // A table row, heading, or thematic break leaves no open trailing paragraph.
   if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(content)) {
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   // A blockquote line keeps the fold open: the quote's trailing paragraph
   // absorbs the dedented line via the quote's own lazy continuation.
   if (RE_BLOCKQUOTE.test(content)) {
     state.lazyFoldable = true
+    state.inDefList = false
     return
   }
   // A div / admonition / line-block OPENER is structural; it opens no paragraph
@@ -2349,10 +2373,12 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     RE_HARDBREAKS_OPEN.test(content)
   ) {
     state.lazyFoldable = false
+    state.inDefList = false
     return
   }
   // Everything else (plain prose, list-marker content, div body text) leaves an
-  // open paragraph the dedented line can continue.
+  // open paragraph the dedented line can continue. Prose folds into a def body,
+  // so an open def list stays open (inDefList unchanged).
   state.lazyFoldable = true
 }
 
@@ -2518,6 +2544,7 @@ function parseList(lexer: Lexer): List {
       inComment: false,
       commentLen: 0,
       lazyFoldable: !isBlankLine(content),
+      inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
     while (!lexer.eof()) {
       const l = lexer.peek()!
@@ -2649,9 +2676,23 @@ function parseList(lexer: Lexer): List {
         // Lazy continuation: a line with no blank before it that starts no block
         // (or is the indented ordered marker above) folds into the item's lead
         // paragraph (djot rule). A block-starting line or a blank ends the list.
-        nested.push(l)
+        //
+        // Exception: an UNDER-indented (below content-column) def/term marker
+        // line inside an OPEN definition list re-aligns to column 0 instead of
+        // folding as prose, so it attaches as a `<dd>`/`<dt>` (decision D).
+        // rs/php attach an under-indented `:  def`; carve-js must match. An
+        // OVER-indented marker never reaches here (it goes through sliceColumns
+        // and folds), so only the genuinely-under-indented case is realigned.
+        let lazyLine = l
+        if (lazyState.inDefList && indentColumns(l) < contentCol) {
+          const stripped = l.replace(/^[ \t]+/, '')
+          if (RE_DEFLIST_DEF.test(stripped) || RE_DEFLIST_TERM.test(stripped)) {
+            lazyLine = stripped
+          }
+        }
+        nested.push(lazyLine)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        trackItemLazyState(l, lazyState)
+        trackItemLazyState(lazyLine, lazyState)
         lexer.consume()
       } else {
         break
