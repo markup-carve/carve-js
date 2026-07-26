@@ -272,7 +272,12 @@ const isTableRow = (line: string): boolean => {
 // it from a `+ ` list item (which never ends with `|`). Only consumed
 // inside parseTable, after a standard `|` row has opened the table.
 const RE_TABLE_CONT = /^\+.*\|\s*$/
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)\s*(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+// The trailing attribute block must be GLUED to the `)` (no intervening space)
+// to attach, per the inline glue rule; a space before `{…}` makes it literal
+// and the line falls back to a paragraph (inline image + literal braces),
+// matching carve-rs/carve-php. Hence `\)` is directly followed by the optional
+// attr group, with no `\s*` between them.
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
 // Frontmatter open fence: `---` with an optional format token (`---toml`,
 // `---json`); bare `---` uses the default format. The space before the token is
 // optional (lenient input: both `---toml` and `--- toml` are accepted; the
