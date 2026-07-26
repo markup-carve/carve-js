@@ -70,6 +70,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A trailing `{…}` after an inert inline node no longer vanishes** (carve#295).
+  An attribute block following a mention `@user`, a tag `#tag`, or a soft/hard
+  break was attached to that node and then silently dropped at render (those
+  renderers emit no attributes). It now stays literal text, matching carve-rs
+  and carve-php - mentions and tags are inert stable spans that do not take
+  attributes. Legitimate attachment (`` `code`{.c} ``, `[span]{.c}`, `!`x`{.c}`,
+  emphasis, symbols, links, images) is unchanged.
 - **A definition-list term (`::`) is now a first-class block opener** (carve#295).
   It interrupts an open paragraph or heading like a heading/quote/fence does, so
   `text` / `:: term` opens a definition list and a `:: term` at a list item's
