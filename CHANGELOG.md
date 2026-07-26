@@ -70,6 +70,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A sole-image block only absorbs a *glued* trailing attribute block** (carve#295).
+  `![a](/u){k=v}` attaches `k="v"` to the bare `<img>`, but `![a](/u) {k=v}` (with a
+  space) now keeps the `{k=v}` literal and inlines the image in a paragraph, matching
+  the inline glue rule and carve-rs/carve-php; carve-js previously absorbed the
+  space-separated block onto the image.
 - **A trailing `{…}` after an inert inline node no longer vanishes** (carve#295).
   An attribute block following a mention `@user`, a tag `#tag`, or a soft/hard
   break was attached to that node and then silently dropped at render (those
