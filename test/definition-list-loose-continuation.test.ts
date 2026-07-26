@@ -118,6 +118,30 @@ describe('terms fold continuation lines like a heading (no data loss)', () => {
       '<dl>\n  <dt>term</dt>\n</dl>\n<blockquote><p>quote</p></blockquote>',
     )
   })
+
+  // A term nested inside a list item whose continuation line sits BELOW the
+  // item content column is a lazy continuation: its leading whitespace is
+  // stripped before it folds into the <dt>, exactly as a lazy paragraph
+  // continuation is stripped. Matches carve-php / carve-rs / the spec oracle.
+  it('a below-content-column wrapped term line folds with its leading space stripped', () => {
+    // `- ` opens content column 2; `:: term` is the term; ` wrapped` at column
+    // 1 is below the content column, so its leading space is removed.
+    expect(html('- one\n  :: term\n wrapped')).toBe(
+      '<ul>\n  <li>one\n    <dl>\n      <dt>term\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
+    )
+  })
+
+  it('a flush-left (column 0) wrapped term line folds identically', () => {
+    expect(html('- one\n  :: term\nwrapped')).toBe(
+      '<ul>\n  <li>one\n    <dl>\n      <dt>term\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
+    )
+  })
+
+  it('a second below-column term continuation is also stripped', () => {
+    expect(html('- one\n  :: term\n  more\n wrapped')).toBe(
+      '<ul>\n  <li>one\n    <dl>\n      <dt>term\nmore\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
+    )
+  })
 })
 
 describe('a blank line may separate a term from its definition (djot parity)', () => {

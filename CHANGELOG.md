@@ -70,6 +70,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A below-content-column wrapped definition-list term folds with its leading
+  whitespace stripped**. When a `:: term` inside a list item is followed by a
+  lazy continuation line that sits below the item content column, that line is a
+  lazy continuation and its leading whitespace is now removed before it folds
+  into the `<dt>` - matching how a lazy paragraph continuation is stripped, and
+  matching carve-php, carve-rs, and the spec oracle. carve-js previously kept
+  the stray leading space (`<dt>term\n wrapped</dt>`), producing bytes that
+  diverged from the other engines.
 - **A sole-image block only absorbs a *glued* trailing attribute block** (carve#295).
   `![a](/u){k=v}` attaches `k="v"` to the bare `<img>`, but `![a](/u) {k=v}` (with a
   space) now keeps the `{k=v}` literal and inlines the image in a paragraph, matching
