@@ -70,6 +70,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Strict column-0 rule for block-attribute lines, image captions, and
+  reference/footnote definitions**. A block-level construct opener fires only
+  when it begins at its container's content column (column 0 at the top level).
+  carve-js previously recognized three such constructs while indented above that
+  column, diverging from carve-php (which already implements the rule) and the
+  spec oracle: an indented `{…}` block-attribute line attached to the following
+  block; an indented image + `^ caption` formed a `<figure>`; and an indented
+  reference-link or footnote definition was collected/consumed (resolving a
+  reference and rendering nothing) instead of staying literal paragraph text.
+  All three now stay literal when indented, while a flush (column-0) attribute
+  line, caption, or definition keeps opening exactly as before. carve-js now
+  matches carve-php byte-for-byte on these shapes.
 - **A below-content-column wrapped definition-list term folds with its leading
   whitespace stripped**. When a `:: term` inside a list item is followed by a
   lazy continuation line that sits below the item content column, that line is a
