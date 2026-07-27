@@ -91,7 +91,13 @@ export interface ParseOptions {
 let activeMatchers: CarveExtension[] = []
 let activeMatcherCtx: MatcherContext | null = null
 
-const RE_HEADING = /^(#{1,6}) +(.+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+// Content must carry at least one non-ASCII-whitespace character, mirroring
+// RE_CAPTION: `# ` / `#   ` (marker + whitespace only) and `#\t…` are NOT
+// headings, exactly like the caption rule. Leading spaces are folded into the
+// ` +` delimiter, so the content group starts at the first non-space; a NBSP
+// (U+00A0) counts as content, as everywhere else in the parser.
+const RE_HEADING =
+  /^(#{1,6}) +((?=[ \t\f]*[^ \t\n\r\f]).+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
 // Thematic break: a COL-0 line of 3+ CONTIGUOUS identical `-`, `*`, or `_`
 // (`---`, `***`, `___`, `----`), followed only by optional trailing
 // whitespace and end of line (grammar §262 thematic_break). No leading
