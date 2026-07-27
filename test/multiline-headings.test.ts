@@ -99,6 +99,19 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     expect(html('# \tx')).toBe('<section id="x">\n  <h1>\tx</h1>\n</section>')
   })
 
+  // A marker followed by whitespace ONLY is not a heading (it has no content),
+  // exactly like the caption rule. Matches carve-rs / carve-php, which both
+  // render `<p>#</p>`; previously two-or-more trailing spaces slipped through as
+  // an empty `<h1 id="s">`.
+  it('is not a heading when the remainder is whitespace only', () => {
+    expect(html('#  ')).toBe('<p>#</p>')
+    expect(html('#   ')).toBe('<p>#</p>')
+    expect(html('#\t')).toBe('<p>#</p>')
+    // A single trailing space already folds into the delimiter and leaves no
+    // content, so it was never a heading.
+    expect(html('# ')).toBe('<p>#</p>')
+  })
+
   it('keeps interior trailing whitespace but strips the final line', () => {
     expect(html('# a \nb')).toBe('<section id="a-b">\n  <h1>a \nb</h1>\n</section>')
     expect(html('# a\nb ')).toBe('<section id="a-b">\n  <h1>a\nb</h1>\n</section>')
