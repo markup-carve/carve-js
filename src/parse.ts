@@ -2769,7 +2769,31 @@ function parseList(lexer: Lexer): List {
     // table) keeps the item tight, so an item can carry a sub-block without the
     // list going loose. Only the tight/loose RENDERING changes; block structure
     // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
+    // A blank line INSIDE a fenced code block is verbatim content, not an
+    // interior block separator, so it must not loosen the item (carve#326 case
+    // C; matches carve-rs / carve-php). Track the fence while scanning: lines
+    // inside an open fence are skipped, and the fence's own closer closes it. A
+    // blank AFTER the fence closes still loosens normally. The opener may be the
+    // item's lead (a marker-line fence, `- ``` `, which is NOT in `nested`), so
+    // seed the state from the lead content.
+    const leadFence = RE_FENCE.exec(content)
+    let scanFence: { ch: string; len: number } | null = leadFence
+      ? { ch: leadFence[2]![0]!, len: leadFence[2]!.length }
+      : null
     for (let k = 0; k < nested.length; k++) {
+      const ln = nested[k]!
+      if (scanFence) {
+        const cl = RE_FENCE_CLOSER.exec(ln)
+        if (cl && cl[1]![0] === scanFence.ch && cl[1]!.length >= scanFence.len) {
+          scanFence = null
+        }
+        continue
+      }
+      const fo = RE_FENCE.exec(ln)
+      if (fo) {
+        scanFence = { ch: fo[2]![0]!, len: fo[2]!.length }
+        continue
+      }
       if (nested[k] !== '') continue
       // A `+`-injected separator never loosens, even when the block it attaches
       // is a plain paragraph -- it keeps the item tight like a `+`-attached

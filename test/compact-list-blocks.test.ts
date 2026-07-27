@@ -20,6 +20,19 @@ describe('compact list blocks (A1)', () => {
     expect(html).not.toContain('<li><p>run</p>')
   })
 
+  it('a blank line inside a fenced code block does not loosen the list', () => {
+    // The blank is verbatim fence content; no blank line separates the two
+    // items, so the list is tight (matches carve-rs / carve-php).
+    expect(carveToHtml('- ```\n  a\n\n  b\n  ```\n- c')).toBe(
+      '<ul>\n  <li>\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n  <li>c</li>\n</ul>',
+    )
+  })
+
+  it('a blank after the fence closes still loosens the list', () => {
+    const html = carveToHtml('- ```\n  a\n  ```\n\n- c')
+    expect(html).toContain('<li><p>c</p></li>')
+  })
+
   it('a real second paragraph still loosens the list', () => {
     const html = carveToHtml('- item\n\n  second para\n- next')
     expect(html).toContain('<li><p>item</p>')
