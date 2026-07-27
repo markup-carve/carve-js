@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-27
+
 ### Added
 
 - **Inline literal** via the `` !`…` `` prefix (#359). A `!` immediately before
