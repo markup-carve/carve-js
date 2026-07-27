@@ -21,6 +21,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   backtick span is written `\!`.
 - **Lint rule for indented fenced-code delimiters** (`fence-delimiter-indentation`)
   (#367).
+- **SVG `img` fence** (Tier-3, opt-in via `imgFence()`, off by default) (#366,
+  #378). An `` ```img `` block renders a sanitized SVG instead of showing the
+  source. Sandbox by default: the sanitized SVG is encoded into a
+  `data:image/svg+xml` `<img>` the browser isolates (no script, no fetch, no DOM
+  access); a host may opt into a live inline `<svg>` (`imgFence({ allowInline:
+  true })`) for `currentColor` / CSS theming. When no `{alt=…}` is given, the
+  alt text falls back to the SVG's `<title>`.
+- **PlantUML preset and an open static-renderers map** (#360, #363). A
+  build-time diagram renderer can be plugged in via the css-class-keyed
+  renderers map, and static diagram output is wrapped in a uniform `<div>`.
+- **Source-line tracking** for editor scroll-sync (#349, #339):
+  `data-source-line` is stamped on nested blocks and list items, emitted after
+  author attributes for cross-implementation parity.
+- The ordered-list delimiter is now recorded in the AST (#342).
 
 ### Changed
 
@@ -137,6 +151,31 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   All-space content is now preserved verbatim: `` `  ` `` renders
   `<code>  </code>` rather than `<code></code>`. The all-space guard matches
   the executable spec's `codeText()` and the CommonMark rule it derives from.
+- The definition prepass now tracks list content columns, fixing a
+  nested-fence-inside-a-list-item limitation (#364).
+- A fenced-code delimiter sits at its container's content column, and a
+  list-nested fence keeps its indent through Markdown migration (#361, #362).
+- A definition marker requires a literal space after the colon, not a tab
+  (#353).
+- An ordered list item continues on a 2-space indent after a blank line (#352).
+- A trailing backslash at end of input is a hard break; a bare same-level `#`
+  continues a heading (#345).
+- A thematic break is a contiguous column-zero run only; `markdownToCarve`
+  normalizes to `---` (#346).
+- Empty and space-initial bold-italic (`/*…*/`) are rejected, matching the spec
+  and carve-php (#343).
+- A blank line may separate a term from its definition, and a multi-line term
+  folds continuation lines like a heading (#335, #336).
+- Definition descriptions continue like a list item (loose and `+` forms) and
+  support the `:  +` first-block form (#332, #334).
+- Definition and footnote bodies continue like list items (#329).
+- A profile `maxLength` is enforced before parsing; untrusted presets are
+  capped (#331).
+- Fixed quadratic parsing of inline tails and block attributes, so pathological
+  input parses in near-linear time (#328).
+- The formatter preserves the authored list marker (bullet character and
+  ordered delimiter) and keeps verbatim content byte-exact through
+  normalization (#351, #341).
 
 ## [0.1.1] - 2026-07-15
 
