@@ -149,7 +149,7 @@ function renderList(node: List, ctx: CarveContext): string {
           ? `${prefix.trimEnd()}${itemAttrs} `
           : `${bullet}${itemAttrs}${item.checked !== undefined ? ` [${item.checked ? 'x' : ' '}] ` : ' '}`
       }
-      let content = trimNonNbsp(renderListItem(item, ctx))
+      let content = trimNonNbsp(renderListItem(item, ctx, node.tight))
       if (item.children.length === 1 && item.children[0]?.type === 'list') {
         content = content.replace(/^  /gm, '')
       }
@@ -166,8 +166,22 @@ function renderList(node: List, ctx: CarveContext): string {
   }
 }
 
-function renderListItem(item: ListItem, ctx: CarveContext): string {
-  return renderBlocks(item.children, ctx)
+function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  // A loose item separates its blocks with a blank line; a tight item joins
+  // them with a single newline so the re-parse stays tight. Using the generic
+  // blank-line join here would loosen a tight item that has more than one child
+  // (e.g. text after a fenced block), breaking toHtml(fmt(x)) == toHtml(x).
+  if (!tight) return renderBlocks(item.children, ctx)
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  ctx.blockDepth++
+  try {
+    return item.children
+      .map((b) => renderBlock(b, ctx))
+      .filter((s) => s.length > 0)
+      .join('\n')
+  } finally {
+    ctx.blockDepth--
+  }
 }
 
 function orderedMarker(n: number, type: List['olType']): string {
