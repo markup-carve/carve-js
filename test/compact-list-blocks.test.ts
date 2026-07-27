@@ -33,6 +33,15 @@ describe('compact list blocks (A1)', () => {
     expect(html).toContain('<li><p>c</p></li>')
   })
 
+  it('a blank after an UNCLOSED fence still loosens (the fence is not a code block)', () => {
+    // Without a closer the backticks are inline verbatim inside a paragraph, so
+    // the blank before `b` is a real second-paragraph separator (matches
+    // carve-rs). The fence tracking must not suppress it.
+    expect(carveToHtml('- a\n  ```\n\n  b\n- c')).toBe(
+      '<ul>\n  <li><p>a\n<code></code></p>\n    <p>b</p>\n  </li>\n  <li><p>c</p></li>\n</ul>',
+    )
+  })
+
   it('a real second paragraph still loosens the list', () => {
     const html = carveToHtml('- item\n\n  second para\n- next')
     expect(html).toContain('<li><p>item</p>')

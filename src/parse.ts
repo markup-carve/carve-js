@@ -2776,10 +2776,22 @@ function parseList(lexer: Lexer): List {
     // blank AFTER the fence closes still loosens normally. The opener may be the
     // item's lead (a marker-line fence, `- ``` `, which is NOT in `nested`), so
     // seed the state from the lead content.
+    // A fence suppresses interior blanks only when it actually forms a code
+    // block -- i.e. a matching closer exists ahead. An UNCLOSED fence opener is
+    // inline verbatim inside a paragraph, so a following blank is still a real
+    // second-paragraph separator and must loosen (matches carve-rs).
+    const fenceCloserAhead = (from: number, ch: string, len: number): boolean => {
+      for (let i = from; i < nested.length; i++) {
+        const cl = RE_FENCE_CLOSER.exec(nested[i]!)
+        if (cl && cl[1]![0] === ch && cl[1]!.length >= len) return true
+      }
+      return false
+    }
     const leadFence = RE_FENCE.exec(content)
-    let scanFence: { ch: string; len: number } | null = leadFence
-      ? { ch: leadFence[2]![0]!, len: leadFence[2]!.length }
-      : null
+    let scanFence: { ch: string; len: number } | null =
+      leadFence && fenceCloserAhead(0, leadFence[2]![0]!, leadFence[2]!.length)
+        ? { ch: leadFence[2]![0]!, len: leadFence[2]!.length }
+        : null
     for (let k = 0; k < nested.length; k++) {
       const ln = nested[k]!
       if (scanFence) {
@@ -2790,7 +2802,7 @@ function parseList(lexer: Lexer): List {
         continue
       }
       const fo = RE_FENCE.exec(ln)
-      if (fo) {
+      if (fo && fenceCloserAhead(k + 1, fo[2]![0]!, fo[2]!.length)) {
         scanFence = { ch: fo[2]![0]!, len: fo[2]!.length }
         continue
       }
