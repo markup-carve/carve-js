@@ -32,4 +32,16 @@ describe('a heading folds trailing lazy text when nested', () => {
       '<ul>\n  <li>a\n    <ul>\n      <li>\n        <h1 id="N">N</h1>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>sep</p>',
     )
   })
+
+  it('a caption line ends the item rather than folding into the heading', () => {
+    // A caption (`^ …`) is a heading terminator, so it ends the lazy
+    // continuation instead of folding in, matching carve-php / carve-rs.
+    expect(carveToHtml('- text\n\n  # H\n^ cap')).toBe(
+      '<ul>\n  <li>text\n    <h1 id="H">H</h1>\n  </li>\n</ul>\n<p>^ cap</p>',
+    )
+  })
+
+  it('a caption line ends a plain-paragraph item too', () => {
+    expect(carveToHtml('- text\n^ cap')).toBe('<ul>\n  <li>text</li>\n</ul>\n<p>^ cap</p>')
+  })
 })
