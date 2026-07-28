@@ -2769,7 +2769,39 @@ function parseList(lexer: Lexer): List {
     // table) keeps the item tight, so an item can carry a sub-block without the
     // list going loose. Only the tight/loose RENDERING changes; block structure
     // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
+    // A blank line INSIDE a fenced code block is verbatim content, not an
+    // interior block separator, so it must not loosen the item (carve#326 case
+    // C; matches carve-rs / carve-php). Precompute which lines fall inside a
+    // CLOSED fence in a single pass, then skip those blanks in the scan below.
+    // Only a fence with a matching closer forms a code block; an UNCLOSED opener
+    // is inline verbatim inside a paragraph, so a following blank still loosens
+    // (matches carve-rs). The opener may be the item's lead (a marker-line
+    // fence, `- ``` `, which is not in `nested`), so the pass prepends `content`
+    // and a `nested[k]` corresponds to `fenceLines[k + 1]`. Marking closed
+    // ranges is O(n) total (ranges never overlap), keeping the scan linear.
+    const fenceLines = [content, ...nested]
+    const inFence: boolean[] = new Array(fenceLines.length).fill(false)
+    let fenceOpenIdx = -1
+    let fenceOpenCh = ''
+    let fenceOpenLen = 0
+    for (let k = 0; k < fenceLines.length; k++) {
+      if (fenceOpenIdx >= 0) {
+        const cl = RE_FENCE_CLOSER.exec(fenceLines[k]!)
+        if (cl && cl[1]![0] === fenceOpenCh && cl[1]!.length >= fenceOpenLen) {
+          for (let i = fenceOpenIdx; i <= k; i++) inFence[i] = true
+          fenceOpenIdx = -1
+        }
+      } else {
+        const fo = RE_FENCE.exec(fenceLines[k]!)
+        if (fo) {
+          fenceOpenIdx = k
+          fenceOpenCh = fo[2]![0]!
+          fenceOpenLen = fo[2]!.length
+        }
+      }
+    }
     for (let k = 0; k < nested.length; k++) {
+      if (inFence[k + 1]!) continue
       if (nested[k] !== '') continue
       // A `+`-injected separator never loosens, even when the block it attaches
       // is a plain paragraph -- it keeps the item tight like a `+`-attached
