@@ -2287,6 +2287,10 @@ function lazyContinuationEndsList(line: string): boolean {
     RE_LINK_DEF.test(line) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
+    // A caption line (`^ …`) ends the item's lazy continuation rather than
+    // folding in, matching carve-php / carve-rs (a caption is a heading/figure
+    // terminator, not plain prose the item absorbs).
+    RE_CAPTION.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
     RE_TASK.test(line) ||
@@ -2394,7 +2398,15 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     return
   }
   // A table row, heading, or thematic break leaves no open trailing paragraph.
-  if (isTableRow(content) || RE_HEADING.test(content) || RE_HR.test(content)) {
+  // A heading folds trailing plain text as continuation (PART 2 headings,
+  // carve#326), so a following dedented plain line folds INTO the heading --
+  // unlike a table or thematic break, which leave no foldable trailing content.
+  if (RE_HEADING.test(content)) {
+    state.lazyFoldable = true
+    state.inDefList = false
+    return
+  }
+  if (isTableRow(content) || RE_HR.test(content)) {
     state.lazyFoldable = false
     state.inDefList = false
     return
