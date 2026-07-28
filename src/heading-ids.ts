@@ -19,6 +19,7 @@ import type {
   Link,
   Text,
 } from './ast.js'
+import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeRefLabel, mergeAttrs } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
 
@@ -186,6 +187,12 @@ export function inlineText(nodes: InlineNode[]): string {
       case 'text':
       case 'code':
         out += n.value
+        break
+      // The visible glyph, not the source run: a heading id has always been
+      // slugified from the rendered character (`Don't` -> `Don-t`), and moving
+      // the substitution into a node must not change that.
+      case 'smart_punctuation':
+        out += n.glyph ?? SMART_PUNCTUATION_GLYPHS[n.kind] ?? n.value
         break
       case 'math':
       // An inline literal renders as visible prose (§27), so it contributes

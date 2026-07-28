@@ -420,6 +420,9 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return node.raw
     case 'comment':
       return ` %% ${node.content}`
+    case 'smart_punctuation':
+      // The whole point: reproduce the author's source run verbatim.
+      return node.value
     default: {
       const t: never = node
       throw new Error(`renderCarve: unknown inline ${(t as { type: string }).type}`)
