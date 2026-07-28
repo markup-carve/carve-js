@@ -11,6 +11,7 @@ import type {
   Table,
   Text,
 } from './ast.js'
+import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 
 export interface MarkdownRenderOptions {}
@@ -343,6 +344,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return stripControls(node.raw)
     case 'comment':
       return ''
+    case 'smart_punctuation':
+      return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown inline ${(t as { type: string }).type}`)

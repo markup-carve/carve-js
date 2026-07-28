@@ -7,6 +7,34 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Smart typography is represented as AST nodes instead of character
+  substitution** (carve#339). A `smart_punctuation` inline node carries the
+  resolved `kind` and the author's source `value`, so `renderCarve` reproduces
+  what was written (`...`, `->`, `--`, `"`) instead of normalizing it to the
+  glyph. `carveToHtml(fmt(x))` still equals `carveToHtml(x)` and `fmt` stays
+  idempotent.
+
+  HTML, Markdown, plain text and ANSI resolve the kind back to the same glyph,
+  so their output is unchanged - verified byte-identical against the pinned spec
+  corpus and against carve-php across the full transform matrix. Quote glyphs
+  are locale-dependent and resolved during parsing, so a quote node also carries
+  `glyph`.
+
+  Covers the ellipsis, the eleven operators, the em/en dash ladder and the quote
+  directions. A dash run partitions into one node per resolved glyph, each
+  carrying the hyphens it came from.
+
+  Consumers that accumulate visible text (`inlineText`, the citation entry
+  flattener) contribute the resolved glyph, so heading ids and derived text are
+  unchanged. Citation entry attribute blocks (`{author= year=}`) are now matched
+  across the leading run of nodes rather than a single text node, since the
+  quotes inside them are their own nodes.
+
+  For profiles, `smart_punctuation` folds into the `text` trust class - the
+  normative vocabulary is unchanged.
+
 ## [0.1.2] - 2026-07-27
 
 ### Added

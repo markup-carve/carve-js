@@ -6,6 +6,7 @@
  */
 
 import type {
+  SmartPunctuation,
   Abbreviation,
   AbbreviationDef,
   Admonition,
@@ -52,6 +53,7 @@ import type {
   Text,
   ThematicBreak,
 } from './ast.js'
+import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
 import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
@@ -3720,19 +3722,19 @@ const RE_TAG = /^#([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 
 // Fixed multi-character smart-typography tokens, longest first so
 // `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
-const SMART_TOKENS: Array<[string, string]> = [
-  ['<->', '↔'],
-  ['(tm)', '™'],
-  ['...', '…'],
-  ['->', '→'],
-  ['<-', '←'],
-  ['=>', '⇒'],
-  ['<=', '≤'],
-  ['>=', '≥'],
-  ['!=', '≠'],
-  ['+-', '±'],
-  ['(c)', '©'],
-  ['(r)', '®'],
+const SMART_TOKENS: Array<[string, string, string]> = [
+  ['<->', '↔', 'left_right_arrow'],
+  ['(tm)', '™', 'trademark'],
+  ['...', '…', 'ellipsis'],
+  ['->', '→', 'rightwards_arrow'],
+  ['<-', '←', 'leftwards_arrow'],
+  ['=>', '⇒', 'rightwards_double_arrow'],
+  ['<=', '≤', 'less_than_or_equal'],
+  ['>=', '≥', 'greater_than_or_equal'],
+  ['!=', '≠', 'not_equal'],
+  ['+-', '±', 'plus_minus'],
+  ['(c)', '©', 'copyright'],
+  ['(r)', '®', 'registered'],
 ]
 
 /**
@@ -3778,24 +3780,43 @@ const isQuoteOpenContext = (prev: string) =>
  * `prev` is the character immediately before (for contextual quotes).
  * Returns the replacement and consumed length, or null.
  */
+/**
+ * The previously emitted character, for the quote open/close decision.
+ *
+ * It used to be the tail of the text buffer, but a smart-typography node
+ * flushes that buffer, so the glyph it produced would otherwise be invisible
+ * here. An opening curly quote is one of the few characters that puts the NEXT
+ * quote in opening context, so losing it flips `""` from opening to closing.
+ * Anything else with prior output is word-adjacent, i.e. closing context.
+ */
+function lastEmittedGlyph(out: InlineNode[]): string {
+  const previous = out[out.length - 1]
+  if (previous && previous.type === 'smart_punctuation') {
+    const glyph = previous.glyph ?? SMART_PUNCTUATION_GLYPHS[previous.kind]
+    if (glyph) return glyph
+  }
+  return 'x'
+}
+
 function smartToken(
   text: string,
   i: number,
   prev: string,
-): { out: string; len: number } | null {
-  for (const [tok, out] of SMART_TOKENS) {
-    if (text.startsWith(tok, i)) return { out, len: tok.length }
+): { out: string; len: number; kind: string } | null {
+  for (const [tok, out, kind] of SMART_TOKENS) {
+    if (text.startsWith(tok, i)) return { out, len: tok.length, kind }
   }
   // A run of 2+ hyphens collapses to em/en dashes (djot allocation). A
   // lone `-` stays literal.
   if (text[i] === '-' && text[i + 1] === '-') {
     let n = 0
     while (text[i + n] === '-') n++
-    return { out: allocateDashes(n), len: n }
+    return { out: allocateDashes(n), len: n, kind: 'dash_run' }
   }
   const c = text[i]!
   if (c === '"') {
-    return { out: isQuoteOpenContext(prev) ? '“' : '”', len: 1 }
+    const open = isQuoteOpenContext(prev)
+    return { out: open ? '“' : '”', len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
   }
   if (c === "'") {
     // Contextual single quote (matches djot): an apostrophe / closing
@@ -3805,7 +3826,11 @@ function smartToken(
     // context (`'word'`, `rock 'n' roll`); otherwise `’`.
     const next = text[i + 1] ?? ''
     const apostrophe = isAlnum(prev) || /[0-9]/.test(next) || !isQuoteOpenContext(prev)
-    return { out: apostrophe ? '’' : '‘', len: 1 }
+    return {
+      out: apostrophe ? '’' : '‘',
+      len: 1,
+      kind: apostrophe ? 'right_single_quote' : 'left_single_quote',
+    }
   }
   return null
 }
@@ -3970,11 +3995,44 @@ function scanInlineInner(
       const prevForQuote = buf.length
         ? bufLast
         : out.length
-          ? 'x'
+          ? lastEmittedGlyph(out)
           : ''
       const st = smartToken(text, i, prevForQuote)
       if (st) {
-        append(st.out)
+        flush()
+        // A dash run resolves to one or more glyphs; each consumes a fixed
+        // number of source hyphens (3 for em, 2 for en), so the run partitions
+        // into one node per glyph carrying the hyphens it came from.
+        if (st.kind === 'dash_run') {
+          let consumed = 0
+          for (const glyph of st.out) {
+            const width = glyph === '—' ? 3 : 2
+            out.push(
+              withPos(
+                {
+                  type: 'smart_punctuation',
+                  kind: glyph === '—' ? 'em_dash' : 'en_dash',
+                  value: text.slice(i + consumed, i + consumed + width),
+                } as SmartPunctuation,
+                source,
+                text,
+                i + consumed,
+                i + consumed + width,
+              ),
+            )
+            consumed += width
+          }
+        } else {
+          const node = {
+            type: 'smart_punctuation',
+            kind: st.kind,
+            value: text.slice(i, i + st.len),
+          } as SmartPunctuation
+          // Quote glyphs are locale-dependent and decided here, so record the
+          // resolved character; other kinds resolve through the glyph table.
+          if (st.kind.endsWith('_quote')) node.glyph = st.out
+          out.push(withPos(node, source, text, i, i + st.len))
+        }
         i += st.len
         continue
       }

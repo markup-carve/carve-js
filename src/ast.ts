@@ -279,6 +279,56 @@ export type BlockNode =
 
 // ----- Inline nodes -----
 
+/**
+ * Canonical glyph per smart-typography kind.
+ *
+ * Presentation renderers resolve a kind through this table; the Carve renderer
+ * ignores it and emits the author's source run instead. Quote kinds are absent
+ * on purpose: their glyph is locale-dependent and is recorded on the node.
+ */
+export const SMART_PUNCTUATION_GLYPHS: Record<string, string> = {
+  ellipsis: '…',
+  em_dash: '—',
+  en_dash: '–',
+  left_right_arrow: '↔',
+  rightwards_arrow: '→',
+  leftwards_arrow: '←',
+  rightwards_double_arrow: '⇒',
+  less_than_or_equal: '≤',
+  greater_than_or_equal: '≥',
+  not_equal: '≠',
+  plus_minus: '±',
+  copyright: '©',
+  registered: '®',
+  trademark: '™',
+}
+
+/**
+ * A smart-typography substitution, carrying what it resolved to AND what the
+ * author wrote.
+ *
+ * The substitution used to be written straight into the text buffer, which
+ * discarded the source spelling: by the time the AST existed, `...` could not be
+ * told from a literal ellipsis and the Carve renderer had nothing to reproduce.
+ * Keeping both halves lets presentation renderers emit the glyph while the Carve
+ * renderer emits the source, so `fmt` reproduces the document instead of
+ * normalizing it.
+ *
+ * `kind` is the resolved sort (`ellipsis`, `em_dash`, `rightwards_arrow`,
+ * `left_double_quote`, ...). Quote glyphs are locale-dependent and resolved
+ * during parsing, so a quote node also carries `glyph`; every other kind resolves
+ * through SMART_PUNCTUATION_GLYPHS. For profiles this folds into the `text` trust
+ * class - it is ordinary visible prose, not a distinct capability.
+ */
+export interface SmartPunctuation extends BaseNode {
+  type: 'smart_punctuation'
+  kind: string
+  /** The author's source run, e.g. `...`, `->`, `"`. */
+  value: string
+  /** Resolved glyph, set when the parser fixed it (quotes). */
+  glyph?: string
+}
+
 export interface Text extends BaseNode {
   type: 'text'
   value: string
@@ -554,6 +604,7 @@ export interface CriticComment extends BaseNode {
 
 export type InlineNode =
   | Text
+  | SmartPunctuation
   | Emphasis
   | InlineCode
   | Link

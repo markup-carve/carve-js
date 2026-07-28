@@ -24,6 +24,7 @@ import type {
   TableCell,
   TableRow,
 } from './ast.js'
+import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type {
   BlockExtensionRenderContext,
   CarveExtension,
@@ -1417,6 +1418,10 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     case 'comment':
       // Comments are not rendered (§4.13); inline form mirrors the block one.
       return ''
+    case 'smart_punctuation':
+      // The resolved glyph, escaped like any other text: a locale quote glyph
+      // can carry a non-breaking space (French guillemets are `«` + U+00A0).
+      return escapeHtml(node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
     default: {
       const t: never = node
       throw new Error(`renderHtml: unknown inline ${(t as { type: string }).type}`)

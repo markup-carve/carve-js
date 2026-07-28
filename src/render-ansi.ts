@@ -1,4 +1,5 @@
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
+import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 
 export interface AnsiRenderOptions {}
@@ -403,6 +404,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return stripControls(node.raw)
     case 'comment':
       return ''
+    case 'smart_punctuation':
+      return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node
       throw new Error(`renderAnsi: unknown inline ${(t as { type: string }).type}`)

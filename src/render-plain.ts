@@ -1,4 +1,5 @@
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
+import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 
 export interface PlainTextRenderOptions {}
 
@@ -218,6 +219,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return stripControls(node.raw)
     case 'comment':
       return ''
+    case 'smart_punctuation':
+      return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node
       throw new Error(`renderPlainText: unknown inline ${(t as { type: string }).type}`)
