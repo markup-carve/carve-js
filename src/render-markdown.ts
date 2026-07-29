@@ -14,12 +14,26 @@ import type {
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 
-export interface MarkdownRenderOptions {}
+/**
+ * Whether smart typography renders as its glyph or as the source run the author
+ * typed.
+ *
+ * Presentation output wants the glyph. Output written for a machine to read is
+ * usually better off with the characters that were actually typed: the glyph is
+ * a presentation choice the consumer did not ask for and cannot undo, and a
+ * search for the source spelling misses it.
+ */
+export type SmartTypographyMode = 'glyph' | 'source'
+
+export interface MarkdownRenderOptions {
+  /** Defaults to `'glyph'`. */
+  smartTypography?: SmartTypographyMode
+}
 
 const MAX_RENDER_DEPTH = 200
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
-export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {}): string {
+export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
   const headingIds = new Set<string>()
   const referencedHeadingIds = new Set<string>()
 
@@ -42,6 +56,7 @@ export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {})
     blockDepth: 0,
     inlineDepth: 0,
     abbrBudget: new AbbrBudget(ast.srcByteLength),
+    smartTypography: opts.smartTypography ?? 'glyph',
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -56,6 +71,7 @@ interface MarkdownContext {
   inlineDepth: number
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
+  smartTypography: SmartTypographyMode
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
@@ -345,7 +361,11 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'comment':
       return ''
     case 'smart_punctuation':
-      return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
+      // Source mode reproduces what the author typed; the glyph is a
+      // presentation choice a machine consumer cannot reverse.
+      return ctx.smartTypography === 'source'
+        ? node.value
+        : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown inline ${(t as { type: string }).type}`)
