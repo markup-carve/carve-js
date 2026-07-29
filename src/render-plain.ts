@@ -7,7 +7,11 @@ const MAX_RENDER_DEPTH = 200
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {}): string {
-  const ctx: PlainContext = { blockDepth: 0, inlineDepth: 0 }
+  const ctx: PlainContext = {
+    blockDepth: 0,
+    inlineDepth: 0,
+    definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+  }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return normalize(`${out}${footnotes}`)
@@ -16,6 +20,13 @@ export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {
 interface PlainContext {
   blockDepth: number
   inlineDepth: number
+  /**
+   * Labels that actually have a definition. A footnote reference without one did
+   * not form a footnote, so it has to be reproduced as source text rather than
+   * as a marker - which the HTML renderer does via `node.number`, a field this
+   * path never populates because it does no numbering.
+   */
+  definedFootnotes: Set<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
@@ -203,8 +214,16 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return renderInlines(node.content, ctx)
     case 'abbreviation':
       return stripControls(node.abbr)
-    case 'footnote':
-      return node.inline ? `(${renderInlines(node.inline, ctx)})` : `[${stripControls(node.id ?? '')}]`
+    case 'footnote': {
+      if (node.inline) return `(${renderInlines(node.inline, ctx)})`
+      const id = stripControls(node.id ?? '')
+      // An UNRESOLVED reference stays literal, exactly as the HTML target
+      // renders it: the construct did not form, so `[^a]` is ordinary text and
+      // dropping the caret invented a reference the document does not have.
+      // carve-php already did this; carve-js and carve-rs both emitted `[a]`
+      // (carve#352, corpus 132/133/157/161).
+      return ctx.definedFootnotes.has(id) ? `[${id}]` : `[^${id}]`
+    }
     case 'soft_break':
       return ' '
     case 'hard_break':
