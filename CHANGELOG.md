@@ -7,6 +7,38 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The canonical writer no longer escapes punctuation that needs no escape**
+  (PART 11). `carve fmt` turned ordinary prose into backslash soup - a sentence
+  reading `50% faster: yes (ok).` came back as `50\% faster\: yes \(ok\).`,
+  where every one of those escapes re-parses to exactly the same document.
+  The writer now renders the minimal form, checks it against the conservative
+  form, and keeps the escapes only when dropping them would change the parse.
+
+  Three details are worth knowing, because each is forced rather than chosen:
+
+  The check is document-scoped. Verifying a single block would lose the
+  document's link and footnote definitions, so a paragraph carrying a reference
+  link comes back with an empty href and reports a difference escaping never
+  caused.
+
+  It compares the two renders rather than comparing against the source AST. The
+  writer does not satisfy `parse(fmt(x)) == parse(x)` for every construct today -
+  tables with a colspan, doubled alignment markers, one list-item-attribute shape
+  and one line-block shape all re-parse to a different AST while rendering
+  identical HTML. Comparing against the original would inherit those defects and
+  flip the escaping decision between passes, breaking idempotence for a reason
+  unrelated to escaping.
+
+  The caret stays escaped in both modes. Its escape carries information the AST
+  records separately - a text node whose leading caret came from an escape is
+  flagged, so an image followed by a caret line is not promoted to a figure.
+  Comparing that flag would escalate any document whose text begins with a
+  caret; ignoring it would silently turn the image case into a figure.
+
+## [Unreleased]
+
 ### Changed
 
 - **Smart typography is represented as AST nodes instead of character
