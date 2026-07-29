@@ -3511,7 +3511,21 @@ const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 
 // decides span (valid block, possibly empty) vs literal (invalid content).
 // Destination is non-empty (grammar `link_destination = {...}+`), so `[a]()`
 // is NOT a link -- it stays literal (matches carve-php / carve-rs).
-const RE_LINK_TAIL = /^\(([^)\s]+)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+// The destination is either an ANGLE form (`<...>`) or a bare run. The angle
+// form is what lets a destination carry a parenthesis or a space at all: a bare
+// run stops at the first `)`, so `https://x/Foo_(bar)` truncates and the rest
+// leaks into the text (carve#377). Both spellings share capture group 1;
+// `linkDestination` unwraps the brackets.
+const RE_LINK_TAIL = /^\((<[^<>\n]*>|[^)\s]+)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+/**
+ * The destination a `(...)` tail carries, with the angle form's brackets
+ * removed. `<...>` is the only spelling that can hold a parenthesis or a space;
+ * a bare run stops at the first `)` or whitespace, which is what it is for.
+ */
+function linkDestination(raw: string): string {
+  return raw.startsWith('<') && raw.endsWith('>') ? raw.slice(1, -1) : raw
+}
+
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
@@ -4177,7 +4191,7 @@ function scanInlineInner(
         const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
         if (ml) {
           flush()
-          const img: Image = { type: 'image', src: ml[1]!, alt }
+          const img: Image = { type: 'image', src: linkDestination(ml[1]!), alt }
           const title = ml[2] ?? ml[3]
           if (title !== undefined) img.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
@@ -4278,7 +4292,7 @@ function scanInlineInner(
           flush()
           const link: Link = {
             type: 'link',
-            href: ml[1]!,
+            href: linkDestination(ml[1]!),
             children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
           }
           const title = ml[2] ?? ml[3]
