@@ -24,6 +24,9 @@ interface CarveContext {
   blockDepth: number
   inlineDepth: number
   listDepth: number
+  /** Depth of line-block nesting, so the inline writer drops the explicit
+   *  backslash: inside a `::: |` fence every newline already IS a hard break. */
+  lineBlockDepth: number
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -41,7 +44,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
   const previous = escapeMode
   escapeMode = mode
   try {
-    const ctx: CarveContext = { blockDepth: 0, inlineDepth: 0, listDepth: 0 }
+    const ctx: CarveContext = { blockDepth: 0, inlineDepth: 0, listDepth: 0, lineBlockDepth: 0 }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
     const body = renderBlocks(ast.children, ctx)
@@ -168,12 +171,32 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       const fence = colonFenceFor(node.children)
       return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
     }
+    case 'line_block': {
+      // `::: |` is the line-block opener (PART 3, line_block_open). Emitting a
+      // bare `:::` and tagging the node with a `.line-block` class instead
+      // re-parsed as an ordinary div, so the node type changed across a format
+      // round trip and `parse(fmt(x)) == parse(x)` did not hold (issue 359).
+      //
+      // Inside the fence every newline IS a hard break (PART 3,
+      // line_block_body), so the explicit backslash the inline writer emits for
+      // a hard_break would double it on re-parse.
+      ctx.lineBlockDepth++
+      let body: string
+      try {
+        body = renderBlocks(node.children, ctx)
+      } finally {
+        ctx.lineBlockDepth--
+      }
+      const fence = colonFenceFor(node.children)
+      return withAttrs(fence + ' |\n' + lineBlockIndent(body) + '\n' + fence)
+    }
     case 'div': {
-      // Always render divs generically (`::: {.class}`), never the `::: |` /
-      // `::: \` line-block sugar: that sugar forces hard breaks, but a plain div
-      // carrying a `.line-block` / `.hardbreaks` class keeps soft breaks. The
-      // two are indistinguishable by attrs - only the child break nodes differ -
-      // so we let those break nodes serialize themselves, which round-trips both.
+      // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
+      // sugar: that sugar forces hard breaks, but a plain div carrying a
+      // `.hardbreaks` class keeps soft breaks. The two are indistinguishable by
+      // attrs - only the child break nodes differ - so we let those break nodes
+      // serialize themselves, which round-trips both. (A line block is its own
+      // node type and is handled above.)
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
       const body = renderBlocks(node.children, ctx)
       const fence = colonFenceFor(node.children)
@@ -481,7 +504,7 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
     case 'soft_break':
       return '\n'
     case 'hard_break':
-      return '\\\n'
+      return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
     case 'insert':
       return `{+${renderInlines(node.children, ctx)}+}${renderAttrs(node.attrs)}`
     case 'delete':
@@ -676,6 +699,23 @@ function alignMarker(align: TableCell['align']): string {
     default:
       return ''
   }
+}
+
+/**
+ * Write a line block's leading indentation back as ordinary spaces.
+ *
+ * The parser records that indentation as the U+E000 placeholder (the same
+ * sentinel an escaped space uses, so the two never collide with a literal
+ * nbsp). normalize() resolves every remaining U+E000 to a real nbsp, which is
+ * right for an escaped space and wrong here: the source form of a line block's
+ * indent is a plain space, and a real nbsp re-parses as literal text rather
+ * than as indentation, so the text node came back different (issue 359).
+ *
+ * Hand the run to the verbatim scheme instead, which restores plain spaces
+ * after normalize() has run.
+ */
+function lineBlockIndent(body: string): string {
+  return body.replace(/^\ue000+/gm, (run) => '\ue001'.repeat(run.length))
 }
 
 function normalize(text: string): string {

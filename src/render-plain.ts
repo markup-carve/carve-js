@@ -59,6 +59,8 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return node.label
         ? `${stripControls(node.label)}\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
+    case 'line_block':
+      return renderBlocks(node.children, ctx)
     case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':

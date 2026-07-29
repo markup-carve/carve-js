@@ -25,6 +25,7 @@ import type {
   DefinitionItem,
   DefinitionList,
   Div,
+  LineBlock,
   Document,
   Emphasis,
   Extension,
@@ -1460,7 +1461,7 @@ function lineBlockHasCloser(lexer: Lexer): boolean {
   return false
 }
 
-function parseLineBlock(lexer: Lexer): Div {
+function parseLineBlock(lexer: Lexer): LineBlock {
   const open = lexer.consume()
   const m = RE_LINE_BLOCK_OPEN.exec(open)!
   const fence = m[1]!.length
@@ -1492,10 +1493,9 @@ function parseLineBlock(lexer: Lexer): Div {
     ),
   }))
   // No inline opener attributes (strict djot); a preceding block-attribute
-  // line merges onto this div in parseBlocks.
-  const node: Div = {
-    type: 'div',
-    attrs: { classes: ['line-block'], order: ['.class'] },
+  // line merges onto this node in parseBlocks.
+  const node: LineBlock = {
+    type: 'line_block',
     children,
   }
   return node
