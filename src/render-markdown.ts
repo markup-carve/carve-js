@@ -97,7 +97,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
-      const info = markdownFenceInfo(node.lang, node.header)
+      const info = markdownFenceInfo(node.lang, node.header, node.label)
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
@@ -400,13 +400,23 @@ function renderImage(node: Image): string {
     : `![${alt}](${src} "${escapeMdTitle(node.title)}")`
 }
 
-function markdownFenceInfo(lang: string | undefined, header: string | undefined): string {
+function markdownFenceInfo(
+  lang: string | undefined,
+  header: string | undefined,
+  label: string | undefined,
+): string {
   // Keep only the first whitespace-delimited token (the language word); drop it
   // if it still contains a backtick (would break the fence).
   const rawToken = lang === undefined ? '' : (stripControls(lang).split(/\s/)[0] ?? '')
   const token = rawToken.includes('`') ? '' : rawToken
-  if (header === undefined) return token
-  return `${token} "${escapeMdTitle(header)}"`
+  // A grouping `[label]` rides along after the language and title. Dropping it
+  // was silent data loss: an info string is free-form after the first word, so
+  // every consumer ignores what it does not understand, and carve-php was
+  // already emitting it (carve#352).
+  const grouping =
+    label === undefined || label === '' ? '' : ` [${stripControls(label).replace(/[[\]`]/g, '')}]`
+  if (header === undefined) return `${token}${grouping}`
+  return `${token} "${escapeMdTitle(header)}"${grouping}`
 }
 
 function escapeMarkdownLabel(text: string): string {
