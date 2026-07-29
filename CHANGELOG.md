@@ -29,6 +29,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer round-trips 9 more corpus cases.** Measured over the
+  whole 494-case corpus, `parse(fmt(x)) == parse(x)` goes from 468 to 477;
+  `to_html(fmt(x)) == to_html(x)` and `fmt(fmt(x)) == fmt(x)` stay at 494/494.
+  Together with the `line_block` node this closes all four constructs named in
+  carve#359.
+
+  *Tables* are written in the native header form (`=` cells plus per-cell
+  alignment markers) instead of a GFM delimiter row. A delimiter row's
+  alignment applies to the whole column, header and body alike, while the AST
+  records alignment per cell - so an aligned header over unaligned body cells
+  came back with every body cell aligned. The two header shapes with no native
+  spelling (a promoted span marker, a header cell carrying attributes) keep the
+  delimiter row, now emitted bare so it cannot spill alignment down the column.
+
+  *The blessed empty attribute block* (`-{} text`) records nothing, matching the
+  four other sites in the parser that already drop an attribute block declaring
+  nothing, and matching carve-rs.
 - **`autolink` and `admonition` are deniable by name** (carve#362). Both folded
   into `link` / `div` before the profile's allow/deny check, so naming them was
   a silent no-op - a host restricting untrusted input could deny autolinks, get
