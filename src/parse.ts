@@ -151,12 +151,20 @@ const RE_ITEM_ATTR =
 // when there is no abutting brace or the brace is not a valid attribute payload
 // (then `-{...}` is not a marker and the line stays ordinary text, mirroring the
 // inline-span disambiguation, grammar §14).
-function extractItemAttr(line: string): { stripped: string; attrs: Attrs } | null {
+function extractItemAttr(line: string): { stripped: string; attrs: Attrs | undefined } | null {
   const m = RE_ITEM_ATTR.exec(line)
   if (!m) return null
   if (!isValidAttrPayload(m[3]!)) return null
-  return { stripped: m[1]! + m[2]! + m[4]!, attrs: parseAttrs(m[3]!) }
+  const attrs = parseAttrs(m[3]!)
+  // The blessed empty block (`-{} text`) exists to STRIP the braces, not to
+  // record anything: it declares no id, class or key. Recording an empty attrs
+  // object would make `-{} x` and `- x` different documents that render the
+  // same, and the writer emits the shorter of the two - so a formatted item
+  // came back without the object and `parse(fmt(x)) == parse(x)` did not hold
+  // (issue 359). carve-rs already records nothing here.
+  return { stripped: m[1]! + m[2]! + m[4]!, attrs: isEmptyAttrs(attrs) ? undefined : attrs }
 }
+
 const TRIM_STRUCTURAL_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 function trimStructural(text: string): string {
