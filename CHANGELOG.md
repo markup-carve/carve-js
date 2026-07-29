@@ -9,6 +9,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer no longer emits a code fence's title twice.** The
+  opener's quoted title is resolved onto `attrs.title` at parse time so it
+  reaches every consumer, but the fence carries it too - and the writer emitted
+  both, turning ```` ```php "src/Auth.php" ```` into a `{title=src/Auth.php}`
+  line plus the same quoted title on the fence. Longer than the author wrote,
+  and it re-parsed with an attribute order the source never had. The fence is
+  the authored spelling, so it wins (carve#369).
+
+  Corpus round trip goes from 493/498 to **497/498**.
+
+### Fixed
+
 - **The canonical writer reproduces an escaped space instead of resolving it.**
   `10\ kg` came back carrying a literal non-breaking space, which re-parses as
   a literal rather than as an escape - the same HTML, a different text node.

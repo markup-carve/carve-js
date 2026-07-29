@@ -77,3 +77,29 @@ describe('the escaped-space placeholder', () => {
     expect(carveToHtml('10\\ kg\n')).toBe(carveToHtml('10 kg\n'))
   })
 })
+
+/**
+ * A fence's quoted title is resolved onto `attrs.title` at parse time so it
+ * reaches every consumer, but the fence carries it too. The writer emitted
+ * both, so the source said the title twice and re-parsed with an attribute
+ * order the author never wrote (carve#369).
+ */
+describe('a code fence title', () => {
+  it('is not also emitted as an attribute block', () => {
+    const out = carveToCarve('```php "src/Auth.php"\n$ok = true;\n```\n')
+    expect(out).not.toContain('{title=')
+    expect(out).toContain('"src/Auth.php"')
+  })
+
+  it('round-trips the attributes it started with', () => {
+    const src = '```php "src/Auth.php"\n$ok = true;\n```\n'
+    const first = (s: string) => (parse(s).children[0] as any).attrs
+    expect(first(carveToCarve(src))).toEqual(first(src))
+  })
+
+  it('keeps a genuine attribute block alongside the title', () => {
+    const out = carveToCarve('{#snippet}\n```php "src/Auth.php"\n$ok = true;\n```\n')
+    expect(out).toContain('{#snippet}')
+    expect(out).not.toContain('{title=')
+  })
+})
