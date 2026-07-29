@@ -438,7 +438,10 @@ function escapeText(text: string): string {
   // too. `&` first so the entities are not re-escaped.
   text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Escape Markdown metacharacters (none overlap with the HTML chars above).
-  return text.replace(/[\\`*_[\]#]/g, '\\$&')
+  // The underscore escape is emitted as a sentinel rather than a backslash:
+  // whether it survives depends on its neighbours in the assembled document,
+  // which only normalize() can see. See UNDERSCORE_ESCAPE.
+  return text.replace(/[\\`*_[\]#]/g, (ch) => (ch === '_' ? UNDERSCORE_ESCAPE : `\\${ch}`))
 }
 
 /** Dangerous URL schemes blanked on Markdown link/image destinations, mirroring
@@ -452,9 +455,14 @@ function sanitizeMdUrl(url: string): string {
   return url
 }
 
-/** Drop C0/C1 control characters (keeping tab and newline) from author content. */
+/**
+ * Drop C0/C1 control characters (keeping tab and newline) from author content,
+ * and the underscore-escape sentinel with them: author content that carried it
+ * would otherwise reach normalize() and be read as an escape this renderer
+ * emitted. Every path to the output passes through here.
+ */
 function stripControls(s: string): string {
-  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/\p{Cc}|\ue004/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
@@ -473,7 +481,16 @@ function cleanEscapedText(node: Text): string {
 
 
 /**
- * Drop the backslash from an intraword underscore.
+ * Sentinel standing in for an underscore escape this renderer emitted, so the
+ * final pass can tell those apart from a backslash the author wrote. U+E000 is
+ * the NBSP sentinel and render-carve claims U+E001..U+E003; this extends the
+ * scheme. Author content never carries it: stripControls() drops it on the way
+ * in, and every path to the output runs through stripControls().
+ */
+const UNDERSCORE_ESCAPE = '\ue004'
+
+/**
+ * Resolve the underscore escapes, dropping the backslash from an intraword one.
  *
  * CommonMark does not honour an intraword underscore, so `company_id` renders
  * literally with or without the escape - the backslash only litters identifiers
@@ -485,11 +502,19 @@ function cleanEscapedText(node: Text): string {
  * node: the parser splits `company_id` into the text nodes `company` and
  * `_id`, so at escape time the underscore looks like it starts a word.
  *
- * Code spans are unaffected: their content is emitted verbatim and never
- * carries these escapes to begin with.
+ * It decides on the sentinel rather than on `\_` because the assembled document
+ * also contains regions this renderer must reproduce byte-exact - code spans,
+ * code blocks, link destinations, titles, raw HTML - and a backslash there is
+ * content, not an escape. Matching `\_` rewrote those too (issue 400).
  */
-function dropRedundantUnderscoreEscapes(text: string): string {
-  return text.replace(/(?<=[\p{L}\p{N}])\\_(?=[\p{L}\p{N}])/gu, '_')
+function resolveUnderscoreEscapes(text: string): string {
+  return text.replace(
+    /\ue004/g,
+    (_match, offset: number) =>
+      /[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') && /[\p{L}\p{N}]/u.test(text[offset + 1] ?? '')
+        ? '_'
+        : '\\_',
+  )
 }
 
 function normalize(text: string): string {
@@ -504,7 +529,7 @@ function normalize(text: string): string {
     '\u00a0',
   )
 
-  return dropRedundantUnderscoreEscapes(collapsed)
+  return resolveUnderscoreEscapes(collapsed)
 }
 
 function trimNonNbsp(text: string): string {
