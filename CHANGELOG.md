@@ -9,6 +9,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown renderer no longer de-escapes underscores inside verbatim
+  content.** The intraword-underscore cleanup matched a literal `\_` anywhere in
+  the assembled document, so a backslash the author wrote was rewritten along
+  with the escapes the renderer added: `` `a\_b` `` came back as `` `a_b` ``,
+  and the same happened in fenced code blocks, link destinations, image sources
+  and escaped raw HTML. Each of those dropped a byte the parser had kept - a
+  code span does not process escapes, so its value carries the backslash
+  literally. The cleanup now decides on a sentinel only the text escaper emits,
+  so it sees exactly the escapes the renderer wrote.
+
 - **The canonical writer no longer escapes punctuation that needs no escape**
   (PART 11). `carve fmt` turned ordinary prose into backslash soup - a sentence
   reading `50% faster: yes (ok).` came back as `50\% faster\: yes \(ok\).`,
