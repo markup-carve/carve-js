@@ -680,7 +680,17 @@ function alignMarker(align: TableCell['align']): string {
 
 function normalize(text: string): string {
   const lines = trimNonNbsp(text.replace(/\ue000/g, '\u00a0')).split('\n')
-  const cleaned = trimNonNbsp(lines.map((line) => line.replace(/[^\S\u00a0]+$/g, '')).join('\n').replace(/\n{3,}/g, '\n\n'))
+  // Strip a line's trailing whitespace only where it cannot be content. At the
+  // end of a paragraph the parser drops it (corpus 102), so the writer must
+  // too; before a SOFT BREAK the parser keeps it, and stripping it there
+  // changed the rendered output (carve#359). A line whose successor is blank
+  // ends its block; one followed by more text is mid-paragraph.
+  const stripped = lines.map((line, i) => {
+    const next = lines[i + 1]
+    const endsBlock = next === undefined || next.trim() === ''
+    return endsBlock ? line.replace(/[^\S\u00a0]+$/g, '') : line
+  })
+  const cleaned = trimNonNbsp(stripped.join('\n').replace(/\n{3,}/g, '\n\n'))
   return `${restoreVerbatim(cleaned)}\n`
 }
 
