@@ -273,6 +273,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'text':
       if (/^<\/#[^>]+>$/.test(node.value)) return node.value
       return escapeText(cleanEscapedText(node))
+    case 'escaped_text':
+      // Reproduce the author's escape. `\-\-` was written precisely so a
+      // downstream processor with smart punctuation on would not read an en
+      // dash; emitting the character bare loses exactly that (carve#350).
+      // The underscore still goes through the sentinel, so the intraword rule
+      // can drop the backslash where CommonMark ignores it anyway.
+      return node.value === '_' ? UNDERSCORE_ESCAPE : '\\' + node.value
     case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
     case 'strong':

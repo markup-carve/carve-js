@@ -1242,6 +1242,9 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value)
+    case 'escaped_text':
+      // The backslash is authoring syntax; the reader sees the character.
+      return escapeHtml(node.value)
     case 'emphasis':
       return `<em${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</em>`
     case 'strong':

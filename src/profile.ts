@@ -154,6 +154,11 @@ export function canonicalType(type: string): string | undefined {
     // ----- inline -----
     case 'text':
       return 'text'
+    // An escaped character is ordinary visible prose; the backslash is
+    // authoring syntax, so it shares text's trust class rather than becoming a
+    // separately deniable feature.
+    case 'escaped_text':
+      return 'text'
     // Smart typography is ordinary visible prose, so it shares text's trust
     // class rather than becoming a nameable type of its own (the same way the
     // inline literal folds into `code`).

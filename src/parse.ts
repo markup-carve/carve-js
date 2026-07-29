@@ -25,6 +25,7 @@ import type {
   DefinitionItem,
   DefinitionList,
   Div,
+  EscapedText,
   LineBlock,
   Document,
   Emphasis,
@@ -3803,6 +3804,10 @@ function lastEmittedGlyph(out: InlineNode[]): string {
     const glyph = previous.glyph ?? SMART_PUNCTUATION_GLYPHS[previous.kind]
     if (glyph) return glyph
   }
+  // An escaped character is its own node but still the character before the
+  // quote, and quote flanking reads that character: `\{"quoted"` opens on the
+  // brace exactly as an unescaped `{` would (corpus 163).
+  if (previous && previous.type === 'escaped_text') return previous.value
   return 'x'
 }
 
@@ -3985,7 +3990,15 @@ function scanInlineInner(
         // Remember a leading escaped caret so it is never mistaken for a caption
         // marker (`\^ cap` after an image stays a paragraph, not a figure).
         if (nxt === '^' && buf === '') bufEscapedCaret = true
-        append(nxt)
+        // The escape is its own node: the backslash carries intent the literal
+        // character does not. `\-\-` was written precisely so a downstream
+        // processor would not read an en dash, and flattening it into text lost
+        // that (carve#350).
+        const escStart = i
+        flush()
+        out.push(
+          withPos({ type: 'escaped_text', value: nxt } as EscapedText, source, text, escStart, i + 2),
+        )
         i += 2
         continue
       }

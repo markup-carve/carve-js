@@ -160,6 +160,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
+    case 'escaped_text':
+      return node.value
     case 'emphasis':
     case 'strong':
     case 'underline':

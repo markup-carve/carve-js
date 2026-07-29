@@ -344,6 +344,23 @@ export interface SmartPunctuation extends BaseNode {
   glyph?: string
 }
 
+/**
+ * A character the author escaped with a backslash (`\-`, `\"`).
+ *
+ * Its own type rather than plain text, because the escape carries intent the
+ * literal character alone cannot: the author wrote `\-\-` precisely so a
+ * downstream processor would NOT turn it into an en dash. Flattening it into
+ * text lost that, and the Markdown target emitted the trigger bare where
+ * carve-php reproduced the escape (carve#350). The inline vocabulary in the
+ * spec's profiles.md lists `escaped_text` for the same reason.
+ *
+ * The value is the literal character, without the backslash.
+ */
+export interface EscapedText extends BaseNode {
+  type: 'escaped_text'
+  value: string
+}
+
 export interface Text extends BaseNode {
   type: 'text'
   value: string
@@ -619,6 +636,7 @@ export interface CriticComment extends BaseNode {
 
 export type InlineNode =
   | Text
+  | EscapedText
   | SmartPunctuation
   | Emphasis
   | InlineCode

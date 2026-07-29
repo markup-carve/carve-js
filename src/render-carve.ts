@@ -105,7 +105,7 @@ function stableJson(value: unknown): string {
  * dropped rather than compared.
  */
 function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical)
+  if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
@@ -115,6 +115,44 @@ function canonical(value: unknown): unknown {
     return out
   }
   return value
+}
+
+/**
+ * Collapse adjacent text and escaped-text nodes into one text node.
+ *
+ * An escape is exactly what this comparison is deciding, so the two renders
+ * must not be told apart BY it. Escaping a character both retypes the node and
+ * SPLITS the run it sat in - `blue.` is one text node, `blue\.` is a text node
+ * plus an escaped-text node - so without this every candidate character would
+ * report a difference and escalate the whole document to conservative escaping.
+ *
+ * What survives the merge is the question worth asking: same characters, same
+ * order, same surrounding structure - does dropping the escapes change anything
+ * ELSE?
+ */
+function mergeTextRuns(nodes: unknown[]): unknown[] {
+  const out: unknown[] = []
+  for (const node of nodes) {
+    const current = node as Record<string, unknown> | null
+    const isTextish =
+      current !== null &&
+      typeof current === 'object' &&
+      (current['type'] === 'text' || current['type'] === 'escaped_text')
+    const previous = out[out.length - 1] as Record<string, unknown> | undefined
+    if (isTextish && previous !== undefined && previous['type'] === 'text') {
+      previous['value'] = String(previous['value'] ?? '') + String(current!['value'] ?? '')
+      if (current!['escapedLeadingCaret'] === true) previous['escapedLeadingCaret'] = true
+      continue
+    }
+    if (isTextish) {
+      const merged: Record<string, unknown> = { type: 'text', value: String(current!['value'] ?? '') }
+      if (current!['escapedLeadingCaret'] === true) merged['escapedLeadingCaret'] = true
+      out.push(merged)
+      continue
+    }
+    out.push(node)
+  }
+  return out
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
@@ -455,6 +493,10 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
   switch (node.type) {
     case 'text':
       return escapeText(cleanEscapedText(node))
+    case 'escaped_text':
+      // The author escaped this character; the writer says so again. No
+      // minimal/conservative decision applies - the node IS the decision.
+      return '\\' + node.value
     case 'emphasis':
       return withAttrs(renderEmphasis('/', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'strong':
@@ -907,6 +949,13 @@ function firstBoundary(node: InlineNode | undefined): string {
   switch (node.type) {
     case 'text':
       return node.value[0] ?? ''
+    // The CHARACTER, not the backslash that precedes it in the output. A text
+    // node holding `_b_` and an escaped-text node holding `_` describe the same
+    // neighbour, and the writer has to brace an adjacent delimiter the same way
+    // for both - otherwise the first pass (text) and the second (escaped text)
+    // disagree and `fmt(fmt(x)) != fmt(x)`.
+    case 'escaped_text':
+      return node.value
     case 'soft_break':
     case 'hard_break':
       return '\n'
@@ -926,6 +975,8 @@ function lastBoundary(node: InlineNode | undefined): string {
   switch (node.type) {
     case 'text':
       return node.value[node.value.length - 1] ?? ''
+    case 'escaped_text':
+      return node.value
     case 'soft_break':
     case 'hard_break':
       return '\n'
