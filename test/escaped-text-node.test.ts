@@ -56,3 +56,24 @@ describe('escaped_text', () => {
     expect(carveToHtml('# What\\\'s new\n')).toContain('id="What-s-new"')
   })
 })
+
+/**
+ * An escaped space (`\ `) and a literal non-breaking space are two different
+ * things in the AST: the parser records the escape with its own placeholder,
+ * and a literal nbsp as itself. The writer resolved BOTH to a literal nbsp, so
+ * `10\ kg` came back as a literal - the same HTML, a different text node
+ * (carve#369).
+ */
+describe('the escaped-space placeholder', () => {
+  it('is written back as the escape the author wrote', () => {
+    expect(carveToCarve('10\\ kg\n')).toBe('10\\ kg\n')
+  })
+
+  it('leaves a literal non-breaking space alone', () => {
+    expect(carveToCarve('10 kg\n')).toBe('10 kg\n')
+  })
+
+  it('renders both spellings identically', () => {
+    expect(carveToHtml('10\\ kg\n')).toBe(carveToHtml('10 kg\n'))
+  })
+})

@@ -768,7 +768,16 @@ function lineBlockIndent(body: string): string {
 }
 
 function normalize(text: string): string {
-  const lines = trimNonNbsp(text.replace(/\ue000/g, '\u00a0')).split('\n')
+  // The placeholder means the author wrote an ESCAPED SPACE, so the writer says
+  // that again. Resolving it to a literal non-breaking space instead lost the
+  // distinction the parser draws - `10\ kg` came back carrying U+00A0, which
+  // re-parses as a literal nbsp rather than as an escape, so the text node
+  // differed even though the HTML did not (carve#369).
+  //
+  // A line block's indent is the other user of this sentinel and is already
+  // routed through the verbatim scheme before this runs, so what is left here
+  // is an escaped space and nothing else.
+  const lines = trimNonNbsp(text.replace(/\ue000/g, '\\ ')).split('\n')
   const cleaned = trimNonNbsp(lines.map((line) => line.replace(/[^\S\u00a0]+$/g, '')).join('\n').replace(/\n{3,}/g, '\n\n'))
   return `${restoreVerbatim(cleaned)}\n`
 }
