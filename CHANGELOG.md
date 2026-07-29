@@ -7,6 +7,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The canonical writer reproduces an escaped space instead of resolving it.**
+  `10\ kg` came back carrying a literal non-breaking space, which re-parses as
+  a literal rather than as an escape - the same HTML, a different text node.
+  The parser draws the distinction (the escape gets its own placeholder, a
+  literal nbsp stays itself) and the writer was collapsing both. Round-trip
+  goes from 484/498 to 486/498 on the corpus (carve#369).
+
 ### Changed
 
 - **BREAKING (AST): an escaped character is now its own node.** `\-` parses to
