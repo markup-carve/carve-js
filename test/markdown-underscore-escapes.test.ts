@@ -65,6 +65,12 @@ describe('markdown underscore escaping', () => {
     })
   })
 
+  it('de-escapes an authored escape when it is intraword', () => {
+    // `a\_b` and `a_b` are two spellings of the same document, so they have to
+    // render the same - the escape the author wrote is still an escape.
+    expect(carveToMarkdown('a\\_b').trim()).toBe('a_b')
+  })
+
   it('keeps underline emphasis working', () => {
     expect(carveToMarkdown('_underline_').trim()).toBe('<u>underline</u>')
   })
