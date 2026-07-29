@@ -207,20 +207,37 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
   const rows: string[] = []
   let columns = 0
-  // Per-column alignment, taken from the first non-header row (matching
-  // carve-php), so the Markdown separator preserves `:---` / `:---:` / `---:`
-  // instead of dropping alignment.
+  // Per-column alignment for the Markdown delimiter row, which is the only place
+  // Markdown can express it.
+  //
+  // COLUMN alignment is declared on the HEADER cells - that is where `|=> Age`
+  // puts it, and the HTML renderer applies it to every cell in the column. This
+  // used to read the first NON-header row instead, where `align` is set only by a
+  // per-CELL override, so ordinary aligned tables lost their alignment entirely
+  // and a table with one overridden cell reported that cell's alignment as the
+  // whole column's (carve#352, corpus 48/49/52/53).
+  //
+  // A per-cell override cannot be expressed in a Markdown table at all, so it is
+  // deliberately not consulted here; the column keeps what the header declared.
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
     const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
     columns = Math.max(columns, cells.length)
     const rendered = `| ${cells.join(' | ')} |`
-    if (row.cells.every((cell) => cell.header)) header = rendered
-    else {
-      rows.push(rendered)
+    if (row.cells.every((cell) => cell.header)) {
+      header = rendered
       row.cells.forEach((cell, i) => {
         if (aligns[i] === undefined) aligns[i] = cell.align
       })
+    } else {
+      rows.push(rendered)
+      // A headerless table still declares its columns somewhere, so fall back to
+      // the first row that carries an alignment.
+      if (header === undefined) {
+        row.cells.forEach((cell, i) => {
+          if (aligns[i] === undefined) aligns[i] = cell.align
+        })
+      }
     }
   }
   const separator = (i: number): string => {
