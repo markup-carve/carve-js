@@ -316,6 +316,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
+    case 'escaped_text':
+      return node.value
     case 'emphasis':
       return style(renderInlines(node.children, ctx), ITALIC)
     case 'strong':

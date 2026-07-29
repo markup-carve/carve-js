@@ -9,6 +9,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **BREAKING (AST): an escaped character is now its own node.** `\-` parses to
+  `{type: 'escaped_text', value: '-'}` instead of being flattened into the
+  surrounding text. Consumers that read `text.value` see the run split at each
+  escape; the character itself is unchanged, and every renderer's output is the
+  same except Markdown (below).
+
+  The backslash carries intent the character does not: `\-\-` was written
+  precisely so a downstream processor with smart punctuation on would not read
+  an en dash. Flattening it lost that, and this engine emitted the trigger bare
+  where carve-php reproduced the escape (carve#350). `escaped_text` is in the
+  inline vocabulary in the spec's profiles.md.
+
+- **Markdown output reproduces the author's escapes** (PART 11 §7 M2).
+  `A \" B \-\- C` now renders as `A \" B \-\- C` rather than `A " B -- C`.
+  A document that escapes nothing gains no backslashes.
+
+### Changed
+
 - **BREAKING (AST): a line block is now its own node type.** `::: |` parses to
   `{type: 'line_block', children}` instead of a `div` carrying a `.line-block`
   class. Consumers that matched on the class have to match on the type instead.

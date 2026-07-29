@@ -694,6 +694,7 @@ function extractTextContent(node: NodeLike): string {
     case 'thematic_break':
       return '---'
     case 'text':
+    case 'escaped_text':
       return (node['value'] as string) ?? ''
     case 'code':
       return (node['value'] as string) ?? ''
