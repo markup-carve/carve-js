@@ -57,6 +57,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     inlineDepth: 0,
     abbrBudget: new AbbrBudget(ast.srcByteLength),
     smartTypography: opts.smartTypography ?? 'glyph',
+    definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -72,6 +73,12 @@ interface MarkdownContext {
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
   smartTypography: SmartTypographyMode
+  /**
+   * Labels that actually have a definition. A reference without one did not form
+   * a footnote, so it is ordinary text - and its brackets are Markdown
+   * metacharacters that section 8 M1 requires escaping.
+   */
+  definedFootnotes: Set<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
@@ -348,10 +355,17 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       )
       return `<abbr title="${title}">${text}</abbr>`
     }
-    case 'footnote':
-      return node.inline
-        ? `^[${renderInlines(node.inline, ctx)}]`
-        : `[^${stripControls(node.id ?? '')}]`
+    case 'footnote': {
+      if (node.inline) return `^[${renderInlines(node.inline, ctx)}]`
+      const id = stripControls(node.id ?? '')
+      // An UNRESOLVED reference did not form a footnote, so what is emitted is
+      // ordinary text -- and its brackets are Markdown metacharacters, which
+      // PART 11 section 8 M1 escapes UNCONDITIONALLY. Emitting them bare handed
+      // the re-parser markup the document never had. carve-php already did this
+      // (carve#352, corpus 132/133/157/161).
+      if (!ctx.definedFootnotes.has(id)) return `\\[^${id}\\]`
+      return `[^${id}]`
+    }
     case 'soft_break':
       return '\n'
     case 'hard_break':
