@@ -213,6 +213,20 @@ export interface Div extends BaseNode {
 }
 
 /**
+ * Line block (§4.4): a `::: |` fence whose every newline is a hard break.
+ *
+ * Its own type rather than a `div` carrying a `.line-block` class, because the
+ * two are not the same document: a plain div with that class keeps soft breaks,
+ * and a writer given only the class cannot tell which one to emit. The block
+ * vocabulary in the spec's profiles.md lists `line_block` for the same reason -
+ * a profile denying it must be able to name it.
+ */
+export interface LineBlock extends BaseNode {
+  type: 'line_block'
+  children: BlockNode[]
+}
+
+/**
  * Definition list (§4.5): `:: term` lines (one or more) followed by
  * `:  definition` lines (one or more) form an entry; entries render to a
  * `<dl>` of `<dt>` (terms) then `<dd>` (definitions). `::` is exactly two
@@ -270,6 +284,7 @@ export type BlockNode =
   | Table
   | Admonition
   | Div
+  | LineBlock
   | DefinitionList
   | Figure
   | Image

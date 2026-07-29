@@ -130,6 +130,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return node.label
         ? `**${escapeText(node.label)}**\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
+    case 'line_block':
+      return renderBlocks(node.children, ctx)
     case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
@@ -570,6 +572,7 @@ function walkBlocks(
       case 'block_quote':
       case 'admonition':
       case 'div':
+      case 'line_block':
         walkBlocks(block.children, visit)
         break
       case 'list':

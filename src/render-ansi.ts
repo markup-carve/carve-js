@@ -112,6 +112,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       }
       return `${labelLine}${body}`
     }
+    case 'line_block':
+      return renderBlocks(node.children, ctx)
     case 'div': {
       if (!node.label) return renderBlocks(node.children, ctx)
       // Caption floor: a bold label line, prefixed with the blockquote `│` when
