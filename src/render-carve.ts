@@ -711,7 +711,16 @@ function protectVerbatim(content: string): string {
 }
 
 function restoreVerbatim(text: string): string {
-  return text.replace(/\ue001/g, ' ').replace(/\ue002/g, '\t').replace(/\ue003/g, '')
+  return (
+    text
+      .replace(/\ue001/g, ' ')
+      .replace(/\ue002/g, '\t')
+      .replace(/\ue003/g, '')
+      // U+E004 marks a paragraph line that must not begin at column 0. It
+      // resolves AFTER normalize()'s trims, which would otherwise strip a plain
+      // leading space whenever the paragraph is the document's first block.
+      .replace(/\ue004/g, ' ')
+  )
 }
 
 function trimNonNbsp(text: string): string {
@@ -773,7 +782,7 @@ function guardThematicBreakLines(body: string): string {
   if (!body.includes('-')) return body
   return body
     .split('\n')
-    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? ` ${line}` : line))
+    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? `\ue004${line}` : line))
     .join('\n')
 }
 
