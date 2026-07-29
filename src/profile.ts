@@ -41,6 +41,7 @@ export const CANONICAL_BLOCK_TYPES = [
   'definition_term',
   'definition_description',
   'section',
+  'admonition',
   'line_block',
   'comment',
   'figure',
@@ -50,6 +51,7 @@ export const CANONICAL_BLOCK_TYPES = [
 /** Canonical inline node-type vocabulary (snake_case). */
 export const CANONICAL_INLINE_TYPES = [
   'text',
+  'autolink',
   'emphasis',
   'strong',
   'underline',
@@ -88,6 +90,32 @@ const INLINE_SET: ReadonlySet<string> = new Set(CANONICAL_INLINE_TYPES)
  * carve-php's "unknown type -> denied" rule. The exception is `document`,
  * which the resolver always treats as allowed.
  */
+/**
+ * Types that are a SPECIALIZATION of a broader one.
+ *
+ * `profiles.md` requires both to be nameable on their own: an autolink is not a
+ * `link` (folding it in loses the authored form a round trip has to restore),
+ * and an admonition is not a `div` (a profile wanting to deny callouts while
+ * allowing generic containers cannot say so if the kind lives in a class
+ * string). Naming them used to be a silent no-op, because both folded into the
+ * broader name before the check (issue 362).
+ *
+ * They stay COVERED BY the broader name, though: a profile that denies `link`
+ * must keep stripping autolinks, and one that denies `div` must keep stripping
+ * admonitions. Otherwise unfolding them would quietly widen every profile that
+ * already relies on the broad name - the opposite of what a deny list is for.
+ */
+const SUPERTYPE: Record<string, string> = {
+  autolink: 'link',
+  admonition: 'div',
+}
+
+/** The type itself, plus its supertype when it has one. */
+function withSupertype(type: string): string[] {
+  const parent = SUPERTYPE[type]
+  return parent === undefined ? [type] : [type, parent]
+}
+
 export function canonicalType(type: string): string | undefined {
   switch (type) {
     // ----- block -----
@@ -113,10 +141,8 @@ export function canonicalType(type: string): string | undefined {
       return 'thematic_break'
     case 'div':
       return 'div'
-    // An admonition is a typed div; carve-php has no separate admonition node,
-    // it is a Div. Treat it under the `div` feature for allow/deny purposes.
     case 'admonition':
-      return 'div'
+      return 'admonition'
     case 'raw_block':
       return 'raw_block'
     case 'definition_list':
@@ -152,9 +178,8 @@ export function canonicalType(type: string): string | undefined {
       return 'code'
     case 'link':
       return 'link'
-    // An angle autolink is a link.
     case 'autolink':
-      return 'link'
+      return 'autolink'
     case 'image':
       return 'image'
     case 'soft_break':
@@ -663,14 +688,16 @@ export class Profile {
   }
 
   private isInlineAllowed(type: string): boolean {
-    if (this.deniedInline.includes(type)) return false
-    if (this.allowedInline !== null) return this.allowedInline.includes(type)
+    const names = withSupertype(type)
+    if (names.some((n) => this.deniedInline.includes(n))) return false
+    if (this.allowedInline !== null) return names.some((n) => this.allowedInline!.includes(n))
     return true
   }
 
   private isBlockAllowed(type: string): boolean {
-    if (this.deniedBlock.includes(type)) return false
-    if (this.allowedBlock !== null) return this.allowedBlock.includes(type)
+    const names = withSupertype(type)
+    if (names.some((n) => this.deniedBlock.includes(n))) return false
+    if (this.allowedBlock !== null) return names.some((n) => this.allowedBlock!.includes(n))
     return true
   }
 

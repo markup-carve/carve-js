@@ -57,9 +57,16 @@ describe('Profile: canonical type mapping', () => {
     expect(canonicalType('delete')).toBe('delete')
   })
 
-  it('maps tag and autolink under their feature families', () => {
+  it('maps a tag under the mention feature', () => {
+    // `tag` is not in the canonical vocabulary; `mention` is.
     expect(canonicalType('tag')).toBe('mention')
-    expect(canonicalType('autolink')).toBe('link')
+  })
+
+  it('keeps autolink and admonition as their own canonical names', () => {
+    // profiles.md requires both to be nameable on their own. Folding them into
+    // `link` / `div` made naming them a silent no-op (issue 362).
+    expect(canonicalType('autolink')).toBe('autolink')
+    expect(canonicalType('admonition')).toBe('admonition')
   })
 
   it('returns undefined for types with no canonical mapping', () => {
