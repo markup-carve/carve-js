@@ -157,6 +157,11 @@ function renderList(node: List, ctx: MarkdownContext): string {
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
+  // The authored bullet, not a normalized one. A change of bullet is what
+  // SEPARATES two adjacent lists in CommonMark, so emitting `-` for a `*` list
+  // merges lists the source kept apart - the same section 11 rule the AST
+  // records `bulletChar` for and `renderCarve` already honors (carve#352).
+  const bullet = node.bulletChar ?? '-'
   for (const item of node.items) {
     const indent = '  '.repeat(ctx.listDepth - 1)
     let prefix: string
@@ -164,9 +169,9 @@ function renderList(node: List, ctx: MarkdownContext): string {
       prefix = `${counter}. `
       counter++
     } else if (item.checked !== undefined) {
-      prefix = `- ${item.checked ? '[x]' : '[ ]'} `
+      prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `
     } else {
-      prefix = '- '
+      prefix = `${bullet} `
     }
     const content = trimNonNbsp(renderListItem(item, ctx))
     const lines = content.split('\n')
