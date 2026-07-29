@@ -805,7 +805,24 @@ function normalize(text: string): string {
   // routed through the verbatim scheme before this runs, so what is left here
   // is an escaped space and nothing else.
   const lines = trimNonNbsp(text.replace(/\ue000/g, '\\ ')).split('\n')
-  const cleaned = trimNonNbsp(lines.map((line) => line.replace(/[^\S\u00a0]+$/g, '')).join('\n').replace(/\n{3,}/g, '\n\n'))
+  const swept = lines.map((line, i) => {
+    // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
+    // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
+    // three spaces inside a code block are out of reach and stay intact.
+    if (line.length > 0 && line.replace(/[ \t]+/g, '') === '') return ''
+    // Otherwise strip a line's trailing whitespace only where it CANNOT be
+    // content. At the end of a block the parser drops it too, so the writer
+    // must; before a SOFT BREAK the parser keeps it, and stripping it there
+    // changes the rendered output - `a \nb` renders `<p>a \nb</p>`, so the
+    // stripped form broke carveToHtml(fmt(x)) == carveToHtml(x). carve-rs and
+    // carve-php already restricted this (carve#359, carve#375); this engine did
+    // not, and no corpus case covered an ASCII trailing space before a soft
+    // break, so nothing caught it.
+    const next = lines[i + 1]
+    const endsBlock = next === undefined || next.trim() === ''
+    return endsBlock ? line.replace(/[^\S\u00a0]+$/g, '') : line
+  })
+  const cleaned = trimNonNbsp(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
   return `${restoreVerbatim(cleaned)}\n`
 }
 
