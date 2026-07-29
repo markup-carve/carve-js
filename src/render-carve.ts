@@ -348,25 +348,50 @@ function colonFenceFor(children: BlockNode[]): string {
   return children.some((child) => child.type === 'admonition' || child.type === 'div') ? '::::' : ':::'
 }
 
+/**
+ * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
+ * per-cell `<`/`>`/`~` alignment markers.
+ *
+ * The GFM delimiter row is an accepted alias on input, but it says something
+ * the AST does not: its alignment applies to the WHOLE column, header and body
+ * alike (PART 9 T7), while alignment on the AST belongs to each cell. Writing a
+ * delimiter row for the ordinary shape - an aligned header over unaligned body
+ * cells - brought every body cell back aligned, so `parse(fmt(x)) == parse(x)`
+ * did not hold (issue 359).
+ *
+ * Two header shapes have no native spelling, because `header_cell` in the
+ * grammar is `'=' [alignment_marker] content` and admits neither an attribute
+ * block nor a span marker:
+ *
+ *   | < | b |     a span marker promoted to a header cell
+ *   |{.x} a | b | a header cell carrying attributes
+ *
+ * Those still need a delimiter row to promote the first row. It is emitted BARE
+ * (`|---|---|`), never with colons: the cells keep their own alignment markers,
+ * so the delimiter contributes structure only and cannot spill alignment down
+ * the column.
+ */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
   const columns = node.rows.reduce((max, row) => Math.max(max, row.cells.length), 0)
-  const gfmHeader = node.rows.length > 0 && node.rows[0]!.cells.every((cell) => cell.header)
-  const headerAligns = node.rows[0]?.cells.map((cell) => cell.align) ?? []
+  const first = node.rows[0]
+  const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
+  const needsDelimiter =
+    headerRow && first.cells.some((c) => c.span !== undefined || c.attrs !== undefined)
+
   node.rows.forEach((row, rowIndex) => {
     const cells: RenderedCell[] = []
     for (let i = 0; i < columns; i++) {
       const cell = row.cells[i]
-      const suppressHeader = gfmHeader && rowIndex === 0
-      const suppressAlign = gfmHeader && rowIndex > 0 && cell?.align === headerAligns[i]
-      cells.push(cell ? renderTableCell(cell, ctx, suppressHeader, suppressAlign) : { text: '', tight: false })
+      // In the delimiter form the promoted row is written as ordinary data
+      // cells - the row after it is what makes them headers.
+      const asHeader = !(needsDelimiter && rowIndex === 0)
+      cells.push(cell ? renderTableCell(cell, ctx, asHeader) : { text: '', tight: false })
     }
-    const attrs = renderAttrs(row.attrs)
-    rows.push(renderTableRow(cells, attrs))
+    rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
   })
-  if (gfmHeader) {
-    const sep = Array.from({ length: columns }, (_, i) => tableSeparator(node.rows[0]!.cells[i])).join('|')
-    rows.splice(1, 0, `|${sep}|`)
+  if (needsDelimiter) {
+    rows.splice(1, 0, `|${Array.from({ length: columns }, () => '---').join('|')}|`)
   }
   if (node.caption) rows.push(`^ ${renderInlines(node.caption, ctx)}`)
   return rows.join('\n')
@@ -381,30 +406,12 @@ function renderTableRow(cells: RenderedCell[], attrs: string): string {
   return `|${cells.map((cell) => (cell.tight ? cell.text : ` ${cell.text} `)).join('|')}|${attrs}`
 }
 
-function renderTableCell(
-  cell: TableCell,
-  ctx: CarveContext,
-  suppressHeader: boolean,
-  suppressAlign: boolean,
-): RenderedCell {
+function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): RenderedCell {
   const attrs = renderAttrs(cell.attrs)
   if (cell.span === 'rowspan') return { text: `${attrs}^`, tight: true }
   if (cell.span === 'colspan') return { text: `${attrs}<`, tight: true }
-  const prefix = `${attrs}${cell.header && !suppressHeader ? '=' : ''}${suppressAlign ? '' : alignMarker(cell.align)}`
+  const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${alignMarker(cell.align)}`
   return { text: `${prefix}${renderInlines(cell.children, ctx)}`, tight: prefix !== '' }
-}
-
-function tableSeparator(cell: TableCell | undefined): string {
-  switch (cell?.align) {
-    case 'left':
-      return ':---'
-    case 'right':
-      return '---:'
-    case 'center':
-      return ':---:'
-    default:
-      return '---'
-  }
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {
