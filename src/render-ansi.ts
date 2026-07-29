@@ -34,6 +34,7 @@ export function renderAnsi(ast: Document, _opts: AnsiRenderOptions = {}): string
     blockDepth: 0,
     inlineDepth: 0,
     abbrBudget: new AbbrBudget(ast.srcByteLength),
+    definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -48,6 +49,13 @@ interface AnsiContext {
   inlineDepth: number
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
+  /**
+   * Labels that actually have a definition. A reference without one did not form
+   * a footnote, so it is source text rather than a marker - and must not be
+   * styled as one. The HTML renderer decides this on `node.number`, which this
+   * path never populates because it does no numbering.
+   */
+  definedFootnotes: Set<string>
 }
 
 function style(text: string, codes: string): string {
@@ -379,10 +387,17 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
         return stripControls(node.abbr)
       return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
     }
-    case 'footnote':
-      return node.inline
-        ? `(${renderInlines(node.inline, ctx)})`
-        : style(`[${stripControls(node.id ?? '')}]`, FG_CYAN + BOLD)
+    case 'footnote': {
+      if (node.inline) return `(${renderInlines(node.inline, ctx)})`
+      const id = stripControls(node.id ?? '')
+      // An UNRESOLVED reference stays literal and UNSTYLED, exactly as the HTML
+      // target renders it: the construct did not form, so `[^a]` is ordinary
+      // text. Styling it cyan-bold and dropping the caret announced a footnote
+      // the document does not have. carve-php already did this (carve#352,
+      // corpus 132/133/157/161).
+      if (!ctx.definedFootnotes.has(id)) return `[^${id}]`
+      return style(`[${id}]`, FG_CYAN + BOLD)
+    }
     case 'soft_break':
       return ' '
     case 'hard_break':
