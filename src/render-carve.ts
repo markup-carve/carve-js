@@ -905,15 +905,46 @@ function escapeImageAlt(text: string): string {
   return text.replace(/[\\[\]]/g, '\\$&')
 }
 
+/**
+ * Backslash-escape exactly the characters the destination scan would otherwise
+ * read differently: a parenthesis with no partner, and a backslash sitting in
+ * front of one of the three escapable characters. Balanced parentheses are
+ * left alone -- they re-parse as themselves, and escaping them would be churn
+ * against the minimal-escaping rule in PART 11 section 4.
+ */
+function escapeDestinationEscapes(text: string): string {
+  const openers: number[] = []
+  const unbalanced = new Set<number>()
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '(') openers.push(i)
+    else if (text[i] === ')') {
+      if (openers.length > 0) openers.pop()
+      else unbalanced.add(i)
+    }
+  }
+  for (const i of openers) unbalanced.add(i)
+  let out = ''
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    const escapable = ch === '\\' && (text[i + 1] === '(' || text[i + 1] === ')' || text[i + 1] === '\\')
+    out += unbalanced.has(i) || escapable ? `\\${ch}` : ch
+  }
+  return out
+}
+
 function escapeDestination(text: string): string {
   const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
   const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
-  // A backslash is a literal destination character (no destination escapes),
-  // so it is emitted verbatim -- escaping it would double on re-parse.
   // Whitespace is percent-encoded (it would otherwise end the destination).
-  return text
+  // A parenthesis only needs escaping when it is unbalanced, because a
+  // balanced pair survives the scan as-is -- and leaving it bare is what keeps
+  // the common case (`.../Foo_(bar)`) readable. A backslash is escaped only
+  // in front of the three characters the destination scan treats as escapes,
+  // so backslashes elsewhere in a URL are emitted verbatim.
+  const escaped = escapeDestinationEscapes(text)
+  return escaped
     .replace(/\s/g, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
-    .replace(/[()]/g, (ch) => (sanitizeBlank ? (ch === '(' ? '%28' : '%29') : ch))
+    .replace(/\\?[()]/g, (m) => (sanitizeBlank ? (m.endsWith('(') ? '%28' : '%29') : m))
 }
 
 function escapeQuoted(text: string): string {

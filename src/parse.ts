@@ -3511,7 +3511,60 @@ const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 
 // decides span (valid block, possibly empty) vs literal (invalid content).
 // Destination is non-empty (grammar `link_destination = {...}+`), so `[a]()`
 // is NOT a link -- it stays literal (matches carve-php / carve-rs).
-const RE_LINK_TAIL = /^\(([^)\s]+)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_LINK_REST = /^(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+
+/**
+ * Read a destination out of a link or image tail, starting at the `(`.
+ *
+ * A parenthesis inside a destination is balanced against the one that closes
+ * the tail, so `[a](x(y)z)` is a whole link rather than a truncated one. This
+ * is what djot and CommonMark both do, and URLs that carry parentheses -
+ * Wikipedia and MDN produce them constantly - are the reason they do.
+ *
+ * The scan ends at whitespace, which begins a title, or at a `)` with no
+ * opener left to match. A destination that needs either of those characters
+ * literally escapes it; `\(`, `\)` and `\\` are the only escapes here, so a
+ * backslash in front of anything else stays a literal backslash and URLs full
+ * of them are unaffected.
+ *
+ * Returns the raw destination and where the scan stopped, or null when the
+ * tail does not open with `(`.
+ */
+function scanDestination(tail: string): { dest: string; end: number } | null {
+  if (tail[0] !== '(') return null
+  let dest = ''
+  let depth = 0
+  let i = 1
+  for (; i < tail.length; i++) {
+    const c = tail[i]!
+    if (c === '\\' && (tail[i + 1] === '(' || tail[i + 1] === ')' || tail[i + 1] === '\\')) {
+      dest += tail[i + 1]
+      i++
+      continue
+    }
+    if (c === '(') depth++
+    else if (c === ')') {
+      if (depth === 0) break
+      depth--
+    } else if (/\s/.test(c)) break
+    dest += c
+  }
+  return { dest, end: i }
+}
+
+/**
+ * The whole tail of a link or image: `(destination)`, optionally with a title
+ * and an attribute block. Returns the shape the regex it replaced returned --
+ * full match, destination, the two title spellings, attribute payload -- so
+ * the call sites read the same either way.
+ */
+function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
+  const scanned = scanDestination(tail)
+  if (scanned === null || scanned.dest === '') return null
+  const rest = RE_LINK_REST.exec(tail.slice(scanned.end))
+  if (rest === null) return null
+  return [tail.slice(0, scanned.end + rest[0].length), scanned.dest, rest[1], rest[2], rest[3]]
+}
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
@@ -3588,7 +3641,7 @@ function buildBracketMap(s: string): Record<number, number> {
 
 // Suffix-existence tables used to skip the inline tail regexes when their
 // mandatory close delimiter is absent from the rest of the input. Each tail
-// pattern (RE_LINK_TAIL, RE_SPAN_TAIL, the critic and forced-emphasis
+// pattern (the link tail, RE_SPAN_TAIL, the critic and forced-emphasis
 // patterns) requires a specific literal (`)`, `}`, `+}`, `-}`) inside its
 // match; if no such literal occurs at or after the position where the regex
 // would be anchored, the regex CANNOT match, so running it is pure wasted work.
@@ -4174,7 +4227,7 @@ function scanInlineInner(
         const alt = rest.slice(2, close)
         const tail = rest.slice(close + 1)
         // A link/image tail needs a literal `)`; skip when none lies ahead.
-        const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
+        const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
         if (ml) {
           flush()
           const img: Image = { type: 'image', src: ml[1]!, alt }
@@ -4273,7 +4326,7 @@ function scanInlineInner(
           continue
         }
         // Inline link [text](url "title"){attrs}
-        const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
+        const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
         if (ml) {
           flush()
           const link: Link = {
