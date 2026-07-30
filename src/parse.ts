@@ -3140,12 +3140,20 @@ function parseTable(lexer: Lexer): Table | Figure {
     rawRows.splice(1, 1)
     rowAttrsList.splice(1, 1)
     for (const c of rawRows[0]!) c.header = true
-    for (const rc of rawRows) {
-      rc.forEach((c, i) => {
-        const a = aligns[i]
-        if (a && !c.align) c.align = a
-      })
-    }
+    // Column alignment lands on the HEADER cells only, matching what the native
+    // `|=<` markers produce. Propagating it onto body cells too made the same
+    // logical table parse to two different trees depending on which separator
+    // syntax was used, and the writer then serialized the propagated values as
+    // per-cell markers the author never wrote (carve#352, corpus 09-tables-3).
+    //
+    // Nothing is lost: the HTML renderer already inherits column alignment for a
+    // body cell whose own align is unset, which is how the native path has always
+    // rendered aligned body cells. A genuine per-cell override still sets
+    // `c.align` itself and is untouched here.
+    rawRows[0]!.forEach((c, i) => {
+      const a = aligns[i]
+      if (a && !c.align) c.align = a
+    })
   }
   const rows: TableRow[] = rawRows.map((rc, idx) => {
     const row: TableRow = {
