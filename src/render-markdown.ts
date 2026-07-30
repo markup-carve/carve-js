@@ -169,11 +169,18 @@ function renderList(node: List, ctx: MarkdownContext): string {
   // merges lists the source kept apart - the same section 11 rule the AST
   // records `bulletChar` for and `renderCarve` already honors (carve#352).
   const bullet = node.bulletChar ?? '-'
+  // The authored ordered-list delimiter, for the same reason as the bullet above:
+  // in CommonMark a change of delimiter SEPARATES two adjacent lists, so emitting
+  // `1.` for a `1)` list merges lists the source kept apart. Measured against
+  // commonmark.js - `1. a` followed by `1) c` gives two `<ol>` elements, the same
+  // input with one delimiter gives one. The AST records `delim` and `renderCarve`
+  // already reproduces it (carve#352, corpus 31).
+  const delim = node.delim === ')' ? ')' : '.'
   for (const item of node.items) {
     const indent = '  '.repeat(ctx.listDepth - 1)
     let prefix: string
     if (node.ordered) {
-      prefix = `${counter}. `
+      prefix = `${counter}${delim} `
       counter++
     } else if (item.checked !== undefined) {
       prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `
