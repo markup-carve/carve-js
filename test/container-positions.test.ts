@@ -143,3 +143,41 @@ describe('table rows and cells carry exact spans', () => {
     expect(merged.rows[0]!.cells[0]!.children.map((c) => c.value ?? '').join('')).toBe('a cont')
   })
 })
+
+describe('a figure gives its target a span too', () => {
+  it('spans the image itself, not the image plus caption', () => {
+    const src = '![alt](img.png)\n^ Caption\n'
+    const codepoints = [...src]
+    const figure = parse(src).children[0] as Record<string, any>
+
+    expect(figure.type).toBe('figure')
+    // The block loop attaches a span to the FIGURE; without this the node it
+    // wraps had none at all (PART 12 §4).
+    expect(figure.target.pos).toBeDefined()
+    expect(codepoints.slice(figure.target.pos.startOffset, figure.target.pos.endOffset).join('')).toBe(
+      '![alt](img.png)',
+    )
+    // And the figure still covers the caption.
+    expect(codepoints.slice(figure.pos.startOffset, figure.pos.endOffset).join('')).toContain('^ Caption')
+  })
+
+  it('ends the quoted block where the attribution begins', () => {
+    const src = '> Stay hungry, stay foolish.\n^ Steve Jobs\n'
+    const codepoints = [...src]
+    const figure = parse(src).children[0] as Record<string, any>
+
+    expect(figure.target.type).toBe('block_quote')
+    expect(codepoints.slice(figure.target.pos.startOffset, figure.target.pos.endOffset).join('')).toBe(
+      '> Stay hungry, stay foolish.',
+    )
+  })
+
+  it('leaves an uncaptioned block exactly as it was', () => {
+    // The target only needs its own span when a figure wraps it; a bare block
+    // still gets one from the block loop.
+    const src = '![alt](img.png)\n'
+    const image = parse(src).children[0] as Record<string, any>
+    expect(image.type).toBe('image')
+    expect(image.pos).toBeDefined()
+  })
+})
