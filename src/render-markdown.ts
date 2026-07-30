@@ -13,6 +13,7 @@ import type {
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
 
 /**
  * Whether smart typography renders as its glyph or as the source run the author
@@ -545,14 +546,21 @@ function escapeText(text: string): string {
   return text.replace(/[\\`*_[\]#]/g, (ch) => (ch === '_' ? UNDERSCORE_ESCAPE : `\\${ch}`))
 }
 
-/** Dangerous URL schemes blanked on Markdown link/image destinations, mirroring
- *  the HTML renderer so a `javascript:` URL does not survive into Markdown (and
- *  from there a downstream Markdown -> HTML render). */
-const MD_DANGEROUS_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file'])
+/**
+ * Dangerous URL schemes blanked on Markdown link/image destinations.
+ *
+ * The set and the probe come from the HTML renderer rather than being restated
+ * here. A local copy listed only the four script/inline-content/local-file
+ * schemes and probed with an ASCII-only strip, so the twenty OS
+ * protocol-handler schemes -- `ms-msdt`, `search-ms`, `jar`, `vscode` and the
+ * rest -- survived into Markdown, and from there into whatever renders it. That
+ * is not a narrower policy, it is the same sink one step removed (PART 9 §25,
+ * carve#385).
+ */
 function sanitizeMdUrl(url: string): string {
-  const probe = url.replace(/[\u0000-\u0020]/g, '')
+  const probe = url.replace(SCHEME_PROBE_STRIP_RE, '')
   const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
-  if (m && MD_DANGEROUS_SCHEMES.has(m[1].toLowerCase())) return ''
+  if (m && DANGEROUS_URL_SCHEMES.includes(m[1].toLowerCase())) return ''
   return url
 }
 
