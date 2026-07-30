@@ -2267,6 +2267,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const subLexer = nestedSubLexer(lexer, inner.join('\n'), firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'block_quote', children }
+  const quoteEndIndex = lexer.pos
   // Optional caption with ^
   // Allow one blank line between
   let lookahead = 0
@@ -2278,6 +2279,10 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
+      // The block loop spans the FIGURE, so the quote it wraps would otherwise
+      // have no position of its own (PART 12 section 4). It ends where the
+      // caption begins.
+      attachBlockPos(lexer, bq, firstLineIndex, quoteEndIndex)
       return {
         type: 'figure',
         target: bq,
@@ -2329,6 +2334,7 @@ function imageIsBlock(lexer: Lexer): boolean {
 }
 
 function parseBlockImage(lexer: Lexer): Image | Figure {
+  const imageLineIndex = lexer.pos
   const line = lexer.consume()
   const m = RE_BARE_IMAGE.exec(line)!
   const img: Image = { type: 'image', src: m[2]!, alt: m[1]! }
@@ -2345,6 +2351,11 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
+      // The block loop attaches a span to whatever this returns, so a figure
+      // gets one and its TARGET would be left without - PART 12 section 4 wants
+      // one on every node but the root. The image occupies exactly its own line;
+      // the figure spans that plus the caption.
+      attachBlockPos(lexer, img, imageLineIndex, imageLineIndex + 1)
       return {
         type: 'figure',
         target: img,
