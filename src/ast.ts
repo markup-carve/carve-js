@@ -653,7 +653,7 @@ export interface CriticSubstitute extends BaseNode {
 }
 
 export interface CriticComment extends BaseNode {
-  type: 'critic-comment'
+  type: 'critic_comment'
   text: string
 }
 

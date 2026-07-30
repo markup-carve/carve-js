@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { carveToHtml } from '../src/index.js'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,14 +30,15 @@ function declaredTypes(): string[] {
 }
 
 /*
- * Types still awaiting a spec decision, so still hyphenated. Each needs a
- * resolution rather than an indefinite exemption:
+ * Types still awaiting a spec decision, so still hyphenated.
  *
- * - critic-comment: whether CriticMarkup's comment folds into `comment` or
- *   becomes `critic_comment`. Folding would lose which syntax the author
- *   wrote, the same objection that keeps `autolink` separate from `link`.
+ * Empty, and worth keeping that way. The last entry was `critic-comment`: the
+ * open question was whether CriticMarkup's comment folds into `comment` or
+ * becomes `critic_comment`, and it resolved to the latter - folding would lose
+ * which syntax the author wrote, the same objection that keeps `autolink`
+ * separate from `link` (carve#401).
  */
-const PENDING_SPEC_DECISION = new Set(['critic-comment'])
+const PENDING_SPEC_DECISION = new Set<string>([])
 
 describe('AST node-type vocabulary', () => {
   it('finds the declared types', () => {
@@ -64,9 +66,20 @@ describe('AST node-type vocabulary', () => {
       'critic-insert',
       'critic-delete',
       'critic-substitute',
+      'critic-comment',
     ]
     const declared = new Set(declaredTypes())
     expect(renamed.filter((type) => declared.has(type))).toEqual([])
+  })
+
+  it('keeps the rendered CSS class hyphenated', () => {
+    // The AST type is `critic_comment`, the CSS class stays `critic-comment`.
+    // They look like the same name mid-rename, but they are different surfaces:
+    // the class is user-visible styling that the docs theme, the Prism grammar
+    // and the published examples all select on, so renaming it in sympathy with
+    // the node type would break stylesheets for no gain.
+    expect(carveToHtml('a {# note #} b\n')).toContain('<span class="critic-comment">')
+    expect(declaredTypes()).toContain('critic_comment')
   })
 
   it('keeps the types the spec adopted from carve-js', () => {

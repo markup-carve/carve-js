@@ -5035,7 +5035,7 @@ function scanInlineInner(
       const cmt = hasBrace ? RE_CRITIC_CMT.exec(rest) : null
       if (cmt) {
         flush()
-        out.push(withPos({ type: 'critic-comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
+        out.push(withPos({ type: 'critic_comment', text: cmt[1]! } as CriticComment, source, text, i, i + cmt[0].length))
         i += cmt[0].length
         continue
       }
