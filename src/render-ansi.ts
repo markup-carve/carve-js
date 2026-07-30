@@ -328,8 +328,19 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return node.value
     case 'emphasis':
       return style(renderInlines(node.children, ctx), ITALIC)
-    case 'strong':
+    case 'strong': {
+      // The combined bold-italic form is ONE construct, so it gets one style run
+      // and one reset. Rendering it as nested strong-around-emphasis emitted a
+      // reset per level (`ESC[1m ESC[3m x ESC[0m ESC[0m`); the second is
+      // redundant, since a reset clears every attribute. carve-rs, which carries
+      // bold-italic as a single kind, always emitted one (carve#352, corpus
+      // 01-emphasis and both 128-bold-italic cases).
+      const inner = node.children[0]
+      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis') {
+        return style(renderInlines(inner.children, ctx), BOLD + ITALIC)
+      }
       return style(renderInlines(node.children, ctx), BOLD)
+    }
     case 'underline':
       return style(renderInlines(node.children, ctx), UNDERLINE)
     case 'strike':
