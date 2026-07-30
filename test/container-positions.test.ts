@@ -92,3 +92,54 @@ describe('inline positions inside containers', () => {
     expect(() => parse('| a | b |\n+ cont | more |\n')).not.toThrow()
   })
 })
+
+describe('table rows and cells carry exact spans', () => {
+  const src = '| aaa | bbb |\n| ccc | ddd |\n'
+  const table = () => parse(src).children[0] as { rows: Array<Record<string, any>> }
+
+  it('gives every cell a span that slices back to its own source', () => {
+    const codepoints = [...src]
+    for (const row of table().rows) {
+      for (const cell of row.cells) {
+        expect(cell.pos).toBeDefined()
+        const slice = codepoints.slice(cell.pos.startOffset, cell.pos.endOffset).join('')
+        // The cell's source region, delimiters excluded, padding kept.
+        expect(src).toContain(slice)
+        expect(slice.trim()).not.toBe('')
+      }
+    }
+  })
+
+  it('places cells at the right columns', () => {
+    const [first, second] = table().rows[0]!.cells
+    // `| aaa | bbb |` - the pipe is column 1, so the first cell opens at 2.
+    expect(first.pos.startColumn).toBe(2)
+    expect(second.pos.startColumn).toBe(8)
+  })
+
+  it('spans a row from its first cell to its last', () => {
+    const row = table().rows[0]!
+    const codepoints = [...src]
+    expect(codepoints.slice(row.pos.startOffset, row.pos.endOffset).join('')).toBe(' aaa | bbb ')
+  })
+
+  it('omits the span when a continuation row merges into a cell', () => {
+    // `+ cont` appends to the previous row's cells, so their content comes from
+    // two non-adjacent lines and no single span covers it. PART 12 §4 forbids
+    // inventing one, so there is none rather than a range spanning the join.
+    const merged = parse('| a | b |\n+ cont | more |\n').children[0] as {
+      rows: Array<Record<string, any>>
+    }
+    const row = merged.rows[0]!
+    expect(row.cells[0]!.pos).toBeUndefined()
+    expect(row.pos).toBeUndefined()
+  })
+
+  it('still resolves the merged content itself', () => {
+    // Losing the span must not lose the text.
+    const merged = parse('| a | b |\n+ cont | more |\n').children[0] as {
+      rows: Array<{ cells: Array<{ children: Array<{ value?: string }> }> }>
+    }
+    expect(merged.rows[0]!.cells[0]!.children.map((c) => c.value ?? '').join('')).toBe('a cont')
+  })
+})
