@@ -23,6 +23,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   non-http URLs are left alone. Note the behavior change: Markdown that
   contained Carve inline syntax and previously passed through verbatim is now
   escaped.
+
+- **A `%%%` comment opener with trailing text no longer leaks the comment body
+  and drops the next block.** `%%% html` and `%%% notes` were not accepted as
+  fence lines, so the `%%` line-comment rule ate the opener, the body rendered
+  as an ordinary paragraph, and the following `%%%` opened an unterminated
+  block that swallowed the rest of the document. A comment fence is now a
+  delimiter plus an insignificant tail: only the leading run of `%` is
+  structural, so `%%% TODO` opens and `%%% end` closes. Percent fences carry no
+  info string - a raw block is a code fence with `=FORMAT` - so `%%% html` is a
+  comment and its body stays hidden.
+
+  An opener with no matching closer ahead now opens nothing and degrades to a
+  line comment, so following blocks still render instead of vanishing, matching
+  the existing `:::` rule. An opener's tail is kept as the body's first line so
+  `fmt` round-trips it; a closer's tail is dropped (carve#463, PART 9 §28).
 - **The canonical writer no longer emits a code fence's title twice.** The
   opener's quoted title is resolved onto `attrs.title` at parse time so it
   reaches every consumer, but the fence carries it too - and the writer emitted

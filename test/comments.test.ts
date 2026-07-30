@@ -47,3 +47,79 @@ describe('trailing line comments', () => {
     expect(carveToHtml('x\n  %% c\ny').trim()).toBe('<p>x</p>\n<p>y</p>')
   })
 })
+
+describe('block comment fence lines (PART 9 §28)', () => {
+  it('treats trailing text on the opener as insignificant', () => {
+    // `%%% html` is a comment fence, NOT a raw block: `%%%` carries no info
+    // string (a raw block is a code fence with an `=FORMAT` info string). The
+    // body stays hidden and the following block still renders.
+    expect(carveToHtml('before\n\n%%% html\nsecret\n%%%\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>after</p>',
+    )
+    expect(carveToHtml('before\n\n%%% TODO\nsecret\n%%%\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>after</p>',
+    )
+  })
+
+  it('treats trailing text on the closer as insignificant', () => {
+    expect(carveToHtml('before\n\n%%%\nsecret\n%%% end\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>after</p>',
+    )
+  })
+
+  it('needs no space before the trailing text', () => {
+    expect(carveToHtml('before\n\n%%%html\nsecret\n%%%\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>after</p>',
+    )
+  })
+
+  it('matches the closer on exact delimiter length, so longer fences nest', () => {
+    expect(carveToHtml('before\n\n%%%% html\nhidden %%% inner\n%%%%\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>after</p>',
+    )
+  })
+
+  it('does not open a block when no matching closer exists ahead', () => {
+    // Degrades to a `%%` line comment, so every following block still renders
+    // instead of being swallowed to EOF.
+    expect(carveToHtml('before\n\n%%% TODO\nsecret\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+    )
+    expect(carveToHtml('before\n\n%%%\nsecret\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+    )
+  })
+
+  it('does not treat a too-short closer as closing a longer fence', () => {
+    expect(carveToHtml('before\n\n%%%%\nsecret\n%%%\n\nafter').trim()).toBe(
+      '<p>before</p>\n<p>secret</p>\n<p>after</p>',
+    )
+  })
+
+  it('keeps the opener tail in the body so fmt round-trips it', () => {
+    // The tail is comment content, so it renders nothing but survives fmt.
+    expect(carveToHtml('%%% TODO\nx\n%%%\n\nafter').trim()).toBe('<p>after</p>')
+  })
+
+  it('stays linear on many unclosed openers', () => {
+    // The closer lookahead scans to EOF per opener; without the per-length
+    // negative cache this input is O(n^2).
+    const build = (n: number) => '%%% x\n'.repeat(n) + 'tail\n'
+    const timeMin = (fn: () => void, runs = 5) => {
+      let best = Infinity
+      for (let r = 0; r < runs; r++) {
+        const t = performance.now()
+        fn()
+        best = Math.min(best, performance.now() - t)
+      }
+      return best
+    }
+    const small = build(2000)
+    const large = build(4000)
+    const tSmall = timeMin(() => carveToHtml(small))
+    const tLarge = timeMin(() => carveToHtml(large))
+    expect(tSmall).toBeLessThan(2000)
+    expect(tLarge).toBeLessThan(2000)
+    expect(tLarge / Math.max(tSmall, 1)).toBeLessThan(6)
+  })
+})
