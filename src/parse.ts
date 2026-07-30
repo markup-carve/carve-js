@@ -464,6 +464,20 @@ class Lexer {
     return (this.linePrefixWidths?.[lineIndex] ?? 0) + 1
   }
 
+  /**
+   * Whether `lineOffset` returns a DOCUMENT offset rather than one into this
+   * lexer's own text.
+   *
+   * True at the root, and for a sub-lexer whose lines were mapped back (see
+   * attachDocumentOffsets). An unmapped sub-lexer - a container whose lines were
+   * reconstructed rather than stripped - has offsets that are only meaningful
+   * locally, and emitting them as document positions is the invented value PART
+   * 12 section 4 forbids.
+   */
+  get hasDocumentOffsets(): boolean {
+    return !this.nested || this.sourceOffsetMap !== undefined
+  }
+
   lineNumber(lineIndex: number): number {
     return this.sourceLineMap?.[lineIndex] ?? this.lineNumberOffset + lineIndex + 1
   }
@@ -524,6 +538,10 @@ function nestedSubLexer(
  * behavior they had.
  */
 function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number): void {
+  // A parent whose own offsets are local cannot anchor a child: the child would
+  // inherit local numbers and believe they were document ones, which is how a
+  // list inside a `+`-continued blockquote reported "\n- i" for the text "item".
+  if (!parent.hasDocumentOffsets) return
   const offsets: number[] = []
   const widths: number[] = []
 
@@ -1308,6 +1326,7 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
   const raw = lexer.peek()!
   const firstLead = raw.match(/^[ \t]+/)?.[0].length ?? 0
   const inline = parseInline(raw.replace(/^[ \t]+/, ''), lexer.abbrDefs, lexer.linkDefs, {
+    anchored: lexer.hasDocumentOffsets,
     baseOffset: lexer.lineOffset(lineIndex) + firstLead,
     startLine: lexer.lineNumber(lineIndex),
     startColumn: lexer.lineStartColumn(lineIndex) + firstLead,
@@ -1413,6 +1432,7 @@ function parseHeading(lexer: Lexer): Heading {
   // Column where the content starts on the first line (the marker + spaces).
   const textColumn = line.length - line.replace(/^#{1,6} +/, '').length + 1
   node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+    anchored: lexer.hasDocumentOffsets,
     baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
     startLine: lexer.lineNumber(lineIndex),
     startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
@@ -2037,6 +2057,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       }
       terms.push(
         parseInline(termText, lexer.abbrDefs, lexer.linkDefs, {
+          anchored: lexer.hasDocumentOffsets,
           baseOffset: lexer.lineOffset(termLineIndex) + lexer.lines[termLineIndex]!.indexOf(t[1]!),
           startLine: lexer.lineNumber(termLineIndex),
           startColumn:
@@ -3308,6 +3329,17 @@ interface RawCell {
    * section 4 forbids inventing one.
    */
   pos?: Position
+  /**
+   * Anchor for the cell's INLINE content, set only when `raw` was VERIFIED to
+   * appear verbatim at that point in the row line.
+   *
+   * Not every cell qualifies: `\|` is two source characters for one content
+   * character, so a cell containing an escaped pipe drifts after it. Rather than
+   * detect that syntactically, the anchor is kept only when the document text at
+   * the computed offset equals the content - a check that cannot pass for a case
+   * this does not handle.
+   */
+  inlineAnchor?: InlineSource
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
@@ -3368,13 +3400,18 @@ function parseTable(lexer: Lexer): Table | Figure {
         if (!frag || !target || target.span) return
         target.raw = target.raw ? `${target.raw} ${frag}` : frag
         // The cell's content now comes from two non-adjacent lines, so no single
-        // span covers it.
+        // span covers it and no single anchor locates its inline content.
         delete target.pos
+        delete target.inlineAnchor
       })
       continue
     }
     lexer.consume()
     const { attrs: rowAttrs, body: rowBody } = rowAttrsFromLine(line)
+    // Positions are only emitted when this lexer can express a document offset.
+    // Verifying the content against the local line is not enough: inside an
+    // unmapped container the check passes while the offset means something else.
+    const canPosition = lexer.hasDocumentOffsets
     const lineOffset = lexer.lineOffset(lineIndex)
     const lineNo = lexer.lineNumber(lineIndex)
     const lineCol = lexer.lineStartColumn(lineIndex)
@@ -3384,13 +3421,26 @@ function parseTable(lexer: Lexer): Table | Figure {
       if (span) c.span = span
       if (align) c.align = align
       if (attrs) c.attrs = attrs
-      c.pos = {
-        startLine: lineNo,
-        endLine: lineNo,
-        startColumn: lineCol + start,
-        endColumn: lineCol + start + src.length,
-        startOffset: lineOffset + start,
-        endOffset: lineOffset + start + src.length,
+      if (canPosition) {
+        c.pos = {
+          startLine: lineNo,
+          endLine: lineNo,
+          startColumn: lineCol + start,
+          endColumn: lineCol + start + src.length,
+          startOffset: lineOffset + start,
+          endOffset: lineOffset + start + src.length,
+        }
+      }
+      // Anchor the cell's inline content, but only after checking the content is
+      // where we think it is. `\|` unescapes to one character, so a cell holding
+      // an escaped pipe is not a verbatim slice and gets no anchor.
+      const within = content === '' || !canPosition ? -1 : src.indexOf(content)
+      if (within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
+        c.inlineAnchor = inlineSource({
+          baseOffset: lineOffset + start + within,
+          startLine: lineNo,
+          startColumn: lineCol + start + within,
+        })
       }
       return c
     })
@@ -3444,7 +3494,9 @@ function parseTable(lexer: Lexer): Table | Figure {
           header: c.header,
           children: c.span
             ? []
-            : stripPositions(parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
+            : c.inlineAnchor
+              ? parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, c.inlineAnchor)
+              : stripPositions(parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
         }
         if (c.span) cell.span = c.span
         if (c.align) cell.align = c.align
@@ -3745,6 +3797,7 @@ function parseParagraph(lexer: Lexer): Paragraph {
   return {
     type: 'paragraph',
     children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      anchored: lexer.hasDocumentOffsets,
       baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
       startLine: lexer.lineNumber(startLineIndex),
       startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
@@ -4271,6 +4324,17 @@ interface InlineSource {
    * exists and inventing one is what PART 12 section 4 forbids.
    */
   lineAnchors?: Array<{ offset: number; column: number }>
+  /**
+   * False when this text cannot be located in the document at all, so no `pos`
+   * is emitted for anything scanned from it.
+   *
+   * A nested sub-lexer whose lines could not be mapped back (a blockquote with a
+   * `+` continuation marker, a definition list that re-indents its body) has
+   * offsets that are only meaningful inside its own text. Emitting those as
+   * document positions is the invented value PART 12 section 4 forbids, and it
+   * is what produced spans like "> quot" for the text "quoted".
+   */
+  anchored?: boolean
 }
 
 function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
@@ -4280,6 +4344,7 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
     startColumn: overrides.startColumn ?? 1,
   }
   if (overrides.lineAnchors) source.lineAnchors = overrides.lineAnchors
+  if (overrides.anchored === false) source.anchored = false
   return source
 }
 
@@ -4814,7 +4879,7 @@ function scanInlineInner(
       if (cr) {
         flush()
         const cref: CrossRef = { type: 'heading_ref', target: cr[1]! }
-        cref.pos = sourcePos(source, text, i, i + cr[0].length)
+        if (source.anchored !== false) cref.pos = sourcePos(source, text, i, i + cr[0].length)
         out.push(cref)
         i += cr[0].length
         continue
@@ -5128,6 +5193,7 @@ function withPos<T extends InlineNode>(
   start: number,
   end: number,
 ): T {
+  if (source.anchored === false) return node
   node.pos = sourcePos(source, text, start, end)
   return node
 }
