@@ -141,7 +141,16 @@ export {
   type ProfileViolation,
 } from './profile.js'
 export { applyProfile, type ProfileFilterResult } from './profile-filter.js'
-export { stampCarve, buildMarker, stripTrailingMarker, readStamp, needsReview, type StampForm, type Stamp } from './stamp.js'
+export {
+  stampCarve,
+  buildMarker,
+  stripTrailingMarker,
+  readStamp,
+  needsReview,
+  compareSpecVersions,
+  type StampForm,
+  type Stamp,
+} from './stamp.js'
 export { SPEC_VERSION, LIB_VERSION } from './version.js'
 
 /**
