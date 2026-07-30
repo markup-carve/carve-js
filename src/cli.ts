@@ -31,8 +31,8 @@ import {
   type MigrationWarning,
   type ProfileOptions,
 } from './index.js'
-import { stampCarve, type StampForm } from './stamp.js'
-import { LIB_VERSION } from './version.js'
+import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
+import { LIB_VERSION, SPEC_VERSION } from './version.js'
 
 /** Injectable I/O so `run` is testable without real fs / stdin / exit. */
 export interface CliIO {
@@ -65,6 +65,8 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --markdown     Markdown (--md)
     --plain        plain text (--plain-text)
     --ansi         ANSI-colored terminal text
+    --stamp-info   report the document's provenance marker
+    --stamp-check  exit 1 when the document predates this spec version
     --carve        canonical Carve source
 
   safety options (for untrusted input; combine freely with a format above):
@@ -341,6 +343,8 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     ansi?: boolean
     md?: boolean
     'plain-text'?: boolean
+    'stamp-info'?: boolean
+    'stamp-check'?: boolean
     'no-raw-html'?: boolean
     safe?: boolean
     profile?: string
@@ -359,6 +363,8 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         ansi: { type: 'boolean' },
         md: { type: 'boolean' },
         'plain-text': { type: 'boolean' },
+        'stamp-info': { type: 'boolean' },
+        'stamp-check': { type: 'boolean' },
         'no-raw-html': { type: 'boolean' },
         safe: { type: 'boolean' },
         profile: { type: 'string' },
@@ -442,6 +448,28 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       io.writeErr(`carve render: cannot read ${positionals[0]}\n`)
       return 2
     }
+  }
+
+  // The stamp modes answer a question about the document rather than rendering
+  // it, so they report and return before any renderer runs.
+  if (values['stamp-info'] || values['stamp-check']) {
+    const stamp = readStamp(src)
+    if (stamp === null) {
+      io.write(`unstamped (spec version unknown; this engine targets ${SPEC_VERSION})\n`)
+    } else {
+      io.write(
+        `carve-version: ${stamp.version}\n` +
+          `generated-by: ${stamp.generatedBy ?? '(unrecorded)'}\n` +
+          `this engine targets: ${SPEC_VERSION}\n`,
+      )
+    }
+
+    if (values['stamp-check'] && needsReview(src)) {
+      io.writeErr(`Review the [behavior] changelog entries between that version and ${SPEC_VERSION}.\n`)
+      return 1
+    }
+
+    return 0
   }
 
   let out: string

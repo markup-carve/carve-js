@@ -52,4 +52,33 @@ describe('the authored bold-italic spelling survives a format', () => {
       expect(carveToHtml(once)).toBe(carveToHtml(src))
     }
   })
+
+  it('gives the synthesized inner emphasis a truthful span', () => {
+    // The inner emphasis comes from the single `/*…*/` token rather than its own
+    // delimiter pair, so nothing else assigned it a `pos`. PART 12 section 4
+    // requires one on every node but the document root, and a consumer cannot
+    // tell a synthesized node from a parsed one.
+    const src = 'x /*bold italic*/ y'
+    const paragraph = parse(src).children[0] as { children: Array<Record<string, any>> }
+    const strong = paragraph.children.find((c) => c.type === 'strong')!
+    const emphasis = strong.children[0]!
+
+    expect(emphasis.type).toBe('emphasis')
+    expect(emphasis.pos).toBeDefined()
+
+    // Truthful, not merely present: the emphasis spans the CONTENT, the strong
+    // spans the delimiters too.
+    expect(src.slice(emphasis.pos.startOffset, emphasis.pos.endOffset)).toBe('bold italic')
+    expect(src.slice(strong.pos.startOffset, strong.pos.endOffset)).toBe('/*bold italic*/')
+  })
+
+  it('gives the nested spelling the same inner span', () => {
+    const src = 'x */bold italic/* y'
+    const paragraph = parse(src).children[0] as { children: Array<Record<string, any>> }
+    const strong = paragraph.children.find((c) => c.type === 'strong')!
+    const emphasis = strong.children.find((c) => c.type === 'emphasis')!
+
+    expect(emphasis.pos).toBeDefined()
+    expect(src.slice(emphasis.pos.startOffset, emphasis.pos.endOffset)).toContain('bold italic')
+  })
 })
