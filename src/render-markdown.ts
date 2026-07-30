@@ -104,7 +104,14 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
-      const info = markdownFenceInfo(node.lang, node.header, node.label)
+      // The EFFECTIVE title, not the authored header. An attribute line above the
+      // fence overrides a title written in the header, and the HTML target uses
+      // the winner - so emitting `node.header` here described the document
+      // differently in the two targets, announcing a title that had lost
+      // (carve#352, corpus 11-fenced-code-10). The parser resolves the override
+      // into `attrs`, so that is where the answer already is.
+      const effectiveTitle = node.attrs?.keyValues?.['title'] ?? node.header
+      const info = markdownFenceInfo(node.lang, effectiveTitle, node.label)
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
