@@ -27,21 +27,24 @@ export interface Position {
   startLine: number
   /** 1-based line number, inclusive */
   endLine: number
-  /** 1-based column number, inclusive */
+  /** 1-based column, counted in CODEPOINTS (PART 12 §4), inclusive */
   startColumn?: number
-  /** 1-based column number, exclusive */
+  /** 1-based column, counted in CODEPOINTS (PART 12 §4), exclusive */
   endColumn?: number
   /**
-   * 0-based BYTE offset into the source, inclusive (PART 12 §4).
+   * 0-based CODEPOINT offset into the source, inclusive (PART 12 §4).
    *
-   * Bytes rather than UTF-16 code units so an AST is exchangeable: carve-rs and
-   * carve-php index their strings by byte, and the two units agree only for
-   * ASCII - which is why the difference went unnoticed. A JavaScript consumer
-   * slicing the source string must convert; `lintCarve` already reports UTF-16
-   * for exactly that reason.
+   * Codepoints rather than UTF-16 code units or bytes so an AST is exchangeable
+   * and every index lands on a character boundary - a byte offset can point
+   * inside a UTF-8 sequence, a UTF-16 offset inside a surrogate pair. Matches
+   * djot.lua, which converts away from its native byte index for this reason.
+   *
+   * Agrees with the UTF-16 index across the whole Basic Multilingual Plane, so
+   * only astral characters differ. A JavaScript consumer slicing the source
+   * string must convert; `lintCarve` already reports UTF-16 for that reason.
    */
   startOffset?: number
-  /** 0-based BYTE offset into the source, exclusive (PART 12 §4). */
+  /** 0-based CODEPOINT offset into the source, exclusive (PART 12 §4). */
   endOffset?: number
 }
 
