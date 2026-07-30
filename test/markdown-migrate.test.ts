@@ -432,9 +432,76 @@ describe('markdownToCarve — more block spacing', () => {
     expect(conv('  > quote')).toBe('> quote')
   })
 
-  it('leaves an already well-spaced document unchanged', () => {
+  it('leaves an already well-spaced document structure unchanged', () => {
+    // The slash pair is escaped: `/para/` is prose in Markdown, and only the
+    // escaped form renders as the prose it was. The spacing is what this case
+    // is about, and that is untouched.
     const md = '# Title\n\nA /para/ here.\n\n- one\n- two\n'
-    expect(conv(md)).toBe('# Title\n\nA /para/ here.\n\n- one\n- two\n')
+    expect(conv(md)).toBe('# Title\n\nA \\/para/ here.\n\n- one\n- two\n')
+  })
+})
+
+describe('markdownToCarve — Carve-only inline syntax is literal in Markdown', () => {
+  const html = (md: string): string => carveToHtml(conv(md)).trim()
+
+  // CommonMark defines none of these, so they are plain text on the way in.
+  // Before this, `a {,y,} b` rendered a subscript and `a %%c%% b` lost its
+  // text outright, since `%%` opens a comment.
+  it.each([
+    ['a {^x^} b', '<p>a {^x^} b</p>'],
+    ['a {,x,} b', '<p>a {,x,} b</p>'],
+    ['a {=x=} b', '<p>a {=x=} b</p>'],
+    ['a {+x+} b', '<p>a {+x+} b</p>'],
+    ['a {-x-} b', '<p>a {-x-} b</p>'],
+    ['a {~x~} b', '<p>a {~x~} b</p>'],
+    ['a {/x/} b', '<p>a {/x/} b</p>'],
+    ['a /it/ b', '<p>a /it/ b</p>'],
+    ['a =hl= b', '<p>a =hl= b</p>'],
+    ['a ~s~ b', '<p>a ~s~ b</p>'],
+    ['a %%c%% b', '<p>a %%c%% b</p>'],
+    ['%% whole line', '<p>%% whole line</p>'],
+    // One pass escapes only the outer brace, and the inner pair would then
+    // render as a subscript inside otherwise literal text.
+    ['nested {^a{,b,}c^} d', '<p>nested {^a{,b,}c^} d</p>'],
+    ['two {^a^} and {,b,} x', '<p>two {^a^} and {,b,} x</p>'],
+  ])('keeps %j literal', (md, expected) => {
+    expect(html(md)).toBe(expected)
+  })
+
+  // Over-escaping is its own defect, so the shapes Carve already leaves alone
+  // are asserted rather than assumed. The non-http URLs matter: only http and
+  // https are protected before the escape pass, and escaping the second slash
+  // of `//` would free the first one to open emphasis.
+  it.each([
+    'path a/b/c d',
+    'and/or maybe',
+    '1/2 and 3/4',
+    'ratio 16/9',
+    'C:/path/to/file',
+    'x = y = z',
+    'approx ~5 items',
+    'a 50% of b',
+    'k {a=b} v',
+    'c {.cls} d',
+    'ftp://x/',
+    '//host/path',
+    'file:///etc/hosts',
+    'a //b// c',
+  ])('does not escape %j', (md) => {
+    expect(conv(md)).toBe(md)
+  })
+
+  it.each([
+    ['**b**', '<strong>b</strong>'],
+    ['_em_', '<em>em</em>'],
+    ['~~s~~', '<s>s</s>'],
+    ['==h==', '<mark>h</mark>'],
+    ['^sup^', '<sup>sup</sup>'],
+    ['<sub>x</sub>', '<sub>x</sub>'],
+    ['<ins>x</ins>', '<ins>x</ins>'],
+    ['`*x*`', '<code>*x*</code>'],
+  ])('still converts %j', (md, expected) => {
+    expect(html(md)).toContain(expected)
   })
 })
 
