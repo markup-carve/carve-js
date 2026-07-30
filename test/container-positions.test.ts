@@ -181,3 +181,51 @@ describe('a figure gives its target a span too', () => {
     expect(image.pos).toBeDefined()
   })
 })
+
+describe('table cells anchor their inline content', () => {
+  it('gives inline nodes inside a cell spans that slice back', () => {
+    const src = '| a *b* c | d |\n'
+    const codepoints = [...src]
+    const table = parse(src).children[0] as { rows: Array<Record<string, any>> }
+    for (const cell of table.rows[0]!.cells) {
+      for (const node of cell.children) {
+        if (node.type !== 'text') continue
+        expect(node.pos).toBeDefined()
+        expect(codepoints.slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
+      }
+    }
+  })
+
+  it('declines to anchor a cell holding an escaped pipe', () => {
+    // `\|` is two source characters for one content character, so the cell text
+    // is not a verbatim slice and offsets would drift past it. The anchor is
+    // kept only when the source at the computed offset MATCHES the content, so
+    // this case fails that check rather than being detected syntactically.
+    const src = '| a \\| b | c |\n'
+    const table = parse(src).children[0] as { rows: Array<Record<string, any>> }
+    const [escaped, plain] = table.rows[0]!.cells
+    expect(escaped.children.find((c: any) => c.type === 'text')?.pos).toBeUndefined()
+    // The neighbouring cell is unaffected.
+    expect(plain.children.find((c: any) => c.type === 'text')?.pos).toBeDefined()
+  })
+
+  it('emits no inline position inside an unmappable container', () => {
+    // A `+` continuation marker means the quote's lines are not a suffix of the
+    // document's, so nothing inside it can be located. Absent beats wrong.
+    const src = '> quoted\n+\n- item\n> more\n'
+    const codepoints = [...src]
+    const walk = (n: any, out: any[] = []): any[] => {
+      if (!n || typeof n !== 'object') return out
+      if (Array.isArray(n)) { n.forEach((c) => walk(c, out)); return out }
+      if (n.type === 'text') out.push(n)
+      for (const k of Object.keys(n)) if (k !== 'pos') walk(n[k], out)
+      return out
+    }
+    for (const node of walk(parse(src))) {
+      // Either no position, or one that is actually correct - never a wrong one.
+      if (node.pos?.startOffset !== undefined) {
+        expect(codepoints.slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
+      }
+    }
+  })
+})
