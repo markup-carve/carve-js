@@ -9,6 +9,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A document full of comment-fence openers with distinct widths no longer
+  rescans itself per opener.** The closer lookahead added in carve#463 scanned to
+  end of input for every `%%%` opener. Where every opener has a different width
+  no line can close any other, so every scan ran to the end: ~1.9 MiB of such
+  input took 8.5s, growing about 7x per 4x of input. It is now answered from a
+  width to last-index map built in one pass, which takes the same input to 67ms.
+  Since a closer must match the opener width exactly, any later line of that
+  width IS a valid closer, so the map is exact rather than an approximation.
+
+  The per-width negative cache that shipped with carve#463 is removed. It could
+  never help: its hit condition is a second opener of the same width after a
+  proven-no-closer point, and a second line of the same width is itself a closer
+  for the first, so the condition is unreachable. The perf test guarding it
+  repeated one width, which meant line two closed line one and the lookahead was
+  never even reached - it passed no matter what that code did. The replacement
+  uses distinct widths and fails against the old scan.
+
+### Fixed
+
 - **`markdownToCarve` no longer turns plain Markdown text into Carve markup.**
   CommonMark defines no `/…/`, `=…=`, single-`~…~`, `%%…%%` or braced
   `{X…X}` syntax, so all of those are literal text on the way in - and the

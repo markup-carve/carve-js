@@ -388,11 +388,12 @@ class Lexer {
   // advances) short-circuits, keeping "many unclosed fences" input linear.
   noFenceCloserFrom = Infinity
 
-  // Negative cache for commentBlockHasCloser, mirroring divHasCloser for the
-  // `%%%` opener. A comment closer matches on EXACT delimiter length, so only
-  // the per-length map can short-circuit; without it, input like thousands of
-  // unclosed `%%%` openers rescans to EOF for each one → O(n²).
-  commentNoCloserOfLenFrom = new Map<number, number>()
+  // width -> LAST line index carrying a comment fence of that width, built once
+  // by commentBlockHasCloser. A closer must match the opener width exactly, so
+  // "is there a closer after i" is exactly "last index for this width > i".
+  // Replaces a per-opener scan to end of input, which was superlinear when many
+  // openers carry distinct widths.
+  commentFenceLastIndex: Map<number, number> | undefined = undefined
 
   constructor(source: string, opts: ParseOptions = {}, lineNumberOffset = 0) {
     this.lineNumberOffset = lineNumberOffset
@@ -1333,23 +1334,30 @@ function parseRawBlock(lexer: Lexer): RawBlock {
 
 /**
  * From a `%%%` opener at peek(0), is there a matching closer ahead? A comment
- * closer matches on EXACT delimiter length (longer fences nest), so the scan is
- * per-length. Used to reject an unclosed `%%%` as a block opener (PART 9 §28):
- * without this an unclosed opener swallows the rest of the document, silently
- * dropping every following block.
+ * closer matches on EXACT delimiter length (longer fences nest), so ANY later
+ * line whose delimiter run has that length is a valid closer. Used to reject an
+ * unclosed `%%%` as a block opener (PART 9 §28): without this an unclosed opener
+ * swallows the rest of the document, silently dropping every following block.
+ *
+ * Answered from a width -> LAST line index map, built once per lexer in a single
+ * pass. A per-opener scan to end of input is superlinear on a document full of
+ * fence openers with DISTINCT widths (each one scans the whole document and no
+ * width repeats): ~1.9 MiB of such input took 8.5s before this, growing ~7x per
+ * 4x of input. Since any same-width line ahead IS a closer, comparing against
+ * the last index of that width is exact, not an approximation.
  */
 function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
-  const start = lexer.pos + 1
-  if (start >= (lexer.commentNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
-  for (let i = start; i < lexer.lines.length; i++) {
-    const c = RE_COMMENT_BLOCK.exec(lexer.lines[i]!)
-    if (c && c[1]!.length === fence) return true
+  let lastByWidth = lexer.commentFenceLastIndex
+  if (lastByWidth === undefined) {
+    lastByWidth = new Map<number, number>()
+    for (let i = 0; i < lexer.lines.length; i++) {
+      const c = RE_COMMENT_BLOCK.exec(lexer.lines[i]!)
+      if (c) lastByWidth.set(c[1]!.length, i)
+    }
+    lexer.commentFenceLastIndex = lastByWidth
   }
-  // No closer of this length ahead. pos only advances, so the smallest such
-  // start is a monotone frontier — cache it to keep later openers O(1).
-  const prev = lexer.commentNoCloserOfLenFrom.get(fence) ?? Infinity
-  if (start < prev) lexer.commentNoCloserOfLenFrom.set(fence, start)
-  return false
+  const last = lastByWidth.get(fence)
+  return last !== undefined && last > lexer.pos
 }
 
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
