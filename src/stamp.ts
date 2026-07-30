@@ -10,6 +10,10 @@
  * Two forms:
  *   line:  `%% carve-version: 0.1; generated-by: carve-js 0.1.0`
  *   block: `%%%\ncarve-version: 0.1\ngenerated-by: carve-js 0.1.0\n%%%`
+ *
+ * Writing the marker is only half of it: the spec's upgrade procedure says to
+ * review the `[behavior]` changelog entries between a document's stamped version
+ * and the target, which needs the marker read back - `readStamp` / `needsReview`.
  */
 import { SPEC_VERSION } from './version.js'
 
@@ -61,4 +65,86 @@ export function stampCarve(formatted: string, generatedBy: string, form: StampFo
   const marker = buildMarker(generatedBy, form)
   if (body === '') return marker + '\n'
   return body.replace(/\n$/, '') + '\n\n' + marker + '\n'
+}
+
+/** A document's provenance, as recorded by the marker. */
+export interface Stamp {
+  /** The spec version the document was last processed under. */
+  version: string
+  /** The engine that wrote the marker, when it recorded one. */
+  generatedBy: string | null
+}
+
+/**
+ * Read a document's provenance marker, or null when it carries none.
+ *
+ * Recognizes both documented forms and identifies the marker by
+ * `carve-version:` as its first field, so an ordinary trailing comment is not
+ * mistaken for provenance. A missing `generated-by` is tolerated.
+ *
+ * Null is the normal answer for hand-written documents: nothing has stamped them
+ * yet.
+ */
+export function readStamp(source: string): Stamp | null {
+  const lines = source.replace(/\n+$/, '').split('\n')
+  if (lines.length === 0) return null
+
+  const last = (lines[lines.length - 1] ?? '').trim()
+
+  const lineForm = /^%%[ \t]*carve-version:[ \t]*([^;\s]+)(?:[ \t]*;[ \t]*generated-by:[ \t]*(.+))?$/.exec(last)
+  if (lineForm) {
+    const generatedBy = (lineForm[2] ?? '').trim()
+    return { version: lineForm[1]!, generatedBy: generatedBy === '' ? null : generatedBy }
+  }
+
+  // Block form: the closing fence is last, the fields sit above it.
+  if (!/^%{3,}$/.test(last)) return null
+
+  let version: string | null = null
+  let generatedBy: string | null = null
+  for (let i = lines.length - 2; i >= 0; i--) {
+    const line = (lines[i] ?? '').trim()
+    if (/^%{3,}$/.test(line)) break
+
+    const versionField = /^carve-version:[ \t]*(.+)$/.exec(line)
+    if (versionField) {
+      version = versionField[1]!.trim()
+      continue
+    }
+    const byField = /^generated-by:[ \t]*(.+)$/.exec(line)
+    if (byField) generatedBy = byField[1]!.trim()
+  }
+
+  return version === null ? null : { version, generatedBy }
+}
+
+/**
+ * Whether a document was last processed under an older spec version than this
+ * implementation targets, so its `[behavior]` changelog entries are worth
+ * reviewing.
+ *
+ * An unstamped document answers true: its provenance is unknown, and assuming it
+ * is current is the unsafe direction. A document stamped with a FUTURE version
+ * answers false - this engine has nothing to say about changes it does not know.
+ */
+export function needsReview(source: string, currentVersion: string = SPEC_VERSION): boolean {
+  const stamp = readStamp(source)
+  if (stamp === null) return true
+
+  return compareVersions(stamp.version, currentVersion) < 0
+}
+
+/** Numeric-segment comparison; a non-numeric segment compares as 0. */
+function compareVersions(a: string, b: string): number {
+  const left = a.split('.')
+  const right = b.split('.')
+  const length = Math.max(left.length, right.length)
+
+  for (let i = 0; i < length; i++) {
+    const l = Number.parseInt(left[i] ?? '0', 10) || 0
+    const r = Number.parseInt(right[i] ?? '0', 10) || 0
+    if (l !== r) return l < r ? -1 : 1
+  }
+
+  return 0
 }
