@@ -256,7 +256,20 @@ function normalize(text: string): string {
   // ordinary space in plain text. Done after trimming so placeholder-derived
   // leading indentation (e.g. in a line block) survives; a literal U+00A0 in
   // the author's text is left intact.
-  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, ' ')
+  // Trim only BLANK LINES, not the indentation of the first or last content line.
+  // A document that opens with a fenced code block whose first line is indented had
+  // that indentation eaten here, so a tab the HTML target emits inside `<code>`
+  // vanished from plain text (carve#352, corpus 11-fenced-code-2). Code content is
+  // data, and a document-level trim has no business reaching into it.
+  // The two ends need different rules. At the START, trim blank lines only: the
+  // indentation of the first content line is data - a document opening with a
+  // fenced code block whose first line is indented had that eaten here, so a tab
+  // the HTML target emits inside `<code>` vanished (carve#352, corpus
+  // 11-fenced-code-2). At the END, trailing whitespace is trimmed as before,
+  // because there it is layout rather than content: a table row ending in an empty
+  // cell renders `x | ` and that space is an artifact of the separator.
+  const body = trimEndNonNbsp(text.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, ''))
+  return `${body}\n`.replace(/\ue000/g, ' ')
 }
 
 function trimNonNbsp(text: string): string {
