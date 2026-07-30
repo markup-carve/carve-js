@@ -465,7 +465,14 @@ function markdownFenceInfo(
   // already emitting it (carve#352).
   const grouping =
     label === undefined || label === '' ? '' : ` [${stripControls(label).replace(/[[\]`]/g, '')}]`
-  if (header === undefined) return `${token}${grouping}`
+  // A title needs a LANGUAGE in front of it. In Markdown the info string's first
+  // token IS the language, so `` ``` "notes.txt" `` makes a CommonMark reader
+  // emit `class="language-&quot;notes.txt&quot;"` -- measured against
+  // commonmark.js. Markdown has no way to express a fence title on its own, so
+  // dropping it beats emitting a bogus language; with a language present the
+  // title is ignored by every consumer and rides along safely. carve-php had this
+  // guard and was right about it (carve#352, corpus 11-fenced-code-8).
+  if (header === undefined || token === '') return `${token}${grouping}`
   return `${token} "${escapeMdTitle(header)}"${grouping}`
 }
 
