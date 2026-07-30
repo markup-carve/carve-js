@@ -345,6 +345,20 @@ class Lexer {
   lineOffsets: number[]
   lineNumberOffset: number
   sourceLineMap?: number[]
+  /**
+   * Document offset of each line's CONTENT start, for a sub-lexer over stripped
+   * container lines. Without it `lineOffset` reports an offset into the
+   * container's own text, so every inline position inside a blockquote, list or
+   * admonition pointed at the wrong place (#444).
+   */
+  sourceOffsetMap?: number[]
+  /**
+   * Width of the container prefix stripped from each line (`> `, `- `, and so
+   * on). Columns are 1-based against the DOCUMENT line, so the inline scanner
+   * has to add back what the container removed. It varies per line, since `>`,
+   * `> ` and `>  ` are all valid.
+   */
+  linePrefixWidths?: number[]
   suppressPositions = false
   pos = 0
   // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
@@ -442,7 +456,12 @@ class Lexer {
   }
 
   lineOffset(lineIndex: number): number {
-    return this.lineOffsets[lineIndex] ?? 0
+    return this.sourceOffsetMap?.[lineIndex] ?? this.lineOffsets[lineIndex] ?? 0
+  }
+
+  /** 1-based column, in the DOCUMENT line, where this line's content starts. */
+  lineStartColumn(lineIndex: number): number {
+    return (this.linePrefixWidths?.[lineIndex] ?? 0) + 1
   }
 
   lineNumber(lineIndex: number): number {
@@ -484,7 +503,44 @@ function nestedSubLexer(
   sub.footnoteDefs = parent.footnoteDefs
   sub.nested = true
   sub.depth = parent.depth + 1
+  attachDocumentOffsets(sub, parent, startLineIndex)
   return sub
+}
+
+/**
+ * Map a sub-lexer's lines back to their DOCUMENT offsets and columns.
+ *
+ * A container strips a prefix (`> `, `- `, the admonition indent) from each
+ * line, and the sub-lexer then measures offsets against that stripped text. Line
+ * NUMBERS were already mapped (`sourceLineMap`), which is why a lint diagnostic
+ * inside a blockquote had the right line and a column short by the prefix
+ * (#444).
+ *
+ * Only a line that is literally a SUFFIX of its document line gets a mapping:
+ * then the prefix width is the length difference and the arithmetic is exact.
+ * Anything reconstructed rather than stripped - a line block's expanded leading
+ * whitespace, a table's reassembled cells - fails that test and is left alone,
+ * because a guessed offset is what PART 12 section 4 forbids. Those keep the
+ * behavior they had.
+ */
+function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number): void {
+  const offsets: number[] = []
+  const widths: number[] = []
+
+  for (let i = 0; i < sub.lines.length; i++) {
+    const parentIndex = startLineIndex + i
+    const parentLine = parent.lines[parentIndex]
+    const subLine = sub.lines[i]
+    if (parentLine === undefined || subLine === undefined) return
+    if (!parentLine.endsWith(subLine)) return
+
+    const prefix = parentLine.length - subLine.length
+    offsets.push(parent.lineOffset(parentIndex) + prefix)
+    widths.push(parent.lineStartColumn(parentIndex) - 1 + prefix)
+  }
+
+  sub.sourceOffsetMap = offsets
+  sub.linePrefixWidths = widths
 }
 
 export function parse(source: string, opts: ParseOptions = {}): Document {
@@ -1155,7 +1211,7 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
   const inline = parseInline(raw.replace(/^[ \t]+/, ''), lexer.abbrDefs, lexer.linkDefs, {
     baseOffset: lexer.lineOffset(lineIndex) + firstLead,
     startLine: lexer.lineNumber(lineIndex),
-    startColumn: 1 + firstLead,
+    startColumn: lexer.lineStartColumn(lineIndex) + firstLead,
   })
   if (inline.length !== 1) return null
   const only = inline[0]!
@@ -1196,8 +1252,8 @@ function attachBlockPos(
   node.pos = {
     startLine: lexer.lineNumber(startLineIndex),
     endLine: lexer.lineNumber(endLineIndex),
-    startColumn: 1,
-    endColumn: endLine.length + 1,
+    startColumn: lexer.lineStartColumn(startLineIndex),
+    endColumn: lexer.lineStartColumn(endLineIndex) + endLine.length,
     startOffset: lexer.lineOffset(startLineIndex),
     endOffset: lexer.lineOffset(endLineIndex) + endLine.length,
   }
@@ -1258,7 +1314,7 @@ function parseHeading(lexer: Lexer): Heading {
   node.children = parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
     baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
     startLine: lexer.lineNumber(lineIndex),
-    startColumn: textColumn,
+    startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
   })
   return node
 }
@@ -1850,7 +1906,8 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         parseInline(termText, lexer.abbrDefs, lexer.linkDefs, {
           baseOffset: lexer.lineOffset(termLineIndex) + lexer.lines[termLineIndex]!.indexOf(t[1]!),
           startLine: lexer.lineNumber(termLineIndex),
-          startColumn: lexer.lines[termLineIndex]!.indexOf(t[1]!) + 1,
+          startColumn:
+            lexer.lineStartColumn(termLineIndex) + lexer.lines[termLineIndex]!.indexOf(t[1]!),
         }),
       )
     }
@@ -3462,12 +3519,26 @@ function parseParagraph(lexer: Lexer): Paragraph {
   // keeps verbatim since two trailing spaces are NOT a hard break here) is left
   // intact, and a backslash hard break is never affected.
   const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n').replace(/[ \t]+$/, '')
+  // Each line contributes its OWN leading whitespace on top of whatever prefix
+  // the container stripped, so a continuation line needs its own origin rather
+  // than a single base offset plus a local one (#444).
+  const anchors =
+    lines.length > 1
+      ? lines.map((ln, i) => {
+          const lead = ln.match(/^[ \t]+/)?.[0].length ?? 0
+          return {
+            offset: lexer.lineOffset(startLineIndex + i) + lead,
+            column: lexer.lineStartColumn(startLineIndex + i) + lead,
+          }
+        })
+      : undefined
   return {
     type: 'paragraph',
     children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
       baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
       startLine: lexer.lineNumber(startLineIndex),
-      startColumn: 1 + firstLead,
+      startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
+      ...(anchors ? { lineAnchors: anchors } : {}),
     }),
   }
 }
@@ -3976,15 +4047,32 @@ interface InlineSource {
   baseOffset: number
   startLine: number
   startColumn: number
+  /**
+   * Document offset and column of each LINE START inside the inline text.
+   *
+   * The scanner walks the container's STRIPPED text, so after the first newline
+   * a linear `baseOffset + localOffset` drifts by whatever prefix the container
+   * removed from each following line (`> `, the list content indent). Anchors
+   * give each line its own origin, which is the only way a continuation line
+   * lands on the right source (#444).
+   *
+   * Absent for text that was reconstructed rather than stripped - a line block's
+   * expanded whitespace, a table's reassembled cells - where no exact mapping
+   * exists and inventing one is what PART 12 section 4 forbids.
+   */
+  lineAnchors?: Array<{ offset: number; column: number }>
 }
 
 function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
-  return {
+  const source: InlineSource = {
     baseOffset: overrides.baseOffset ?? 0,
     startLine: overrides.startLine ?? 1,
     startColumn: overrides.startColumn ?? 1,
   }
+  if (overrides.lineAnchors) source.lineAnchors = overrides.lineAnchors
+  return source
 }
+
 
 // Inline recursion depth, bounding the same nesting the block side caps with
 // MAX_NESTING_DEPTH. scanInline recurses one frame per nested link / span /
@@ -4847,8 +4935,8 @@ function sourcePos(
     endLine: endPoint.line,
     startColumn: startPoint.column,
     endColumn: endPoint.column,
-    startOffset: source.baseOffset + start,
-    endOffset: source.baseOffset + end,
+    startOffset: startPoint.offset,
+    endOffset: endPoint.offset,
   }
 }
 
@@ -4881,11 +4969,19 @@ function newlineIndices(text: string): number[] {
   return indices
 }
 
+/**
+ * Map a local offset in the inline text to its document line, column and
+ * offset.
+ *
+ * With `lineAnchors` each line carries its own origin, so a continuation line is
+ * measured from where that line actually starts in the document rather than by
+ * adding a single base offset to a local one.
+ */
 function pointAt(
   source: InlineSource,
   text: string,
   offset: number,
-): { line: number; column: number } {
+): { line: number; column: number; offset: number } {
   const indices = newlineIndices(text)
   // Count newlines strictly before `offset` (binary search for the insertion
   // point of `offset` in the sorted indices).
@@ -4901,13 +4997,22 @@ function pointAt(
   }
   const newlinesBefore = lo
   const line = source.startLine + newlinesBefore
+  // Offset of this line's start within the LOCAL text.
+  const lineStart = newlinesBefore === 0 ? 0 : indices[newlinesBefore - 1]! + 1
+  const withinLine = offset - lineStart
+
+  const anchor = source.lineAnchors?.[newlinesBefore]
+  if (anchor) {
+    return { line, column: anchor.column + withinLine, offset: anchor.offset + withinLine }
+  }
+
   // Column resets to 1 right after the most recent newline; with none, it
   // continues from the source's starting column.
   const column =
     newlinesBefore === 0
       ? source.startColumn + offset
       : offset - indices[newlinesBefore - 1]!
-  return { line, column }
+  return { line, column, offset: source.baseOffset + offset }
 }
 
 function findEmphasisClose(text: string, from: number, delim: string): number {
