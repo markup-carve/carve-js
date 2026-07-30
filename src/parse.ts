@@ -1671,7 +1671,17 @@ function parseAdmonition(lexer: Lexer): Admonition {
   // `!== undefined` (not truthiness): an explicitly empty quoted title
   // `""` still emits a (empty) <p class="admonition-title"> per §12.
   if (titleText !== undefined) {
-    node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs)
+    // The title sits inside quotes on the opener line. Without an anchor the
+    // scanner measured from offset 0, so the text "Pro Tip" reported the span of
+    // `::: tip` - an invented value (PART 12 section 4). The +1 steps past the
+    // opening quote, which m[3] includes.
+    const titleStart = open.indexOf(m[3]!) + 1
+    node.title = parseInline(titleText, lexer.abbrDefs, lexer.linkDefs, {
+      anchored: lexer.hasDocumentOffsets && titleStart > 0,
+      baseOffset: lexer.lineOffset(openLineIndex) + titleStart,
+      startLine: lexer.lineNumber(openLineIndex),
+      startColumn: lexer.lineStartColumn(openLineIndex) + titleStart,
+    })
   }
   if (label !== undefined) {
     node.label = label
@@ -2043,6 +2053,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // definition. A blank line, a new marker (`::` / `:  `), or a block
       // opener ends the term.
       let termText = t[1]!
+      let continuationLines = 0
       while (!lexer.eof()) {
         const next = lexer.peek()!
         if (
@@ -2053,15 +2064,35 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         )
           break
         termText += '\n' + next
+        continuationLines++
         lexer.consume()
       }
+      const termStart = lexer.lines[termLineIndex]!.indexOf(t[1]!)
+      // A continuation line folds in whole, indent included, and the scanner
+      // strips that indent when it builds the text node - so a single base
+      // offset drifts by the indent on every line after the first. Each line
+      // gets its own origin instead (#441): the term's own line starts after its
+      // `::` marker, a continuation line at its left edge.
+      const termAnchors =
+        continuationLines > 0
+          ? [
+              {
+                offset: lexer.lineOffset(termLineIndex) + termStart,
+                column: lexer.lineStartColumn(termLineIndex) + termStart,
+              },
+              ...Array.from({ length: continuationLines }, (_unused, i) => ({
+                offset: lexer.lineOffset(termLineIndex + 1 + i),
+                column: lexer.lineStartColumn(termLineIndex + 1 + i),
+              })),
+            ]
+          : undefined
       terms.push(
         parseInline(termText, lexer.abbrDefs, lexer.linkDefs, {
           anchored: lexer.hasDocumentOffsets,
-          baseOffset: lexer.lineOffset(termLineIndex) + lexer.lines[termLineIndex]!.indexOf(t[1]!),
+          baseOffset: lexer.lineOffset(termLineIndex) + termStart,
           startLine: lexer.lineNumber(termLineIndex),
-          startColumn:
-            lexer.lineStartColumn(termLineIndex) + lexer.lines[termLineIndex]!.indexOf(t[1]!),
+          startColumn: lexer.lineStartColumn(termLineIndex) + termStart,
+          ...(termAnchors ? { lineAnchors: termAnchors } : {}),
         }),
       )
     }

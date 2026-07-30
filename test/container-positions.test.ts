@@ -229,3 +229,40 @@ describe('table cells anchor their inline content', () => {
     }
   })
 })
+
+describe('multi-line terms and admonition titles', () => {
+  it('anchors a wrapped definition term to its continuation line', () => {
+    // The continuation folds in whole, indent included, and the scanner strips
+    // that indent - so a single base offset drifts by it (#441).
+    const src = '- one\n  :: term\n wrapped\n'
+    const codepoints = [...src]
+    const found: any[] = []
+    const walk = (n: any): void => {
+      if (!n || typeof n !== 'object') return
+      if (Array.isArray(n)) return n.forEach(walk)
+      if (n.type === 'text') found.push(n)
+      for (const k of Object.keys(n)) if (k !== 'pos') walk(n[k])
+    }
+    walk(parse(src))
+
+    expect(found.map((n) => n.value)).toContain('wrapped')
+    for (const node of found) {
+      expect(node.pos).toBeDefined()
+      expect(codepoints.slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
+    }
+  })
+
+  it('anchors an admonition title inside its quotes', () => {
+    // Unanchored, the scanner measured from offset 0 and reported the span of
+    // `::: tip` for the text "Pro Tip".
+    const src = '::: tip "Pro Tip"\nbody\n:::\n'
+    const codepoints = [...src]
+    const admonition = parse(src).children[0] as { title?: Array<Record<string, any>> }
+
+    expect(admonition.title).toBeDefined()
+    for (const node of admonition.title!) {
+      expect(node.pos).toBeDefined()
+      expect(codepoints.slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
+    }
+  })
+})
