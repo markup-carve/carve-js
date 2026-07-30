@@ -136,10 +136,28 @@ the engine that wrote it:
 
 It is deterministic (no timestamp) and replace-in-place, so re-stamping is
 idempotent; it renders nothing and a plain `carve fmt` preserves it. Use
-`--stamp-block` for the multi-line `%%%` block form. The marker records which
-spec version a document was last processed under, so future tooling can flag
-documents predating a breaking spec change. The same logic is available as
-`stampCarve(formatted, 'carve-js 0.1.0')`.
+`--stamp-block` for the multi-line `%%%` block form. The same logic is available
+as `stampCarve(formatted, 'carve-js 0.1.0')`.
+
+The marker is machine-readable, so flagging documents that predate a breaking
+spec change does not have to be done by eye:
+
+```bash
+carve --stamp-info doc.crv    # report the version and the writer
+carve --stamp-check doc.crv   # exit 1 when the document predates this spec version
+```
+
+`--stamp-check` works as a CI gate over a directory of stored documents. An
+**unstamped** document counts as needing review: its provenance is unknown, and
+assuming it is current is the unsafe direction. Programmatically, `readStamp(src)`
+returns `{version, generatedBy}` or `null`, and `needsReview(src)` answers the
+same question as the flag.
+
+Both marker forms are read, and a marker written by another implementation reads
+the same - that is the point of recording it. What to do with the answer is the
+[versioning contract](https://markup-carve.github.io/carve/versioning): only
+`[behavior]` changelog entries between the stamped version and yours can require
+a document change.
 
 `carve lint` is a validator for problems that *parse* but render as the wrong
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
