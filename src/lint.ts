@@ -50,10 +50,10 @@ export interface LintWarning {
    * 0-based start offset in the source, inclusive, in UTF-16 code units - the
    * unit a JavaScript caller slices a string with.
    *
-   * Deliberately NOT the byte offsets PART 12 section 4 pins for a serialized
-   * AST: this struct is a diagnostic for JS consumers (carve-lsp, editors), and
-   * handing them byte offsets would silently highlight the wrong text on any
-   * document containing a non-ASCII character.
+   * Deliberately NOT the codepoint positions PART 12 section 4 pins for a
+   * serialized AST: this struct is a diagnostic for JS consumers (carve-lsp,
+   * editors), and handing them codepoint offsets would silently highlight the
+   * wrong text on any document containing an astral character.
    */
   start: number
   /** 0-based end offset in the source, exclusive, in UTF-16 code units. */
@@ -70,34 +70,34 @@ interface Positioned {
 }
 
 /**
- * Byte offset -> UTF-16 offset, for a source that has any non-ASCII character.
+ * Codepoint offset -> UTF-16 offset, for a source containing a surrogate pair.
  *
- * The AST carries byte offsets (PART 12 section 4); a LintWarning reports the
- * unit its JavaScript consumers index with. Identity for an ASCII-only source,
- * which is the common case and costs one scan.
+ * The AST carries codepoint positions (PART 12 section 4); a LintWarning reports
+ * the unit its JavaScript consumers index a string with. Identity unless the
+ * document has an astral character, since UTF-16 and codepoints agree across the
+ * whole Basic Multilingual Plane.
  */
-function byteToUtf16Map(source: string): Uint32Array | undefined {
-  let nonAscii = false
+function codepointToUtf16Map(source: string): Uint32Array | undefined {
+  let hasAstral = false
   for (let i = 0; i < source.length; i++) {
-    if (source.charCodeAt(i) > 0x7f) {
-      nonAscii = true
+    const code = source.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      hasAstral = true
       break
     }
   }
-  if (!nonAscii) return undefined
+  if (!hasAstral) return undefined
 
-  const byteLength = Buffer.byteLength(source, 'utf8')
-  const utf16At = new Uint32Array(byteLength + 1)
-  let bytes = 0
+  const codepoints = [...source].length
+  const utf16At = new Uint32Array(codepoints + 1)
+  let cp = 0
   for (let i = 0; i < source.length; i++) {
+    utf16At[cp] = i
     const code = source.charCodeAt(i)
-    const width =
-      code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code <= 0xdbff && i + 1 < source.length ? 4 : 3
-    for (let b = 0; b < width; b++) utf16At[bytes + b] = i
-    bytes += width
-    if (width === 4) i++
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < source.length) i++
+    cp++
   }
-  utf16At[byteLength] = source.length
+  utf16At[codepoints] = source.length
   return utf16At
 }
 
@@ -257,9 +257,10 @@ export function lintCarve(
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): LintWarning[] {
   const doc = parse(source, { positions: true })
-  // The AST carries byte offsets; a LintWarning reports UTF-16, so a JS consumer
-  // can slice the source with it. Identity for ASCII-only input.
-  const utf16At = byteToUtf16Map(source)
+  // The AST carries codepoint positions; a LintWarning reports UTF-16, so a JS
+  // consumer can slice the source with it. Identity unless the document has an
+  // astral character.
+  const utf16At = codepointToUtf16Map(source)
   const toUtf16 = (offset: number): number => (utf16At ? (utf16At[offset] ?? source.length) : offset)
   const slugOpts = headingIdSlugOpts(opts)
   // Cross-references resolve case-insensitively, so the broken-crossref check

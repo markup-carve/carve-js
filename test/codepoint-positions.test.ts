@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { parse, lintCarve } from '../src/index.js'
 
 /**
- * PART 12 §4: "offsets are 0-based byte offsets into the source".
+ * PART 12 §4 pins positions in CODEPOINTS.
  *
  * The scanner counts UTF-16 code units, because that is how JavaScript indexes
- * strings, and the two agree for ASCII - which is why no fixture ever caught the
- * difference. They diverge on the first non-ASCII character, so an AST handed to
- * carve-rs or carve-php (whose strings are byte-indexed) described a different
- * span than the author wrote.
+ * strings. The two agree across the whole Basic Multilingual Plane, so `é` and
+ * `한` were already right and only astral characters differ - a fixture has to
+ * contain a surrogate pair to tell them apart, which is why nothing caught it.
  *
- * These assert by slicing the source as BYTES, so a UTF-16 offset fails.
+ * These assert by slicing the source as an array of CODEPOINTS, so a UTF-16
+ * offset fails on astral input.
  */
 const textNodes = (node: unknown): Array<Record<string, any>> => {
   const out: Array<Record<string, any>> = []
@@ -25,7 +25,7 @@ const textNodes = (node: unknown): Array<Record<string, any>> => {
   return out
 }
 
-describe('AST offsets are byte offsets', () => {
+describe('AST positions are codepoint positions', () => {
   const cases: Record<string, string> = {
     ascii: 'plain text here\n',
     'two-byte (é)': 'éé and *bold* here\n',
@@ -37,26 +37,46 @@ describe('AST offsets are byte offsets', () => {
   }
 
   for (const [label, src] of Object.entries(cases)) {
-    it(`slices back as bytes: ${label}`, () => {
-      const buf = Buffer.from(src, 'utf8')
+    it(`slices back as codepoints: ${label}`, () => {
+      const codepoints = [...src]
       const nodes = textNodes(parse(src))
       expect(nodes.length).toBeGreaterThan(0)
       for (const node of nodes) {
-        const slice = buf.subarray(node.pos.startOffset, node.pos.endOffset).toString('utf8')
+        const slice = codepoints.slice(node.pos.startOffset, node.pos.endOffset).join('')
         expect(slice).toBe(node.value)
       }
     })
   }
 
-  it('differs from the UTF-16 offset once the source is not ASCII', () => {
+  it('differs from the UTF-16 offset once the source has an astral character', () => {
     // Guards the fast path: if this ever equalled the UTF-16 index again, the
     // conversion would have silently stopped happening.
     const src = '😀 *bold*\n'
     const strong = (parse(src).children[0] as { children: Array<Record<string, any>> }).children.find(
       (c) => c.type === 'strong',
     )!
-    expect(strong.pos.startOffset).toBe(Buffer.byteLength('😀 ', 'utf8'))
+    expect(strong.pos.startOffset).toBe([...'😀 '].length)
     expect(strong.pos.startOffset).not.toBe('😀 '.length)
+  })
+
+  it('agrees with UTF-16 for the whole Basic Multilingual Plane', () => {
+    // `é` and `한` are one UTF-16 unit each, so no conversion is needed and the
+    // fast path is correct to skip them.
+    for (const src of ['éé *b*\n', '한글 *b*\n']) {
+      const strong = (parse(src).children[0] as { children: Array<Record<string, any>> }).children.find(
+        (c) => c.type === 'strong',
+      )!
+      expect(strong.pos.startOffset).toBe(src.indexOf('*'))
+    }
+  })
+
+  it('reports columns in codepoints too, consistent with the offset', () => {
+    const src = '😀😀 *b*\n'
+    const strong = (parse(src).children[0] as { children: Array<Record<string, any>> }).children.find(
+      (c) => c.type === 'strong',
+    )!
+    // Two emoji plus a space: column 4 in codepoints, 6 in UTF-16.
+    expect(strong.pos.startColumn).toBe(4)
   })
 
   it('leaves an ASCII-only document unchanged', () => {
@@ -68,10 +88,10 @@ describe('AST offsets are byte offsets', () => {
   })
 
   it('lintCarve still reports UTF-16 offsets a JS caller can slice with', () => {
-    // The AST is byte-based for cross-engine exchange; a diagnostic is consumed
-    // by JavaScript (carve-lsp, editors), so handing it bytes would highlight
-    // the wrong text on any non-ASCII document.
-    const src = '# T\n\né é [^nope] here\n'
+    // The AST is codepoint-based for cross-engine exchange; a diagnostic is
+    // consumed by JavaScript (carve-lsp, editors), so handing it codepoints
+    // would highlight the wrong text on any astral document.
+    const src = '# T\n\n😀 😀 [^nope] here\n'
     const [warning] = lintCarve(src)
     expect(src.slice(warning!.start, warning!.end)).toBe('[^nope]')
   })

@@ -545,58 +545,65 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
 
 
 /**
- * Rewrite every `pos` offset from UTF-16 code units to BYTE offsets.
+ * Rewrite every `pos` from UTF-16 code units to CODEPOINT positions.
  *
- * PART 12 section 4 says offsets are "0-based byte offsets into the source". The
- * scanner counts in UTF-16 units because that is how JavaScript indexes strings,
- * and the two agree for ASCII - which is why no fixture ever caught the
- * difference. They diverge on the first non-ASCII character, so an AST handed to
- * carve-rs or carve-php (whose strings are byte-indexed) would have described a
- * different span than the one the author wrote.
+ * PART 12 section 4 pins the unit. The scanner counts UTF-16 code units, because
+ * that is how JavaScript indexes strings, and the two agree for everything in
+ * the Basic Multilingual Plane - so `é` and `한` are already right and only
+ * astral characters (emoji, rare CJK extensions) differ. That is why nothing
+ * caught this: a fixture has to contain a surrogate pair to tell them apart.
  *
- * ASCII-only sources take the identity fast path, so the common case costs one
- * scan and no allocation. Otherwise one Uint32Array maps every UTF-16 index to
- * its byte offset, and each node is then O(1).
+ * Codepoints rather than bytes or UTF-16 because a codepoint index always lands
+ * on a character boundary. A byte offset can point into the middle of a UTF-8
+ * sequence and a UTF-16 offset into the middle of a surrogate pair; both let a
+ * consumer slice a document into garbage. It also matches djot.lua, which builds
+ * a byte-to-charpos table specifically so it can report characters from a
+ * byte-indexed language.
  *
- * Columns are left alone: section 4 fixes the unit for offsets and says only
- * that lines and columns are 1-based.
+ * Columns are recomputed from the converted offset rather than converted
+ * separately, so a column can never disagree with the offset on the same node.
+ *
+ * Documents with no surrogate pairs take an identity fast path: one scan, no
+ * allocation, which is the overwhelmingly common case.
  */
-function toByteOffsets(doc: Document, source: string): void {
-  let nonAscii = false
+function toCodepointPositions(doc: Document, source: string): void {
+  let hasAstral = false
   for (let i = 0; i < source.length; i++) {
-    if (source.charCodeAt(i) > 0x7f) {
-      nonAscii = true
+    const code = source.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      hasAstral = true
       break
     }
   }
-  if (!nonAscii) return
+  if (!hasAstral) return
 
-  // byteAt[i] is the byte offset of UTF-16 index i; one extra slot for the end.
-  const byteAt = new Uint32Array(source.length + 1)
-  let bytes = 0
+  // codepointAt[i] is the number of CODEPOINTS before UTF-16 index i.
+  const codepointAt = new Uint32Array(source.length + 1)
+  let count = 0
   for (let i = 0; i < source.length; i++) {
-    byteAt[i] = bytes
+    codepointAt[i] = count
     const code = source.charCodeAt(i)
-    if (code < 0x80) {
-      bytes += 1
-    } else if (code < 0x800) {
-      bytes += 2
-    } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < source.length) {
-      // Surrogate pair: four bytes, and the low surrogate shares the same start.
-      bytes += 4
-      byteAt[i + 1] = bytes
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < source.length) {
+      // A surrogate pair is one codepoint; the low half shares its index.
+      codepointAt[i + 1] = count
       i++
-    } else {
-      bytes += 3
     }
+    count++
   }
-  byteAt[source.length] = bytes
+  codepointAt[source.length] = count
 
-  const map = (offset: number): number => byteAt[Math.min(offset, source.length)] ?? bytes
+  const map = (offset: number): number => codepointAt[Math.min(offset, source.length)] ?? count
+
+  // Codepoint index of each line's start, so a column can be recomputed from an
+  // offset instead of converted on its own.
+  const lineStartCodepoint: number[] = [0]
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) lineStartCodepoint.push(map(i + 1))
+  }
 
   // A generic walk rather than a per-node-type visitor: a node type added later
-  // must not silently keep UTF-16 offsets, and this file has been bitten before
-  // by walkers that could not see every node.
+  // must not silently keep UTF-16 positions, and this file has been bitten
+  // before by walkers that could not see every node.
   const seen = new Set<object>()
   const walk = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
@@ -607,10 +614,24 @@ function toByteOffsets(doc: Document, source: string): void {
       return
     }
     const record = value as Record<string, unknown>
-    const pos = record['pos'] as { startOffset?: number; endOffset?: number } | undefined
+    const pos = record['pos'] as Position | undefined
     if (pos && typeof pos === 'object') {
-      if (typeof pos.startOffset === 'number') pos.startOffset = map(pos.startOffset)
-      if (typeof pos.endOffset === 'number') pos.endOffset = map(pos.endOffset)
+      const startOffset = pos.startOffset
+      const endOffset = pos.endOffset
+      if (typeof startOffset === 'number') {
+        pos.startOffset = map(startOffset)
+        const lineStart = lineStartCodepoint[pos.startLine - 1]
+        if (lineStart !== undefined && pos.startColumn !== undefined) {
+          pos.startColumn = pos.startOffset - lineStart + 1
+        }
+      }
+      if (typeof endOffset === 'number') {
+        pos.endOffset = map(endOffset)
+        const lineStart = lineStartCodepoint[pos.endLine - 1]
+        if (lineStart !== undefined && pos.endColumn !== undefined) {
+          pos.endColumn = pos.endOffset - lineStart + 1
+        }
+      }
     }
     for (const key of Object.keys(record)) {
       if (key === 'pos') continue
@@ -651,7 +672,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     doc.srcByteLength = utf8ByteLength(source)
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
-    toByteOffsets(doc, source)
+    toCodepointPositions(doc, source)
     return doc
   } finally {
     activeMatchers = prevMatchers
