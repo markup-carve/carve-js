@@ -9,6 +9,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`markdownToCarve` no longer turns plain Markdown text into Carve markup.**
+  CommonMark defines no `/…/`, `=…=`, single-`~…~`, `%%…%%` or braced
+  `{X…X}` syntax, so all of those are literal text on the way in - and the
+  converter passed them through for Carve to parse as markup. `a {,y,} b` came
+  out as a subscript, `a /it/ b` as emphasis, and `a %%c%% b` lost its text
+  entirely, because `%%` opens a comment. The first delimiter of each construct
+  is now escaped, which is the rule carve-php#420 applied to the bare dollar
+  pair: the converter must not introduce a construct that was not in the input.
+  Escaping runs after code spans, links, URLs and math are protected and before
+  the Markdown rewrites, so `**b**`, `_em_`, `~~s~~`, `==h==`, `^sup^` and the
+  HTML inline tags still convert, while `a/b/c`, `1/2`, `x = y`, `~5`, `50%` and
+  non-http URLs are left alone. Note the behavior change: Markdown that
+  contained Carve inline syntax and previously passed through verbatim is now
+  escaped.
 - **The canonical writer no longer emits a code fence's title twice.** The
   opener's quoted title is resolved onto `attrs.title` at parse time so it
   reaches every consumer, but the fence carries it too - and the writer emitted
