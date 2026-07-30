@@ -4681,7 +4681,14 @@ function matchEmphasis(
         }
         const children = scanInline(inner, shiftSource(source, text, start), inFootnote)
         return {
-          node: { type: 'strong', children: [{ type: 'emphasis', children }] },
+          // `boldItalic` records that the author used the combined form. The
+          // nested spelling `*/x/*` yields the same tree, so the writer needs the
+          // mark to reproduce what was written (PART 11 §6).
+          node: {
+            type: 'strong',
+            boldItalic: true,
+            children: [{ type: 'emphasis', children }],
+          },
           end: close + 2,
         }
       }
