@@ -15,7 +15,12 @@ const infoString = (src: string): string => carveToMarkdown(src).split('\n')[0] 
 
 describe('the Markdown fence info string carries the effective title', () => {
   it('keeps a title written in the header', () => {
-    expect(infoString('``` "notes.txt"\nremember the milk\n```\n')).toBe('``` "notes.txt"')
+    // With a language in front of it: a title alone is dropped, because in
+    // Markdown the first token of the info string IS the language. See
+    // markdown-title-needs-language.test.ts.
+    expect(infoString('```php "notes.php"\nremember the milk\n```\n')).toBe(
+      '```php "notes.php"',
+    )
   })
 
   it('prefers an attribute line over the header', () => {
