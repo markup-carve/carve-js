@@ -46,9 +46,17 @@ export interface LintWarning {
   rule: string
   /** Human-readable explanation of the silent degradation. */
   message: string
-  /** 0-based start offset in the source, inclusive. */
+  /**
+   * 0-based start offset in the source, inclusive, in UTF-16 code units - the
+   * unit a JavaScript caller slices a string with.
+   *
+   * Deliberately NOT the byte offsets PART 12 section 4 pins for a serialized
+   * AST: this struct is a diagnostic for JS consumers (carve-lsp, editors), and
+   * handing them byte offsets would silently highlight the wrong text on any
+   * document containing a non-ASCII character.
+   */
   start: number
-  /** 0-based end offset in the source, exclusive. */
+  /** 0-based end offset in the source, exclusive, in UTF-16 code units. */
   end: number
 }
 
@@ -61,16 +69,48 @@ interface Positioned {
   }
 }
 
-function locate(node: Positioned): Pick<
-  LintWarning,
-  'line' | 'column' | 'start' | 'end'
-> {
+/**
+ * Byte offset -> UTF-16 offset, for a source that has any non-ASCII character.
+ *
+ * The AST carries byte offsets (PART 12 section 4); a LintWarning reports the
+ * unit its JavaScript consumers index with. Identity for an ASCII-only source,
+ * which is the common case and costs one scan.
+ */
+function byteToUtf16Map(source: string): Uint32Array | undefined {
+  let nonAscii = false
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) > 0x7f) {
+      nonAscii = true
+      break
+    }
+  }
+  if (!nonAscii) return undefined
+
+  const byteLength = Buffer.byteLength(source, 'utf8')
+  const utf16At = new Uint32Array(byteLength + 1)
+  let bytes = 0
+  for (let i = 0; i < source.length; i++) {
+    const code = source.charCodeAt(i)
+    const width =
+      code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code <= 0xdbff && i + 1 < source.length ? 4 : 3
+    for (let b = 0; b < width; b++) utf16At[bytes + b] = i
+    bytes += width
+    if (width === 4) i++
+  }
+  utf16At[byteLength] = source.length
+  return utf16At
+}
+
+function locate(
+  node: Positioned,
+  toUtf16: (offset: number) => number,
+): Pick<LintWarning, 'line' | 'column' | 'start' | 'end'> {
   const p = node.pos
   return {
     line: p?.startLine ?? 1,
     column: p?.startColumn ?? 1,
-    start: p?.startOffset ?? 0,
-    end: p?.endOffset ?? p?.startOffset ?? 0,
+    start: toUtf16(p?.startOffset ?? 0),
+    end: toUtf16(p?.endOffset ?? p?.startOffset ?? 0),
   }
 }
 
@@ -217,6 +257,10 @@ export function lintCarve(
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): LintWarning[] {
   const doc = parse(source, { positions: true })
+  // The AST carries byte offsets; a LintWarning reports UTF-16, so a JS consumer
+  // can slice the source with it. Identity for ASCII-only input.
+  const utf16At = byteToUtf16Map(source)
+  const toUtf16 = (offset: number): number => (utf16At ? (utf16At[offset] ?? source.length) : offset)
   const slugOpts = headingIdSlugOpts(opts)
   // Cross-references resolve case-insensitively, so the broken-crossref check
   // folds case the same way resolveHeadingIds does.
@@ -246,7 +290,7 @@ export function lintCarve(
             id = explicit
             if (used.has(explicit)) {
               out.push({
-                ...locate(heading),
+                ...locate(heading, toUtf16),
                 rule: 'duplicate-heading-id',
                 message: `Duplicate heading id "${explicit}": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.`,
               })
@@ -259,7 +303,7 @@ export function lintCarve(
               while (used.has(`${base}-${n}`)) n++
               id = `${base}-${n}`
               out.push({
-                ...locate(heading),
+                ...locate(heading, toUtf16),
                 rule: 'duplicate-heading-id',
                 message: `Heading slug "${base}" collides with an earlier heading; its auto id becomes "${id}", and ambiguous references to "${base}" resolve to the first occurrence.`,
               })
@@ -315,7 +359,7 @@ export function lintCarve(
   for (const { target, node } of collectCrossrefs(doc)) {
     if (used.has(target) || usedFolded.has(foldId(target))) continue
     out.push({
-      ...locate(node),
+      ...locate(node, toUtf16),
       rule: 'broken-crossref',
       message: `Cross-reference </#${target}> has no matching heading id; it renders as the literal text "</#${target}>".`,
     })
@@ -327,7 +371,7 @@ export function lintCarve(
   for (const { ref, rawRef, node } of collectUnresolvedRefLinks(doc)) {
     if (headingRefs.has(normalizeHeadingRefLabel(ref))) continue
     out.push({
-      ...locate(node),
+      ...locate(node, toUtf16),
       rule: 'unresolved-reference-link',
       message: `Reference link ${rawRef} has no matching link definition or heading; it renders as literal text.`,
     })
@@ -340,7 +384,7 @@ export function lintCarve(
     referencedFootnotes.add(id)
     if (footnoteDefs[id]) continue
     out.push({
-      ...locate(node),
+      ...locate(node, toUtf16),
       rule: 'unresolved-footnote',
       message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.`,
     })
@@ -351,7 +395,7 @@ export function lintCarve(
   // per line replaces a per-line scan over a growing range list (was O(n^2),
   // and was computed twice).
   const verbatimLines = collectVerbatimLines(doc)
-  collectSilentFailures(source, doc, verbatimLines, out)
+  collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
@@ -412,6 +456,7 @@ function collectSilentFailures(
   doc: Document,
   verbatimLines: Set<number>,
   out: LintWarning[],
+  toUtf16: (offset: number) => number,
 ): void {
   const lines = source.split('\n')
   const lineStart: number[] = []
@@ -487,7 +532,7 @@ function collectSilentFailures(
     if (first?.type !== 'text' || typeof first.value !== 'string') continue
     const m = LEAKED_BLOCK_MARKER.exec(first.value)
     if (!m) continue
-    const loc = locate(first as Positioned)
+    const loc = locate(first as Positioned, toUtf16)
     // 3a. The common authoring mistakes on a fence opener get a targeted
     //     hint instead of the generic marker warning: an unquoted trailing
     //     title (the VitePress/Docusaurus habit), typographic quotes (a CMS

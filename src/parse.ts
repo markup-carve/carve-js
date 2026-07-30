@@ -543,6 +543,83 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   sub.linePrefixWidths = widths
 }
 
+
+/**
+ * Rewrite every `pos` offset from UTF-16 code units to BYTE offsets.
+ *
+ * PART 12 section 4 says offsets are "0-based byte offsets into the source". The
+ * scanner counts in UTF-16 units because that is how JavaScript indexes strings,
+ * and the two agree for ASCII - which is why no fixture ever caught the
+ * difference. They diverge on the first non-ASCII character, so an AST handed to
+ * carve-rs or carve-php (whose strings are byte-indexed) would have described a
+ * different span than the one the author wrote.
+ *
+ * ASCII-only sources take the identity fast path, so the common case costs one
+ * scan and no allocation. Otherwise one Uint32Array maps every UTF-16 index to
+ * its byte offset, and each node is then O(1).
+ *
+ * Columns are left alone: section 4 fixes the unit for offsets and says only
+ * that lines and columns are 1-based.
+ */
+function toByteOffsets(doc: Document, source: string): void {
+  let nonAscii = false
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) > 0x7f) {
+      nonAscii = true
+      break
+    }
+  }
+  if (!nonAscii) return
+
+  // byteAt[i] is the byte offset of UTF-16 index i; one extra slot for the end.
+  const byteAt = new Uint32Array(source.length + 1)
+  let bytes = 0
+  for (let i = 0; i < source.length; i++) {
+    byteAt[i] = bytes
+    const code = source.charCodeAt(i)
+    if (code < 0x80) {
+      bytes += 1
+    } else if (code < 0x800) {
+      bytes += 2
+    } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < source.length) {
+      // Surrogate pair: four bytes, and the low surrogate shares the same start.
+      bytes += 4
+      byteAt[i + 1] = bytes
+      i++
+    } else {
+      bytes += 3
+    }
+  }
+  byteAt[source.length] = bytes
+
+  const map = (offset: number): number => byteAt[Math.min(offset, source.length)] ?? bytes
+
+  // A generic walk rather than a per-node-type visitor: a node type added later
+  // must not silently keep UTF-16 offsets, and this file has been bitten before
+  // by walkers that could not see every node.
+  const seen = new Set<object>()
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (seen.has(value as object)) return
+    seen.add(value as object)
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+      return
+    }
+    const record = value as Record<string, unknown>
+    const pos = record['pos'] as { startOffset?: number; endOffset?: number } | undefined
+    if (pos && typeof pos === 'object') {
+      if (typeof pos.startOffset === 'number') pos.startOffset = map(pos.startOffset)
+      if (typeof pos.endOffset === 'number') pos.endOffset = map(pos.endOffset)
+    }
+    for (const key of Object.keys(record)) {
+      if (key === 'pos') continue
+      walk(record[key])
+    }
+  }
+  walk(doc)
+}
+
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
   // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
@@ -574,6 +651,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     doc.srcByteLength = utf8ByteLength(source)
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
+    toByteOffsets(doc, source)
     return doc
   } finally {
     activeMatchers = prevMatchers
