@@ -1328,7 +1328,9 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
     return {
       type: 'figure',
       target: para,
-      caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      caption: stripPositions(
+          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        ),
     } as Figure
   }
   // Non-blank, non-caption text immediately follows: let parseParagraph fold
@@ -1460,7 +1462,9 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
       return {
         type: 'figure',
         target: cb,
-        caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        caption: stripPositions(
+          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        ),
       } as Figure
     }
   }
@@ -1677,6 +1681,34 @@ function lineBlockHasCloser(lexer: Lexer): boolean {
   return false
 }
 
+/**
+ * Drop `pos` from a subtree whose positions cannot be mapped to the document.
+ *
+ * PART 12 section 4: an implementation that cannot produce a position "MUST NOT
+ * emit `pos` with invented values, and MUST NOT omit it silently". Omitting is
+ * the conformant half; the omission is recorded in carve-js#441.
+ *
+ * Both callers re-parse RECONSTRUCTED text - a line block expands each line's
+ * leading whitespace, and a table cell is scanned out of a row and re-joined -
+ * so the inline scanner measures against a string that does not appear verbatim
+ * in the source. The offsets it produced were not merely imprecise: a table
+ * cell reported the document's first three characters for every cell.
+ */
+function stripPositions(nodes: InlineNode[]): InlineNode[] {
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+      return
+    }
+    const record = value as Record<string, unknown>
+    delete record['pos']
+    for (const key of Object.keys(record)) walk(record[key])
+  }
+  walk(nodes)
+  return nodes
+}
+
 function parseLineBlock(lexer: Lexer): LineBlock {
   const open = lexer.consume()
   const m = RE_LINE_BLOCK_OPEN.exec(open)!
@@ -1704,8 +1736,10 @@ function parseLineBlock(lexer: Lexer): LineBlock {
 
   const children = stanzas.map<Paragraph>((lines) => ({
     type: 'paragraph',
-    children: parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs).map((node) =>
-      node.type === 'soft_break' ? ({ type: 'hard_break' } as InlineNode) : node,
+    children: stripPositions(
+      parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs).map((node) =>
+        node.type === 'soft_break' ? ({ type: 'hard_break' } as InlineNode) : node,
+      ),
     ),
   }))
   // No inline opener attributes (strict djot); a preceding block-attribute
@@ -2247,7 +2281,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       return {
         type: 'figure',
         target: bq,
-        caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        caption: stripPositions(
+          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        ),
       } as Figure
     }
   }
@@ -2312,7 +2348,9 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
       return {
         type: 'figure',
         target: img,
-        caption: parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        caption: stripPositions(
+          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+        ),
       } as Figure
     }
   }
@@ -3372,7 +3410,7 @@ function parseTable(lexer: Lexer): Table | Figure {
           header: c.header,
           children: c.span
             ? []
-            : parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs),
+            : stripPositions(parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
         }
         if (c.span) cell.span = c.span
         if (c.align) cell.align = c.align
@@ -3395,7 +3433,9 @@ function parseTable(lexer: Lexer): Table | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true)
+      table.caption = stripPositions(
+        parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      )
     }
   }
   return table
