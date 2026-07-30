@@ -526,12 +526,21 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return '\\' + node.value
     case 'emphasis':
       return withAttrs(renderEmphasis('/', renderInlines(node.children, ctx), prevChar, nextChar))
-    case 'strong':
-      // Bold-italic has no node of its own: it is whichever of strong and
-      // emphasis the author wrote outermost, nested. Serializing the nesting
-      // literally is therefore exact - `*/y/*` and `/*y*/` differ only in
-      // which mark is outer, and each re-parses to the shape it came from.
+    case 'strong': {
+      // The combined bold-italic form is a single production, and the nested
+      // spelling parses to the SAME strong-wrapping-emphasis tree - so the
+      // nesting does not record which one the author wrote and cannot be
+      // serialized back "literally". The comment here used to claim each
+      // spelling re-parses to the shape it came from; it does not, which is why
+      // the documented form was being rewritten into an undocumented one
+      // (carve#375). `boldItalic` carries the answer (PART 11 section 6).
+      const inner = node.children[0]
+      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis') {
+        const content = renderInlines(inner.children, ctx)
+        return withAttrs(`/*${content}*/`)
+      }
       return withAttrs(renderEmphasis('*', renderInlines(node.children, ctx), prevChar, nextChar))
+    }
     case 'underline':
       return withAttrs(renderEmphasis('_', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'strike':
