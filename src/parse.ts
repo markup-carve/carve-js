@@ -1743,8 +1743,14 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   const open = lexer.consume()
   const m = RE_LINE_BLOCK_OPEN.exec(open)!
   const fence = m[1]!.length
-  const stanzas: string[][] = []
-  let stanza: string[] = []
+  interface StanzaLine {
+    text: string
+    lineIndex: number
+    /** The expansion left this line untouched, so it is a verbatim slice. */
+    verbatim: boolean
+  }
+  const stanzas: StanzaLine[][] = []
+  let stanza: StanzaLine[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     const c = RE_ADMONITION_CLOSE.exec(ln)
@@ -1752,6 +1758,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       lexer.consume()
       break
     }
+    const lineIndex = lexer.pos
     lexer.consume()
     if (isBlankLine(ln)) {
       if (stanza.length) {
@@ -1760,18 +1767,57 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       }
       continue
     }
-    stanza.push(expandLineBlockLeadingWhitespace(ln))
+    const expanded = expandLineBlockLeadingWhitespace(ln)
+    stanza.push({ text: expanded, lineIndex, verbatim: expanded === ln })
   }
   if (stanza.length) stanzas.push(stanza)
 
-  const children = stanzas.map<Paragraph>((lines) => ({
-    type: 'paragraph',
-    children: stripPositions(
-      parseInline(lines.join('\n'), lexer.abbrDefs, lexer.linkDefs).map((node) =>
-        node.type === 'soft_break' ? ({ type: 'hard_break' } as InlineNode) : node,
-      ),
-    ),
-  }))
+  const children = stanzas.map<Paragraph>((lines) => {
+    // A line's leading whitespace is rewritten to the U+E000 indent sentinel, so
+    // an indented line is NOT a verbatim slice of the source and nothing here
+    // can locate it. A stanza is anchored only when every line came through
+    // untouched; otherwise its content keeps no position at all, which is what
+    // PART 12 section 4 asks for when a position cannot be produced (#441).
+    const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.verbatim)
+    const inline = parseInline(
+      lines.map((l) => l.text).join('\n'),
+      lexer.abbrDefs,
+      lexer.linkDefs,
+      anchorable
+        ? inlineSource({
+            baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
+            startLine: lexer.lineNumber(lines[0]!.lineIndex),
+            startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
+            lineAnchors: lines.map((l) => ({
+              offset: lexer.lineOffset(l.lineIndex),
+              column: lexer.lineStartColumn(l.lineIndex),
+            })),
+          })
+        : inlineSource({ anchored: false }),
+    ).map((node) => {
+      if (node.type !== 'soft_break') return node
+      // Keep the break's span: it is the same source, just a different meaning
+      // inside a line block. Building a fresh object dropped it.
+      const hardBreak = { type: 'hard_break' } as InlineNode
+      if (node.pos) hardBreak.pos = node.pos
+      return hardBreak
+    })
+
+    const paragraph: Paragraph = { type: 'paragraph', children: inline }
+    if (anchorable) {
+      const first = lines[0]!
+      const last = lines[lines.length - 1]!
+      paragraph.pos = {
+        startLine: lexer.lineNumber(first.lineIndex),
+        endLine: lexer.lineNumber(last.lineIndex),
+        startColumn: lexer.lineStartColumn(first.lineIndex),
+        endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+        startOffset: lexer.lineOffset(first.lineIndex),
+        endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+      }
+    }
+    return paragraph
+  })
   // No inline opener attributes (strict djot); a preceding block-attribute
   // line merges onto this node in parseBlocks.
   const node: LineBlock = {
