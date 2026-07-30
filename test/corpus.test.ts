@@ -196,6 +196,8 @@ const IMPLEMENTED = new Set([
   '161-unresolved-footnote-reference-with-a-trailing-attribute-stays-literal',
   '162-tight-list-item-keeps-trailing-text-after-a-block-bare',
   '163-quote-flanking-after-an-escaped-character',
+  '164-comment-fence-with-trailing-text',
+  '165-unterminated-comment-fence',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
