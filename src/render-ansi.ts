@@ -412,8 +412,12 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
         style(stripControls(node.oldText), STRIKE + '\x1b[31m') +
         style(stripControls(node.newText), FG_GREEN + UNDERLINE)
       )
+      // A critic comment is VISIBLE content: the HTML target renders it as
+      // `<span class="critic-comment"> note </span>`, so dropping it here made two
+      // targets of one engine disagree about whether the document says it.
+      // carve-php kept it (carve#352, corpus 33-editorial-markup).
     case 'critic-comment':
-      return ''
+      return stripControls(node.text)
     case 'heading_ref':
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
