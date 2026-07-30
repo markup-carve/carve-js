@@ -34,6 +34,7 @@ export function renderAnsi(ast: Document, _opts: AnsiRenderOptions = {}): string
     blockDepth: 0,
     inlineDepth: 0,
     abbrBudget: new AbbrBudget(ast.srcByteLength),
+    definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -48,6 +49,13 @@ interface AnsiContext {
   inlineDepth: number
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
+  /**
+   * Labels that actually have a definition. A reference without one did not form
+   * a footnote, so it is source text rather than a marker - and must not be
+   * styled as one. The HTML renderer decides this on `node.number`, which this
+   * path never populates because it does no numbering.
+   */
+  definedFootnotes: Set<string>
 }
 
 function style(text: string, codes: string): string {
@@ -112,6 +120,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       }
       return `${labelLine}${body}`
     }
+    case 'line_block':
+      return renderBlocks(node.children, ctx)
     case 'div': {
       if (!node.label) return renderBlocks(node.children, ctx)
       // Caption floor: a bold label line, prefixed with the blockquote `│` when
@@ -314,10 +324,23 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
+    case 'escaped_text':
+      return node.value
     case 'emphasis':
       return style(renderInlines(node.children, ctx), ITALIC)
-    case 'strong':
+    case 'strong': {
+      // The combined bold-italic form is ONE construct, so it gets one style run
+      // and one reset. Rendering it as nested strong-around-emphasis emitted a
+      // reset per level (`ESC[1m ESC[3m x ESC[0m ESC[0m`); the second is
+      // redundant, since a reset clears every attribute. carve-rs, which carries
+      // bold-italic as a single kind, always emitted one (carve#352, corpus
+      // 01-emphasis and both 128-bold-italic cases).
+      const inner = node.children[0]
+      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis') {
+        return style(renderInlines(inner.children, ctx), BOLD + ITALIC)
+      }
       return style(renderInlines(node.children, ctx), BOLD)
+    }
     case 'underline':
       return style(renderInlines(node.children, ctx), UNDERLINE)
     case 'strike':
@@ -375,10 +398,17 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
         return stripControls(node.abbr)
       return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
     }
-    case 'footnote':
-      return node.inline
-        ? `(${renderInlines(node.inline, ctx)})`
-        : style(`[${stripControls(node.id ?? '')}]`, FG_CYAN + BOLD)
+    case 'footnote': {
+      if (node.inline) return `(${renderInlines(node.inline, ctx)})`
+      const id = stripControls(node.id ?? '')
+      // An UNRESOLVED reference stays literal and UNSTYLED, exactly as the HTML
+      // target renders it: the construct did not form, so `[^a]` is ordinary
+      // text. Styling it cyan-bold and dropping the caret announced a footnote
+      // the document does not have. carve-php already did this (carve#352,
+      // corpus 132/133/157/161).
+      if (!ctx.definedFootnotes.has(id)) return `[^${id}]`
+      return style(`[${id}]`, FG_CYAN + BOLD)
+    }
     case 'soft_break':
       return ' '
     case 'hard_break':
@@ -393,8 +423,12 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
         style(stripControls(node.oldText), STRIKE + '\x1b[31m') +
         style(stripControls(node.newText), FG_GREEN + UNDERLINE)
       )
+      // A critic comment is VISIBLE content: the HTML target renders it as
+      // `<span class="critic-comment"> note </span>`, so dropping it here made two
+      // targets of one engine disagree about whether the document says it.
+      // carve-php kept it (carve#352, corpus 33-editorial-markup).
     case 'critic-comment':
-      return ''
+      return stripControls(node.text)
     case 'heading_ref':
       return `</#${stripControls(node.target)}>`
     case 'caption_number':

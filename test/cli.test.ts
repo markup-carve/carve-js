@@ -213,6 +213,7 @@ describe('carve fix — collisions', () => {
 
 describe('carve render', () => {
   const SRC = '# Hi\n\n_em_ *strong* `code`\n'
+  const RAW_HTML = '```=html\n<script>alert(1)</script>\n```\n'
 
   it('renders HTML by default from stdin', async () => {
     const t = makeIO({ stdin: SRC })
@@ -281,6 +282,92 @@ describe('carve render', () => {
     const t = makeIO({ stdin: SRC })
     expect(await run(['--markdown'], t.io)).toBe(0)
     expect(t.out).toContain('# Hi')
+  })
+
+  it('--no-raw-html escapes raw HTML blocks on the HTML target', async () => {
+    const t = makeIO({ stdin: RAW_HTML })
+    expect(await run(['render', '--no-raw-html'], t.io)).toBe(0)
+    expect(t.out).toContain('&lt;script&gt;')
+    expect(t.out).not.toContain('<script>')
+  })
+
+  it('emits raw HTML blocks by default on the HTML target', async () => {
+    const t = makeIO({ stdin: RAW_HTML })
+    expect(await run(['render'], t.io)).toBe(0)
+    expect(t.out).toContain('<script>alert(1)</script>')
+  })
+
+  it('--safe is an alias for --no-raw-html', async () => {
+    const safe = makeIO({ stdin: RAW_HTML })
+    const noRawHtml = makeIO({ stdin: RAW_HTML })
+    expect(await run(['render', '--safe'], safe.io)).toBe(0)
+    expect(await run(['render', '--no-raw-html'], noRawHtml.io)).toBe(0)
+    expect(safe.out).toBe(noRawHtml.out)
+    // Equality alone would also hold if both flags were ignored.
+    expect(safe.out).toContain('&lt;script&gt;')
+  })
+
+  it('accepts the carve-rs format aliases --md and --plain-text', async () => {
+    const md = makeIO({ stdin: SRC })
+    const markdown = makeIO({ stdin: SRC })
+    expect(await run(['--md'], md.io)).toBe(0)
+    expect(await run(['--markdown'], markdown.io)).toBe(0)
+    expect(md.out).toBe(markdown.out)
+    expect(md.out).toContain('# Hi')
+
+    const plainText = makeIO({ stdin: SRC })
+    const plain = makeIO({ stdin: SRC })
+    expect(await run(['--plain-text'], plainText.io)).toBe(0)
+    expect(await run(['--plain'], plain.io)).toBe(0)
+    expect(plainText.out).toBe(plain.out)
+    expect(plainText.out).not.toContain('#')
+  })
+
+  it('counts an alias and its canonical flag as one format, but still rejects two', async () => {
+    const same = makeIO({ stdin: SRC })
+    expect(await run(['--md', '--markdown'], same.io)).toBe(0)
+
+    const two = makeIO({ stdin: SRC })
+    expect(await run(['--md', '--plain'], two.io)).toBe(2)
+    expect(two.err).toContain('choose at most one')
+  })
+
+  it('--profile comment filters headings', async () => {
+    const t = makeIO({ stdin: '# Heading\n' })
+    expect(await run(['render', '--profile', 'comment'], t.io)).toBe(0)
+    expect(t.out).not.toContain('<h1>')
+  })
+
+  it("rejects input over a profile's maximum length like any other profile rejection", async () => {
+    const t = makeIO({ stdin: `${'x'.repeat(20_000)}\n` })
+    expect(await run(['render', '--profile', 'minimal'], t.io)).toBe(2)
+    expect(t.err).toContain('carve render:')
+    expect(t.err).toContain('maximum length of 10000 bytes')
+  })
+
+  it('leaves input under the cap alone, so the check above can fail', async () => {
+    const t = makeIO({ stdin: `${'x'.repeat(20)}\n` })
+    expect(await run(['render', '--profile', 'minimal'], t.io)).toBe(0)
+    expect(t.err).toBe('')
+  })
+
+  it('rejects an unknown profile', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render', '--profile', 'nope'], t.io)).toBe(2)
+    expect(t.err).toContain('expected full, article, comment or minimal')
+  })
+
+  it('rejects --profile-base-host without --profile', async () => {
+    const t = makeIO({ stdin: SRC })
+    expect(await run(['render', '--profile-base-host', 'example.com'], t.io)).toBe(2)
+    expect(t.err).toContain('--profile-base-host requires --profile')
+  })
+
+  it('rejects profiles with --carve and explains why', async () => {
+    const t = makeIO({ stdin: '# Heading\n' })
+    expect(await run(['render', '--profile', 'comment', '--carve'], t.io)).toBe(2)
+    expect(t.err).toContain('formats what the author wrote')
+    expect(t.err).toContain('filtered output')
   })
 })
 

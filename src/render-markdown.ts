@@ -13,13 +13,28 @@ import type {
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
 
-export interface MarkdownRenderOptions {}
+/**
+ * Whether smart typography renders as its glyph or as the source run the author
+ * typed.
+ *
+ * Presentation output wants the glyph. Output written for a machine to read is
+ * usually better off with the characters that were actually typed: the glyph is
+ * a presentation choice the consumer did not ask for and cannot undo, and a
+ * search for the source spelling misses it.
+ */
+export type SmartTypographyMode = 'glyph' | 'source'
+
+export interface MarkdownRenderOptions {
+  /** Defaults to `'glyph'`. */
+  smartTypography?: SmartTypographyMode
+}
 
 const MAX_RENDER_DEPTH = 200
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
-export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {}): string {
+export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
   const headingIds = new Set<string>()
   const referencedHeadingIds = new Set<string>()
 
@@ -42,6 +57,8 @@ export function renderMarkdown(ast: Document, _opts: MarkdownRenderOptions = {})
     blockDepth: 0,
     inlineDepth: 0,
     abbrBudget: new AbbrBudget(ast.srcByteLength),
+    smartTypography: opts.smartTypography ?? 'glyph',
+    definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -56,6 +73,13 @@ interface MarkdownContext {
   inlineDepth: number
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
+  smartTypography: SmartTypographyMode
+  /**
+   * Labels that actually have a definition. A reference without one did not form
+   * a footnote, so it is ordinary text - and its brackets are Markdown
+   * metacharacters that section 8 M1 requires escaping.
+   */
+  definedFootnotes: Set<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
@@ -81,7 +105,14 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
-      const info = markdownFenceInfo(node.lang, node.header)
+      // The EFFECTIVE title, not the authored header. An attribute line above the
+      // fence overrides a title written in the header, and the HTML target uses
+      // the winner - so emitting `node.header` here described the document
+      // differently in the two targets, announcing a title that had lost
+      // (carve#352, corpus 11-fenced-code-10). The parser resolves the override
+      // into `attrs`, so that is where the answer already is.
+      const effectiveTitle = node.attrs?.keyValues?.['title'] ?? node.header
+      const info = markdownFenceInfo(node.lang, effectiveTitle, node.label)
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
@@ -114,6 +145,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return node.label
         ? `**${escapeText(node.label)}**\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
+    case 'line_block':
+      return renderBlocks(node.children, ctx)
     case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
@@ -139,16 +172,28 @@ function renderList(node: List, ctx: MarkdownContext): string {
   ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
+  // The authored bullet, not a normalized one. A change of bullet is what
+  // SEPARATES two adjacent lists in CommonMark, so emitting `-` for a `*` list
+  // merges lists the source kept apart - the same section 11 rule the AST
+  // records `bulletChar` for and `renderCarve` already honors (carve#352).
+  const bullet = node.bulletChar ?? '-'
+  // The authored ordered-list delimiter, for the same reason as the bullet above:
+  // in CommonMark a change of delimiter SEPARATES two adjacent lists, so emitting
+  // `1.` for a `1)` list merges lists the source kept apart. Measured against
+  // commonmark.js - `1. a` followed by `1) c` gives two `<ol>` elements, the same
+  // input with one delimiter gives one. The AST records `delim` and `renderCarve`
+  // already reproduces it (carve#352, corpus 31).
+  const delim = node.delim === ')' ? ')' : '.'
   for (const item of node.items) {
     const indent = '  '.repeat(ctx.listDepth - 1)
     let prefix: string
     if (node.ordered) {
-      prefix = `${counter}. `
+      prefix = `${counter}${delim} `
       counter++
     } else if (item.checked !== undefined) {
-      prefix = `- ${item.checked ? '[x]' : '[ ]'} `
+      prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `
     } else {
-      prefix = '- '
+      prefix = `${bullet} `
     }
     const content = trimNonNbsp(renderListItem(item, ctx))
     const lines = content.split('\n')
@@ -177,20 +222,37 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
   const rows: string[] = []
   let columns = 0
-  // Per-column alignment, taken from the first non-header row (matching
-  // carve-php), so the Markdown separator preserves `:---` / `:---:` / `---:`
-  // instead of dropping alignment.
+  // Per-column alignment for the Markdown delimiter row, which is the only place
+  // Markdown can express it.
+  //
+  // COLUMN alignment is declared on the HEADER cells - that is where `|=> Age`
+  // puts it, and the HTML renderer applies it to every cell in the column. This
+  // used to read the first NON-header row instead, where `align` is set only by a
+  // per-CELL override, so ordinary aligned tables lost their alignment entirely
+  // and a table with one overridden cell reported that cell's alignment as the
+  // whole column's (carve#352, corpus 48/49/52/53).
+  //
+  // A per-cell override cannot be expressed in a Markdown table at all, so it is
+  // deliberately not consulted here; the column keeps what the header declared.
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
     const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
     columns = Math.max(columns, cells.length)
     const rendered = `| ${cells.join(' | ')} |`
-    if (row.cells.every((cell) => cell.header)) header = rendered
-    else {
-      rows.push(rendered)
+    if (row.cells.every((cell) => cell.header)) {
+      header = rendered
       row.cells.forEach((cell, i) => {
         if (aligns[i] === undefined) aligns[i] = cell.align
       })
+    } else {
+      rows.push(rendered)
+      // A headerless table still declares its columns somewhere, so fall back to
+      // the first row that carries an alignment.
+      if (header === undefined) {
+        row.cells.forEach((cell, i) => {
+          if (aligns[i] === undefined) aligns[i] = cell.align
+        })
+      }
     }
   }
   const separator = (i: number): string => {
@@ -255,6 +317,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'text':
       if (/^<\/#[^>]+>$/.test(node.value)) return node.value
       return escapeText(cleanEscapedText(node))
+    case 'escaped_text':
+      // Reproduce the author's escape. `\-\-` was written precisely so a
+      // downstream processor with smart punctuation on would not read an en
+      // dash; emitting the character bare loses exactly that (carve#350).
+      // The underscore still goes through the sentinel, so the intraword rule
+      // can drop the backslash where CommonMark ignores it anyway.
+      return node.value === '_' ? UNDERSCORE_ESCAPE : '\\' + node.value
     case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
     case 'strong':
@@ -318,14 +387,26 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       )
       return `<abbr title="${title}">${text}</abbr>`
     }
-    case 'footnote':
-      return node.inline
-        ? `^[${renderInlines(node.inline, ctx)}]`
-        : `[^${stripControls(node.id ?? '')}]`
+    case 'footnote': {
+      if (node.inline) return `^[${renderInlines(node.inline, ctx)}]`
+      const id = stripControls(node.id ?? '')
+      // An UNRESOLVED reference did not form a footnote, so what is emitted is
+      // ordinary text -- and its brackets are Markdown metacharacters, which
+      // PART 11 section 8 M1 escapes UNCONDITIONALLY. Emitting them bare handed
+      // the re-parser markup the document never had. carve-php already did this
+      // (carve#352, corpus 132/133/157/161).
+      if (!ctx.definedFootnotes.has(id)) return `\\[^${id}\\]`
+      return `[^${id}]`
+    }
     case 'soft_break':
       return '\n'
     case 'hard_break':
-      return '  \n'
+      // A BACKSLASH, not two trailing spaces (PART 11 section 9). Both mean
+      // `<br />` to a CommonMark reader, but trailing whitespace is removed by
+      // editors that strip on save, by `git apply --whitespace=fix` and by CI
+      // whitespace checks - and losing ONE of the two spaces is enough for the
+      // break to vanish rather than degrade, silently, in a file nobody edited.
+      return '\\\n'
     case 'insert':
       return `<ins>${renderInlines(node.children, ctx)}</ins>`
     case 'delete':
@@ -334,7 +415,14 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Emit BOTH sides like the HTML renderer; dropping oldText loses content.
       return `<del>${escapeText(node.oldText)}</del><ins>${escapeText(node.newText)}</ins>`
     case 'critic-comment':
-      return ''
+      // Visible content: the HTML target renders it as
+      // `<span class="critic-comment"> note </span>`, so dropping it here made two
+      // targets of one engine disagree about whether the document says it. Markdown
+      // has no critic syntax, so the text is what degrades gracefully -- and it is
+      // escaped like any other text, since it lands in a Markdown document.
+      // carve-php kept it (carve#352, corpus 33-editorial-markup); the plain and
+      // ANSI targets were fixed in carve-js#429.
+      return escapeText(node.text)
     case 'heading_ref':
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
@@ -345,7 +433,11 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'comment':
       return ''
     case 'smart_punctuation':
-      return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
+      // Source mode reproduces what the author typed; the glyph is a
+      // presentation choice a machine consumer cannot reverse.
+      return ctx.smartTypography === 'source'
+        ? node.value
+        : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown inline ${(t as { type: string }).type}`)
@@ -371,13 +463,30 @@ function renderImage(node: Image): string {
     : `![${alt}](${src} "${escapeMdTitle(node.title)}")`
 }
 
-function markdownFenceInfo(lang: string | undefined, header: string | undefined): string {
+function markdownFenceInfo(
+  lang: string | undefined,
+  header: string | undefined,
+  label: string | undefined,
+): string {
   // Keep only the first whitespace-delimited token (the language word); drop it
   // if it still contains a backtick (would break the fence).
   const rawToken = lang === undefined ? '' : (stripControls(lang).split(/\s/)[0] ?? '')
   const token = rawToken.includes('`') ? '' : rawToken
-  if (header === undefined) return token
-  return `${token} "${escapeMdTitle(header)}"`
+  // A grouping `[label]` rides along after the language and title. Dropping it
+  // was silent data loss: an info string is free-form after the first word, so
+  // every consumer ignores what it does not understand, and carve-php was
+  // already emitting it (carve#352).
+  const grouping =
+    label === undefined || label === '' ? '' : ` [${stripControls(label).replace(/[[\]`]/g, '')}]`
+  // A title needs a LANGUAGE in front of it. In Markdown the info string's first
+  // token IS the language, so `` ``` "notes.txt" `` makes a CommonMark reader
+  // emit `class="language-&quot;notes.txt&quot;"` -- measured against
+  // commonmark.js. Markdown has no way to express a fence title on its own, so
+  // dropping it beats emitting a bogus language; with a language present the
+  // title is ignored by every consumer and rides along safely. carve-php had this
+  // guard and was right about it (carve#352, corpus 11-fenced-code-8).
+  if (header === undefined || token === '') return `${token}${grouping}`
+  return `${token} "${escapeMdTitle(header)}"${grouping}`
 }
 
 function escapeMarkdownLabel(text: string): string {
@@ -438,23 +547,38 @@ function escapeText(text: string): string {
   // too. `&` first so the entities are not re-escaped.
   text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Escape Markdown metacharacters (none overlap with the HTML chars above).
-  return text.replace(/[\\`*_[\]#]/g, '\\$&')
+  // The underscore escape is emitted as a sentinel rather than a backslash:
+  // whether it survives depends on its neighbours in the assembled document,
+  // which only normalize() can see. See UNDERSCORE_ESCAPE.
+  return text.replace(/[\\`*_[\]#]/g, (ch) => (ch === '_' ? UNDERSCORE_ESCAPE : `\\${ch}`))
 }
 
-/** Dangerous URL schemes blanked on Markdown link/image destinations, mirroring
- *  the HTML renderer so a `javascript:` URL does not survive into Markdown (and
- *  from there a downstream Markdown -> HTML render). */
-const MD_DANGEROUS_SCHEMES = new Set(['javascript', 'vbscript', 'data', 'file'])
+/**
+ * Dangerous URL schemes blanked on Markdown link/image destinations.
+ *
+ * The set and the probe come from the HTML renderer rather than being restated
+ * here. A local copy listed only the four script/inline-content/local-file
+ * schemes and probed with an ASCII-only strip, so the twenty OS
+ * protocol-handler schemes -- `ms-msdt`, `search-ms`, `jar`, `vscode` and the
+ * rest -- survived into Markdown, and from there into whatever renders it. That
+ * is not a narrower policy, it is the same sink one step removed (PART 9 §25,
+ * carve#385).
+ */
 function sanitizeMdUrl(url: string): string {
-  const probe = url.replace(/[\u0000-\u0020]/g, '')
+  const probe = url.replace(SCHEME_PROBE_STRIP_RE, '')
   const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
-  if (m && MD_DANGEROUS_SCHEMES.has(m[1].toLowerCase())) return ''
+  if (m && DANGEROUS_URL_SCHEMES.includes(m[1].toLowerCase())) return ''
   return url
 }
 
-/** Drop C0/C1 control characters (keeping tab and newline) from author content. */
+/**
+ * Drop C0/C1 control characters (keeping tab and newline) from author content,
+ * and the underscore-escape sentinel with them: author content that carried it
+ * would otherwise reach normalize() and be read as an escape this renderer
+ * emitted. Every path to the output passes through here.
+ */
 function stripControls(s: string): string {
-  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/\p{Cc}|\ue004/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
@@ -473,7 +597,16 @@ function cleanEscapedText(node: Text): string {
 
 
 /**
- * Drop the backslash from an intraword underscore.
+ * Sentinel standing in for an underscore escape this renderer emitted, so the
+ * final pass can tell those apart from a backslash the author wrote. U+E000 is
+ * the NBSP sentinel and render-carve claims U+E001..U+E003; this extends the
+ * scheme. Author content never carries it: stripControls() drops it on the way
+ * in, and every path to the output runs through stripControls().
+ */
+const UNDERSCORE_ESCAPE = '\ue004'
+
+/**
+ * Resolve the underscore escapes, dropping the backslash from an intraword one.
  *
  * CommonMark does not honour an intraword underscore, so `company_id` renders
  * literally with or without the escape - the backslash only litters identifiers
@@ -485,11 +618,19 @@ function cleanEscapedText(node: Text): string {
  * node: the parser splits `company_id` into the text nodes `company` and
  * `_id`, so at escape time the underscore looks like it starts a word.
  *
- * Code spans are unaffected: their content is emitted verbatim and never
- * carries these escapes to begin with.
+ * It decides on the sentinel rather than on `\_` because the assembled document
+ * also contains regions this renderer must reproduce byte-exact - code spans,
+ * code blocks, link destinations, titles, raw HTML - and a backslash there is
+ * content, not an escape. Matching `\_` rewrote those too (issue 400).
  */
-function dropRedundantUnderscoreEscapes(text: string): string {
-  return text.replace(/(?<=[\p{L}\p{N}])\\_(?=[\p{L}\p{N}])/gu, '_')
+function resolveUnderscoreEscapes(text: string): string {
+  return text.replace(
+    /\ue004/g,
+    (_match, offset: number) =>
+      /[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') && /[\p{L}\p{N}]/u.test(text[offset + 1] ?? '')
+        ? '_'
+        : '\\_',
+  )
 }
 
 function normalize(text: string): string {
@@ -504,7 +645,7 @@ function normalize(text: string): string {
     '\u00a0',
   )
 
-  return dropRedundantUnderscoreEscapes(collapsed)
+  return resolveUnderscoreEscapes(collapsed)
 }
 
 function trimNonNbsp(text: string): string {
@@ -525,6 +666,7 @@ function walkBlocks(
       case 'block_quote':
       case 'admonition':
       case 'div':
+      case 'line_block':
         walkBlocks(block.children, visit)
         break
       case 'list':

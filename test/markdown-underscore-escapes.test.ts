@@ -31,6 +31,46 @@ describe('markdown underscore escaping', () => {
     expect(carveToMarkdown('`code_span`').trim()).toBe('`code_span`')
   })
 
+  /**
+   * A backslash the author typed is content, not an escape this renderer added.
+   * The de-escaping used to run over the assembled document, where it could not
+   * tell the two apart, and rewrote verbatim regions that carry a literal
+   * backslash before an underscore (issue 400).
+   */
+  describe('does not touch a backslash it did not write', () => {
+    it('keeps a code span verbatim', () => {
+      expect(carveToMarkdown('`a\\_b`').trim()).toBe('`a\\_b`')
+    })
+
+    it('keeps a code block verbatim', () => {
+      expect(carveToMarkdown('```\ncompany\\_id\n```').trim()).toBe('```\ncompany\\_id\n```')
+    })
+
+    it('keeps a link destination verbatim', () => {
+      expect(carveToMarkdown('[x](a\\_b)').trim()).toBe('[x](a\\_b)')
+    })
+
+    it('keeps an image source verbatim', () => {
+      expect(carveToMarkdown('![a](x\\_y)').trim()).toBe('![a](x\\_y)')
+    })
+
+    it('keeps a backslash in a link title', () => {
+      // The parser resolves `\_` in a title, so a backslash only reaches the
+      // renderer when the author doubled it - and then it is content.
+      expect(carveToMarkdown('[x](/u "a\\\\_b")').trim()).toBe('[x](/u "a\\\\_b")')
+    })
+
+    it('keeps raw HTML verbatim', () => {
+      expect(carveToMarkdown('```=html\n<i>a\\_b</i>\n```').trim()).toBe('&lt;i&gt;a\\_b&lt;/i&gt;')
+    })
+  })
+
+  it('de-escapes an authored escape when it is intraword', () => {
+    // `a\_b` and `a_b` are two spellings of the same document, so they have to
+    // render the same - the escape the author wrote is still an escape.
+    expect(carveToMarkdown('a\\_b').trim()).toBe('a_b')
+  })
+
   it('keeps underline emphasis working', () => {
     expect(carveToMarkdown('_underline_').trim()).toBe('<u>underline</u>')
   })

@@ -24,6 +24,9 @@ interface CarveContext {
   blockDepth: number
   inlineDepth: number
   listDepth: number
+  /** Depth of line-block nesting, so the inline writer drops the explicit
+   *  backslash: inside a `::: |` fence every newline already IS a hard break. */
+  lineBlockDepth: number
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -41,7 +44,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
   const previous = escapeMode
   escapeMode = mode
   try {
-    const ctx: CarveContext = { blockDepth: 0, inlineDepth: 0, listDepth: 0 }
+    const ctx: CarveContext = { blockDepth: 0, inlineDepth: 0, listDepth: 0, lineBlockDepth: 0 }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
     const body = renderBlocks(ast.children, ctx)
@@ -102,7 +105,7 @@ function stableJson(value: unknown): string {
  * dropped rather than compared.
  */
 function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical)
+  if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
@@ -112,6 +115,44 @@ function canonical(value: unknown): unknown {
     return out
   }
   return value
+}
+
+/**
+ * Collapse adjacent text and escaped-text nodes into one text node.
+ *
+ * An escape is exactly what this comparison is deciding, so the two renders
+ * must not be told apart BY it. Escaping a character both retypes the node and
+ * SPLITS the run it sat in - `blue.` is one text node, `blue\.` is a text node
+ * plus an escaped-text node - so without this every candidate character would
+ * report a difference and escalate the whole document to conservative escaping.
+ *
+ * What survives the merge is the question worth asking: same characters, same
+ * order, same surrounding structure - does dropping the escapes change anything
+ * ELSE?
+ */
+function mergeTextRuns(nodes: unknown[]): unknown[] {
+  const out: unknown[] = []
+  for (const node of nodes) {
+    const current = node as Record<string, unknown> | null
+    const isTextish =
+      current !== null &&
+      typeof current === 'object' &&
+      (current['type'] === 'text' || current['type'] === 'escaped_text')
+    const previous = out[out.length - 1] as Record<string, unknown> | undefined
+    if (isTextish && previous !== undefined && previous['type'] === 'text') {
+      previous['value'] = String(previous['value'] ?? '') + String(current!['value'] ?? '')
+      if (current!['escapedLeadingCaret'] === true) previous['escapedLeadingCaret'] = true
+      continue
+    }
+    if (isTextish) {
+      const merged: Record<string, unknown> = { type: 'text', value: String(current!['value'] ?? '') }
+      if (current!['escapedLeadingCaret'] === true) merged['escapedLeadingCaret'] = true
+      out.push(merged)
+      continue
+    }
+    out.push(node)
+  }
+  return out
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
@@ -127,6 +168,23 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   }
 }
 
+/** A copy of `attrs` without one key-value, dropping the slot from `order`. */
+function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
+  if (!attrs?.keyValues || !(key in attrs.keyValues)) return attrs
+  const keyValues = { ...attrs.keyValues }
+  delete keyValues[key]
+  const next: Attrs = { ...attrs, keyValues }
+  if (next.order) next.order = next.order.filter((slot) => slot !== key)
+  if (
+    next.id === undefined &&
+    (next.classes === undefined || next.classes.length === 0) &&
+    Object.keys(keyValues).length === 0
+  ) {
+    return undefined
+  }
+  return next
+}
+
 function renderBlock(node: BlockNode, ctx: CarveContext): string {
   const attrs = renderBlockAttrs(node.attrs)
   const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
@@ -140,7 +198,17 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'code_block': {
       const fence = safeFence(node.content, 3)
       const info = codeFenceInfo(node.lang, node.header, node.label)
-      return withAttrs(`${fence}${info}\n${protectVerbatim(node.content)}\n${fence}`)
+      // The opener's quoted title is resolved onto `attrs.title` at parse time
+      // so it reaches every consumer, but the fence carries it too - emitting
+      // both says it twice (`{title=x}` AND `\`\`\` lang "x"`), which is longer
+      // than the author wrote and re-parses with an attribute ORDER the source
+      // never had (issue 369). The fence is the authored spelling, so it wins.
+      const attrsWithoutTitle =
+        node.header !== undefined && node.attrs?.keyValues?.['title'] === node.header
+          ? renderBlockAttrs(withoutKey(node.attrs, 'title'))
+          : attrs
+      const body = `${fence}${info}\n${protectVerbatim(node.content)}\n${fence}`
+      return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
     }
     case 'block_quote': {
       const inner = renderBlocks(node.children, ctx)
@@ -168,12 +236,32 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       const fence = colonFenceFor(node.children)
       return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
     }
+    case 'line_block': {
+      // `::: |` is the line-block opener (PART 3, line_block_open). Emitting a
+      // bare `:::` and tagging the node with a `.line-block` class instead
+      // re-parsed as an ordinary div, so the node type changed across a format
+      // round trip and `parse(fmt(x)) == parse(x)` did not hold (issue 359).
+      //
+      // Inside the fence every newline IS a hard break (PART 3,
+      // line_block_body), so the explicit backslash the inline writer emits for
+      // a hard_break would double it on re-parse.
+      ctx.lineBlockDepth++
+      let body: string
+      try {
+        body = renderBlocks(node.children, ctx)
+      } finally {
+        ctx.lineBlockDepth--
+      }
+      const fence = colonFenceFor(node.children)
+      return withAttrs(fence + ' |\n' + lineBlockIndent(body) + '\n' + fence)
+    }
     case 'div': {
-      // Always render divs generically (`::: {.class}`), never the `::: |` /
-      // `::: \` line-block sugar: that sugar forces hard breaks, but a plain div
-      // carrying a `.line-block` / `.hardbreaks` class keeps soft breaks. The
-      // two are indistinguishable by attrs - only the child break nodes differ -
-      // so we let those break nodes serialize themselves, which round-trips both.
+      // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
+      // sugar: that sugar forces hard breaks, but a plain div carrying a
+      // `.hardbreaks` class keeps soft breaks. The two are indistinguishable by
+      // attrs - only the child break nodes differ - so we let those break nodes
+      // serialize themselves, which round-trips both. (A line block is its own
+      // node type and is handled above.)
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
       const body = renderBlocks(node.children, ctx)
       const fence = colonFenceFor(node.children)
@@ -325,25 +413,50 @@ function colonFenceFor(children: BlockNode[]): string {
   return children.some((child) => child.type === 'admonition' || child.type === 'div') ? '::::' : ':::'
 }
 
+/**
+ * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
+ * per-cell `<`/`>`/`~` alignment markers.
+ *
+ * The GFM delimiter row is an accepted alias on input, but it says something
+ * the AST does not: its alignment applies to the WHOLE column, header and body
+ * alike (PART 9 T7), while alignment on the AST belongs to each cell. Writing a
+ * delimiter row for the ordinary shape - an aligned header over unaligned body
+ * cells - brought every body cell back aligned, so `parse(fmt(x)) == parse(x)`
+ * did not hold (issue 359).
+ *
+ * Two header shapes have no native spelling, because `header_cell` in the
+ * grammar is `'=' [alignment_marker] content` and admits neither an attribute
+ * block nor a span marker:
+ *
+ *   | < | b |     a span marker promoted to a header cell
+ *   |{.x} a | b | a header cell carrying attributes
+ *
+ * Those still need a delimiter row to promote the first row. It is emitted BARE
+ * (`|---|---|`), never with colons: the cells keep their own alignment markers,
+ * so the delimiter contributes structure only and cannot spill alignment down
+ * the column.
+ */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
   const columns = node.rows.reduce((max, row) => Math.max(max, row.cells.length), 0)
-  const gfmHeader = node.rows.length > 0 && node.rows[0]!.cells.every((cell) => cell.header)
-  const headerAligns = node.rows[0]?.cells.map((cell) => cell.align) ?? []
+  const first = node.rows[0]
+  const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
+  const needsDelimiter =
+    headerRow && first.cells.some((c) => c.span !== undefined || c.attrs !== undefined)
+
   node.rows.forEach((row, rowIndex) => {
     const cells: RenderedCell[] = []
     for (let i = 0; i < columns; i++) {
       const cell = row.cells[i]
-      const suppressHeader = gfmHeader && rowIndex === 0
-      const suppressAlign = gfmHeader && rowIndex > 0 && cell?.align === headerAligns[i]
-      cells.push(cell ? renderTableCell(cell, ctx, suppressHeader, suppressAlign) : { text: '', tight: false })
+      // In the delimiter form the promoted row is written as ordinary data
+      // cells - the row after it is what makes them headers.
+      const asHeader = !(needsDelimiter && rowIndex === 0)
+      cells.push(cell ? renderTableCell(cell, ctx, asHeader) : { text: '', tight: false })
     }
-    const attrs = renderAttrs(row.attrs)
-    rows.push(renderTableRow(cells, attrs))
+    rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
   })
-  if (gfmHeader) {
-    const sep = Array.from({ length: columns }, (_, i) => tableSeparator(node.rows[0]!.cells[i])).join('|')
-    rows.splice(1, 0, `|${sep}|`)
+  if (needsDelimiter) {
+    rows.splice(1, 0, `|${Array.from({ length: columns }, () => '---').join('|')}|`)
   }
   if (node.caption) rows.push(`^ ${renderInlines(node.caption, ctx)}`)
   return rows.join('\n')
@@ -358,30 +471,12 @@ function renderTableRow(cells: RenderedCell[], attrs: string): string {
   return `|${cells.map((cell) => (cell.tight ? cell.text : ` ${cell.text} `)).join('|')}|${attrs}`
 }
 
-function renderTableCell(
-  cell: TableCell,
-  ctx: CarveContext,
-  suppressHeader: boolean,
-  suppressAlign: boolean,
-): RenderedCell {
+function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): RenderedCell {
   const attrs = renderAttrs(cell.attrs)
   if (cell.span === 'rowspan') return { text: `${attrs}^`, tight: true }
   if (cell.span === 'colspan') return { text: `${attrs}<`, tight: true }
-  const prefix = `${attrs}${cell.header && !suppressHeader ? '=' : ''}${suppressAlign ? '' : alignMarker(cell.align)}`
+  const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${alignMarker(cell.align)}`
   return { text: `${prefix}${renderInlines(cell.children, ctx)}`, tight: prefix !== '' }
-}
-
-function tableSeparator(cell: TableCell | undefined): string {
-  switch (cell?.align) {
-    case 'left':
-      return ':---'
-    case 'right':
-      return '---:'
-    case 'center':
-      return ':---:'
-    default:
-      return '---'
-  }
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {
@@ -425,14 +520,27 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
   switch (node.type) {
     case 'text':
       return escapeText(cleanEscapedText(node))
+    case 'escaped_text':
+      // The author escaped this character; the writer says so again. No
+      // minimal/conservative decision applies - the node IS the decision.
+      return '\\' + node.value
     case 'emphasis':
       return withAttrs(renderEmphasis('/', renderInlines(node.children, ctx), prevChar, nextChar))
-    case 'strong':
-      // Bold-italic has no node of its own: it is whichever of strong and
-      // emphasis the author wrote outermost, nested. Serializing the nesting
-      // literally is therefore exact - `*/y/*` and `/*y*/` differ only in
-      // which mark is outer, and each re-parses to the shape it came from.
+    case 'strong': {
+      // The combined bold-italic form is a single production, and the nested
+      // spelling parses to the SAME strong-wrapping-emphasis tree - so the
+      // nesting does not record which one the author wrote and cannot be
+      // serialized back "literally". The comment here used to claim each
+      // spelling re-parses to the shape it came from; it does not, which is why
+      // the documented form was being rewritten into an undocumented one
+      // (carve#375). `boldItalic` carries the answer (PART 11 section 6).
+      const inner = node.children[0]
+      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis') {
+        const content = renderInlines(inner.children, ctx)
+        return withAttrs(`/*${content}*/`)
+      }
       return withAttrs(renderEmphasis('*', renderInlines(node.children, ctx), prevChar, nextChar))
+    }
     case 'underline':
       return withAttrs(renderEmphasis('_', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'strike':
@@ -481,7 +589,7 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
     case 'soft_break':
       return '\n'
     case 'hard_break':
-      return '\\\n'
+      return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
     case 'insert':
       return `{+${renderInlines(node.children, ctx)}+}${renderAttrs(node.attrs)}`
     case 'delete':
@@ -678,19 +786,52 @@ function alignMarker(align: TableCell['align']): string {
   }
 }
 
+/**
+ * Write a line block's leading indentation back as ordinary spaces.
+ *
+ * The parser records that indentation as the U+E000 placeholder (the same
+ * sentinel an escaped space uses, so the two never collide with a literal
+ * nbsp). normalize() resolves every remaining U+E000 to a real nbsp, which is
+ * right for an escaped space and wrong here: the source form of a line block's
+ * indent is a plain space, and a real nbsp re-parses as literal text rather
+ * than as indentation, so the text node came back different (issue 359).
+ *
+ * Hand the run to the verbatim scheme instead, which restores plain spaces
+ * after normalize() has run.
+ */
+function lineBlockIndent(body: string): string {
+  return body.replace(/^\ue000+/gm, (run) => '\ue001'.repeat(run.length))
+}
+
 function normalize(text: string): string {
-  const lines = trimNonNbsp(text.replace(/\ue000/g, '\u00a0')).split('\n')
-  // Strip a line's trailing whitespace only where it cannot be content. At the
-  // end of a paragraph the parser drops it (corpus 102), so the writer must
-  // too; before a SOFT BREAK the parser keeps it, and stripping it there
-  // changed the rendered output (carve#359). A line whose successor is blank
-  // ends its block; one followed by more text is mid-paragraph.
-  const stripped = lines.map((line, i) => {
+  // The placeholder means the author wrote an ESCAPED SPACE, so the writer says
+  // that again. Resolving it to a literal non-breaking space instead lost the
+  // distinction the parser draws - `10\ kg` came back carrying U+00A0, which
+  // re-parses as a literal nbsp rather than as an escape, so the text node
+  // differed even though the HTML did not (carve#369).
+  //
+  // A line block's indent is the other user of this sentinel and is already
+  // routed through the verbatim scheme before this runs, so what is left here
+  // is an escaped space and nothing else.
+  const lines = trimNonNbsp(text.replace(/\ue000/g, '\\ ')).split('\n')
+  const swept = lines.map((line, i) => {
+    // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
+    // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
+    // three spaces inside a code block are out of reach and stay intact.
+    if (line.length > 0 && line.replace(/[ \t]+/g, '') === '') return ''
+    // Otherwise strip a line's trailing whitespace only where it CANNOT be
+    // content. At the end of a block the parser drops it too, so the writer
+    // must; before a SOFT BREAK the parser keeps it, and stripping it there
+    // changes the rendered output - `a \nb` renders `<p>a \nb</p>`, so the
+    // stripped form broke carveToHtml(fmt(x)) == carveToHtml(x). carve-rs and
+    // carve-php already restricted this (carve#359, carve#375); this engine did
+    // not, and no corpus case covered an ASCII trailing space before a soft
+    // break, so nothing caught it.
     const next = lines[i + 1]
     const endsBlock = next === undefined || next.trim() === ''
     return endsBlock ? line.replace(/[^\S\u00a0]+$/g, '') : line
   })
-  const cleaned = trimNonNbsp(stripped.join('\n').replace(/\n{3,}/g, '\n\n'))
+  const cleaned = trimNonNbsp(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
   return `${restoreVerbatim(cleaned)}\n`
 }
 
@@ -711,16 +852,7 @@ function protectVerbatim(content: string): string {
 }
 
 function restoreVerbatim(text: string): string {
-  return (
-    text
-      .replace(/\ue001/g, ' ')
-      .replace(/\ue002/g, '\t')
-      .replace(/\ue003/g, '')
-      // U+E004 marks a paragraph line that must not begin at column 0. It
-      // resolves AFTER normalize()'s trims, which would otherwise strip a plain
-      // leading space whenever the paragraph is the document's first block.
-      .replace(/\ue004/g, ' ')
-  )
+  return text.replace(/\ue001/g, ' ').replace(/\ue002/g, '\t').replace(/\ue003/g, '')
 }
 
 function trimNonNbsp(text: string): string {
@@ -782,7 +914,7 @@ function guardThematicBreakLines(body: string): string {
   if (!body.includes('-')) return body
   return body
     .split('\n')
-    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? `\ue004${line}` : line))
+    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? ` ${line}` : line))
     .join('\n')
 }
 
@@ -799,15 +931,46 @@ function escapeImageAlt(text: string): string {
   return text.replace(/[\\[\]]/g, '\\$&')
 }
 
+/**
+ * Backslash-escape exactly the characters the destination scan would otherwise
+ * read differently: a parenthesis with no partner, and a backslash sitting in
+ * front of one of the three escapable characters. Balanced parentheses are
+ * left alone -- they re-parse as themselves, and escaping them would be churn
+ * against the minimal-escaping rule in PART 11 section 4.
+ */
+function escapeDestinationEscapes(text: string): string {
+  const openers: number[] = []
+  const unbalanced = new Set<number>()
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '(') openers.push(i)
+    else if (text[i] === ')') {
+      if (openers.length > 0) openers.pop()
+      else unbalanced.add(i)
+    }
+  }
+  for (const i of openers) unbalanced.add(i)
+  let out = ''
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    const escapable = ch === '\\' && (text[i + 1] === '(' || text[i + 1] === ')' || text[i + 1] === '\\')
+    out += unbalanced.has(i) || escapable ? `\\${ch}` : ch
+  }
+  return out
+}
+
 function escapeDestination(text: string): string {
   const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
   const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
-  // A backslash is a literal destination character (no destination escapes),
-  // so it is emitted verbatim -- escaping it would double on re-parse.
   // Whitespace is percent-encoded (it would otherwise end the destination).
-  return text
+  // A parenthesis only needs escaping when it is unbalanced, because a
+  // balanced pair survives the scan as-is -- and leaving it bare is what keeps
+  // the common case (`.../Foo_(bar)`) readable. A backslash is escaped only
+  // in front of the three characters the destination scan treats as escapes,
+  // so backslashes elsewhere in a URL are emitted verbatim.
+  const escaped = escapeDestinationEscapes(text)
+  return escaped
     .replace(/\s/g, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
-    .replace(/[()]/g, (ch) => (sanitizeBlank ? (ch === '(' ? '%28' : '%29') : ch))
+    .replace(/\\?[()]/g, (m) => (sanitizeBlank ? (m.endsWith('(') ? '%28' : '%29') : m))
 }
 
 function escapeQuoted(text: string): string {
@@ -879,6 +1042,13 @@ function firstBoundary(node: InlineNode | undefined): string {
   switch (node.type) {
     case 'text':
       return node.value[0] ?? ''
+    // The CHARACTER, not the backslash that precedes it in the output. A text
+    // node holding `_b_` and an escaped-text node holding `_` describe the same
+    // neighbour, and the writer has to brace an adjacent delimiter the same way
+    // for both - otherwise the first pass (text) and the second (escaped text)
+    // disagree and `fmt(fmt(x)) != fmt(x)`.
+    case 'escaped_text':
+      return node.value
     case 'soft_break':
     case 'hard_break':
       return '\n'
@@ -898,6 +1068,8 @@ function lastBoundary(node: InlineNode | undefined): string {
   switch (node.type) {
     case 'text':
       return node.value[node.value.length - 1] ?? ''
+    case 'escaped_text':
+      return node.value
     case 'soft_break':
     case 'hard_break':
       return '\n'

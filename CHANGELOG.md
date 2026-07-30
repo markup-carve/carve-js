@@ -9,6 +9,136 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`markdownToCarve` no longer turns plain Markdown text into Carve markup.**
+  CommonMark defines no `/…/`, `=…=`, single-`~…~`, `%%…%%` or braced
+  `{X…X}` syntax, so all of those are literal text on the way in - and the
+  converter passed them through for Carve to parse as markup. `a {,y,} b` came
+  out as a subscript, `a /it/ b` as emphasis, and `a %%c%% b` lost its text
+  entirely, because `%%` opens a comment. The first delimiter of each construct
+  is now escaped, which is the rule carve-php#420 applied to the bare dollar
+  pair: the converter must not introduce a construct that was not in the input.
+  Escaping runs after code spans, links, URLs and math are protected and before
+  the Markdown rewrites, so `**b**`, `_em_`, `~~s~~`, `==h==`, `^sup^` and the
+  HTML inline tags still convert, while `a/b/c`, `1/2`, `x = y`, `~5`, `50%` and
+  non-http URLs are left alone. Note the behavior change: Markdown that
+  contained Carve inline syntax and previously passed through verbatim is now
+  escaped.
+
+- **A `%%%` comment opener with trailing text no longer leaks the comment body
+  and drops the next block.** `%%% html` and `%%% notes` were not accepted as
+  fence lines, so the `%%` line-comment rule ate the opener, the body rendered
+  as an ordinary paragraph, and the following `%%%` opened an unterminated
+  block that swallowed the rest of the document. A comment fence is now a
+  delimiter plus an insignificant tail: only the leading run of `%` is
+  structural, so `%%% TODO` opens and `%%% end` closes. Percent fences carry no
+  info string - a raw block is a code fence with `=FORMAT` - so `%%% html` is a
+  comment and its body stays hidden.
+
+  An opener with no matching closer ahead now opens nothing and degrades to a
+  line comment, so following blocks still render instead of vanishing, matching
+  the existing `:::` rule. An opener's tail is kept as the body's first line so
+  `fmt` round-trips it; a closer's tail is dropped (carve#463, PART 9 §28).
+- **The canonical writer no longer emits a code fence's title twice.** The
+  opener's quoted title is resolved onto `attrs.title` at parse time so it
+  reaches every consumer, but the fence carries it too - and the writer emitted
+  both, turning ```` ```php "src/Auth.php" ```` into a `{title=src/Auth.php}`
+  line plus the same quoted title on the fence. Longer than the author wrote,
+  and it re-parsed with an attribute order the source never had. The fence is
+  the authored spelling, so it wins (carve#369).
+
+  Corpus round trip goes from 493/498 to **497/498**.
+
+### Fixed
+
+- **The canonical writer reproduces an escaped space instead of resolving it.**
+  `10\ kg` came back carrying a literal non-breaking space, which re-parses as
+  a literal rather than as an escape - the same HTML, a different text node.
+  The parser draws the distinction (the escape gets its own placeholder, a
+  literal nbsp stays itself) and the writer was collapsing both. Round-trip
+  goes from 484/498 to 486/498 on the corpus (carve#369).
+
+### Changed
+
+- **BREAKING (AST): an escaped character is now its own node.** `\-` parses to
+  `{type: 'escaped_text', value: '-'}` instead of being flattened into the
+  surrounding text. Consumers that read `text.value` see the run split at each
+  escape; the character itself is unchanged, and every renderer's output is the
+  same except Markdown (below).
+
+  The backslash carries intent the character does not: `\-\-` was written
+  precisely so a downstream processor with smart punctuation on would not read
+  an en dash. Flattening it lost that, and this engine emitted the trigger bare
+  where carve-php reproduced the escape (carve#350). `escaped_text` is in the
+  inline vocabulary in the spec's profiles.md.
+
+- **Markdown output reproduces the author's escapes** (PART 11 §7 M2).
+  `A \" B \-\- C` now renders as `A \" B \-\- C` rather than `A " B -- C`.
+  A document that escapes nothing gains no backslashes.
+
+### Changed
+
+- **BREAKING (AST): a line block is now its own node type.** `::: |` parses to
+  `{type: 'line_block', children}` instead of a `div` carrying a `.line-block`
+  class. Consumers that matched on the class have to match on the type instead.
+
+  The class could not express the construct: inside a `::: |` fence every
+  newline is a hard break, while a plain div an author gave that class keeps
+  soft breaks. With only the class to go on, the writer could not tell the two
+  apart, emitted the generic `:::` form, and a formatted line block re-parsed as
+  an ordinary div - one of the four constructs breaking
+  `parse(fmt(x)) == parse(x)` (carve#359). It also brings carve-js in line with
+  the block vocabulary in the spec's profiles.md, which lists `line_block`, and
+  with carve-php, which already had the node.
+
+  **Rendered output is unchanged** in every target: the HTML is still
+  `<div class="line-block">`, with a structural class that trails the author's
+  own attributes exactly as before (`{.foo #v}` renders
+  `class="foo line-block" id="v"`, matching carve-php and carve-rs).
+
+### Fixed
+
+- **The canonical writer round-trips 9 more corpus cases.** Measured over the
+  whole 494-case corpus, `parse(fmt(x)) == parse(x)` goes from 468 to 477;
+  `to_html(fmt(x)) == to_html(x)` and `fmt(fmt(x)) == fmt(x)` stay at 494/494.
+  Together with the `line_block` node this closes all four constructs named in
+  carve#359.
+
+  *Tables* are written in the native header form (`=` cells plus per-cell
+  alignment markers) instead of a GFM delimiter row. A delimiter row's
+  alignment applies to the whole column, header and body alike, while the AST
+  records alignment per cell - so an aligned header over unaligned body cells
+  came back with every body cell aligned. The two header shapes with no native
+  spelling (a promoted span marker, a header cell carrying attributes) keep the
+  delimiter row, now emitted bare so it cannot spill alignment down the column.
+
+  *The blessed empty attribute block* (`-{} text`) records nothing, matching the
+  four other sites in the parser that already drop an attribute block declaring
+  nothing, and matching carve-rs.
+- **`autolink` and `admonition` are deniable by name** (carve#362). Both folded
+  into `link` / `div` before the profile's allow/deny check, so naming them was
+  a silent no-op - a host restricting untrusted input could deny autolinks, get
+  no error and no violation, and still emit them. They stay covered by the
+  broader name: denying `link` still strips autolinks and denying `div` still
+  strips admonitions, so no profile written against the broad name is widened.
+
+- **The canonical writer reproduces a line block as a line block** (carve#359).
+  It emitted a bare `:::` plus a `.line-block` class, and resolved the indent
+  placeholder to a literal non-breaking space - which re-parses as text rather
+  than as indentation, so the text node came back different. `::: |` and its
+  leading spaces now round-trip byte for byte.
+
+### Fixed
+
+- **The Markdown renderer no longer de-escapes underscores inside verbatim
+  content.** The intraword-underscore cleanup matched a literal `\_` anywhere in
+  the assembled document, so a backslash the author wrote was rewritten along
+  with the escapes the renderer added: `` `a\_b` `` came back as `` `a_b` ``,
+  and the same happened in fenced code blocks, link destinations, image sources
+  and escaped raw HTML. Each of those dropped a byte the parser had kept - a
+  code span does not process escapes, so its value carries the backslash
+  literally. The cleanup now decides on a sentinel only the text escaper emits,
+  so it sees exactly the escapes the renderer wrote.
+
 - **The canonical writer no longer escapes punctuation that needs no escape**
   (PART 11). `carve fmt` turned ordinary prose into backslash soup - a sentence
   reading `50% faster: yes (ok).` came back as `50\% faster\: yes \(ok\).`,

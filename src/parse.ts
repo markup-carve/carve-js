@@ -25,6 +25,8 @@ import type {
   DefinitionItem,
   DefinitionList,
   Div,
+  EscapedText,
+  LineBlock,
   Document,
   Emphasis,
   Extension,
@@ -150,12 +152,20 @@ const RE_ITEM_ATTR =
 // when there is no abutting brace or the brace is not a valid attribute payload
 // (then `-{...}` is not a marker and the line stays ordinary text, mirroring the
 // inline-span disambiguation, grammar §14).
-function extractItemAttr(line: string): { stripped: string; attrs: Attrs } | null {
+function extractItemAttr(line: string): { stripped: string; attrs: Attrs | undefined } | null {
   const m = RE_ITEM_ATTR.exec(line)
   if (!m) return null
   if (!isValidAttrPayload(m[3]!)) return null
-  return { stripped: m[1]! + m[2]! + m[4]!, attrs: parseAttrs(m[3]!) }
+  const attrs = parseAttrs(m[3]!)
+  // The blessed empty block (`-{} text`) exists to STRIP the braces, not to
+  // record anything: it declares no id, class or key. Recording an empty attrs
+  // object would make `-{} x` and `- x` different documents that render the
+  // same, and the writer emits the shorter of the two - so a formatted item
+  // came back without the object and `parse(fmt(x)) == parse(x)` did not hold
+  // (issue 359). carve-rs already records nothing here.
+  return { stripped: m[1]! + m[2]! + m[4]!, attrs: isEmptyAttrs(attrs) ? undefined : attrs }
 }
+
 const TRIM_STRUCTURAL_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 function trimStructural(text: string): string {
@@ -306,7 +316,12 @@ const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*=([a-zA-Z][\w-]*)\s*$/
 // indented line whose first non-whitespace content is `%%` is a comment line
 // (it interrupts an open paragraph and renders nothing), matching carve-php /
 // carve-rs and the grammar's `comment_line = [whitespace], "%%", …`.
-const RE_COMMENT_BLOCK = /^%{3,}\s*$/
+// A comment fence line: the leading run of 3+ `%` is the DELIMITER and any
+// trailing text on the line is insignificant (PART 9 §28), so `%%% TODO` and
+// `%%% html` are fences, not raw blocks — `%%%` carries no info string (the raw
+// block is a code fence with an `=FORMAT` info string). Capture group 1 is the
+// delimiter run, whose length must match to close.
+const RE_COMMENT_BLOCK = /^(%{3,})(.*)$/
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
@@ -372,6 +387,12 @@ class Lexer {
   // line exists onward. Once proven, every later fence opener (pos only
   // advances) short-circuits, keeping "many unclosed fences" input linear.
   noFenceCloserFrom = Infinity
+
+  // Negative cache for commentBlockHasCloser, mirroring divHasCloser for the
+  // `%%%` opener. A comment closer matches on EXACT delimiter length, so only
+  // the per-length map can short-circuit; without it, input like thousands of
+  // unclosed `%%%` openers rescans to EOF for each one → O(n²).
+  commentNoCloserOfLenFrom = new Map<number, number>()
 
   constructor(source: string, opts: ParseOptions = {}, lineNumberOffset = 0) {
     this.lineNumberOffset = lineNumberOffset
@@ -1033,8 +1054,14 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Block-level constructs in priority order
   if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
   if (RE_FENCE.test(line)) return parseFence(lexer)
-  // Comments (not rendered). Block (`%%%`) before line (`%%`).
-  if (RE_COMMENT_BLOCK.test(line)) return parseCommentBlock(lexer)
+  // Comments (not rendered). Block (`%%%`) before line (`%%`). A `%%%` opener
+  // with NO matching closer ahead does not open a block (PART 9 §28) — it falls
+  // through to the line-comment rule below, so the following blocks still
+  // render instead of being swallowed to EOF.
+  const commentFence = RE_COMMENT_BLOCK.exec(line)
+  if (commentFence && commentBlockHasCloser(lexer, commentFence[1]!.length)) {
+    return parseCommentBlock(lexer)
+  }
   if (RE_COMMENT_LINE.test(line)) {
     const l = lexer.consume()
     return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^\s/, '') }
@@ -1304,18 +1331,45 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   return { type: 'raw_block', format, content: lines.join('\n') }
 }
 
-// Block comment: a `%%%`+ opener, closed by a line of the SAME length
-// (more `%` nest). Not rendered.
+/**
+ * From a `%%%` opener at peek(0), is there a matching closer ahead? A comment
+ * closer matches on EXACT delimiter length (longer fences nest), so the scan is
+ * per-length. Used to reject an unclosed `%%%` as a block opener (PART 9 §28):
+ * without this an unclosed opener swallows the rest of the document, silently
+ * dropping every following block.
+ */
+function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
+  const start = lexer.pos + 1
+  if (start >= (lexer.commentNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
+  for (let i = start; i < lexer.lines.length; i++) {
+    const c = RE_COMMENT_BLOCK.exec(lexer.lines[i]!)
+    if (c && c[1]!.length === fence) return true
+  }
+  // No closer of this length ahead. pos only advances, so the smallest such
+  // start is a monotone frontier — cache it to keep later openers O(1).
+  const prev = lexer.commentNoCloserOfLenFrom.get(fence) ?? Infinity
+  if (start < prev) lexer.commentNoCloserOfLenFrom.set(fence, start)
+  return false
+}
+
+// Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
+// SAME length (more `%` nest). Not rendered.
 function parseCommentBlock(lexer: Lexer): Comment {
-  // A comment fence delimiter is STRUCTURAL, not content: match the opener and
-  // closer with native trim (treating any whitespace, incl. U+00A0, as
-  // insignificant) so a stray non-breaking space cannot desync the closer and
-  // swallow the rest of the document.
-  const open = lexer.consume().trim()
+  // A comment fence delimiter is STRUCTURAL, not content: only the leading run
+  // of `%` is matched, so neither trailing text (`%%% TODO`) nor a stray
+  // non-breaking space can desync the closer and swallow the rest of the
+  // document. The opener's trailing text is kept as the body's first line so
+  // `carve fmt` round-trips the words instead of deleting them; a closer's
+  // trailing text is discarded, like a code fence's closing info.
+  const m = RE_COMMENT_BLOCK.exec(lexer.consume())!
+  const fence = m[1]!.length
   const lines: string[] = []
+  const openerTail = m[2]!.trim()
+  if (openerTail !== '') lines.push(openerTail)
   while (!lexer.eof()) {
     const ln = lexer.peek()!
-    if (ln.trim() === open) {
+    const c = RE_COMMENT_BLOCK.exec(ln)
+    if (c && c[1]!.length === fence) {
       lexer.consume()
       break
     }
@@ -1460,7 +1514,7 @@ function lineBlockHasCloser(lexer: Lexer): boolean {
   return false
 }
 
-function parseLineBlock(lexer: Lexer): Div {
+function parseLineBlock(lexer: Lexer): LineBlock {
   const open = lexer.consume()
   const m = RE_LINE_BLOCK_OPEN.exec(open)!
   const fence = m[1]!.length
@@ -1492,10 +1546,9 @@ function parseLineBlock(lexer: Lexer): Div {
     ),
   }))
   // No inline opener attributes (strict djot); a preceding block-attribute
-  // line merges onto this div in parseBlocks.
-  const node: Div = {
-    type: 'div',
-    attrs: { classes: ['line-block'], order: ['.class'] },
+  // line merges onto this node in parseBlocks.
+  const node: LineBlock = {
+    type: 'line_block',
     children,
   }
   return node
@@ -3131,12 +3184,20 @@ function parseTable(lexer: Lexer): Table | Figure {
     rawRows.splice(1, 1)
     rowAttrsList.splice(1, 1)
     for (const c of rawRows[0]!) c.header = true
-    for (const rc of rawRows) {
-      rc.forEach((c, i) => {
-        const a = aligns[i]
-        if (a && !c.align) c.align = a
-      })
-    }
+    // Column alignment lands on the HEADER cells only, matching what the native
+    // `|=<` markers produce. Propagating it onto body cells too made the same
+    // logical table parse to two different trees depending on which separator
+    // syntax was used, and the writer then serialized the propagated values as
+    // per-cell markers the author never wrote (carve#352, corpus 09-tables-3).
+    //
+    // Nothing is lost: the HTML renderer already inherits column alignment for a
+    // body cell whose own align is unset, which is how the native path has always
+    // rendered aligned body cells. A genuine per-cell override still sets
+    // `c.align` itself and is untouched here.
+    rawRows[0]!.forEach((c, i) => {
+      const a = aligns[i]
+      if (a && !c.align) c.align = a
+    })
   }
   const rows: TableRow[] = rawRows.map((rc, idx) => {
     const row: TableRow = {
@@ -3502,7 +3563,60 @@ const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 
 // decides span (valid block, possibly empty) vs literal (invalid content).
 // Destination is non-empty (grammar `link_destination = {...}+`), so `[a]()`
 // is NOT a link -- it stays literal (matches carve-php / carve-rs).
-const RE_LINK_TAIL = /^\(([^)\s]+)(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+const RE_LINK_REST = /^(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+
+/**
+ * Read a destination out of a link or image tail, starting at the `(`.
+ *
+ * A parenthesis inside a destination is balanced against the one that closes
+ * the tail, so `[a](x(y)z)` is a whole link rather than a truncated one. This
+ * is what djot and CommonMark both do, and URLs that carry parentheses -
+ * Wikipedia and MDN produce them constantly - are the reason they do.
+ *
+ * The scan ends at whitespace, which begins a title, or at a `)` with no
+ * opener left to match. A destination that needs either of those characters
+ * literally escapes it; `\(`, `\)` and `\\` are the only escapes here, so a
+ * backslash in front of anything else stays a literal backslash and URLs full
+ * of them are unaffected.
+ *
+ * Returns the raw destination and where the scan stopped, or null when the
+ * tail does not open with `(`.
+ */
+function scanDestination(tail: string): { dest: string; end: number } | null {
+  if (tail[0] !== '(') return null
+  let dest = ''
+  let depth = 0
+  let i = 1
+  for (; i < tail.length; i++) {
+    const c = tail[i]!
+    if (c === '\\' && (tail[i + 1] === '(' || tail[i + 1] === ')' || tail[i + 1] === '\\')) {
+      dest += tail[i + 1]
+      i++
+      continue
+    }
+    if (c === '(') depth++
+    else if (c === ')') {
+      if (depth === 0) break
+      depth--
+    } else if (/\s/.test(c)) break
+    dest += c
+  }
+  return { dest, end: i }
+}
+
+/**
+ * The whole tail of a link or image: `(destination)`, optionally with a title
+ * and an attribute block. Returns the shape the regex it replaced returned --
+ * full match, destination, the two title spellings, attribute payload -- so
+ * the call sites read the same either way.
+ */
+function execLinkTail(tail: string): [string, string, string | undefined, string | undefined, string | undefined] | null {
+  const scanned = scanDestination(tail)
+  if (scanned === null || scanned.dest === '') return null
+  const rest = RE_LINK_REST.exec(tail.slice(scanned.end))
+  if (rest === null) return null
+  return [tail.slice(0, scanned.end + rest[0].length), scanned.dest, rest[1], rest[2], rest[3]]
+}
 const RE_REF_TAIL = /^\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 
@@ -3579,7 +3693,7 @@ function buildBracketMap(s: string): Record<number, number> {
 
 // Suffix-existence tables used to skip the inline tail regexes when their
 // mandatory close delimiter is absent from the rest of the input. Each tail
-// pattern (RE_LINK_TAIL, RE_SPAN_TAIL, the critic and forced-emphasis
+// pattern (the link tail, RE_SPAN_TAIL, the critic and forced-emphasis
 // patterns) requires a specific literal (`)`, `}`, `+}`, `-}`) inside its
 // match; if no such literal occurs at or after the position where the regex
 // would be anchored, the regex CANNOT match, so running it is pure wasted work.
@@ -3795,6 +3909,10 @@ function lastEmittedGlyph(out: InlineNode[]): string {
     const glyph = previous.glyph ?? SMART_PUNCTUATION_GLYPHS[previous.kind]
     if (glyph) return glyph
   }
+  // An escaped character is its own node but still the character before the
+  // quote, and quote flanking reads that character: `\{"quoted"` opens on the
+  // brace exactly as an unescaped `{` would (corpus 163).
+  if (previous && previous.type === 'escaped_text') return previous.value
   return 'x'
 }
 
@@ -3977,7 +4095,15 @@ function scanInlineInner(
         // Remember a leading escaped caret so it is never mistaken for a caption
         // marker (`\^ cap` after an image stays a paragraph, not a figure).
         if (nxt === '^' && buf === '') bufEscapedCaret = true
-        append(nxt)
+        // The escape is its own node: the backslash carries intent the literal
+        // character does not. `\-\-` was written precisely so a downstream
+        // processor would not read an en dash, and flattening it into text lost
+        // that (carve#350).
+        const escStart = i
+        flush()
+        out.push(
+          withPos({ type: 'escaped_text', value: nxt } as EscapedText, source, text, escStart, i + 2),
+        )
         i += 2
         continue
       }
@@ -4153,7 +4279,7 @@ function scanInlineInner(
         const alt = rest.slice(2, close)
         const tail = rest.slice(close + 1)
         // A link/image tail needs a literal `)`; skip when none lies ahead.
-        const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
+        const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
         if (ml) {
           flush()
           const img: Image = { type: 'image', src: ml[1]!, alt }
@@ -4252,7 +4378,7 @@ function scanInlineInner(
           continue
         }
         // Inline link [text](url "title"){attrs}
-        const ml = rparenSuf && rparenSuf[i + close + 1] ? RE_LINK_TAIL.exec(tail) : null
+        const ml = rparenSuf && rparenSuf[i + close + 1] ? execLinkTail(tail) : null
         if (ml) {
           flush()
           const link: Link = {
@@ -4607,7 +4733,14 @@ function matchEmphasis(
         }
         const children = scanInline(inner, shiftSource(source, text, start), inFootnote)
         return {
-          node: { type: 'strong', children: [{ type: 'emphasis', children }] },
+          // `boldItalic` records that the author used the combined form. The
+          // nested spelling `*/x/*` yields the same tree, so the writer needs the
+          // mark to reproduce what was written (PART 11 §6).
+          node: {
+            type: 'strong',
+            boldItalic: true,
+            children: [{ type: 'emphasis', children }],
+          },
           end: close + 2,
         }
       }

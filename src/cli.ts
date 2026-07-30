@@ -26,7 +26,10 @@ import {
   carveToCarve,
   carveToPlainText,
   carveToAnsi,
+  Profile,
+  ProfileViolationError,
   type MigrationWarning,
+  type ProfileOptions,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { LIB_VERSION, SPEC_VERSION } from './version.js'
@@ -59,12 +62,21 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
 
   render options (default --html; choose at most one):
     --html         HTML (default)
-    --markdown     Markdown
-    --plain        plain text
+    --markdown     Markdown (--md)
+    --plain        plain text (--plain-text)
     --ansi         ANSI-colored terminal text
     --stamp-info   report the document's provenance marker
     --stamp-check  exit 1 when the document predates this spec version
     --carve        canonical Carve source
+
+  safety options (for untrusted input; combine freely with a format above):
+    --no-raw-html, --safe       escape =html raw blocks/spans instead of
+                                emitting them. Affects --html, the only format
+                                that can emit live HTML; the others already
+                                escape it (--markdown), drop it (--plain), or
+                                keep it as source text (--ansi, --carve).
+    --profile NAME              restrict features (full|article|comment|minimal)
+    --profile-base-host HOST    base host for the profile's link policy
 
 fmt - format Carve source canonically.
 
@@ -218,14 +230,6 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
   return 0
 }
 
-const RENDERERS = {
-  html: carveToHtml,
-  markdown: carveToMarkdown,
-  carve: carveToCarve,
-  plain: carveToPlainText,
-  ansi: carveToAnsi,
-} as const
-
 async function runFmt(args: string[], io: CliIO): Promise<number> {
   let values: {
     write?: boolean
@@ -337,8 +341,14 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     carve?: boolean
     plain?: boolean
     ansi?: boolean
+    md?: boolean
+    'plain-text'?: boolean
     'stamp-info'?: boolean
     'stamp-check'?: boolean
+    'no-raw-html'?: boolean
+    safe?: boolean
+    profile?: string
+    'profile-base-host'?: string
     help?: boolean
   }
   let positionals: string[]
@@ -351,8 +361,14 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         carve: { type: 'boolean' },
         plain: { type: 'boolean' },
         ansi: { type: 'boolean' },
+        md: { type: 'boolean' },
+        'plain-text': { type: 'boolean' },
         'stamp-info': { type: 'boolean' },
         'stamp-check': { type: 'boolean' },
+        'no-raw-html': { type: 'boolean' },
+        safe: { type: 'boolean' },
+        profile: { type: 'string' },
+        'profile-base-host': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -369,6 +385,11 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     return 0
   }
 
+  // Fold the carve-rs-compatible aliases into their canonical flags before the
+  // "at most one" check, so `--md --markdown` is one format, not two.
+  if (values.md) values.markdown = true
+  if (values['plain-text']) values.plain = true
+
   const chosen = (['html', 'markdown', 'plain', 'ansi', 'carve'] as const).filter((f) => values[f])
   if (chosen.length > 1) {
     io.writeErr('carve render: choose at most one of --html, --markdown, --plain, --ansi, --carve\n')
@@ -378,7 +399,44 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     io.writeErr('carve render: takes a single file (or stdin)\n')
     return 2
   }
-  const render = RENDERERS[chosen[0] ?? 'html']
+  const target = chosen[0] ?? 'html'
+  if ((values.profile !== undefined || values['profile-base-host'] !== undefined) && target === 'carve') {
+    io.writeErr(
+      'carve render: profiles cannot be used with --carve because the Carve formatter formats what the author wrote rather than the filtered output\n',
+    )
+    return 2
+  }
+  if (values['profile-base-host'] !== undefined && values.profile === undefined) {
+    io.writeErr('carve render: --profile-base-host requires --profile\n')
+    return 2
+  }
+
+  const opts: ProfileOptions & { allowRawHtml?: false } = {}
+  if (values['no-raw-html'] || values.safe) opts.allowRawHtml = false
+  if (values.profile !== undefined) {
+    switch (values.profile) {
+      case 'full':
+        opts.profile = Profile.full()
+        break
+      case 'article':
+        opts.profile = Profile.article()
+        break
+      case 'comment':
+        opts.profile = Profile.comment()
+        break
+      case 'minimal':
+        opts.profile = Profile.minimal()
+        break
+      default:
+        io.writeErr(
+          `carve render: unknown profile '${values.profile}' (expected full, article, comment or minimal)\n`,
+        )
+        return 2
+    }
+  }
+  if (values['profile-base-host'] !== undefined) {
+    opts.profileBaseHost = values['profile-base-host']
+  }
 
   let src: string
   if (positionals.length === 0) {
@@ -414,7 +472,41 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     return 0
   }
 
-  let out = render(src)
+  let out: string
+  try {
+    switch (target) {
+      case 'html':
+        out = carveToHtml(src, opts)
+        break
+      case 'markdown':
+        out = carveToMarkdown(src, opts)
+        break
+      case 'plain':
+        out = carveToPlainText(src, opts)
+        break
+      case 'ansi':
+        out = carveToAnsi(src, opts)
+        break
+      case 'carve':
+        out = carveToCarve(src, opts)
+        break
+    }
+  } catch (e) {
+    if (e instanceof ProfileViolationError) {
+      io.writeErr(`carve render: ${e.message}\n`)
+      return 2
+    }
+    // A profile's maxLength rejection arrives as a RangeError from
+    // enforceProfileMaxLength. It is a rejected input like any other profile
+    // rejection, so it exits 2 here rather than reaching the generic handler
+    // and reporting exit 1. Only treated this way when a profile is set,
+    // which is the only way that throw can happen.
+    if (opts.profile && e instanceof RangeError) {
+      io.writeErr(`carve render: ${e.message}\n`)
+      return 2
+    }
+    throw e
+  }
   if (!out.endsWith('\n')) out += '\n'
   io.write(out)
   return 0

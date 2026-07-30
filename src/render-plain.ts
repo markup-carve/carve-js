@@ -7,7 +7,11 @@ const MAX_RENDER_DEPTH = 200
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {}): string {
-  const ctx: PlainContext = { blockDepth: 0, inlineDepth: 0 }
+  const ctx: PlainContext = {
+    blockDepth: 0,
+    inlineDepth: 0,
+    definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+  }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
   return normalize(`${out}${footnotes}`)
@@ -16,6 +20,13 @@ export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {
 interface PlainContext {
   blockDepth: number
   inlineDepth: number
+  /**
+   * Labels that actually have a definition. A footnote reference without one did
+   * not form a footnote, so it has to be reproduced as source text rather than
+   * as a marker - which the HTML renderer does via `node.number`, a field this
+   * path never populates because it does no numbering.
+   */
+  definedFootnotes: Set<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
@@ -59,6 +70,8 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return node.label
         ? `${stripControls(node.label)}\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
+    case 'line_block':
+      return renderBlocks(node.children, ctx)
     case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
@@ -158,6 +171,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)
+    case 'escaped_text':
+      return node.value
     case 'emphasis':
     case 'strong':
     case 'underline':
@@ -199,8 +214,16 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return renderInlines(node.content, ctx)
     case 'abbreviation':
       return stripControls(node.abbr)
-    case 'footnote':
-      return node.inline ? `(${renderInlines(node.inline, ctx)})` : `[${stripControls(node.id ?? '')}]`
+    case 'footnote': {
+      if (node.inline) return `(${renderInlines(node.inline, ctx)})`
+      const id = stripControls(node.id ?? '')
+      // An UNRESOLVED reference stays literal, exactly as the HTML target
+      // renders it: the construct did not form, so `[^a]` is ordinary text and
+      // dropping the caret invented a reference the document does not have.
+      // carve-php already did this; carve-js and carve-rs both emitted `[a]`
+      // (carve#352, corpus 132/133/157/161).
+      return ctx.definedFootnotes.has(id) ? `[${id}]` : `[^${id}]`
+    }
     case 'soft_break':
       return ' '
     case 'hard_break':
@@ -208,8 +231,12 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'substitution':
       // Keep both sides (old struck like critic-delete, then new).
       return `~${stripControls(node.oldText)}~${stripControls(node.newText)}`
+      // A critic comment is VISIBLE content: the HTML target renders it as
+      // `<span class="critic-comment"> note </span>`, so dropping it here made two
+      // targets of one engine disagree about whether the document says it.
+      // carve-php kept it (carve#352, corpus 33-editorial-markup).
     case 'critic-comment':
-      return ''
+      return stripControls(node.text)
     case 'heading_ref':
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
@@ -233,7 +260,20 @@ function normalize(text: string): string {
   // ordinary space in plain text. Done after trimming so placeholder-derived
   // leading indentation (e.g. in a line block) survives; a literal U+00A0 in
   // the author's text is left intact.
-  return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, ' ')
+  // Trim only BLANK LINES, not the indentation of the first or last content line.
+  // A document that opens with a fenced code block whose first line is indented had
+  // that indentation eaten here, so a tab the HTML target emits inside `<code>`
+  // vanished from plain text (carve#352, corpus 11-fenced-code-2). Code content is
+  // data, and a document-level trim has no business reaching into it.
+  // The two ends need different rules. At the START, trim blank lines only: the
+  // indentation of the first content line is data - a document opening with a
+  // fenced code block whose first line is indented had that eaten here, so a tab
+  // the HTML target emits inside `<code>` vanished (carve#352, corpus
+  // 11-fenced-code-2). At the END, trailing whitespace is trimmed as before,
+  // because there it is layout rather than content: a table row ending in an empty
+  // cell renders `x | ` and that space is an artifact of the separator.
+  const body = trimEndNonNbsp(text.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, ''))
+  return `${body}\n`.replace(/\ue000/g, ' ')
 }
 
 function trimNonNbsp(text: string): string {
