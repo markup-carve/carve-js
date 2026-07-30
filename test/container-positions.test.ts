@@ -266,3 +266,49 @@ describe('multi-line terms and admonition titles', () => {
     }
   })
 })
+
+describe('line blocks', () => {
+  const textNodesOf = (root: unknown): Array<Record<string, any>> => {
+    const out: Array<Record<string, any>> = []
+    const walk = (n: any): void => {
+      if (!n || typeof n !== 'object') return
+      if (Array.isArray(n)) return n.forEach(walk)
+      if (n.type === 'text' || n.type === 'hard_break') out.push(n)
+      for (const k of Object.keys(n)) if (k !== 'pos') walk(n[k])
+    }
+    walk(root)
+    return out
+  }
+
+  it('anchors a stanza whose lines are verbatim', () => {
+    const src = '::: |\n*Bold* and /italic/,\nplain line.\n:::\n'
+    const codepoints = [...src]
+    const nodes = textNodesOf(parse(src))
+
+    expect(nodes.length).toBeGreaterThan(0)
+    for (const node of nodes) {
+      expect(node.pos).toBeDefined()
+      if (node.type === 'text') {
+        expect(codepoints.slice(node.pos.startOffset, node.pos.endOffset).join('')).toBe(node.value)
+      }
+    }
+  })
+
+  it('keeps the break span when a soft break becomes a hard break', () => {
+    // Same source, different meaning inside a line block - building a fresh
+    // node dropped the position.
+    const src = '::: |\none\ntwo\n:::\n'
+    const breaks = textNodesOf(parse(src)).filter((n) => n.type === 'hard_break')
+    expect(breaks).toHaveLength(1)
+    expect(breaks[0]!.pos).toBeDefined()
+  })
+
+  it('declines to anchor a stanza with an indented line', () => {
+    // The indent is rewritten to the U+E000 sentinel, so the line is not a
+    // verbatim slice and nothing can locate it. Absent beats wrong.
+    const src = '::: |\nRoses are red,\n  Violets are blue.\n:::\n'
+    for (const node of textNodesOf(parse(src))) {
+      expect(node.pos).toBeUndefined()
+    }
+  })
+})
