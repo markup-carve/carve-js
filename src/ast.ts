@@ -31,9 +31,17 @@ export interface Position {
   startColumn?: number
   /** 1-based column number, exclusive */
   endColumn?: number
-  /** 0-based UTF-16 source offset, inclusive */
+  /**
+   * 0-based BYTE offset into the source, inclusive (PART 12 §4).
+   *
+   * Bytes rather than UTF-16 code units so an AST is exchangeable: carve-rs and
+   * carve-php index their strings by byte, and the two units agree only for
+   * ASCII - which is why the difference went unnoticed. A JavaScript consumer
+   * slicing the source string must convert; `lintCarve` already reports UTF-16
+   * for exactly that reason.
+   */
   startOffset?: number
-  /** 0-based UTF-16 source offset, exclusive */
+  /** 0-based BYTE offset into the source, exclusive (PART 12 §4). */
   endOffset?: number
 }
 
