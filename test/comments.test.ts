@@ -101,11 +101,23 @@ describe('block comment fence lines (PART 9 §28)', () => {
     expect(carveToHtml('%%% TODO\nx\n%%%\n\nafter').trim()).toBe('<p>after</p>')
   })
 
-  it('stays linear on many unclosed openers', () => {
-    // The closer lookahead scans to EOF per opener; without the per-length
-    // negative cache this input is O(n^2).
-    const build = (n: number) => '%%% x\n'.repeat(n) + 'tail\n'
-    const timeMin = (fn: () => void, runs = 5) => {
+  it('does not rescan the document per fence opener', () => {
+    // Every line is an opener of a DISTINCT width, so no line can close any
+    // other and each one has to answer "is there a closer ahead?". Scanning to
+    // end of input per opener made this superlinear: ~1.9 MiB of it took 8.5s,
+    // growing ~7x per 4x of input. The width -> last-index map answers each in
+    // O(1) after one pass.
+    //
+    // Note the input's own size grows quadratically with n (the widths get
+    // longer), so this asserts against ELAPSED TIME PER BYTE, which stays flat
+    // for a linear parse. A ratio of raw times would look superlinear even for
+    // a correct implementation.
+    const build = (n: number) => {
+      const out: string[] = []
+      for (let i = 0; i < n; i++) out.push('%'.repeat(3 + i) + '\n')
+      return out.join('\n')
+    }
+    const timeMin = (fn: () => void, runs = 3) => {
       let best = Infinity
       for (let r = 0; r < runs; r++) {
         const t = performance.now()
@@ -114,12 +126,13 @@ describe('block comment fence lines (PART 9 §28)', () => {
       }
       return best
     }
-    const small = build(2000)
-    const large = build(4000)
-    const tSmall = timeMin(() => carveToHtml(small))
-    const tLarge = timeMin(() => carveToHtml(large))
-    expect(tSmall).toBeLessThan(2000)
-    expect(tLarge).toBeLessThan(2000)
-    expect(tLarge / Math.max(tSmall, 1)).toBeLessThan(6)
+    const small = build(300)
+    const large = build(600)
+    const perByteSmall = timeMin(() => carveToHtml(small)) / small.length
+    const perByteLarge = timeMin(() => carveToHtml(large)) / large.length
+    // Measured on this input: ~1.42 with the per-opener scan, ~0.40 with the
+    // map. The 1.1 bound sits between them with margin on both sides, and the
+    // sizes stay small enough not to starve tests in sibling files.
+    expect(perByteLarge / Math.max(perByteSmall, 1e-9)).toBeLessThan(1.1)
   })
 })
