@@ -7,6 +7,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (AST): the `critic-comment` node type is now `critic_comment`.**
+  It was the last hyphenated type in the vocabulary, held back pending a spec
+  decision on whether CriticMarkup's comment should fold into `comment`
+  instead. It should not - folding loses which syntax the author wrote, the same
+  objection that keeps `autolink` separate from `link` (carve#401) - so the type
+  stays distinct and takes the snake_case spelling every other type uses.
+  Consumers that switch on the AST `type` string need the new spelling.
+
+  The rendered CSS class is deliberately unchanged and stays
+  `<span class="critic-comment">`: it is user-visible styling that the docs
+  theme, the Prism grammar and the published examples select on, so nothing
+  about existing stylesheets or HTML output changes.
+
 ### Fixed
 
 - **A document full of comment-fence openers with distinct widths no longer

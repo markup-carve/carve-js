@@ -427,7 +427,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // `<span class="critic-comment"> note </span>`, so dropping it here made two
       // targets of one engine disagree about whether the document says it.
       // carve-php kept it (carve#352, corpus 33-editorial-markup).
-    case 'critic-comment':
+    case 'critic_comment':
       return stripControls(node.text)
     case 'heading_ref':
       return `</#${stripControls(node.target)}>`

@@ -229,7 +229,7 @@ export function canonicalType(type: string): string | undefined {
       return 'abbreviation'
     default:
       // 'heading_ref', 'caption_number', 'abbreviation_def',
-      // 'substitution', 'critic-comment'
+      // 'substitution', 'critic_comment'
       return undefined
   }
 }

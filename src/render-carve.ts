@@ -596,7 +596,7 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return `{-${renderInlines(node.children, ctx)}-}${renderAttrs(node.attrs)}`
     case 'substitution':
       return `{~${escapeCriticText(node.oldText)}~>${escapeCriticText(node.newText)}~}`
-    case 'critic-comment':
+    case 'critic_comment':
       return `{#${escapeCriticText(node.text)}#}`
     case 'heading_ref':
       return `</#${escapeCrossrefTarget(node.target)}>`

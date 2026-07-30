@@ -244,7 +244,7 @@ export function inlineText(nodes: InlineNode[]): string {
         // Contributes its assigned number (nothing while unresolved).
         out += n.n === undefined ? '' : String(n.n)
         break
-      // image, autolink, footnote, crossref, critic-comment: no slug text
+      // image, autolink, footnote, crossref, critic_comment: no slug text
       default:
         break
     }

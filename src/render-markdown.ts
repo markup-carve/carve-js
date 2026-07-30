@@ -414,7 +414,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'substitution':
       // Emit BOTH sides like the HTML renderer; dropping oldText loses content.
       return `<del>${escapeText(node.oldText)}</del><ins>${escapeText(node.newText)}</ins>`
-    case 'critic-comment':
+    case 'critic_comment':
       // Visible content: the HTML target renders it as
       // `<span class="critic-comment"> note </span>`, so dropping it here made two
       // targets of one engine disagree about whether the document says it. Markdown
