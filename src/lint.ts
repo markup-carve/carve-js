@@ -33,6 +33,8 @@ import {
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { normalizeRefLabel } from './parse.js'
+import { readStamp, compareSpecVersions } from './stamp.js'
+import { SPEC_VERSION } from './version.js'
 import type { BlockNode, Document, Heading } from './ast.js'
 
 export interface LintWarning {
@@ -150,6 +152,66 @@ function captionHasNumber(value: unknown): boolean {
  * `asciiHeadingIds` must match the value passed to `resolve()`, since it
  * changes how heading slugs (and therefore the valid id set) are computed.
  */
+
+/**
+ * Warn when a document declares a Carve spec version this engine does not
+ * implement, so a construct the author is relying on may be silently absent.
+ *
+ * The DECLARATION is frontmatter `carve-version:`, which is the author-facing
+ * field - a trailing `%% carve-version:` marker is tool-written provenance, not
+ * something anyone hand-writes. When there is no frontmatter declaration the
+ * marker is used as a fallback, so a stamped document still gets the check.
+ * Neither present means no diagnostic: declaring a version stays optional.
+ *
+ * Frontmatter is raw uninterpreted text by design (the application decides what
+ * the declared format means), so the key is read with a line-anchored match
+ * rather than by parsing YAML.
+ */
+function checkDeclaredVersion(source: string, doc: Document, push: (w: LintWarning) => void): void {
+  const declared = declaredVersion(source, doc)
+  if (!declared) return
+
+  const { version, offset } = declared
+  const known = /^\d+(\.\d+)*$/.test(version)
+  if (known && compareSpecVersions(version, SPEC_VERSION) <= 0) return
+
+  const before = source.slice(0, offset)
+  const line = before.split('\n').length
+  const column = offset - (before.lastIndexOf('\n') + 1) + 1
+  push({
+    line,
+    column,
+    rule: 'carve-version-unsupported',
+    message: known
+      ? `document declares Carve ${version}; this engine implements ${SPEC_VERSION}, ` +
+        'so constructs added after that version will not render as intended'
+      : `document declares an unrecognized Carve version ${JSON.stringify(version)}; ` +
+        `this engine implements ${SPEC_VERSION}`,
+    start: offset,
+    end: offset + version.length,
+  })
+}
+
+/** The declared version and the offset of the version text itself, or null. */
+function declaredVersion(source: string, doc: Document): { version: string; offset: number } | null {
+  const front = doc.frontmatter
+  if (front) {
+    const match = /^[ \t]*carve-version[ \t]*:[ \t]*(\S+)[ \t]*$/m.exec(front.content)
+    if (match) {
+      // Frontmatter opens the document, so its raw content appears verbatim in
+      // the source and the offset of the value is findable without re-parsing.
+      const blockAt = source.indexOf(front.content)
+      const valueInBlock = match.index + match[0].lastIndexOf(match[1]!)
+      if (blockAt >= 0) return { version: match[1]!, offset: blockAt + valueInBlock }
+    }
+  }
+
+  const stamp = readStamp(source)
+  if (!stamp) return null
+  const at = source.lastIndexOf(stamp.version)
+  return { version: stamp.version, offset: at >= 0 ? at : 0 }
+}
+
 export function lintCarve(
   source: string,
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
@@ -161,6 +223,8 @@ export function lintCarve(
   const foldId = (s: string): string =>
     Array.from(s, (c) => c.toLowerCase()).join('')
   const out: LintWarning[] = []
+
+  checkDeclaredVersion(source, doc, (w) => out.push(w))
 
   // Build the final heading-id set exactly as resolveHeadingIds does
   // (explicit ids win; colliding slugs get a `-2`, `-3`, … suffix), and warn

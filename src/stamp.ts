@@ -131,11 +131,18 @@ export function needsReview(source: string, currentVersion: string = SPEC_VERSIO
   const stamp = readStamp(source)
   if (stamp === null) return true
 
-  return compareVersions(stamp.version, currentVersion) < 0
+  return compareSpecVersions(stamp.version, currentVersion) < 0
 }
 
-/** Numeric-segment comparison; a non-numeric segment compares as 0. */
-function compareVersions(a: string, b: string): number {
+/**
+ * Numeric-segment comparison; a non-numeric segment compares as 0, and a missing
+ * segment counts as 0 so `0.1` and `0.1.0` are equal.
+ *
+ * Exported because the version-compatibility lint rule has to answer the same
+ * question about a DECLARED version that `needsReview` answers about a stamped
+ * one, and two comparators would be two chances to disagree.
+ */
+export function compareSpecVersions(a: string, b: string): number {
   const left = a.split('.')
   const right = b.split('.')
   const length = Math.max(left.length, right.length)

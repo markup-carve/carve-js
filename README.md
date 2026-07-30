@@ -163,10 +163,19 @@ a document change.
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
 ids, unresolved reference links, missing/duplicate/unused footnotes, a trailing
 `{…}` on a heading (literal text, not an attribute block), a legacy
-`` ```raw FORMAT `` fence (use `` ```=FORMAT ``), and a line that opens like a
-block (`:::`, `{#`) but parsed as plain text. It exits non-zero when it reports
-anything, so it works as a CI gate. The same checks surface live in editors
+`` ```raw FORMAT `` fence (use `` ```=FORMAT ``), a line that opens like a block
+(`:::`, `{#`) but parsed as plain text, and a document declaring a Carve version
+this engine does not implement. It exits non-zero when it reports anything, so it
+works as a CI gate. The same checks surface live in editors
 through [carve-lsp](https://github.com/markup-carve/carve-lsp).
+
+`carve-version-unsupported` reads a frontmatter `carve-version:` key - the
+author-facing declaration of which Carve version a document targets - and warns
+when it is newer than this engine implements, since constructs added after that
+version will not render as intended. Declaring one is optional. A document with
+no frontmatter key falls back to the trailing `%% carve-version:` provenance
+marker, so anything `carve fmt --stamp` has touched is covered too; when both are
+present the author's declaration wins.
 
 ## Untrusted input
 
