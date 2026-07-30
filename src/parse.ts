@@ -3289,6 +3289,14 @@ interface RawCell {
   align?: 'left' | 'right' | 'center'
   attrs?: Attrs
   raw: string
+  /**
+   * Where this cell sits in the document, when that is answerable.
+   *
+   * Cleared once a `+` continuation row merges into the cell: its content then
+   * comes from two non-adjacent regions, so no single span covers it and PART 12
+   * section 4 forbids inventing one.
+   */
+  pos?: Position
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
@@ -3328,6 +3336,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     (isTableRow(lexer.peek()!) || RE_TABLE_CONT.test(lexer.peek()!))
   ) {
     const line = lexer.peek()!
+    const lineIndex = lexer.pos
     if (RE_TABLE_CONT.test(line)) {
       if (!lastRaw) break // a continuation with no row to extend
       if (
@@ -3347,17 +3356,31 @@ function parseTable(lexer: Lexer): Table | Figure {
         // (verified). A `+` after the span row is not a spec'd ordering.
         if (!frag || !target || target.span) return
         target.raw = target.raw ? `${target.raw} ${frag}` : frag
+        // The cell's content now comes from two non-adjacent lines, so no single
+        // span covers it.
+        delete target.pos
       })
       continue
     }
     lexer.consume()
     const { attrs: rowAttrs, body: rowBody } = rowAttrsFromLine(line)
-    const raw: RawCell[] = splitTableRow(rowBody).map((src) => {
+    const lineOffset = lexer.lineOffset(lineIndex)
+    const lineNo = lexer.lineNumber(lineIndex)
+    const lineCol = lexer.lineStartColumn(lineIndex)
+    const raw: RawCell[] = splitTableRowSpans(rowBody).map(({ text: src, start }) => {
       const { header, span, align, attrs, content } = parseCellMarkers(src)
       const c: RawCell = { header, raw: content }
       if (span) c.span = span
       if (align) c.align = align
       if (attrs) c.attrs = attrs
+      c.pos = {
+        startLine: lineNo,
+        endLine: lineNo,
+        startColumn: lineCol + start,
+        endColumn: lineCol + start + src.length,
+        startOffset: lineOffset + start,
+        endOffset: lineOffset + start + src.length,
+      }
       return c
     })
     rawRows.push(raw)
@@ -3415,8 +3438,32 @@ function parseTable(lexer: Lexer): Table | Figure {
         if (c.span) cell.span = c.span
         if (c.align) cell.align = c.align
         if (c.attrs) cell.attrs = c.attrs
+        if (c.pos) cell.pos = c.pos
         return cell
       }),
+    }
+    // A row spans its cells. Omitted when any cell lost its span to a `+`
+    // continuation, rather than reporting a range that skips a line.
+    const spans = rc.map((c) => c.pos)
+    const first = spans[0]
+    const last = spans[spans.length - 1]
+    if (
+      first &&
+      last &&
+      spans.every(Boolean) &&
+      first.startColumn !== undefined &&
+      last.endColumn !== undefined &&
+      first.startOffset !== undefined &&
+      last.endOffset !== undefined
+    ) {
+      row.pos = {
+        startLine: first.startLine,
+        endLine: last.endLine,
+        startColumn: first.startColumn,
+        endColumn: last.endColumn,
+        startOffset: first.startOffset,
+        endOffset: last.endOffset,
+      }
     }
     const ra = rowAttrsList[idx]
     if (ra) row.attrs = ra
@@ -3441,14 +3488,22 @@ function parseTable(lexer: Lexer): Table | Figure {
   return table
 }
 
-function splitTableRow(line: string): string[] {
-  // Split on unescaped pipes. Pipes inside backticks are protected.
-  const cells: string[] = []
+/**
+ * Split a table row into cells, reporting where each one STARTS in the line.
+ *
+ * The start index is what lets a cell carry a real span (PART 12 section 4)
+ * instead of none. The cell TEXT is still built character by character, because
+ * `\|` is two source characters for one content character - so the text is not
+ * always a verbatim slice even though its start always is.
+ */
+function splitTableRowSpans(line: string): Array<{ text: string; start: number }> {
+  const cells: Array<{ text: string; start: number }> = []
   let buf = ''
   let inCode = false
   let i = 0
   // Skip the leading row marker: `|` (standard) or `+` (continuation)
   if (line[0] === '|' || line[0] === '+') i = 1
+  let cellStart = i
   for (; i < line.length; i++) {
     const ch = line[i]!
     if (ch === '`') inCode = !inCode
@@ -3458,15 +3513,20 @@ function splitTableRow(line: string): string[] {
       continue
     }
     if (ch === '|' && !inCode) {
-      cells.push(buf)
+      cells.push({ text: buf, start: cellStart })
       buf = ''
+      cellStart = i + 1
       continue
     }
     buf += ch
   }
   // Trailing content after last pipe
-  if (trimStructural(buf) !== '') cells.push(buf)
+  if (trimStructural(buf) !== '') cells.push({ text: buf, start: cellStart })
   return cells
+}
+
+function splitTableRow(line: string): string[] {
+  return splitTableRowSpans(line).map((cell) => cell.text)
 }
 
 /**
