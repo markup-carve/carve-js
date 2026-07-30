@@ -97,4 +97,37 @@ describe('provenance stamp', () => {
     // A document from a future version is not this engine's problem.
     expect(needsReview('text\n\n%% carve-version: 99.0; generated-by: x\n')).toBe(false)
   })
+
+  // The point of a provenance marker is that ANOTHER engine can read it. These
+  // are the literal bytes carve-php's `carve fmt --stamp` / `--stamp-block`
+  // produce, so a divergence in either writer fails a build rather than showing
+  // up in the field.
+  it('readStamp reads a line-form marker written by carve-php', () => {
+    const fromPhp = '# Hi\n\nText.\n\n%% carve-version: 0.1; generated-by: carve-php 0.1.0\n'
+    expect(readStamp(fromPhp)).toEqual({ version: '0.1', generatedBy: 'carve-php 0.1.0' })
+  })
+
+  it('readStamp reads a block-form marker written by carve-php', () => {
+    const fromPhp =
+      '# Hi\n\nText.\n\n%%%\ncarve-version: 0.1\ngenerated-by: carve-php 0.1.0\n%%%\n'
+    expect(readStamp(fromPhp)).toEqual({ version: '0.1', generatedBy: 'carve-php 0.1.0' })
+  })
+
+  it('needsReview treats 0.1 and 0.1.0 as the same version', () => {
+    // Spec versions carry two segments, engine versions three. Comparing them
+    // lexically, or by segment count, would report every stamped document as
+    // stale.
+    expect(needsReview('text\n\n%% carve-version: 0.1; generated-by: x\n', '0.1.0')).toBe(false)
+    expect(needsReview('text\n\n%% carve-version: 0.1.0; generated-by: x\n', '0.1')).toBe(false)
+  })
+
+  it('needsReview compares segments numerically, not as strings', () => {
+    // "0.10" sorts before "0.9" as a string, but 10 > 9.
+    expect(needsReview('text\n\n%% carve-version: 0.10; generated-by: x\n', '0.9')).toBe(false)
+    expect(needsReview('text\n\n%% carve-version: 0.9; generated-by: x\n', '0.10')).toBe(true)
+  })
+
+  it('readStamp tolerates trailing blank lines after the marker', () => {
+    expect(readStamp('# Hi\n\n%% carve-version: 0.1; generated-by: x\n\n\n')?.version).toBe('0.1')
+  })
 })

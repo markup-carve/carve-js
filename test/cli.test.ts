@@ -404,4 +404,16 @@ describe('carve CLI — stamp modes', () => {
 
     expect(await run(['--stamp-check'], t.io)).toBe(0)
   })
+
+  it('the stamp modes render nothing, whatever format flag is passed', async () => {
+    // They answer a question ABOUT the document. If they also rendered, piping
+    // --stamp-check into a file would silently write markup.
+    for (const format of [[], ['--markdown'], ['--ansi'], ['--carve']]) {
+      const t = makeIO({ stdin: '# Heading\n\n%% carve-version: 0.0.9; generated-by: x\n' })
+      await run([...format, '--stamp-info'], t.io)
+      expect(t.out).not.toContain('<h1')
+      expect(t.out).not.toContain('Heading')
+      expect(t.out).toContain('carve-version: 0.0.9')
+    }
+  })
 })
