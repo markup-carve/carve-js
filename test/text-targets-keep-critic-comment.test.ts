@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToAnsi, carveToHtml, carveToPlainText } from '../src/index.js'
+import { carveToAnsi, carveToHtml, carveToMarkdown, carveToPlainText } from '../src/index.js'
 
 /**
  * A critic comment is VISIBLE content: the HTML target renders it as
@@ -29,5 +29,17 @@ describe('the text targets keep a critic comment', () => {
   it('keeps it alongside the other editorial marks', () => {
     const src = 'a {+ins+} {-del-} {~old~>new~} b{# note #}\n'
     expect(carveToPlainText(src)).toBe('a ins ~del~ ~old~new b note\n')
+  })
+})
+
+describe('the Markdown target keeps a critic comment', () => {
+  it('keeps it as text, since Markdown has no critic syntax', () => {
+    expect(carveToMarkdown('b{# note #}\n')).toBe('b note\n')
+  })
+
+  it('escapes it like any other text landing in a Markdown document', () => {
+    // A comment carrying Markdown metacharacters must not become live markup when
+    // the output is re-rendered.
+    expect(carveToMarkdown('b{# *not emphasis* #}\n')).toContain('\\*not emphasis\\*')
   })
 })
