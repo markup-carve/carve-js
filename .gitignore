@@ -9,3 +9,7 @@ examples/static-mode-demo.*.html
 
 # Working design docs - never committed
 docs/superpowers/
+
+# Scratch files (`_`-prefixed) are never part of the repository.
+_*
+!_*/

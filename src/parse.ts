@@ -4747,7 +4747,13 @@ function matchEmphasis(
           node: {
             type: 'strong',
             boldItalic: true,
-            children: [{ type: 'emphasis', children }],
+            // The inner emphasis is synthesized from the single `/*…*/` token
+            // rather than scanned as its own delimiter pair, so nothing else
+            // assigns it a span. PART 12 §4 requires one on every node but the
+            // document root, and a consumer cannot tell a synthesized node from
+            // a parsed one. It spans the CONTENT; the outer strong spans the
+            // delimiters too.
+            children: [withPos({ type: 'emphasis', children }, source, text, start, close)],
           },
           end: close + 2,
         }

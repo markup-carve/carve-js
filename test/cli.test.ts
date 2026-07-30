@@ -370,3 +370,50 @@ describe('carve render', () => {
     expect(t.err).toContain('filtered output')
   })
 })
+
+describe('carve CLI — stamp modes', () => {
+  const OLD = 'text\n\n%% carve-version: 0.0.9; generated-by: carve-js 0.0.9\n'
+
+  it('--stamp-info reports the marker and exits 0', async () => {
+    const t = makeIO({ stdin: OLD })
+
+    expect(await run(['--stamp-info'], t.io)).toBe(0)
+    expect(t.out).toContain('carve-version: 0.0.9')
+    expect(t.out).toContain('generated-by: carve-js 0.0.9')
+  })
+
+  it('--stamp-info says so when there is no marker', async () => {
+    const t = makeIO({ stdin: 'text\n' })
+
+    expect(await run(['--stamp-info'], t.io)).toBe(0)
+    expect(t.out).toContain('unstamped')
+  })
+
+  it('--stamp-check exits 1 for an older or unknown document', async () => {
+    const older = makeIO({ stdin: OLD })
+    expect(await run(['--stamp-check'], older.io)).toBe(1)
+    expect(older.err).toContain('[behavior]')
+
+    const unstamped = makeIO({ stdin: 'text\n' })
+    expect(await run(['--stamp-check'], unstamped.io)).toBe(1)
+  })
+
+  it('--stamp-check exits 0 for a current document', async () => {
+    const { SPEC_VERSION } = await import('../src/version.js')
+    const t = makeIO({ stdin: `text\n\n%% carve-version: ${SPEC_VERSION}; generated-by: x\n` })
+
+    expect(await run(['--stamp-check'], t.io)).toBe(0)
+  })
+
+  it('the stamp modes render nothing, whatever format flag is passed', async () => {
+    // They answer a question ABOUT the document. If they also rendered, piping
+    // --stamp-check into a file would silently write markup.
+    for (const format of [[], ['--markdown'], ['--ansi'], ['--carve']]) {
+      const t = makeIO({ stdin: '# Heading\n\n%% carve-version: 0.0.9; generated-by: x\n' })
+      await run([...format, '--stamp-info'], t.io)
+      expect(t.out).not.toContain('<h1')
+      expect(t.out).not.toContain('Heading')
+      expect(t.out).toContain('carve-version: 0.0.9')
+    }
+  })
+})
