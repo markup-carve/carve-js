@@ -1348,9 +1348,7 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
     return {
       type: 'figure',
       target: para,
-      caption: stripPositions(
-          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
-        ),
+      caption: parseCaptionInline(lexer, cap[1]!),
     } as Figure
   }
   // Non-blank, non-caption text immediately follows: let parseParagraph fold
@@ -1394,6 +1392,18 @@ function parseHeading(lexer: Lexer): Heading {
   // ends it and starts that block, exactly as it interrupts a paragraph (§10)
   // -- only plain text folds.
   let text = line.replace(/^#{1,6} +/, '')
+  // A heading spans several lines and each one strips a different prefix (its
+  // own `##` run, or nothing), so the joined text needs an origin PER LINE.
+  // Passing only the first line's origin gave a continuation line the opener's
+  // column: `## A` / `## still A` placed "still A" at the first line's `##`.
+  const anchors: Array<{ offset: number; column: number }> = []
+  const anchorLine = (index: number, within: number): void => {
+    anchors.push({
+      offset: lexer.lineOffset(index) + within,
+      column: lexer.lineStartColumn(index) + within,
+    })
+  }
+  anchorLine(lineIndex, line.length - text.length)
   const sameLevel = new RegExp(`^#{${level}} +(.+)$`)
   const sameLevelBare = new RegExp(`^#{${level}}[ ]*$`)
   while (!lexer.eof()) {
@@ -1402,6 +1412,7 @@ function parseHeading(lexer: Lexer): Heading {
     const cont = sameLevel.exec(next)
     if (cont) {
       text += '\n' + cont[1]!
+      anchorLine(lexer.pos, next.length - cont[1]!.length)
       lexer.consume()
       continue
     }
@@ -1420,6 +1431,7 @@ function parseHeading(lexer: Lexer): Heading {
     // ends the heading (it folds only into a paragraph, not a heading).
     if (endsHeadingOrQuote(lexer)) break
     text += '\n' + next
+    anchorLine(lexer.pos, 0)
     lexer.consume()
   }
   // §756 (NORMATIVE): strip the final line's trailing whitespace (ASCII only,
@@ -1437,6 +1449,7 @@ function parseHeading(lexer: Lexer): Heading {
     baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
     startLine: lexer.lineNumber(lineIndex),
     startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
+    ...(lexer.hasDocumentOffsets ? { lineAnchors: anchors } : {}),
   })
   return node
 }
@@ -1483,9 +1496,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
       return {
         type: 'figure',
         target: cb,
-        caption: stripPositions(
-          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
-        ),
+        caption: parseCaptionInline(lexer, cap[1]!),
       } as Figure
     }
   }
@@ -2385,9 +2396,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       return {
         type: 'figure',
         target: bq,
-        caption: stripPositions(
-          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
-        ),
+        caption: parseCaptionInline(lexer, cap[1]!),
       } as Figure
     }
   }
@@ -2458,9 +2467,7 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
       return {
         type: 'figure',
         target: img,
-        caption: stripPositions(
-          parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
-        ),
+        caption: parseCaptionInline(lexer, cap[1]!),
       } as Figure
     }
   }
@@ -3621,9 +3628,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      table.caption = stripPositions(
-        parseInline(readCaptionText(lexer, cap[1]!), lexer.abbrDefs, lexer.linkDefs, undefined, true),
-      )
+      table.caption = parseCaptionInline(lexer, cap[1]!)
     }
   }
   return table
@@ -3789,13 +3794,70 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
 // or a further `^ ` caption line also ends it. Continuation lines join with
 // `\n`. The lexer is positioned on the line AFTER the caption's first line;
 // `firstLine` is that first line's already-extracted text (`cap[1]`).
-function readCaptionText(lexer: Lexer, firstLine: string): string {
+/**
+ * Parse a caption's inline content, anchored to the source.
+ *
+ * The caption's text IS a suffix of its line (`^ text` keeps everything after
+ * the marker), and its continuation lines are appended verbatim - so unlike a
+ * line block's expanded whitespace or a table's reassembled cells, an exact
+ * mapping exists and there is nothing to invent. Captions were nonetheless run
+ * through `stripPositions`, which is why 41 of this engine's 61 unplaced corpus
+ * nodes were inside a `caption`.
+ *
+ * The suffix test is kept as a guard rather than assumed: if the line the lexer
+ * is sitting on does not end with the caption text, the mapping is not exact
+ * and the positions are dropped, as before.
+ */
+function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
+  const capIndex = lexer.pos - 1
+  const capLine = lexer.lines[capIndex]
+  const anchors: Array<{ offset: number; column: number }> = []
+  const anchorable =
+    lexer.hasDocumentOffsets && capLine !== undefined && capLine.endsWith(firstLine)
+  if (anchorable) {
+    const within = capLine.length - firstLine.length
+    anchors.push({
+      offset: lexer.lineOffset(capIndex) + within,
+      column: lexer.lineStartColumn(capIndex) + within,
+    })
+  }
+  const text = readCaptionText(lexer, firstLine, anchorable ? anchors : undefined)
+  if (!anchorable) {
+    return stripPositions(
+      parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+    )
+  }
+  return parseInline(
+    text,
+    lexer.abbrDefs,
+    lexer.linkDefs,
+    inlineSource({
+      anchored: true,
+      baseOffset: anchors[0]!.offset,
+      startLine: lexer.lineNumber(capIndex),
+      startColumn: anchors[0]!.column,
+      lineAnchors: anchors,
+    }),
+    true,
+  )
+}
+
+function readCaptionText(
+  lexer: Lexer,
+  firstLine: string,
+  anchors?: Array<{ offset: number; column: number }>,
+): string {
   let text = firstLine
   while (!lexer.eof()) {
     const next = lexer.peek()!
     if (isBlankLine(next) || RE_CAPTION.test(next)) break
     if (startsInterruptingBlock(lexer)) break
     text += '\n' + next
+    // A continuation line is appended whole, so its origin is its own start.
+    anchors?.push({
+      offset: lexer.lineOffset(lexer.pos),
+      column: lexer.lineStartColumn(lexer.pos),
+    })
     lexer.consume()
   }
   // §756 (NORMATIVE): trailing whitespace on the block's final line is stripped
