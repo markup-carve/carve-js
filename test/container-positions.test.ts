@@ -303,10 +303,29 @@ describe('line blocks', () => {
     expect(breaks[0]!.pos).toBeDefined()
   })
 
-  it('declines to anchor a stanza with an indented line', () => {
-    // The indent is rewritten to the U+E000 sentinel, so the line is not a
-    // verbatim slice and nothing can locate it. Absent beats wrong.
+  it('anchors a SPACE-indented stanza, because the rewrite keeps its length', () => {
+    // The indent becomes one U+E000 sentinel per space, so the line is not a
+    // verbatim slice but every character still sits at its own offset. This
+    // used to decline, which left a whole stanza unplaced over one indented
+    // line (#462).
     const src = '::: |\nRoses are red,\n  Violets are blue.\n:::\n'
+    const codepoints = [...src]
+
+    for (const node of textNodesOf(parse(src))) {
+      expect(node.pos).toBeDefined()
+      // The span must cover the source the node came from. Comparing to the
+      // node's value directly would fail on the indent alone - the value spells
+      // it with sentinels - so compare after putting the spaces back.
+      if (typeof node.value !== 'string') continue
+      const slice = codepoints.slice(node.pos!.startOffset, node.pos!.endOffset).join('')
+      expect(slice).toBe(node.value.replaceAll('\ue000', ' '))
+    }
+  })
+
+  it('declines to anchor a TAB-indented stanza', () => {
+    // A tab expands to up to four sentinels, so everything after it shifts and
+    // no offset here is trustworthy. Absent beats wrong.
+    const src = '::: |\nRoses are red,\n\tViolets are blue.\n:::\n'
     for (const node of textNodesOf(parse(src))) {
       expect(node.pos).toBeUndefined()
     }

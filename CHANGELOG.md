@@ -9,6 +9,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A captioned fence and a captioned standalone equation place the block they
+  wrap.** A caption turns the block into a `figure`, and the block loop attaches
+  the span to the figure - so the target inside had none, which PART 12 §4 wants
+  on every node but the root. The captioned image and blockquote already did
+  this (carve-js#462).
+- **A space-indented line block stanza keeps its positions.** The indent is
+  rewritten to one U+E000 sentinel per space, so the line is not a verbatim
+  slice but every character still sits at its own offset. Requiring verbatim
+  lines left a whole stanza unplaced over a single indented line. A TAB-indented
+  stanza still declines, because a tab expands to up to four sentinels and
+  shifts everything after it (carve-js#462).
+
+### Fixed
+
 - **A tree carrying block `footnote` definition nodes renders.** `footnote` is a
   BLOCK type in the spec vocabulary and carve-php puts a definition in the tree
   as one, so a carve-php tree threw `unknown block footnote` - it could not be
