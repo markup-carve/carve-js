@@ -28,6 +28,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the one that keeps document order AND actually ends with the line
   (carve-js#462).
 
+### Added
+
+- **`toAstJson(doc)`**: serialize a parsed document to the PART 12 exchange
+  shape. The root comes out as exactly `type`, `children` and `srcByteLength`,
+  with frontmatter and footnote definitions as block nodes in the tree, which
+  is what PART 12 §7 requires (carve#411, carve#418).
+
+  The runtime `Document` is unchanged. It keeps `frontmatter` and
+  `footnoteDefs` on the root, where the renderers, the profile filter and
+  downstream consumers already read them; reshaping the in-memory tree would be
+  a breaking change made to serve a wire format, and §1 explicitly allows an
+  implementation whose internals differ to map on the way out.
+
+  Consumers needing conformant JSON must call this rather than stringifying
+  `parse()` directly.
+
 ### Fixed
 
 - **A `+`-continued blockquote keeps its positions.** The continuation splices a

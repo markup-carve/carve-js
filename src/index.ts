@@ -48,6 +48,13 @@ import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
+export {
+  toAstJson,
+  type AstJsonDocument,
+  type AstJsonBlock,
+  type FrontmatterNode,
+  type FootnoteDefNode,
+} from './ast-json.js'
 export type { RenderOptions } from './render-html.js'
 export type { MarkdownRenderOptions } from './render-markdown.js'
 export type { CarveRenderOptions } from './render-carve.js'
