@@ -14,6 +14,7 @@ import type {
   Text,
 } from './ast.js'
 import { parse } from './parse.js'
+import { normalizeLegacyInline } from './legacy-nodes.js'
 
 export interface CarveRenderOptions {}
 
@@ -516,6 +517,10 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext): string {
 }
 
 function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextChar = ''): string {
+  // A stored tree may still carry a type this engine no longer emits; map it
+  // before dispatch so the switch below only ever sees current types.
+  node = normalizeLegacyInline(node)
+
   const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
   switch (node.type) {
     case 'text':

@@ -7,6 +7,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A stored AST carrying the pre-split `footnote` type still renders.** The
+  split into `footnote_ref` / `inline_footnote` made every tree serialized by
+  0.1.2 unrenderable - the renderers threw `unknown inline footnote` rather
+  than degrading. A consumer switching on the type is code someone can update;
+  a stored tree is data someone already has. The legacy name is accepted on
+  INPUT and mapped by the node's own shape (a body means inline, a label means
+  a reference). It is never produced, and `parse` emits only the new types
+  (carve#405).
+
 ### Changed
 
 - **BREAKING (AST): the `footnote` node type is split into `footnote_ref` and
