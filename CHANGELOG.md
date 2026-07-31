@@ -9,6 +9,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `+`-continued blockquote keeps its positions.** The continuation splices a
+  flush-left block into the quote body and inserts blank separators, so the
+  body's lines stop being a contiguous run of the document's - and the offset
+  mapping, which walked `start + i`, fell off the source at the first splice and
+  dropped every following line's position. It now uses the per-line map the
+  caller already passes for line numbers. A map that runs backwards is declined
+  rather than emitted, so an invalid span cannot replace a missing one
+  (carve-js#462).
+
+### Fixed
+
 - **A hard-breaks block keeps the span of the break it converts.** `::: ` plus a
   backslash turns every line ending into a hard break, and building a fresh node
   for it dropped the position the soft break already carried - the same slip the

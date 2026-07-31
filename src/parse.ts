@@ -546,8 +546,30 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   const offsets: number[] = []
   const widths: number[] = []
 
+  // Where a sub-line came from, when its lines are NOT a contiguous run of the
+  // parent's. A `+` continuation splices a flush-left block into a quote body
+  // and inserts blank separators, and a definition list re-indents its body, so
+  // `startLineIndex + i` walks off the real source after the first splice and
+  // the suffix test below then fails for every following line - which is why a
+  // whole `+`-continued quote came out unplaced (#462).
+  //
+  // The per-line map already exists: the caller passes it so line NUMBERS are
+  // right. This reuses it for offsets by inverting it back to parent indices.
+  let previousIndex = -1
+  const parentIndexOf = new Map<number, number>()
+  if (sub.sourceLineMap) {
+    for (let i = parent.lines.length - 1; i >= 0; i--) parentIndexOf.set(parent.lineNumber(i), i)
+  }
+
   for (let i = 0; i < sub.lines.length; i++) {
-    const parentIndex = startLineIndex + i
+    const mapped = sub.sourceLineMap?.[i]
+    const parentIndex = mapped === undefined ? startLineIndex + i : parentIndexOf.get(mapped)
+    if (parentIndex === undefined) return
+    // Document order must not go backwards, or a block spanning first-to-last
+    // line reports an end before its start. A map that jumps back is one this
+    // cannot reason about, so it declines rather than emitting that.
+    if (i > 0 && parentIndex < previousIndex) return
+    previousIndex = parentIndex
     const parentLine = parent.lines[parentIndex]
     const subLine = sub.lines[i]
     if (parentLine === undefined || subLine === undefined) return
@@ -2361,12 +2383,17 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       if (attached.length > 0) {
         // `inner` always holds the quote's first content line, so a leading
         // blank separates the attached block from it.
+        // The separators are SYNTHETIC - no such blank line exists in the
+        // source - so each borrows the line it sits against rather than the
+        // `+` marker's. Borrowing the marker's put them BEFORE the attached
+        // block in document order, and a block spanning first-to-last line then
+        // reported an end offset earlier than its start (#462).
         inner.push('')
-        innerLineNumbers.push(plusLineNumber)
+        innerLineNumbers.push(attachedLineNumbers[0]!)
         for (const attachedLine of attached) inner.push(attachedLine)
         innerLineNumbers.push(...attachedLineNumbers)
         inner.push('')
-        innerLineNumbers.push(plusLineNumber)
+        innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
         // The attached block closed any open paragraph: a following unmarked
         // line no longer lazily continues the quote.
         state.paragraphOpen = false

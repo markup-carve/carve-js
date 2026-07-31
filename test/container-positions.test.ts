@@ -357,3 +357,45 @@ describe('hard-breaks block', () => {
     ).toBe('\n')
   })
 })
+
+describe('a `+` continuation quote', () => {
+  it('anchors the quoted lines around the attached block', () => {
+    // The `+` splices a flush-left block into the quote body and inserts blank
+    // separators, so the body's lines are no longer a contiguous run of the
+    // document's. Walking `start + i` then fell off the source at the first
+    // splice and every following line lost its position (#462).
+    const src = '> quoted\n+\n- item\n> more\n'
+    const codepoints = [...src]
+    const placed: string[] = []
+    const walk = (n: unknown): void => {
+      if (!n || typeof n !== 'object') return
+      if (Array.isArray(n)) return n.forEach(walk)
+      const rec = n as Record<string, unknown>
+      if (rec['type'] === 'text' && rec['pos']) {
+        const pos = rec['pos'] as { startOffset: number; endOffset: number }
+        placed.push(codepoints.slice(pos.startOffset, pos.endOffset).join(''))
+      }
+      for (const k of Object.keys(rec)) if (k !== 'pos') walk(rec[k])
+    }
+    walk(parse(src))
+
+    // Each placed span must slice back to its own text, not merely exist.
+    expect(placed).toEqual(['quoted', 'more'])
+  })
+
+  it('never reports a span that runs backwards', () => {
+    // The synthetic separators used to borrow the `+` marker's line, which sits
+    // BEFORE the attached block - so a block spanning first-to-last line
+    // reported an end offset earlier than its start.
+    const src = '> quoted\n+\n- item\n> more\n'
+    const walk = (n: unknown): void => {
+      if (!n || typeof n !== 'object') return
+      if (Array.isArray(n)) return n.forEach(walk)
+      const rec = n as Record<string, unknown>
+      const pos = rec['pos'] as { startOffset: number; endOffset: number } | undefined
+      if (pos) expect(pos.endOffset).toBeGreaterThanOrEqual(pos.startOffset)
+      for (const k of Object.keys(rec)) if (k !== 'pos') walk(rec[k])
+    }
+    walk(parse(src))
+  })
+})
