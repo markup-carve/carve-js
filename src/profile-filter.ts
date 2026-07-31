@@ -273,11 +273,14 @@ class ProfileFilter {
         continue
       }
 
-      const canonical = resolveCanonical(child)
-      const allowed =
-        canonical !== undefined
-          ? profile.isTypeAllowed(canonical)
-          : child.type === 'document'
+      // An unresolved canonical means the type is outside the vocabulary, NOT
+      // that it is disallowed. It resolves through the same three steps under
+      // its own name (profiles.md "Resolution"): it cannot be in a deny list,
+      // an allow list excludes it, and otherwise it is allowed. Treating
+      // `undefined` as denied is the fourth step the spec forbids, and it is
+      // why `{~old~>new~}` vanished under a profile that denies nothing.
+      const canonical = resolveCanonical(child) ?? child.type
+      const allowed = profile.isTypeAllowed(canonical, block)
       if (!allowed) {
         this.handleViolation(child, slot, profile, 'element_not_allowed')
         continue
@@ -420,10 +423,25 @@ class ProfileFilter {
       return
     }
 
-    const textContent = extractTextContent(node)
+    let textContent = extractTextContent(node)
     if (textContent === '') {
-      this.removeAt(slot)
-      return
+      // A node that renders nothing has nothing to degrade to, so removing it
+      // loses nothing. Anything ELSE reaching here means `extractTextContent`
+      // has no arm for the node's payload - silently deleting visible content,
+      // which is how a substitution disappeared. Record it and substitute a
+      // marker ugly enough that it cannot pass for intended output (mirrors
+      // carve-php's `to_text_yielded_nothing`).
+      if (rendersNothing(node)) {
+        this.removeAt(slot)
+        return
+      }
+      const canonical = resolveCanonical(node) ?? node.type
+      this.violations.push({
+        nodeType: canonical,
+        reason: 'to_text_yielded_nothing',
+        detail: null,
+      } as unknown as ProfileViolation)
+      textContent = `[${canonical}]`
     }
 
     if (slot.block) {
@@ -601,6 +619,17 @@ function textWithBreaks(content: string): NodeLike[] {
  * to_text output matches byte-for-byte. The representations are deliberately
  * source-flavored (heading `# ` prefix, `[img: alt]`, code fences, etc.).
  */
+/**
+ * Types that produce no output at all, so a to_text degradation has nothing to
+ * substitute and removal loses nothing.
+ *
+ * Deliberately a short list rather than "probably empty": anything else that
+ * extracts to '' is a missing extractor arm, and reporting that is the point.
+ */
+function rendersNothing(node: NodeLike): boolean {
+  return node.type === 'comment' || node.type === 'frontmatter'
+}
+
 function extractTextContent(node: NodeLike): string {
   switch (node.type) {
     case 'image': {
@@ -718,6 +747,18 @@ function extractTextContent(node: NodeLike): string {
       return (node['abbr'] as string) ?? ''
     case 'comment':
       return ''
+    // These keep their text in FIELDS rather than children, so the generic
+    // child walk below returns '' and the node is deleted - losing visible
+    // words. A substitution lost BOTH the old wording and the new one under
+    // any profile that disallowed it (carve#419).
+    case 'substitution':
+      return ((node['oldText'] as string) ?? '') + ((node['newText'] as string) ?? '')
+    case 'critic_comment':
+      return (node['text'] as string) ?? ''
+    // A citation group renders from its items; `raw` is the author's source
+    // form, which is the closest honest degradation.
+    case 'citation_group':
+      return (node['raw'] as string) ?? ''
     default:
       break
   }
