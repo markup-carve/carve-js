@@ -9,6 +9,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A list nested inside a `+` continuation keeps its positions.** The line map
+  a container passes can hold the same document line twice - the continuation's
+  synthetic blank separators borrow the line they sit against - and inverting it
+  picked whichever index came first, which was a blank where the real content
+  line was meant. The suffix test then failed and the nested block lost its
+  positions. The inversion now chooses among the candidates for a line number
+  the one that keeps document order AND actually ends with the line
+  (carve-js#462).
+
+### Fixed
+
 - **A `+`-continued blockquote keeps its positions.** The continuation splices a
   flush-left block into the quote body and inserts blank separators, so the
   body's lines stop being a contiguous run of the document's - and the offset

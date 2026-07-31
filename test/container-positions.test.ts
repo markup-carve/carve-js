@@ -379,8 +379,12 @@ describe('a `+` continuation quote', () => {
     }
     walk(parse(src))
 
-    // Each placed span must slice back to its own text, not merely exist.
-    expect(placed).toEqual(['quoted', 'more'])
+    // Each placed span must slice back to its own text, not merely exist. The
+    // list inside the attached block is placed too: the line map carries
+    // duplicate numbers where the synthetic separators borrow a real line, so
+    // the inversion has to pick the candidate that actually ends with the line
+    // rather than the first one it finds (#462).
+    expect(placed).toEqual(['quoted', 'item', 'more'])
   })
 
   it('never reports a span that runs backwards', () => {
