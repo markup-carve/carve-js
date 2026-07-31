@@ -82,13 +82,22 @@ const BLOCK_SET: ReadonlySet<string> = new Set(CANONICAL_BLOCK_TYPES)
 const INLINE_SET: ReadonlySet<string> = new Set(CANONICAL_INLINE_TYPES)
 
 /**
+ * Outside the vocabulary entirely and always allowed - naming them in a deny
+ * or allow list expresses nothing, so they never reach that check. Matches
+ * carve-php's `NON_DENIABLE_TYPES`.
+ */
+const NON_DENIABLE: ReadonlySet<string> = new Set(['raw_text', 'abbreviation_def', 'document'])
+
+/**
  * Map a carve-js internal `node.type` to its canonical snake_case name.
  *
- * Returns `undefined` for types that have no canonical mapping (e.g.
- * `crossref`, `caption-number`, `abbreviation-def`, `critic-*`);
- * such nodes are denied-by-default by the profile resolver, matching
- * carve-php's "unknown type -> denied" rule. The exception is `document`,
- * which the resolver always treats as allowed.
+ * Total: every `node.type` maps to *some* canonical name, even one this
+ * build has no fold for (e.g. `heading_ref`, `caption_number`,
+ * `abbreviation_def`, `substitution`, `critic_comment`) -- it maps to
+ * itself. profiles.md's resolution steps are exhaustive: a type outside the
+ * vocabulary cannot be named by a deny list, is excluded by an allow list by
+ * definition, and otherwise is allowed. There is no "deny the unrecognized"
+ * step.
  */
 /**
  * Types that are a SPECIALIZATION of a broader one.
@@ -116,7 +125,7 @@ function withSupertype(type: string): string[] {
   return parent === undefined ? [type] : [type, parent]
 }
 
-export function canonicalType(type: string): string | undefined {
+export function canonicalType(type: string): string {
   switch (type) {
     // ----- block -----
     case 'paragraph':
@@ -206,10 +215,11 @@ export function canonicalType(type: string): string | undefined {
     case 'footnote_ref':
     case 'inline_footnote':
       // Inline footnote (`^[...]`) carries `inline`; a reference (`[^id]`)
-      // does not. carve-php denies both under the footnote family, so the
-      // mapping does not matter for allow/deny, but we distinguish so a
-      // profile could allow one and not the other.
-      return undefined // handled specially in resolveType via node shape
+      // does not. `resolveCanonical` in profile-filter.ts intercepts both
+      // before this function is ever called, distinguishing them by node
+      // shape, so this arm only needs to keep `canonicalType` total for a
+      // direct call.
+      return type
     case 'span':
       return 'span'
     case 'superscript':
@@ -229,9 +239,13 @@ export function canonicalType(type: string): string | undefined {
     case 'abbreviation':
       return 'abbreviation'
     default:
-      // 'heading_ref', 'caption_number', 'abbreviation_def',
-      // 'substitution', 'critic_comment'
-      return undefined
+      // profiles.md's resolution steps are exhaustive: there is no "deny the
+      // unrecognized" step. A type this build has no fold for is its own
+      // trust class, so it reaches the deny/allow lists unchanged instead of
+      // being denied for not being listed. 'heading_ref', 'caption_number',
+      // 'abbreviation_def', 'substitution' and 'critic_comment' used to land
+      // here and vanish under Profile.full().
+      return type
   }
 }
 
@@ -686,11 +700,23 @@ export class Profile {
 
   /** Whether a canonical type string is allowed by this profile. */
   isTypeAllowed(canonical: string): boolean {
+    if (NON_DENIABLE.has(canonical)) return true
     if (INLINE_SET.has(canonical)) return this.isInlineAllowed(canonical)
     if (BLOCK_SET.has(canonical)) return this.isBlockAllowed(canonical)
-    if (canonical === 'document') return true
-    // Unknown types are denied by default.
-    return false
+    // Outside the vocabulary: nothing can name it, so no deny list contains
+    // it; an allow list excludes it by definition. Without a node the axis is
+    // unknown, so any allow list is taken as excluding it.
+    return this.allowedInline === null && this.allowedBlock === null
+  }
+
+  /**
+   * Resolve a node on its own axis. The slot knows whether the child list
+   * holds block children, which is the only unambiguous source for the axis
+   * when the type is outside the vocabulary.
+   */
+  isNodeAllowed(canonical: string, isBlock: boolean): boolean {
+    if (NON_DENIABLE.has(canonical)) return true
+    return isBlock ? this.isBlockAllowed(canonical) : this.isInlineAllowed(canonical)
   }
 
   private isInlineAllowed(type: string): boolean {

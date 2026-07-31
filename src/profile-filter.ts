@@ -37,9 +37,10 @@ type NodeLike = { type: string; attrs?: Attrs } & Record<string, unknown>
 
 /**
  * Resolve a node to its canonical type for the allow/deny check, accounting
- * for shape-dependent types (footnote ref vs inline footnote).
+ * for shape-dependent types (footnote ref vs inline footnote). Total: every
+ * node resolves to some canonical name, even one outside the vocabulary.
  */
-function resolveCanonical(node: NodeLike): string | undefined {
+function resolveCanonical(node: NodeLike): string {
   if ((node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
     // `^[...]` (inline) carries `inline`; `[^id]` is a reference.
     return node['inline'] !== undefined ? 'inline_footnote' : 'footnote_ref'
@@ -146,12 +147,7 @@ function childArrays(node: NodeLike): ChildArray[] {
 
 /** Whether a canonical type is a block-axis type (drives nesting depth). */
 function isBlockNode(node: NodeLike): boolean {
-  const c = resolveCanonical(node)
-  if (c === undefined) {
-    // Fall back to the js block type list for unmapped block nodes.
-    return BLOCK_JS_TYPES.has(node.type)
-  }
-  return BLOCK_CANONICAL.has(c)
+  return BLOCK_CANONICAL.has(resolveCanonical(node))
 }
 
 const BLOCK_CANONICAL = new Set([
@@ -176,24 +172,13 @@ const BLOCK_CANONICAL = new Set([
   'comment',
   'figure',
   'caption',
-])
-
-const BLOCK_JS_TYPES = new Set([
-  'heading',
-  'paragraph',
-  'block_quote',
-  'list',
-  'code_block',
-  'thematic_break',
-  'table',
-  'admonition',
-  'div',
-  'definition_list',
-  'figure',
-  'image',
+  // Outside the deniable inline/block vocabulary (canonicalType maps it to
+  // itself), but it is a block-axis node: it used to reach this set only via
+  // the now-removed "unmapped -> BLOCK_JS_TYPES fallback" branch, since
+  // `resolveCanonical` used to return undefined for it. Listed explicitly now
+  // that resolveCanonical is total, so depth-tracking and empty-container
+  // cleanup keep classifying it as a block.
   'abbreviation_def',
-  'raw_block',
-  'comment',
 ])
 
 /** Result of a profile transform. */
@@ -274,11 +259,7 @@ class ProfileFilter {
       }
 
       const canonical = resolveCanonical(child)
-      const allowed =
-        canonical !== undefined
-          ? profile.isTypeAllowed(canonical)
-          : child.type === 'document'
-      if (!allowed) {
+      if (!profile.isNodeAllowed(canonical, slot.block)) {
         this.handleViolation(child, slot, profile, 'element_not_allowed')
         continue
       }
@@ -388,7 +369,7 @@ class ProfileFilter {
     profile: Profile,
     reason: string,
   ): void {
-    const canonical = resolveCanonical(node) ?? node.type
+    const canonical = resolveCanonical(node)
     const reasonDescription = profile.getReasonDisallowed(canonical)
     this.violations.push({ nodeType: canonical, reason, reasonDescription })
 
