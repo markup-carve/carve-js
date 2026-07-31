@@ -121,7 +121,7 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
             { type: 'text', value: `text${osc('TEXT')}` },
             { type: 'image', src: 'img.png', alt: `alt${osc('ALT')}` },
             { type: 'code', value: `code${osc('CODE')}` },
-            { type: 'footnote', id: `fn${osc('ID')}` },
+            { type: 'footnote_ref', id: `fn${osc('ID')}` },
             {
               type: 'substitution',
               oldText: `old${osc('OLD')}`,

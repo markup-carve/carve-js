@@ -398,7 +398,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
         return stripControls(node.abbr)
       return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
     }
-    case 'footnote': {
+    case 'footnote_ref':
+    case 'inline_footnote': {
       if (node.inline) return `(${renderInlines(node.inline, ctx)})`
       const id = stripControls(node.id ?? '')
       // An UNRESOLVED reference stays literal and UNSTYLED, exactly as the HTML

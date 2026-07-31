@@ -31,7 +31,6 @@ import type {
   Emphasis,
   Extension,
   Figure,
-  Footnote,
   Heading,
   HeadingLevel,
   Image,
@@ -54,6 +53,8 @@ import type {
   Tag,
   Text,
   ThematicBreak,
+  FootnoteRef,
+  InlineFootnote,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
@@ -4809,7 +4810,7 @@ function scanInlineInner(
         flush()
         const inner = text.slice(i + 2, close)
         const children = scanInline(inner, shiftSource(source, text, i + 2), true)
-        out.push(withPos({ type: 'footnote', inline: children } as Footnote, source, text, i, close + 1))
+        out.push(withPos({ type: 'inline_footnote', inline: children } as InlineFootnote, source, text, i, close + 1))
         i = close + 1
         continue
       }
@@ -4833,7 +4834,7 @@ function scanInlineInner(
         const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
         if (mfn) {
           flush()
-          out.push(withPos({ type: 'footnote', id: mfn[1]!.trim() } as Footnote, source, text, i, i + mfn[0].length))
+          out.push(withPos({ type: 'footnote_ref', id: mfn[1]!.trim() } as FootnoteRef, source, text, i, i + mfn[0].length))
           i += mfn[0].length
           continue
         }
@@ -4904,7 +4905,7 @@ function scanInlineInner(
       const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
       if (mfn) {
         flush()
-        out.push(withPos({ type: 'footnote', id: mfn[1]!.trim() } as Footnote, source, text, i, i + mfn[0].length))
+        out.push(withPos({ type: 'footnote_ref', id: mfn[1]!.trim() } as FootnoteRef, source, text, i, i + mfn[0].length))
         i += mfn[0].length
         continue
       }
