@@ -1345,6 +1345,10 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
   // §4: a caption attaches across at most one blank line.
   if (cap && blanks <= 1) {
     for (let i = 0; i <= la; i++) lexer.consume()
+    // The block loop spans the FIGURE, so the equation paragraph it wraps would
+    // otherwise have no position of its own (PART 12 §4). The equation occupies
+    // exactly its own line; the figure spans that plus the caption.
+    attachBlockPos(lexer, para, lineIndex, lineIndex + 1)
     return {
       type: 'figure',
       target: para,
@@ -1455,6 +1459,7 @@ function parseHeading(lexer: Lexer): Heading {
 }
 
 function parseFence(lexer: Lexer): CodeBlock | Figure {
+  const fenceStartIndex = lexer.pos
   const open = lexer.consume()
   const m = RE_FENCE.exec(open)!
   const indent = m[1]!.length
@@ -1478,6 +1483,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
     // Strip the common indent of the opening fence (Djot rule)
     lines.push(ln.slice(Math.min(indent, leadingWhitespace(ln))))
   }
+  const fenceEndIndex = lexer.pos
   const cb: CodeBlock = { type: 'code_block', content: lines.join('\n') }
   if (lang) cb.lang = lang
   if (header !== undefined) cb.header = header
@@ -1493,6 +1499,11 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
+      // The block loop spans the FIGURE, so the fence it wraps would otherwise
+      // have no position of its own (PART 12 §4). It ends where the caption
+      // begins - the same treatment the captioned image and blockquote already
+      // get.
+      attachBlockPos(lexer, cb, fenceStartIndex, fenceEndIndex)
       return {
         type: 'figure',
         target: cb,
@@ -1758,8 +1769,16 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   interface StanzaLine {
     text: string
     lineIndex: number
-    /** The expansion left this line untouched, so it is a verbatim slice. */
-    verbatim: boolean
+    /**
+     * The expansion kept the line's LENGTH, so document offsets still line up.
+     *
+     * Each leading space becomes exactly one U+E000 sentinel, so a space-
+     * indented line is not a verbatim slice but every character still sits at
+     * its own offset - the indent is consumed as indentation and never reaches
+     * a text node's value. A TAB expands to up to four sentinels, which shifts
+     * everything after it, so those stay unanchored.
+     */
+    aligned: boolean
   }
   const stanzas: StanzaLine[][] = []
   let stanza: StanzaLine[] = []
@@ -1780,17 +1799,22 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       continue
     }
     const expanded = expandLineBlockLeadingWhitespace(ln)
-    stanza.push({ text: expanded, lineIndex, verbatim: expanded === ln })
+    stanza.push({ text: expanded, lineIndex, aligned: expanded.length === ln.length })
   }
   if (stanza.length) stanzas.push(stanza)
 
   const children = stanzas.map<Paragraph>((lines) => {
-    // A line's leading whitespace is rewritten to the U+E000 indent sentinel, so
-    // an indented line is NOT a verbatim slice of the source and nothing here
-    // can locate it. A stanza is anchored only when every line came through
-    // untouched; otherwise its content keeps no position at all, which is what
-    // PART 12 section 4 asks for when a position cannot be produced (#441).
-    const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.verbatim)
+    // A line's leading whitespace is rewritten to the U+E000 indent sentinel.
+    // That is not a verbatim slice, but it is still ALIGNED: one sentinel per
+    // space, so every character keeps its own offset and the indent is consumed
+    // as indentation rather than reaching a text node's value. Requiring
+    // verbatim lines instead left a whole stanza unplaced because one line was
+    // indented (#462).
+    //
+    // A TAB is the exception - it expands to up to four sentinels and shifts
+    // everything after it - so a stanza containing one stays unanchored, which
+    // is what PART 12 §4 asks for when a position cannot be produced.
+    const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.aligned)
     const inline = parseInline(
       lines.map((l) => l.text).join('\n'),
       lexer.abbrDefs,
