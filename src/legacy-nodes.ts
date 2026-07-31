@@ -1,4 +1,4 @@
-import type { InlineNode } from './ast.js'
+import type { Document, InlineNode } from './ast.js'
 
 /**
  * Rewrite node types this engine no longer emits but may still be handed.
@@ -35,4 +35,39 @@ export function normalizeLegacyInline(node: InlineNode): InlineNode {
     ...(node as object),
     type: Array.isArray(legacy.inline) ? 'inline_footnote' : 'footnote_ref',
   } as InlineNode
+}
+
+/**
+ * Move block `footnote` definition nodes into the document's `footnoteDefs` map.
+ *
+ * `footnote` is a BLOCK type in the spec vocabulary, and carve-php puts a
+ * definition in the tree as one. This engine keeps definitions in a root-level
+ * map instead, so a carve-php tree threw `unknown block footnote` and could not
+ * be rendered at all - the other half of the interop break in carve#408, whose
+ * first half is that engine refusing this one's map.
+ *
+ * Which representation is canonical is still open. This is not that decision:
+ * it accepts the node form and normalizes to the map this engine already uses,
+ * so the exchange PART 12 exists for works either way.
+ *
+ * A definition's POSITION carries no meaning - both engines render footnotes at
+ * the end regardless of where they were written - so hoisting one out of
+ * `children` loses nothing.
+ */
+export function adoptBlockFootnoteDefs(ast: Document): Document {
+  const isDef = (n: { type?: string }): boolean => n.type === 'footnote'
+  if (!ast.children?.some(isDef)) return ast
+
+  const defs: Record<string, unknown> = { ...(ast.footnoteDefs ?? {}) }
+  const children = ast.children.filter((child) => {
+    if (!isDef(child)) return true
+    const def = child as unknown as { id?: string; children?: unknown[] }
+    // An existing entry wins: the map is this engine's own representation, so a
+    // tree carrying both is one it produced and then had nodes added to.
+    if (def.id !== undefined && defs[def.id] === undefined) defs[def.id] = def.children ?? []
+
+    return false
+  })
+
+  return { ...ast, children, footnoteDefs: defs } as Document
 }

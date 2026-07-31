@@ -9,6 +9,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A tree carrying block `footnote` definition nodes renders.** `footnote` is a
+  BLOCK type in the spec vocabulary and carve-php puts a definition in the tree
+  as one, so a carve-php tree threw `unknown block footnote` - it could not be
+  rendered at all. Such nodes are now hoisted into the `footnoteDefs` map this
+  engine uses. Which representation is canonical is still open (carve#408);
+  this only makes the exchange work either way.
+
+### Fixed
+
 - **A stored AST carrying the pre-split `footnote` type still renders.** The
   split into `footnote_ref` / `inline_footnote` made every tree serialized by
   0.1.2 unrenderable - the renderers threw `unknown inline footnote` rather
