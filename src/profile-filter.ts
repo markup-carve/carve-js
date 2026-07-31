@@ -401,10 +401,30 @@ class ProfileFilter {
       return
     }
 
-    const textContent = extractTextContent(node)
+    let textContent = extractTextContent(node)
     if (textContent === '') {
-      this.removeAt(slot)
-      return
+      // Only a node that renders nothing may be removed outright; anything
+      // else reaching here means extractTextContent has no arm for its
+      // payload, and deleting it would silently drop content that should
+      // have degraded to visible text instead.
+      //
+      // Comment only - a thematic break already extracts to `---` above and
+      // never reaches this branch, so listing it here would be a check that
+      // cannot fire. carve-js has no walkable `frontmatter` node (it is a
+      // `Document.frontmatter` field the HTML renderer never reads), so
+      // there is no second "renders nothing" case to add here, unlike
+      // carve-php's Frontmatter node.
+      if (node.type === 'comment') {
+        this.removeAt(slot)
+        return
+      }
+      const canonical = resolveCanonical(node)
+      this.violations.push({
+        nodeType: canonical,
+        reason: 'to_text_yielded_nothing',
+        reasonDescription: null,
+      })
+      textContent = `[${canonical}]`
     }
 
     if (slot.block) {
@@ -699,6 +719,17 @@ function extractTextContent(node: NodeLike): string {
       return (node['abbr'] as string) ?? ''
     case 'comment':
       return ''
+    case 'substitution':
+      // Both texts live in `oldText`/`newText` fields, not children. Falling
+      // through to the generic child walk finds no children and returns '',
+      // losing old AND new instead of degrading to visible text.
+      return ((node['oldText'] as string) ?? '') + ((node['newText'] as string) ?? '')
+    case 'citation_group':
+      // The citation items and the verbatim fallback both live in fields
+      // (`items`, `raw`), not children; the generic child walk would return
+      // ''. `raw` is the author-facing `[…]` form, so it is the more
+      // faithful degraded text.
+      return (node['raw'] as string) ?? ''
     default:
       break
   }

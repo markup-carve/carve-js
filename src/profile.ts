@@ -757,7 +757,7 @@ export class Profile {
 export interface ProfileViolation {
   /** Canonical node type that was disallowed. */
   nodeType: string
-  /** Machine reason: element_not_allowed | max_nesting_exceeded | link_not_allowed | image_not_allowed. */
+  /** Machine reason: element_not_allowed | max_nesting_exceeded | link_not_allowed | image_not_allowed | to_text_yielded_nothing. */
   reason: string
   /** Human-readable feature reason from the profile, if any. */
   reasonDescription: string | null
