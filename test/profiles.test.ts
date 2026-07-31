@@ -69,9 +69,14 @@ describe('Profile: canonical type mapping', () => {
     expect(canonicalType('admonition')).toBe('admonition')
   })
 
-  it('returns undefined for types with no canonical mapping', () => {
-    expect(canonicalType('heading_ref')).toBeUndefined()
-    expect(canonicalType('caption_number')).toBeUndefined()
+  it('returns the type itself when there is no fold, so it stays resolvable', () => {
+    // Returning undefined was the defect: the filter treated "no canonical
+    // mapping" as "deny", so a full profile deleted these types outright.
+    // profiles.md's three resolution steps are exhaustive - an unmapped type
+    // reaches the deny/allow lists unchanged instead of being denied for not
+    // being listed.
+    expect(canonicalType('heading_ref')).toBe('heading_ref')
+    expect(canonicalType('caption_number')).toBe('caption_number')
   })
 
   it('maps symbol as a canonical inline feature', () => {
