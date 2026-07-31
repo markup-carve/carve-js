@@ -1,6 +1,7 @@
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { normalizeLegacyInline } from './legacy-nodes.js'
 
 export interface AnsiRenderOptions {}
 
@@ -321,6 +322,10 @@ function renderInlines(nodes: InlineNode[], ctx: AnsiContext): string {
 }
 
 function renderInline(node: InlineNode, ctx: AnsiContext): string {
+  // A stored tree may still carry a type this engine no longer emits; map it
+  // before dispatch so the switch below only ever sees current types.
+  node = normalizeLegacyInline(node)
+
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)

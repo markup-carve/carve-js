@@ -33,6 +33,7 @@ import type {
 } from './extension.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
+import { normalizeLegacyInline } from './legacy-nodes.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -1239,6 +1240,10 @@ function renderInlines(nodes: InlineNode[], opts: RenderOptions): string {
 }
 
 function renderInline(node: InlineNode, opts: RenderOptions): string {
+  // A stored tree may still carry a type this engine no longer emits; map it
+  // before dispatch so the switch below only ever sees current types.
+  node = normalizeLegacyInline(node)
+
   switch (node.type) {
     case 'text':
       return escapeHtml(node.value)

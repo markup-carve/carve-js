@@ -1,5 +1,6 @@
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
+import { normalizeLegacyInline } from './legacy-nodes.js'
 
 export interface PlainTextRenderOptions {}
 
@@ -168,6 +169,10 @@ function renderInlines(nodes: InlineNode[], ctx: PlainContext): string {
 }
 
 function renderInline(node: InlineNode, ctx: PlainContext): string {
+  // A stored tree may still carry a type this engine no longer emits; map it
+  // before dispatch so the switch below only ever sees current types.
+  node = normalizeLegacyInline(node)
+
   switch (node.type) {
     case 'text':
       return cleanEscapedText(node)

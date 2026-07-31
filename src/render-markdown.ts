@@ -14,6 +14,7 @@ import type {
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
+import { normalizeLegacyInline } from './legacy-nodes.js'
 
 /**
  * Whether smart typography renders as its glyph or as the source run the author
@@ -319,6 +320,10 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
 }
 
 function renderInline(node: InlineNode, ctx: MarkdownContext): string {
+  // A stored tree may still carry a type this engine no longer emits; map it
+  // before dispatch so the switch below only ever sees current types.
+  node = normalizeLegacyInline(node)
+
   switch (node.type) {
     case 'text':
       if (/^<\/#[^>]+>$/.test(node.value)) return node.value
