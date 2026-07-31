@@ -593,8 +593,8 @@ export class Profile {
   }
 
   /** Reason a node type is disallowed, or null if it is allowed / no reason. */
-  getReasonDisallowed(canonical: string): string | null {
-    if (this.isTypeAllowed(canonical)) return null
+  getReasonDisallowed(canonical: string, isBlock?: boolean): string | null {
+    if (this.isTypeAllowed(canonical, isBlock)) return null
     return this.featureReasons[canonical] ?? this.featureReasons['default'] ?? null
   }
 
@@ -684,13 +684,37 @@ export class Profile {
     return this
   }
 
-  /** Whether a canonical type string is allowed by this profile. */
-  isTypeAllowed(canonical: string): boolean {
+  /**
+   * Whether a canonical type string is allowed by this profile.
+   *
+   * `isBlock` is the node's OWN axis, and is what makes a type outside the
+   * vocabulary resolvable: block-vs-inline cannot be read off a type string the
+   * vocabulary does not know, and it is unambiguous at the node.
+   *
+   * profiles.md "Resolution" makes the three steps exhaustive and forbids a
+   * fourth that denies unrecognized types. This used to have that fourth step,
+   * and it meant a construct whose type predated the vocabulary rendered as
+   * NOTHING - not degraded to text, gone - under any profile at all, including
+   * one that denies nothing. `{~old~>new~}` lost both the old wording and the
+   * new (carve#419).
+   *
+   * An allow list still excludes an unknown type, so a restrictive profile
+   * loses no safety: step 2 handles it by construction.
+   */
+  isTypeAllowed(canonical: string, isBlock?: boolean): boolean {
+    if (canonical === 'document') return true
     if (INLINE_SET.has(canonical)) return this.isInlineAllowed(canonical)
     if (BLOCK_SET.has(canonical)) return this.isBlockAllowed(canonical)
-    if (canonical === 'document') return true
-    // Unknown types are denied by default.
-    return false
+    // Outside the vocabulary: resolve on the node's own axis, unchanged.
+    if (isBlock !== undefined) {
+      return isBlock ? this.isBlockAllowed(canonical) : this.isInlineAllowed(canonical)
+    }
+
+    // Called without an axis (the string-only API, not the filter). Step 2
+    // would exclude the type on whichever axis it belongs to, so an allow list
+    // on either axis means denied; with neither set, step 3 allows it. Fails
+    // CLOSED, because the caller cannot say which axis it meant.
+    return this.allowedInline === null && this.allowedBlock === null
   }
 
   private isInlineAllowed(type: string): boolean {
