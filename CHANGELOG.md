@@ -7,6 +7,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **An escaped pipe in a table cell is an `escaped_text` node, like every other
+  escape.** The row splitter resolved `\|` itself, which made a cell the one
+  place in the engine where an escape does not become its own node - and left
+  the cell's text one character shorter than its source, so no position could be
+  anchored to it. The splitter now keeps the escape; stopping the pipe from
+  SPLITTING the row was always its job, resolving it was not. Rendered output is
+  unchanged on every target: `\|` still renders as `|` (carve-js#462).
+
+### Fixed
+
+- **A list nested inside a `+` continuation keeps its positions.** The line map
+  a container passes can hold the same document line twice - the continuation's
+  synthetic blank separators borrow the line they sit against - and inverting it
+  picked whichever index came first, which was a blank where the real content
+  line was meant. The suffix test then failed and the nested block lost its
+  positions. The inversion now chooses among the candidates for a line number
+  the one that keeps document order AND actually ends with the line
+  (carve-js#462).
+
 ### Added
 
 - **`toAstJson(doc)`**: serialize a parsed document to the PART 12 exchange
