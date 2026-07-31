@@ -556,14 +556,35 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   // The per-line map already exists: the caller passes it so line NUMBERS are
   // right. This reuses it for offsets by inverting it back to parent indices.
   let previousIndex = -1
-  const parentIndexOf = new Map<number, number>()
+  // ALL indices per line number, not one. A `+` continuation's synthetic blank
+  // separators borrow the line they sit against, so several sub-lines can carry
+  // the same number - and picking one of them blindly chose a blank where the
+  // real content line was meant, which failed the suffix test and unplaced a
+  // list nested inside the continuation (#462).
+  const parentIndicesOf = new Map<number, number[]>()
   if (sub.sourceLineMap) {
-    for (let i = parent.lines.length - 1; i >= 0; i--) parentIndexOf.set(parent.lineNumber(i), i)
+    for (let i = 0; i < parent.lines.length; i++) {
+      const number = parent.lineNumber(i)
+      const bucket = parentIndicesOf.get(number)
+      if (bucket) bucket.push(i)
+      else parentIndicesOf.set(number, [i])
+    }
   }
 
   for (let i = 0; i < sub.lines.length; i++) {
     const mapped = sub.sourceLineMap?.[i]
-    const parentIndex = mapped === undefined ? startLineIndex + i : parentIndexOf.get(mapped)
+    const subLine = sub.lines[i]
+    if (subLine === undefined) return
+    // Among the candidates for this number, take the first that both keeps
+    // document order and actually ends with this line - the suffix test is what
+    // makes the offset arithmetic exact, so it decides which candidate is meant.
+    const parentIndex =
+      mapped === undefined
+        ? startLineIndex + i
+        : (parentIndicesOf.get(mapped) ?? []).find(
+            (candidate) =>
+              candidate >= previousIndex && (parent.lines[candidate] ?? '').endsWith(subLine),
+          )
     if (parentIndex === undefined) return
     // Document order must not go backwards, or a block spanning first-to-last
     // line reports an end before its start. A map that jumps back is one this
@@ -571,8 +592,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     if (i > 0 && parentIndex < previousIndex) return
     previousIndex = parentIndex
     const parentLine = parent.lines[parentIndex]
-    const subLine = sub.lines[i]
-    if (parentLine === undefined || subLine === undefined) return
+    if (parentLine === undefined) return
     if (!parentLine.endsWith(subLine)) return
 
     const prefix = parentLine.length - subLine.length
