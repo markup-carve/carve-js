@@ -3731,7 +3731,12 @@ function splitTableRowSpans(line: string): Array<{ text: string; start: number }
     const ch = line[i]!
     if (ch === '`') inCode = !inCode
     if (ch === '\\' && line[i + 1] === '|') {
-      buf += '|'
+      // Keep the escape. It stops the pipe SPLITTING the row - that is this
+      // loop's job - but resolving it here too made a cell the one place in the
+      // engine where an escape does not become an `escaped_text` node, and left
+      // the cell's text shorter than its source so no position could be
+      // anchored to it (#462).
+      buf += '\\|'
       i++
       continue
     }
