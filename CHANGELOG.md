@@ -7,6 +7,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A heading referenced only from a footnote body keeps its `{#id}` in the
+  Markdown target.** The target emits the id only for headings a
+  cross-reference resolves to, and the prepass that decides this walked
+  `ast.children` alone - not footnote definition bodies, which render as block
+  content just the same. The reference still rendered as a link, so the output
+  carried a dangling anchor: exactly what emitting the id prevents (carve#352).
+
 ### Changed
 
 - **BREAKING (AST): the `critic-comment` node type is now `critic_comment`.**
