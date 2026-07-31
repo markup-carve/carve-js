@@ -38,10 +38,16 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   const headingIds = new Set<string>()
   const referencedHeadingIds = new Set<string>()
 
-  walkBlocks(ast.children, (node) => {
+  // Footnote definition bodies are rendered as block content too, so both
+  // prepasses have to see them. Without this, a heading referenced ONLY from a
+  // footnote lost its `{#id}` suffix while the reference still rendered as a
+  // link, leaving a dangling anchor in the Markdown output (carve#352).
+  const allBlocks = [...ast.children, ...Object.values(ast.footnoteDefs ?? {}).flat()]
+
+  walkBlocks(allBlocks, (node) => {
     if (node.type === 'heading' && node.attrs?.id) headingIds.add(node.attrs.id)
   })
-  walkBlocks(ast.children, (_node, inlines) => {
+  walkBlocks(allBlocks, (_node, inlines) => {
     if (!inlines) return
     walkInlines(inlines, (node) => {
       if (node.type !== 'link') return
