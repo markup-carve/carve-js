@@ -2367,7 +2367,6 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // splice them into the quote body behind a blank-line separator, so they
     // parse as their own block instead of folding into the quoted paragraph.
     if (/^\+[ \t]*$/.test(ln)) {
-      const plusLineNumber = lexer.lineNumber(lexer.pos)
       lexer.consume()
       const attached: string[] = []
       const attachedLineNumbers: number[] = []
