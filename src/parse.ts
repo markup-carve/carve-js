@@ -4100,6 +4100,18 @@ function buildBracketMap(s: string): Record<number, number> {
       j = verbatimSpanEnd(s, j).end - 1
       continue
     }
+    // Likewise an editorial comment: its content is LITERAL (PART 9
+    // editorial_comment), so a `]` inside is text and no escape can spell it
+    // otherwise. Without this, `[{#a]b#}](u)` ended the label at the comment's
+    // `]` and the link never formed, with no way for the author to fix it
+    // (carve#403). An unclosed `{#` is not a comment, so it is left alone.
+    if (ch === '{' && s[j + 1] === '#') {
+      const close = s.indexOf('#}', j + 2)
+      if (close !== -1) {
+        j = close + 1
+        continue
+      }
+    }
     if (ch === '[') {
       stack.push(j)
     } else if (ch === ']') {

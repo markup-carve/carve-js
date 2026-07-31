@@ -9,6 +9,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A link label's closing `]` is found past an editorial comment.** The scan
+  already skipped code spans, because a `]` inside one is content. An editorial
+  comment holds literal content too, and was not skipped, so `[{#a]b#}](u)`
+  ended the label at the comment's bracket and formed no link. There was no
+  spelling that worked: `{# ... #}` resolves no escapes, so `\]` put a real
+  backslash in the comment (carve#403).
+
 - **A heading referenced only from a footnote body keeps its `{#id}` in the
   Markdown target.** The target emits the id only for headings a
   cross-reference resolves to, and the prepass that decides this walked
