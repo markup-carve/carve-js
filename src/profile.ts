@@ -203,7 +203,8 @@ export function canonicalType(type: string): string | undefined {
       // class/id/style just as an attributed code span does, so it belongs with
       // `code`, not with plain text.
       return 'code'
-    case 'footnote':
+    case 'footnote_ref':
+    case 'inline_footnote':
       // Inline footnote (`^[...]`) carries `inline`; a reference (`[^id]`)
       // does not. carve-php denies both under the footnote family, so the
       // mapping does not matter for allow/deny, but we distinguish so a

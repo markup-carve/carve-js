@@ -40,7 +40,7 @@ type NodeLike = { type: string; attrs?: Attrs } & Record<string, unknown>
  * for shape-dependent types (footnote ref vs inline footnote).
  */
 function resolveCanonical(node: NodeLike): string | undefined {
-  if (node.type === 'footnote') {
+  if ((node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
     // `^[...]` (inline) carries `inline`; `[^id]` is a reference.
     return node['inline'] !== undefined ? 'inline_footnote' : 'footnote_ref'
   }
@@ -116,7 +116,8 @@ function childArrays(node: NodeLike): ChildArray[] {
     case 'figure':
       if (node['caption']) push(node['caption'], false)
       break
-    case 'footnote':
+    case 'footnote_ref':
+    case 'inline_footnote':
       // Inline footnote content is inline.
       if (node['inline']) push(node['inline'], false)
       break
@@ -681,7 +682,8 @@ function extractTextContent(node: NodeLike): string {
     }
     case 'symbol':
       return ':' + (node['name'] as string) + ':'
-    case 'footnote': {
+    case 'footnote_ref':
+    case 'inline_footnote': {
       // Reference: `[^id]`; carve-php FootnoteRef renders `[^label]`.
       if (node['inline'] === undefined) {
         return '[^' + ((node['id'] as string | undefined) ?? '') + ']'

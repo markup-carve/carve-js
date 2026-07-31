@@ -496,7 +496,7 @@ function collectFootnotes(ast: Document): FootnoteState {
   const seen: Record<string, number> = {}
   const labelIndexes = new Map<string, number>()
   const onNode = (n: InlineNode): void => {
-    if (n.type !== 'footnote') return
+    if (n.type !== 'footnote_ref' && n.type !== 'inline_footnote') return
     // Inline footnote (`^[content]`): always a fresh, anonymous number.
     if (n.inline) {
       const number = order.length + 1
@@ -1389,7 +1389,8 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       if (!fit) return escapeHtml(node.abbr)
       return `<abbr title="${escapeAttr(node.expansion)}">${escapeHtml(node.abbr)}</abbr>`
     }
-    case 'footnote':
+    case 'footnote_ref':
+    case 'inline_footnote':
       // number is assigned by collectFootnotes for refs with a matching
       // definition; an unresolved ref falls back to literal source.
       return node.number === undefined

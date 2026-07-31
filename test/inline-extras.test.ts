@@ -11,7 +11,7 @@ function collectInlineTypes(nodes: InlineNode[]): string[] {
     if ('children' in node && Array.isArray(node.children)) {
       out.push(...collectInlineTypes(node.children as InlineNode[]))
     }
-    if (node.type === 'footnote' && node.inline) out.push(...collectInlineTypes(node.inline))
+    if (node.type === 'inline_footnote' && node.inline) out.push(...collectInlineTypes(node.inline))
   }
   return out
 }

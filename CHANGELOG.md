@@ -7,6 +7,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (AST): the `footnote` node type is split into `footnote_ref` and
+  `inline_footnote`.** One identifier named both `[^label]` and `^[content]`,
+  and `footnote` is ALSO the block type for the definition - so a single string
+  named three different things, `footnote_ref` and `inline_footnote` named
+  nothing despite being in the vocabulary, and a profile could not deny one
+  form without denying the other. `profile-filter.ts` already disambiguated the
+  two by hand, which is the shape of the problem (carve#405).
+
+  Fields are unchanged: a `footnote_ref` carries `id`, an `inline_footnote`
+  carries `inline`, and both carry `number` and `refId`. A `Footnote` union
+  alias is exported, so code that only needs "a footnote reference" keeps
+  compiling. Rendered output does not change on any target.
+
 ### Fixed
 
 - **A link label's closing `]` is found past an editorial comment.** The scan

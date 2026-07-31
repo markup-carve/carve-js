@@ -214,7 +214,8 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return renderInlines(node.content, ctx)
     case 'abbreviation':
       return stripControls(node.abbr)
-    case 'footnote': {
+    case 'footnote_ref':
+    case 'inline_footnote': {
       if (node.inline) return `(${renderInlines(node.inline, ctx)})`
       const id = stripControls(node.id ?? '')
       // An UNRESOLVED reference stays literal, exactly as the HTML target

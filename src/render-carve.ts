@@ -582,7 +582,8 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
       return withAttrs(`:${escapeIdentifier(node.name)}[${renderInlines(node.content, ctx)}]`)
     case 'abbreviation':
       return escapeText(node.abbr)
-    case 'footnote':
+    case 'footnote_ref':
+    case 'inline_footnote':
       return withAttrs(node.inline
         ? `^[${renderInlines(node.inline, ctx)}]`
         : `[^${escapeFootnoteLabel(node.id ?? '')}]`)

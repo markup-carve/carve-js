@@ -393,7 +393,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       )
       return `<abbr title="${title}">${text}</abbr>`
     }
-    case 'footnote': {
+    case 'footnote_ref':
+    case 'inline_footnote': {
       if (node.inline) return `^[${renderInlines(node.inline, ctx)}]`
       const id = stripControls(node.id ?? '')
       // An UNRESOLVED reference did not form a footnote, so what is emitted is
@@ -719,7 +720,8 @@ function walkInlines(nodes: InlineNode[], visit: (node: InlineNode) => void): vo
       case 'inline_extension':
         walkInlines(node.content, visit)
         break
-      case 'footnote':
+      case 'footnote_ref':
+    case 'inline_footnote':
         if (node.inline) walkInlines(node.inline, visit)
         break
       default:

@@ -615,16 +615,52 @@ export interface Abbreviation extends BaseNode {
   expansion: string
 }
 
-export interface Footnote extends BaseNode {
-  type: 'footnote'
+/**
+ * `[^label]` - a reference to a definition collected in `Document.footnoteDefs`.
+ *
+ * Split from `InlineFootnote` because profiles.md lists them as two types and
+ * `footnote` is already the BLOCK type for the definition. One identifier named
+ * all three, so `footnote_ref` and `inline_footnote` named nothing and a
+ * profile could not deny one without denying the other (carve#405).
+ */
+export interface FootnoteRef extends BaseNode {
+  type: 'footnote_ref'
   /** Reference label (`[^label]`); resolved against Document.footnoteDefs. */
   id?: string
-  inline?: InlineNode[]
+  /**
+   * Never present - a reference has no body of its own, it points at a
+   * definition. Declared so code that handles BOTH footnote forms can test
+   * `.inline` directly instead of narrowing on the type first.
+   */
+  inline?: undefined
   /** Renderer-assigned 1-based number, by document reference order. */
   number?: number
   /** Renderer-assigned unique id for this reference (a backlink target). */
   refId?: string
 }
+
+/** `^[content]` - a footnote whose body is written at the point of use. */
+export interface InlineFootnote extends BaseNode {
+  type: 'inline_footnote'
+  inline: InlineNode[]
+  /**
+   * Never present - an inline footnote carries its body, not a label pointing
+   * at one. The mirror of `FootnoteRef.inline`, for the same reason.
+   */
+  id?: undefined
+  /** Renderer-assigned 1-based number, by document reference order. */
+  number?: number
+  /** Renderer-assigned unique id for this reference (a backlink target). */
+  refId?: string
+}
+
+/**
+ * Either footnote form.
+ *
+ * Both carry a number and a backlink id and render the same marker, so code
+ * that only needs "a footnote reference" keeps working against this alias.
+ */
+export type Footnote = FootnoteRef | InlineFootnote
 
 export interface SoftBreak extends BaseNode {
   type: 'soft_break'
@@ -678,7 +714,8 @@ export type InlineNode =
   | Tag
   | Extension
   | Abbreviation
-  | Footnote
+  | FootnoteRef
+  | InlineFootnote
   | SoftBreak
   | HardBreak
   | CriticInsert

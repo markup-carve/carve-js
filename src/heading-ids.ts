@@ -422,9 +422,10 @@ export function resolveHeadingIds(
         case 'inline_extension':
           resolveRefs(n.content)
           break
-        case 'footnote':
-          // Inline footnote content (`^[…]`) lives in `.inline`; resolve refs
+        case 'inline_footnote':
+          // An inline footnote's body (`^[…]`) is inline content; resolve refs
           // there too so an implicit/reference link inside a note is finalized.
+          // A `footnote_ref` has no body of its own - it points at a definition.
           if (n.inline) resolveRefs(n.inline)
           break
         default:
@@ -473,7 +474,7 @@ export function resolveHeadingIds(
         case 'inline_extension':
           flattenNestedCrossrefs(n.content)
           break
-        case 'footnote':
+        case 'inline_footnote':
           if (n.inline) flattenNestedCrossrefs(n.inline)
           break
         default:
@@ -554,7 +555,7 @@ export function resolveHeadingIds(
         case 'inline_extension':
           resolveCrossrefs(n.content)
           break
-        case 'footnote':
+        case 'inline_footnote':
           if (n.inline) resolveCrossrefs(n.inline)
           break
         default:
@@ -732,7 +733,7 @@ export function resolveHeadingIds(
             out.push(n)
           }
           break
-        case 'footnote':
+        case 'inline_footnote':
           if (n.inline) n.inline = enforceNoNesting(n.inline, false)
           out.push(n)
           break
