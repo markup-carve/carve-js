@@ -9,6 +9,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A hard-breaks block keeps the span of the break it converts.** `::: ` plus a
+  backslash turns every line ending into a hard break, and building a fresh node
+  for it dropped the position the soft break already carried - the same slip the
+  line block had fixed earlier (carve-js#462).
+
+### Fixed
+
 - **A captioned fence and a captioned standalone equation place the block they
   wrap.** A caption turns the block into a `figure`, and the block loop attaches
   the span to the figure - so the target inside had none, which PART 12 §4 wants

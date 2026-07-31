@@ -331,3 +331,29 @@ describe('line blocks', () => {
     }
   })
 })
+
+describe('hard-breaks block', () => {
+  it('keeps the break span when converting a soft break', () => {
+    // `::: ` + backslash turns every line ending into a hard break. Building a
+    // fresh node for it dropped the span the soft break already had - the same
+    // slip the line block fixed earlier (#462).
+    const src = '::: \\\none\ntwo\n:::\n'
+    const codepoints = [...src]
+    const breaks: Array<{ pos?: { startOffset: number; endOffset: number } }> = []
+    const walk = (n: unknown): void => {
+      if (!n || typeof n !== 'object') return
+      if (Array.isArray(n)) return n.forEach(walk)
+      const rec = n as Record<string, unknown>
+      if (rec['type'] === 'hard_break') breaks.push(rec as never)
+      for (const k of Object.keys(rec)) if (k !== 'pos') walk(rec[k])
+    }
+    walk(parse(src))
+
+    expect(breaks).toHaveLength(1)
+    expect(breaks[0]!.pos).toBeDefined()
+    // The break IS the line ending it came from.
+    expect(
+      codepoints.slice(breaks[0]!.pos!.startOffset, breaks[0]!.pos!.endOffset).join(''),
+    ).toBe('\n')
+  })
+})

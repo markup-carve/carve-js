@@ -1925,9 +1925,16 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
   const children = parseBlocks(subLexer, 0)
   for (const child of children) {
     if (child.type === 'paragraph') {
-      child.children = child.children.map((node) =>
-        node.type === 'soft_break' ? ({ type: 'hard_break' } as InlineNode) : node,
-      )
+      child.children = child.children.map((node) => {
+        if (node.type !== 'soft_break') return node
+        // Keep the break's span: it is the same source, just a different
+        // meaning inside a hard-breaks block. Building a fresh object dropped
+        // it, which is the same slip the line block already fixed (#462).
+        const hardBreak = { type: 'hard_break' } as InlineNode
+        if (node.pos) hardBreak.pos = node.pos
+
+        return hardBreak
+      })
     }
   }
   return {
