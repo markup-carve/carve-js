@@ -44,6 +44,7 @@ import {
   type PlainTextRenderOptions,
 } from './render-plain.js'
 import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
+import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
@@ -225,27 +226,27 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
 
 /** Render a Carve AST to HTML matching the spec corpus. */
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
-  return renderHtmlImpl(ast, opts)
+  return renderHtmlImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
 /** Render a resolved Carve AST to Markdown. */
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
-  return renderMarkdownImpl(ast, opts)
+  return renderMarkdownImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
 /** Render a resolved Carve AST to canonical Carve source. */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
-  return renderCarveImpl(ast, opts)
+  return renderCarveImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
 /** Render a resolved Carve AST to plain text. */
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
-  return renderPlainTextImpl(ast, opts)
+  return renderPlainTextImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
 /** Render a resolved Carve AST to ANSI terminal text. */
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
-  return renderAnsiImpl(ast, opts)
+  return renderAnsiImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
 /**
