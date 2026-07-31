@@ -198,6 +198,7 @@ const IMPLEMENTED = new Set([
   '163-quote-flanking-after-an-escaped-character',
   '164-comment-fence-with-trailing-text',
   '165-unterminated-comment-fence',
+  '166-widened-verbatim-fences',
 ])
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
