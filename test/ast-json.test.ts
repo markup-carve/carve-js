@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from '../src/parse.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
-import { carveToAstJson } from '../src/index.js'
+import { carveToAstJson, carveToHtml, Profile } from '../src/index.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('emits a root of exactly type, children and srcByteLength', () => {
@@ -154,15 +154,50 @@ describe('carveToAstJson', () => {
   })
 
   it('carries resolution results the consumer would have to recompute', () => {
-    // PART 12 §5. Caption numbers are assigned by resolve(), so they are here.
-    // Footnote numbering is NOT: this engine assigns it inside each renderer's
-    // collection pass, so a serialized tree carries `footnote_ref` without a
-    // number and a consumer has to reimplement PART 9R to get one. Tracked
-    // rather than papered over - asserting the caption half only is what makes
-    // the footnote half visible.
+    // PART 12 §5: "resolution results that a consumer can recompute - footnote
+    // numbering, caption numbers - ARE serialized, because recomputing them
+    // requires reimplementing PART 9R". Both halves, since the footnote half
+    // used to be missing (#479): numbering lived inside the HTML renderer, so a
+    // document serialized without being rendered carried no numbers at all.
     const json = carveToAstJson('![a](/i.png)\n\n^ Figure #: caption\n')
     const figure = json.children[0] as { caption: Array<{ type: string; n?: number }> }
-    const number = figure.caption.find((c) => c.type === 'caption_number')
-    expect(number?.n).toBe(1)
+    expect(figure.caption.find((c) => c.type === 'caption_number')?.n).toBe(1)
+
+    const notes = carveToAstJson('P[^a] again[^a] and ^[inline]\n\n[^a]: note\n')
+    const para = notes.children[0] as {
+      children: Array<{ type: string; number?: number; refId?: string }>
+    }
+    const refs = para.children.filter((c) => c.type !== 'text')
+    expect(refs.map((r) => [r.type, r.number, r.refId])).toEqual([
+      // A repeated reference shares the NUMBER and gets its own backlink id.
+      ['footnote_ref', 1, 'fnref1'],
+      ['footnote_ref', 1, 'fnref1-2'],
+      ['inline_footnote', 2, 'fnref2'],
+    ])
+  })
+
+  it('numbers the AST exactly as the HTML does', () => {
+    // The point of sharing the pass rather than reimplementing it: a consumer
+    // that reads a number off the AST and a reader looking at the page must see
+    // the same one.
+    const source = 'A[^x] B[^y] C[^x] and ^[note]\n\n[^y]: why\n\n[^x]: ex\n'
+    const html = carveToHtml(source)
+    const json = carveToAstJson(source)
+    const para = json.children[0] as { children: Array<{ type: string; number?: number }> }
+    const numbers = para.children.filter((c) => c.number !== undefined).map((c) => c.number)
+
+    expect(numbers).toEqual([1, 2, 1, 3])
+    // The rendered markers, in the same order. Only the REFERENCE markers -
+    // the backlinks in the endnotes section carry their own superscripts.
+    const body = html.slice(0, html.indexOf('doc-endnotes'))
+    const rendered = [...body.matchAll(/doc-noteref"><sup>(\d+)<\/sup>/g)].map((m) => Number(m[1]))
+    expect(rendered).toEqual(numbers)
+  })
+
+  it('does not number references a profile removed', () => {
+    // Numbering runs after the profile, so a denied footnote does not consume a
+    // number and leave the sequence with a hole in it.
+    const json = carveToAstJson('A[^x] B\n\n[^x]: ex\n', { profile: Profile.minimal() })
+    expect(JSON.stringify(json)).not.toContain('footnote_ref')
   })
 })

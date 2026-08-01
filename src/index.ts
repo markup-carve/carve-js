@@ -46,6 +46,7 @@ import {
 import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
+import { collectFootnotes } from './footnote-numbers.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
@@ -340,6 +341,17 @@ export function carveToAstJson(
     exts,
   )
   doc = runProfile(doc, opts)
+  // Footnote numbering, which PART 12 section 5 keeps in the serialized form:
+  // "resolution results that a consumer can recompute - footnote numbering,
+  // caption numbers - ARE serialized, because recomputing them requires
+  // reimplementing PART 9R". It runs AFTER the profile, because a profile that
+  // denies footnotes removes references, and numbering the ones it removed
+  // would publish a sequence with holes in it.
+  //
+  // The same pass the HTML renderer runs, not a second implementation of the
+  // rule, so the number a consumer reads off the AST is the number the HTML
+  // shows.
+  collectFootnotes(doc)
   return toAstJsonImpl(doc)
 }
 
