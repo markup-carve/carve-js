@@ -15,17 +15,23 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
     // read footnoteDefs and frontmatter from the root.
     const doc = parse('---\ntitle: T\n---\n\nPara[^a]\n\n[^a]: note\n')
     toAstJson(doc)
-    expect(doc.frontmatter).toEqual({ format: 'yaml', content: 'title: T' })
+    // `pos` rides along on the root's frontmatter now: the serializer needs a
+    // span for the node it builds, and §4 requires one (carve-js#480).
+    expect(doc.frontmatter).toMatchObject({ format: 'yaml', content: 'title: T' })
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['a'])
   })
 
   it('makes frontmatter the first child, raw and with its format', () => {
-    const json = toAstJson(parse('---toml\nx = 1\n---\n\nBody\n'))
-    expect(json.children[0]).toEqual({
+    const src = '---toml\nx = 1\n---\n\nBody\n'
+    const json = toAstJson(parse(src))
+    expect(json.children[0]).toMatchObject({
       type: 'frontmatter',
       format: 'toml',
       content: 'x = 1',
     })
+    // And it is placed - slicing the source with its span returns the block.
+    const pos = (json.children[0] as { pos: { startOffset: number; endOffset: number } }).pos
+    expect([...src].slice(pos.startOffset, pos.endOffset).join('')).toBe('---toml\nx = 1\n---')
   })
 
   it('defaults the frontmatter format to yaml when the fence carries none', () => {
@@ -88,8 +94,12 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     // read; the exchange shape puts both in the tree. Decoding has to undo that,
     // or a decoded document renders without its footnotes.
     const doc = fromAstJson(toAstJson(parse('---\na: 1\n---\n\nP[^x]\n\n[^x]: d\n')))
-    expect(doc.frontmatter).toEqual({ format: 'yaml', content: 'a: 1' })
+    expect(doc.frontmatter).toMatchObject({ format: 'yaml', content: 'a: 1' })
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['x'])
+    // The spans come back too, or the round trip is not identity: they are on
+    // the tree nodes in the exchange shape and on the root in the runtime one.
+    expect(doc.frontmatter?.pos).toBeDefined()
+    expect(doc.footnoteDefPos?.x).toBeDefined()
     expect(doc.children.every((c) => c.type !== 'frontmatter' && c.type !== 'footnote')).toBe(true)
   })
 

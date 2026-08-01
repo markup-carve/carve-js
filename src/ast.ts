@@ -77,7 +77,16 @@ export interface Document extends BaseNode {
    * the fences; `format` is the fence token (default `'yaml'`). Carve does
    * not parse it - the application interprets the declared format.
    */
-  frontmatter?: { format: string; content: string }
+  frontmatter?: { format: string; content: string; pos?: Position }
+  /**
+   * Where each footnote definition sits in the source, by label.
+   *
+   * Parallel to `footnoteDefs` because that map holds only the body blocks, and
+   * a definition's span starts at its `[^label]:` marker - which is not part of
+   * any of them. Consumed by {@link toAstJson}, which needs a `pos` for the
+   * block node it builds (PART 12 §4); it is not itself serialized.
+   */
+  footnoteDefPos?: Record<string, Position>
   children: BlockNode[]
   /**
    * Footnote definitions collected during parsing, keyed by raw label

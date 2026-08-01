@@ -364,7 +364,7 @@ class Lexer {
   pos = 0
   // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
   depth = 0
-  frontmatter?: { format: string; content: string }
+  frontmatter?: { format: string; content: string; pos?: Position }
   /** Format applied to a bare `---` fence; set from ParseOptions. */
   defaultFrontmatterFormat = 'yaml'
   abbrDefs: Map<string, string> = new Map()
@@ -372,6 +372,8 @@ class Lexer {
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
   footnoteDefs: Map<string, BlockNode[]> = new Map()
+  /** Where each definition sits in the source, parallel to `footnoteDefs`. */
+  footnoteDefPos: Map<string, Position> = new Map()
   // True for sub-lexers over already-nested block content (list item /
   // blockquote / admonition bodies). Informational only: under the §10
   // Markdown-like rule a visible block interrupts a paragraph at EVERY level
@@ -437,7 +439,23 @@ class Lexer {
       if (RE_FRONTMATTER_CLOSE.test(this.lines[i]!)) {
         const content = this.lines.slice(1, i).join('\n')
         const format = open[1] !== '' ? open[1]! : this.defaultFrontmatterFormat
-        this.frontmatter = { format, content }
+        // The block runs from the opening fence to the closing one. Frontmatter
+        // is document-leading, so it starts at the first byte - but the END has
+        // to be measured, and without it the node `toAstJson` builds has no
+        // position at all (carve-js#480).
+        const closeOffset = (this.lineOffsets[i] ?? 0) + this.lines[i]!.length
+        this.frontmatter = {
+          format,
+          content,
+          pos: {
+            startLine: 1,
+            endLine: i + 1,
+            startColumn: 1,
+            endColumn: this.lines[i]!.length + 1,
+            startOffset: 0,
+            endOffset: closeOffset,
+          },
+        }
         this.pos = i + 1
         return
       }
@@ -516,6 +534,7 @@ function nestedSubLexer(
   sub.abbrDefs = parent.abbrDefs
   sub.linkDefs = parent.linkDefs
   sub.footnoteDefs = parent.footnoteDefs
+  sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
   sub.depth = parent.depth + 1
   attachDocumentOffsets(sub, parent, startLineIndex)
@@ -733,6 +752,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     doc.srcByteLength = utf8ByteLength(source)
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
+    if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
     toCodepointPositions(doc, source)
     return doc
   } finally {
@@ -781,6 +801,7 @@ function parseBlockSource(source: string, opts: ParseOptions, root: Lexer): Bloc
   for (const [k, v] of root.linkDefs) sub.linkDefs.set(k, v)
   for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
   sub.footnoteDefs = root.footnoteDefs
+  sub.footnoteDefPos = root.footnoteDefPos
   collectAbbrDefs(sub)
   collectLinkDefs(sub)
   if (!activeMatchers.length) return parseBlocks(sub, 0)
@@ -1700,6 +1721,25 @@ function parseFootnoteDef(lexer: Lexer): null {
   if (!lexer.footnoteDefs.has(label)) {
     const sub = nestedSubLexer(lexer, bodyLines.join('\n'), defLineIndex, bodyLineNumbers)
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
+    // The definition runs from its `[^label]:` marker to the last line it
+    // consumed. The body blocks cannot supply that: the marker is not part of
+    // any of them, so a span derived from the body would start inside the
+    // definition (carve-js#480).
+    //
+    // Only when this lexer can express a document offset - inside an unmapped
+    // container the numbers mean something else, and §4 forbids inventing one.
+    if (lexer.hasDocumentOffsets) {
+      const lastIndex = Math.max(defLineIndex, lexer.pos - 1)
+      const lastLine = lexer.lines[lastIndex] ?? ''
+      lexer.footnoteDefPos.set(label, {
+        startLine: lexer.lineNumber(defLineIndex),
+        endLine: lexer.lineNumber(lastIndex),
+        startColumn: lexer.lineStartColumn(defLineIndex),
+        endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
+        startOffset: lexer.lineOffset(defLineIndex),
+        endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
+      })
+    }
   }
   return null
 }
