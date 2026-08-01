@@ -123,16 +123,23 @@ describe('table rows and cells carry exact spans', () => {
     expect(codepoints.slice(row.pos.startOffset, row.pos.endOffset).join('')).toBe(' aaa | bbb ')
   })
 
-  it('omits the span when a continuation row merges into a cell', () => {
-    // `+ cont` appends to the previous row's cells, so their content comes from
-    // two non-adjacent lines and no single span covers it. PART 12 §4 forbids
-    // inventing one, so there is none rather than a range spanning the join.
+  it('omits a merged CELL span but keeps the row', () => {
+    // `+ cont` appends to the previous row's cells, so a merged cell's content
+    // sits in two column ranges on non-adjacent lines. One range covering both
+    // would swallow the neighbouring column on the line between - cell 1 would
+    // CONTAIN cell 0 - so the cell has none, per PART 12 §4.
+    //
+    // The ROW is a different shape: it occupies a contiguous run of lines that
+    // no sibling row overlaps, so a span exists and withholding it lost a
+    // position for no reason (carve-js#462).
     const merged = parse('| a | b |\n+ cont | more |\n').children[0] as {
       rows: Array<Record<string, any>>
     }
     const row = merged.rows[0]!
     expect(row.cells[0]!.pos).toBeUndefined()
-    expect(row.pos).toBeUndefined()
+    expect(row.pos).toBeDefined()
+    expect(row.pos.startLine).toBe(1)
+    expect(row.pos.endLine).toBe(2)
   })
 
   it('still resolves the merged content itself', () => {
