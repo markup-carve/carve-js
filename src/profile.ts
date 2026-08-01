@@ -154,11 +154,14 @@ export function canonicalType(type: string): string | undefined {
     // ----- inline -----
     case 'text':
       return 'text'
-    // An escaped character is ordinary visible prose; the backslash is
-    // authoring syntax, so it shares text's trust class rather than becoming a
-    // separately deniable feature.
+    // Its own canonical name, NOT folded into `text`. profiles.md lists
+    // `escaped_text` in the normative inline vocabulary, and ast.ts explains
+    // why the type exists at all: the escape carries intent the bare character
+    // does not. Folding it here made `denyInline(['escaped_text'])` a silent
+    // no-op while the vocabulary said it was nameable (carve-js#474). Contrast
+    // `smart_punctuation` below, which profiles.md explicitly excludes.
     case 'escaped_text':
-      return 'text'
+      return 'escaped_text'
     // Smart typography is ordinary visible prose, so it shares text's trust
     // class rather than becoming a nameable type of its own (the same way the
     // inline literal folds into `code`).
