@@ -1,0 +1,102 @@
+name: Carve
+description: Check that Carve documents are formatted canonically and free of silent-failure problems.
+author: markup-carve
+
+branding:
+  icon: check-square
+  color: purple
+
+# A composite action rather than a Docker one: the engine is a published npm
+# package with no native dependencies, so `npm install -g` on a runner that
+# already has Node is a few seconds, where a container pull is tens of megabytes
+# and a build step nobody asked for.
+
+inputs:
+  files:
+    description: >
+      Shell glob for the documents to check. Expanded with globstar, so
+      `docs/**/*.crv` reaches nested directories. No match is not an error -
+      a repository that has not adopted Carve everywhere should not fail here.
+    required: false
+    default: '**/*.crv'
+  fmt:
+    description: >
+      Fail when a document is not in canonical form (`carve fmt --check`).
+      This is the check that keeps diffs meaningful for stored content.
+    required: false
+    default: 'true'
+  lint:
+    description: >
+      Fail on silent-failure problems (`carve lint`): a broken cross-reference,
+      an unresolved reference link, a duplicate heading id, a missing footnote,
+      a line that opens like a block and parsed as text.
+    required: false
+    default: 'true'
+  from-djot:
+    description: >
+      Also flag valid Carve whose meaning differs from Djot (`_x_` underline vs
+      emphasis, `~x~` strike vs subscript). Noise for hand-written Carve; useful
+      while migrating a Djot corpus.
+    required: false
+    default: 'false'
+  version:
+    description: 'npm version or dist-tag of @markup-carve/carve to run.'
+    required: false
+    default: 'latest'
+
+runs:
+  using: composite
+  steps:
+    - name: Install carve
+      shell: bash
+      run: npm install --global --no-audit --no-fund "@markup-carve/carve@${{ inputs.version }}"
+
+    - name: Check
+      shell: bash
+      env:
+        CARVE_FILES: ${{ inputs.files }}
+        CARVE_FMT: ${{ inputs.fmt }}
+        CARVE_LINT: ${{ inputs.lint }}
+        CARVE_FROM_DJOT: ${{ inputs.from-djot }}
+      run: |
+        set -euo pipefail
+        shopt -s globstar nullglob
+
+        # Word-split the glob deliberately: `files` may name several patterns.
+        # shellcheck disable=SC2206
+        patterns=( $CARVE_FILES )
+        documents=()
+        for pattern in "${patterns[@]}"; do
+          for file in $pattern; do
+            documents+=( "$file" )
+          done
+        done
+
+        if [ ${#documents[@]} -eq 0 ]; then
+          echo "carve: no documents matched ${CARVE_FILES} - nothing to check"
+          exit 0
+        fi
+
+        echo "carve: checking ${#documents[@]} document(s)"
+
+        # Both checks RUN even when the first fails, so one push shows every
+        # problem rather than the formatting one, then the lint one tomorrow.
+        status=0
+
+        if [ "$CARVE_FMT" = "true" ]; then
+          carve fmt --check "${documents[@]}" || status=1
+        fi
+
+        if [ "$CARVE_LINT" = "true" ]; then
+          if [ "$CARVE_FROM_DJOT" = "true" ]; then
+            carve lint --from-djot "${documents[@]}" || status=1
+          else
+            carve lint "${documents[@]}" || status=1
+          fi
+        fi
+
+        if [ "$status" -ne 0 ]; then
+          echo "carve: run 'carve fmt --write' locally, or install the pre-commit hook"
+        fi
+
+        exit "$status"

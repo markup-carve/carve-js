@@ -1,0 +1,48 @@
+# Hooks for https://pre-commit.com
+#
+#   repos:
+#     - repo: https://github.com/markup-carve/carve-js
+#       rev: v0.1.2
+#       hooks:
+#         - id: carve-fmt
+#         - id: carve-lint
+#
+# `language: node` makes pre-commit install this package from the pinned rev and
+# run its `carve` binary, so the hook and the CI action run the same engine at
+# the same version - which is the point of pinning a rev at all.
+
+- id: carve-fmt
+  name: carve fmt (check)
+  description: Fail when a Carve document is not in canonical form. Keeps diffs meaningful for stored content.
+  entry: carve fmt --check
+  language: node
+  files: \.(crv|carve)$
+
+- id: carve-fmt-write
+  name: carve fmt (write)
+  description: >
+    Rewrite Carve documents in canonical form and stage the result. Use this OR
+    carve-fmt, not both - this one fixes, that one reports.
+  entry: carve fmt --write
+  language: node
+  files: \.(crv|carve)$
+
+- id: carve-lint
+  name: carve lint
+  description: >
+    Report silent-failure problems - a broken cross-reference, an unresolved
+    reference link, a duplicate heading id, a missing or unused footnote, a line
+    that opens like a block and parsed as plain text.
+  entry: carve lint
+  language: node
+  files: \.(crv|carve)$
+
+- id: carve-lint-from-djot
+  name: carve lint (--from-djot)
+  description: >
+    carve-lint, plus valid Carve whose meaning differs from Djot (`_x_` is
+    underline not emphasis, `~x~` is strike not subscript). Noise for
+    hand-written Carve; useful while migrating a Djot corpus.
+  entry: carve lint --from-djot
+  language: node
+  files: \.(crv|carve)$

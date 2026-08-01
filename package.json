@@ -19,7 +19,8 @@
     "markup",
     "parser",
     "markdown",
-    "djot"
+    "djot",
+    "prettier-plugin"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,12 +31,18 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./prettier": {
+      "import": "./dist/prettier.js",
+      "types": "./dist/prettier.d.ts"
     }
   },
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "action.yml",
+    ".pre-commit-hooks.yaml"
   ],
   "publishConfig": {
     "access": "public"
@@ -50,7 +57,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.20",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "yaml": "^2.9.0"
   }
 }
