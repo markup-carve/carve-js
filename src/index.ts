@@ -28,6 +28,7 @@ import {
   promoteBlockImages,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
+import { numberFootnotes } from './footnote-numbering.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
 import { renderHtml as renderHtmlImpl, type RenderOptions } from './render-html.js'
@@ -260,16 +261,22 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
 
 /**
  * Post-parse semantic resolution: heading ids, `</#id>` crossrefs,
- * implicit heading references (`[Foo][]` -> `#foo`), and finalization
- * of any reference-link placeholder the parse phase left unresolved
- * (no explicit `[label]: url` def and no matching heading) to its
- * literal source text.
+ * implicit heading references (`[Foo][]` -> `#foo`), footnote numbering
+ * (`footnote_ref` / `inline_footnote` `.number`, by document reference
+ * order), and finalization of any reference-link placeholder the parse
+ * phase left unresolved (no explicit `[label]: url` def and no matching
+ * heading) to its literal source text.
  */
 export function resolve(
   doc: Document,
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): Document {
-  return resolveHeadingIds(doc, headingIdSlugOpts(opts))
+  const resolved = resolveHeadingIds(doc, headingIdSlugOpts(opts))
+  // Footnote `number` (PART 12 §5): document reference order, so it is a
+  // resolution result rather than a rendering one. `renderHtml()` numbers
+  // the same way standalone (carve-js#479) via the same shared pass.
+  numberFootnotes(resolved)
+  return resolved
 }
 
 /** Convenience: parse + resolve + render in one call. */

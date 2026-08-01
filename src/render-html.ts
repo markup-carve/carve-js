@@ -34,6 +34,7 @@ import type {
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
+import { numberFootnotes } from './footnote-numbering.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -440,102 +441,33 @@ interface FootnoteState {
   order: FootnoteEntry[]
 }
 
-/** Visit every inline array under a block subtree (depth-first). */
-function walkBlockInlines(node: BlockNode, visit: (xs: InlineNode[]) => void): void {
-  switch (node.type) {
-    case 'heading':
-    case 'paragraph':
-      visit(node.children)
-      break
-    case 'block_quote':
-      if (node.attribution) visit(node.attribution)
-      node.children.forEach((c) => walkBlockInlines(c, visit))
-      break
-    case 'list':
-      for (const it of node.items) it.children.forEach((c) => walkBlockInlines(c, visit))
-      break
-    case 'admonition':
-      if (node.title) visit(node.title)
-      node.children.forEach((c) => walkBlockInlines(c, visit))
-      break
-    case 'div':
-      node.children.forEach((c) => walkBlockInlines(c, visit))
-      break
-    case 'definition_list':
-      for (const it of node.items) {
-        for (const t of it.terms) visit(t)
-        for (const d of it.definitions) for (const b of d) walkBlockInlines(b, visit)
-      }
-      break
-    case 'table':
-      if (node.caption) visit(node.caption)
-      for (const row of node.rows) for (const cell of row.cells) visit(cell.children)
-      break
-    case 'figure':
-      visit(node.caption)
-      if (node.target.type === 'block_quote' || node.target.type === 'table')
-        walkBlockInlines(node.target, visit)
-      break
-    default:
-      break
-  }
-}
-
-function visitInlineTree(nodes: InlineNode[], fn: (n: InlineNode) => void): void {
-  for (const n of nodes) {
-    fn(n)
-    const kids =
-      (n as { children?: InlineNode[]; content?: InlineNode[] }).children ??
-      (n as { content?: InlineNode[] }).content
-    if (Array.isArray(kids)) visitInlineTree(kids, fn)
-  }
-}
-
+/**
+ * Number footnotes (shared with `resolve()`, carve-js#479) then build the
+ * rendering-only parts on top: the `order` list an endnotes section walks,
+ * and per-reference `refId` backlink anchors. `number` may already be set
+ * (this document went through `resolve()` first) or not (renderHtml called
+ * standalone) - `numberFootnotes` is idempotent either way, since it is pure
+ * document order.
+ */
 function collectFootnotes(ast: Document): FootnoteState {
-  const defs = ast.footnoteDefs ?? {}
-  const order: FootnoteEntry[] = []
-  const seen: Record<string, number> = {}
-  const labelIndexes = new Map<string, number>()
-  const onNode = (n: InlineNode): void => {
-    if (n.type !== 'footnote_ref' && n.type !== 'inline_footnote') return
-    // Inline footnote (`^[content]`): always a fresh, anonymous number.
-    if (n.inline) {
-      const number = order.length + 1
-      const refId = `fnref${number}`
-      const entry: FootnoteEntry = { inline: n.inline, backrefs: [refId] }
-      if (n.pos?.startLine !== undefined) entry.sourceLine = n.pos.startLine
-      order.push(entry)
-      n.number = number
-      n.refId = refId
-      return
-    }
-    // Reference footnote (`[^label]`): numbered at first resolved reference.
-    if (!n.id || !defs[n.id]) return
-    let idx = labelIndexes.get(n.id)
-    if (idx === undefined) {
-      const entry: FootnoteEntry = { label: n.id, backrefs: [] }
-      const sourceLine = defs[n.id]?.[0]?.pos?.startLine
-      if (sourceLine !== undefined) entry.sourceLine = sourceLine
-      order.push(entry)
-      idx = order.length - 1
-      labelIndexes.set(n.id, idx)
-    }
-    const number = idx + 1
-    const occ = (seen[n.id] = (seen[n.id] ?? 0) + 1)
+  const { order: numbered, refs } = numberFootnotes(ast)
+  const order: FootnoteEntry[] = numbered.map((e) => {
+    const entry: FootnoteEntry = { backrefs: [] }
+    if (e.label !== undefined) entry.label = e.label
+    if (e.inline !== undefined) entry.inline = e.inline
+    if (e.sourceLine !== undefined) entry.sourceLine = e.sourceLine
+    return entry
+  })
+  // Occurrence count keyed by orderIndex (not label): an inline footnote's
+  // orderIndex is unique to itself, so this counts reference-footnote
+  // repeats and inline single-occurrences uniformly.
+  const seen: Record<number, number> = {}
+  for (const { node: n, orderIndex } of refs) {
+    const number = orderIndex + 1
+    const occ = (seen[orderIndex] = (seen[orderIndex] ?? 0) + 1)
     const refId = occ === 1 ? `fnref${number}` : `fnref${number}-${occ}`
-    n.number = number
     n.refId = refId
-    order[idx]!.backrefs.push(refId)
-  }
-  for (const b of ast.children) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
-  // Reference bodies may cite further reference footnotes; walk them in
-  // discovery order (the queue grows as onNode appends entries). Inline-note
-  // content lives in `.inline`, which visitInlineTree does not descend, so it
-  // is never walked for footnotes (design §3.1: no footnotes inside notes).
-  for (let k = 0; k < order.length; k++) {
-    const label = order[k]!.label
-    if (label === undefined) continue
-    for (const b of defs[label] ?? []) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
+    order[orderIndex]!.backrefs.push(refId)
   }
   return { order }
 }

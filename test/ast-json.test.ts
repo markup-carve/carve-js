@@ -155,11 +155,11 @@ describe('carveToAstJson', () => {
 
   it('carries resolution results the consumer would have to recompute', () => {
     // PART 12 §5. Caption numbers are assigned by resolve(), so they are here.
-    // Footnote numbering is NOT: this engine assigns it inside each renderer's
-    // collection pass, so a serialized tree carries `footnote_ref` without a
-    // number and a consumer has to reimplement PART 9R to get one. Tracked
-    // rather than papered over - asserting the caption half only is what makes
-    // the footnote half visible.
+    // Footnote numbering is too (carve-js#479): `resolve()` assigns
+    // `footnote_ref` / `inline_footnote` `.number` via the same shared pass
+    // `renderHtml()` uses standalone, so a serialized tree already carries it
+    // and a consumer never has to reimplement PART 9R to get one. See
+    // test/footnote-numbering.test.ts for the footnote-specific coverage.
     const json = carveToAstJson('![a](/i.png)\n\n^ Figure #: caption\n')
     const figure = json.children[0] as { caption: Array<{ type: string; n?: number }> }
     const number = figure.caption.find((c) => c.type === 'caption_number')
