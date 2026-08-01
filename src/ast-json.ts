@@ -113,7 +113,11 @@ export function fromAstJson(json: AstJsonDocument): Document {
   const footnoteDefs: Record<string, BlockNode[]> = {}
   let frontmatter: Document['frontmatter']
 
-  for (const child of json.children ?? []) {
+  // A root whose `children` is not an array is not iterable, and this is the
+  // entry point for a file someone was handed. An empty document is the honest
+  // reading of "no children I can walk"; throwing here would turn malformed
+  // input into a stack trace at the CLI.
+  for (const child of Array.isArray(json.children) ? json.children : []) {
     if (child?.type === 'frontmatter' && frontmatter === undefined) {
       const node = child as FrontmatterNode
       if (typeof node.format === 'string' && typeof node.content === 'string') {
@@ -126,10 +130,20 @@ export function fromAstJson(json: AstJsonDocument): Document {
       // published before PART 12 §7 settled it, and those trees are stored.
       const node = child as FootnoteDefNode & { id?: string }
       const label = typeof node.label === 'string' ? node.label : node.id
-      if (typeof label === 'string' && footnoteDefs[label] === undefined) {
-        footnoteDefs[label] = node.children ?? []
+      // `children` has to be an array to be a definition BODY. Adopting a
+      // string here puts it where every renderer iterates footnote bodies
+      // without checking, so the failure would surface as a crash inside the
+      // renderer for a document the decoder had already accepted.
+      if (typeof label === 'string' && Array.isArray(node.children)) {
+        if (footnoteDefs[label] === undefined) footnoteDefs[label] = node.children
         continue
       }
+      // Unusable as a definition, and `footnote` is a type no renderer has a
+      // case for - a definition renders where its REFERENCE appears, never in
+      // place. Keeping it would trade a decoder error for a renderer crash, so
+      // it is dropped and a reference to it reads as unresolved, which is what
+      // a missing definition already means.
+      continue
     }
     children.push(child as BlockNode)
   }

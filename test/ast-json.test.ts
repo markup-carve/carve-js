@@ -105,16 +105,21 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['a'])
   })
 
-  it('leaves a malformed footnote node in the tree rather than dropping it', () => {
-    // Absent beats invented: a node with no label cannot become a definition,
-    // and silently deleting it would lose content a consumer handed us.
+  it('drops a footnote definition it cannot use rather than passing it on', () => {
+    // A definition with no label, or a body that is not a list of blocks, cannot
+    // become an entry - and `footnote` is a type no renderer has a case for,
+    // since a definition renders where its reference appears and never in place.
+    // Keeping it would trade a decode-time refusal for a renderer crash.
     const doc = fromAstJson({
       type: 'document',
       srcByteLength: 0,
-      children: [{ type: 'footnote', children: [] } as never],
+      children: [
+        { type: 'footnote', children: [] } as never,
+        { type: 'footnote', label: 'b', children: 'bad' } as never,
+      ],
     })
     expect(doc.footnoteDefs).toBeUndefined()
-    expect(doc.children).toHaveLength(1)
+    expect(doc.children).toHaveLength(0)
   })
 
   it('keeps only the FIRST frontmatter node', () => {

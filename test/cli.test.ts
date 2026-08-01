@@ -502,3 +502,52 @@ describe('carve CLI — --json / --from-json (PART 12 exchange format)', () => {
     expect(t.out).toContain('--from-json')
   })
 })
+
+describe('carve CLI — --from-json is hostile-input tolerant', () => {
+  it('does not throw when children is not an array', async () => {
+    const t = makeIO({ stdin: '{"type":"document","children":{}}' })
+    expect(await run(['--from-json', '--html'], t.io)).toBe(0)
+    expect(t.out.trim()).toBe('')
+  })
+
+  it('drops a footnote definition whose body is not a list of blocks', async () => {
+    // Adopting it would put a string where every renderer iterates a body, so
+    // the crash would surface inside the renderer for a document the decoder
+    // had already accepted.
+    const t = makeIO({
+      stdin: JSON.stringify({
+        type: 'document',
+        srcByteLength: 0,
+        children: [
+          { type: 'paragraph', children: [{ type: 'footnote_ref', id: 'a' }] },
+          { type: 'footnote', label: 'a', children: 'bad' },
+        ],
+      }),
+    })
+    expect(await run(['--from-json', '--html'], t.io)).toBe(0)
+  })
+
+  it('applies the profile maxLength to the encoded payload', async () => {
+    // The untrusted input on this path IS the JSON, so `--profile comment` has
+    // to bound it; otherwise the flag stops meaning anything as soon as the
+    // document arrives encoded.
+    const big = JSON.stringify({
+      type: 'document',
+      srcByteLength: 0,
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x'.repeat(150_000) }] }],
+    })
+    const t = makeIO({ stdin: big })
+    expect(await run(['--from-json', '--html', '--profile', 'comment'], t.io)).toBe(2)
+    expect(t.err).toContain('maximum length')
+  })
+
+  it('lets a small encoded document through the same profile', async () => {
+    // The mirror of the case above: a limit that rejected everything would pass
+    // that test for the wrong reason.
+    const encode = makeIO({ stdin: 'a short comment\n' })
+    await run(['--json'], encode.io)
+    const t = makeIO({ stdin: encode.out })
+    expect(await run(['--from-json', '--html', '--profile', 'comment'], t.io)).toBe(0)
+    expect(t.out).toContain('a short comment')
+  })
+})

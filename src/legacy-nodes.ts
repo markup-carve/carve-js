@@ -67,9 +67,20 @@ export function adoptBlockFootnoteDefs(ast: Document): Document {
     // recalled. Accepting both on INPUT is the same concession the legacy
     // `footnote` inline type gets above; only `label` is ever produced.
     const label = def.label ?? def.id
+    // A definition BODY has to be a list of blocks. Adopting anything else puts
+    // it where the renderers iterate a body without checking, so a corrupted
+    // tree crashed inside the HTML renderer for a document that had already
+    // been accepted.
+    //
+    // Such a node is DROPPED rather than left in `children`: `footnote` is a
+    // definition, which renders where its reference appears and never in place,
+    // so no renderer has a case for it - leaving it in trades one crash for
+    // another ("unknown block footnote"). A reference to it then renders as an
+    // unresolved reference, which is what a missing definition already means.
+    if (label === undefined || !Array.isArray(def.children)) return false
     // An existing entry wins: the map is this engine's own representation, so a
     // tree carrying both is one it produced and then had nodes added to.
-    if (label !== undefined && defs[label] === undefined) defs[label] = def.children ?? []
+    if (defs[label] === undefined) defs[label] = def.children
 
     return false
   })

@@ -368,6 +368,28 @@ function renderFromJson(
   opts: ProfileOptions & { allowRawHtml?: false },
   io: CliIO,
 ): number {
+  // A profile's maxLength bounds UNTRUSTED INPUT, and on this path the untrusted
+  // input is the JSON payload - it is what gets parsed, held in memory and
+  // walked. Skipping the check because nothing parses Carve here would let
+  // `--profile comment` accept an arbitrarily large document as long as it
+  // arrived encoded, which is the one thing that flag is for.
+  //
+  // Measured against the payload rather than the source it encodes, because the
+  // source no longer exists at this point. An encoded document is several times
+  // its own source, so a host storing trees should size the limit for the form
+  // it stores - the error says which form was measured.
+  const maxLength = opts.profile?.getMaxLength() ?? 0
+  if (maxLength > 0) {
+    const size = Buffer.byteLength(src, 'utf8')
+    if (size > maxLength) {
+      io.writeErr(
+        `carve render: encoded AST exceeds the profile's maximum length of ${maxLength} bytes ` +
+          `(got ${size} bytes of JSON).\n`,
+      )
+      return 2
+    }
+  }
+
   let json: AstJsonDocument
   try {
     json = JSON.parse(src) as AstJsonDocument
