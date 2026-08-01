@@ -26,8 +26,18 @@ import {
   carveToCarve,
   carveToPlainText,
   carveToAnsi,
+  carveToAstJson,
+  fromAstJson,
+  toAstJson,
+  applyProfile,
+  renderHtml,
+  renderMarkdown,
+  renderCarve,
+  renderPlainText,
+  renderAnsi,
   Profile,
   ProfileViolationError,
+  type AstJsonDocument,
   type MigrationWarning,
   type ProfileOptions,
 } from './index.js'
@@ -65,9 +75,15 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --markdown     Markdown (--md)
     --plain        plain text (--plain-text)
     --ansi         ANSI-colored terminal text
+    --json, --ast  the parsed AST as JSON (the PART 12 exchange format,
+                   https://markup-carve.github.io/carve/ast-json)
     --stamp-info   report the document's provenance marker
     --stamp-check  exit 1 when the document predates this spec version
     --carve        canonical Carve source
+
+  input options:
+    --from-json    read an encoded AST instead of Carve source, and render it
+                   to the chosen format
 
   safety options (for untrusted input; combine freely with a format above):
     --no-raw-html, --safe       escape =html raw blocks/spans instead of
@@ -334,6 +350,99 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
   return mode === 'check' && changed > 0 ? 1 : 0
 }
 
+/**
+ * Render a document handed in as PART 12 JSON rather than as Carve source.
+ *
+ * The AST is the interchange format, so a tool that produced one - an editor, a
+ * converter, another engine - can render it here without round-tripping through
+ * Carve source it would have to re-parse. It is also the only way to exercise
+ * PART 12 §6 from the command line: `--json` then `--from-json --json` must
+ * come back to the same tree.
+ *
+ * Malformed input is a user error (exit 2), not a crash: this reads whatever
+ * the caller passes, including a file that is not JSON at all.
+ */
+function renderFromJson(
+  src: string,
+  target: 'html' | 'markdown' | 'plain' | 'ansi' | 'carve' | 'json',
+  opts: ProfileOptions & { allowRawHtml?: false },
+  io: CliIO,
+): number {
+  // A profile's maxLength bounds UNTRUSTED INPUT, and on this path the untrusted
+  // input is the JSON payload - it is what gets parsed, held in memory and
+  // walked. Skipping the check because nothing parses Carve here would let
+  // `--profile comment` accept an arbitrarily large document as long as it
+  // arrived encoded, which is the one thing that flag is for.
+  //
+  // Measured against the payload rather than the source it encodes, because the
+  // source no longer exists at this point. An encoded document is several times
+  // its own source, so a host storing trees should size the limit for the form
+  // it stores - the error says which form was measured.
+  const maxLength = opts.profile?.getMaxLength() ?? 0
+  if (maxLength > 0) {
+    const size = Buffer.byteLength(src, 'utf8')
+    if (size > maxLength) {
+      io.writeErr(
+        `carve render: encoded AST exceeds the profile's maximum length of ${maxLength} bytes ` +
+          `(got ${size} bytes of JSON).\n`,
+      )
+      return 2
+    }
+  }
+
+  let json: AstJsonDocument
+  try {
+    json = JSON.parse(src) as AstJsonDocument
+  } catch (e) {
+    io.writeErr(`carve render: --from-json input is not valid JSON (${(e as Error).message})\n`)
+    return 2
+  }
+  if (json === null || typeof json !== 'object' || json.type !== 'document') {
+    io.writeErr("carve render: --from-json input is not a Carve AST (expected a root of type 'document')\n")
+    return 2
+  }
+
+  let doc = fromAstJson(json)
+  if (opts.profile) {
+    doc = applyProfile(doc, opts.profile, opts.profileBaseHost ?? null).doc
+  }
+
+  let out: string
+  try {
+    switch (target) {
+      case 'json':
+        out = JSON.stringify(toAstJson(doc), null, 2)
+        break
+      case 'html':
+        // The only render option the CLI exposes; the rest of `opts` is parse
+        // and profile configuration, which was already applied above.
+        out = renderHtml(doc, opts.allowRawHtml === false ? { allowRawHtml: false } : {})
+        break
+      case 'markdown':
+        out = renderMarkdown(doc)
+        break
+      case 'plain':
+        out = renderPlainText(doc)
+        break
+      case 'ansi':
+        out = renderAnsi(doc)
+        break
+      case 'carve':
+        out = renderCarve(doc)
+        break
+    }
+  } catch (e) {
+    if (e instanceof ProfileViolationError) {
+      io.writeErr(`carve render: ${e.message}\n`)
+      return 2
+    }
+    throw e
+  }
+  if (!out.endsWith('\n')) out += '\n'
+  io.write(out)
+  return 0
+}
+
 async function runRender(args: string[], io: CliIO): Promise<number> {
   let values: {
     html?: boolean
@@ -342,6 +451,9 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     plain?: boolean
     ansi?: boolean
     md?: boolean
+    json?: boolean
+    ast?: boolean
+    'from-json'?: boolean
     'plain-text'?: boolean
     'stamp-info'?: boolean
     'stamp-check'?: boolean
@@ -362,6 +474,9 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         plain: { type: 'boolean' },
         ansi: { type: 'boolean' },
         md: { type: 'boolean' },
+        json: { type: 'boolean' },
+        ast: { type: 'boolean' },
+        'from-json': { type: 'boolean' },
         'plain-text': { type: 'boolean' },
         'stamp-info': { type: 'boolean' },
         'stamp-check': { type: 'boolean' },
@@ -389,10 +504,17 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   // "at most one" check, so `--md --markdown` is one format, not two.
   if (values.md) values.markdown = true
   if (values['plain-text']) values.plain = true
+  // `--ast` is carve-php's spelling of the same flag; folding it here keeps one
+  // format in `chosen` rather than two.
+  if (values.ast) values.json = true
 
-  const chosen = (['html', 'markdown', 'plain', 'ansi', 'carve'] as const).filter((f) => values[f])
+  const chosen = (['html', 'markdown', 'plain', 'ansi', 'carve', 'json'] as const).filter(
+    (f) => values[f],
+  )
   if (chosen.length > 1) {
-    io.writeErr('carve render: choose at most one of --html, --markdown, --plain, --ansi, --carve\n')
+    io.writeErr(
+      'carve render: choose at most one of --html, --markdown, --plain, --ansi, --carve, --json\n',
+    )
     return 2
   }
   if (positionals.length > 1) {
@@ -472,9 +594,17 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     return 0
   }
 
+  // --from-json reads an encoded AST instead of Carve source. The render path
+  // below takes source, so this branch runs the renderers directly over the
+  // decoded tree - and applies the profile itself, since nothing parsed here.
+  if (values['from-json']) return renderFromJson(src, target, opts, io)
+
   let out: string
   try {
     switch (target) {
+      case 'json':
+        out = JSON.stringify(carveToAstJson(src, opts), null, 2)
+        break
       case 'html':
         out = carveToHtml(src, opts)
         break

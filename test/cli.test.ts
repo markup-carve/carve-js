@@ -417,3 +417,137 @@ describe('carve CLI — stamp modes', () => {
     }
   })
 })
+
+describe('carve CLI — --json / --from-json (PART 12 exchange format)', () => {
+  it('renders the AST as JSON with positions', async () => {
+    const t = makeIO({ stdin: '# Title\n' })
+    const code = await run(['--json'], t.io)
+    expect(code).toBe(0)
+    const json = JSON.parse(t.out)
+    expect(json.type).toBe('document')
+    expect(Object.keys(json).sort()).toEqual(['children', 'srcByteLength', 'type'])
+    expect(json.children[0]).toMatchObject({ type: 'heading', level: 1 })
+    expect(json.children[0].pos.startLine).toBe(1)
+  })
+
+  it('accepts --ast, carve-php\'s spelling of the same flag', async () => {
+    const t = makeIO({ stdin: '# Title\n' })
+    expect(await run(['--ast'], t.io)).toBe(0)
+    expect(JSON.parse(t.out).type).toBe('document')
+  })
+
+  it('refuses a second output format', async () => {
+    const t = makeIO({ stdin: '# T\n' })
+    expect(await run(['--json', '--markdown'], t.io)).toBe(2)
+    expect(t.err).toContain('choose at most one')
+  })
+
+  it('round trips source -> JSON -> HTML identically to rendering it directly', async () => {
+    const source = '# H\n\nP[^a] with /em/\n\n- a\n- b\n\n[^a]: note\n'
+    const direct = makeIO({ stdin: source })
+    await run(['--html'], direct.io)
+
+    const encode = makeIO({ stdin: source })
+    await run(['--json'], encode.io)
+    const decode = makeIO({ stdin: encode.out })
+    const code = await run(['--from-json', '--html'], decode.io)
+
+    expect(code).toBe(0)
+    expect(decode.out).toBe(direct.out)
+  })
+
+  it('round trips the tree itself: --json then --from-json --json is identity', async () => {
+    // PART 12 §6, from the command line.
+    const first = makeIO({ stdin: '---\na: 1\n---\n\n> q[^x]\n\n[^x]: d\n' })
+    await run(['--json'], first.io)
+    const second = makeIO({ stdin: first.out })
+    await run(['--from-json', '--json'], second.io)
+    expect(JSON.parse(second.out)).toEqual(JSON.parse(first.out))
+  })
+
+  it('reports malformed JSON as a user error, not a crash', async () => {
+    const t = makeIO({ stdin: 'not json at all\n' })
+    expect(await run(['--from-json'], t.io)).toBe(2)
+    expect(t.err).toContain('not valid JSON')
+  })
+
+  it('rejects JSON that is not a Carve AST', async () => {
+    const t = makeIO({ stdin: '{"hello":"world"}' })
+    expect(await run(['--from-json'], t.io)).toBe(2)
+    expect(t.err).toContain("type 'document'")
+  })
+
+  it('applies a profile to a decoded tree', async () => {
+    // Nothing parsed here, so the profile has to be applied to the tree itself -
+    // a decoded document must not be a way around the restriction.
+    const encode = makeIO({ stdin: '# H\n\n`code`\n' })
+    await run(['--json'], encode.io)
+    const decode = makeIO({ stdin: encode.out })
+    expect(await run(['--from-json', '--html', '--profile', 'minimal'], decode.io)).toBe(0)
+    expect(decode.out).not.toContain('<h1')
+  })
+
+  it('escapes raw HTML under --safe when reading a tree', async () => {
+    const encode = makeIO({ stdin: '```=html\n<script>alert(1)</script>\n```\n' })
+    await run(['--json'], encode.io)
+    const decode = makeIO({ stdin: encode.out })
+    expect(await run(['--from-json', '--html', '--safe'], decode.io)).toBe(0)
+    expect(decode.out).not.toContain('<script>')
+  })
+
+  it('documents both flags in --help', async () => {
+    const t = makeIO()
+    await run(['--help'], t.io)
+    expect(t.out).toContain('--json, --ast')
+    expect(t.out).toContain('--from-json')
+  })
+})
+
+describe('carve CLI — --from-json is hostile-input tolerant', () => {
+  it('does not throw when children is not an array', async () => {
+    const t = makeIO({ stdin: '{"type":"document","children":{}}' })
+    expect(await run(['--from-json', '--html'], t.io)).toBe(0)
+    expect(t.out.trim()).toBe('')
+  })
+
+  it('drops a footnote definition whose body is not a list of blocks', async () => {
+    // Adopting it would put a string where every renderer iterates a body, so
+    // the crash would surface inside the renderer for a document the decoder
+    // had already accepted.
+    const t = makeIO({
+      stdin: JSON.stringify({
+        type: 'document',
+        srcByteLength: 0,
+        children: [
+          { type: 'paragraph', children: [{ type: 'footnote_ref', id: 'a' }] },
+          { type: 'footnote', label: 'a', children: 'bad' },
+        ],
+      }),
+    })
+    expect(await run(['--from-json', '--html'], t.io)).toBe(0)
+  })
+
+  it('applies the profile maxLength to the encoded payload', async () => {
+    // The untrusted input on this path IS the JSON, so `--profile comment` has
+    // to bound it; otherwise the flag stops meaning anything as soon as the
+    // document arrives encoded.
+    const big = JSON.stringify({
+      type: 'document',
+      srcByteLength: 0,
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x'.repeat(150_000) }] }],
+    })
+    const t = makeIO({ stdin: big })
+    expect(await run(['--from-json', '--html', '--profile', 'comment'], t.io)).toBe(2)
+    expect(t.err).toContain('maximum length')
+  })
+
+  it('lets a small encoded document through the same profile', async () => {
+    // The mirror of the case above: a limit that rejected everything would pass
+    // that test for the wrong reason.
+    const encode = makeIO({ stdin: 'a short comment\n' })
+    await run(['--json'], encode.io)
+    const t = makeIO({ stdin: encode.out })
+    expect(await run(['--from-json', '--html', '--profile', 'comment'], t.io)).toBe(0)
+    expect(t.out).toContain('a short comment')
+  })
+})
