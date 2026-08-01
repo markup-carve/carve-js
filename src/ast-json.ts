@@ -39,8 +39,18 @@ export interface FrontmatterNode {
 /** A footnote definition as a block node (PART 12 §7). */
 export interface FootnoteDefNode {
   type: 'footnote'
-  /** The label as written, without `[^` and `]:`. Named to match `footnote_ref.id`. */
-  id: string
+  /**
+   * The label as written, without `[^` and `]:`.
+   *
+   * `label`, not `id`, per PART 12 §7: PART 9 §16 calls it a label throughout,
+   * and `id` collides with the attribute of that name. This engine and
+   * carve-php both shipped `id` first - matching `footnote_ref.id` - and the
+   * spec settled it the other way when the node moved into the tree (carve#418).
+   *
+   * {@link fromAstJson} still ACCEPTS `id` on input, because trees written by
+   * the earlier spelling exist and a stored document cannot be recalled.
+   */
+  label: string
   children: BlockNode[]
   pos?: Position
 }
@@ -75,11 +85,58 @@ export function toAstJson(doc: Document): AstJsonDocument {
 
   children.push(...doc.children)
 
-  for (const [id, body] of Object.entries(doc.footnoteDefs ?? {})) {
-    children.push({ type: 'footnote', id, children: body })
+  for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
+    children.push({ type: 'footnote', label, children: body })
   }
 
   const out: AstJsonDocument = { type: 'document', children }
   if (doc.srcByteLength !== undefined) out.srcByteLength = doc.srcByteLength
   return out
+}
+
+/**
+ * The inverse of {@link toAstJson}: an exchange-shape document to the runtime
+ * `Document` this engine's renderers, extensions and profile filter expect.
+ *
+ * PART 12 §6 requires `parse(x)` serialized and deserialized to equal
+ * `parse(x)`, and a format with only one direction cannot be checked against
+ * that at all - the round trip is the rule that catches a serializer quietly
+ * dropping a field, one document before a consumer does.
+ *
+ * Input is treated as DATA, not as a trusted tree: a `footnote` child missing
+ * its label, or a `frontmatter` child carrying something other than strings, is
+ * left alone rather than adopted, so a malformed document degrades to "an
+ * unrecognized node" instead of throwing halfway through a conversion.
+ */
+export function fromAstJson(json: AstJsonDocument): Document {
+  const children: BlockNode[] = []
+  const footnoteDefs: Record<string, BlockNode[]> = {}
+  let frontmatter: Document['frontmatter']
+
+  for (const child of json.children ?? []) {
+    if (child?.type === 'frontmatter' && frontmatter === undefined) {
+      const node = child as FrontmatterNode
+      if (typeof node.format === 'string' && typeof node.content === 'string') {
+        frontmatter = { format: node.format, content: node.content }
+        continue
+      }
+    }
+    if (child?.type === 'footnote') {
+      // `label` is the spec spelling; `id` is what this engine and carve-php
+      // published before PART 12 §7 settled it, and those trees are stored.
+      const node = child as FootnoteDefNode & { id?: string }
+      const label = typeof node.label === 'string' ? node.label : node.id
+      if (typeof label === 'string' && footnoteDefs[label] === undefined) {
+        footnoteDefs[label] = node.children ?? []
+        continue
+      }
+    }
+    children.push(child as BlockNode)
+  }
+
+  const doc: Document = { type: 'document', children }
+  if (frontmatter !== undefined) doc.frontmatter = frontmatter
+  if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
+  if (json.srcByteLength !== undefined) doc.srcByteLength = json.srcByteLength
+  return doc
 }

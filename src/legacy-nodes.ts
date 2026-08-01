@@ -61,10 +61,15 @@ export function adoptBlockFootnoteDefs(ast: Document): Document {
   const defs: Record<string, unknown> = { ...(ast.footnoteDefs ?? {}) }
   const children = ast.children.filter((child) => {
     if (!isDef(child)) return true
-    const def = child as unknown as { id?: string; children?: unknown[] }
+    const def = child as unknown as { label?: string; id?: string; children?: unknown[] }
+    // `label` is the PART 12 §7 spelling; `id` is what this engine and carve-php
+    // published before it, and those trees are stored where they cannot be
+    // recalled. Accepting both on INPUT is the same concession the legacy
+    // `footnote` inline type gets above; only `label` is ever produced.
+    const label = def.label ?? def.id
     // An existing entry wins: the map is this engine's own representation, so a
     // tree carrying both is one it produced and then had nodes added to.
-    if (def.id !== undefined && defs[def.id] === undefined) defs[def.id] = def.children ?? []
+    if (label !== undefined && defs[label] === undefined) defs[label] = def.children ?? []
 
     return false
   })
