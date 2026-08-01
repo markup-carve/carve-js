@@ -3535,6 +3535,10 @@ function parseTable(lexer: Lexer): Table | Figure {
   // parsing happens once, after merging.
   const rawRows: RawCell[][] = []
   const rowAttrsList: (Attrs | undefined)[] = []
+  /** Where a row BEGINS, by row index - its own line, not its first cell's. */
+  const rowStarts: Array<{ line: number; column: number; offset: number } | undefined> = []
+  /** Where a row ENDS once `+` continuations have extended it, by row index. */
+  const rowEnds: Array<{ line: number; column: number; offset: number } | undefined> = []
   let lastRaw: RawCell[] | null = null
   while (
     !lexer.eof() &&
@@ -3552,7 +3556,15 @@ function parseTable(lexer: Lexer): Table | Figure {
       )
         break
       lexer.consume()
-      splitTableRow(line).forEach((src, idx) => {
+      // A row that continues still occupies a CONTIGUOUS run of lines, and no
+      // sibling row overlaps it - so unlike its cells, the row can be placed.
+      // Recording where it now ends is what makes that possible.
+      rowEnds[rawRows.length - 1] = {
+        line: lexer.lineNumber(lineIndex),
+        column: lexer.lineStartColumn(lineIndex) + line.length,
+        offset: lexer.lineOffset(lineIndex) + line.length,
+      }
+      splitTableRowSpans(line).forEach(({ text: src }, idx) => {
         const frag = trimStructural(src)
         const target = lastRaw![idx]
         // A fragment on a span (`^`/`<`) column is skipped: the spec's
@@ -3561,8 +3573,15 @@ function parseTable(lexer: Lexer): Table | Figure {
         // (verified). A `+` after the span row is not a spec'd ordering.
         if (!frag || !target || target.span) return
         target.raw = target.raw ? `${target.raw} ${frag}` : frag
-        // The cell's content now comes from two non-adjacent lines, so no single
-        // span covers it and no single anchor locates its inline content.
+        // The CELL keeps no span. Its content sits in two column ranges on
+        // non-adjacent lines, and one range covering both would swallow the
+        // neighbouring column's content on the lines between - so cell 1 would
+        // CONTAIN cell 0, and an offset would map to two sibling cells at once.
+        // A construct that is not one contiguous range cannot honestly be one.
+        //
+        // Its inline content goes with it: joined from lines that are not
+        // adjacent, so no single anchor locates it and a span covering it could
+        // not select its own text.
         delete target.pos
         delete target.inlineAnchor
       })
@@ -3608,6 +3627,12 @@ function parseTable(lexer: Lexer): Table | Figure {
     })
     rawRows.push(raw)
     rowAttrsList.push(rowAttrs)
+    // The row's own extent, independent of whether its cells keep theirs. A row
+    // whose every cell continues has no cell span to start from, and it still
+    // occupies these lines.
+    rowStarts[rawRows.length - 1] = canPosition
+      ? { line: lineNo, column: lineCol, offset: lineOffset }
+      : undefined
     lastRaw = raw
   }
   // GFM-style header separator: when the SECOND row is a delimiter row -- every
@@ -3667,27 +3692,58 @@ function parseTable(lexer: Lexer): Table | Figure {
         return cell
       }),
     }
-    // A row spans its cells. Omitted when any cell lost its span to a `+`
-    // continuation, rather than reporting a range that skips a line.
+    // A row spans its cells: from the first cell's start to the last cell's end.
+    //
+    // A `+` continuation breaks that, because the extended cell loses its own
+    // span - its content sits in two column ranges on non-adjacent lines. The
+    // ROW is still one contiguous range that no sibling row overlaps, so it is
+    // placed from where it starts to where the continuation leaves it. Only
+    // when every cell continued does the start come from the row's own line
+    // rather than a cell, since there is no cell span left to take it from.
     const spans = rc.map((c) => c.pos)
-    const first = spans[0]
-    const last = spans[spans.length - 1]
-    if (
-      first &&
-      last &&
-      spans.every(Boolean) &&
-      first.startColumn !== undefined &&
-      last.endColumn !== undefined &&
-      first.startOffset !== undefined &&
-      last.endOffset !== undefined
-    ) {
-      row.pos = {
-        startLine: first.startLine,
-        endLine: last.endLine,
-        startColumn: first.startColumn,
-        endColumn: last.endColumn,
-        startOffset: first.startOffset,
-        endOffset: last.endOffset,
+    const end = rowEnds[idx]
+    if (end) {
+      const first = spans.find(Boolean) ?? rowStarts[idx]
+      const startLine = 'startLine' in (first ?? {}) ? (first as Position).startLine : undefined
+      const rowStart = first
+        ? 'line' in first
+          ? { line: first.line, column: first.column, offset: first.offset }
+          : {
+              line: startLine!,
+              column: (first as Position).startColumn!,
+              offset: (first as Position).startOffset!,
+            }
+        : undefined
+      if (rowStart) {
+        row.pos = {
+          startLine: rowStart.line,
+          endLine: end.line,
+          startColumn: rowStart.column,
+          endColumn: end.column,
+          startOffset: rowStart.offset,
+          endOffset: end.offset,
+        }
+      }
+    } else {
+      const first = spans[0]
+      const last = spans[spans.length - 1]
+      if (
+        first &&
+        last &&
+        spans.every(Boolean) &&
+        first.startColumn !== undefined &&
+        last.endColumn !== undefined &&
+        first.startOffset !== undefined &&
+        last.endOffset !== undefined
+      ) {
+        row.pos = {
+          startLine: first.startLine,
+          endLine: last.endLine,
+          startColumn: first.startColumn,
+          endColumn: last.endColumn,
+          startOffset: first.startOffset,
+          endOffset: last.endOffset,
+        }
       }
     }
     const ra = rowAttrsList[idx]
