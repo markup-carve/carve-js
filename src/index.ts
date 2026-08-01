@@ -54,6 +54,8 @@ export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
   toAstJson,
   fromAstJson,
+  AstJsonDepthError,
+  MAX_AST_JSON_DEPTH,
   type AstJsonDocument,
   type AstJsonBlock,
   type FrontmatterNode,
