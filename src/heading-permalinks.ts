@@ -62,8 +62,11 @@ export function headingPermalinks(opts: HeadingPermalinksOptions = {}): CarveExt
       heading: (node, ctx) => {
         const h = node as Heading
         const id = h.attrs?.id
-        // Only top-level (section-wrapped) headings reach a heading renderer,
-        // so the id is owned by the <section> and stripped from the <h*>.
+        // Only top-level headings reach a heading renderer. Whether the <h*>
+        // keeps the id depends on the `sections` option: with a wrapper the
+        // <section> owns it and emitting it here too would produce a duplicate
+        // DOM id; without one the <h*> is the only element that can carry it,
+        // and the permalink's own href would otherwise dangle.
         // Defer when out of the configured levels or there is no id to link to.
         if (!id || !levels.includes(h.level)) return undefined
         const inner = ctx.renderInlines(h.children)
@@ -77,7 +80,8 @@ export function headingPermalinks(opts: HeadingPermalinksOptions = {}): CarveExt
           ? `<span class="permalink-wrapper permalink-hover">${anchor}</span>`
           : anchor
         const body = prepend ? `${marker} ${inner}` : `${inner} ${marker}`
-        return `${ctx.indent(ctx.level)}<h${h.level}${ctx.renderAttrs(stripId(h.attrs))}>${body}</h${h.level}>`
+        const attrs = ctx.sections ? stripId(h.attrs) : h.attrs
+        return `${ctx.indent(ctx.level)}<h${h.level}${ctx.renderAttrs(attrs)}>${body}</h${h.level}>`
       },
     },
   }
