@@ -96,6 +96,38 @@ export interface RenderOptions {
    */
   sanitizeUrls?: boolean
   /**
+   * Wrap each top-level heading, and the content following it up to the next
+   * same-or-shallower heading, in a `<section id="{slug}">` (grammar PART 9
+   * §13). On by default, which is what the conformance corpus pins.
+   *
+   * Set `false` to render headings flat: the id goes back on the `<h*>`
+   * alongside its other attributes, and the blocks that would have been the
+   * section's children stay as siblings - so they also lose the two-space
+   * indentation they carried as container children.
+   *
+   * ```
+   * # A          sections: true      sections: false
+   * p            <section id="A">    <h1 id="A">A</h1>
+   *                <h1>A</h1>        <p>p</p>
+   *                <p>p</p>
+   *              </section>
+   * ```
+   *
+   * For a site whose CSS or JS assumes rendered blocks are direct children of
+   * the content container (the `.stack > * + *` spacing idiom, `:first-child`,
+   * `nth-child()` counting, `element.children` walks), the wrapper is the one
+   * output change a clean source migration still breaks.
+   *
+   * Nothing else is affected: ids, the dedup namespace, `</#id>` crossrefs,
+   * implicit `[Heading][]` references, `::: toc`, endnotes placement and
+   * heading numbering all resolve against the slug rather than the element
+   * carrying it. The `<section role="doc-endnotes">` region is a separate
+   * construct and is emitted either way. A heading inside a container was
+   * never wrapped, so it renders identically under both settings - which is
+   * the point: with this off, one placement rule covers the whole document.
+   */
+  sections?: boolean
+  /**
    * Opt in to a strict ALLOWLIST instead of the default denylist: when set,
    * ONLY these schemes pass on `href`/`src` (case-insensitive); everything
    * else is blanked. No effect when `sanitizeUrls` is `false`.
@@ -349,6 +381,14 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   // opens a <section id="{slug}"> that holds the heading and the content
   // up to the next same-or-shallower heading. The id lives on the
   // <section>, not on the <h*>. Sections nest by heading level.
+  //
+  // With `sections: false` no wrapper is emitted and the id stays on the
+  // <h*>, which is exactly how a heading inside a container has always
+  // rendered. The stack then never grows, so `closeTo` and the
+  // `sectionStack.length` indent both fall to no-ops rather than needing a
+  // second code path. The endnotes `<section role="doc-endnotes">` is a
+  // different construct and is unaffected by the option.
+  const wrapSections = opts.sections !== false
   const sectionStack: number[] = [] // open section heading-levels, outer→inner
 
   const closeTo = (level: number): void => {
@@ -387,27 +427,33 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     if (node.type === 'heading') {
       closeTo(node.level)
       const depth = sectionStack.length
-      // The id moves to <section>; any other heading attrs (classes,
-      // key-values) stay on the <h*>.
-      const id = node.attrs?.id
-      // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
-      // <section> (it already suppressed the auto-slug in resolveHeadingIds).
-      const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
-      out.push(`${indent(depth)}<section${sectionId}>`)
-      sectionStack.push(node.level)
+      if (wrapSections) {
+        // The id moves to <section>; any other heading attrs (classes,
+        // key-values) stay on the <h*>.
+        const id = node.attrs?.id
+        // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
+        // <section> (it already suppressed the auto-slug in resolveHeadingIds).
+        const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''
+        out.push(`${indent(depth)}<section${sectionId}>`)
+        sectionStack.push(node.level)
+      }
+      // Where the <h*> sits: one level in when a wrapper opened above it,
+      // at the document level when it did not.
+      const headingLevel = wrapSections ? depth + 1 : depth
       // An extension may render the <h*> element itself (e.g. heading
       // permalinks); the <section> wrapper above stays core. Returns undefined
-      // to fall through to the default heading rendering.
-      const custom = renderHeadingElement(node, opts, depth + 1)
+      // to fall through to the default heading rendering. The node it receives
+      // carries the id under either setting - only the emission site moves.
+      const custom = renderHeadingElement(node, opts, headingLevel)
       if (custom !== undefined) {
         out.push(opts.sourceLine ? withSourceLine(custom, node.pos?.startLine) : custom)
         continue
       }
-      const headingAttrs = stripId(node.attrs)
+      const headingAttrs = wrapSections ? stripId(node.attrs) : node.attrs
       const inner = renderInlines(node.children, opts)
       const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
       out.push(
-        `${indent(depth + 1)}<h${node.level}${renderAttrs(headingAttrs)}${slAttr}>${inner}</h${node.level}>`,
+        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs)}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -645,6 +691,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
     uniqueId,
     mode: opts.mode ?? 'interactive',
     renderers: opts.renderers ?? {},
+    sections: opts.sections !== false,
   }
 }
 

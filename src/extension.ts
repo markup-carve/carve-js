@@ -64,6 +64,18 @@ export interface BlockExtensionRenderContext extends ExtensionRenderContext {
   indent(level: number): string
   /** Render a list of block nodes at `level` via the core renderer. */
   renderChildren(nodes: BlockNode[], level: number): string
+  /**
+   * Whether the core renderer is wrapping top-level headings in `<section>`
+   * (the `sections` render option; `true` by default).
+   *
+   * This matters to a `heading` block renderer and to nothing else. When it is
+   * `true` the enclosing `<section>` owns the heading's id, so the renderer
+   * must strip the id from the `<h*>` it emits or the document gets two
+   * elements with the same id. When it is `false` there is no wrapper, and the
+   * `<h*>` is the only thing that can carry the id - dropping it there leaves
+   * every fragment link and cross-reference pointing at nothing.
+   */
+  sections: boolean
 }
 
 /**

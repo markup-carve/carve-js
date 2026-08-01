@@ -7,6 +7,28 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`sections: false` renders headings without the `<section>` wrapper**
+  (markup-carve/carve#427, spec PART 9 §13). The id goes back on the `<h*>`
+  alongside its other attributes, and the blocks that would have been section
+  children stay as siblings. Default unchanged, so existing callers are
+  unaffected.
+
+  The wrapper is the one output change that breaks a site whose source migrated
+  cleanly: CSS and JS assuming rendered blocks are direct children of the
+  content container - the `.stack > * + *` spacing idiom, `:first-child`,
+  `nth-child()` counting, `element.children` walks - stop matching once a
+  `<section>` sits in between. djot users unwrap the node with a filter;
+  carve-js has no such escape, because the element is synthesized at render
+  time from a flat AST with no `section` node, which left post-processing the
+  HTML as the only option.
+
+  Implemented as one branch in the existing wrapping pass rather than a second
+  renderer, because with the option off a top-level heading renders exactly the
+  way a heading inside a blockquote or div already does. The endnotes
+  `<section role="doc-endnotes">` is a different construct and is unaffected.
+
 ### Fixed
 
 - **`markdownToCarve` preserves leading YAML frontmatter instead of destroying

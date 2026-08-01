@@ -88,6 +88,41 @@ Under `'strict'`, a heading made entirely of unmappable script has no ASCII
 left and falls back to the id `s` (then `s-2`, ...); attach an explicit
 `{#my-id}` to such a heading for a meaningful anchor.
 
+### Section wrappers
+
+A top-level heading is wrapped, along with the content following it up to the
+next same-or-shallower heading, in a `<section>` that carries the heading's id
+(spec PART 9 §13). Only the id moves - `{#install .featured}` gives
+`<section id="install"><h2 class="featured">` - and a heading inside a
+blockquote, div, or list item is not wrapped at all.
+
+Pass `sections: false` to render headings flat, with the id back on the `<h*>`:
+
+```ts
+carveToHtml('# A\n\np\n')
+// <section id="A">
+//   <h1>A</h1>
+//   <p>p</p>
+// </section>
+
+carveToHtml('# A\n\np\n', { sections: false })
+// <h1 id="A">A</h1>
+// <p>p</p>
+```
+
+This exists for sites whose CSS or JS assumes rendered blocks are direct
+children of the content container - the `.stack > * + *` spacing idiom,
+`:first-child`, `nth-child()` counting, `element.children` walks - all of which
+stop matching once a wrapper sits in between. It is the one output change that
+breaks a document whose *source* migrated cleanly.
+
+Nothing else changes when it is off: ids, collision dedup, `</#id>`
+cross-references, implicit `[Heading][]` references, `::: toc`, endnotes
+placement and heading numbering all resolve against the slug rather than the
+element carrying it. The endnotes `<section role="doc-endnotes">` is a separate
+construct and is still emitted. The option is HTML-only - no other target emits
+`<section>`, and the AST has no `section` node.
+
 ## CLI
 
 The package installs a `carve` binary. Rendering is the default action — it
