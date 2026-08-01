@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from '../src/parse.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
-import { carveToAstJson } from '../src/index.js'
+import { carveToAstJson, carveToHtml, renderHtml } from '../src/index.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('emits a root of exactly type, children and srcByteLength', () => {
@@ -164,5 +164,97 @@ describe('carveToAstJson', () => {
     const figure = json.children[0] as { caption: Array<{ type: string; n?: number }> }
     const number = figure.caption.find((c) => c.type === 'caption_number')
     expect(number?.n).toBe(1)
+  })
+})
+
+describe('definition lists on the wire (PART 12)', () => {
+  const source = ':: Term one\n:: Term two\n:  Def A\n:  Def B\n\n:: Second\n:  Only\n'
+
+  it('publishes a flat sequence of nodes, not a grouping object', () => {
+    // The grouping was an internal, and not an agreed one: given this document
+    // carve-js published one entry with two terms and two definitions while
+    // carve-rs published three entries split differently - and all three
+    // engines rendered the same <dl>. The wire carries what the renderers
+    // agree on.
+    const list = carveToAstJson(source).children[0] as {
+      type: string
+      items: { type: string }[]
+    }
+
+    expect(list.type).toBe('definition_list')
+    expect(list.items.map((i) => i.type)).toEqual([
+      'definition_term',
+      'definition_term',
+      'definition_description',
+      'definition_description',
+      'definition_term',
+      'definition_description',
+    ])
+  })
+
+  it('gives a term a position, which a plain object could not carry', () => {
+    // §4's point: a term is content an editor navigates to and a language
+    // server renames. The span is DERIVED from the spans the parser recorded
+    // for its children, so it covers exactly the term.
+    const list = carveToAstJson(source).children[0] as {
+      items: { type: string; pos?: { startLine: number; startColumn: number } }[]
+    }
+
+    expect(list.items[0]?.pos).toMatchObject({ startLine: 1, startColumn: 4 })
+    expect(list.items[1]?.pos).toMatchObject({ startLine: 2 })
+  })
+
+  it('round trips back to the runtime grouping', () => {
+    // §6. The grouping rule is the renderer's: a run of terms opens an entry,
+    // the descriptions after it belong to it.
+    const json = carveToAstJson(source)
+    const doc = fromAstJson(JSON.parse(JSON.stringify(json))) as {
+      children: { items: { terms: unknown[]; definitions: unknown[] }[] }[]
+    }
+
+    expect(doc.children[0]?.items.map((i) => [i.terms.length, i.definitions.length])).toEqual([
+      [2, 2],
+      [1, 1],
+    ])
+    expect(toAstJson(doc as never)).toEqual(json)
+  })
+
+  it('rewrites a definition list wherever it sits, not only at the top level', () => {
+    const nested = carveToAstJson('> :: T\n> :  D\n\n- item\n  :: A\n  :  B\n')
+    const wire = JSON.stringify(nested)
+
+    expect(wire.match(/definition_term/g)).toHaveLength(2)
+    expect(wire).not.toContain('"terms"')
+  })
+
+  it('renders a decoded document identically', () => {
+    const doc = fromAstJson(JSON.parse(JSON.stringify(carveToAstJson(source))))
+
+    expect(renderHtml(doc)).toBe(carveToHtml(source))
+  })
+
+  it('still decodes the older grouping form, which stored trees carry', () => {
+    const doc = fromAstJson({
+      type: 'document',
+      srcByteLength: 0,
+      children: [
+        {
+          type: 'definition_list',
+          items: [
+            { terms: [[{ type: 'text', value: 'T' }]], definitions: [[{ type: 'paragraph', children: [] }]] },
+          ],
+        } as never,
+      ],
+    }) as { children: { items: { terms: unknown[] }[] }[] }
+
+    expect(doc.children[0]?.items[0]?.terms).toHaveLength(1)
+  })
+
+  it('leaves the runtime document untouched', () => {
+    const doc = parse(source)
+    carveToAstJson(source)
+    toAstJson(doc)
+
+    expect(Array.isArray((doc.children[0] as { items: { terms: unknown }[] }).items[0]?.terms)).toBe(true)
   })
 })

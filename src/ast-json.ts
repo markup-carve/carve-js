@@ -25,6 +25,12 @@
  */
 
 import type { BlockNode, Document, Position } from './ast.js'
+import {
+  entriesFromWire,
+  entriesToWire,
+  isRuntimeEntry,
+  type DefinitionEntryNode,
+} from './definition-list-wire.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -65,6 +71,94 @@ export interface AstJsonDocument {
 }
 
 /**
+ * Fields that hold child nodes, in the order a walk should follow them.
+ *
+ * Listed rather than discovered, because two fields that look like child lists
+ * are not: a citation group's `items` and a definition list's `items` hold
+ * plain objects in the runtime tree, and walking them as nodes would rewrite
+ * data that is not one.
+ */
+const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title'] as const
+
+/**
+ * Rewrite definition lists into their wire shape, everywhere in a subtree.
+ *
+ * Structurally shared: a branch with no definition list in it comes back as the
+ * SAME object, so `toAstJson` still leaves the runtime document untouched and
+ * a large document does not pay for a deep copy it does not need.
+ */
+function definitionListsToWire<T>(node: T): T {
+  if (Array.isArray(node)) {
+    let changed = false
+    const mapped = node.map((child) => {
+      const next = definitionListsToWire(child)
+      if (next !== child) changed = true
+      return next
+    })
+    return (changed ? mapped : node) as T
+  }
+  if (typeof node !== 'object' || node === null) return node
+
+  const record = node as Record<string, unknown>
+  let out: Record<string, unknown> | undefined
+
+  if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
+    const items = record['items']
+    if (items.every(isRuntimeEntry)) {
+      out = { ...record, items: entriesToWire(items) as unknown as DefinitionEntryNode[] }
+    }
+  }
+
+  for (const field of CHILD_FIELDS) {
+    const value = (out ?? record)[field]
+    if (value === undefined) continue
+    // A definition list's own `items` was just rewritten; walking it again
+    // would descend into wire nodes as if they were runtime ones.
+    if (field === 'items' && (out ?? record)['type'] === 'definition_list') {
+      const mapped = definitionListsToWire(value)
+      if (mapped !== value) out = { ...(out ?? record), [field]: mapped }
+      continue
+    }
+    const mapped = definitionListsToWire(value)
+    if (mapped !== value) out = { ...(out ?? record), [field]: mapped }
+  }
+
+  const target = (out ?? record)['target']
+  if (target !== undefined) {
+    const mapped = definitionListsToWire(target)
+    if (mapped !== target) out = { ...(out ?? record), target: mapped }
+  }
+
+  return (out ?? record) as T
+}
+
+/** The inverse: wire entries back to the runtime `{terms, definitions}` form. */
+function definitionListsFromWire<T>(node: T): T {
+  if (Array.isArray(node)) {
+    return node.map((child) => definitionListsFromWire(child)) as unknown as T
+  }
+  if (typeof node !== 'object' || node === null) return node
+
+  const record = { ...(node as Record<string, unknown>) }
+
+  if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
+    // A payload already in the runtime form decodes unchanged: older stored
+    // trees carry it, and this engine produced them.
+    record['items'] = record['items'].every(isRuntimeEntry)
+      ? record['items']
+      : entriesFromWire(record['items'])
+    return record as T
+  }
+
+  for (const field of CHILD_FIELDS) {
+    if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
+  }
+  if (record['target'] !== undefined) record['target'] = definitionListsFromWire(record['target'])
+
+  return record as T
+}
+
+/**
  * Map a document onto the exchange shape.
  *
  * Frontmatter becomes the FIRST child, which is where it was written. Footnote
@@ -89,10 +183,14 @@ export function toAstJson(doc: Document): AstJsonDocument {
     children.push(node)
   }
 
-  children.push(...doc.children)
+  children.push(...definitionListsToWire(doc.children))
 
   for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
-    const node: FootnoteDefNode = { type: 'footnote', label, children: body }
+    const node: FootnoteDefNode = {
+      type: 'footnote',
+      label,
+      children: definitionListsToWire(body),
+    }
     const pos = doc.footnoteDefPos?.[label]
     if (pos !== undefined) node.pos = pos
     children.push(node)
@@ -149,7 +247,7 @@ export function fromAstJson(json: AstJsonDocument): Document {
       // renderer for a document the decoder had already accepted.
       if (typeof label === 'string' && Array.isArray(node.children)) {
         if (footnoteDefs[label] === undefined) {
-          footnoteDefs[label] = node.children
+          footnoteDefs[label] = definitionListsFromWire(node.children)
           if (node.pos !== undefined) footnoteDefPos[label] = node.pos
         }
         continue
@@ -161,7 +259,7 @@ export function fromAstJson(json: AstJsonDocument): Document {
       // a missing definition already means.
       continue
     }
-    children.push(child as BlockNode)
+    children.push(definitionListsFromWire(child) as BlockNode)
   }
 
   const doc: Document = { type: 'document', children }
