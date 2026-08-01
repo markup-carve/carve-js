@@ -65,3 +65,25 @@ describe('a profile can deny the types this engine keeps on the root', () => {
     }
   })
 })
+
+describe('the root-field deny path is not duplicated', () => {
+  it('raises for footnote definitions too, not only frontmatter', () => {
+    // The regression this guards: two checks for the same thing, only one of
+    // which honoured `error`. The earlier one deleted the field and pushed a
+    // violation; the later one - which throws - then found nothing to do, so
+    // `onDisallowed('error')` was silently downgraded to removal for the type
+    // that had two checks and worked for the type that had one. Asserting both
+    // types is what makes an asymmetry visible.
+    const profile = Profile.full().denyBlock(['footnote']).onDisallowed('error')
+    expect(() => carveToHtml('Body[^a].\n\n[^a]: note\n', { profile })).toThrow(
+      ProfileViolationError,
+    )
+  })
+
+  it('reports the violation exactly once', () => {
+    const doc = parse('---\ntitle: x\n---\n\nBody.\n')
+    const { violations } = applyProfile(doc, Profile.full().denyBlock(['frontmatter']))
+
+    expect(violations.map((v) => v.nodeType)).toEqual(['frontmatter'])
+  })
+})

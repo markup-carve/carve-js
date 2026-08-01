@@ -219,25 +219,6 @@ class ProfileFilter {
     // must be filtered too (e.g. an image in a footnote when images are
     // denied). carve-php keeps definitions in the tree and filters them
     // naturally; we mirror that by walking each definition's block list.
-    // Frontmatter is a plain field on the runtime `Document`, so the child walk
-    // never reaches it and `denyBlock(['frontmatter'])` was a silent no-op -
-    // while carve-php stripped the node and reported the violation. profiles.md
-    // lists `frontmatter` as a nameable block type, so a host naming it must be
-    // honoured; the silent no-op is exactly what a normative vocabulary exists
-    // to prevent (carve-js#473).
-    //
-    // Same shape as the footnote-definition walk below: a root field the tree
-    // walk cannot see, handled explicitly rather than left unreachable.
-    const runtime = doc as unknown as { frontmatter?: unknown }
-    if (runtime.frontmatter !== undefined && !profile.isTypeAllowed('frontmatter', true)) {
-      this.violations.push({
-        nodeType: 'frontmatter',
-        reason: 'element_not_allowed',
-        detail: null,
-      } as unknown as ProfileViolation)
-      delete runtime.frontmatter
-    }
-
     const defs = (doc as unknown as { footnoteDefs?: Record<string, NodeLike[]> }).footnoteDefs
     if (defs) {
       for (const blocks of Object.values(defs)) {
