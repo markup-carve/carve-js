@@ -527,3 +527,62 @@ describe('markdownToCarve — sentinel placeholder robustness', () => {
     expect(out).not.toContain('undefined')
   })
 })
+
+describe('markdownToCarve — frontmatter', () => {
+  it('preserves YAML frontmatter verbatim and converts only the body', () => {
+    // Frontmatter is opaque metadata that Carve strips before block parsing, so
+    // it must survive byte-for-byte. Without the guard the opening `---` reads
+    // as a thematic break and the closing one as a setext underline, turning
+    // `description: y` into an h2.
+    const md = ['---', 'title: X', 'description: Y', '---', '', '# H', '', 'a **bold** word'].join(
+      '\n',
+    )
+    expect(conv(md)).toBe(
+      ['---', 'title: X', 'description: Y', '---', '', '# H', '', 'a *bold* word'].join('\n'),
+    )
+  })
+
+  it('does not rewrite Markdown delimiters inside frontmatter', () => {
+    // A YAML value is data, not prose: `**x**` and `_x_` stay exactly as written.
+    const md = ['---', 'title: a **bold** and _under_ value', '---', '', 'a **bold** word'].join(
+      '\n',
+    )
+    expect(conv(md)).toBe(
+      ['---', 'title: a **bold** and _under_ value', '---', '', 'a *bold* word'].join('\n'),
+    )
+  })
+
+  it('preserves a format-labeled frontmatter fence', () => {
+    const md = ['---toml', 'title = "X"', '---', '', 'text'].join('\n')
+    expect(conv(md)).toBe(['---toml', 'title = "X"', '---', '', 'text'].join('\n'))
+  })
+
+  it('preserves the lenient spaced form of the format label', () => {
+    // The parser accepts `--- toml` as well as `---toml`; the migrator must
+    // recognize the same openers or a spaced fence would be shredded.
+    const md = ['--- toml', 'title = "X"', '---', '', 'a **bold** word'].join('\n')
+    expect(conv(md)).toBe(['--- toml', 'title = "X"', '---', '', 'a *bold* word'].join('\n'))
+  })
+
+  it('handles a frontmatter-only document with no body', () => {
+    expect(conv('---\ntitle: X\n---')).toBe('---\ntitle: X\n---')
+  })
+
+  it('keeps frontmatter out of the rendered body', () => {
+    const md = ['---', 'title: X', '---', '', 'text'].join('\n')
+    expect(carveToHtml(conv(md))).toBe('<p>text</p>')
+  })
+
+  it('an unclosed leading --- is still a thematic break, not frontmatter', () => {
+    // No closing fence, so Carve would not read frontmatter either; the rule
+    // must survive as a rule.
+    expect(carveToHtml(conv('---\n\ntext'))).toBe('<hr>\n<p>text</p>')
+  })
+
+  it('an empty --- fence pair stays two thematic breaks', () => {
+    // An empty fence carries no metadata, so the CommonMark reading (two rules)
+    // is the meaning-preserving one. Guards the existing line-0 rule behavior.
+    expect(carveToHtml(conv('---\n---'))).toBe('<hr>\n<hr>')
+    expect(carveToHtml(conv('---\n\n---'))).toBe('<hr>\n<hr>')
+  })
+})
