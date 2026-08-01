@@ -7,6 +7,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A fence opened with a non-Tier-1 word classifies as `div` for profiles,
+  not `admonition`.** Only the eight Tier-1 canonical kinds (`note`, `tip`,
+  `warning`, `danger`, `info`, `success`, `example`, `quote`) are callouts
+  (grammar PART 9 §12); `::: sidebar` is a generic container. The profile
+  classifier used to treat every named fence as an `admonition` regardless of
+  kind, so `denyBlock(['admonition'])` stripped `::: sidebar` along with every
+  real callout - a cross-engine divergence from carve-php, which already made
+  this classification (markup-carve/carve-php#513, carve#431).
+
+  **Migration:** `denyBlock(['admonition'])` previously stripped *every* named
+  fence and now strips only Tier-1 callouts. To keep the old behavior exactly,
+  deny both `admonition` and `div`; `denyBlock(['div'])` still catches callouts
+  through the existing supertype rule.
+
+  This is a trust-class change only: the serialized AST is unchanged -
+  `::: sidebar` still publishes `{"type":"admonition","kind":"sidebar"}`, and
+  the HTML renderer's choice of `<aside>` vs `<div>` (already Tier-1 aware) is
+  untouched. Verified byte-identical rendering across the full spec corpus.
+
 ### Added
 
 - **`sections: false` renders headings without the `<section>` wrapper**
