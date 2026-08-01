@@ -94,7 +94,9 @@ describe('renderCarve targeted canonicalization', () => {
   })
 
   it('counts admonitions, divs and line blocks alike when widening a fence', () => {
-    const src = ':::::: note\n\n::::: {.wrap}\n\n:::: |\na\nb\n::::\n\n:::::\n\n::::::\n'
+    // The div's class rides a PRECEDING attribute line: an opener carrying
+    // inline `{...}` is a paragraph, which would leave only two real levels.
+    const src = ':::::: note\n\n{.wrap}\n:::::\n\n:::: |\na\nb\n::::\n\n:::::\n\n::::::\n'
     const formatted = carveToCarve(src)
     expect(carveToHtml(formatted)).toBe(carveToHtml(src))
     expect(carveToCarve(formatted)).toBe(formatted)
