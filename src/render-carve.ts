@@ -28,8 +28,8 @@ interface CarveContext {
   /** Depth of line-block nesting, so the inline writer drops the explicit
    *  backslash: inside a `::: |` fence every newline already IS a hard break. */
   lineBlockDepth: number
-  /** Per-pass memo for colonFenceWidth (see below). */
-  fenceWidths: WeakMap<BlockNode[], number>
+  /** Per-pass memo for colonFenceWidth, keyed by child list then depth budget. */
+  fenceWidths: WeakMap<BlockNode[], Map<number, number>>
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -427,7 +427,11 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
  * container across a fmt pass (issue 496).
  */
 function colonFenceFor(children: BlockNode[], ctx: CarveContext): string {
-  return ':'.repeat(colonFenceWidth(children, ctx))
+  // Only the levels this pass will actually render may widen the fence: past
+  // MAX_RENDER_DEPTH renderBlock emits nothing, so counting deeper containers
+  // would size a fence for output that does not exist. A hand-built AST (an
+  // `--from-json` document, say) can nest far past the cap the parser enforces.
+  return ':'.repeat(colonFenceWidth(children, ctx, MAX_RENDER_DEPTH - ctx.blockDepth))
 }
 
 /**
@@ -439,15 +443,17 @@ function colonFenceFor(children: BlockNode[], ctx: CarveContext): string {
  * renders, and a width cached across calls would then emit a fence too short
  * for the container that was added.
  */
-function colonFenceWidth(children: BlockNode[], ctx: CarveContext): number {
-  const cached = ctx.fenceWidths.get(children)
+function colonFenceWidth(children: BlockNode[], ctx: CarveContext, budget: number): number {
+  if (budget <= 0) return 3
+  const byBudget = ctx.fenceWidths.get(children)
+  const cached = byBudget?.get(budget)
   if (cached !== undefined) return cached
   let widest = 0
   const scan = (blocks: BlockNode[]): void => {
     for (const child of blocks) {
       if (child.type === 'admonition' || child.type === 'div' || child.type === 'line_block') {
         // The child's own width already covers its whole subtree.
-        widest = Math.max(widest, colonFenceWidth(child.children, ctx))
+        widest = Math.max(widest, colonFenceWidth(child.children, ctx, budget - 1))
       } else {
         for (const nested of childBlockLists(child)) scan(nested)
       }
@@ -455,7 +461,8 @@ function colonFenceWidth(children: BlockNode[], ctx: CarveContext): number {
   }
   scan(children)
   const width = widest ? widest + 1 : 3
-  ctx.fenceWidths.set(children, width)
+  if (byBudget) byBudget.set(budget, width)
+  else ctx.fenceWidths.set(children, new Map([[budget, width]]))
   return width
 }
 
