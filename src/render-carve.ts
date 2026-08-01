@@ -420,11 +420,17 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
 
 /**
  * A colon fence closes on a bare fence of equal-or-greater length (PART 9 §12),
- * so a container's fence must be longer than every container fence BELOW it -
- * not just the ones among its direct children. Testing only the direct children
- * emitted `::::` for both the outer and the middle container of a three-level
- * nest, and equal-length fences do not nest, so the middle one stopped being a
- * container across a fmt pass (issue 496).
+ * so a container's fence must outrank every container fence written at ITS OWN
+ * content column - the whole chain of directly nested containers, not just the
+ * next level down. Testing only the direct children emitted `::::` for both the
+ * outer and the middle container of a three-level nest, and equal-length fences
+ * do not nest, so the middle one stopped being a container across a fmt pass
+ * (issue 496).
+ *
+ * A container inside a blockquote, a list item or a definition body does NOT
+ * count: its fence lines carry that host's prefix or indent, so they cannot
+ * close an ancestor fence, and widening for them would only make the source
+ * noisier.
  */
 function colonFenceFor(children: BlockNode[], ctx: CarveContext): string {
   // Only the levels this pass will actually render may widen the fence: past
@@ -449,43 +455,18 @@ function colonFenceWidth(children: BlockNode[], ctx: CarveContext, budget: numbe
   const cached = byBudget?.get(budget)
   if (cached !== undefined) return cached
   let widest = 0
-  const scan = (blocks: BlockNode[]): void => {
-    for (const child of blocks) {
-      if (child.type === 'admonition' || child.type === 'div' || child.type === 'line_block') {
-        // The child's own width already covers its whole subtree.
-        widest = Math.max(widest, colonFenceWidth(child.children, ctx, budget - 1))
-      } else {
-        for (const nested of childBlockLists(child)) scan(nested)
-      }
+  for (const child of children) {
+    if (child.type === 'admonition' || child.type === 'div' || child.type === 'line_block') {
+      // The child's own width already covers its whole subtree.
+      widest = Math.max(widest, colonFenceWidth(child.children, ctx, budget - 1))
     }
   }
-  scan(children)
   const width = widest ? widest + 1 : 3
   if (byBudget) byBudget.set(budget, width)
   else ctx.fenceWidths.set(children, new Map([[budget, width]]))
   return width
 }
 
-/**
- * The block lists a non-container block can carry containers in - a fenced
- * container nested inside a list item or a blockquote still constrains the
- * enclosing fence's width.
- */
-function childBlockLists(node: BlockNode): BlockNode[][] {
-  switch (node.type) {
-    case 'block_quote':
-      return [node.children]
-    case 'figure':
-      return [[node.target]]
-    case 'list':
-      return node.items.map((item) => item.children)
-    case 'definition_list':
-      return node.items.flatMap((item) => item.definitions)
-    default:
-      // A table cell holds inlines, so no container can hide there.
-      return []
-  }
-}
 
 /**
  * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
