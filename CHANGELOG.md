@@ -9,6 +9,26 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`denyBlock(['frontmatter'])` and `denyBlock(['footnote'])` are honoured
+  instead of silently ignored.** `profiles.md` lists both in the normative Block
+  vocabulary, so a profile can name them, but this engine keeps frontmatter and
+  footnote definitions on the `Document` rather than in `children` - and the
+  filter walked only `children`. Naming either produced no violation and no
+  change (carve#422).
+
+  Denial REMOVES rather than degrades: both render nothing, so there is no text
+  form to fall back to. The rendered HTML is therefore identical either way;
+  what changes is the tree, the serialized AST, and the violation report. That
+  distinction is now documented in `profiles.md` upstream.
+
+  This matters most for frontmatter, which is exactly the content a host
+  restricting untrusted input would want gone before it reaches its own
+  templating - the path Security PART 9 §25 already requires a safe loader and
+  escaping for.
+
+
+### Fixed
+
 - **`denyInline(['escaped_text'])` is honoured instead of silently ignored.**
   `canonicalType()` folded `escaped_text` into `text`, so a profile naming it
   produced no violation and no change in output. `profiles.md` lists the type

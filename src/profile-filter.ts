@@ -225,6 +225,7 @@ class ProfileFilter {
         this.filterArray(blocks, profile, 1, true)
       }
     }
+    this.filterRootFields(doc, profile)
     this.cleanupEmptyContainers(doc as unknown as NodeLike)
     if (defs) {
       for (const blocks of Object.values(defs)) this.cleanupArray(blocks)
@@ -498,6 +499,50 @@ class ProfileFilter {
   }
 
   // ---- empty-container cleanup (mirrors carve-php) ----
+
+  /**
+   * Check the two node types this engine keeps on the Document rather than in
+   * the tree: frontmatter, and footnote definitions.
+   *
+   * `profiles.md` lists `frontmatter` and `footnote` in the Block vocabulary,
+   * so a profile can name them - but the walk above only reaches `children`,
+   * so naming either did nothing at all: no violation, no change (carve#422).
+   * A silent no-op is the specific failure a normative vocabulary exists to
+   * prevent, and it is worst here, because frontmatter is exactly the content
+   * a host restricting untrusted input would want gone.
+   *
+   * Denial REMOVES rather than degrades. Both render nothing, so there is no
+   * text form to fall back to - the same reasoning `rendersNothing` already
+   * applies inside the tree. The rendered HTML is therefore unchanged either
+   * way; what changes is the serialized AST and the violation report, which
+   * `docs/profiles.md` now states explicitly.
+   */
+  private filterRootFields(doc: Document, profile: Profile): void {
+    const root = doc as unknown as {
+      frontmatter?: unknown
+      footnoteDefs?: Record<string, NodeLike[]>
+    }
+    if (root.frontmatter !== undefined && !profile.isTypeAllowed('frontmatter', true)) {
+      this.denyRootField(profile, 'frontmatter')
+      delete root.frontmatter
+    }
+    if (root.footnoteDefs !== undefined && !profile.isTypeAllowed('footnote', true)) {
+      this.denyRootField(profile, 'footnote')
+      delete root.footnoteDefs
+    }
+  }
+
+  /** Record the violation, honouring `error` exactly as the in-tree path does. */
+  private denyRootField(profile: Profile, canonical: string): void {
+    this.violations.push({
+      nodeType: canonical,
+      reason: 'element_not_allowed',
+      reasonDescription: profile.getReasonDisallowed(canonical),
+    })
+    if (profile.getDisallowedAction() === Profile.ACTION_ERROR) {
+      throw new ProfileViolationError(this.violations)
+    }
+  }
 
   private cleanupEmptyContainers(parent: NodeLike): void {
     if (parent.type === 'definition_list') {
