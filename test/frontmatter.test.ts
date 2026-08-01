@@ -2,19 +2,21 @@ import { describe, it, expect } from 'vitest'
 import { parse, carveToHtml } from '../src/index.js'
 
 describe('typed frontmatter (raw-hold)', () => {
+  // `toMatchObject` rather than `toEqual`: the root's frontmatter also carries
+  // a `pos` now, so the serializer can place the node it builds (carve-js#480).
   it('holds a bare fence as yaml by default', () => {
     const doc = parse('---\ntitle: Hi\n---\n\nBody')
-    expect(doc.frontmatter).toEqual({ format: 'yaml', content: 'title: Hi' })
+    expect(doc.frontmatter).toMatchObject({ format: 'yaml', content: 'title: Hi' })
   })
 
   it('captures an attached toml format token', () => {
     const doc = parse('---toml\ntitle = "Hi"\n---\n\nBody')
-    expect(doc.frontmatter).toEqual({ format: 'toml', content: 'title = "Hi"' })
+    expect(doc.frontmatter).toMatchObject({ format: 'toml', content: 'title = "Hi"' })
   })
 
   it('captures a json format token', () => {
     const doc = parse('---json\n{"title":"Hi"}\n---')
-    expect(doc.frontmatter).toEqual({ format: 'json', content: '{"title":"Hi"}' })
+    expect(doc.frontmatter).toMatchObject({ format: 'json', content: '{"title":"Hi"}' })
   })
 
   it('captures an arbitrary custom token', () => {
@@ -45,7 +47,7 @@ describe('typed frontmatter (raw-hold)', () => {
   it('accepts an optional space before the format token (lenient)', () => {
     // `--- toml` and `---toml` are equivalent; the no-space form is canonical.
     const doc = parse('--- toml\ntitle = "Hi"\n---\n\nBody')
-    expect(doc.frontmatter).toEqual({ format: 'toml', content: 'title = "Hi"' })
+    expect(doc.frontmatter).toMatchObject({ format: 'toml', content: 'title = "Hi"' })
     expect(carveToHtml('--- toml\ntitle = "Hi"\n---\n\nBody')).toBe('<p>Body</p>')
   })
 

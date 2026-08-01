@@ -32,10 +32,31 @@ describe('Profile: type resolution', () => {
     expect(p.isTypeAllowed('raw_inline')).toBe(false)
   })
 
-  it('document is always allowed; unknown canonical type is denied', () => {
+  it('document is always allowed; an allow list excludes an unknown type', () => {
     const p = Profile.minimal()
     expect(p.isTypeAllowed('document')).toBe(true)
+    // `minimal` sets allow lists, so step 2 of profiles.md "Resolution"
+    // excludes a type not in them - including one the vocabulary never had.
     expect(p.isTypeAllowed('not_a_real_type')).toBe(false)
+    expect(p.isTypeAllowed('not_a_real_type', true)).toBe(false)
+    expect(p.isTypeAllowed('not_a_real_type', false)).toBe(false)
+  })
+
+  it('a profile that denies nothing allows an unknown type', () => {
+    // The rule the spec made explicit: the three steps are exhaustive and an
+    // implementation MUST NOT add a fourth denying unrecognized types. This
+    // used to return false, so a construct whose type predated the vocabulary
+    // rendered as nothing under `full()` (carve#419).
+    const p = Profile.full()
+    expect(p.isTypeAllowed('not_a_real_type')).toBe(true)
+    expect(p.isTypeAllowed('not_a_real_type', true)).toBe(true)
+    expect(p.isTypeAllowed('not_a_real_type', false)).toBe(true)
+  })
+
+  it('deny still beats an unknown type on its own axis', () => {
+    const p = Profile.full().denyInline(['not_a_real_type'])
+    expect(p.isTypeAllowed('not_a_real_type', false)).toBe(false)
+    expect(p.isTypeAllowed('not_a_real_type', true)).toBe(true)
   })
 })
 

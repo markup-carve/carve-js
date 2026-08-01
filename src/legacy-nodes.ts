@@ -61,10 +61,26 @@ export function adoptBlockFootnoteDefs(ast: Document): Document {
   const defs: Record<string, unknown> = { ...(ast.footnoteDefs ?? {}) }
   const children = ast.children.filter((child) => {
     if (!isDef(child)) return true
-    const def = child as unknown as { id?: string; children?: unknown[] }
+    const def = child as unknown as { label?: string; id?: string; children?: unknown[] }
+    // `label` is the PART 12 §7 spelling; `id` is what this engine and carve-php
+    // published before it, and those trees are stored where they cannot be
+    // recalled. Accepting both on INPUT is the same concession the legacy
+    // `footnote` inline type gets above; only `label` is ever produced.
+    const label = def.label ?? def.id
+    // A definition BODY has to be a list of blocks. Adopting anything else puts
+    // it where the renderers iterate a body without checking, so a corrupted
+    // tree crashed inside the HTML renderer for a document that had already
+    // been accepted.
+    //
+    // Such a node is DROPPED rather than left in `children`: `footnote` is a
+    // definition, which renders where its reference appears and never in place,
+    // so no renderer has a case for it - leaving it in trades one crash for
+    // another ("unknown block footnote"). A reference to it then renders as an
+    // unresolved reference, which is what a missing definition already means.
+    if (label === undefined || !Array.isArray(def.children)) return false
     // An existing entry wins: the map is this engine's own representation, so a
     // tree carrying both is one it produced and then had nodes added to.
-    if (def.id !== undefined && defs[def.id] === undefined) defs[def.id] = def.children ?? []
+    if (defs[label] === undefined) defs[label] = def.children
 
     return false
   })

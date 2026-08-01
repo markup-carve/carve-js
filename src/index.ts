@@ -45,11 +45,13 @@ import {
 } from './render-plain.js'
 import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
+import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
 export {
   toAstJson,
+  fromAstJson,
   type AstJsonDocument,
   type AstJsonBlock,
   type FrontmatterNode,
@@ -309,6 +311,36 @@ function applyTransforms(doc: Document, exts: CarveExtension[] | undefined): Doc
   for (const ext of exts) if (ext.afterParse) out = ext.afterParse(out)
   for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out)
   return out
+}
+
+/**
+ * Convenience: parse + resolve to the PART 12 exchange shape in one call.
+ *
+ * Positions are forced on. PART 12 §4 lets an implementation gate position
+ * TRACKING behind a parse option - recording a span per node is not free - but
+ * not serialization: "JSON it is handed carries positions". A serializer that
+ * honored `positions: false` would publish a tree an editor or language server
+ * cannot navigate, which is the one thing the format exists to prevent.
+ *
+ * Resolution runs first, because §5 keeps resolution RESULTS (footnote numbers,
+ * caption numbers) in the serialized form: recomputing them means reimplementing
+ * PART 9R, which is exactly the work a consumer is reading an AST to avoid.
+ */
+export function carveToAstJson(
+  source: string,
+  opts: ParseOptions & ProfileOptions = {},
+): AstJsonDocument {
+  enforceProfileMaxLength(source, opts)
+  const exts: CarveExtension[] = opts.extensions ?? []
+  let doc = applyTransforms(
+    resolve(parse(source, { ...opts, extensions: exts, positions: true }), {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }),
+    exts,
+  )
+  doc = runProfile(doc, opts)
+  return toAstJsonImpl(doc)
 }
 
 /** Convenience: parse + resolve + render Markdown in one call. */

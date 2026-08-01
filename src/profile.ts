@@ -82,22 +82,13 @@ const BLOCK_SET: ReadonlySet<string> = new Set(CANONICAL_BLOCK_TYPES)
 const INLINE_SET: ReadonlySet<string> = new Set(CANONICAL_INLINE_TYPES)
 
 /**
- * Outside the vocabulary entirely and always allowed - naming them in a deny
- * or allow list expresses nothing, so they never reach that check. Matches
- * carve-php's `NON_DENIABLE_TYPES`.
- */
-const NON_DENIABLE: ReadonlySet<string> = new Set(['raw_text', 'abbreviation_def', 'document'])
-
-/**
  * Map a carve-js internal `node.type` to its canonical snake_case name.
  *
- * Total: every `node.type` maps to *some* canonical name, even one this
- * build has no fold for (e.g. `heading_ref`, `caption_number`,
- * `abbreviation_def`, `substitution`, `critic_comment`) -- it maps to
- * itself. profiles.md's resolution steps are exhaustive: a type outside the
- * vocabulary cannot be named by a deny list, is excluded by an allow list by
- * definition, and otherwise is allowed. There is no "deny the unrecognized"
- * step.
+ * Returns `undefined` for types that have no canonical mapping (e.g.
+ * `crossref`, `caption-number`, `abbreviation-def`, `critic-*`);
+ * such nodes are denied-by-default by the profile resolver, matching
+ * carve-php's "unknown type -> denied" rule. The exception is `document`,
+ * which the resolver always treats as allowed.
  */
 /**
  * Types that are a SPECIALIZATION of a broader one.
@@ -163,11 +154,14 @@ export function canonicalType(type: string): string {
     // ----- inline -----
     case 'text':
       return 'text'
-    // An escaped character is ordinary visible prose; the backslash is
-    // authoring syntax, so it shares text's trust class rather than becoming a
-    // separately deniable feature.
+    // Its own canonical name, NOT folded into `text`. profiles.md lists
+    // `escaped_text` in the normative inline vocabulary, and ast.ts explains
+    // why the type exists at all: the escape carries intent the bare character
+    // does not. Folding it here made `denyInline(['escaped_text'])` a silent
+    // no-op while the vocabulary said it was nameable (carve-js#474). Contrast
+    // `smart_punctuation` below, which profiles.md explicitly excludes.
     case 'escaped_text':
-      return 'text'
+      return 'escaped_text'
     // Smart typography is ordinary visible prose, so it shares text's trust
     // class rather than becoming a nameable type of its own (the same way the
     // inline literal folds into `code`).
@@ -215,10 +209,14 @@ export function canonicalType(type: string): string {
     case 'footnote_ref':
     case 'inline_footnote':
       // Inline footnote (`^[...]`) carries `inline`; a reference (`[^id]`)
-      // does not. `resolveCanonical` in profile-filter.ts intercepts both
-      // before this function is ever called, distinguishing them by node
-      // shape, so this arm only needs to keep `canonicalType` total for a
-      // direct call.
+      // does not. carve-php denies both under the footnote family, so the
+      // mapping does not matter for allow/deny, but we distinguish so a
+      // profile could allow one and not the other.
+      //
+      // Each is its own canonical name. Given only a type STRING that is the
+      // whole answer; `resolveCanonical` has the node and tells the two apart
+      // by shape, which is the case this arm used to defer to by returning
+      // undefined.
       return type
     case 'span':
       return 'span'
@@ -239,12 +237,15 @@ export function canonicalType(type: string): string {
     case 'abbreviation':
       return 'abbreviation'
     default:
-      // profiles.md's resolution steps are exhaustive: there is no "deny the
-      // unrecognized" step. A type this build has no fold for is its own
-      // trust class, so it reaches the deny/allow lists unchanged instead of
-      // being denied for not being listed. 'heading_ref', 'caption_number',
-      // 'abbreviation_def', 'substitution' and 'critic_comment' used to land
-      // here and vanish under Profile.full().
+      // A type with no FOLD is still a type: `heading_ref`, `caption_number`,
+      // `abbreviation_def`, `substitution` and `critic_comment` are their own
+      // canonical names, not absences.
+      //
+      // This used to return undefined, and the filter read that as "deny" - so
+      // a profile denying nothing deleted them (carve-js#472). The call sites
+      // compensated with `?? node.type`, which worked and left a sentinel
+      // whose only meaning was "ask the caller instead". Total is the honest
+      // signature: every type resolves to itself unless it folds into another.
       return type
   }
 }
@@ -607,8 +608,8 @@ export class Profile {
   }
 
   /** Reason a node type is disallowed, or null if it is allowed / no reason. */
-  getReasonDisallowed(canonical: string): string | null {
-    if (this.isTypeAllowed(canonical)) return null
+  getReasonDisallowed(canonical: string, isBlock?: boolean): string | null {
+    if (this.isTypeAllowed(canonical, isBlock)) return null
     return this.featureReasons[canonical] ?? this.featureReasons['default'] ?? null
   }
 
@@ -698,25 +699,37 @@ export class Profile {
     return this
   }
 
-  /** Whether a canonical type string is allowed by this profile. */
-  isTypeAllowed(canonical: string): boolean {
-    if (NON_DENIABLE.has(canonical)) return true
+  /**
+   * Whether a canonical type string is allowed by this profile.
+   *
+   * `isBlock` is the node's OWN axis, and is what makes a type outside the
+   * vocabulary resolvable: block-vs-inline cannot be read off a type string the
+   * vocabulary does not know, and it is unambiguous at the node.
+   *
+   * profiles.md "Resolution" makes the three steps exhaustive and forbids a
+   * fourth that denies unrecognized types. This used to have that fourth step,
+   * and it meant a construct whose type predated the vocabulary rendered as
+   * NOTHING - not degraded to text, gone - under any profile at all, including
+   * one that denies nothing. `{~old~>new~}` lost both the old wording and the
+   * new (carve#419).
+   *
+   * An allow list still excludes an unknown type, so a restrictive profile
+   * loses no safety: step 2 handles it by construction.
+   */
+  isTypeAllowed(canonical: string, isBlock?: boolean): boolean {
+    if (canonical === 'document') return true
     if (INLINE_SET.has(canonical)) return this.isInlineAllowed(canonical)
     if (BLOCK_SET.has(canonical)) return this.isBlockAllowed(canonical)
-    // Outside the vocabulary: nothing can name it, so no deny list contains
-    // it; an allow list excludes it by definition. Without a node the axis is
-    // unknown, so any allow list is taken as excluding it.
-    return this.allowedInline === null && this.allowedBlock === null
-  }
+    // Outside the vocabulary: resolve on the node's own axis, unchanged.
+    if (isBlock !== undefined) {
+      return isBlock ? this.isBlockAllowed(canonical) : this.isInlineAllowed(canonical)
+    }
 
-  /**
-   * Resolve a node on its own axis. The slot knows whether the child list
-   * holds block children, which is the only unambiguous source for the axis
-   * when the type is outside the vocabulary.
-   */
-  isNodeAllowed(canonical: string, isBlock: boolean): boolean {
-    if (NON_DENIABLE.has(canonical)) return true
-    return isBlock ? this.isBlockAllowed(canonical) : this.isInlineAllowed(canonical)
+    // Called without an axis (the string-only API, not the filter). Step 2
+    // would exclude the type on whichever axis it belongs to, so an allow list
+    // on either axis means denied; with neither set, step 3 allows it. Fails
+    // CLOSED, because the caller cannot say which axis it meant.
+    return this.allowedInline === null && this.allowedBlock === null
   }
 
   private isInlineAllowed(type: string): boolean {
@@ -757,7 +770,7 @@ export class Profile {
 export interface ProfileViolation {
   /** Canonical node type that was disallowed. */
   nodeType: string
-  /** Machine reason: element_not_allowed | max_nesting_exceeded | link_not_allowed | image_not_allowed | to_text_yielded_nothing. */
+  /** Machine reason: element_not_allowed | max_nesting_exceeded | link_not_allowed | image_not_allowed. */
   reason: string
   /** Human-readable feature reason from the profile, if any. */
   reasonDescription: string | null
