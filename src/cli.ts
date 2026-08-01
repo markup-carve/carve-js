@@ -27,6 +27,8 @@ import {
   carveToPlainText,
   carveToAnsi,
   carveToAstJson,
+  diffAst,
+  formatChanges,
   fromAstJson,
   toAstJson,
   applyProfile,
@@ -66,6 +68,7 @@ Usage:
   carve fmt [-w|--check] [--stamp] [files...] Format Carve source canonically
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
+  carve diff [--json] a.crv b.crv  Report what changed in the DOCUMENT
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -117,6 +120,15 @@ constructs that otherwise silently mis-render under Carve (e.g. **bold**
   With no files, fix reads Carve source on stdin and writes the fixed result
   to stdout. Crossing collisions that cannot be auto-fixed are reported on
   stderr for manual review.
+
+diff - compare two documents STRUCTURALLY: what changed in the tree, not in
+the bytes. Reflowing a paragraph, re-indenting a list or running fmt reports
+nothing; an edited link destination, a moved section or a changed heading level
+reports one line each. Exits 1 when the documents differ, 0 when they do not,
+so it works as a gate over stored content.
+
+  diff options:
+        --json     Emit the changes as JSON (kind, type, path, line, detail)
 
 lint - report silent-failure problems as \`file:line:col rule - message\`:
 broken </#id> cross-references, unresolved reference links, duplicate heading
@@ -661,6 +673,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'fmt') return runFmt(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
+  if (sub === 'diff') return runDiff(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
   // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
@@ -686,6 +699,53 @@ function reportLint(
   if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
   if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
   return migration.length + semantic.length
+}
+
+/**
+ * `carve diff a.crv b.crv` - what changed in the DOCUMENT, not in the bytes.
+ *
+ * Exits 1 when the documents differ, 0 when they do not, so it works as a gate:
+ * a formatter run, a re-wrap or a re-indent that leaves the tree alone exits 0,
+ * while an edit that changes content exits 1.
+ */
+async function runDiff(args: string[], io: CliIO): Promise<number> {
+  let values: { json?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: { json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve diff: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+  if (positionals.length !== 2) {
+    io.writeErr('carve diff: takes exactly two files (before, after)\n')
+    return 2
+  }
+
+  const sources: string[] = []
+  for (const file of positionals) {
+    try {
+      sources.push(io.readFile(file))
+    } catch {
+      io.writeErr(`carve diff: cannot read ${file}\n`)
+      return 2
+    }
+  }
+
+  const changes = diffAst(carveToAstJson(sources[0]!), carveToAstJson(sources[1]!))
+  io.write(values.json ? `${JSON.stringify(changes, null, 2)}\n` : formatChanges(changes))
+
+  return changes.length > 0 ? 1 : 0
 }
 
 async function runLint(args: string[], io: CliIO): Promise<number> {
