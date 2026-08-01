@@ -24,7 +24,7 @@ import type {
   TableCell,
   TableRow,
 } from './ast.js'
-import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
+import { CANONICAL_ADMONITION_KINDS, SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type {
   BlockExtensionRenderContext,
   CarveExtension,
@@ -1128,22 +1128,6 @@ function renderTableRowFlat(
 }
 
 /**
- * The eight canonical admonition types (grammar PART 9 §12, Tier 1).
- * These render as a semantic `<aside class="admonition {type}">`; any
- * other type is a Tier-2 generic `<div class="{type}">`.
- */
-const CANONICAL_ADMONITIONS = new Set([
-  'note',
-  'tip',
-  'warning',
-  'danger',
-  'info',
-  'success',
-  'example',
-  'quote',
-])
-
-/**
  * The core caption floor for an unconsumed grouping `[label]`: a
  * `<p class="div-label">` (label HTML-escaped) at the given indent level, or
  * `''` when there is no label. The label text survives in every target even
@@ -1169,7 +1153,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
   // Leading block attributes (§15) merge with the admonition's own
   // wrapper class: extra classes append, id/key attach to the wrapper.
-  const canonical = CANONICAL_ADMONITIONS.has(node.kind)
+  const canonical = CANONICAL_ADMONITION_KINDS.has(node.kind)
   const baseClass = canonical ? `admonition ${node.kind}` : node.kind
   const classValue = [baseClass, ...(node.attrs?.classes ?? [])].map(escapeAttr).join(' ')
   const restAttrs: Attrs = {}

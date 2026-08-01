@@ -202,6 +202,30 @@ export interface TableCell extends BaseNode {
   children: InlineNode[]
 }
 
+/**
+ * The eight canonical admonition kinds (grammar PART 9 §12, Tier 1). An
+ * `Admonition` carrying one of these renders as a semantic
+ * `<aside class="admonition {kind}">`; any other kind is a Tier-2 generic
+ * container, rendered as a plain `<div class="{kind}">`.
+ *
+ * Shared between the HTML renderer (which picks the wrapper tag) and the
+ * profile filter (which classifies the node for allow/deny purposes, carve
+ * issue 431): a fence opened with a non-Tier-1 word is a generic container,
+ * not a callout, so it must be denied by `denyBlock(['div'])`, not
+ * `denyBlock(['admonition'])`. One shared list keeps the two decisions from
+ * drifting apart the way carve-php's did before markup-carve/carve-php#513.
+ */
+export const CANONICAL_ADMONITION_KINDS: ReadonlySet<string> = new Set([
+  'note',
+  'tip',
+  'warning',
+  'danger',
+  'info',
+  'success',
+  'example',
+  'quote',
+])
+
 export interface Admonition extends BaseNode {
   type: 'admonition'
   kind: string

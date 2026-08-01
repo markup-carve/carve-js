@@ -18,6 +18,7 @@
  * `replaceChildNode()` semantics.
  */
 
+import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import type {
   Attrs,
   BlockNode,
@@ -37,12 +38,25 @@ type NodeLike = { type: string; attrs?: Attrs } & Record<string, unknown>
 
 /**
  * Resolve a node to its canonical type for the allow/deny check, accounting
- * for shape-dependent types (footnote ref vs inline footnote).
+ * for shape-dependent types (footnote ref vs inline footnote, and a
+ * non-Tier-1 admonition kind).
  */
 function resolveCanonical(node: NodeLike): string {
   if ((node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
     // `^[...]` (inline) carries `inline`; `[^id]` is a reference.
     return node['inline'] !== undefined ? 'inline_footnote' : 'footnote_ref'
+  }
+  if (node.type === 'admonition') {
+    // A fence opened with a non-Tier-1 word is a generic container, not a
+    // callout (carve#431): it renders `<div class="name">` (renderAdmonition
+    // in render-html.ts gates the wrapper tag on the same
+    // CANONICAL_ADMONITION_KINDS set), so it must classify as `div` for
+    // profiles too - `denyBlock(['admonition'])` should not strip `::: sidebar`.
+    // A Tier-1 kind (`note`, `tip`, ...) still classifies as `admonition`,
+    // which carries `div` as its supertype (SUPERTYPE in profile.ts), so
+    // `denyBlock(['div'])` keeps catching callouts either way.
+    const kind = node['kind'] as string | undefined
+    if (kind === undefined || !CANONICAL_ADMONITION_KINDS.has(kind)) return 'div'
   }
   return canonicalType(node.type)
 }
