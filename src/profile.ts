@@ -116,7 +116,7 @@ function withSupertype(type: string): string[] {
   return parent === undefined ? [type] : [type, parent]
 }
 
-export function canonicalType(type: string): string | undefined {
+export function canonicalType(type: string): string {
   switch (type) {
     // ----- block -----
     case 'paragraph':
@@ -212,7 +212,12 @@ export function canonicalType(type: string): string | undefined {
       // does not. carve-php denies both under the footnote family, so the
       // mapping does not matter for allow/deny, but we distinguish so a
       // profile could allow one and not the other.
-      return undefined // handled specially in resolveType via node shape
+      //
+      // Each is its own canonical name. Given only a type STRING that is the
+      // whole answer; `resolveCanonical` has the node and tells the two apart
+      // by shape, which is the case this arm used to defer to by returning
+      // undefined.
+      return type
     case 'span':
       return 'span'
     case 'superscript':
@@ -232,9 +237,16 @@ export function canonicalType(type: string): string | undefined {
     case 'abbreviation':
       return 'abbreviation'
     default:
-      // 'heading_ref', 'caption_number', 'abbreviation_def',
-      // 'substitution', 'critic_comment'
-      return undefined
+      // A type with no FOLD is still a type: `heading_ref`, `caption_number`,
+      // `abbreviation_def`, `substitution` and `critic_comment` are their own
+      // canonical names, not absences.
+      //
+      // This used to return undefined, and the filter read that as "deny" - so
+      // a profile denying nothing deleted them (carve-js#472). The call sites
+      // compensated with `?? node.type`, which worked and left a sentinel
+      // whose only meaning was "ask the caller instead". Total is the honest
+      // signature: every type resolves to itself unless it folds into another.
+      return type
   }
 }
 

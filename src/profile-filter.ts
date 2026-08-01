@@ -39,7 +39,7 @@ type NodeLike = { type: string; attrs?: Attrs } & Record<string, unknown>
  * Resolve a node to its canonical type for the allow/deny check, accounting
  * for shape-dependent types (footnote ref vs inline footnote).
  */
-function resolveCanonical(node: NodeLike): string | undefined {
+function resolveCanonical(node: NodeLike): string {
   if ((node.type === 'footnote_ref' || node.type === 'inline_footnote')) {
     // `^[...]` (inline) carries `inline`; `[^id]` is a reference.
     return node['inline'] !== undefined ? 'inline_footnote' : 'footnote_ref'
@@ -279,7 +279,7 @@ class ProfileFilter {
       // an allow list excludes it, and otherwise it is allowed. Treating
       // `undefined` as denied is the fourth step the spec forbids, and it is
       // why `{~old~>new~}` vanished under a profile that denies nothing.
-      const canonical = resolveCanonical(child) ?? child.type
+      const canonical = resolveCanonical(child)
       const allowed = profile.isTypeAllowed(canonical, block)
       if (!allowed) {
         this.handleViolation(child, slot, profile, 'element_not_allowed')
@@ -391,7 +391,7 @@ class ProfileFilter {
     profile: Profile,
     reason: string,
   ): void {
-    const canonical = resolveCanonical(node) ?? node.type
+    const canonical = resolveCanonical(node)
     const reasonDescription = profile.getReasonDisallowed(canonical)
     this.violations.push({ nodeType: canonical, reason, reasonDescription })
 
@@ -435,7 +435,7 @@ class ProfileFilter {
         this.removeAt(slot)
         return
       }
-      const canonical = resolveCanonical(node) ?? node.type
+      const canonical = resolveCanonical(node)
       this.violations.push({
         nodeType: canonical,
         reason: 'to_text_yielded_nothing',
