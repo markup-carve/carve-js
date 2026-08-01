@@ -76,17 +76,26 @@ export function toAstJson(doc: Document): AstJsonDocument {
   const children: AstJsonBlock[] = []
 
   if (doc.frontmatter !== undefined) {
-    children.push({
+    const node: FrontmatterNode = {
       type: 'frontmatter',
       format: doc.frontmatter.format,
       content: doc.frontmatter.content,
-    })
+    }
+    // §4 wants a position on every node but the root. These two are SYNTHESIZED
+    // here from data the parser kept on the root, so unless the parser recorded
+    // a span there is none to give - and they were the only content in a
+    // serialized document that could not be navigated to (carve-js#480).
+    if (doc.frontmatter.pos !== undefined) node.pos = doc.frontmatter.pos
+    children.push(node)
   }
 
   children.push(...doc.children)
 
   for (const [label, body] of Object.entries(doc.footnoteDefs ?? {})) {
-    children.push({ type: 'footnote', label, children: body })
+    const node: FootnoteDefNode = { type: 'footnote', label, children: body }
+    const pos = doc.footnoteDefPos?.[label]
+    if (pos !== undefined) node.pos = pos
+    children.push(node)
   }
 
   const out: AstJsonDocument = { type: 'document', children }
@@ -111,6 +120,7 @@ export function toAstJson(doc: Document): AstJsonDocument {
 export function fromAstJson(json: AstJsonDocument): Document {
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
+  const footnoteDefPos: Record<string, Position> = {}
   let frontmatter: Document['frontmatter']
 
   // A root whose `children` is not an array is not iterable, and this is the
@@ -122,6 +132,9 @@ export function fromAstJson(json: AstJsonDocument): Document {
       const node = child as FrontmatterNode
       if (typeof node.format === 'string' && typeof node.content === 'string') {
         frontmatter = { format: node.format, content: node.content }
+        // §6 makes the round trip identity, so the span has to come back too -
+        // it is on the node here and on the root in the runtime document.
+        if (node.pos !== undefined) frontmatter.pos = node.pos
         continue
       }
     }
@@ -135,7 +148,10 @@ export function fromAstJson(json: AstJsonDocument): Document {
       // without checking, so the failure would surface as a crash inside the
       // renderer for a document the decoder had already accepted.
       if (typeof label === 'string' && Array.isArray(node.children)) {
-        if (footnoteDefs[label] === undefined) footnoteDefs[label] = node.children
+        if (footnoteDefs[label] === undefined) {
+          footnoteDefs[label] = node.children
+          if (node.pos !== undefined) footnoteDefPos[label] = node.pos
+        }
         continue
       }
       // Unusable as a definition, and `footnote` is a type no renderer has a
@@ -151,6 +167,7 @@ export function fromAstJson(json: AstJsonDocument): Document {
   const doc: Document = { type: 'document', children }
   if (frontmatter !== undefined) doc.frontmatter = frontmatter
   if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
+  if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
   if (json.srcByteLength !== undefined) doc.srcByteLength = json.srcByteLength
   return doc
 }
