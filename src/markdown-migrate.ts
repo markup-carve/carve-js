@@ -49,6 +49,11 @@
  *    level for a faithful migration.
  *  - Image alt text is preserved verbatim, not flattened to plain text as
  *    CommonMark does, so `![*x*](u)` keeps `*x*` in the Carve alt attribute.
+ *  - A document opening with `---`, at least one non-blank line, and a closing
+ *    `---` is migrated as frontmatter, even where CommonMark alone would read a
+ *    thematic break followed by a setext h2. Every Markdown toolchain that
+ *    supports frontmatter resolves that ambiguity the same way, and so does
+ *    Carve. An EMPTY fence pair carries no metadata and stays two rules.
  */
 
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
@@ -422,9 +427,46 @@ function escapePlainCarveInlineSyntax(line: string): string {
   return out.replace(/(?<![A-Za-z0-9~])~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, escapeFirst)
 }
 
+/**
+ * A document-leading frontmatter fence, mirroring the parser's
+ * RE_FRONTMATTER_OPEN / RE_FRONTMATTER_CLOSE so a document Carve reads as
+ * having frontmatter is migrated as having frontmatter.
+ */
+const RE_MD_FRONTMATTER_OPEN = /^---[ \t]*(\w*)\s*$/
+const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
+
+/**
+ * Split leading frontmatter off a document, returning its lines (fences
+ * included) and the index of the first body line.
+ *
+ * Frontmatter is opaque metadata in Markdown and in Carve alike - both strip it
+ * before block parsing - so it has to survive the migration byte-for-byte. Left
+ * to the normal line transform, the opening `---` reads as a thematic break and
+ * the closing one as a setext underline, so `description: y` becomes an h2 and
+ * the metadata is destroyed.
+ *
+ * The fence must enclose at least one non-blank line. An empty pair (`---\n---`
+ * or `---\n\n---`) carries no metadata, so the CommonMark reading - two
+ * thematic breaks - is the meaning-preserving one, and it stays on the
+ * thematic-break path guarded at the end of markdownToCarve.
+ */
+function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bodyStart: number } {
+  const none = { frontmatter: [], bodyStart: 0 }
+  if (lines.length < 2 || !RE_MD_FRONTMATTER_OPEN.test(lines[0]!)) return none
+  for (let i = 1; i < lines.length; i++) {
+    if (!RE_MD_FRONTMATTER_CLOSE.test(lines[i]!)) continue
+    const content = lines.slice(1, i)
+    if (!content.some((l) => l.trim() !== '')) return none
+    return { frontmatter: lines.slice(0, i + 1), bodyStart: i + 1 }
+  }
+  return none
+}
+
 /** Convert a Markdown document to Carve. */
 export function markdownToCarve(markdown: string): string {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const allLines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const { frontmatter, bodyStart } = splitFrontmatter(allLines)
+  const lines = allLines.slice(bodyStart)
   const out: string[] = []
   let inCode = false
   let fenceChar = ''
@@ -674,10 +716,19 @@ export function markdownToCarve(markdown: string): string {
   // frontmatter never triggers and every rule stays a rule. The closer test
   // mirrors Carve's `/^---\s*$/` (trailing whitespace allowed, so `---   ` in a
   // code fence counts too); the opener is always the exact `---` we emit.
-  if (out[0] === '---' && out.slice(1).some((l) => /^---\s*$/.test(l))) {
+  // Real frontmatter already occupies line 0, so the body cannot open a
+  // phantom fence and the guard would only inject a stray blank after the
+  // closing `---`.
+  if (
+    frontmatter.length === 0 &&
+    out[0] === '---' &&
+    out.slice(1).some((l) => /^---\s*$/.test(l))
+  ) {
     out.unshift('')
   }
 
   // Collapse 3+ consecutive blank lines to 2.
-  return out.join('\n').replace(/\n{3,}/g, '\n\n')
+  const body = out.join('\n').replace(/\n{3,}/g, '\n\n')
+  if (frontmatter.length === 0) return body
+  return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
 }

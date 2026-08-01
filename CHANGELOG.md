@@ -9,6 +9,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`markdownToCarve` preserves leading YAML frontmatter instead of destroying
+  it.** The converter had no frontmatter rule, so the opening `---` was migrated
+  as a thematic break and the closing one as a setext underline: a page opening
+  with `title:` / `description:` came back as a rule, a paragraph, and an `##`
+  heading, with the metadata gone. Frontmatter is opaque in Markdown and in
+  Carve alike, so it now passes through byte-for-byte and only the body is
+  converted.
+
+  The fence is recognized with the parser's own open/close rules, including the
+  format label (`---toml`, `--- toml`), and must enclose at least one non-blank
+  line. An empty pair (`---\n---`, `---\n\n---`) carries no metadata and stays
+  two thematic breaks, as before.
+
 - **`denyBlock(['frontmatter'])` and `denyBlock(['footnote'])` are honoured
   instead of silently ignored.** `profiles.md` lists both in the normative Block
   vocabulary, so a profile can name them, but this engine keeps frontmatter and
