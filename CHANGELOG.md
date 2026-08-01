@@ -7,6 +7,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`denyInline(['escaped_text'])` is honoured instead of silently ignored.**
+  `canonicalType()` folded `escaped_text` into `text`, so a profile naming it
+  produced no violation and no change in output. `profiles.md` lists the type
+  in the normative inline vocabulary, and `ast.ts` already explained why the
+  type exists at all - the escape carries intent the bare character does not -
+  so the engine contradicted both the spec and itself.
+
+  Under the default `to_text` action the rendered bytes do not change, because
+  the text form of an escaped character is that character. The deny is no
+  longer a no-op: it is reported, and `strip` and `error` act on it.
+
+  The neighbouring `smart_punctuation` fold is unchanged and correct -
+  `profiles.md` explicitly lists that type as one the vocabulary does not
+  include.
+
+
 ### Changed
 
 - **An escaped pipe in a table cell is an `escaped_text` node, like every other
