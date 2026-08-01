@@ -88,3 +88,25 @@ describe('a disallowed node keeps its words', () => {
     expect(html).not.toContain('<del>')
   })
 })
+
+describe('a node that renders nothing is removed, not marked', () => {
+  // The `[type]` marker means "this engine has no extractor arm for that
+  // payload" - it is a bug report, not a rendering. A node that genuinely
+  // renders nothing must be removed instead, or denying it injects the marker
+  // into the document as visible text.
+  const cases: Record<string, string> = {
+    'abbreviation definition': '*[HTML]: HyperText\n\nHTML is fine.\n',
+    comment: '%% invisible\n\nBody.\n',
+  }
+
+  for (const [label, source] of Object.entries(cases)) {
+    it(`removes a denied ${label}`, () => {
+      const html = carveToHtml(source, {
+        profile: Profile.full().denyBlock(['abbreviation_def', 'comment']),
+      })
+
+      expect(html).not.toContain('[abbreviation_def]')
+      expect(html).not.toContain('[comment]')
+    })
+  }
+})

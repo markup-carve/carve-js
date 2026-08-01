@@ -627,7 +627,15 @@ function textWithBreaks(content: string): NodeLike[] {
  * extracts to '' is a missing extractor arm, and reporting that is the point.
  */
 function rendersNothing(node: NodeLike): boolean {
-  return node.type === 'comment' || node.type === 'frontmatter'
+  return (
+    node.type === 'comment' ||
+    node.type === 'frontmatter' ||
+    // A definition line produces no output of its own - it feeds the inline
+    // `abbreviation` nodes that do. Degrading it to text has nothing to
+    // substitute, so it took the missing-extractor path and injected a literal
+    // `[abbreviation_def]` paragraph into the document.
+    node.type === 'abbreviation_def'
+  )
 }
 
 function extractTextContent(node: NodeLike): string {
