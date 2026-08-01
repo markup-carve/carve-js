@@ -50,6 +50,7 @@ import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
+export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
   toAstJson,
   fromAstJson,

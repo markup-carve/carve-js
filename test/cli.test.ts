@@ -551,3 +551,51 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     expect(t.out).toContain('a short comment')
   })
 })
+
+describe('carve diff', () => {
+  const files = {
+    'a.crv': '# Title\n\nSee [docs](/a).\n',
+    'b.crv': '# Title\n\nSee [docs](/b).\n',
+    'a-rewrapped.crv': '# Title\n\nSee\n[docs](/a).\n',
+  }
+
+  it('exits 1 and names the change when the document differs', async () => {
+    const t = makeIO({ files })
+    expect(await run(['diff', 'a.crv', 'b.crv'], t.io)).toBe(1)
+    expect(t.out).toContain('changed  link')
+    expect(t.out).toContain('1 structural change')
+  })
+
+  it('exits 0 when only the bytes differ', async () => {
+    // The gate this exists for: `fmt` and every editor with a wrap width move
+    // bytes around without changing the document.
+    const t = makeIO({ files })
+    expect(await run(['diff', 'a.crv', 'a-rewrapped.crv'], t.io)).toBe(0)
+    expect(t.out).toBe('no structural changes\n')
+  })
+
+  it('emits machine-readable changes under --json', async () => {
+    const t = makeIO({ files })
+    expect(await run(['diff', '--json', 'a.crv', 'b.crv'], t.io)).toBe(1)
+    const changes = JSON.parse(t.out)
+    expect(changes[0]).toMatchObject({ kind: 'changed', type: 'link', line: 3 })
+  })
+
+  it('refuses anything but two files', async () => {
+    const t = makeIO({ files })
+    expect(await run(['diff', 'a.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('exactly two files')
+  })
+
+  it('reports an unreadable file rather than throwing', async () => {
+    const t = makeIO({ files })
+    expect(await run(['diff', 'a.crv', 'missing.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('cannot read missing.crv')
+  })
+
+  it('appears in --help', async () => {
+    const t = makeIO()
+    await run(['--help'], t.io)
+    expect(t.out).toContain('carve diff')
+  })
+})
