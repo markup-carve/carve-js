@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parse, carveToHtml } from '../src/index.js'
+import { parse, carveToHtml, carveToCarve, renderCarve, fromAstJson, type AstJsonBlock } from '../src/index.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -31,5 +31,51 @@ describe('deep nesting does not overflow the stack', () => {
       node = node.children?.[0]
     }
     expect(depth).toBe(3)
+  })
+})
+
+describe('the canonical writer survives deep container nesting', () => {
+  it('keeps 40 nested containers nested across a fmt pass', () => {
+    // Equal-length fences do not nest, so real depth needs a widening fence per
+    // level: the writer has to reproduce that ladder, not a fixed `::::`.
+    const depth = 40
+    const width = (level: number) => ':'.repeat(depth + 2 - level)
+    let src = ''
+    for (let level = 0; level < depth; level++) src += width(level) + '\n'
+    src += 'x\n'
+    for (let level = depth - 1; level >= 0; level--) src += width(level) + '\n'
+
+    const containerDepth = (source: string) => {
+      let node = parse(source).children[0]
+      let seen = 0
+      while (node && (node.type === 'div' || node.type === 'admonition')) {
+        seen++
+        node = node.children?.[0]
+      }
+      return seen
+    }
+    expect(containerDepth(src)).toBe(depth)
+
+    const formatted = carveToCarve(src)
+    expect(containerDepth(formatted)).toBe(depth)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    expect(carveToCarve(formatted)).toBe(formatted)
+  })
+})
+
+describe('the canonical writer respects the render depth cap', () => {
+  it('does not size a fence from containers past MAX_RENDER_DEPTH', () => {
+    // A hand-built AST (an --from-json document) can nest far past the depth
+    // the parser allows. renderBlock emits nothing past the cap, so counting
+    // those levels would emit a fence sized for output that never appears.
+    let node: AstJsonBlock = { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }] }
+    for (let i = 0; i < 1000; i++) node = { type: 'div', children: [node] }
+    const doc = fromAstJson({ type: 'doc', children: [node] })
+
+    const started = Date.now()
+    const formatted = renderCarve(doc)
+    expect(Date.now() - started).toBeLessThan(5000)
+    const widest = Math.max(...formatted.split('\n').map((line) => (/^:+$/.test(line) ? line.length : 0)))
+    expect(widest).toBeLessThanOrEqual(202)
   })
 })

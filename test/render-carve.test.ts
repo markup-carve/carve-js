@@ -82,6 +82,26 @@ describe('renderCarve targeted canonicalization', () => {
     expect(carveToHtml(formatted)).toBe(carveToHtml(src))
   })
 
+  it('widens a container fence for its whole subtree, not the next level (issue 496)', () => {
+    // A fence closes on an equal-or-longer bare fence, so an outer container
+    // needs a fence wider than EVERY container below it, not just its direct
+    // children: three levels deep, a one-level lookahead emitted `::::` for
+    // both the outer and the middle fence and the middle stopped nesting.
+    const src = '::::: a\n\n:::: b\n\n::: c\nX\n:::\n\n::::\n\n:::::\n'
+    const formatted = carveToCarve(src)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    expect(carveToCarve(formatted)).toBe(formatted)
+  })
+
+  it('counts admonitions, divs and line blocks alike when widening a fence', () => {
+    // The div's class rides a PRECEDING attribute line: an opener carrying
+    // inline `{...}` is a paragraph, which would leave only two real levels.
+    const src = ':::::: note\n\n{.wrap}\n:::::\n\n:::: |\na\nb\n::::\n\n:::::\n\n::::::\n'
+    const formatted = carveToCarve(src)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    expect(carveToCarve(formatted)).toBe(formatted)
+  })
+
   it('emits Carve inline delimiters', () => {
     expect(carveToCarve('/i/ *b* _u_ ~s~ {^sup^} {,sub,} =mark=')).toBe(
       '/i/ *b* _u_ ~s~ {^sup^} {,sub,} =mark=\n',
