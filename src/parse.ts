@@ -137,7 +137,16 @@ const RE_UNORDERED = /^([^\S\u00a0]*)[-*] +([\S\u00a0].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
-const RE_ORDERED = /^([^\S\u00a0]*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])([.)]) +([\S\u00a0].*)$/
+//
+// BARE-DOT MARKER (Carve addition; proposal for carve#315). The value may be
+// EMPTY when the delimiter is `.`: a bare `. ` is a decimal ordered marker that
+// counts from 1. The empty branch is the zero-width lookahead `(?=\.)`, so it
+// fires only before a `.` and a bare `)` can never match -- `) text` collides
+// with prose parentheticals far more often, and AsciiDoc (the source of the
+// shorthand) uses `.` only. Capture groups are unchanged, so every call site
+// keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
+const RE_ORDERED =
+  /^([^\S\u00a0]*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([\S\u00a0].*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^([^\S\u00a0]*)[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
@@ -146,8 +155,13 @@ const RE_TASK = /^([^\S\u00a0]*)[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
 // required space and content. The brace attaches its attributes to the <li>
 // (Carve addition, grammar `item_attributes`). The brace body uses the same
 // quote-aware subpattern as the inline span tail (RE_SPAN_TAIL).
+// The ordered branch carries the same bare-dot alternative as RE_ORDERED, so
+// `.{#x} text` is an item like `1.{#x} text` and `-{#x} text` are: the shape is
+// marker + [attrs] + space + content, and the block sits BEFORE the required
+// space rather than competing with it. A block with nothing after it is not a
+// marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 const RE_ITEM_ATTR =
-  /^([^\S\u00a0]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[\S\u00a0].*)$/
+  /^([^\S\u00a0]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[\S\u00a0].*)$/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload
@@ -2621,7 +2635,9 @@ function romanToInt(s: string): number {
 function olKindMatches(marker: string, kind: OlKind): boolean {
   switch (kind) {
     case 'dec':
-      return /^[0-9]+$/.test(marker)
+      // `*` not `+`: the bare-dot marker (empty value, carve#315) is decimal
+      // too, so it continues an explicit decimal-dot list and vice versa.
+      return /^[0-9]*$/.test(marker)
     case 'alo':
       return /^[a-z]$/.test(marker)
     case 'aup':
@@ -2638,6 +2654,8 @@ function olKindMatches(marker: string, kind: OlKind): boolean {
 // marker is roman of the same case, or when it is `i`/`I` (the common
 // roman start); any other single letter is alphabetic.
 function olKindOf(marker: string, nextMarker: string | null): OlKind {
+  // The bare dot has no value to classify: it is decimal by definition.
+  if (marker === '') return 'dec'
   if (/^[0-9]+$/.test(marker)) return 'dec'
   const upper = marker === marker.toUpperCase()
   const romanChars = /^[ivxlcdm]+$/i.test(marker)
@@ -2667,7 +2685,12 @@ function olKindOf(marker: string, nextMarker: string | null): OlKind {
 }
 
 function olStartOf(marker: string, kind: OlKind): number {
-  if (kind === 'dec') return parseInt(marker, 10)
+  if (kind === 'dec') {
+    // The bare dot carries no number, so it starts at 1 and the `<ol>` omits
+    // `start`. Setting a start is exactly what the explicit `1.` form is for.
+    const n = parseInt(marker, 10)
+    return Number.isNaN(n) ? 1 : n
+  }
   if (kind === 'rlo' || kind === 'rup') return romanToInt(marker)
   return marker.toLowerCase().charCodeAt(0) - 96 // a=1
 }

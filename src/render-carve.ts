@@ -309,11 +309,29 @@ function renderList(node: List, ctx: CarveContext): string {
     // adjacent sibling lists on re-parse (carve issue 286).
     const delim = node.delim ?? '.'
     const bullet = node.bulletChar ?? '-'
+    // CANONICAL ORDERED MARKER (carve#315). A decimal-dot list starting at 1 is
+    // written with the BARE dot; every other list keeps an explicit value,
+    // because that value is the only thing carrying the difference: `3.` is how
+    // a start survives the round trip, and `a.` / `i.` / `1)` are each another
+    // dialect or delimiter (§11).
+    //
+    // One of the two forms HAS to be canonical: `. a` and `1. a` parse to the
+    // same list, deliberately, so the writer cannot reproduce which one was
+    // typed. Picking the bare form is what makes the shorthand survive `fmt` at
+    // all - the other choice rewrites every bare dot into `1.` the first time a
+    // document is formatted. Author numbering was never preserved either way
+    // (`1.`/`1.`/`1.` already comes back as `1.`/`2.`/`3.`); dialect, delimiter
+    // and start are the authored form, and all three still round-trip.
+    const bareDot =
+      node.ordered &&
+      delim === '.' &&
+      node.olType === undefined &&
+      (node.start ?? 1) === 1
     node.items.forEach((item, idx) => {
       const indent = '  '.repeat(ctx.listDepth - 1)
       let prefix: string
       if (node.ordered) {
-        prefix = `${orderedMarker(counter, node.olType)}${delim} `
+        prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
         counter++
       } else if (item.checked !== undefined) {
         prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `

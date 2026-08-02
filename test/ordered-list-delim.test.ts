@@ -47,6 +47,13 @@ describe('ordered-list delimiter in the AST', () => {
     // The delimiter is semantic (§11): normalizing `1)` to `1.` would merge
     // adjacent lists separated only by their delimiter.
     expect(carveToCarve('1) a\n2) b')).toBe('1) a\n2) b\n')
-    expect(carveToCarve('1. a\n2. b')).toBe('1. a\n2. b\n')
+    // The `.` delimiter survives too - as the bare-dot marker, which is the
+    // canonical spelling of a decimal-dot list starting at 1 (carve#315). The
+    // value was never authored form here: `1.`/`1.`/`1.` already came back
+    // renumbered, so nothing about the AUTHOR's input is lost that fmt was
+    // keeping before.
+    expect(carveToCarve('1. a\n2. b')).toBe('. a\n. b\n')
+    // What the value does carry is a start, and that still round-trips.
+    expect(carveToCarve('3. a\n4. b')).toBe('3. a\n4. b\n')
   })
 })
