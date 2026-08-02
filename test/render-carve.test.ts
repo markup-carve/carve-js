@@ -102,6 +102,22 @@ describe('renderCarve targeted canonicalization', () => {
     expect(carveToCarve(formatted)).toBe(formatted)
   })
 
+  it('does not widen a fence for a container behind a prefix or indent', () => {
+    // A container inside a blockquote, a list item or a definition body writes
+    // its fence lines with that host's prefix or indent, so they cannot close
+    // an ancestor fence. Widening for them would only make the source noisier.
+    const hosts = [
+      '::: outer\n\n- item\n\n  ::: inner\n  x\n  :::\n\n:::\n',
+      '::: outer\n\n> ::: inner\n> x\n> :::\n\n:::\n',
+      '::: outer\n\n:: term\n:  ::: inner\n   x\n   :::\n\n:::\n',
+    ]
+    for (const src of hosts) {
+      const formatted = carveToCarve(src)
+      expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+      expect(formatted.startsWith('::: outer')).toBe(true)
+    }
+  })
+
   it('emits Carve inline delimiters', () => {
     expect(carveToCarve('/i/ *b* _u_ ~s~ {^sup^} {,sub,} =mark=')).toBe(
       '/i/ *b* _u_ ~s~ {^sup^} {,sub,} =mark=\n',
