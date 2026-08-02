@@ -204,12 +204,24 @@ const RULES: Rule[] = [
   // A BARE same-count marker line (`#` alone, which Djot also folds) ends the
   // run here: it contributes no text, so no join reproduces the Djot reading,
   // and a wrong fix is worse than a missing one.
+  //
+  // The negative lookaheads below carry a second job beyond Carve's own block
+  // openers: three constructs open a block in DJOT while Carve reads them as
+  // prose, so Djot never folded them and a "fix" would pull a list item or a
+  // definition term INTO the heading. Verified by running @djot/djot beside
+  // this parser, not from memory:
+  //   `(1) x` / `(a) x`  Djot's parenthesized ordered markers, incl. letters
+  //                      and romans; Carve has no such marker
+  //   `: x`              Djot definition list (Carve spells a term `:: x`,
+  //                      which the `:{2,}` guard already covers)
+  // The `+` bullet and a tab-after-bullet are covered by the `[-*+][ \t]`
+  // guard, and 7-or-more hashes by the `#` guard.
   {
     id: 'djot-heading-continuation',
     category: 'djot-shift',
     family: 'heading-continuation',
     pattern:
-      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!\d+[.)][ \t])(?!:{2,})(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/gmd,
+      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!\d+[.)][ \t])(?!:[ \t])(?!:{2,})(?!\([0-9a-zA-Z]+\)[ \t])(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/gmd,
     message: () =>
       'Djot folds the line(s) below a heading INTO it (a plain line, or one with the same number of `#`); Carve ends the heading at the newline, so they are separate blocks and the heading id changes.',
     suggestion: (m) => {

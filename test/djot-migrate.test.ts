@@ -423,3 +423,30 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
     expect(r.skipped).toEqual([])
   })
 })
+
+describe('djot-heading-continuation — openers Djot has and Carve does not', () => {
+  const contHits = (src: string) =>
+    djotMigrationWarnings(src).filter((w) => w.rule === 'djot-heading-continuation')
+
+  it('does not flag a line that opens a block in DJOT but reads as prose in Carve', () => {
+    // Verified against @djot/djot, not from memory: each of these ends the Djot
+    // heading, so nothing shifted. Flagging one would be worse than silence -
+    // the fix joins the lines, pulling a list item or a definition term INTO
+    // the title.
+    expect(contHits('# H\n(1) item\n')).toEqual([]) // parenthesized ordered marker
+    expect(contHits('# H\n(a) item\n')).toEqual([])
+    expect(contHits('# H\n(iv) item\n')).toEqual([])
+    expect(contHits('# H\n: term\n')).toEqual([]) // Djot definition list
+  })
+
+  it('leaves those lines untouched under the autofix', () => {
+    expect(applyMigrationFixes('# H\n(1) item\n').output).toBe('# H\n(1) item\n')
+    expect(applyMigrationFixes('# H\n: term\n').output).toBe('# H\n: term\n')
+  })
+
+  it('still flags the forms Djot really does fold', () => {
+    expect(contHits('# Title\nSome text.\n')).toHaveLength(1)
+    expect(contHits('## A\n## B\n')).toHaveLength(1)
+    expect(applyMigrationFixes('# Title\nSome text.\n').output).toBe('# Title Some text.\n')
+  })
+})
