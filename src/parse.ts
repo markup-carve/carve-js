@@ -3426,6 +3426,10 @@ function parseList(lexer: Lexer): List {
     const t = olTypeOf(orderedKind)
     if (t) list.olType = t
     if (orderedDelim === '.' || orderedDelim === ')') list.delim = orderedDelim
+    // The bare dot is a spelling, not a dialect: `. a` and `1. a` are the same
+    // list, so the tree has to carry which one opened it or the writer must
+    // normalize one away (PART 11 §6).
+    if (firstOrdered && firstOrdered[2] === '') list.bareMarker = true
   } else if (firstMarkerChar === '-' || firstMarkerChar === '*') {
     list.bulletChar = firstMarkerChar
   }

@@ -309,21 +309,20 @@ function renderList(node: List, ctx: CarveContext): string {
     // adjacent sibling lists on re-parse (carve issue 286).
     const delim = node.delim ?? '.'
     const bullet = node.bulletChar ?? '-'
-    // CANONICAL ORDERED MARKER (carve#315). A decimal-dot list starting at 1 is
-    // written with the BARE dot; every other list keeps an explicit value,
-    // because that value is the only thing carrying the difference: `3.` is how
-    // a start survives the round trip, and `a.` / `i.` / `1)` are each another
-    // dialect or delimiter (§11).
+    // The bare dot is written back only where the author wrote one (carve#315).
+    // PART 11 §6: `fmt` does not respell a construct to a synonym, because the
+    // choice is the author's and the AST records it - the same rule, and the
+    // same remedy, as the combined bold-italic form. `bareMarker` is that
+    // record; picking a canonical spelling instead would rewrite every
+    // `1.`/`2.`/`3.` list in existing documents on the next format.
     //
-    // One of the two forms HAS to be canonical: `. a` and `1. a` parse to the
-    // same list, deliberately, so the writer cannot reproduce which one was
-    // typed. Picking the bare form is what makes the shorthand survive `fmt` at
-    // all - the other choice rewrites every bare dot into `1.` the first time a
-    // document is formatted. Author numbering was never preserved either way
-    // (`1.`/`1.`/`1.` already comes back as `1.`/`2.`/`3.`); dialect, delimiter
-    // and start are the authored form, and all three still round-trip.
+    // The other three conditions are belt and braces for a hand-built tree: a
+    // bare dot cannot carry a start, a dialect or the `)` delimiter, so a mark
+    // that contradicts one of them is ignored rather than written as source
+    // that reads back differently.
     const bareDot =
       node.ordered &&
+      node.bareMarker === true &&
       delim === '.' &&
       node.olType === undefined &&
       (node.start ?? 1) === 1

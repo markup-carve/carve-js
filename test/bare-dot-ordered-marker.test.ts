@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToCarve, carveToHtml } from '../src/index.js'
+import {
+  carveToCarve,
+  carveToHtml,
+  fromAstJson,
+  parse,
+  renderCarve,
+  toAstJson,
+} from '../src/index.js'
 
 /**
  * The bare-dot ordered marker (proposal for carve#315).
@@ -102,22 +109,45 @@ describe('bare-dot ordered marker', () => {
   })
 
   describe('fmt', () => {
-    it('writes the bare dot for a decimal-dot list starting at 1', () => {
-      // One of the two spellings has to be canonical, because they parse to the
-      // same list. Choosing the bare form is what makes the shorthand survive a
-      // format at all - the other choice rewrites `. a` to `1. a` on first run.
+    it('writes back the spelling the author used, either way', () => {
+      // PART 11 §6: `fmt` does not respell a construct to a synonym. The two
+      // forms parse to the same list, so the tree carries which one opened it
+      // (`bareMarker`) - the same remedy the combined bold-italic form needed,
+      // and the reason an existing `1.`/`2.`/`3.` document is untouched.
       expect(carveToCarve('. a\n. b')).toBe('. a\n. b\n')
-      expect(carveToCarve('1. a\n2. b')).toBe('. a\n. b\n')
-      expect(carveToCarve('1. a\n1. b')).toBe('. a\n. b\n')
+      expect(carveToCarve('1. a\n2. b')).toBe('1. a\n2. b\n')
+    })
+
+    it('is fixed by the FIRST item, like start and olType', () => {
+      // A mixed list is one list, and its opener decides how it is written.
+      expect(carveToCarve('. a\n2. b')).toBe('. a\n. b\n')
+      expect(carveToCarve('1. a\n. b')).toBe('1. a\n2. b\n')
+    })
+
+    it('keeps renumbering an explicit list, which it always did', () => {
+      // Author NUMBERING was never preserved; the marker SPELLING now is.
+      expect(carveToCarve('1. a\n1. b')).toBe('1. a\n2. b\n')
     })
 
     it('keeps an explicit value wherever the value carries something', () => {
-      // A start, a dialect and a delimiter are all authored form (§11) and all
-      // still round-trip; the digit in a start-1 decimal list is not.
+      // A start, a dialect and a delimiter are all authored form (§11), and a
+      // bare dot cannot express any of them.
       expect(carveToCarve('3. a\n4. b')).toBe('3. a\n4. b\n')
       expect(carveToCarve('a. x\nb. y')).toBe('a. x\nb. y\n')
       expect(carveToCarve('i. x\nii. y')).toBe('i. x\nii. y\n')
       expect(carveToCarve('1) a\n2) b')).toBe('1) a\n2) b\n')
+    })
+
+    it('records the spelling in the AST, and it survives the wire', () => {
+      // Without the mark there is nothing to preserve, which is exactly the
+      // argument PART 11 §6 makes for `boldItalic`.
+      const bare = parse('. a').children[0] as { bareMarker?: true }
+      const explicit = parse('1. a').children[0] as { bareMarker?: true }
+      expect(bare.bareMarker).toBe(true)
+      expect(explicit.bareMarker).toBeUndefined()
+
+      const wire = JSON.parse(JSON.stringify(toAstJson(parse('. a\n. b'))))
+      expect(renderCarve(fromAstJson(wire))).toBe('. a\n. b\n')
     })
 
     it('keeps li-attributes on the canonical form', () => {
@@ -127,7 +157,14 @@ describe('bare-dot ordered marker', () => {
     })
 
     it('is idempotent and preserves the rendered list', () => {
-      for (const source of ['. a\n. b', '1. a\n2. b', '3. a\n4. b', '.{#x} a\n. b']) {
+      for (const source of [
+        '. a\n. b',
+        '1. a\n2. b',
+        '3. a\n4. b',
+        '.{#x} a\n. b',
+        '. a\n2. b',
+        '1. a\n. b',
+      ]) {
         const once = carveToCarve(source)
         expect(carveToCarve(once)).toBe(once)
         expect(carveToHtml(once)).toBe(carveToHtml(source))

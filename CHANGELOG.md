@@ -24,13 +24,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   decimal-dot dialect, so it mixes with `1.`/`2.` in one list, and li-attributes
   attach exactly as they do elsewhere (`.{#x} text`).
 
-  `fmt` now writes the bare form as the CANONICAL spelling of a decimal-dot list
-  starting at 1, and keeps an explicit value wherever the value carries
-  something - a start (`3.`), a dialect (`a.`, `i.`) or the other delimiter
-  (`1)`). The two spellings parse to the same list on purpose, so one of them
-  has to be canonical; choosing the bare form is what lets the shorthand survive
-  a format at all. Author numbering was never preserved (`1.`/`1.`/`1.` already
-  came back renumbered).
+  `fmt` writes back the spelling the author used. The two forms parse to the
+  same list on purpose, so the tree carries which one opened it - a `bareMarker`
+  flag on the list node, set by the FIRST item like `start` and `olType`, and
+  published on the wire beside `delim` and `bulletChar`. PART 11 §6 makes the
+  choice the author's rather than the writer's, and the AST is where such a
+  choice is recorded: the same remedy the combined bold-italic form needed
+  (`boldItalic`, carve#375). An existing `1.`/`2.`/`3.` document is therefore
+  untouched by a format. Author NUMBERING is still not preserved -
+  `1.`/`1.`/`1.` comes back renumbered, as it always did.
 
   **This is a breaking change to the language.** After a blank line, a paragraph
   beginning with `. ` - an ellipsis fragment, a wrapped sentence, a deliberate

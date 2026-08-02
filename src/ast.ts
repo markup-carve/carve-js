@@ -143,6 +143,23 @@ export interface List extends BaseNode {
    * lists separated only by their bullet stay separate. Absent -> `-`.
    */
   bulletChar?: '-' | '*'
+  /**
+   * Set on an ordered list the author opened with the BARE dot marker -- `. x`
+   * rather than `1. x` (carve#315).
+   *
+   * Both spellings parse to the same decimal-dot list starting at 1, on
+   * purpose, so without this the writer cannot tell them apart and has to pick
+   * one to emit -- normalizing the other away on the first `fmt`. PART 11 §6
+   * makes that the author's choice rather than the writer's, and the AST is
+   * where such a choice is recorded: exactly the role `boldItalic` plays for
+   * the combined bold-italic form, and `bulletChar` and `delim` for the marker
+   * characters beside it.
+   *
+   * Only the FIRST item fixes it, like `start` and `olType`: a list opened
+   * `. a` and continued `2. b` is one list, written back with the opener the
+   * author used.
+   */
+  bareMarker?: true
   tight: boolean
   items: ListItem[]
 }
