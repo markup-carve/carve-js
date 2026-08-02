@@ -240,19 +240,27 @@ export class AstJsonDepthError extends Error {
  * than the parser can produce cannot round trip anyway: the renderers stop at
  * `MAX_RENDER_DEPTH` and silently drop everything below it.
  *
- * Counted in NODES, and the margin is not decoration. The parser's cap counts
- * CONTAINER nesting; this probe counts every node level, and a container chain
- * at the parser's limit carries two more - the innermost paragraph and its text.
- * Measured: 200 containers serialise to a node depth of 202, the offset holding
- * at +2 from 10 containers upward.
+ * Counted in NODES, and DERIVED from the parser's cap by the worst per-level
+ * cost of this encoding rather than restated from it - the rule PART 12 §9
+ * spells out. The two numbers are in different units and the conversion factor
+ * is not a constant:
  *
- * Equating the two numbers is how carve-rs came to reject ASTs its own encoder
- * had produced (carve-rs#389), so the relationship is written down rather than
- * the coincidence. The extra slack absorbs a deeper innermost leaf - a table
- * cell inside a list item inside the last container - so the cap refuses hostile
- * input without refusing anything this engine can emit.
+ *   blockquote / div chain   1 node per container level   200 -> depth 202
+ *   list ladder              2 nodes per level (the list  200 -> depth 402
+ *                            node and its item node)
+ *
+ * So the worst case is 2x, and `MAX_NESTING_DEPTH + margin` is not a bound at
+ * all: at +8 this rejected a 200-deep list at 209 - an AST the same build's
+ * parser had just produced, violating §9's first rule. The margin on top of 2x
+ * absorbs a deeper innermost leaf, a table cell inside the last list item,
+ * whose rows/cells/paragraph/text levels cost a constant rather than a factor.
+ *
+ * Equating the two numbers is also how carve-rs came to reject ASTs its own
+ * encoder had produced (carve-rs#389), which is why the relationship is written
+ * down as arithmetic instead of a measured constant that would silently stop
+ * being true the moment the parser's cap moved.
  */
-export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH + 8
+export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 2 + 16
 
 /**
  * Node depth of a payload, measured with an EXPLICIT STACK.

@@ -7,6 +7,7 @@ import {
   resolve,
   toAstJson,
 } from '../src/index.js'
+import { MAX_NESTING_DEPTH } from '../src/parse.js'
 
 /** `k` nested containers, each fence one colon wider than the one inside it. */
 function nestedContainers(k: number): string {
@@ -24,6 +25,11 @@ function wrapped(n: number): ReturnType<typeof toAstJson> {
   return { type: 'document', srcByteLength: 0, children: [node] } as ReturnType<typeof toAstJson>
 }
 
+/** `k` nested list levels - two AST nodes per level, the worst shape there is. */
+function nestedList(k: number): string {
+  return Array.from({ length: k }, (_, i) => '  '.repeat(i) + '- x').join('\n') + '\n'
+}
+
 describe('fromAstJson depth cap', () => {
   it('ingests anything the parser can emit, at the parser own limit', () => {
     // The test that would have caught carve-rs#389: a reader whose budget is
@@ -32,6 +38,23 @@ describe('fromAstJson depth cap', () => {
       const json = toAstJson(resolve(parse(nestedContainers(k))))
       expect(() => fromAstJson(json), `round trip at ${k} containers`).not.toThrow()
     }
+  })
+
+  it('ingests the shape that costs the most per level, not just the cheapest', () => {
+    // Containers cost one node per level and lists cost two, so a cap set from
+    // the container measurement passes the test above and still rejects a list
+    // the parser just produced. That is how `MAX_NESTING_DEPTH + 8` survived
+    // review: every shape it was tried against was the cheap one.
+    for (const k of [40, 100, 199, 200]) {
+      const json = toAstJson(resolve(parse(nestedList(k))))
+      expect(() => fromAstJson(json), `round trip at ${k} list levels`).not.toThrow()
+    }
+  })
+
+  it('is derived from the parser cap, not a number of its own', () => {
+    // A constant that happens to be big enough today stops being big enough the
+    // moment MAX_NESTING_DEPTH moves. PART 12 section 9 asks for the arithmetic.
+    expect(MAX_AST_JSON_DEPTH).toBeGreaterThanOrEqual(MAX_NESTING_DEPTH * 2)
   })
 
   it('refuses deeper input with its own error, not a RangeError', () => {
