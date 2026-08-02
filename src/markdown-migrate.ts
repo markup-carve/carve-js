@@ -96,6 +96,429 @@ const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   [/<i>([^<]+)<\/i>/gi, '/$1/'],
 ]
 
+const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
+  Aacute: '\u00c1',
+  aacute: '\u00e1',
+  Abreve: '\u0102',
+  abreve: '\u0103',
+  Acirc: '\u00c2',
+  acirc: '\u00e2',
+  AElig: '\u00c6',
+  aelig: '\u00e6',
+  Agrave: '\u00c0',
+  agrave: '\u00e0',
+  Alpha: '\u0391',
+  alpha: '\u03b1',
+  Amacr: '\u0100',
+  amacr: '\u0101',
+  amp: '&',
+  apos: "'",
+  and: '\u2227',
+  ang: '\u2220',
+  angst: '\u00c5',
+  Aogon: '\u0104',
+  aogon: '\u0105',
+  Aring: '\u00c5',
+  aring: '\u00e5',
+  ast: '*',
+  asymp: '\u2248',
+  Atilde: '\u00c3',
+  atilde: '\u00e3',
+  Auml: '\u00c4',
+  auml: '\u00e4',
+  bdquo: '\u201e',
+  Beta: '\u0392',
+  beta: '\u03b2',
+  brvbar: '\u00a6',
+  bull: '\u2022',
+  Cacute: '\u0106',
+  cacute: '\u0107',
+  cap: '\u2229',
+  Ccaron: '\u010c',
+  ccaron: '\u010d',
+  Ccedil: '\u00c7',
+  ccedil: '\u00e7',
+  Ccirc: '\u0108',
+  ccirc: '\u0109',
+  Cdot: '\u010a',
+  cdot: '\u010b',
+  cent: '\u00a2',
+  clubs: '\u2663',
+  copy: '\u00a9',
+  crarr: '\u21b5',
+  cup: '\u222a',
+  curren: '\u00a4',
+  Dagger: '\u2021',
+  dagger: '\u2020',
+  dArr: '\u21d3',
+  darr: '\u2193',
+  Dcaron: '\u010e',
+  dcaron: '\u010f',
+  deg: '\u00b0',
+  Delta: '\u0394',
+  delta: '\u03b4',
+  diams: '\u2666',
+  div: '\u00f7',
+  divide: '\u00f7',
+  Dstrok: '\u0110',
+  dstrok: '\u0111',
+  Eacute: '\u00c9',
+  eacute: '\u00e9',
+  Ecaron: '\u011a',
+  ecaron: '\u011b',
+  Ecirc: '\u00ca',
+  ecirc: '\u00ea',
+  Edot: '\u0116',
+  edot: '\u0117',
+  Egrave: '\u00c8',
+  egrave: '\u00e8',
+  Emacr: '\u0112',
+  emacr: '\u0113',
+  emdash: '\u2014',
+  empty: '\u2205',
+  emsp: '\u2003',
+  endash: '\u2013',
+  ENG: '\u014a',
+  eng: '\u014b',
+  ensp: '\u2002',
+  Eogon: '\u0118',
+  eogon: '\u0119',
+  epsilon: '\u03b5',
+  equiv: '\u2261',
+  ETH: '\u00d0',
+  eth: '\u00f0',
+  Euml: '\u00cb',
+  euml: '\u00eb',
+  euro: '\u20ac',
+  exist: '\u2203',
+  fnof: '\u0192',
+  forall: '\u2200',
+  frac12: '\u00bd',
+  frac14: '\u00bc',
+  frac34: '\u00be',
+  frasl: '\u2044',
+  gacute: '\u01f5',
+  Gamma: '\u0393',
+  gamma: '\u03b3',
+  Gbreve: '\u011e',
+  gbreve: '\u011f',
+  Gcedil: '\u0122',
+  Gcirc: '\u011c',
+  gcirc: '\u011d',
+  Gdot: '\u0120',
+  gdot: '\u0121',
+  ge: '\u2265',
+  gt: '>',
+  hArr: '\u21d4',
+  harr: '\u2194',
+  Hcirc: '\u0124',
+  hcirc: '\u0125',
+  hearts: '\u2665',
+  hellip: '\u2026',
+  Hstrok: '\u0126',
+  hstrok: '\u0127',
+  Iacute: '\u00cd',
+  iacute: '\u00ed',
+  Icirc: '\u00ce',
+  icirc: '\u00ee',
+  Idot: '\u0130',
+  iexcl: '\u00a1',
+  Igrave: '\u00cc',
+  igrave: '\u00ec',
+  IJlig: '\u0132',
+  ijlig: '\u0133',
+  Imacr: '\u012a',
+  imacr: '\u012b',
+  imath: '\u0131',
+  imped: '\u01b5',
+  infin: '\u221e',
+  inodot: '\u0131',
+  int: '\u222b',
+  Iogon: '\u012e',
+  iogon: '\u012f',
+  iquest: '\u00bf',
+  isin: '\u2208',
+  Itilde: '\u0128',
+  itilde: '\u0129',
+  Iuml: '\u00cf',
+  iuml: '\u00ef',
+  Jcirc: '\u0134',
+  jcirc: '\u0135',
+  jmath: '\u0237',
+  Kcedil: '\u0136',
+  kcedil: '\u0137',
+  kgreen: '\u0138',
+  Lacute: '\u0139',
+  lacute: '\u013a',
+  Lambda: '\u039b',
+  lambda: '\u03bb',
+  laquo: '\u00ab',
+  lArr: '\u21d0',
+  larr: '\u2190',
+  Lcaron: '\u013d',
+  lcaron: '\u013e',
+  Lcedil: '\u013b',
+  lcedil: '\u013c',
+  ldquo: '\u201c',
+  le: '\u2264',
+  Lmidot: '\u013f',
+  lmidot: '\u0140',
+  lowast: '\u2217',
+  loz: '\u25ca',
+  lsaquo: '\u2039',
+  lsquo: '\u2018',
+  Lstrok: '\u0141',
+  lstrok: '\u0142',
+  lt: '<',
+  mdash: '\u2014',
+  micro: '\u00b5',
+  middot: '\u00b7',
+  minus: '\u2212',
+  mu: '\u03bc',
+  nabla: '\u2207',
+  Nacute: '\u0143',
+  nacute: '\u0144',
+  napos: '\u0149',
+  nbsp: '\u00a0',
+  Ncaron: '\u0147',
+  ncaron: '\u0148',
+  Ncedil: '\u0145',
+  ncedil: '\u0146',
+  ndash: '\u2013',
+  ne: '\u2260',
+  ni: '\u220b',
+  not: '\u00ac',
+  notin: '\u2209',
+  Ntilde: '\u00d1',
+  ntilde: '\u00f1',
+  Oacute: '\u00d3',
+  oacute: '\u00f3',
+  Ocirc: '\u00d4',
+  ocirc: '\u00f4',
+  Odblac: '\u0150',
+  odblac: '\u0151',
+  OElig: '\u0152',
+  oelig: '\u0153',
+  Ograve: '\u00d2',
+  ograve: '\u00f2',
+  oline: '\u203e',
+  Omacr: '\u014c',
+  omacr: '\u014d',
+  Omega: '\u03a9',
+  omega: '\u03c9',
+  or: '\u2228',
+  ordf: '\u00aa',
+  ordm: '\u00ba',
+  Oslash: '\u00d8',
+  oslash: '\u00f8',
+  Otilde: '\u00d5',
+  otilde: '\u00f5',
+  Ouml: '\u00d6',
+  ouml: '\u00f6',
+  para: '\u00b6',
+  part: '\u2202',
+  permil: '\u2030',
+  perp: '\u22a5',
+  Phi: '\u03a6',
+  phi: '\u03c6',
+  Pi: '\u03a0',
+  pi: '\u03c0',
+  plusmn: '\u00b1',
+  pound: '\u00a3',
+  Prime: '\u2033',
+  prime: '\u2032',
+  prod: '\u220f',
+  prop: '\u221d',
+  quot: '"',
+  Racute: '\u0154',
+  racute: '\u0155',
+  radic: '\u221a',
+  raquo: '\u00bb',
+  rArr: '\u21d2',
+  rarr: '\u2192',
+  Rcaron: '\u0158',
+  rcaron: '\u0159',
+  Rcedil: '\u0156',
+  rcedil: '\u0157',
+  rdquo: '\u201d',
+  reg: '\u00ae',
+  rsaquo: '\u203a',
+  rsquo: '\u2019',
+  Sacute: '\u015a',
+  sacute: '\u015b',
+  sbquo: '\u201a',
+  Scaron: '\u0160',
+  scaron: '\u0161',
+  Scedil: '\u015e',
+  scedil: '\u015f',
+  Scirc: '\u015c',
+  scirc: '\u015d',
+  sect: '\u00a7',
+  shy: '\u00ad',
+  Sigma: '\u03a3',
+  sigma: '\u03c3',
+  sim: '\u223c',
+  spades: '\u2660',
+  star: '\u2606',
+  sub: '\u2282',
+  sube: '\u2286',
+  sum: '\u2211',
+  sup: '\u2283',
+  sup1: '\u00b9',
+  sup2: '\u00b2',
+  sup3: '\u00b3',
+  supe: '\u2287',
+  szlig: '\u00df',
+  Tcaron: '\u0164',
+  tcaron: '\u0165',
+  Tcedil: '\u0162',
+  tcedil: '\u0163',
+  there4: '\u2234',
+  Theta: '\u0398',
+  theta: '\u03b8',
+  thinsp: '\u2009',
+  THORN: '\u00de',
+  thorn: '\u00fe',
+  times: '\u00d7',
+  trade: '\u2122',
+  Tstrok: '\u0166',
+  tstrok: '\u0167',
+  Uacute: '\u00da',
+  uacute: '\u00fa',
+  uArr: '\u21d1',
+  uarr: '\u2191',
+  Ubreve: '\u016c',
+  ubreve: '\u016d',
+  Ucirc: '\u00db',
+  ucirc: '\u00fb',
+  Udblac: '\u0170',
+  udblac: '\u0171',
+  Ugrave: '\u00d9',
+  ugrave: '\u00f9',
+  Umacr: '\u016a',
+  umacr: '\u016b',
+  Uogon: '\u0172',
+  uogon: '\u0173',
+  Uring: '\u016e',
+  uring: '\u016f',
+  Utilde: '\u0168',
+  utilde: '\u0169',
+  Uuml: '\u00dc',
+  uuml: '\u00fc',
+  Wcirc: '\u0174',
+  wcirc: '\u0175',
+  Yacute: '\u00dd',
+  yacute: '\u00fd',
+  Ycirc: '\u0176',
+  ycirc: '\u0177',
+  yen: '\u00a5',
+  Yuml: '\u0178',
+  yuml: '\u00ff',
+  Zacute: '\u0179',
+  zacute: '\u017a',
+  Zcaron: '\u017d',
+  zcaron: '\u017e',
+  Zdot: '\u017b',
+  zdot: '\u017c',
+})
+
+const RE_HTML_ENTITY = /&(?:#([0-9]+)|#[xX]([0-9A-Fa-f]+)|([A-Za-z][A-Za-z0-9]+));/g
+const RE_DECODED_CARVE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$:;?]/g
+
+function decodeCodePoint(n: number): string {
+  // U+0000 joins the out-of-range and surrogate cases: cmark replaces a NUL
+  // with U+FFFD, and this module wraps its own placeholders in NUL, so a
+  // decoded one would collide with the stash/protect sentinels.
+  return n > 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)
+    ? String.fromCodePoint(n)
+    : '\ufffd'
+}
+
+function escapeDecodedForCarve(s: string): string {
+  return s.replace(RE_DECODED_CARVE_PUNCTUATION, '\\$&')
+}
+
+function resolveEntity(
+  match: string,
+  dec: string | undefined,
+  hex: string | undefined,
+  named: string | undefined,
+): string {
+  const decoded =
+    dec !== undefined
+      ? decodeCodePoint(Number(dec))
+      : hex !== undefined
+        ? decodeCodePoint(Number.parseInt(hex, 16))
+        : NAMED_HTML_ENTITIES[named ?? '']
+  return decoded ?? match
+}
+
+/** Resolve every entity reference in `s`, with no Carve escaping applied. */
+function decodeHtmlEntitiesRaw(s: string): string {
+  return s.replace(
+    RE_HTML_ENTITY,
+    (match, dec: string | undefined, hex: string | undefined, named: string | undefined) =>
+      resolveEntity(match, dec, hex, named),
+  )
+}
+
+/**
+ * Decode entities in a link/image DESTINATION. Unlike inline text the result is
+ * not Carve-escaped: a backslash would be part of the URL. Whitespace a decode
+ * introduces (`&#32;`, `&nbsp;`) is percent-encoded through
+ * `encodeURIComponent`, so a non-ASCII space becomes its UTF-8 bytes the way
+ * cmark writes it (`%C2%A0`, not `%A0`); a raw space would end the destination
+ * and turn the rest into a title. A destination holds no raw whitespace before
+ * decoding -- it is matched as `\S+` -- so every match here came from an entity.
+ */
+function decodeEntitiesInDestination(url: string): string {
+  return decodeHtmlEntitiesRaw(url).replace(/\s/g, (c) => encodeURIComponent(c))
+}
+
+/** A quoted title and the whitespace around it: ` "a & b"` / ` 'a & b'`. */
+const RE_QUOTED_TITLE = /^(\s*)(["'])([\s\S]*)\2(\s*)$/
+
+/**
+ * Decode entities in a link/image TITLE. The decoded text is ordinary prose but
+ * it sits inside a delimiter: `&quot;` in a double-quoted title decodes to the
+ * very character that closes it, and emitting that raw stops the link parsing
+ * at all. Carve reads a backslash-escaped delimiter inside a title, so the
+ * delimiter (and any backslash) is escaped on the way out. A title in a shape
+ * this does not recognize is left exactly as it was rather than guessed at.
+ */
+function decodeEntitiesInTitle(rest: string): string {
+  const m = RE_QUOTED_TITLE.exec(rest)
+  if (!m) return rest
+  const [, lead, quote, body, trail] = m
+  const decoded = decodeHtmlEntitiesRaw(body!)
+  if (decoded === body) return rest
+  const escaped = decoded.replace(/\\/g, '\\\\').split(quote!).join('\\' + quote)
+  return `${lead}${quote}${escaped}${quote}${trail}`
+}
+
+function decodeHtmlEntities(s: string): string {
+  const decoded = s.replace(
+    RE_HTML_ENTITY,
+    (match, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
+      const resolved = resolveEntity(match, dec, hex, named)
+      if (resolved === match) return match
+      // A decoded line ending would SPLIT this line. The migration works a line
+      // at a time, so the tail would lose whatever prefix its block needs (a
+      // list item's indent, a quote's `>`) and land outside it. cmark reads
+      // `&#10;` as a soft break, and a soft break is whitespace once rendered,
+      // so a space says the same thing without breaking the line.
+      if (resolved === '\n' || resolved === '\r' || resolved === '\r\n') return ' '
+      return escapeDecodedForCarve(resolved)
+    },
+  )
+  // Whitespace that a decode put at the START of the line is indentation to
+  // every block rule that runs after this: `&#32;- item` is a paragraph in
+  // cmark and would become a LIST here. `\ ` keeps it inline. The cost is one
+  // character - Carve reads the escape as U+00A0, where cmark keeps U+0020 -
+  // and structure is worth more than the space's breaking behavior.
+  return /^[ \t]/.test(decoded) && !/^[ \t]/.test(s) ? '\\ ' + decoded.slice(1) : decoded
+}
+
 const NATIVE_INLINE_HTML_TAGS = new Set([
   'mark',
   'ins',
@@ -276,8 +699,7 @@ function convertInlineHtml(input: string, protect: (s: string) => string): strin
     out += protect(rawInlineHtml(input.slice(i, end)))
     i = end
   }
-  return out
-}
+  return out}
 
 /**
  * Replace every inline code span in `s` via `repl`, leaving everything else
@@ -351,8 +773,14 @@ function convertInline(input: string): string {
     const m = inner.match(/^(\S+)([\s\S]*)$/)
     const url = m ? m[1]! : inner
     const rest = m ? m[2]! : ''
-    const enc = url.replace(/[()]/g, (c) => (c === '(' ? '%28' : '%29'))
-    return `(${enc}${rest})`
+    // A destination and title are entity-decoded by cmark like any other text,
+    // and this whole construct is protected from the later decode pass, so it
+    // happens here or not at all. `&amp;` in a query string is the canonical
+    // case: left literal, the migrated link points somewhere else.
+    const enc = decodeEntitiesInDestination(url).replace(/[()]/g, (c) =>
+      c === '(' ? '%28' : '%29',
+    )
+    return `(${enc}${decodeEntitiesInTitle(rest)})`
   }
 
   // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
@@ -390,7 +818,13 @@ function convertInline(input: string): string {
   // the colon). The whole line is consumed literally by Carve's ref-link
   // parser, so protect it. A footnote definition `[^id]: body` is excluded —
   // its body is normal inline content that must still be converted.
-  line = line.replace(/^\s*\[[^^\]][^\]]*\]:\s*\S.*$/, (m) => protect(m))
+  // The destination and title are entity-decoded here for the same reason the
+  // inline form is (encodeDest): protecting the line puts it out of reach of
+  // the later decode pass, and a literal `&amp;` in the definition points the
+  // link somewhere the Markdown source did not.
+  line = line.replace(/^(\s*\[[^^\]][^\]]*\]:\s*)(\S+)([\s\S]*)$/, (_m, head, dest, rest) =>
+    protect(head + decodeEntitiesInDestination(dest) + decodeEntitiesInTitle(rest)),
+  )
 
   // Math, converted and protected before the emphasis passes so a formula
   // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup.
@@ -480,6 +914,8 @@ function convertInline(input: string): string {
   // twice. The `[` guards skip carets that belong to footnote references
   // (`[^x] … [^y]` must not pair up as a superscript span across the line).
   line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
+
+  line = decodeHtmlEntities(line)
 
   // Restore stashes and protected spans until stable: a protected/stashed
   // span may itself contain placeholders (e.g. a reference-definition line
@@ -864,6 +1300,12 @@ export function markdownToCarve(markdown: string): string {
     if (isBlank) {
       out.push(line)
       prevType = 'blank'
+      continue
+    }
+
+    if (indent >= 4 && (prevType === 'blank' || prevType === 'code')) {
+      out.push(line)
+      prevType = 'code'
       continue
     }
 

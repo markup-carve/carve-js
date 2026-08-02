@@ -438,6 +438,165 @@ describe('markdownToCarve — code protection', () => {
   })
 })
 
+describe('markdownToCarve — HTML entities', () => {
+  it.each([
+    ['a&nbsp;b', `a\u00a0b`, '<p>a&nbsp;b</p>'],
+    ['a &amp; b', 'a & b', '<p>a &amp; b</p>'],
+    ['a &copy; b', 'a \u00a9 b', '<p>a \u00a9 b</p>'],
+    ['a &#8212; b', 'a \u2014 b', '<p>a \u2014 b</p>'],
+    ['a &#x2014; b', 'a \u2014 b', '<p>a \u2014 b</p>'],
+  ])('decodes %j once before rendering', (markdown, carve, html) => {
+    expect(conv(markdown)).toBe(carve)
+    expect(carveToHtml(carve)).toBe(html)
+  })
+
+  it('does not let decimal or hexadecimal numeric entities open a tag span', () => {
+    for (const markdown of ['a &#8212; b', 'a &#x2014; b']) {
+      const html = carveToHtml(conv(markdown))
+      expect(html).toContain('\u2014')
+      expect(html).not.toContain('<span class="tag">')
+    }
+  })
+
+  it.each([
+    ['a & b', 'a & b', '<p>a &amp; b</p>'],
+    ['AT&T', 'AT&T', '<p>AT&amp;T</p>'],
+    ['a &notanentity; b', 'a &notanentity; b', '<p>a &amp;notanentity; b</p>'],
+  ])('leaves non-entities unchanged for %j', (markdown, carve, html) => {
+    expect(conv(markdown)).toBe(carve)
+    expect(carveToHtml(carve)).toBe(html)
+  })
+
+  it('keeps entities literal inside code spans', () => {
+    const carve = conv('use `a&nbsp;b &amp; c` here')
+    expect(carve).toBe('use `a&nbsp;b &amp; c` here')
+    expect(carveToHtml(carve)).toBe('<p>use <code>a&amp;nbsp;b &amp;amp; c</code> here</p>')
+  })
+
+  it('keeps entities literal inside fenced code blocks', () => {
+    const markdown = ['```', 'a&nbsp;b &amp; c', '```'].join('\n')
+    expect(conv(markdown)).toBe(markdown)
+    expect(carveToHtml(conv(markdown))).toBe('<pre><code>a&amp;nbsp;b &amp;amp; c\n</code></pre>')
+  })
+
+  it('keeps entities literal inside indented code blocks', () => {
+    const markdown = '    a&nbsp;b &amp; c'
+    expect(conv(markdown)).toBe(markdown)
+    expect(carveToHtml(conv(markdown))).toBe('<p>a&amp;nbsp;b &amp;amp; c</p>')
+  })
+
+  it('escapes a decoded Carve delimiter so it renders literally', () => {
+    const carve = conv('a &ast;literal&ast; b and &#42;also&#42;')
+    expect(carve).toBe('a \\*literal\\* b and \\*also\\*')
+    expect(carveToHtml(carve)).toBe('<p>a *literal* b and *also*</p>')
+  })
+
+  it('decodes in one pass only', () => {
+    const carve = conv('a &amp;nbsp; b')
+    expect(carve).toBe('a &nbsp; b')
+    expect(carveToHtml(carve)).toBe('<p>a &amp;nbsp; b</p>')
+  })
+
+  // A destination is protected from the text-level decode pass, so leaving it
+  // out meant the migrated link pointed somewhere the source did not: the href
+  // kept a literal `&amp;`. cmark resolves each of these to the decoded form.
+  it('decodes a link and image destination and title', () => {
+    expect(conv('[t](http://x/?a=1&amp;b=2)')).toBe('[t](http://x/?a=1&b=2)')
+    expect(conv('![a](http://x/?a=1&amp;b=2)')).toBe('![a](http://x/?a=1&b=2)')
+    expect(conv('[t](/u "a &amp; b")')).toBe('[t](/u "a & b")')
+    expect(carveToHtml(conv('[t](http://x/?a=1&amp;b=2)'))).toBe(
+      '<p><a href="http://x/?a=1&amp;b=2">t</a></p>',
+    )
+  })
+
+  it('decodes a reference definition destination and title', () => {
+    const carve = conv('[t][ref]\n\n[ref]: /u?a=1&amp;b=2 "T &amp; T"')
+    expect(carve).toBe('[t][ref]\n\n[ref]: /u?a=1&b=2 "T & T"')
+    expect(carveToHtml(carve)).toBe(
+      '<p><a href="/u?a=1&amp;b=2" title="T &amp; T">t</a></p>',
+    )
+  })
+
+  // A raw space would end the destination and turn the rest into a title, so
+  // whitespace a decode introduces is percent-encoded through
+  // encodeURIComponent - a non-ASCII space becomes its UTF-8 bytes, the answer
+  // cmark gives (`%C2%A0`, not `%A0`).
+  it('percent-encodes whitespace a destination decode introduces', () => {
+    expect(conv('[t](/a&#32;b)')).toBe('[t](/a%20b)')
+    expect(conv('[t](/a&#9;b)')).toBe('[t](/a%09b)')
+    expect(conv('[t](/a&nbsp;b)')).toBe('[t](/a%C2%A0b)')
+    expect(conv('[t](/a&emsp;b)')).toBe('[t](/a%E2%80%83b)')
+    expect(carveToHtml(conv('[t](/a&#32;b)'))).toBe('<p><a href="/a%20b">t</a></p>')
+  })
+
+  // `&quot;` decodes to the character that CLOSES the title it sits in, so an
+  // unescaped one stops the link parsing at all.
+  it('escapes a decoded delimiter inside a title', () => {
+    expect(conv('[x](u "a &quot;q&quot;")')).toBe('[x](u "a \\"q\\"")')
+    expect(carveToHtml(conv('[x](u "a &quot;q&quot;")'))).toBe(
+      '<p><a href="u" title="a &quot;q&quot;">x</a></p>',
+    )
+    expect(conv("[x](u 'a &#39;q&#39;')")).toBe("[x](u 'a \\'q\\'')")
+  })
+
+  it('does not backslash-escape a decoded delimiter inside a destination', () => {
+    // Escaping is for inline text; in a URL the backslash would be part of it.
+    expect(conv('[t](/u?a=&ast;)')).toBe('[t](/u?a=*)')
+  })
+
+  // U+0000 is the one code point that cannot pass through: cmark replaces it
+  // with U+FFFD, and this module wraps its own placeholders in NUL, so a
+  // decoded one would collide with the stash/protect sentinels.
+  // The migration works a line at a time, so a decoded line ending would send
+  // the tail outside whatever block it belongs to. cmark reads `&#10;` as a
+  // soft break, which is whitespace once rendered.
+  it('does not let a decoded line ending split the line', () => {
+    expect(conv('a&#10;b')).toBe('a b')
+    expect(conv('- a&#10;b')).toBe('- a b')
+    expect(carveToHtml(conv('a&#10;b'))).toBe('<p>a b</p>')
+  })
+
+  // Leading whitespace is indentation to every block rule that runs after the
+  // decode: ` - item` is a LIST, where `&#32;- item` is a paragraph in cmark.
+  it('does not let decoded leading whitespace open a block', () => {
+    expect(conv('&#32;- item')).toBe('\\ - item')
+    expect(carveToHtml(conv('&#32;- item'))).toBe('<p>&nbsp;- item</p>')
+    expect(carveToHtml(conv('&#32;# H'))).toBe('<p>&nbsp;# H</p>')
+  })
+
+  // Whitespace that was already there is not the decode's doing.
+  it('leaves an indented line alone', () => {
+    expect(conv('  a &amp; b')).toBe('  a & b')
+  })
+
+  // Accented Latin letters are the entities non-English Markdown actually
+  // uses, and leaving them literal reproduced the bug this whole pass exists
+  // to fix - a visible `&amp;ouml;` on the page.
+  it('decodes accented Latin letters, symbols and arrows', () => {
+    expect(conv('&ouml;ffnen')).toBe('\u00f6ffnen')
+    expect(conv('&Uuml;ber')).toBe('\u00dcber')
+    expect(conv('&eacute;t&eacute;')).toBe('\u00e9t\u00e9')
+    expect(conv('2&sup2;')).toBe('2\u00b2')
+    expect(conv('a &rarr; b')).toBe('a \u2192 b')
+    expect(conv('&frac12;')).toBe('\u00bd')
+    expect(carveToHtml(conv('&ouml;ffnen'))).toBe('<p>\u00f6ffnen</p>')
+  })
+
+  // The table is a chosen subset, not the full HTML5 set. A name outside it
+  // must stay literal rather than resolve to something else.
+  it('leaves a name outside the table literal', () => {
+    expect(conv('&angmsdaa;')).toBe('&angmsdaa;')
+  })
+
+  it('replaces a NUL entity rather than emitting one', () => {
+    for (const markdown of ['&#0;', '&#x0;']) {
+      const carve = conv(markdown)
+      expect(carve).toBe('\ufffd')
+      expect(carve).not.toContain('\u0000')
+    }
+  })
+})
+
 describe('markdownToCarve — block spacing', () => {
   it('inserts a blank line before a heading following text', () => {
     expect(conv('text\n# Heading')).toBe('text\n\n# Heading')
