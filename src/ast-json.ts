@@ -236,23 +236,35 @@ export class AstJsonDepthError extends Error {
 /**
  * Deepest node nesting `fromAstJson` will ingest.
  *
- * The same cap the parser applies (`MAX_NESTING_DEPTH`), because an AST deeper
- * than the parser can produce cannot round trip anyway: the renderers stop at
- * `MAX_RENDER_DEPTH` and silently drop everything below it.
+ * PART 12 §9 states the contract as a property, not a number: ingest MUST
+ * accept anything this engine's own parser can produce at `MAX_NESTING_DEPTH`,
+ * and MUST refuse deeper input with an error of its own rather than a
+ * `RangeError` at whatever depth the JS stack happens to give out.
  *
- * Counted in NODES, and the margin is not decoration. The parser's cap counts
- * CONTAINER nesting; this probe counts every node level, and a container chain
- * at the parser's limit carries two more - the innermost paragraph and its text.
- * Measured: 200 containers serialise to a node depth of 202, the offset holding
- * at +2 from 10 containers upward.
+ * Counted in NODES, and the number is DERIVED from the worst per-level cost of
+ * the encoding, never restated from the parser's cap. The parser counts
+ * CONTAINER nesting; a container costs a different number of nodes depending on
+ * which container it is:
  *
- * Equating the two numbers is how carve-rs came to reject ASTs its own encoder
- * had produced (carve-rs#389), so the relationship is written down rather than
- * the coincidence. The extra slack absorbs a deeper innermost leaf - a table
- * cell inside a list item inside the last container - so the cap refuses hostile
- * input without refusing anything this engine can emit.
+ * - a div or blockquote is one node per level
+ * - a LIST is two - the list and its item
+ *
+ * Measured at the parser's cap of 200: div ladder 202 nodes, blockquote chain
+ * 202, table under a deep chain 201, and a LIST LADDER 402. A cap derived as
+ * "the parser's number plus a small margin" therefore rejects a document the
+ * parser just produced - which is how carve-rs#389 happened, and what the first
+ * draft of this constant (`MAX_NESTING_DEPTH + 8`) did to a 200-deep list.
+ *
+ * So: three nodes per level, which covers the two-node list with room for a
+ * container that costs more, plus a constant for the innermost leaf. That
+ * lands far below the depth where the decoder's own recursion gives out
+ * (measured: 1500 levels decode, 2000 raise a RangeError), so the typed error
+ * always wins the race against the stack.
  */
-export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH + 8
+export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
+
+/** The child-bearing fields, `target` included, each named exactly once. */
+const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, 'target'])]
 
 /**
  * Node depth of a payload, measured with an EXPLICIT STACK.
@@ -280,11 +292,12 @@ function astJsonDepth(root: unknown, limit: number): number {
     if (typeof node !== 'object' || node === null) continue
 
     const record = node as Record<string, unknown>
-    for (const field of CHILD_FIELDS) {
+    // `items` is already in CHILD_FIELDS: pushing it again doubled the work for
+    // every level of a nested list, so measuring a 30-deep list took minutes and
+    // a 40-deep one never finished. The fields are walked ONCE each.
+    for (const field of DEPTH_WALK_FIELDS) {
       if (record[field] !== undefined) stack.push({ node: record[field], depth: depth + 1 })
     }
-    if (record['target'] !== undefined) stack.push({ node: record['target'], depth: depth + 1 })
-    if (record['items'] !== undefined) stack.push({ node: record['items'], depth: depth + 1 })
   }
 
   return deepest
