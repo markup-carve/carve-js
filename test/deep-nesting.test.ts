@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parse, carveToHtml, carveToCarve, renderCarve, fromAstJson, type AstJsonBlock } from '../src/index.js'
+import { parse, carveToHtml, carveToCarve, renderCarve } from '../src/index.js'
+import type { BlockNode, Document } from '../src/ast.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -65,12 +66,21 @@ describe('the canonical writer survives deep container nesting', () => {
 
 describe('the canonical writer respects the render depth cap', () => {
   it('does not size a fence from containers past MAX_RENDER_DEPTH', () => {
-    // A hand-built AST (an --from-json document) can nest far past the depth
-    // the parser allows. renderBlock emits nothing past the cap, so counting
-    // those levels would emit a fence sized for output that never appears.
-    let node: AstJsonBlock = { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }] }
-    for (let i = 0; i < 1000; i++) node = { type: 'div', children: [node] }
-    const doc = fromAstJson({ type: 'doc', children: [node] })
+    // A hand-built AST can nest far past the depth the parser allows.
+    // renderBlock emits nothing past the cap, so counting those levels would
+    // emit a fence sized for output that never appears.
+    //
+    // Built directly rather than through `fromAstJson`: the subject here is the
+    // WRITER, and ingest now refuses a payload this deep on purpose, since
+    // nothing that nests past the parser's cap can round trip (carve-js#498).
+    // Laundering the fixture through the decoder would test the decoder's cap
+    // instead of the writer's.
+    let node: BlockNode = {
+      type: 'div',
+      children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }],
+    } as BlockNode
+    for (let i = 0; i < 1000; i++) node = { type: 'div', children: [node] } as BlockNode
+    const doc: Document = { type: 'document', children: [node] }
 
     const started = Date.now()
     const formatted = renderCarve(doc)

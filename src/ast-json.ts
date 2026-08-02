@@ -31,6 +31,7 @@ import {
   isRuntimeEntry,
   type DefinitionEntryNode,
 } from './definition-list-wire.js'
+import { MAX_NESTING_DEPTH } from './parse.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -133,9 +134,60 @@ function definitionListsToWire<T>(node: T): T {
 }
 
 /** The inverse: wire entries back to the runtime `{terms, definitions}` form. */
-function definitionListsFromWire<T>(node: T): T {
+/** Raised when a payload cannot be decoded. Deep input is the only cause today. */
+export class AstJsonError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AstJsonError'
+  }
+}
+
+/**
+ * The longest chain of wire levels ONE nesting level can cost.
+ *
+ * The decoder walks the decoded payload, so its depth is a JSON STRUCTURAL
+ * depth: every object and every array is a level. That is not the unit the
+ * parser's `MAX_NESTING_DEPTH` counts - that one counts nesting levels - and
+ * conflating the two is how carve-rs came to reject ASTs its own serializer had
+ * produced (markup-carve/carve-rs#389).
+ *
+ * Measured here at the parser's cap of 200: a div ladder and 200 blockquotes
+ * reach 406 structural levels, a table under 200 blockquotes 406, and a
+ * 200-deep LIST ladder 806 - the worst, because a list costs `list` + `items` +
+ * `list_item` + `children` where a blockquote costs two. 6 is the deepest chain
+ * any container has (a table's), which leaves room for the next container type
+ * before this has to move.
+ */
+const LONGEST_WIRE_CHAIN = 6
+
+/**
+ * How deep a payload may nest before `fromAstJson` refuses it.
+ *
+ * Derived, so that raising the parser's cap raises this with it: the decoder
+ * must accept anything the serializer can emit, whatever that limit becomes.
+ *
+ * Without a cap the walk simply ran until the JS stack ran out, surfacing a
+ * `RangeError` at a depth that depends on the engine and on how much stack the
+ * caller had already used - between 1500 and 2000 nested divs on Node 22
+ * (markup-carve/carve-js#498). A `RangeError` says nothing about the payload,
+ * cannot be distinguished from a bug in the caller, and is not catchable in any
+ * meaningful sense. Refusing deeper input is the honest answer, and it is what
+ * carve-rs does.
+ */
+const MAX_INGEST_DEPTH = MAX_NESTING_DEPTH * LONGEST_WIRE_CHAIN + 16
+
+function definitionListsFromWire<T>(node: T, depth = 0): T {
+  // Checked before descending, so the throw happens with stack to spare rather
+  // than at whatever depth the engine gives out. Arrays count: a payload of
+  // nothing but nested arrays carries no node at all and would otherwise walk
+  // just as deep.
+  if (depth > MAX_INGEST_DEPTH) {
+    throw new AstJsonError(
+      `AST JSON nests deeper than ${MAX_INGEST_DEPTH} levels, past what this engine can parse`,
+    )
+  }
   if (Array.isArray(node)) {
-    return node.map((child) => definitionListsFromWire(child)) as unknown as T
+    return node.map((child) => definitionListsFromWire(child, depth + 1)) as unknown as T
   }
   if (typeof node !== 'object' || node === null) return node
 
@@ -151,9 +203,11 @@ function definitionListsFromWire<T>(node: T): T {
   }
 
   for (const field of CHILD_FIELDS) {
-    if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
+    if (record[field] !== undefined)
+      record[field] = definitionListsFromWire(record[field], depth + 1)
   }
-  if (record['target'] !== undefined) record['target'] = definitionListsFromWire(record['target'])
+  if (record['target'] !== undefined)
+    record['target'] = definitionListsFromWire(record['target'], depth + 1)
 
   return record as T
 }
