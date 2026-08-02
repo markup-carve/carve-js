@@ -220,7 +220,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
     }
     case 'block_quote': {
-      const inner = renderBlocks(node.children, ctx)
+      const inner = renderHostedBlocks(node.children, ctx)
       const body = inner
         .split('\n')
         .map((line) => (line === '' ? '>' : `> ${line}`))
@@ -344,6 +344,17 @@ function renderList(node: List, ctx: CarveContext): string {
 }
 
 function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  // A list item is a prefix/indent host: its fences start over at `:::`.
+  const outerFenceDepth = ctx.colonFenceDepth
+  ctx.colonFenceDepth = 0
+  try {
+    return renderListItemBody(item, ctx, tight)
+  } finally {
+    ctx.colonFenceDepth = outerFenceDepth
+  }
+}
+
+function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
   // A loose item separates its blocks with a blank line; a tight item joins
   // them with a single newline so the re-parse stays tight. Using the generic
   // blank-line join here would loosen a tight item that has more than one child
@@ -412,7 +423,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
   for (const item of items) {
     for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
     for (const def of item.definitions) {
-      const lines = trimNonNbsp(renderBlocks(def, ctx)).split('\n')
+      const lines = trimNonNbsp(renderHostedBlocks(def, ctx)).split('\n')
       out.push(`:  ${lines.shift() ?? ''}`)
       for (const line of lines) out.push(`   ${line}`)
     }
@@ -420,6 +431,19 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
   return out.join('\n')
 }
 
+/**
+ * A colon fence closes on an EXACT length match (PART 9 §12), so a fence's
+ * width is simply how deep it sits: the outermost container is `:::` and each
+ * level inward adds a colon. No subtree scan, and no writer needing to know its
+ * own maximum depth before it can emit its opening line - the bug class behind
+ * issue 496.
+ *
+ * A container inside a blockquote, a list item or a definition body does NOT
+ * count toward that depth (issue 499): its fence lines carry that host's prefix
+ * or indent, and an indented or prefixed bare fence cannot close an ancestor,
+ * so the count restarts inside the host. Widening for them would only make the
+ * source noisier.
+ */
 function colonFenceFor(ctx: CarveContext): string {
   return ':'.repeat(3 + ctx.colonFenceDepth)
 }
@@ -430,6 +454,20 @@ function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string 
     return renderBlocks(children, ctx)
   } finally {
     ctx.colonFenceDepth--
+  }
+}
+
+/**
+ * Render blocks that a prefix/indent host owns (blockquote, list item,
+ * definition body). Their fences start over at `:::` - see colonFenceFor.
+ */
+function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
+  const outer = ctx.colonFenceDepth
+  ctx.colonFenceDepth = 0
+  try {
+    return renderBlocks(children, ctx)
+  } finally {
+    ctx.colonFenceDepth = outer
   }
 }
 
