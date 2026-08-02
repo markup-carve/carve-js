@@ -78,19 +78,19 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
     )
   })
 
-  // With NO closer the opener still opens, and closes at the end of the item
-  // (carve#439). The nested list stays a sub-list of the item either way.
-  it('closes at the end of the item when no closer follows the body', () => {
+  // With NO closer the opener still opens and closes at the end of the ITEM
+  // (carve#439), so the nested list is its BODY - not a sibling beside an empty
+  // container, which is what an earlier cut of this change produced.
+  it('captures the nested-list body and closes at the end of the item', () => {
     expect(html('- ::: note\n  - para text')).toBe(
       [
         '<ul>',
         '  <li>',
         '    <aside class="admonition note">',
-        '',
+        '      <ul>',
+        '        <li>para text</li>',
+        '      </ul>',
         '    </aside>',
-        '    <ul>',
-        '      <li>para text</li>',
-        '    </ul>',
         '  </li>',
         '</ul>',
       ].join('\n'),
@@ -106,11 +106,10 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
         '<ul>',
         '  <li>',
         '    <aside class="admonition note">',
-        '',
+        '      <ul>',
+        '        <li>para text</li>',
+        '      </ul>',
         '    </aside>',
-        '    <ul>',
-        '      <li>para text</li>',
-        '    </ul>',
         '  </li>',
         '</ul>',
         '<div>',

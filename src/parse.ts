@@ -3307,33 +3307,27 @@ function parseList(lexer: Lexer): List {
       extractItemAttr(content) !== null
 
     // When the lead is a colon-fence opener (`::: word` admonition or a bare
-    // `:::` div) whose matching closer line sits among the collected nested
-    // lines, the body in between -- including a nested LIST -- belongs to the
-    // container. The `firstBlockIdx` split (which exists to let an indented
-    // ordered sub-list nest instead of folding) would otherwise sever the
-    // opener from its body, leaving `::: word` literal and the closer as
-    // trailing text. Keep the whole stream together so the admonition/div
-    // opener captures its nested-list body and finds its closer (matching
-    // carve-rs / the grammar `admonition = open, {block}, close`). The closer
-    // must be one of the collected (item-content-column) lines: a closer at
-    // column 0 dedents out of the item and is not in `nested`, so this guard
-    // does not fire and the opener correctly stays literal.
+    // `:::` div), everything collected at the item's content column -- a nested
+    // LIST included -- is its body. The `firstBlockIdx` split (which exists to
+    // let an indented ordered sub-list nest instead of folding) would otherwise
+    // sever the opener from that body, so the whole stream stays together.
+    //
+    // This used to require a closer among the collected lines; without one the
+    // opener was literal text, so severing it cost nothing. Since carve#439 an
+    // unclosed container closes AT THE END OF ITS ENCLOSING SCOPE -- here the
+    // end of the item -- so the body belongs to it either way, and requiring a
+    // closer left the container open but EMPTY with its body beside it.
+    // A closer at column 0 dedents out of the item and is not in `nested`, so
+    // it still cannot reach in and close this one.
     const leadOpensColonFence =
       (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
       RE_DIV_OPEN.test(content)
-    const colonFenceLen = leadOpensColonFence ? /^(:{3,})/.exec(content)![1]!.length : 0
-    const colonFenceHasBodyCloser =
-      leadOpensColonFence &&
-      nested.some((ln) => {
-        const c = RE_ADMONITION_CLOSE.exec(ln)
-        return c !== null && c[1]!.length >= colonFenceLen
-      })
 
     // Parse the lead text together with its continuation/nested lines as one
     // block sequence (lazy continuation merges into the lead paragraph). An
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
-    const keepStreamWhole = firstBlockIdx === -1 || leadIsMarker || colonFenceHasBodyCloser
+    const keepStreamWhole = firstBlockIdx === -1 || leadIsMarker || leadOpensColonFence
     const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
     const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
     const mkSub = (text: string, startLineIndex: number, sourceLineMap?: number[]): Lexer => {
