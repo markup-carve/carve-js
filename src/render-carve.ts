@@ -28,8 +28,8 @@ interface CarveContext {
   /** Depth of line-block nesting, so the inline writer drops the explicit
    *  backslash: inside a `::: |` fence every newline already IS a hard break. */
   lineBlockDepth: number
-  /** Per-pass memo for colonFenceWidth, keyed by child list then depth budget. */
-  fenceWidths: WeakMap<BlockNode[], Map<number, number>>
+  /** Number of colon-fence containers enclosing the block currently rendering. */
+  colonFenceDepth: number
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -52,7 +52,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
       inlineDepth: 0,
       listDepth: 0,
       lineBlockDepth: 0,
-      fenceWidths: new WeakMap(),
+      colonFenceDepth: 0,
     }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
@@ -220,7 +220,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
     }
     case 'block_quote': {
-      const inner = renderBlocks(node.children, ctx)
+      const inner = renderHostedBlocks(node.children, ctx)
       const body = inner
         .split('\n')
         .map((line) => (line === '' ? '>' : `> ${line}`))
@@ -241,8 +241,8 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // fmt pass (issue 295).
       const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
-      const body = renderBlocks(node.children, ctx)
-      const fence = colonFenceFor(node.children, ctx)
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
     }
     case 'line_block': {
@@ -254,14 +254,16 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // Inside the fence every newline IS a hard break (PART 3,
       // line_block_body), so the explicit backslash the inline writer emits for
       // a hard_break would double it on re-parse.
+      const fence = colonFenceFor(ctx)
       ctx.lineBlockDepth++
+      ctx.colonFenceDepth++
       let body: string
       try {
         body = renderBlocks(node.children, ctx)
       } finally {
+        ctx.colonFenceDepth--
         ctx.lineBlockDepth--
       }
-      const fence = colonFenceFor(node.children, ctx)
       return withAttrs(fence + ' |\n' + lineBlockIndent(body) + '\n' + fence)
     }
     case 'div': {
@@ -272,8 +274,8 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // serialize themselves, which round-trips both. (A line block is its own
       // node type and is handled above.)
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
-      const body = renderBlocks(node.children, ctx)
-      const fence = colonFenceFor(node.children, ctx)
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
     }
     case 'definition_list':
@@ -342,6 +344,17 @@ function renderList(node: List, ctx: CarveContext): string {
 }
 
 function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  // A list item is a prefix/indent host: its fences start over at `:::`.
+  const outerFenceDepth = ctx.colonFenceDepth
+  ctx.colonFenceDepth = 0
+  try {
+    return renderListItemBody(item, ctx, tight)
+  } finally {
+    ctx.colonFenceDepth = outerFenceDepth
+  }
+}
+
+function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
   // A loose item separates its blocks with a blank line; a tight item joins
   // them with a single newline so the re-parse stays tight. Using the generic
   // blank-line join here would loosen a tight item that has more than one child
@@ -410,7 +423,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
   for (const item of items) {
     for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
     for (const def of item.definitions) {
-      const lines = trimNonNbsp(renderBlocks(def, ctx)).split('\n')
+      const lines = trimNonNbsp(renderHostedBlocks(def, ctx)).split('\n')
       out.push(`:  ${lines.shift() ?? ''}`)
       for (const line of lines) out.push(`   ${line}`)
     }
@@ -419,54 +432,44 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
 }
 
 /**
- * A colon fence closes on a bare fence of equal-or-greater length (PART 9 §12),
- * so a container's fence must outrank every container fence written at ITS OWN
- * content column - the whole chain of directly nested containers, not just the
- * next level down. Testing only the direct children emitted `::::` for both the
- * outer and the middle container of a three-level nest, and equal-length fences
- * do not nest, so the middle one stopped being a container across a fmt pass
- * (issue 496).
+ * A colon fence closes on an EXACT length match (PART 9 §12), so a fence's
+ * width is simply how deep it sits: the outermost container is `:::` and each
+ * level inward adds a colon. No subtree scan, and no writer needing to know its
+ * own maximum depth before it can emit its opening line - the bug class behind
+ * issue 496.
  *
  * A container inside a blockquote, a list item or a definition body does NOT
- * count: its fence lines carry that host's prefix or indent, so they cannot
- * close an ancestor fence, and widening for them would only make the source
- * noisier.
+ * count toward that depth (issue 499): its fence lines carry that host's prefix
+ * or indent, and an indented or prefixed bare fence cannot close an ancestor,
+ * so the count restarts inside the host. Widening for them would only make the
+ * source noisier.
  */
-function colonFenceFor(children: BlockNode[], ctx: CarveContext): string {
-  // Only the levels this pass will actually render may widen the fence: past
-  // MAX_RENDER_DEPTH renderBlock emits nothing, so counting deeper containers
-  // would size a fence for output that does not exist. A hand-built AST (an
-  // `--from-json` document, say) can nest far past the cap the parser enforces.
-  return ':'.repeat(colonFenceWidth(children, ctx, MAX_RENDER_DEPTH - ctx.blockDepth))
+function colonFenceFor(ctx: CarveContext): string {
+  return ':'.repeat(3 + ctx.colonFenceDepth)
+}
+
+function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
+  ctx.colonFenceDepth++
+  try {
+    return renderBlocks(children, ctx)
+  } finally {
+    ctx.colonFenceDepth--
+  }
 }
 
 /**
- * Memoized per child list FOR ONE PASS: a container's width is asked for while
- * rendering it, and its own scan already visited every container below it, so
- * caching keeps the whole walk linear instead of rescanning each subtree once
- * per level (MAX_NESTING_DEPTH allows 200 of them). The memo lives on the pass
- * context, never module-wide: a caller may mutate a `children` array between
- * renders, and a width cached across calls would then emit a fence too short
- * for the container that was added.
+ * Render blocks that a prefix/indent host owns (blockquote, list item,
+ * definition body). Their fences start over at `:::` - see colonFenceFor.
  */
-function colonFenceWidth(children: BlockNode[], ctx: CarveContext, budget: number): number {
-  if (budget <= 0) return 3
-  const byBudget = ctx.fenceWidths.get(children)
-  const cached = byBudget?.get(budget)
-  if (cached !== undefined) return cached
-  let widest = 0
-  for (const child of children) {
-    if (child.type === 'admonition' || child.type === 'div' || child.type === 'line_block') {
-      // The child's own width already covers its whole subtree.
-      widest = Math.max(widest, colonFenceWidth(child.children, ctx, budget - 1))
-    }
+function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
+  const outer = ctx.colonFenceDepth
+  ctx.colonFenceDepth = 0
+  try {
+    return renderBlocks(children, ctx)
+  } finally {
+    ctx.colonFenceDepth = outer
   }
-  const width = widest ? widest + 1 : 3
-  if (byBudget) byBudget.set(budget, width)
-  else ctx.fenceWidths.set(children, new Map([[budget, width]]))
-  return width
 }
-
 
 /**
  * Tables prefer the NATIVE header form: an `=` on each header cell, plus the

@@ -8,8 +8,8 @@ describe('Severity-2 renderer content loss', () => {
   })
 
   it('admonition title is preserved in non-HTML renderers', () => {
-    expect(carveToMarkdown(':::note "Heads up"\nbody\n:::')).toContain('**Heads up**')
-    expect(carveToPlainText(':::note "Heads up"\nbody\n:::')).toContain('Heads up')
+    expect(carveToMarkdown('::: note "Heads up"\nbody\n:::')).toContain('**Heads up**')
+    expect(carveToPlainText('::: note "Heads up"\nbody\n:::')).toContain('Heads up')
   })
 
   it('nested strong in a title does not emit degenerate bold-in-bold', () => {

@@ -193,14 +193,17 @@ const RE_BLOCKQUOTE = /^>[^\S ]?(.*)$/
 // nothing else. Any trailing `{...}` (or other text not matching that shape)
 // makes it not a fence, so the line is an ordinary paragraph. Class/id attach
 // via a PRECEDING `{...}` block-attribute line.
-// The "header" keeps its role (admonition title / summary). The [label] is an
-// inert grouping id a group extension (tabs) consumes -- the canonical
-// replacement for the tabs `{label="..."}` / heading convention. Both must be
-// whitespace-separated from the preceding token (PART 9 §12).
+// The "header" keeps its role (admonition title / summary). The type word must
+// be separated from the fence by at least one literal space or tab; a glued
+// `:::note` is paragraph text. The [label] is an inert grouping id a group
+// extension (tabs) consumes -- the canonical replacement for the tabs
+// `{label="..."}` / heading convention. A label on a typed opener must be
+// whitespace-separated from the preceding token (PART 9 §12); a typeless label
+// may sit against the fence and is handled by RE_DIV_OPEN.
 // The type word is a grammar `identifier`: `(letter | '_'), {letter | digit
 // | '_' | '-'}`, so it may start with an underscore (matches carve-php /
 // carve-rs). Groups: 2 kind, 3 header (quoted), 4 label (bracketed).
-const RE_ADMONITION_OPEN = /^(:{3,})\s*([a-zA-Z_][\w-]*)(?:\s+("[^"]*"))?(?:\s+(\[[^\]]*\]))?\s*$/
+const RE_ADMONITION_OPEN = /^(:{3,})[ \t]+([a-zA-Z_][\w-]*)(?:\s+("[^"]*"))?(?:\s+(\[[^\]]*\]))?\s*$/
 const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
 // `::: line-block` keyword is no longer special -- it falls through to the
@@ -380,24 +383,6 @@ class Lexer {
   // (top and nested) — startsInterruptingBlock no longer branches on this —
   // but sub-lexers still set it to mark their context.
   nested = false
-
-  // Negative cache for divHasCloser: the smallest line index from which
-  // NO bare colon-fence closer of ANY length exists onward. Once a scan
-  // proves that, every later bare opener (pos only advances) is O(1),
-  // keeping pathological "many unclosed `:::`" input linear.
-  divNoCloserFrom = Infinity
-
-  // Negative cache for divHasCloser keyed by fence length: fenceLen → smallest
-  // line index from which no bare closer of >= that length exists onward. Keeps
-  // "many `:::: word` openers + one too-short closer" input linear instead of
-  // O(n²) (the any-length cache above never trips when a too-short closer is
-  // present). pos only advances, so the stored start is a monotone frontier.
-  divNoCloserOfLenFrom = new Map<number, number>()
-
-  // Negative cache for lineBlockHasCloser, mirroring divHasCloser for the
-  // `::: |` opener. Without it, many unclosed line-block openers rescan to EOF.
-  lineBlockNoCloserFrom = Infinity
-  lineBlockNoCloserOfLenFrom = new Map<number, number>()
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead): the smallest line index from which NO bare fence-closer
@@ -1304,26 +1289,15 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
     const l = lexer.consume()
     return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^\s/, '') }
   }
-  if (RE_LINE_BLOCK_OPEN.test(line) && lineBlockHasCloser(lexer)) return parseLineBlock(lexer)
-  if (RE_HARDBREAKS_OPEN.test(line) && hardBreaksHasCloser(lexer))
-    return parseHardBreaksBlock(lexer)
-  // A typed `::: word` admonition, like a bare `:::` div, opens ONLY when a
-  // matching closer exists ahead (PART 9 §12 / grammar: `admonition = open …
-  // close`). Without this guard an unterminated `::: note` swallows the rest
-  // of the document into an aside.
-  if (
-    RE_ADMONITION_OPEN.test(line) &&
-    !RE_ADMONITION_CLOSE.test(line) &&
-    divHasCloser(lexer)
-  )
+  if (RE_LINE_BLOCK_OPEN.test(line)) return parseLineBlock(lexer)
+  if (RE_HARDBREAKS_OPEN.test(line)) return parseHardBreaksBlock(lexer)
+  // A typed `::: word` admonition opens immediately; if no exact closer appears
+  // ahead, it auto-closes at EOF.
+  if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
     return parseAdmonition(lexer)
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
-  // admonition branch above already claimed the `::: word` form) — but
-  // ONLY when a matching closing `:::` exists ahead. A lone, unclosed
-  // `:::` is literal text (matches djot + carve-php + the grammar, which
-  // requires a closer); without this guard it would swallow the rest of
-  // the document into a div.
-  if (RE_DIV_OPEN.test(line) && divHasCloser(lexer)) return parseDiv(lexer)
+  // admonition branch above already claimed the `::: word` form).
+  if (RE_DIV_OPEN.test(line)) return parseDiv(lexer)
   if (RE_ABBR_DEF.test(line)) {
     return parseAbbrDef(lexer)
   }
@@ -1759,18 +1733,8 @@ function parseAdmonition(lexer: Lexer): Admonition {
   // Optional inert grouping `[label]` (PART 9 §12): a group extension (tabs)
   // uses it as the tab name; core does not render it.
   const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
-  const inner: string[] = []
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    const c = RE_ADMONITION_CLOSE.exec(ln)
-    if (c && c[1]!.length >= fence) {
-      lexer.consume()
-      break
-    }
-    lexer.consume()
-    inner.push(ln)
-  }
-  const subLexer = nestedSubLexer(lexer, inner.join('\n'), openLineIndex + 1)
+  const inner = collectColonFenceBody(lexer, fence)
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
   // `!== undefined` (not truthiness): an explicitly empty quoted title
@@ -1795,25 +1759,6 @@ function parseAdmonition(lexer: Lexer): Admonition {
   // line is the only way to attribute an admonition, and parseBlocks
   // applies it to the returned node.
   return node
-}
-
-function lineBlockHasCloser(lexer: Lexer): boolean {
-  const start = lexer.pos + 1
-  if (start >= lexer.lineBlockNoCloserFrom) return false
-  const fence = RE_LINE_BLOCK_OPEN.exec(lexer.peek()!)![1]!.length
-  if (start >= (lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
-  let sawAnyCloser = false
-  for (let i = start; i < lexer.lines.length; i++) {
-    const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
-    if (c) {
-      sawAnyCloser = true
-      if (c[1]!.length >= fence) return true
-    }
-  }
-  const prev = lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity
-  if (start < prev) lexer.lineBlockNoCloserOfLenFrom.set(fence, start)
-  if (!sawAnyCloser) lexer.lineBlockNoCloserFrom = start
-  return false
 }
 
 /**
@@ -1844,6 +1789,118 @@ function stripPositions(nodes: InlineNode[]): InlineNode[] {
   return nodes
 }
 
+interface ColonFenceBodyLine {
+  text: string
+  lineIndex: number
+}
+
+function colonFenceOpenerLen(line: string): number | null {
+  const m =
+    RE_DIV_OPEN.exec(line) ??
+    (RE_ADMONITION_CLOSE.test(line) ? null : RE_ADMONITION_OPEN.exec(line)) ??
+    RE_LINE_BLOCK_OPEN.exec(line) ??
+    RE_HARDBREAKS_OPEN.exec(line)
+  return m ? m[1]!.length : null
+}
+
+function consumeOpaqueColonFenceBodySpan(
+  lexer: Lexer,
+  lines: ColonFenceBodyLine[],
+  lineIndex: number,
+  text: string,
+  paragraphOpen: boolean,
+): boolean {
+  const rawOpen = RE_RAW_FENCE.exec(text)
+  const codeOpen = rawOpen === null ? RE_FENCE.exec(text) : null
+  const marker = rawOpen?.[1] ?? codeOpen?.[2]
+  if (marker !== undefined) {
+    if (paragraphOpen && !startsInterruptingBlock(lexer)) return false
+    const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+    const isCodeFence = codeOpen !== null
+    lexer.consume()
+    lines.push({ text, lineIndex })
+    while (!lexer.eof()) {
+      const innerLineIndex = lexer.pos
+      const innerText = lexer.peek()!
+      lexer.consume()
+      lines.push({ text: innerText, lineIndex: innerLineIndex })
+      if (closeRe.test(innerText) && (!isCodeFence || leadingWhitespace(innerText) <= 3)) break
+    }
+    return true
+  }
+
+  const commentOpen = RE_COMMENT_BLOCK.exec(text)
+  if (commentOpen !== null && commentBlockHasCloser(lexer, commentOpen[1]!.length)) {
+    const fence = commentOpen[1]!.length
+    lexer.consume()
+    lines.push({ text, lineIndex })
+    while (!lexer.eof()) {
+      const innerLineIndex = lexer.pos
+      const innerText = lexer.peek()!
+      const commentClose = RE_COMMENT_BLOCK.exec(innerText)
+      lexer.consume()
+      lines.push({ text: innerText, lineIndex: innerLineIndex })
+      if (commentClose !== null && commentClose[1]!.length === fence) break
+    }
+    return true
+  }
+
+  return false
+}
+
+function collectColonFenceBody(lexer: Lexer, fence: number): ColonFenceBodyLine[] {
+  const lines: ColonFenceBodyLine[] = []
+  const stack = [fence]
+  let paragraphOpen: boolean = false
+
+  while (!lexer.eof()) {
+    const lineIndex = lexer.pos
+    const text = lexer.peek()!
+    const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, paragraphOpen)) {
+      paragraphOpen = false
+      continue
+    }
+    const close = RE_ADMONITION_CLOSE.exec(text)
+
+    if (close && close[1]!.length === stack[stack.length - 1]) {
+      lexer.consume()
+      stack.pop()
+      if (stack.length === 0) break
+      lines.push({ text, lineIndex })
+      paragraphOpen = false
+      continue
+    }
+
+    lexer.consume()
+    lines.push({ text, lineIndex })
+    const openerLen = colonFenceOpenerLen(text)
+    if (openerLen !== null) {
+      stack.push(openerLen)
+      paragraphOpen = false
+      continue
+    }
+    paragraphOpen = !isBlankLine(text) && !interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))
+  }
+
+  return lines
+}
+
+function collectLiteralColonFenceBody(lexer: Lexer, fence: number): ColonFenceBodyLine[] {
+  const lines: ColonFenceBodyLine[] = []
+
+  while (!lexer.eof()) {
+    const lineIndex = lexer.pos
+    const text = lexer.peek()!
+    const close = RE_ADMONITION_CLOSE.exec(text)
+    lexer.consume()
+    if (close && close[1]!.length === fence) break
+    lines.push({ text, lineIndex })
+  }
+
+  return lines
+}
+
 function parseLineBlock(lexer: Lexer): LineBlock {
   const open = lexer.consume()
   const m = RE_LINE_BLOCK_OPEN.exec(open)!
@@ -1864,15 +1921,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   }
   const stanzas: StanzaLine[][] = []
   let stanza: StanzaLine[] = []
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    const c = RE_ADMONITION_CLOSE.exec(ln)
-    if (c && c[1]!.length >= fence) {
-      lexer.consume()
-      break
-    }
-    const lineIndex = lexer.pos
-    lexer.consume()
+  for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, fence)) {
     if (isBlankLine(ln)) {
       if (stanza.length) {
         stanzas.push(stanza)
@@ -1962,28 +2011,6 @@ function expandLineBlockLeadingWhitespace(line: string): string {
   return '\ue000'.repeat(columns) + line.slice(i)
 }
 
-// Whether a `::: \` hard-break opener at peek(0) has a matching bare `:::`
-// closer of equal-or-greater colon length ahead. The closer is the same bare
-// `:::` the line block uses, so this reuses the line-block negative caches.
-function hardBreaksHasCloser(lexer: Lexer): boolean {
-  const start = lexer.pos + 1
-  if (start >= lexer.lineBlockNoCloserFrom) return false
-  const fence = RE_HARDBREAKS_OPEN.exec(lexer.peek()!)![1]!.length
-  if (start >= (lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
-  let sawAnyCloser = false
-  for (let i = start; i < lexer.lines.length; i++) {
-    const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
-    if (c) {
-      sawAnyCloser = true
-      if (c[1]!.length >= fence) return true
-    }
-  }
-  const prev = lexer.lineBlockNoCloserOfLenFrom.get(fence) ?? Infinity
-  if (start < prev) lexer.lineBlockNoCloserOfLenFrom.set(fence, start)
-  if (!sawAnyCloser) lexer.lineBlockNoCloserFrom = start
-  return false
-}
-
 // `::: \` hard-break block. Unlike the line block, the body is parsed as
 // ordinary blocks (so nested admonitions / lists work); soft breaks are then
 // promoted to hard breaks ONLY in the div's DIRECT paragraph children, and
@@ -1992,18 +2019,8 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
   const openLineIndex = lexer.pos
   const m = RE_HARDBREAKS_OPEN.exec(lexer.consume())!
   const fence = m[1]!.length
-  const inner: string[] = []
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    const c = RE_ADMONITION_CLOSE.exec(ln)
-    if (c && c[1]!.length >= fence) {
-      lexer.consume()
-      break
-    }
-    lexer.consume()
-    inner.push(ln)
-  }
-  const subLexer = nestedSubLexer(lexer, inner.join('\n'), openLineIndex + 1)
+  const inner = collectColonFenceBody(lexer, fence)
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
   const children = parseBlocks(subLexer, 0)
   for (const child of children) {
     if (child.type === 'paragraph') {
@@ -2026,62 +2043,14 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
   }
 }
 
-// Generic div: same body collection as an admonition, but emits a plain
-// <div> carrying the opener's attributes (no class added). Like
-// admonitions it closes at the first bare `:::` (no length-based nesting).
-/**
- * From a `:::` opener at peek(0), is there a matching closing `:::`
- * line ahead? A flat scan (first bare `:::` closes), mirroring parseDiv.
- * Used to reject a lone, unclosed `:::` as a div opener (PART 9 §12 /
- * grammar: a div requires a closer).
- */
-function divHasCloser(lexer: Lexer): boolean {
-  // A bare-`:::`+ div (or typed `::: word` admonition) opens only when a bare
-  // closer of equal-or-greater colon length exists ahead (otherwise the opener
-  // is literal — and a longer fence must be matched by a longer closer).
-  const start = lexer.pos + 1
-  if (start >= lexer.divNoCloserFrom) return false // memo: no closer at all ahead
-  const fence = /^(:{3,})/.exec(lexer.peek()!)![1]!.length
-  // memo: no closer of >= this fence length from here on. Without this, input
-  // like thousands of `:::: word` openers followed by a single too-short `:::`
-  // rescans to EOF for every opener (the "no closer at all" cache never trips
-  // because a closer *is* seen, just too short) → O(n²).
-  if (start >= (lexer.divNoCloserOfLenFrom.get(fence) ?? Infinity)) return false
-  let sawAnyCloser = false
-  for (let i = start; i < lexer.lines.length; i++) {
-    const c = RE_ADMONITION_CLOSE.exec(lexer.lines[i]!)
-    if (c) {
-      sawAnyCloser = true
-      if (c[1]!.length >= fence) return true
-    }
-  }
-  // No closer of length >= fence ahead. Cache it per fence length (pos only
-  // advances, so the smallest such start is a monotone frontier); also cache
-  // the stronger "no bare closer at all" when that holds.
-  const prev = lexer.divNoCloserOfLenFrom.get(fence) ?? Infinity
-  if (start < prev) lexer.divNoCloserOfLenFrom.set(fence, start)
-  if (!sawAnyCloser) lexer.divNoCloserFrom = start
-  return false
-}
-
 function parseDiv(lexer: Lexer): Div {
   const openLineIndex = lexer.pos
   const m = RE_DIV_OPEN.exec(lexer.consume())!
   const fence = m[1]!.length
   // Optional inert grouping `[label]` on a typeless div (`::: [First]`).
   const label = m[2] !== undefined ? m[2]!.slice(1, -1) : undefined
-  const inner: string[] = []
-  while (!lexer.eof()) {
-    const ln = lexer.peek()!
-    const c = RE_ADMONITION_CLOSE.exec(ln)
-    if (c && c[1]!.length >= fence) {
-      lexer.consume()
-      break
-    }
-    lexer.consume()
-    inner.push(ln)
-  }
-  const subLexer = nestedSubLexer(lexer, inner.join('\n'), openLineIndex + 1)
+  const inner = collectColonFenceBody(lexer, fence)
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
   // No inline opener attributes (strict djot): a bare `:::` carries none;
   // a preceding block-attribute line attaches them in parseBlocks.
   const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
@@ -2802,6 +2771,17 @@ function colonFenceShapeEndsLazyContinuation(line: string): boolean {
   )
 }
 
+function isLiteralColonFenceLine(line: string): boolean {
+  return (
+    /^:{3,}/.test(line) &&
+    !RE_ADMONITION_CLOSE.test(line) &&
+    !(RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) &&
+    !RE_DIV_OPEN.test(line) &&
+    !RE_LINE_BLOCK_OPEN.test(line) &&
+    !RE_HARDBREAKS_OPEN.test(line)
+  )
+}
+
 interface ItemLazyState {
   inFence: boolean
   fenceClose: RegExp | null
@@ -3077,6 +3057,7 @@ function parseList(lexer: Lexer): List {
     // via the join, and lazy continuation / block-attribute lines must stay on
     // the join, so only an indented ordered marker triggers the split.
     let firstBlockIdx = -1
+    let bodyHasContentColumnLine = false
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
     // Indices in `nested` that hold a `+`-injected blank separator. These keep
@@ -3162,6 +3143,7 @@ function parseList(lexer: Lexer): List {
       // divergence from djot, which attaches at any indent past the marker.
       const lw = indentColumns(l)
       if (lw >= contentCol) {
+        bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
           nested.push('')
           nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
@@ -3374,26 +3356,22 @@ function parseList(lexer: Lexer): List {
     const leadOpensColonFence =
       (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
       RE_DIV_OPEN.test(content)
-    const colonFenceLen = leadOpensColonFence ? /^(:{3,})/.exec(content)![1]!.length : 0
-    const colonFenceHasBodyCloser =
-      leadOpensColonFence &&
-      nested.some((ln) => {
-        const c = RE_ADMONITION_CLOSE.exec(ln)
-        return c !== null && c[1]!.length >= colonFenceLen
-      })
-
     // Parse the lead text together with its continuation/nested lines as one
     // block sequence (lazy continuation merges into the lead paragraph). An
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
-    const keepStreamWhole = firstBlockIdx === -1 || leadIsMarker || colonFenceHasBodyCloser
+    const literalBelowColumnColonFence =
+      leadOpensColonFence && nested.length > 0 && !bodyHasContentColumnLine
+    const itemLead = literalBelowColumnColonFence ? ` ${content}` : content
+    const keepStreamWhole =
+      firstBlockIdx === -1 || leadIsMarker || (leadOpensColonFence && !literalBelowColumnColonFence)
     const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
     const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
     const mkSub = (text: string, startLineIndex: number, sourceLineMap?: number[]): Lexer => {
       return nestedSubLexer(lexer, text, startLineIndex, sourceLineMap)
     }
     const children = parseBlocks(
-      mkSub([content, ...leadLines].join('\n'), itemStartLineIndex, [
+      mkSub([itemLead, ...leadLines].join('\n'), itemStartLineIndex, [
         lexer.lineNumber(itemStartLineIndex),
         ...nestedLineNumbers.slice(0, leadLines.length),
       ]),
@@ -3923,15 +3901,14 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
     case '_':
       return RE_HR.test(ln)
     case ':':
-      // An admonition/div/line-block that has a `:::` closer ahead (the `::: |`
-      // line-block shares the bare `:::` closer).
+      // Colon-fence containers open immediately and auto-close at EOF.
       if (
         (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
         RE_DIV_OPEN.test(ln) ||
         RE_LINE_BLOCK_OPEN.test(ln) ||
         RE_HARDBREAKS_OPEN.test(ln)
       )
-        return divHasCloser(lexer)
+        return true
       // A definition-list term (`::`) is a first-class block opener (carve#295):
       // it interrupts an open paragraph like a heading or quote, so `text` /
       // `:: term` opens a def-list, and at a list item's content column a def-list
@@ -4079,7 +4056,12 @@ function parseParagraph(lexer: Lexer): Paragraph {
     // (e.g. a `>` past the depth cap) is routed here to become literal text —
     // without this guard startsInterruptingBlock would break before consuming,
     // looping forever on the same line.
-    if (lines.length > 0 && startsInterruptingBlock(lexer)) break
+    if (
+      lines.length > 0 &&
+      startsInterruptingBlock(lexer) &&
+      !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
+    )
+      break
     lexer.consume()
     lines.push(ln)
   }

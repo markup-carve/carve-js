@@ -5,7 +5,7 @@ const h = (s: string) => carveToHtml(s)
 
 /**
  * Fence-length nesting (djot rule): a longer colon fence contains shorter
- * ones, and only a bare closer of equal-or-greater length closes a block.
+ * ones, and only a bare closer of exactly the same length closes a block.
  */
 describe('::: fence-length nesting', () => {
   it('nests an admonition inside a longer-fenced admonition', () => {
@@ -42,8 +42,8 @@ describe('::: fence-length nesting', () => {
     expect(out).toContain('<aside class="admonition tip">')
   })
 
-  it('a lone unclosed :::: stays literal', () => {
-    expect(h('a\n\n::::\n\nb')).toBe('<p>a</p>\n<p>::::</p>\n<p>b</p>')
+  it('a lone unclosed :::: opens and auto-closes at EOF', () => {
+    expect(h('a\n\n::::\n\nb')).toBe('<p>a</p>\n<div>\n  <p>b</p>\n</div>')
   })
 
   it('a plain 3-colon block is unchanged', () => {

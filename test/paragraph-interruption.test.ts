@@ -6,8 +6,8 @@ import { carveToHtml } from '../src/index.js'
  * starts interrupt an open paragraph without a blank line, at top level and
  * inside nested content. List markers (bullet, task, AND ordered) do NOT
  * interrupt -- they need a blank line, so without one they fold into the open
- * paragraph as lazy continuation; fenced code or div/admonition openers only
- * interrupt when a closer exists.
+ * paragraph as lazy continuation; fenced code needs a closer to interrupt, but
+ * div/admonition openers interrupt and auto-close at EOF.
  */
 describe('top-level paragraph interruption (§10)', () => {
   it('a `* ` unordered marker folds into prose (no blank line)', () => {
@@ -169,9 +169,11 @@ describe('nested content: visible block starts interrupt paragraphs', () => {
     expect(html).toContain('<div>')
   })
 
-  it('an unclosed nested div stays literal (no hang)', () => {
+  it('an unclosed nested div opens and auto-closes without hanging', () => {
     const html = carveToHtml('- item\n  :::\n  content')
-    expect(html).not.toContain('<div>')
+    expect(html).toBe(
+      '<ul>\n  <li>item\n    <div>\n      <p>content</p>\n    </div>\n  </li>\n</ul>',
+    )
   })
 })
 
@@ -185,7 +187,7 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     )
   })
 
-  it('an unterminated div/admonition remains paragraph text', () => {
+  it('a glued admonition word remains paragraph text', () => {
     expect(carveToHtml('text\n:::note\nno closer')).toBe(
       '<p>text\n:::note\nno closer</p>',
     )

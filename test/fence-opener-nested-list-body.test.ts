@@ -78,36 +78,38 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
     )
   })
 
-  // Negative boundary: with NO closer, the opener stays literal text and the
-  // nested list parses as a normal sub-list of the item.
-  it('stays literal when no closer follows the nested-list body', () => {
+  it('auto-closes at item end when no closer follows the nested-list body', () => {
     expect(html('- ::: note\n  - para text')).toBe(
       [
         '<ul>',
-        '  <li>::: note',
-        '    <ul>',
-        '      <li>para text</li>',
-        '    </ul>',
+        '  <li>',
+        '    <aside class="admonition note">',
+        '      <ul>',
+        '        <li>para text</li>',
+        '      </ul>',
+        '    </aside>',
         '  </li>',
         '</ul>',
       ].join('\n'),
     )
   })
 
-  // Negative boundary: a closer at column 0 is OUTSIDE the item, so it does not
-  // close the in-item opener -- the opener stays literal and the closer is a
-  // top-level paragraph.
+  // Boundary: a closer at column 0 is OUTSIDE the item, so the in-item opener
+  // auto-closes at item end and the flush-left fence opens its own block.
   it('stays literal when the closer is at column 0 (outside the item)', () => {
     expect(html('- ::: note\n  - para text\n:::')).toBe(
       [
         '<ul>',
-        '  <li>::: note',
-        '    <ul>',
-        '      <li>para text</li>',
-        '    </ul>',
+        '  <li>',
+        '    <aside class="admonition note">',
+        '      <ul>',
+        '        <li>para text</li>',
+        '      </ul>',
+        '    </aside>',
         '  </li>',
         '</ul>',
-        '<p>:::</p>',
+        '<div>',
+        '</div>',
       ].join('\n'),
     )
   })
