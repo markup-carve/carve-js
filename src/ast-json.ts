@@ -291,8 +291,12 @@ function astJsonDepth(root: unknown, limit: number): number {
     for (const field of CHILD_FIELDS) {
       if (record[field] !== undefined) stack.push({ node: record[field], depth: depth + 1 })
     }
+    // `target` only: `items` is already in CHILD_FIELDS, and pushing it a second
+    // time walked every list subtree TWICE, which compounds to 2^depth - a
+    // 20-level list took 1.9 s and the parser's own 200 never finished. A guard
+    // against deep input that is itself exponential in depth is the denial of
+    // service it exists to prevent.
     if (record['target'] !== undefined) stack.push({ node: record['target'], depth: depth + 1 })
-    if (record['items'] !== undefined) stack.push({ node: record['items'], depth: depth + 1 })
   }
 
   return deepest

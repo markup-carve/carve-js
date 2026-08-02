@@ -51,6 +51,17 @@ describe('fromAstJson depth cap', () => {
     }
   })
 
+  it('measures depth in time linear in the tree, not exponential', () => {
+    // The probe pushed `items` twice - once from CHILD_FIELDS and once
+    // explicitly - so every list level walked its subtree twice and the cost
+    // compounded to 2^depth: 20 levels took 1.9 s and 200 never finished. A
+    // guard against deep input that is itself exponential in depth IS the
+    // denial of service it exists to prevent, so the shape is pinned by cost.
+    const start = Date.now()
+    fromAstJson(toAstJson(resolve(parse(nestedList(MAX_NESTING_DEPTH)))))
+    expect(Date.now() - start).toBeLessThan(2000)
+  })
+
   it('is derived from the parser cap, not a number of its own', () => {
     // A constant that happens to be big enough today stops being big enough the
     // moment MAX_NESTING_DEPTH moves. PART 12 section 9 asks for the arithmetic.
