@@ -569,6 +569,25 @@ describe('markdownToCarve — HTML entities', () => {
     expect(conv('  a &amp; b')).toBe('  a & b')
   })
 
+  // Accented Latin letters are the entities non-English Markdown actually
+  // uses, and leaving them literal reproduced the bug this whole pass exists
+  // to fix - a visible `&amp;ouml;` on the page.
+  it('decodes accented Latin letters, symbols and arrows', () => {
+    expect(conv('&ouml;ffnen')).toBe('\u00f6ffnen')
+    expect(conv('&Uuml;ber')).toBe('\u00dcber')
+    expect(conv('&eacute;t&eacute;')).toBe('\u00e9t\u00e9')
+    expect(conv('2&sup2;')).toBe('2\u00b2')
+    expect(conv('a &rarr; b')).toBe('a \u2192 b')
+    expect(conv('&frac12;')).toBe('\u00bd')
+    expect(carveToHtml(conv('&ouml;ffnen'))).toBe('<p>\u00f6ffnen</p>')
+  })
+
+  // The table is a chosen subset, not the full HTML5 set. A name outside it
+  // must stay literal rather than resolve to something else.
+  it('leaves a name outside the table literal', () => {
+    expect(conv('&angmsdaa;')).toBe('&angmsdaa;')
+  })
+
   it('replaces a NUL entity rather than emitting one', () => {
     for (const markdown of ['&#0;', '&#x0;']) {
       const carve = conv(markdown)
