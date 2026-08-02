@@ -352,6 +352,17 @@ function splitTableRow(row: string): string[] {
   return cells.map((c) => c.trim())
 }
 
+function unescapePipesInCodeSpans(row: string): string {
+  return protectCodeSpans(row, (span) => span.replace(/\\\|/g, '|'))
+}
+
+function isStandardTableRow(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return false
+  const cells = splitTableRow(trimmed)
+  return cells.some((cell) => cell !== '') || cells.length >= 2
+}
+
 /** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
 function alignMarker(cell: string): '' | '<' | '>' | '~' {
   const left = cell.startsWith(':')
@@ -579,7 +590,8 @@ export function markdownToCarve(markdown: string): string {
         if (aligns.length === headerCells.length) {
           let header = ''
           for (let c = 0; c < headerCells.length; c++) {
-            header += `|=${aligns[c] ?? ''} ${convertInline(headerCells[c]!)} `
+            const cell = convertInline(unescapePipesInCodeSpans(headerCells[c]!))
+            header += `|=${aligns[c] ?? ''} ${cell} `
           }
           header += '|'
           if (prevType !== 'blank' && out.length > 0) out.push('')
@@ -693,6 +705,7 @@ export function markdownToCarve(markdown: string): string {
     // Carve has no `+` bullet (it is the list-continuation marker); normalize a
     // Markdown `+` bullet to `-` so the converted list survives.
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
+    if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
     out.push(convertInline(body))
 
     if (isHeading && i + 1 < lines.length) {

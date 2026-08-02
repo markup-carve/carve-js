@@ -235,6 +235,41 @@ describe('markdownToCarve — GFM tables', () => {
     expect(conv(md)).toBe(['|= *Bold* |= /Under/ |', '| x | y |'].join('\n'))
   })
 
+  it('unescapes pipes inside body-row code spans', () => {
+    const md = ['| A | B |', '| --- | --- |', '| x | `\\| col \\|` |'].join('\n')
+    const carve = ['|= A |= B |', '| x | `| col |` |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain('<code>| col |</code>')
+  })
+
+  it('unescapes pipes inside header-row code spans', () => {
+    const md = ['| `\\| col \\|` | B |', '| --- | --- |', '| x | y |'].join('\n')
+    const carve = ['|= `| col |` |= B |', '| x | y |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain('<code>| col |</code>')
+  })
+
+  it('keeps escaped pipes outside code spans in table cells', () => {
+    const md = ['| A | B |', '| --- | --- |', '| x | a \\| b |'].join('\n')
+    const carve = ['|= A |= B |', '| x | a \\| b |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain('<td>a | b</td>')
+  })
+
+  it('keeps escaped pipes inside ordinary prose code spans', () => {
+    expect(conv('not a table `\\| col \\|`')).toBe('not a table `\\| col \\|`')
+  })
+
+  it('keeps escaped pipes inside fenced code blocks', () => {
+    const md = ['```', '| a | `\\| b \\|` |', '```'].join('\n')
+    expect(conv(md)).toBe(md)
+  })
+
+  it('unescapes pipes only inside code spans when a row mixes both forms', () => {
+    const md = ['| A | B |', '| --- | --- |', '| a \\| b | `c \\| d` |'].join('\n')
+    expect(conv(md)).toBe(['|= A |= B |', '| a \\| b | `c | d` |'].join('\n'))
+  })
+
   it('leaves a pipe-bearing paragraph alone when no delimiter row follows', () => {
     expect(conv('a | b | c')).toBe('a | b | c')
   })
