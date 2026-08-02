@@ -348,6 +348,66 @@ describe('markdownToCarve — code protection', () => {
   })
 })
 
+describe('markdownToCarve — HTML entities', () => {
+  it.each([
+    ['a&nbsp;b', `a\u00a0b`, '<p>a&nbsp;b</p>'],
+    ['a &amp; b', 'a & b', '<p>a &amp; b</p>'],
+    ['a &copy; b', 'a \u00a9 b', '<p>a \u00a9 b</p>'],
+    ['a &#8212; b', 'a \u2014 b', '<p>a \u2014 b</p>'],
+    ['a &#x2014; b', 'a \u2014 b', '<p>a \u2014 b</p>'],
+  ])('decodes %j once before rendering', (markdown, carve, html) => {
+    expect(conv(markdown)).toBe(carve)
+    expect(carveToHtml(carve)).toBe(html)
+  })
+
+  it('does not let decimal or hexadecimal numeric entities open a tag span', () => {
+    for (const markdown of ['a &#8212; b', 'a &#x2014; b']) {
+      const html = carveToHtml(conv(markdown))
+      expect(html).toContain('\u2014')
+      expect(html).not.toContain('<span class="tag">')
+    }
+  })
+
+  it.each([
+    ['a & b', 'a & b', '<p>a &amp; b</p>'],
+    ['AT&T', 'AT&T', '<p>AT&amp;T</p>'],
+    ['a &notanentity; b', 'a &notanentity; b', '<p>a &amp;notanentity; b</p>'],
+  ])('leaves non-entities unchanged for %j', (markdown, carve, html) => {
+    expect(conv(markdown)).toBe(carve)
+    expect(carveToHtml(carve)).toBe(html)
+  })
+
+  it('keeps entities literal inside code spans', () => {
+    const carve = conv('use `a&nbsp;b &amp; c` here')
+    expect(carve).toBe('use `a&nbsp;b &amp; c` here')
+    expect(carveToHtml(carve)).toBe('<p>use <code>a&amp;nbsp;b &amp;amp; c</code> here</p>')
+  })
+
+  it('keeps entities literal inside fenced code blocks', () => {
+    const markdown = ['```', 'a&nbsp;b &amp; c', '```'].join('\n')
+    expect(conv(markdown)).toBe(markdown)
+    expect(carveToHtml(conv(markdown))).toBe('<pre><code>a&amp;nbsp;b &amp;amp; c\n</code></pre>')
+  })
+
+  it('keeps entities literal inside indented code blocks', () => {
+    const markdown = '    a&nbsp;b &amp; c'
+    expect(conv(markdown)).toBe(markdown)
+    expect(carveToHtml(conv(markdown))).toBe('<p>a&amp;nbsp;b &amp;amp; c</p>')
+  })
+
+  it('escapes a decoded Carve delimiter so it renders literally', () => {
+    const carve = conv('a &ast;literal&ast; b and &#42;also&#42;')
+    expect(carve).toBe('a \\*literal\\* b and \\*also\\*')
+    expect(carveToHtml(carve)).toBe('<p>a *literal* b and *also*</p>')
+  })
+
+  it('decodes in one pass only', () => {
+    const carve = conv('a &amp;nbsp; b')
+    expect(carve).toBe('a &nbsp; b')
+    expect(carveToHtml(carve)).toBe('<p>a &amp;nbsp; b</p>')
+  })
+})
+
 describe('markdownToCarve — block spacing', () => {
   it('inserts a blank line before a heading following text', () => {
     expect(conv('text\n# Heading')).toBe('text\n\n# Heading')

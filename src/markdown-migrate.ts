@@ -99,6 +99,75 @@ const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   [/<i>([^<]+)<\/i>/gi, '/$1/'],
 ]
 
+const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = Object.freeze({
+  amp: '&',
+  apos: "'",
+  ast: '*',
+  brvbar: '\u00a6',
+  bull: '\u2022',
+  cent: '\u00a2',
+  copy: '\u00a9',
+  deg: '\u00b0',
+  divide: '\u00f7',
+  emdash: '\u2014',
+  emsp: '\u2003',
+  endash: '\u2013',
+  ensp: '\u2002',
+  euro: '\u20ac',
+  gt: '>',
+  hellip: '\u2026',
+  laquo: '\u00ab',
+  ldquo: '\u201c',
+  lsquo: '\u2018',
+  lt: '<',
+  mdash: '\u2014',
+  middot: '\u00b7',
+  nbsp: '\u00a0',
+  ndash: '\u2013',
+  para: '\u00b6',
+  plusmn: '\u00b1',
+  pound: '\u00a3',
+  quot: '"',
+  raquo: '\u00bb',
+  rdquo: '\u201d',
+  reg: '\u00ae',
+  rsquo: '\u2019',
+  sect: '\u00a7',
+  shy: '\u00ad',
+  thinsp: '\u2009',
+  times: '\u00d7',
+  trade: '\u2122',
+  yen: '\u00a5',
+})
+
+const RE_HTML_ENTITY = /&(?:#([0-9]+)|#[xX]([0-9A-Fa-f]+)|([A-Za-z][A-Za-z0-9]+));/g
+const RE_DECODED_CARVE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$:;?]/g
+
+function decodeCodePoint(n: number): string {
+  return n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)
+    ? String.fromCodePoint(n)
+    : '\ufffd'
+}
+
+function escapeDecodedForCarve(s: string): string {
+  return s.replace(RE_DECODED_CARVE_PUNCTUATION, '\\$&')
+}
+
+function decodeHtmlEntities(s: string): string {
+  return s.replace(
+    RE_HTML_ENTITY,
+    (match, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
+      const decoded =
+        dec !== undefined
+          ? decodeCodePoint(Number(dec))
+          : hex !== undefined
+            ? decodeCodePoint(Number.parseInt(hex, 16))
+            : NAMED_HTML_ENTITIES[named ?? '']
+      return decoded === undefined ? match : escapeDecodedForCarve(decoded)
+    },
+  )
+}
+
 /**
  * Replace every inline code span in `s` via `repl`, leaving everything else
  * untouched. A run of N backticks closes at the next run of *exactly* N
@@ -295,6 +364,8 @@ function convertInline(input: string): string {
   // skip carets that belong to footnote references (`[^x] … [^y]` must not
   // pair up as a superscript span across the line).
   line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
+
+  line = decodeHtmlEntities(line)
 
   // Restore stashes and protected spans until stable: a protected/stashed
   // span may itself contain placeholders (e.g. a reference-definition line
@@ -618,6 +689,12 @@ export function markdownToCarve(markdown: string): string {
     if (isBlank) {
       out.push(line)
       prevType = 'blank'
+      continue
+    }
+
+    if (indent >= 4 && (prevType === 'blank' || prevType === 'code')) {
+      out.push(line)
+      prevType = 'code'
       continue
     }
 
