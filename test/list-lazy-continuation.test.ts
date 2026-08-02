@@ -51,12 +51,15 @@ describe('list lazy continuation', () => {
   })
 
   it('a flush-left bare div fence does not close an item-local opener', () => {
-    expect(html('- :::\n:::')).toBe('<ul>\n  <li>:::</li>\n</ul>\n<p>:::</p>')
+    expect(html('- :::\n:::')).toBe(
+      '<ul>\n  <li>\n    <div>\n    </div>\n  </li>\n</ul>\n<div>\n</div>',
+    )
   })
 
   it('a flush-left div closer ends lazy continuation after an item-local typed opener', () => {
     expect(html('- ::: note\nbody\n:::')).toBe(
-      '<ul>\n  <li>::: note\nbody</li>\n</ul>\n<p>:::</p>',
+      '<ul>\n  <li>\n    <aside class="admonition note">\n      <p>body</p>\n' +
+        '    </aside>\n  </li>\n</ul>\n<div>\n</div>',
     )
   })
 

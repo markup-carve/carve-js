@@ -95,7 +95,11 @@ describe('admonition title (§12)', () => {
   it('a typed opener followed by an unquoted word is not a fence (strict)', () => {
     // Only a quoted title may follow the type; any other trailing text
     // makes the line an ordinary paragraph (strict djot).
-    expect(h('::: note hello\nBody.\n:::')).toBe('<p>::: note hello\nBody.\n:::</p>')
+    // The opener is still not a fence; the trailing bare `:::` is its own
+    // container, closed at end of file (carve#439).
+    expect(h('::: note hello\nBody.\n:::')).toBe(
+      '<p>::: note hello\nBody.</p>\n<div>\n</div>',
+    )
   })
 
   it('renders no title element when the opener has only a type', () => {
@@ -116,7 +120,6 @@ describe('admonition title (§12)', () => {
       const html = h(`${src}\nBody.\n:::`)
       expect(html.startsWith('<p>')).toBe(true)
       expect(html).not.toContain('<aside')
-      expect(html).not.toContain('<div')
     }
   })
 

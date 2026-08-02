@@ -42,8 +42,9 @@ describe('::: fence-length nesting', () => {
     expect(out).toContain('<aside class="admonition tip">')
   })
 
-  it('a lone unclosed :::: stays literal', () => {
-    expect(h('a\n\n::::\n\nb')).toBe('<p>a</p>\n<p>::::</p>\n<p>b</p>')
+  it('a lone unclosed :::: closes at end of file', () => {
+    // carve#439: closed at EOF, so the trailing content is inside the div.
+    expect(h('a\n\n::::\n\nb')).toBe('<p>a</p>\n<div>\n  <p>b</p>\n</div>')
   })
 
   it('a plain 3-colon block is unchanged', () => {

@@ -171,7 +171,11 @@ describe('lintCarve — legacy raw fence', () => {
 
 describe('lintCarve — block marker leaked as text', () => {
   it('flags a ::: fence that parsed as a paragraph', () => {
-    const w = lintCarve(':::note\nbody')
+    // `:::note` now OPENS (closed at end of file since carve#439), so the input
+    // that used to leak no longer does. An inline-attribute opener is still not
+    // a fence (strict djot), which keeps this rule reachable - without a case
+    // that still leaks, the rule would be a check that cannot fail.
+    const w = lintCarve('::: {.x #y}\nbody')
     expect(w.map((x) => x.rule)).toEqual(['block-marker-as-text'])
     expect(w[0]!.message).toContain(':::')
   })

@@ -24,27 +24,31 @@ describe('generic divs', () => {
 
   it('an inline-attribute opener is not a div (strict djot)', () => {
     // `::: {…}` / `:::{…}` on the fence line is a paragraph, not a div (its
-    // inline content is then parsed as prose).
+    // inline content is then parsed as prose). The trailing bare `:::` is a
+    // separate, empty container since carve#439 - an opener with no closer is
+    // closed at end of file - so only the OPENER's strictness is asserted here.
     for (const src of ['::: {.x #y}', ':::{.x junk}']) {
       const html = h(`${src}\nz\n:::`)
       expect(html.startsWith('<p>')).toBe(true)
-      expect(html).not.toContain('<div')
+      expect(html).toContain('z</p>')
     }
   })
 
-  it('does NOT open a div for a stray, unclosed ::: after prose', () => {
-    // Regression: a lone `:::` must not swallow the rest of the document.
-    // Matches djot + carve-php: it stays paragraph text.
-    expect(h('before\n:::\nafter')).toBe('<p>before\n:::\nafter</p>')
+  it('opens a div for a stray ::: after prose and closes it at end of file', () => {
+    // carve#439: an unclosed container is closed at EOF, matching djot, rather
+    // than degrading the rest of the document to literal text. Degradation was
+    // the louder failure, and exact-length closers make a mistyped closer more
+    // likely, so the two changes ship together.
+    expect(h('before\n:::\nafter')).toBe('<p>before</p>\n<div>\n  <p>after</p>\n</div>')
   })
 
-  it('keeps a trailing unclosed ::: literal', () => {
-    expect(h('text\n:::')).toBe('<p>text\n:::</p>')
+  it('closes a trailing ::: at end of file, as an empty div', () => {
+    expect(h('text\n:::')).toBe('<p>text</p>\n<div>\n</div>')
   })
 
-  it('does not hang or open a div on a nested stray ::: ', () => {
+  it('closes an unclosed ::: inside a quote at the end of the quote', () => {
     expect(h('> before\n> :::\n> after')).toBe(
-      '<blockquote><p>before\n:::\nafter</p></blockquote>',
+      '<blockquote>\n  <p>before</p>\n  <div>\n    <p>after</p>\n  </div>\n</blockquote>',
     )
   })
 
@@ -108,7 +112,9 @@ describe('hard-break block (::: \\)', () => {
     )
   })
 
-  it('does not open without a closer (opener stays literal text)', () => {
-    expect(h('::: \\\none\ntwo')).toBe('<p>::: <br>\none\ntwo</p>')
+  it('opens without a closer and ends at end of file', () => {
+    expect(h('::: \\\none\ntwo')).toBe(
+      '<div class="hardbreaks">\n  <p>one<br>\ntwo</p>\n</div>',
+    )
   })
 })

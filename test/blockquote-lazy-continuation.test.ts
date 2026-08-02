@@ -46,15 +46,17 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   })
 
   it('a flush-left bare div fence ends lazy quote continuation even without a closer', () => {
-    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<p>:::</p>')
+    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
   })
 
   it('a flush-left typed div fence ends lazy quote continuation even without a closer', () => {
-    expect(html('> a\n::: note')).toBe('<blockquote><p>a</p></blockquote>\n<p>::: note</p>')
+    expect(html('> a\n::: note')).toBe(
+      '<blockquote><p>a</p></blockquote>\n<aside class="admonition note">\n\n</aside>',
+    )
   })
 
   it('a flush-left longer div fence ends lazy quote continuation even without a closer', () => {
-    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<p>::::</p>')
+    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
   })
 
   it('a caption attaches to the quote rather than folding in', () => {
@@ -110,7 +112,8 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     // carve-php/carve-rs still open an empty aside here — tracked for a spec
     // decision + alignment.)
     expect(html('> :::note\nbody\n> :::')).toBe(
-      '<blockquote><p>:::note</p></blockquote>\n<p>body</p>\n<blockquote><p>:::</p></blockquote>',
+      '<blockquote>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n' +
+        '<p>body</p>\n<blockquote>\n  <div>\n  </div>\n</blockquote>',
     )
   })
 

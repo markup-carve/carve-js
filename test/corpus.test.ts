@@ -203,6 +203,28 @@ const IMPLEMENTED = new Set([
 
 const baseSlug = (name: string) => name.replace(/-\d+$/, '')
 
+/**
+ * Fixtures this engine deliberately renders differently from the PINNED spec,
+ * because the engine landed a decided change first (carve#439: container
+ * closers must match their opener's width exactly, and an unclosed container is
+ * closed at end of file instead of degrading to literal text).
+ *
+ * These are asserted to STILL DIFFER, not skipped. A skip would go quietly
+ * stale the moment the spec bump lands; this fails instead, which is what
+ * forces the name out of the list.
+ */
+const AHEAD_OF_SPEC = new Set([
+  '114-fence-opener-with-a-nested-list-body-inside-a-list-item-5',
+  '114-fence-opener-with-a-nested-list-body-inside-a-list-item-6',
+  '159-below-content-column-div-body-in-a-list-item-stays-literal',
+  '24-generic-divs-2',
+  '24-generic-divs-4',
+  '41-line-blocks-5',
+  '79-paragraph-interruption-11',
+  '79-paragraph-interruption-19',
+])
+
+
 const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
@@ -245,7 +267,14 @@ describe('spec corpus', () => {
     const expected = readFileSync(htmlPath, 'utf8')
     const allowlisted = IMPLEMENTED.has(name) || IMPLEMENTED.has(baseSlug(name))
 
-    if (allowlisted) {
+    if (AHEAD_OF_SPEC.has(name)) {
+      it(`${name} (ahead of the pinned spec, carve#439)`, () => {
+        expect(
+          carveToHtml(source).trim(),
+          'this fixture now MATCHES the pinned spec - drop it from AHEAD_OF_SPEC',
+        ).not.toBe(expected.trim())
+      })
+    } else if (allowlisted) {
       it(`${name}`, () => {
         const actual = carveToHtml(source)
         expect(actual.trim()).toBe(expected.trim())

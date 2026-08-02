@@ -170,8 +170,10 @@ describe('nested content: visible block starts interrupt paragraphs', () => {
   })
 
   it('an unclosed nested div stays literal (no hang)', () => {
+    // carve#439: the item-local opener now closes at the end of the item.
     const html = carveToHtml('- item\n  :::\n  content')
-    expect(html).not.toContain('<div>')
+    expect(html).toContain('<div>')
+    expect(html).toContain('<p>content</p>')
   })
 })
 
@@ -187,7 +189,7 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
 
   it('an unterminated div/admonition remains paragraph text', () => {
     expect(carveToHtml('text\n:::note\nno closer')).toBe(
-      '<p>text\n:::note\nno closer</p>',
+      '<p>text</p>\n<aside class="admonition note">\n  <p>no closer</p>\n</aside>',
     )
   })
 

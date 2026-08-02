@@ -33,7 +33,7 @@ describe('Severity-1 robustness', () => {
     // grammar: `admonition = open … close`; no closer ahead → literal, like a
     // bare unterminated `:::` (PART 9 §12).
     expect(carveToHtml('intro\n\n::: note\nbody\n\nmore\n')).toBe(
-      '<p>intro</p>\n<p>::: note\nbody</p>\n<p>more</p>',
+      '<p>intro</p>\n<aside class="admonition note">\n  <p>body</p>\n  <p>more</p>\n</aside>',
     )
   })
 
