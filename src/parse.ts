@@ -87,6 +87,21 @@ export interface ParseOptions {
    * be passed here; `carveToHtml` forwards them automatically.
    */
   extensions?: CarveExtension[]
+  /**
+   * Called for each colon-fence container opener that is still open when its
+   * containing parse reaches end of input. This reports parser state that is
+   * intentionally not serialized into the AST.
+   */
+  onUnclosedContainer?: (container: UnclosedContainer) => void
+}
+
+export interface UnclosedContainer {
+  kind: 'div' | 'admonition' | 'line block' | 'hard-break block'
+  line: number
+  column: number
+  startOffset: number
+  endOffset: number
+  fenceWidth: number
 }
 
 // Active extension matchers for the current parse() call. A module-level hook
@@ -370,6 +385,8 @@ class Lexer {
   frontmatter?: { format: string; content: string; pos?: Position }
   /** Format applied to a bare `---` fence; set from ParseOptions. */
   defaultFrontmatterFormat = 'yaml'
+  parseOptions: ParseOptions
+  unclosedContainerKeys: Set<string> | undefined
   abbrDefs: Map<string, string> = new Map()
   linkDefs: Map<string, { href: string; title?: string }> = new Map()
   // Footnote definitions keyed by raw label; value is the parsed note
@@ -397,7 +414,14 @@ class Lexer {
   // openers carry distinct widths.
   commentFenceLastIndex: Map<number, number> | undefined = undefined
 
-  constructor(source: string, opts: ParseOptions = {}, lineNumberOffset = 0) {
+  constructor(
+    source: string,
+    opts: ParseOptions = {},
+    lineNumberOffset = 0,
+    unclosedContainerKeys?: Set<string>,
+  ) {
+    this.parseOptions = opts
+    this.unclosedContainerKeys = unclosedContainerKeys
     this.lineNumberOffset = lineNumberOffset
     this.defaultFrontmatterFormat = opts.defaultFrontmatterFormat ?? 'yaml'
     this.lines = source.replace(/\r\n?/g, '\n').split('\n')
@@ -485,6 +509,15 @@ class Lexer {
   lineNumber(lineIndex: number): number {
     return this.sourceLineMap?.[lineIndex] ?? this.lineNumberOffset + lineIndex + 1
   }
+
+  reportUnclosedContainer(container: UnclosedContainer): void {
+    if (!this.hasDocumentOffsets) return
+    const seen = this.unclosedContainerKeys
+    const key = `${container.startOffset}:${container.endOffset}`
+    if (seen?.has(key)) return
+    seen?.add(key)
+    this.parseOptions.onUnclosedContainer?.(container)
+  }
 }
 
 function normalizedSourceLines(source: string): string[] {
@@ -498,8 +531,9 @@ function subLexer(
   opts: ParseOptions,
   lineNumberOffset: number,
   sourceLineMap?: number[],
+  unclosedContainerKeys?: Set<string>,
 ): Lexer {
-  const sub = new Lexer(source, opts, lineNumberOffset)
+  const sub = new Lexer(source, opts, lineNumberOffset, unclosedContainerKeys)
   if (sourceLineMap) sub.sourceLineMap = sourceLineMap
   return sub
 }
@@ -512,9 +546,10 @@ function nestedSubLexer(
 ): Lexer {
   const sub = subLexer(
     source,
-    {},
+    parent.parseOptions,
     parent.lineNumberOffset + startLineIndex,
     sourceLineMap ?? normalizedSourceLines(source).map((_line, i) => parent.lineNumber(startLineIndex + i)),
+    parent.unclosedContainerKeys,
   )
   sub.abbrDefs = parent.abbrDefs
   sub.linkDefs = parent.linkDefs
@@ -716,7 +751,12 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
   // byte never reaches output (decided cross-impl behavior; WHATWG-style).
   if (source.includes('\0')) source = source.replace(/\0/g, '�')
-  const lexer = new Lexer(source, opts)
+  const lexer = new Lexer(
+    source,
+    opts,
+    0,
+    opts.onUnclosedContainer ? new Set<string>() : undefined,
+  )
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
   lexer.consumeFrontmatter()
@@ -777,7 +817,13 @@ function parseBlockSource(source: string, opts: ParseOptions, root: Lexer): Bloc
     sourceLines.every((line, i) => root.lines[anchor + i] === line)
       ? sourceLines.map((_line, i) => root.lineNumber(anchor + i))
       : undefined
-  const sub = subLexer(source, opts, root.lineNumberOffset + anchor, sourceLineMap)
+  const sub = subLexer(
+    source,
+    opts,
+    root.lineNumberOffset + anchor,
+    sourceLineMap,
+    root.unclosedContainerKeys,
+  )
   if (!sourceLineMap) sub.suppressPositions = true
   // Propagate nesting depth so MAX_NESTING_DEPTH still bounds extension-owned
   // recursion (a self-recursive container matcher would otherwise stack-overflow).
@@ -1733,7 +1779,11 @@ function parseAdmonition(lexer: Lexer): Admonition {
   // Optional inert grouping `[label]` (PART 9 §12): a group extension (tabs)
   // uses it as the tab name; core does not render it.
   const label = m[4] !== undefined ? m[4]!.slice(1, -1) : undefined
-  const inner = collectColonFenceBody(lexer, fence)
+  const inner = collectColonFenceBody(lexer, {
+    kind: 'admonition',
+    lineIndex: openLineIndex,
+    fenceWidth: fence,
+  })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
@@ -1794,6 +1844,24 @@ interface ColonFenceBodyLine {
   lineIndex: number
 }
 
+interface ColonFenceOpener {
+  kind: UnclosedContainer['kind']
+  lineIndex: number
+  fenceWidth: number
+}
+
+function unclosedContainerFromOpener(lexer: Lexer, opener: ColonFenceOpener): UnclosedContainer {
+  const startOffset = lexer.lineOffset(opener.lineIndex)
+  return {
+    kind: opener.kind,
+    line: lexer.lineNumber(opener.lineIndex),
+    column: lexer.lineStartColumn(opener.lineIndex),
+    startOffset,
+    endOffset: startOffset + opener.fenceWidth,
+    fenceWidth: opener.fenceWidth,
+  }
+}
+
 function colonFenceOpenerLen(line: string): number | null {
   const m =
     RE_DIV_OPEN.exec(line) ??
@@ -1801,6 +1869,13 @@ function colonFenceOpenerLen(line: string): number | null {
     RE_LINE_BLOCK_OPEN.exec(line) ??
     RE_HARDBREAKS_OPEN.exec(line)
   return m ? m[1]!.length : null
+}
+
+function colonFenceKind(line: string): UnclosedContainer['kind'] {
+  if (RE_LINE_BLOCK_OPEN.test(line)) return 'line block'
+  if (RE_HARDBREAKS_OPEN.test(line)) return 'hard-break block'
+  if (RE_ADMONITION_OPEN.test(line)) return 'admonition'
+  return 'div'
 }
 
 function consumeOpaqueColonFenceBodySpan(
@@ -1848,9 +1923,9 @@ function consumeOpaqueColonFenceBodySpan(
   return false
 }
 
-function collectColonFenceBody(lexer: Lexer, fence: number): ColonFenceBodyLine[] {
+function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
   const lines: ColonFenceBodyLine[] = []
-  const stack = [fence]
+  const stack: ColonFenceOpener[] = [opener]
   let paragraphOpen: boolean = false
 
   while (!lexer.eof()) {
@@ -1863,7 +1938,7 @@ function collectColonFenceBody(lexer: Lexer, fence: number): ColonFenceBodyLine[
     }
     const close = RE_ADMONITION_CLOSE.exec(text)
 
-    if (close && close[1]!.length === stack[stack.length - 1]) {
+    if (close && close[1]!.length === stack[stack.length - 1]?.fenceWidth) {
       lexer.consume()
       stack.pop()
       if (stack.length === 0) break
@@ -1876,32 +1951,47 @@ function collectColonFenceBody(lexer: Lexer, fence: number): ColonFenceBodyLine[
     lines.push({ text, lineIndex })
     const openerLen = colonFenceOpenerLen(text)
     if (openerLen !== null) {
-      stack.push(openerLen)
+      stack.push({
+        kind: colonFenceKind(text),
+        lineIndex,
+        fenceWidth: openerLen,
+      })
       paragraphOpen = false
       continue
     }
     paragraphOpen = !isBlankLine(text) && !interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))
   }
 
+  for (const unclosed of stack) {
+    lexer.reportUnclosedContainer(unclosedContainerFromOpener(lexer, unclosed))
+  }
   return lines
 }
 
-function collectLiteralColonFenceBody(lexer: Lexer, fence: number): ColonFenceBodyLine[] {
+function collectLiteralColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFenceBodyLine[] {
   const lines: ColonFenceBodyLine[] = []
+  let closed = false
 
   while (!lexer.eof()) {
     const lineIndex = lexer.pos
     const text = lexer.peek()!
     const close = RE_ADMONITION_CLOSE.exec(text)
     lexer.consume()
-    if (close && close[1]!.length === fence) break
+    if (close && close[1]!.length === opener.fenceWidth) {
+      closed = true
+      break
+    }
     lines.push({ text, lineIndex })
   }
 
+  if (!closed) {
+    lexer.reportUnclosedContainer(unclosedContainerFromOpener(lexer, opener))
+  }
   return lines
 }
 
 function parseLineBlock(lexer: Lexer): LineBlock {
+  const openLineIndex = lexer.pos
   const open = lexer.consume()
   const m = RE_LINE_BLOCK_OPEN.exec(open)!
   const fence = m[1]!.length
@@ -1921,7 +2011,11 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   }
   const stanzas: StanzaLine[][] = []
   let stanza: StanzaLine[] = []
-  for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, fence)) {
+  for (const { text: ln, lineIndex } of collectLiteralColonFenceBody(lexer, {
+    kind: 'line block',
+    lineIndex: openLineIndex,
+    fenceWidth: fence,
+  })) {
     if (isBlankLine(ln)) {
       if (stanza.length) {
         stanzas.push(stanza)
@@ -2019,7 +2113,11 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
   const openLineIndex = lexer.pos
   const m = RE_HARDBREAKS_OPEN.exec(lexer.consume())!
   const fence = m[1]!.length
-  const inner = collectColonFenceBody(lexer, fence)
+  const inner = collectColonFenceBody(lexer, {
+    kind: 'hard-break block',
+    lineIndex: openLineIndex,
+    fenceWidth: fence,
+  })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
   const children = parseBlocks(subLexer, 0)
   for (const child of children) {
@@ -2049,7 +2147,11 @@ function parseDiv(lexer: Lexer): Div {
   const fence = m[1]!.length
   // Optional inert grouping `[label]` on a typeless div (`::: [First]`).
   const label = m[2] !== undefined ? m[2]!.slice(1, -1) : undefined
-  const inner = collectColonFenceBody(lexer, fence)
+  const inner = collectColonFenceBody(lexer, {
+    kind: 'div',
+    lineIndex: openLineIndex,
+    fenceWidth: fence,
+  })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
   // No inline opener attributes (strict djot): a bare `:::` carries none;
   // a preceding block-attribute line attaches them in parseBlocks.
