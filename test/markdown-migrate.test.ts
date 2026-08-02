@@ -181,6 +181,145 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 })
 
+describe('markdownToCarve — multiline paragraph inline mapping', () => {
+  it('converts strong spanning a line break without changing the break', () => {
+    const carve = conv('a **b\nc** d')
+    expect(carve).toBe('a *b\nc* d')
+    expect(carveToHtml(carve)).toBe('<p>a <strong>b\nc</strong> d</p>')
+  })
+
+  it('converts emphasis spanning a line break without becoming Carve strong', () => {
+    const carve = conv('a *it\nb* c')
+    expect(carve).toBe('a /it\nb/ c')
+    expect(carveToHtml(carve)).toBe('<p>a <em>it\nb</em> c</p>')
+  })
+
+  it('converts strikethrough spanning a line break', () => {
+    const carve = conv('a ~~s\nt~~ c')
+    expect(carve).toBe('a ~s\nt~ c')
+    expect(carveToHtml(carve)).toBe('<p>a <s>s\nt</s> c</p>')
+  })
+
+  it('does not convert emphasis across a blank line', () => {
+    const carve = conv('a *it\n\nb* c')
+    expect(carve).toBe('a *it\n\nb* c')
+    expect(carveToHtml(carve)).toBe('<p>a *it</p>\n<p>b* c</p>')
+  })
+
+  it('keeps a code span spanning a line break verbatim', () => {
+    const carve = conv('a `*x\n_y_` b')
+    expect(carve).toBe('a `*x\n_y_` b')
+    expect(carveToHtml(carve)).toBe('<p>a <code>*x\n_y_</code> b</p>')
+  })
+
+  it('keeps fenced code with multiline delimiter pairs untouched', () => {
+    const md = ['```', 'a **b', 'c** d', '```'].join('\n')
+    expect(conv(md)).toBe(md)
+    expect(carveToHtml(conv(md))).toBe('<pre><code>a **b\nc** d\n</code></pre>')
+  })
+
+  it('converts a link whose label wraps across a line', () => {
+    const carve = conv('[a\nb](/u)')
+    expect(carve).toBe('[a\nb](/u)')
+    expect(carveToHtml(carve)).toBe('<p><a href="/u">a\nb</a></p>')
+  })
+
+  it('does not let emphasis leak across table row boundaries', () => {
+    const md = ['| *a | b |', '| c | d* |', '| **x** | *y* |', '| **z** | *w* |'].join('\n')
+    const carve = ['| *a | b |', '| c | d* |', '| *x* | /y/ |', '| *z* | /w/ |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain('<tr><td><strong>x</strong></td><td><em>y</em></td></tr>')
+  })
+
+  it('preserves line count and leading whitespace in a multiline paragraph', () => {
+    const md = '  a **b\n    c** d\n\t*e\n\tf*'
+    const carve = conv(md)
+    expect(carve).toBe('  a *b\n    c* d\n\t/e\n\tf/')
+    expect(carve.split('\n')).toHaveLength(md.split('\n').length)
+    expect(carve.split('\n').map((line) => line.match(/^[ \t]*/)?.[0])).toEqual(
+      md.split('\n').map((line) => line.match(/^[ \t]*/)?.[0]),
+    )
+  })
+})
+
+describe('markdownToCarve — prefixed multiline inline mapping', () => {
+  it('converts strong across a wrapped list item without changing indentation', () => {
+    const md = '- **strong\n  text** end'
+    const carve = conv(md)
+    expect(carve).toBe('- *strong\n  text* end')
+    expect(carveToHtml(carve)).toContain('<strong>strong\ntext</strong> end')
+  })
+
+  it('converts wrapped list-item Markdown emphasis to Carve emphasis', () => {
+    const md = '- *italic\n  text* end'
+    const carve = conv(md)
+    expect(carve).toBe('- /italic\n  text/ end')
+    expect(carveToHtml(carve)).toContain('<em>italic\ntext</em> end')
+  })
+
+  it('keeps adjacent list items as independent inline runs', () => {
+    const md = ['- **open', '- **closed**'].join('\n')
+    const carve = conv(md)
+    expect(carve).toBe(['- **open', '- *closed*'].join('\n'))
+    expect(carveToHtml(carve)).toContain('<li>**open</li>')
+    expect(carveToHtml(carve)).toContain('<li><strong>closed</strong></li>')
+  })
+
+  it('keeps nested list items as their own inline runs', () => {
+    const md = ['- parent **only**', '  - nested **wrap', '    here**'].join('\n')
+    const carve = conv(md)
+    expect(carve).toBe(['- parent *only*', '  - nested *wrap', '    here*'].join('\n'))
+    expect(carveToHtml(carve)).toContain('<li>parent <strong>only</strong>')
+    expect(carveToHtml(carve)).toContain('<li>nested <strong>wrap\nhere</strong></li>')
+  })
+
+  it('converts wrapped blockquote emphasis while preserving quote prefixes', () => {
+    const md = ['> **quoted', '> body** end'].join('\n')
+    const carve = conv(md)
+    expect(carve).toBe(['> *quoted', '> body* end'].join('\n'))
+    expect(carveToHtml(carve)).toBe('<blockquote><p><strong>quoted\nbody</strong> end</p></blockquote>')
+  })
+
+  it('leaves a fenced code block inside a list item untouched', () => {
+    const md = ['- item', '  ```', '  **no**', '  ```'].join('\n')
+    const carve = conv(md)
+    expect(carve).toBe(['- item', '', '  ```', '  **no**', '  ```'].join('\n'))
+    expect(carveToHtml(carve)).toContain('<pre><code>**no**\n</code></pre>')
+  })
+
+  it('round-trips the wrapped accumulation documentation snippet', () => {
+    const md = [
+      '- *Accumulation:* consecutive attribute lines merge in source order —',
+      '  `id` last-wins, `key=value` last-wins per key, and **classes',
+      '  accumulate** (no de-duplication):',
+    ].join('\n')
+    const carve = [
+      '- /Accumulation:/ consecutive attribute lines merge in source order —',
+      '  `id` last-wins, `key=value` last-wins per key, and *classes',
+      '  accumulate* (no de-duplication):',
+    ].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain(
+      '<em>Accumulation:</em> consecutive attribute lines merge in source order',
+    )
+    expect(carveToHtml(carve)).toContain('<strong>classes\naccumulate</strong>')
+  })
+
+  it('round-trips the wrapped back-links documentation snippet', () => {
+    const md = [
+      '- *Back-links are mandated.* The anchor sits on the **per-key rendered',
+      '  item**, not on the `citation-group` element, ...',
+    ].join('\n')
+    const carve = [
+      '- /Back-links are mandated./ The anchor sits on the *per-key rendered',
+      '  item*, not on the `citation-group` element, ...',
+    ].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain('<em>Back-links are mandated.</em>')
+    expect(carveToHtml(carve)).toContain('<strong>per-key rendered\nitem</strong>')
+  })
+})
+
 describe('markdownToCarve — HTML inline tags', () => {
   it('converts <em>/<i> to /x/', () => {
     expect(conv('<em>a</em> <i>b</i>')).toBe('/a/ /b/')
