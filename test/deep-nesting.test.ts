@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { parse, carveToHtml, carveToCarve, renderCarve, fromAstJson, type AstJsonBlock } from '../src/index.js'
+import {
+  AstJsonDepthError,
+  carveToCarve,
+  carveToHtml,
+  fromAstJson,
+  parse,
+  renderCarve,
+  type AstJsonBlock,
+} from '../src/index.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -63,13 +71,40 @@ describe('the canonical writer survives deep container nesting', () => {
   })
 })
 
-describe('the canonical writer respects the render depth cap', () => {
-  it('does not size a fence from containers past MAX_RENDER_DEPTH', () => {
-    // A hand-built AST (an --from-json document) can nest far past the depth
-    // the parser allows. renderBlock emits nothing past the cap, so counting
-    // those levels would emit a fence sized for output that never appears.
+describe('the reader refuses a payload deeper than the parser can produce', () => {
+  it('throws a typed error rather than exhausting the stack', () => {
+    // The guard's contract, from the direction the writer test used to cover by
+    // accident: a payload this deep cannot round trip anyway, because the
+    // renderers stop at MAX_RENDER_DEPTH and drop everything below it.
     let node: AstJsonBlock = { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }] }
     for (let i = 0; i < 1000; i++) node = { type: 'div', children: [node] }
+
+    expect(() => fromAstJson({ type: 'doc', children: [node] })).toThrow(AstJsonDepthError)
+  })
+
+  it('accepts a payload at the cap', () => {
+    // The boundary matters: a cap that rejected its own maximum would make the
+    // parser's deepest output unreadable, which is the defect carve-rs#389 was.
+    let node: AstJsonBlock = { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }] }
+    for (let i = 0; i < 300; i++) node = { type: 'div', children: [node] }
+
+    expect(() => fromAstJson({ type: 'doc', children: [node] })).not.toThrow()
+  })
+})
+
+describe('the canonical writer respects the render depth cap', () => {
+  it('does not size a fence from containers past MAX_RENDER_DEPTH', () => {
+    // A hand-built AST (an --from-json document) can nest past the depth the
+    // parser allows. renderBlock emits nothing past MAX_RENDER_DEPTH, so
+    // counting those levels would emit a fence sized for output that never
+    // appears.
+    //
+    // 300 sits deliberately between the two caps: above MAX_RENDER_DEPTH, so
+    // the writer's cap is exercised, and below MAX_AST_JSON_DEPTH, so the
+    // reader accepts the payload. It used to be 1000, which the reader now
+    // rejects outright - see the case below, which pins that rejection.
+    let node: AstJsonBlock = { type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }] }
+    for (let i = 0; i < 300; i++) node = { type: 'div', children: [node] }
     const doc = fromAstJson({ type: 'doc', children: [node] })
 
     const started = Date.now()
