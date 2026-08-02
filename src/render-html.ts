@@ -677,6 +677,25 @@ function renderAttrs2(
   return renderAttrs(a)
 }
 
+function renderLeadingBaseClassAttrs(attrs: Attrs | undefined, baseClass: string): string {
+  const a = attrs?.order?.includes('.class')
+    ? {
+        ...attrs,
+        order: ['.class', ...attrs.order.filter((slot) => slot !== '.class')],
+      }
+    : attrs
+  return renderAttrs2(a, { baseClass })
+}
+
+function renderSocialLinkAttrs(
+  attrs: Attrs | undefined,
+  baseClass: 'mention' | 'tag',
+  href: string,
+): string {
+  const rendered = renderLeadingBaseClassAttrs(stripKeyValue(attrs, 'href'), baseClass)
+  return rendered.replace(/^ class="[^"]*"/, `$& href="${escapeAttr(href)}"`)
+}
+
 /** Build the block-extension render context for a given level. Carries the
  *  active `mode` and `renderers` so a `renderStatic` impl can branch. */
 function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderContext {
@@ -1335,19 +1354,25 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     case 'mention': {
       const text = `@${escapeHtml(node.user)}`
       if (!opts.mentionUrl)
-        return `<span class="mention"><strong>${text}</strong></span>`
+        return `<span${renderLeadingBaseClassAttrs(node.attrs, 'mention')}><strong>${text}</strong></span>`
       // Canonical placeholder is `{name}` (matching tags and carve-php);
       // `{user}` stays as a legacy alias.
       const enc = encodeURIComponent(node.user)
-      const href = sanitizeUrl(opts.mentionUrl.replaceAll('{name}', enc).replaceAll('{user}', enc), opts)
-      return `<a class="mention" href="${escapeAttr(href)}">${text}</a>`
+      const href = sanitizeUrl(
+        opts.mentionUrl.replaceAll('{name}', enc).replaceAll('{user}', enc),
+        opts,
+      )
+      return `<a${renderSocialLinkAttrs(node.attrs, 'mention', href)}>${text}</a>`
     }
     case 'tag': {
       const text = `#${escapeHtml(node.name)}`
       if (!opts.tagUrl)
-        return `<span class="tag"><strong>${text}</strong></span>`
-      const href = sanitizeUrl(opts.tagUrl.replaceAll('{name}', encodeURIComponent(node.name)), opts)
-      return `<a class="tag" href="${escapeAttr(href)}">${text}</a>`
+        return `<span${renderLeadingBaseClassAttrs(node.attrs, 'tag')}><strong>${text}</strong></span>`
+      const href = sanitizeUrl(
+        opts.tagUrl.replaceAll('{name}', encodeURIComponent(node.name)),
+        opts,
+      )
+      return `<a${renderSocialLinkAttrs(node.attrs, 'tag', href)}>${text}</a>`
     }
     case 'inline_extension': {
       // Per-extension resolution in registration order (mirrors the block
