@@ -25,6 +25,7 @@
  */
 
 import type { BlockNode, Document, Position } from './ast.js'
+import { MAX_NESTING_DEPTH } from './parse.js'
 import {
   entriesFromWire,
   entriesToWire,
@@ -215,7 +216,97 @@ export function toAstJson(doc: Document): AstJsonDocument {
  * left alone rather than adopted, so a malformed document degrades to "an
  * unrecognized node" instead of throwing halfway through a conversion.
  */
+/**
+ * Thrown when an ingested AST nests deeper than the reader will follow.
+ *
+ * A typed error rather than whatever the runtime does on its own: without this
+ * a deep payload walked until the JS call stack ran out and surfaced a
+ * `RangeError`, at a depth that varies by engine and by how much stack the
+ * caller had already used (carve-js#498).
+ */
+export class AstJsonDepthError extends Error {
+  constructor(readonly depth: number) {
+    super(
+      `AST nests ${depth} levels, deeper than the reader's cap of ${MAX_AST_JSON_DEPTH}`,
+    )
+    this.name = 'AstJsonDepthError'
+  }
+}
+
+/**
+ * Deepest node nesting `fromAstJson` will ingest.
+ *
+ * PART 12 §9 states the contract as a property, not a number: ingest MUST
+ * accept anything this engine's own parser can produce at `MAX_NESTING_DEPTH`,
+ * and MUST refuse deeper input with an error of its own rather than a
+ * `RangeError` at whatever depth the JS stack happens to give out.
+ *
+ * Counted in NODES, and the number is DERIVED from the worst per-level cost of
+ * the encoding, never restated from the parser's cap. The parser counts
+ * CONTAINER nesting; a container costs a different number of nodes depending on
+ * which container it is:
+ *
+ * - a div or blockquote is one node per level
+ * - a LIST is two - the list and its item
+ *
+ * Measured at the parser's cap of 200: div ladder 202 nodes, blockquote chain
+ * 202, table under a deep chain 201, and a LIST LADDER 402. A cap derived as
+ * "the parser's number plus a small margin" therefore rejects a document the
+ * parser just produced - which is how carve-rs#389 happened, and what the first
+ * draft of this constant (`MAX_NESTING_DEPTH + 8`) did to a 200-deep list.
+ *
+ * So: three nodes per level, which covers the two-node list with room for a
+ * container that costs more, plus a constant for the innermost leaf. That
+ * lands far below the depth where the decoder's own recursion gives out
+ * (measured: 1500 levels decode, 2000 raise a RangeError), so the typed error
+ * always wins the race against the stack.
+ */
+export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
+
+/** The child-bearing fields, `target` included, each named exactly once. */
+const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, 'target'])]
+
+/**
+ * Node depth of a payload, measured with an EXPLICIT STACK.
+ *
+ * Deliberately not recursive: this exists to reject input too deep to recurse
+ * over, so measuring it by recursion would overflow on exactly the payload it
+ * is meant to refuse. Stops as soon as the cap is exceeded rather than walking
+ * a whole hostile tree.
+ */
+function astJsonDepth(root: unknown, limit: number): number {
+  let deepest = 0
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: root, depth: 0 }]
+
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!
+    if (depth > deepest) {
+      deepest = depth
+      if (deepest > limit) return deepest
+    }
+    if (Array.isArray(node)) {
+      // An array is a child LIST, not a level of its own - the nodes in it are.
+      for (const child of node) stack.push({ node: child, depth })
+      continue
+    }
+    if (typeof node !== 'object' || node === null) continue
+
+    const record = node as Record<string, unknown>
+    // `items` is already in CHILD_FIELDS: pushing it again doubled the work for
+    // every level of a nested list, so measuring a 30-deep list took minutes and
+    // a 40-deep one never finished. The fields are walked ONCE each.
+    for (const field of DEPTH_WALK_FIELDS) {
+      if (record[field] !== undefined) stack.push({ node: record[field], depth: depth + 1 })
+    }
+  }
+
+  return deepest
+}
+
 export function fromAstJson(json: AstJsonDocument): Document {
+  const depth = astJsonDepth(json, MAX_AST_JSON_DEPTH)
+  if (depth > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(depth)
+
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
