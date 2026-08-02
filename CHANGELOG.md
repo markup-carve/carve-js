@@ -44,6 +44,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A block that renders to nothing no longer leaves a blank line inside its
+  container.** A comment, a comment block, an abbreviation definition or a
+  non-HTML raw block rendered as the empty string, and the container joined it
+  in, so `::: note` holding a `%%%` block came out as
+  `<aside …>\n\n  <p>body</p>`. The list item filtered these out already; the
+  div, admonition, line block, block quote, definition body and the extension
+  API's `renderChildren` did not. Output now matches carve-php everywhere. A
+  container whose whole body renders to nothing still renders exactly as a
+  childless one does, so genuinely empty containers are unchanged.
+
 - **A fence opened with a non-Tier-1 word classifies as `div` for profiles,
   not `admonition`.** Only the eight Tier-1 canonical kinds (`note`, `tip`,
   `warning`, `danger`, `info`, `success`, `example`, `quote`) are callouts
