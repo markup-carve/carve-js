@@ -26,13 +26,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   `fmt` writes back the spelling the author used. The two forms parse to the
   same list on purpose, so the tree carries which one opened it - a `bareMarker`
-  flag on the list node, set by the FIRST item like `start` and `olType`, and
-  published on the wire beside `delim` and `bulletChar`. PART 11 §6 makes the
-  choice the author's rather than the writer's, and the AST is where such a
-  choice is recorded: the same remedy the combined bold-italic form needed
-  (`boldItalic`, carve#375). An existing `1.`/`2.`/`3.` document is therefore
-  untouched by a format. Author NUMBERING is still not preserved -
+  flag on the list node, set by the FIRST item like `start` and `olType`. PART
+  11 §6 makes the choice the author's rather than the writer's, and the AST is
+  where such a choice is recorded: the same remedy the combined bold-italic form
+  needed (`boldItalic`, carve#375). An existing `1.`/`2.`/`3.` document is
+  therefore untouched by a format. Author NUMBERING is still not preserved -
   `1.`/`1.`/`1.` comes back renumbered, as it always did.
+
+  The flag stays OFF the serialized AST. PART 12 is interchange, pinned by the
+  spec's `ast-schema.json` with `additionalProperties: false`, and neither the
+  schema nor carve-php / carve-rs knows this field yet - publishing it would
+  fail validation the moment a bare-dot document reached the corpus. The writer
+  reads the runtime tree, so source -> `fmt` keeps the spelling; only a JSON
+  round trip forgets it and falls back to `1.`, the same stated loss the other
+  codecs already carry for authored form. If the proposal is accepted the field
+  belongs in the schema beside `delim` and `bulletChar`, published by all three.
 
   **This is a breaking change to the language.** After a blank line, a paragraph
   beginning with `. ` - an ellipsis fragment, a wrapped sentence, a deliberate

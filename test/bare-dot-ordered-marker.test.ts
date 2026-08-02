@@ -138,7 +138,7 @@ describe('bare-dot ordered marker', () => {
       expect(carveToCarve('1) a\n2) b')).toBe('1) a\n2) b\n')
     })
 
-    it('records the spelling in the AST, and it survives the wire', () => {
+    it('records the spelling in the AST, but keeps it off the wire', () => {
       // Without the mark there is nothing to preserve, which is exactly the
       // argument PART 11 §6 makes for `boldItalic`.
       const bare = parse('. a').children[0] as { bareMarker?: true }
@@ -146,8 +146,17 @@ describe('bare-dot ordered marker', () => {
       expect(bare.bareMarker).toBe(true)
       expect(explicit.bareMarker).toBeUndefined()
 
+      // The wire is PART 12 interchange, pinned by the spec's ast-schema.json
+      // with `additionalProperties: false`, and neither the schema nor the
+      // other engines know this field - so it does not ride along. The writer
+      // reads the runtime tree, so source -> fmt keeps the spelling; a JSON
+      // round trip forgets it and falls back to the explicit form, the same
+      // stated loss the other codecs already carry for authored form. When the
+      // proposal lands, the field belongs in the schema beside `delim` and
+      // `bulletChar` and this expectation flips.
       const wire = JSON.parse(JSON.stringify(toAstJson(parse('. a\n. b'))))
-      expect(renderCarve(fromAstJson(wire))).toBe('. a\n. b\n')
+      expect(JSON.stringify(wire)).not.toContain('bareMarker')
+      expect(renderCarve(fromAstJson(wire))).toBe('1. a\n2. b\n')
     })
 
     it('keeps li-attributes on the canonical form', () => {
