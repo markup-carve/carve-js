@@ -18,10 +18,9 @@
  *        inline math   $x$         -> $`x`
  *
  *      Carve's highlight marker is a single char (`=x=`); the doubled form
- *      `==x==` is literal. Superscript/subscript have NO bare form in Carve —
- *      the `<mark>` HTML tag maps to `=x=`/`{=x=}` while `<sub>`/`<sup>` always
- *      map to the braced forms (`{,x,}` / `{^x^}`), which render in every
- *      position (e.g. `H<sub>2</sub>O`).
+ *      `==x==` is literal. Superscript has NO bare form in Carve, so Markdown
+ *      `^x^` maps to the braced form (`{^x^}`), which renders in every
+ *      position.
  *
  * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
  * keeps `_x_`, which Carve renders as underline — a silent mis-render.
@@ -29,9 +28,10 @@
  * Delimiters inside inline code and fenced code blocks are never rewritten.
  *
  * Known limitations:
- *  - Markdown indented (4-space) code blocks are not converted. Carve has no
- *    indented code block (like Djot), so the text is treated as a paragraph
- *    and its delimiters are rewritten. Use a fenced ``` block in the source.
+ *  - Markdown indented (4-space) code blocks are preserved byte-for-byte, but
+ *    Carve has no indented code block (like Djot), so they still parse as
+ *    paragraph text after migration. Use a fenced ``` block in the source for
+ *    a semantic code block.
  *  - Inline conversion is per line, so a construct that crosses a soft line
  *    break is mishandled: an emphasis/strong span (`*first\nsecond*`) is left
  *    unconverted, and a code span (`` `a\nb` ``) is not protected on its first
@@ -63,14 +63,14 @@ type TagReplacer = string | ((match: string, body: string, offset: number, full:
  * highlight). Carve's bare markers do not open/close intraword or next to
  * whitespace, so the bare form (`^x^`) is only used when the tag has a
  * non-alphanumeric neighbor on each side and its body is not whitespace-padded.
- * Otherwise the brace form (`{^x^}`) is required — it renders in every position
+ * Otherwise the brace form (`{^x^}`) is required - it renders in every position
  * (e.g. `H<sub>2</sub>O`), at the cost of being noisier. Preferring the bare
- * form keeps the common, whitespace-separated case clean on a Markdown→Carve
+ * form keeps the common, whitespace-separated case clean on a Markdown->Carve
  * round-trip (corpus 67-superscript-and-subscript).
  */
 function markerForm(marker: string): (match: string, body: string, offset: number, full: string) => string {
   return (match, body, offset, full) => {
-    // Superscript and subscript have NO bare form in Carve — always braced.
+    // Superscript and subscript have NO bare form in Carve - always braced.
     if (marker === '^' || marker === ',') return `{${marker}${body}${marker}}`
     const before = full[offset - 1] ?? ''
     const after = full[offset + match.length] ?? ''
@@ -81,13 +81,10 @@ function markerForm(marker: string): (match: string, body: string, offset: numbe
 }
 
 const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
-  // Highlight/super/subscript use Carve's single-char markers, brace-forced
-  // only when needed: an HTML tag can sit intraword (e.g. `H<sub>2</sub>O`),
-  // where a bare `,2,` / `^2^` / `=2=` is literal in Carve, so `markerForm`
-  // emits `{,x,}` / `{^x^}` / `{=x=}` there and the bare form everywhere else.
+  // Only plain, attribute-free tags have Carve-native equivalents here. If an
+  // HTML tag carries attributes, migrating it to native Carve would drop data,
+  // so convertInlineHtml protects it as raw HTML instead.
   [/<mark>([^<]+)<\/mark>/gi, markerForm('=')],
-  // `<ins>` has no bare Carve form (insertion is the CriticMarkup `{+x+}`), so
-  // it always uses the brace form — unlike the single-char markers below.
   [/<ins>([^<]+)<\/ins>/gi, '{+$1+}'],
   [/<del>([^<]+)<\/del>/gi, '~$1~'],
   [/<s>([^<]+)<\/s>/gi, '~$1~'],
@@ -98,6 +95,189 @@ const HTML_TAG_RULES: Array<[RegExp, TagReplacer]> = [
   [/<em>([^<]+)<\/em>/gi, '/$1/'],
   [/<i>([^<]+)<\/i>/gi, '/$1/'],
 ]
+
+const NATIVE_INLINE_HTML_TAGS = new Set([
+  'mark',
+  'ins',
+  'del',
+  's',
+  'sup',
+  'sub',
+  'strong',
+  'b',
+  'em',
+  'i',
+])
+
+const HTML_BLOCK_TAGS = new Set([
+  'address',
+  'article',
+  'aside',
+  'base',
+  'basefont',
+  'blockquote',
+  'body',
+  'caption',
+  'center',
+  'col',
+  'colgroup',
+  'dd',
+  'details',
+  'dialog',
+  'dir',
+  'div',
+  'dl',
+  'dt',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'frame',
+  'frameset',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'head',
+  'header',
+  'hr',
+  'html',
+  'iframe',
+  'legend',
+  'li',
+  'link',
+  'main',
+  'menu',
+  'menuitem',
+  'nav',
+  'noframes',
+  'ol',
+  'optgroup',
+  'option',
+  'p',
+  'param',
+  'search',
+  'section',
+  'summary',
+  'table',
+  'tbody',
+  'td',
+  'tfoot',
+  'th',
+  'thead',
+  'title',
+  'tr',
+  'track',
+  'ul',
+])
+
+const RAWTEXT_HTML_BLOCK_TAGS = new Set(['script', 'pre', 'style', 'textarea'])
+
+function longestBacktickRun(s: string): number {
+  let longest = 0
+  let current = 0
+  for (const ch of s) {
+    if (ch === '`') {
+      current++
+      if (current > longest) longest = current
+    } else {
+      current = 0
+    }
+  }
+  return longest
+}
+
+function rawInlineHtml(content: string): string {
+  const tickLen = Math.max(1, longestBacktickRun(content) + 1)
+  return `${'`'.repeat(tickLen)}${content}${'`'.repeat(tickLen)}{=html}`
+}
+
+function rawBlockHtml(lines: readonly string[]): string[] {
+  const content = lines.join('\n')
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(content) + 1))
+  return [`${fence}=html`, content, fence]
+}
+
+function scanHtmlTag(
+  s: string,
+  start: number,
+): { end: number; name: string; closing: boolean; selfClosing: boolean; attrs: boolean } | null {
+  const tag = /^<\/?([A-Za-z][A-Za-z0-9-]*)(?=[\s/>])/.exec(s.slice(start))
+  if (!tag) return null
+  let quote = ''
+  for (let i = start + tag[0]!.length; i < s.length; i++) {
+    const ch = s[i]!
+    if (quote !== '') {
+      if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      continue
+    }
+    if (ch === '<') return null
+    if (ch === '>') {
+      const beforeClose = s.slice(start, i).replace(/\s+$/, '').endsWith('/')
+      return {
+        end: i + 1,
+        name: tag[1]!.toLowerCase(),
+        closing: s[start + 1] === '/',
+        selfClosing: beforeClose,
+        attrs: /\s+\S/.test(s.slice(start + tag[0]!.length, i).replace(/\/\s*$/, '')),
+      }
+    }
+  }
+  return null
+}
+
+function convertInlineHtml(input: string, protect: (s: string) => string): string {
+  let out = ''
+  let i = 0
+  while (i < input.length) {
+    if (input[i] !== '<') {
+      out += input[i]!
+      i++
+      continue
+    }
+    if (input.startsWith('<!--', i)) {
+      const end = input.indexOf('-->', i + 4)
+      if (end !== -1) {
+        const html = input.slice(i, end + 3)
+        out += protect(rawInlineHtml(html))
+        i = end + 3
+        continue
+      }
+    }
+    const tag = scanHtmlTag(input, i)
+    if (!tag) {
+      out += input[i]!
+      i++
+      continue
+    }
+    let end = tag.end
+    let native = false
+    if (!tag.closing && !tag.selfClosing) {
+      const closeRe = new RegExp(`</${tag.name}\\s*>`, 'i')
+      const close = closeRe.exec(input.slice(tag.end))
+      if (close) {
+        end = tag.end + close.index + close[0].length
+        const body = input.slice(tag.end, tag.end + close.index)
+        native = !tag.attrs && NATIVE_INLINE_HTML_TAGS.has(tag.name) && !body.includes('<')
+      }
+    }
+    if (native) {
+      out += input.slice(i, end)
+      i = end
+      continue
+    }
+    out += protect(rawInlineHtml(input.slice(i, end)))
+    i = end
+  }
+  return out
+}
 
 /**
  * Replace every inline code span in `s` via `repl`, leaving everything else
@@ -158,8 +338,9 @@ function convertInline(input: string): string {
   // literal in both Markdown and Carve, so protect the pair verbatim.
   line = line.replace(/\\[^A-Za-z0-9\s]/g, protect)
 
-  // <code>…</code> is verbatim: turn it into a Carve code span and protect it
-  // before any delimiter rewrite touches its contents.
+  // <code>...</code> without attributes has a Carve-native equivalent. Protect
+  // it before delimiter rewrites so its body stays verbatim. Attributed code
+  // is handled by convertInlineHtml as raw HTML so attributes are not lost.
   line = line.replace(/<code>([^<]+)<\/code>/gi, (_m, inner) => protect(`\`${inner}\``))
 
   // Normalize a `(dest "title")` part: Carve's link parser closes the
@@ -196,6 +377,10 @@ function convertInline(input: string): string {
   // `_` or `*` inside it (e.g. /_v1_/) must not be rewritten as markup.
   line = line.replace(/<[A-Za-z][A-Za-z0-9+.-]*:[^>\s]+>/g, protect)
   line = line.replace(/<[^>\s@]+@[^>\s]+>/g, protect)
+
+  // Markdown inline HTML is live markup. Protect tags that have no lossless
+  // Carve-native equivalent as explicit raw HTML before delimiter rewrites.
+  line = convertInlineHtml(line, protect)
 
   // Bare/GFM autolink URLs in prose (https://example.com/api/_v1_/x): the
   // path is literal, so protect it before the emphasis passes.
@@ -280,9 +465,10 @@ function convertInline(input: string): string {
   // so a Markdown highlight left unchanged would silently mis-render.
   line = line.replace(/==(?!\s)([^=]+?)(?<!\s)==/g, '=$1=')
 
-  // HTML inline tags -> Carve. Run after the emphasis/strong passes: the tag
-  // bodies contain no * _ ~ delimiters, so the markup they produce (e.g.
-  // <strong>a</strong> -> *a*) is not re-matched and turned into /a/.
+  // Attribute-free HTML inline tags -> Carve. Run after the emphasis/strong
+  // passes: the tag bodies contain no * _ ~ delimiters, so the markup they
+  // produce (e.g. <strong>a</strong> -> *a*) is not re-matched and turned into
+  // /a/.
   for (const [re, repl] of HTML_TAG_RULES) {
     line = typeof repl === 'string' ? line.replace(re, repl) : line.replace(re, repl)
   }
@@ -290,10 +476,9 @@ function convertInline(input: string): string {
   // ^superscript^ (pandoc-style) -> {^x^}. Carve has no bare superscript, so
   // an unconverted `^x^` would render literal. (Highlight ==x== was converted
   // to =x= above; math was converted and protected before the emphasis passes.)
-  // The brace guards skip an already-braced `{^x^}` (e.g. just produced by
-  // the <sup> HTML-tag rule above) so it is not wrapped twice. The `[` guards
-  // skip carets that belong to footnote references (`[^x] … [^y]` must not
-  // pair up as a superscript span across the line).
+  // The brace guards skip an already-braced `{^x^}` so it is not wrapped
+  // twice. The `[` guards skip carets that belong to footnote references
+  // (`[^x] … [^y]` must not pair up as a superscript span across the line).
   line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
 
   // Restore stashes and protected spans until stable: a protected/stashed
@@ -446,6 +631,43 @@ function escapePlainCarveInlineSyntax(line: string): string {
 const RE_MD_FRONTMATTER_OPEN = /^---[ \t]*(\w*)\s*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
 
+function htmlBlockAt(lines: readonly string[], start: number): { lines: string[]; end: number } | null {
+  const first = lines[start]!
+  if (/^(?: {4,}|\t)/.test(first)) return null
+  const trimmed = first.replace(/^ {0,3}/, '')
+  const collectUntil = (endRe: RegExp, fallbackBlank: boolean): { lines: string[]; end: number } => {
+    const block: string[] = []
+    for (let i = start; i < lines.length; i++) {
+      const line = lines[i]!
+      if (i > start && fallbackBlank && line.trim() === '') return { lines: block, end: i - 1 }
+      block.push(line)
+      if (endRe.test(line)) return { lines: block, end: i }
+    }
+    return { lines: block, end: lines.length - 1 }
+  }
+
+  if (trimmed.startsWith('<!--')) return collectUntil(/-->/, false)
+  if (/^<\?/.test(trimmed)) return collectUntil(/\?>/, false)
+  if (/^<![A-Z]/.test(trimmed)) return collectUntil(/>/, false)
+  if (trimmed.startsWith('<![CDATA[')) return collectUntil(/\]\]>/, false)
+
+  const tag = scanHtmlTag(trimmed, 0)
+  if (!tag) return null
+  if (RAWTEXT_HTML_BLOCK_TAGS.has(tag.name)) {
+    return collectUntil(new RegExp(`</${tag.name}\\s*>`, 'i'), false)
+  }
+  if (HTML_BLOCK_TAGS.has(tag.name)) {
+    if (tag.selfClosing || tag.closing || new RegExp(`</${tag.name}\\s*>`, 'i').test(trimmed.slice(tag.end))) {
+      return { lines: [first], end: start }
+    }
+    return collectUntil(new RegExp(`</${tag.name}\\s*>`, 'i'), true)
+  }
+  if (/^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?\s*\/?>\s*$/.test(trimmed)) {
+    return { lines: [first], end: start }
+  }
+  return null
+}
+
 /**
  * Split leading frontmatter off a document, returning its lines (fences
  * included) and the index of the first body line.
@@ -495,8 +717,15 @@ export function markdownToCarve(markdown: string): string {
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
   let prevBlank = true
-  let prevType: 'blank' | 'heading' | 'list' | 'block_quote' | 'code_fence' | 'code' | 'text' =
-    'blank'
+  let prevType:
+    | 'blank'
+    | 'heading'
+    | 'list'
+    | 'block_quote'
+    | 'code_fence'
+    | 'code'
+    | 'raw_block'
+    | 'text' = 'blank'
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
@@ -519,6 +748,7 @@ export function markdownToCarve(markdown: string): string {
         /^#{1,6}([ \t]|$)/.test(trimmed) ||
         trimmed.startsWith('>') ||
         /^(`{3,}|~{3,})/.test(trimmed) ||
+        htmlBlockAt(lines, i) !== null ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)
       if (marker && /\S/.test(line.slice(marker[0].length))) {
         while (listCols.length && listCols[listCols.length - 1]! > marker[1]!.length) listCols.pop()
@@ -571,6 +801,22 @@ export function markdownToCarve(markdown: string): string {
         out.push(dedented)
         prevType = 'code'
       }
+      continue
+    }
+
+    if ((wasPrevBlank || prevType === 'blank' || prevType === 'code') && /^(?: {4,}|\t)/.test(line)) {
+      out.push(line)
+      prevType = 'code'
+      continue
+    }
+
+    const htmlBlock = htmlBlockAt(lines, i)
+    if (htmlBlock) {
+      if (prevType !== 'blank' && out.length > 0) out.push('')
+      out.push(...rawBlockHtml(htmlBlock.lines))
+      i = htmlBlock.end
+      if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
+      prevType = 'raw_block'
       continue
     }
 
