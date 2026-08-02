@@ -38,11 +38,10 @@
  *    every quoted line, and indent list-item continuation lines, to keep them.
  *  - Intraword emphasis (`foo*bar*baz`) is not converted: Carve's `/` cannot
  *    open or close next to an alphanumeric, so it has no intraword form.
- *  - Block constructs nested inside a blockquote or list container (a fenced
- *    code block or a reference definition prefixed by `>` / list indentation)
- *    are not recognized as such — only top-level ones are. Their delimiters
- *    may be rewritten. Keep fenced code and reference definitions at the top
- *    level for a faithful migration.
+ *  - Reference definitions nested inside a blockquote or list container are
+ *    not recognized as such — only top-level ones are. Their delimiters may be
+ *    rewritten. Keep reference definitions at the top level for a faithful
+ *    migration.
  *  - Image alt text is preserved verbatim, not flattened to plain text as
  *    CommonMark does, so `![*x*](u)` keeps `*x*` in the Carve alt attribute.
  *  - A document opening with `---`, at least one non-blank line, and a closing
@@ -392,6 +391,77 @@ function isParagraphRunLine(
   return !isList
 }
 
+type PrefixedInlineLine = {
+  prefix: string
+  text: string
+}
+
+const RE_LIST_MARKER = /^([ \t]*)(?:[-*+]|\d+[.)]) +/
+
+function leadingIndentWidth(line: string): number {
+  return line.length - line.replace(/^[ \t]+/, '').length
+}
+
+function restorePrefixedInlineRun(run: readonly PrefixedInlineLine[]): string[] {
+  const converted = convertInline(run.map((part) => part.text).join('\n')).split('\n')
+  return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
+}
+
+function blockquotePrefix(line: string): { prefix: string; text: string } | null {
+  const match = line.match(/^(>[ \t]?)(.*)$/)
+  if (!match) return null
+  return { prefix: match[1]!, text: match[2]! }
+}
+
+function collectBlockquoteInlineRun(lines: readonly string[], start: number): {
+  lines: string[]
+  end: number
+} {
+  const run: PrefixedInlineLine[] = []
+  let end = start
+  while (end < lines.length) {
+    const line = lines[end]!.replace(/^[ \t]{1,3}(?=>)/, '')
+    const parsed = blockquotePrefix(line)
+    if (!parsed || parsed.text.trim() === '') break
+    run.push(parsed)
+    end++
+  }
+  if (run.length === 0) return { lines: [lines[start]!.replace(/^[ \t]{1,3}(?=>)/, '')], end: start + 1 }
+  return { lines: restorePrefixedInlineRun(run), end }
+}
+
+function collectListInlineRun(lines: readonly string[], start: number): {
+  lines: string[]
+  end: number
+} {
+  const first = lines[start]!
+  const marker = first.match(RE_LIST_MARKER)
+  if (!marker) return { lines: [convertInline(first)], end: start + 1 }
+
+  const contentCol = marker[0].length
+  const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
+  let end = start + 1
+
+  while (end < lines.length) {
+    const line = lines[end]!
+    if (line.trim() === '') break
+
+    const nestedOrSibling = line.match(RE_LIST_MARKER)
+    if (nestedOrSibling) break
+
+    const indent = leadingIndentWidth(line)
+    if (indent < contentCol) break
+
+    // Leave fenced code blocks inside list items to the main fence handler.
+    if (/^[ \t]{0,3}(`{3,}|~{3,})/.test(line.slice(contentCol))) break
+
+    run.push({ prefix: line.slice(0, contentCol), text: line.slice(contentCol) })
+    end++
+  }
+
+  return { lines: restorePrefixedInlineRun(run), end }
+}
+
 /** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
 function alignMarker(cell: string): '' | '<' | '>' | '~' {
   const left = cell.startsWith(':')
@@ -661,6 +731,13 @@ export function markdownToCarve(markdown: string): string {
     // item. Carve keeps it there by indentation, so pass it through with
     // inline conversion only — no top-level block spacing or dedent.
     if (prevType === 'list' && indent >= 1) {
+      if (isList) {
+        const run = collectListInlineRun(lines, i)
+        out.push(...run.lines.map((l) => l.replace(/^(\s*)\+(\s)/, '$1-$2')))
+        i = run.end - 1
+        prevType = 'list'
+        continue
+      }
       out.push(convertInline(line))
       prevType = 'list'
       continue
@@ -740,6 +817,20 @@ export function markdownToCarve(markdown: string): string {
     // Carve has no `+` bullet (it is the list-continuation marker); normalize a
     // Markdown `+` bullet to `-` so the converted list survives.
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
+    if (isBlockquote) {
+      const run = collectBlockquoteInlineRun(lines, i)
+      out.push(...run.lines)
+      i = run.end - 1
+      prevType = 'block_quote'
+      continue
+    }
+    if (isList) {
+      const run = collectListInlineRun(lines, i)
+      out.push(...run.lines.map((l) => l.replace(/^(\s*)\+(\s)/, '$1-$2')))
+      i = run.end - 1
+      prevType = 'list'
+      continue
+    }
     if (!isHeading && !isList && !isBlockquote && !isStandardTableRow(body)) {
       const run = [body]
       let end = i + 1
