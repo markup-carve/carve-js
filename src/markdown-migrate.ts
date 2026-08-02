@@ -212,13 +212,26 @@ function decodeEntitiesInTitle(rest: string): string {
 }
 
 function decodeHtmlEntities(s: string): string {
-  return s.replace(
+  const decoded = s.replace(
     RE_HTML_ENTITY,
     (match, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
-      const decoded = resolveEntity(match, dec, hex, named)
-      return decoded === match ? match : escapeDecodedForCarve(decoded)
+      const resolved = resolveEntity(match, dec, hex, named)
+      if (resolved === match) return match
+      // A decoded line ending would SPLIT this line. The migration works a line
+      // at a time, so the tail would lose whatever prefix its block needs (a
+      // list item's indent, a quote's `>`) and land outside it. cmark reads
+      // `&#10;` as a soft break, and a soft break is whitespace once rendered,
+      // so a space says the same thing without breaking the line.
+      if (resolved === '\n' || resolved === '\r' || resolved === '\r\n') return ' '
+      return escapeDecodedForCarve(resolved)
     },
   )
+  // Whitespace that a decode put at the START of the line is indentation to
+  // every block rule that runs after this: `&#32;- item` is a paragraph in
+  // cmark and would become a LIST here. `\ ` keeps it inline. The cost is one
+  // character - Carve reads the escape as U+00A0, where cmark keeps U+0020 -
+  // and structure is worth more than the space's breaking behavior.
+  return /^[ \t]/.test(decoded) && !/^[ \t]/.test(s) ? '\\ ' + decoded.slice(1) : decoded
 }
 
 const NATIVE_INLINE_HTML_TAGS = new Set([

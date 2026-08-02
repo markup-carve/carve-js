@@ -547,6 +547,28 @@ describe('markdownToCarve — HTML entities', () => {
   // U+0000 is the one code point that cannot pass through: cmark replaces it
   // with U+FFFD, and this module wraps its own placeholders in NUL, so a
   // decoded one would collide with the stash/protect sentinels.
+  // The migration works a line at a time, so a decoded line ending would send
+  // the tail outside whatever block it belongs to. cmark reads `&#10;` as a
+  // soft break, which is whitespace once rendered.
+  it('does not let a decoded line ending split the line', () => {
+    expect(conv('a&#10;b')).toBe('a b')
+    expect(conv('- a&#10;b')).toBe('- a b')
+    expect(carveToHtml(conv('a&#10;b'))).toBe('<p>a b</p>')
+  })
+
+  // Leading whitespace is indentation to every block rule that runs after the
+  // decode: ` - item` is a LIST, where `&#32;- item` is a paragraph in cmark.
+  it('does not let decoded leading whitespace open a block', () => {
+    expect(conv('&#32;- item')).toBe('\\ - item')
+    expect(carveToHtml(conv('&#32;- item'))).toBe('<p>&nbsp;- item</p>')
+    expect(carveToHtml(conv('&#32;# H'))).toBe('<p>&nbsp;# H</p>')
+  })
+
+  // Whitespace that was already there is not the decode's doing.
+  it('leaves an indented line alone', () => {
+    expect(conv('  a &amp; b')).toBe('  a & b')
+  })
+
   it('replaces a NUL entity rather than emitting one', () => {
     for (const markdown of ['&#0;', '&#x0;']) {
       const carve = conv(markdown)
