@@ -370,3 +370,108 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
     expect(r.skipped).toEqual([])
   })
 })
+
+describe('djot-heading-continuation — a Djot heading that spills onto the next line', () => {
+  const contHits = (src: string) =>
+    djotMigrationWarnings(src).filter((w) => w.rule === 'djot-heading-continuation')
+
+  it('flags a plain line after a heading', () => {
+    const w = contHits('# Title\nSome text.\n')
+    expect(w).toHaveLength(1)
+    expect(w[0]!.category).toBe('djot-shift')
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.column).toBe(1)
+    expect(w[0]!.message).toContain('Djot merges this into the heading')
+  })
+
+  it('is a djot-shift, so plain `carve lint` stays quiet about it', () => {
+    // The default lint reports only `carve-breakage`; this source is perfectly
+    // good hand-written Carve, so it must not be noise there.
+    expect(contHits('# Title\nSome text.\n')[0]!.category).toBe('djot-shift')
+  })
+
+  it('joining the lines reproduces the heading Djot produced, id included', () => {
+    // Djot folds both lines into one <h1> whose auto id is `Title-Some-text`.
+    // The fix must land on exactly that id, or cross-references break.
+    const r = applyMigrationFixes('# Title\nSome text.\n')
+    expect(r.output).toBe('# Title Some text.\n')
+    expect(r.skipped).toEqual([])
+  })
+
+  it('flags a SAME-count marker line and strips the marker in the fix', () => {
+    expect(contHits('## A\n## B\n')).toHaveLength(1)
+    expect(applyMigrationFixes('## A\n## B\n').output).toBe('## A B\n')
+  })
+
+  it('does not flag a different-count marker line (a new heading in Djot too)', () => {
+    expect(contHits('# H\n## sub\n')).toEqual([])
+  })
+
+  it('flags a `#foo` line, which is plain text in both languages', () => {
+    // Not a marker line (no space), so Djot folds it as text; the fix keeps the
+    // literal `#` rather than mistaking it for a stripped marker.
+    expect(contHits('# H\n#foo\n')).toHaveLength(1)
+    expect(applyMigrationFixes('# H\n#foo\n').output).toBe('# H #foo\n')
+  })
+
+  it('does not flag a line that opens a block in Djot as well', () => {
+    expect(contHits('# H\n- item\n')).toEqual([])
+    expect(contHits('# H\n> q\n')).toEqual([])
+    expect(contHits('# H\n| a | b |\n')).toEqual([])
+    expect(contHits('# H\n```\ncode\n```\n')).toEqual([])
+  })
+
+  it('does not flag a heading followed by a blank line', () => {
+    expect(contHits('# H\n\ntext\n')).toEqual([])
+  })
+
+  it('ignores a heading inside a fenced code block', () => {
+    expect(contHits('```\n# H\ntext\n```\n')).toEqual([])
+  })
+
+  it('flags every line of a multi-line spill and joins them all', () => {
+    expect(contHits('# H\na\nb\n')).toHaveLength(2)
+    expect(applyMigrationFixes('# H\na\nb\n').output).toBe('# H a b\n')
+  })
+
+  it('composes with an inline fix on the same lines', () => {
+    // The join edit is minimal (the line break only), so it neither contains
+    // nor discards the emphasis fix that spans the break.
+    expect(applyMigrationFixes('# _a\nb_\n').output).toBe('# /a b/\n')
+    expect(applyMigrationFixes('# H\n**bold** here\n').output).toBe('# H *bold* here\n')
+  })
+  it('does not flag a line that opens a block in DJOT but not in Carve', () => {
+    // Verified against @djot/djot, not from memory: each of these ends the Djot
+    // heading, so nothing shifted - and joining one would pull a list item into
+    // the title, which is worse than the missing warning.
+    expect(contHits('# H\n+ item\n')).toEqual([]) // `+` is Carve's continuation marker
+    expect(contHits('# H\n(1) item\n')).toEqual([]) // parenthesized ordered marker
+    expect(contHits('# H\n(a) item\n')).toEqual([])
+    expect(contHits('# H\n: term\n')).toEqual([]) // Djot definition list
+    expect(contHits('# H\n^ cap\n')).toEqual([])
+    expect(contHits('# H\n####### deep\n')).toEqual([]) // Djot has no level cap
+    expect(contHits('# H\n-\titem\n')).toEqual([]) // Djot allows a tab after a bullet
+  })
+
+  it('leaves a `+` bullet fix alone instead of folding the item into the heading', () => {
+    // The `+` line still gets its own bullet fix; what must NOT happen is the
+    // two fixes combining into `# H - item`.
+    expect(applyMigrationFixes('# H\n+ item\n').output).toBe('# H\n- item\n')
+  })
+  it('sees a heading or a continuation line made only of inline code', () => {
+    // Detection classifies lines from the real text plus a fenced-block map.
+    // Reading the code-MASKED buffer instead made both of these look blank.
+    expect(contHits('# `id`\nmore\n')).toHaveLength(1)
+    expect(applyMigrationFixes('# `id`\nmore\n').output).toBe('# `id` more\n')
+    expect(contHits('# H\n`more`\n')).toHaveLength(1)
+    expect(applyMigrationFixes('# H\n`more`\n').output).toBe('# H `more`\n')
+  })
+
+  it('removes a bare same-count marker line rather than spacing it out', () => {
+    // Djot's bare `#` line contributes no text, so `# H` / `#` / `# X` is the
+    // heading "H\nX". Turning the bare line into a space gave "H  X", and at
+    // end of input it left trailing whitespace behind.
+    expect(applyMigrationFixes('# H\n#\n# X\n').output).toBe('# H X\n')
+    expect(applyMigrationFixes('# H\n#\n').output).toBe('# H\n')
+  })
+})

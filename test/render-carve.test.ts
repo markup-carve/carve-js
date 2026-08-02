@@ -258,3 +258,20 @@ describe('all-space verbatim content is never stripped or padded', () => {
     expect(carveToCarve('!`  `').trim()).toBe('!`  `')
   })
 })
+
+describe('fmt keeps a heading on one line', () => {
+  it('collapses a break inside an ingested heading instead of splitting it', async () => {
+    // A heading ends at the newline (PART 2), so fmt must never emit a heading
+    // whose text carries one. No parse builds such a heading, but PART 12 lets
+    // an ingested AST put a break node in one; emitting it verbatim re-parsed
+    // as a heading PLUS a paragraph, silently moving text out of the title.
+    const { carveToAstJson, fromAstJson, renderCarve } = await import('../src/index.js')
+    const j = carveToAstJson('# a b\n\npara x\ny\n')
+    const heading = j.children.find((c) => c.type === 'heading')!
+    const para = j.children.find((c) => c.type === 'paragraph')!
+    heading.children = para.children
+    const out = renderCarve(fromAstJson({ type: 'document', children: [heading] }))
+    expect(out).toBe('{#a-b}\n# para x y\n')
+    expect(carveToHtml(out)).toBe('<section id="a-b">\n  <h1>para x y</h1>\n</section>')
+  })
+})

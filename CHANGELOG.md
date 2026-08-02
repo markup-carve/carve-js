@@ -7,6 +7,32 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: a heading ends at the newline.** A heading no longer folds the
+  following line into its text. `# Title` with prose on the next line is now a
+  heading plus a paragraph, and `## A` / `## B` is two headings, matching
+  CommonMark and the SINGLE-LINE HEADINGS rule in grammar PART 2 (carve#434,
+  carve#451). Folding was a silent corruption for anyone arriving from Markdown:
+  the title text was wrong and so was the auto-generated id, which broke
+  `[Heading][]` cross-references and TOC anchors with nothing to lint.
+
+  **Migration:** a heading that was deliberately wrapped over several source
+  lines must be joined onto one line. `carve lint --from-djot` reports every
+  such line as `djot-heading-continuation`, and `carve fix` joins them, which
+  reproduces the id Djot generated.
+
+- `fmt` collapses a break inside a heading to a space instead of emitting it.
+  No parse produces such a heading, but an ingested AST can (PART 12 permits any
+  inline in a heading), and writing it out verbatim split the heading and moved
+  text out of the title on re-parse.
+
+### Added
+
+- `carve lint --from-djot` gains the `djot-heading-continuation` rule: a plain
+  line, or a same-count `#` line, directly after a heading is folded in by Djot
+  and is its own block in Carve.
+
 ### Fixed
 
 - **A fence opened with a non-Tier-1 word classifies as `div` for profiles,

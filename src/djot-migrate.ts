@@ -20,6 +20,8 @@
  * whereas a missed real mis-render is not — so the bias is intentional.
  */
 
+import { parse } from './parse.js'
+
 export interface MigrationWarning {
   /** 1-based line number. */
   line: number
@@ -197,18 +199,26 @@ const blanks = (s: string) => s.replace(/[^\n]/g, ' ')
  * collisions inside code are not real mis-renders, so the scanner simply
  * never sees them.
  */
-function maskCode(src: string): string {
-  // Stage 1: fenced blocks, line by line.
-  const lines = src.split('\n')
+/**
+ * Which lines belong to a fenced code block (the opener and closer included).
+ *
+ * Split out from {@link maskCode} because a structural scan needs to know that
+ * a line is CODE, which masking alone cannot tell it: masking also blanks
+ * inline spans, so a line holding nothing but `` `code` `` comes out
+ * indistinguishable from a line inside a fence.
+ */
+function fencedBlockLines(lines: string[]): boolean[] {
+  const out: boolean[] = []
   let fence: { ch: string; len: number } | null = null
-  const staged = lines.map((line) => {
+  for (const line of lines) {
     if (fence) {
       // parseFence: a closer may be indented by at most 3 spaces.
       const close = line.match(/^ {0,3}([`~]{3,})[ \t]*$/)
       if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
         fence = null
       }
-      return blanks(line)
+      out.push(true)
+      continue
     }
     // Mirror Carve's RE_FENCE exactly (src/parse.ts): a fence opener is
     // a >=3 run with at most a single `[A-Za-z0-9_+#.-]` info token. A
@@ -217,10 +227,19 @@ function maskCode(src: string): string {
     const open = line.match(/^(\s*)(`{3,}|~{3,})\s*([a-zA-Z0-9_+#.-]*)\s*$/)
     if (open) {
       fence = { ch: open[2]![0]!, len: open[2]!.length }
-      return blanks(line)
+      out.push(true)
+      continue
     }
-    return line
-  })
+    out.push(false)
+  }
+  return out
+}
+
+function maskCode(src: string): string {
+  // Stage 1: fenced blocks, line by line.
+  const lines = src.split('\n')
+  const inFence = fencedBlockLines(lines)
+  const staged = lines.map((line, i) => (inFence[i] ? blanks(line) : line))
   const s = staged.join('\n')
 
   // Stage 2: inline code spans. A run of N backticks closes at the next
@@ -437,6 +456,113 @@ function scanHits(source: string): ScanHit[] {
     }
   }
 
+  // HEADING CONTINUATION (structural, not a delimiter collision). Djot folds the
+  // line after a heading into it -- a plain line, or one carrying the SAME
+  // number of `#`. A Carve heading ENDS AT THE NEWLINE (PART 2), so that line
+  // becomes its own block and the title text (with the auto id derived from it)
+  // is only what stands on the heading line. The result is valid Carve that
+  // merely means something else than it did in Djot, so it is a `djot-shift`
+  // and surfaces under `--from-djot`.
+  //
+  // Lines are classified from the REAL text plus the fenced-block map, not from
+  // the code-masked buffer: masking also blanks inline spans, so a heading whose
+  // title is `` `code` `` -- or a continuation line that is only a code span --
+  // would read as blank and be skipped. The fence map still hides a `#` written
+  // inside a fenced block. A heading marker sits at COLUMN 0 (NORMATIVE), so a
+  // heading nested in a list item or a quote is out of scope, as is a wrapped
+  // heading there; that follows the module's stated advisory scope.
+  const normLines = norm.split('\n')
+  const inFence = fencedBlockLines(normLines)
+  const lineStarts: number[] = []
+  for (let at = 0, k = 0; k < normLines.length; k++) {
+    lineStarts.push(at)
+    at += normLines[k]!.length + 1
+  }
+  // The length of a leading 1-6 `#` run that forms a Djot heading MARKER line
+  // (followed by whitespace or nothing), or 0 when the line is not one. `#foo`
+  // is not a marker line in either language -- it is plain text, which Djot
+  // folds -- so it deliberately returns 0.
+  const markerRun = (s: string): number => {
+    const m = /^(#{1,6})(?!#)(?:[ \t]|$)/.exec(s)
+    return m ? m[1]!.length : 0
+  }
+  // Lines that open a BLOCK in Djot but read as prose in Carve. Carve's parser
+  // cannot answer for Djot, so the two languages' block sets differ here and a
+  // Carve-only test would report a fold that never happened -- and then "fix" it
+  // by pulling a list item into the heading. Derived by running @djot/djot and
+  // this parser over the opener space, not from memory:
+  //   `+ x`         Djot bullet; `+` is Carve's list-CONTINUATION marker
+  //   `- \tx`       Djot allows a tab after a bullet, Carve requires a space
+  //   `(1) x`       Djot's parenthesized ordered markers, incl. letters/romans
+  //   `: x`         Djot definition list (Carve spells a term `:: x`)
+  //   `^ cap`       Carve's caption marker; Djot ends the heading on it
+  //   `####### x`   Djot has no level cap, Carve stops at six
+  // The reverse gap (Carve constructs Djot folds, e.g. `%% comment`, `>x`,
+  // `___`) only costs a warning, so it is left alone: a missed advisory beats a
+  // fix that rewrites a document.
+  const DJOT_BLOCK_ONLY =
+    /^[ \t]*(?:\+(?:[ \t]|$)|[-*+]\t|\([0-9a-zA-Z]+\)[ \t]|:(?!:)[ \t]|\^[ \t]|#{7,}[ \t])/
+  for (let li = 0; li < normLines.length; li++) {
+    if (inFence[li]) continue
+    // A heading needs CONTENT: `#` alone is a paragraph in Carve.
+    const hm = /^(#{1,6})(?!#) +\S/.exec(normLines[li]!)
+    if (!hm) continue
+    const level = hm[1]!.length
+    const headingLine = normLines[li]!
+    for (let j = li + 1; j < normLines.length; j++) {
+      const next = normLines[j]!
+      if (inFence[j] || next.trim() === '') break
+      const mark = markerRun(next)
+      let joinEnd: number
+      let joinText = ' '
+      if (mark) {
+        // A DIFFERENT `#` count opens a new heading in Djot too: nothing shifts.
+        if (mark !== level) break
+        const rest = next.slice(mark)
+        if (/^[ \t]*$/.test(rest)) {
+          // A bare same-count marker line contributes NO text in Djot, so the
+          // whole line goes: turning it into a space would double the spacing
+          // between the lines around it, or leave trailing whitespace at EOF.
+          joinEnd = lineStarts[j]! + next.length
+          joinText = ''
+        } else {
+          // Same count with content: Djot strips the marker and folds the rest in.
+          joinEnd = lineStarts[j]! + mark + /^[ \t]*/.exec(rest)![0].length
+        }
+      } else {
+        // Djot ends its heading here too, so nothing shifted.
+        if (DJOT_BLOCK_ONLY.test(next)) break
+        // Ask the PARSER whether Carve starts a block here instead of keeping a
+        // hand-written opener table that would drift as the grammar grows: if
+        // `heading + line` parses to a heading followed by a PARAGRAPH, Carve
+        // did not fold and Djot would have. Anything else (list, quote, table,
+        // div) is the same block in both, so nothing shifted.
+        const second = parse(`${headingLine}\n${next}\n`).children[1]
+        if (!second || second.type !== 'paragraph') break
+        joinEnd = lineStarts[j]!
+      }
+      // Replace the line break (and a same-count marker) with a single space:
+      // that is the Carve spelling of the heading Djot produced, and it keeps
+      // the same auto id. The edit is deliberately minimal so it cannot contain
+      // -- and so silently discard -- an inline fix on either line.
+      const start = lineStarts[j]! - 1
+      const { line, column } = posOf(lineStarts[j]!)
+      out.push({
+        line,
+        column,
+        rule: 'djot-heading-continuation',
+        category: 'djot-shift',
+        message:
+          'heading continuation line: Djot merges this into the heading, Carve does not — the heading ends at the newline, so this becomes its own block and the heading id comes from the first line alone.',
+        suggestion: joinText,
+        start,
+        end: joinEnd,
+        edits: [{ start, end: joinEnd, text: joinText }],
+      })
+      li = j
+    }
+  }
+
   out.sort((a, b) => a.line - b.line || a.column - b.column)
   return out
 }
@@ -533,15 +659,24 @@ export function applyMigrationFixes(source: string): MigrationFixResult {
   return { output, applied: applied.map(stripHit), skipped: skipped.map(stripHit) }
 }
 
+/** Name a whitespace-only replacement so it is readable in a report line. */
+function describeBlank(s: string): string {
+  if (s === '') return 'nothing'
+  return s === ' ' ? 'a single space' : `${s.length} spaces`
+}
+
 /** Format warnings as `file:line:col rule — message (use: suggestion)`. */
 export function formatMigrationWarnings(
   warnings: MigrationWarning[],
   file = '<stdin>',
 ): string {
   return warnings
-    .map(
-      (w) =>
-        `${file}:${w.line}:${w.column} ${w.rule} — ${w.message} (use: ${w.suggestion})`,
-    )
+    .map((w) => {
+      // A fix can be pure whitespace (joining a Djot heading continuation onto
+      // the heading line), and `(use:  )` reads as a formatting bug rather than
+      // an instruction, so name the replacement instead of printing it.
+      const use = w.suggestion.trim() === '' ? describeBlank(w.suggestion) : w.suggestion
+      return `${file}:${w.line}:${w.column} ${w.rule} — ${w.message} (use: ${use})`
+    })
     .join('\n')
 }

@@ -12,7 +12,10 @@ import { parse } from '../src/index.js'
  *   so an exact mapping exists - unlike a line block's expanded whitespace,
  *   which is what that helper is for.
  * - A multi-line heading (`## A` / `## still A`) gave the continuation line the
- *   opener's origin, so "still A" reported the span of "## stil".
+ *   opener's origin, so "still A" reported the span of "## stil". Headings are
+ *   SINGLE-LINE now, so those two lines are two headings and each carries its
+ *   own origin by construction - the cases stay as the guard that the second
+ *   line is still not measured from the first.
  *
  * These assert by SLICING THE SOURCE with the reported offsets. A span that is
  * present but points somewhere else fails; asserting on the numbers alone would
@@ -67,8 +70,8 @@ describe('caption positions', () => {
   })
 })
 
-describe('multi-line heading positions', () => {
-  it('places a continuation line at its own text, not at the opener', () => {
+describe('heading positions across adjacent heading lines', () => {
+  it('places the second heading line at its own text, not at the opener', () => {
     const src = '## A\n## still A\n# B\n'
     const [, second] = nodesOfType(parse(src), 'text')
 
@@ -79,7 +82,7 @@ describe('multi-line heading positions', () => {
     expect(second!.pos.startColumn).toBe(4)
   })
 
-  it('places an unmarked continuation line too', () => {
+  it('places the paragraph that follows a heading at its own text too', () => {
     const src = '# Title\ncontinues here\n'
     const texts = nodesOfType(parse(src), 'text')
     for (const node of texts) {

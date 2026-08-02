@@ -1425,59 +1425,16 @@ function parseHeading(lexer: Lexer): Heading {
   const m = RE_HEADING.exec(line)!
   const level = m[1]!.length as HeadingLevel
 
-  // Carve headings are multi-line: the text spills onto following lines until a
-  // blank line. A continuation line may carry the same number of `#` (stripped)
-  // or none; a heading marker with a different count (more OR fewer) starts a
-  // NEW heading, and a caption (`^ …`) or fenced comment (`%%%`) ends the
-  // heading. A block-opener (list/quote/table/fence/div/thematic break) ALSO
-  // ends it and starts that block, exactly as it interrupts a paragraph (§10)
-  // -- only plain text folds.
-  let text = line.replace(/^#{1,6} +/, '')
-  // A heading spans several lines and each one strips a different prefix (its
-  // own `##` run, or nothing), so the joined text needs an origin PER LINE.
-  // Passing only the first line's origin gave a continuation line the opener's
-  // column: `## A` / `## still A` placed "still A" at the first line's `##`.
-  const anchors: Array<{ offset: number; column: number }> = []
-  const anchorLine = (index: number, within: number): void => {
-    anchors.push({
-      offset: lexer.lineOffset(index) + within,
-      column: lexer.lineStartColumn(index) + within,
-    })
-  }
-  anchorLine(lineIndex, line.length - text.length)
-  const sameLevel = new RegExp(`^#{${level}} +(.+)$`)
-  const sameLevelBare = new RegExp(`^#{${level}}[ ]*$`)
-  while (!lexer.eof()) {
-    const next = lexer.peek()!
-    if (isBlankLine(next)) break
-    const cont = sameLevel.exec(next)
-    if (cont) {
-      text += '\n' + cont[1]!
-      anchorLine(lexer.pos, next.length - cont[1]!.length)
-      lexer.consume()
-      continue
-    }
-    // A bare same-level marker line (`#` for a level-1 heading) continues the
-    // heading but contributes no content, so the surrounding marker lines join
-    // with a single newline (djot; carve heading rule "same number ... or none").
-    if (sameLevelBare.test(next)) {
-      lexer.consume()
-      continue
-    }
-    if (/^#{1,6}( |$)/.test(next) || RE_CAPTION.test(next) || RE_COMMENT_BLOCK.test(next)) {
-      break
-    }
-    // A block-opener ends the heading and starts that block (§10), so only
-    // plain text continuation lines fold into the heading. A list marker also
-    // ends the heading (it folds only into a paragraph, not a heading).
-    if (endsHeadingOrQuote(lexer)) break
-    text += '\n' + next
-    anchorLine(lexer.pos, 0)
-    lexer.consume()
-  }
-  // §756 (NORMATIVE): strip the final line's trailing whitespace (ASCII only,
-  // so a trailing NBSP stays content), matching a paragraph and carve-rs/-php.
-  text = text.replace(RE_TRAILING_WS, '')
+  // SINGLE-LINE HEADINGS (PART 2, NORMATIVE): a heading ENDS AT THE NEWLINE.
+  // Nothing folds into it -- not a plain line, not a same-count `#` line -- so
+  // whatever comes next simply begins its own block, exactly as it would after
+  // any other closed block. This diverges from Djot deliberately: folding was a
+  // silent corruption of both the title text and the auto-generated id for
+  // anyone writing Markdown habits. `carve lint --from-djot` reports a Djot
+  // heading continuation line rather than quietly absorbing it.
+  // §756 (NORMATIVE): strip trailing whitespace (ASCII only, so a trailing
+  // NBSP stays content), matching a paragraph and carve-rs/-php.
+  const text = line.replace(/^#{1,6} +/, '').replace(RE_TRAILING_WS, '')
 
   const node: Heading = { type: 'heading', level, children: [] }
   // djot-strict: a heading takes its attributes on the PRECEDING block-
@@ -1490,7 +1447,6 @@ function parseHeading(lexer: Lexer): Heading {
     baseOffset: lexer.lineOffset(lineIndex) + textColumn - 1,
     startLine: lexer.lineNumber(lineIndex),
     startColumn: lexer.lineStartColumn(lineIndex) + textColumn - 1,
-    ...(lexer.hasDocumentOffsets ? { lineAnchors: anchors } : {}),
   })
   return node
 }
