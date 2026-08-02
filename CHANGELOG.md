@@ -9,6 +9,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `fmt` collapses a break inside a heading to a space instead of emitting it.
+  No parse produces such a heading, but an ingested AST can (PART 12 permits any
+  inline in a heading), and writing it out verbatim split the heading and moved
+  text out of the title on re-parse. Only an odd run of backslashes before the
+  newline is a hard break's marker, so a literal backslash ending a line
+  survives.
+
 - **BREAKING: a heading ends at the newline** (spec markup-carve/carve#451,
   markup-carve/carve#434). Nothing folds into a heading any more - neither a
   plain line nor a same-count `#` line - so `# Title` with prose beneath is a
