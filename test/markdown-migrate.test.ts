@@ -219,6 +219,96 @@ describe('markdownToCarve — HTML inline tags', () => {
   })
 })
 
+describe('markdownToCarve — raw HTML migration', () => {
+  it('preserves a multi-line HTML block as raw html', () => {
+    const md = ['<div class="x">', '  <span>hi</span>', '</div>', '', 'after'].join('\n')
+    const carve = ['```=html', '<div class="x">', '  <span>hi</span>', '</div>', '```', '', 'after'].join(
+      '\n',
+    )
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toBe('<div class="x">\n  <span>hi</span>\n</div>\n<p>after</p>')
+  })
+
+  it('preserves an HTML comment block', () => {
+    const md = ['<!-- keep "this"', 'and `that` -->', '', 'after'].join('\n')
+    const carve = ['```=html', '<!-- keep "this"', 'and `that` -->', '```', '', 'after'].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toBe('<!-- keep "this"\nand `that` -->\n<p>after</p>')
+  })
+
+  it('preserves inline HTML in a sentence as raw html', () => {
+    const md = 'a <span class="x">hi</span> c'
+    const carve = 'a `<span class="x">hi</span>`{=html} c'
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toBe('<p>a <span class="x">hi</span> c</p>')
+  })
+
+  it('keeps attributed mappable inline tags as raw html', () => {
+    const md = '<b class="x">y</b>'
+    const carve = '`<b class="x">y</b>`{=html}'
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toBe('<p><b class="x">y</b></p>')
+  })
+
+  it('preserves attributed inline code HTML as raw html', () => {
+    const md = 'a <code v-pre>{{ x }}</code> c'
+    const carve = 'a `<code v-pre>{{ x }}</code>`{=html} c'
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toBe('<p>a <code v-pre>{{ x }}</code> c</p>')
+  })
+
+  it('preserves inline HTML in a table cell without breaking the table', () => {
+    const md = ['| Name | Badge |', '| --- | --- |', '| a | <Badge type="tip" /> |'].join('\n')
+    const carve = ['|= Name |= Badge |', '| a | `<Badge type="tip" />`{=html} |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    const html = carveToHtml(carve)
+    expect(html).toContain('<table>')
+    expect(html).toContain('<td><Badge type="tip" /></td>')
+  })
+
+  it('converts mappable HTML natively and unknown HTML as raw inside a table row', () => {
+    const md = ['| Native | Raw |', '| --- | --- |', '| <b>x</b> | <Badge/> |'].join('\n')
+    const carve = ['|= Native |= Raw |', '| *x* | `<Badge/>`{=html} |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    const html = carveToHtml(carve)
+    expect(html).toContain('<td><strong>x</strong></td>')
+    expect(html).toContain('<td><Badge/></td>')
+  })
+
+  it('uses longer delimiters when raw HTML contains backtick runs', () => {
+    const blockMd = ['<div data-run="```">', 'ok', '</div>'].join('\n')
+    const blockCarve = ['````=html', '<div data-run="```">', 'ok', '</div>', '````'].join('\n')
+    expect(conv(blockMd)).toBe(blockCarve)
+    expect(carveToHtml(blockCarve)).toBe('<div data-run="```">\nok\n</div>')
+
+    const inlineMd = 'a <Badge text="``" /> b'
+    const inlineCarve = 'a ```<Badge text="``" />```{=html} b'
+    expect(conv(inlineMd)).toBe(inlineCarve)
+    expect(carveToHtml(inlineCarve)).toBe('<p>a <Badge text="``" /> b</p>')
+  })
+
+  it('leaves HTML-looking text inside fenced code blocks untouched', () => {
+    const md = ['```', '<div class="x">', '```'].join('\n')
+    expect(conv(md)).toBe(md)
+    expect(carveToHtml(conv(md))).toBe('<pre><code>&lt;div class="x"&gt;\n</code></pre>')
+  })
+
+  it('leaves a bare less-than comparison in prose untouched', () => {
+    const md = 'a < b'
+    expect(conv(md)).toBe(md)
+    expect(carveToHtml(conv(md))).toBe('<p>a &lt; b</p>')
+  })
+
+  it('keeps URL and email autolinks as Carve autolinks', () => {
+    expect(conv('<https://example.com>')).toBe('<https://example.com>')
+    expect(conv('<a@b.com>')).toBe('<a@b.com>')
+    expect(carveToHtml(conv('<https://example.com>'))).toBe(
+      '<p><a href="https://example.com">https://example.com</a></p>',
+    )
+    expect(carveToHtml(conv('<a@b.com>'))).toBe('<p><a href="mailto:a@b.com">a@b.com</a></p>')
+  })
+})
+
 describe('markdownToCarve — GFM tables', () => {
   it('rewrites a header row + delimiter to Carve |= header cells (no delimiter row)', () => {
     const md = ['| Name | Type |', '|---|---|', '| Carve | Markup |'].join('\n')

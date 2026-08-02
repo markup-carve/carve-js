@@ -199,6 +199,59 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.column).toBe(1)
   })
 
+  it('flags a Djot heading continuation line and joins it', () => {
+    // Djot folds the line under a heading into it; Carve does not, so the
+    // heading text and its auto-id both change. Valid Carve either way, hence
+    // djot-shift: `carve lint` shows it only under --from-djot.
+    const w = djotMigrationWarnings('# Title\nSome text.\n')
+    expect(w.map((x) => x.rule)).toEqual(['djot-heading-continuation'])
+    expect(w[0]!.category).toBe('djot-shift')
+    expect(w[0]!.line).toBe(1)
+    expect(applyMigrationFixes('# Title\nSome text.\n').output).toBe(
+      '# Title Some text.\n',
+    )
+  })
+
+  it('strips the marker when joining a same-count `#` continuation', () => {
+    // Djot folds `## still A` with its marker stripped, so the fix must too:
+    // joining the raw line would leave a literal `##` in the title.
+    expect(rules('## A\n## still A\n')).toEqual(['djot-heading-continuation'])
+    expect(applyMigrationFixes('## A\n## still A\n').output).toBe('## A still A\n')
+  })
+
+  it('joins the WHOLE run of continuation lines, not just the first', () => {
+    // Djot keeps folding until a blank line or a block opener. Fixing only the
+    // first break would produce a document neither language describes.
+    expect(rules('# A\nB\nC\n')).toEqual(['djot-heading-continuation'])
+    expect(applyMigrationFixes('# A\nB\nC\n').output).toBe('# A B C\n')
+    expect(applyMigrationFixes('# A\n# B\n# C\n').output).toBe('# A B C\n')
+    // A blank line ends the run, so a second heading is its own warning.
+    expect(rules('# A\nB\n\n# C\nD\n')).toEqual([
+      'djot-heading-continuation',
+      'djot-heading-continuation',
+    ])
+    expect(applyMigrationFixes('# A\nB\n\n# C\nD\n').output).toBe('# A B\n\n# C D\n')
+    // So does a block opener: the quote is not part of the heading.
+    expect(applyMigrationFixes('# A\nB\n> q\n').output).toBe('# A B\n> q\n')
+  })
+
+  it('does not flag a heading followed by a blank line or another block', () => {
+    // Nothing folds in Djot either, so there is no shift to report.
+    for (const src of [
+      '# Title\n\nSome text.\n',
+      '# Title\n- item\n',
+      '# Title\n> quote\n',
+      '# Title\n## sub\n',
+      '# Title\n```php\nx\n```\n',
+      '# Title\n{#id}\n',
+      '# T\n^ cap\n',
+      '### H\n| a | b |\n',
+      '```\n# Title\ntext\n```\n',
+    ]) {
+      expect(rules(src), src).toEqual([])
+    }
+  })
+
   it('does not flag a lone `+` (the legit Carve continuation marker)', () => {
     expect(rules('- item\n+\n> note')).toEqual([])
   })
@@ -368,5 +421,32 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
     const r = applyMigrationFixes('**_x_**')
     expect(r.output).toBe('*/x/*')
     expect(r.skipped).toEqual([])
+  })
+})
+
+describe('djot-heading-continuation — openers Djot has and Carve does not', () => {
+  const contHits = (src: string) =>
+    djotMigrationWarnings(src).filter((w) => w.rule === 'djot-heading-continuation')
+
+  it('does not flag a line that opens a block in DJOT but reads as prose in Carve', () => {
+    // Verified against @djot/djot, not from memory: each of these ends the Djot
+    // heading, so nothing shifted. Flagging one would be worse than silence -
+    // the fix joins the lines, pulling a list item or a definition term INTO
+    // the title.
+    expect(contHits('# H\n(1) item\n')).toEqual([]) // parenthesized ordered marker
+    expect(contHits('# H\n(a) item\n')).toEqual([])
+    expect(contHits('# H\n(iv) item\n')).toEqual([])
+    expect(contHits('# H\n: term\n')).toEqual([]) // Djot definition list
+  })
+
+  it('leaves those lines untouched under the autofix', () => {
+    expect(applyMigrationFixes('# H\n(1) item\n').output).toBe('# H\n(1) item\n')
+    expect(applyMigrationFixes('# H\n: term\n').output).toBe('# H\n: term\n')
+  })
+
+  it('still flags the forms Djot really does fold', () => {
+    expect(contHits('# Title\nSome text.\n')).toHaveLength(1)
+    expect(contHits('## A\n## B\n')).toHaveLength(1)
+    expect(applyMigrationFixes('# Title\nSome text.\n').output).toBe('# Title Some text.\n')
   })
 })

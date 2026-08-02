@@ -25,7 +25,7 @@
  * position and skip verbatim regions (code/raw blocks) the parser already
  * accounts for.
  */
-import { parse } from './parse.js'
+import { parse, type UnclosedContainer } from './parse.js'
 import {
   slugify,
   inlineText,
@@ -256,7 +256,11 @@ export function lintCarve(
   source: string,
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): LintWarning[] {
-  const doc = parse(source, { positions: true })
+  const unclosedContainers: UnclosedContainer[] = []
+  const doc = parse(source, {
+    positions: true,
+    onUnclosedContainer: (container) => unclosedContainers.push(container),
+  })
   // The AST carries codepoint positions; a LintWarning reports UTF-16, so a JS
   // consumer can slice the source with it. Identity unless the document has an
   // astral character.
@@ -268,6 +272,19 @@ export function lintCarve(
   const foldId = (s: string): string =>
     Array.from(s, (c) => c.toLowerCase()).join('')
   const out: LintWarning[] = []
+
+  for (const container of unclosedContainers) {
+    out.push({
+      line: container.line,
+      column: container.column,
+      rule: 'unclosed-container-fence',
+      message:
+        `This ${container.fenceWidth}-colon ${container.kind} has no closer; it runs to ` +
+        `the end of the document. Add a bare fence of ${container.fenceWidth} colons to close it.`,
+      start: container.startOffset,
+      end: container.endOffset,
+    })
+  }
 
   checkDeclaredVersion(source, doc, (w) => out.push(w))
 
@@ -639,6 +656,7 @@ function collectSilentFailures(
         `the enclosing list item's content column.`,
     )
   }
+
 }
 
 function collectFootnoteDefinitionWarnings(

@@ -11,8 +11,10 @@ import { parse } from '../src/index.js'
  *   text is a suffix of its line and its continuation lines are appended whole,
  *   so an exact mapping exists - unlike a line block's expanded whitespace,
  *   which is what that helper is for.
- * - A multi-line heading (`## A` / `## still A`) gave the continuation line the
- *   opener's origin, so "still A" reported the span of "## stil".
+ * - A second heading line (`## A` / `## still A`) took the first one's origin,
+ *   so "still A" reported the span of "## stil". Those two lines were one
+ *   folded heading when this was found; they are two headings now
+ *   (markup-carve/carve#451), and the placement still has to be per line.
  *
  * These assert by SLICING THE SOURCE with the reported offsets. A span that is
  * present but points somewhere else fails; asserting on the numbers alone would
@@ -67,8 +69,8 @@ describe('caption positions', () => {
   })
 })
 
-describe('multi-line heading positions', () => {
-  it('places a continuation line at its own text, not at the opener', () => {
+describe('heading positions across consecutive heading lines', () => {
+  it('places the second heading at its own text, not at the first one', () => {
     const src = '## A\n## still A\n# B\n'
     const [, second] = nodesOfType(parse(src), 'text')
 
@@ -79,7 +81,7 @@ describe('multi-line heading positions', () => {
     expect(second!.pos.startColumn).toBe(4)
   })
 
-  it('places an unmarked continuation line too', () => {
+  it('places the paragraph under a heading at its own text', () => {
     const src = '# Title\ncontinues here\n'
     const texts = nodesOfType(parse(src), 'text')
     for (const node of texts) {
