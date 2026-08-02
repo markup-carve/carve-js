@@ -181,6 +181,67 @@ describe('markdownToCarve — inline construct mapping', () => {
   })
 })
 
+describe('markdownToCarve — multiline paragraph inline mapping', () => {
+  it('converts strong spanning a line break without changing the break', () => {
+    const carve = conv('a **b\nc** d')
+    expect(carve).toBe('a *b\nc* d')
+    expect(carveToHtml(carve)).toBe('<p>a <strong>b\nc</strong> d</p>')
+  })
+
+  it('converts emphasis spanning a line break without becoming Carve strong', () => {
+    const carve = conv('a *it\nb* c')
+    expect(carve).toBe('a /it\nb/ c')
+    expect(carveToHtml(carve)).toBe('<p>a <em>it\nb</em> c</p>')
+  })
+
+  it('converts strikethrough spanning a line break', () => {
+    const carve = conv('a ~~s\nt~~ c')
+    expect(carve).toBe('a ~s\nt~ c')
+    expect(carveToHtml(carve)).toBe('<p>a <s>s\nt</s> c</p>')
+  })
+
+  it('does not convert emphasis across a blank line', () => {
+    const carve = conv('a *it\n\nb* c')
+    expect(carve).toBe('a *it\n\nb* c')
+    expect(carveToHtml(carve)).toBe('<p>a *it</p>\n<p>b* c</p>')
+  })
+
+  it('keeps a code span spanning a line break verbatim', () => {
+    const carve = conv('a `*x\n_y_` b')
+    expect(carve).toBe('a `*x\n_y_` b')
+    expect(carveToHtml(carve)).toBe('<p>a <code>*x\n_y_</code> b</p>')
+  })
+
+  it('keeps fenced code with multiline delimiter pairs untouched', () => {
+    const md = ['```', 'a **b', 'c** d', '```'].join('\n')
+    expect(conv(md)).toBe(md)
+    expect(carveToHtml(conv(md))).toBe('<pre><code>a **b\nc** d\n</code></pre>')
+  })
+
+  it('converts a link whose label wraps across a line', () => {
+    const carve = conv('[a\nb](/u)')
+    expect(carve).toBe('[a\nb](/u)')
+    expect(carveToHtml(carve)).toBe('<p><a href="/u">a\nb</a></p>')
+  })
+
+  it('does not let emphasis leak across table row boundaries', () => {
+    const md = ['| *a | b |', '| c | d* |', '| **x** | *y* |', '| **z** | *w* |'].join('\n')
+    const carve = ['| *a | b |', '| c | d* |', '| *x* | /y/ |', '| *z* | /w/ |'].join('\n')
+    expect(conv(md)).toBe(carve)
+    expect(carveToHtml(carve)).toContain('<tr><td><strong>x</strong></td><td><em>y</em></td></tr>')
+  })
+
+  it('preserves line count and leading whitespace in a multiline paragraph', () => {
+    const md = '  a **b\n    c** d\n\t*e\n\tf*'
+    const carve = conv(md)
+    expect(carve).toBe('  a *b\n    c* d\n\t/e\n\tf/')
+    expect(carve.split('\n')).toHaveLength(md.split('\n').length)
+    expect(carve.split('\n').map((line) => line.match(/^[ \t]*/)?.[0])).toEqual(
+      md.split('\n').map((line) => line.match(/^[ \t]*/)?.[0]),
+    )
+  })
+})
+
 describe('markdownToCarve — HTML inline tags', () => {
   it('converts <em>/<i> to /x/', () => {
     expect(conv('<em>a</em> <i>b</i>')).toBe('/a/ /b/')

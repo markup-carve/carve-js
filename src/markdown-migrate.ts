@@ -29,13 +29,9 @@
  * Delimiters inside inline code and fenced code blocks are never rewritten.
  *
  * Known limitations:
- *  - Markdown indented (4-space) code blocks are not converted. Carve has no
- *    indented code block (like Djot), so the text is treated as a paragraph
- *    and its delimiters are rewritten. Use a fenced ``` block in the source.
- *  - Inline conversion is per line, so a construct that crosses a soft line
- *    break is mishandled: an emphasis/strong span (`*first\nsecond*`) is left
- *    unconverted, and a code span (`` `a\nb` ``) is not protected on its first
- *    line. Keep such spans on a single line before converting.
+ *  - Markdown indented (4-space) code blocks are passed through byte-for-byte.
+ *    Carve has no indented code block (like Djot), so use a fenced ``` block
+ *    in the source for a faithful rendered migration.
  *  - Markdown lazy continuation is not preserved — Carve has none. A non-`>`
  *    line after a blockquote, or an unindented line after a list item, stays
  *    a separate paragraph rather than folding into the quote/item. Put `>` on
@@ -142,7 +138,7 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
   return out
 }
 
-/** Convert inline Markdown formatting on a single (non-code) line to Carve. */
+/** Convert inline Markdown formatting in non-code text to Carve. */
 function convertInline(input: string): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL bytes — which cannot occur in the source
@@ -242,22 +238,22 @@ function convertInline(input: string): string {
   // ***bold italic*** / ___bold italic___ -> /*x*/ (Carve's canonical
   // bold-italic). The underscore form needs word boundaries: CommonMark `_`
   // cannot open/close emphasis intraword (foo___bar___baz stays literal).
-  line = line.replace(/\*{3}(?!\s)(.+?)(?<!\s)\*{3}/g, (_m, inner: string) =>
+  line = line.replace(/\*{3}(?!\s)([\s\S]+?)(?<!\s)\*{3}/g, (_m, inner: string) =>
     hold(`/*${convertNestedEm(inner)}*/`),
   )
   line = line.replace(
-    /(?<![A-Za-z0-9])___(?!\s)(.+?)(?<!\s)___(?![A-Za-z0-9])/g,
+    /(?<![A-Za-z0-9])___(?!\s)([\s\S]+?)(?<!\s)___(?![A-Za-z0-9])/g,
     (_m, inner: string) => hold(`/*${convertNestedEm(inner)}*/`),
   )
 
   // **strong** -> *strong*
-  line = line.replace(/\*\*(?!\s)(.+?)(?<!\s)\*\*/g, (_m, inner: string) =>
+  line = line.replace(/\*\*(?!\s)([\s\S]+?)(?<!\s)\*\*/g, (_m, inner: string) =>
     hold(`*${convertNestedEm(inner)}*`),
   )
 
   // __strong__ -> *strong* (word-boundary: intraword `_` is literal)
   line = line.replace(
-    /(?<![A-Za-z0-9])__(?!\s)(.+?)(?<!\s)__(?![A-Za-z0-9])/g,
+    /(?<![A-Za-z0-9])__(?!\s)([\s\S]+?)(?<!\s)__(?![A-Za-z0-9])/g,
     (_m, inner: string) => hold(`*${convertNestedEm(inner)}*`),
   )
 
@@ -361,6 +357,39 @@ function isStandardTableRow(line: string): boolean {
   if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return false
   const cells = splitTableRow(trimmed)
   return cells.some((cell) => cell !== '') || cells.length >= 2
+}
+
+function hasFollowingSetextUnderline(lines: readonly string[], index: number): boolean {
+  const underline = index + 1 < lines.length ? lines[index + 1]!.trim() : ''
+  return /^=+$/.test(underline) || /^-+$/.test(underline)
+}
+
+function startsTableHeader(lines: readonly string[], index: number): boolean {
+  const trimmed = lines[index]!.trim()
+  if (!trimmed.includes('|')) return false
+  const next = index + 1 < lines.length ? lines[index + 1]!.trim() : ''
+  if (!next.includes('-') || !RE_TABLE_DELIMITER.test(next)) return false
+  return splitTableRow(trimmed).length === splitTableRow(next).length
+}
+
+function isParagraphRunLine(
+  lines: readonly string[],
+  index: number,
+  prevType: 'blank' | 'heading' | 'list' | 'block_quote' | 'code_fence' | 'code' | 'text',
+): boolean {
+  const line = lines[index]!
+  const trimmed = line.trim()
+  if (trimmed === '') return false
+  if (/^(\s{0,3})(`{3,}|~{3,})(.*)$/.test(line)) return false
+  if (/^#{1,6}\s/.test(trimmed) || trimmed.startsWith('>')) return false
+  if (RE_MD_THEMATIC.test(line) || hasFollowingSetextUnderline(lines, index)) return false
+  if (startsTableHeader(lines, index) || isStandardTableRow(line)) return false
+
+  const ordered = trimmed.match(/^(\d+)[.)]\s/)
+  const isList =
+    (/^[-*+]\s/.test(trimmed) || ordered !== null) &&
+    !(prevType === 'text' && ordered !== null && Number(ordered[1]) !== 1)
+  return !isList
 }
 
 /** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
@@ -621,6 +650,12 @@ export function markdownToCarve(markdown: string): string {
       continue
     }
 
+    if (indent >= 4 && (prevType === 'blank' || prevType === 'code')) {
+      out.push(line)
+      prevType = 'code'
+      continue
+    }
+
     // Indented content directly under a list item (a nested sublist, an
     // indented blockquote/heading, or a lazy continuation) belongs to that
     // item. Carve keeps it there by indentation, so pass it through with
@@ -705,6 +740,20 @@ export function markdownToCarve(markdown: string): string {
     // Carve has no `+` bullet (it is the list-continuation marker); normalize a
     // Markdown `+` bullet to `-` so the converted list survives.
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
+    if (!isHeading && !isList && !isBlockquote && !isStandardTableRow(body)) {
+      const run = [body]
+      let end = i + 1
+      while (end < lines.length && isParagraphRunLine(lines, end, 'text')) {
+        run.push(lines[end]!)
+        end++
+      }
+      if (run.length > 1) {
+        out.push(convertInline(run.join('\n')))
+        i = end - 1
+        prevType = 'text'
+        continue
+      }
+    }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
     out.push(convertInline(body))
 
