@@ -45,16 +45,18 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     expect(html('> q\nplain')).toBe('<blockquote><p>q\nplain</p></blockquote>')
   })
 
-  it('a flush-left bare div fence ends lazy quote continuation even without a closer', () => {
-    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<p>:::</p>')
+  it('a flush-left bare div fence ends lazy quote continuation and auto-closes at EOF', () => {
+    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
   })
 
-  it('a flush-left typed div fence ends lazy quote continuation even without a closer', () => {
-    expect(html('> a\n::: note')).toBe('<blockquote><p>a</p></blockquote>\n<p>::: note</p>')
+  it('a flush-left typed div fence ends lazy quote continuation and auto-closes at EOF', () => {
+    expect(html('> a\n::: note')).toBe(
+      '<blockquote><p>a</p></blockquote>\n<aside class="admonition note">\n\n</aside>',
+    )
   })
 
-  it('a flush-left longer div fence ends lazy quote continuation even without a closer', () => {
-    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<p>::::</p>')
+  it('a flush-left longer div fence ends lazy quote continuation and auto-closes at EOF', () => {
+    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
   })
 
   it('a caption attaches to the quote rather than folding in', () => {
@@ -101,16 +103,12 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     )
   })
 
-  it('keeps an unterminated `:::note` inside a quote literal (no closer in scope)', () => {
-    // The quote's own content is just `:::note`; its `:::` closer sits on a
-    // separately-marked line that lazy continuation does not fold in, so there
-    // is no closer in scope and the opener is NOT an admonition (grammar:
-    // `admonition = open … close`). It stays a literal paragraph rather than
-    // opening an empty aside. (Deeply underspecified blockquote corner;
-    // carve-php/carve-rs still open an empty aside here — tracked for a spec
-    // decision + alignment.)
+  it('keeps glued `:::note` literal inside a lazily continued quote paragraph', () => {
+    // `:::note` has no space after the fence, so it is paragraph text. The
+    // unmarked middle line can still lazily continue that quoted paragraph,
+    // and the final glued-looking closer is literal because no container opened.
     expect(html('> :::note\nbody\n> :::')).toBe(
-      '<blockquote><p>:::note</p></blockquote>\n<p>body</p>\n<blockquote><p>:::</p></blockquote>',
+      '<blockquote><p>:::note\nbody\n:::</p></blockquote>',
     )
   })
 
@@ -124,9 +122,9 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
     )
   })
 
-  it('still folds a lazy line that continues a paragraph open inside a div', () => {
+  it('still folds a lazy line after glued `:::note` paragraph text', () => {
     expect(html('> :::note\n> para\nlazy\n> :::')).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n    <p>para\nlazy</p>\n  </aside>\n</blockquote>',
+      '<blockquote><p>:::note\npara\nlazy\n:::</p></blockquote>',
     )
   })
 })

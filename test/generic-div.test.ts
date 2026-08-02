@@ -7,9 +7,8 @@ const h = (s: string) => carveToHtml(s)
  * Generic divs: a bare `:::` opens a plain `<div>` (grammar `div`
  * production; PART 9 §12). The `:::` fence carries NO inline attributes
  * (strict djot): an `::: {…}` opener is a paragraph, and attributes
- * attach via a PRECEDING `{…}` block-attribute line. A `:::` only opens a
- * div when a matching closing `:::` exists ahead; a lone, unclosed `:::`
- * is literal text (djot + carve-php + the grammar).
+ * attach via a PRECEDING `{…}` block-attribute line. A `:::` opener always
+ * opens a div, and an unclosed container auto-closes at EOF.
  */
 describe('generic divs', () => {
   it('wraps a bare ::: block in a plain <div>', () => {
@@ -32,19 +31,19 @@ describe('generic divs', () => {
     }
   })
 
-  it('does NOT open a div for a stray, unclosed ::: after prose', () => {
-    // Regression: a lone `:::` must not swallow the rest of the document.
-    // Matches djot + carve-php: it stays paragraph text.
-    expect(h('before\n:::\nafter')).toBe('<p>before\n:::\nafter</p>')
+  it('opens and auto-closes an unclosed ::: after prose', () => {
+    // An opener always starts a container; with no closer, the div closes
+    // cleanly at EOF after consuming the remaining block body.
+    expect(h('before\n:::\nafter')).toBe('<p>before</p>\n<div>\n  <p>after</p>\n</div>')
   })
 
-  it('keeps a trailing unclosed ::: literal', () => {
-    expect(h('text\n:::')).toBe('<p>text\n:::</p>')
+  it('opens an empty trailing ::: block and auto-closes it', () => {
+    expect(h('text\n:::')).toBe('<p>text</p>\n<div>\n</div>')
   })
 
-  it('does not hang or open a div on a nested stray ::: ', () => {
+  it('opens and auto-closes a nested stray ::: without hanging', () => {
     expect(h('> before\n> :::\n> after')).toBe(
-      '<blockquote><p>before\n:::\nafter</p></blockquote>',
+      '<blockquote>\n  <p>before</p>\n  <div>\n    <p>after</p>\n  </div>\n</blockquote>',
     )
   })
 
@@ -108,7 +107,9 @@ describe('hard-break block (::: \\)', () => {
     )
   })
 
-  it('does not open without a closer (opener stays literal text)', () => {
-    expect(h('::: \\\none\ntwo')).toBe('<p>::: <br>\none\ntwo</p>')
+  it('opens without a closer and auto-closes at EOF', () => {
+    expect(h('::: \\\none\ntwo')).toBe(
+      '<div class="hardbreaks">\n  <p>one<br>\ntwo</p>\n</div>',
+    )
   })
 })

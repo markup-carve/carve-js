@@ -28,8 +28,8 @@ interface CarveContext {
   /** Depth of line-block nesting, so the inline writer drops the explicit
    *  backslash: inside a `::: |` fence every newline already IS a hard break. */
   lineBlockDepth: number
-  /** Per-pass memo for colonFenceWidth, keyed by child list then depth budget. */
-  fenceWidths: WeakMap<BlockNode[], Map<number, number>>
+  /** Number of colon-fence containers enclosing the block currently rendering. */
+  colonFenceDepth: number
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -52,7 +52,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
       inlineDepth: 0,
       listDepth: 0,
       lineBlockDepth: 0,
-      fenceWidths: new WeakMap(),
+      colonFenceDepth: 0,
     }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
@@ -241,8 +241,8 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // fmt pass (issue 295).
       const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
-      const body = renderBlocks(node.children, ctx)
-      const fence = colonFenceFor(node.children, ctx)
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
     }
     case 'line_block': {
@@ -254,14 +254,16 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // Inside the fence every newline IS a hard break (PART 3,
       // line_block_body), so the explicit backslash the inline writer emits for
       // a hard_break would double it on re-parse.
+      const fence = colonFenceFor(ctx)
       ctx.lineBlockDepth++
+      ctx.colonFenceDepth++
       let body: string
       try {
         body = renderBlocks(node.children, ctx)
       } finally {
+        ctx.colonFenceDepth--
         ctx.lineBlockDepth--
       }
-      const fence = colonFenceFor(node.children, ctx)
       return withAttrs(fence + ' |\n' + lineBlockIndent(body) + '\n' + fence)
     }
     case 'div': {
@@ -272,8 +274,8 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // serialize themselves, which round-trips both. (A line block is its own
       // node type and is handled above.)
       const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
-      const body = renderBlocks(node.children, ctx)
-      const fence = colonFenceFor(node.children, ctx)
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
     }
     case 'definition_list':
@@ -418,72 +420,16 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
   return out.join('\n')
 }
 
-/**
- * A colon fence closes on a bare fence of equal-or-greater length (PART 9 §12),
- * so a container's fence must be longer than every container fence BELOW it -
- * not just the ones among its direct children. Testing only the direct children
- * emitted `::::` for both the outer and the middle container of a three-level
- * nest, and equal-length fences do not nest, so the middle one stopped being a
- * container across a fmt pass (issue 496).
- */
-function colonFenceFor(children: BlockNode[], ctx: CarveContext): string {
-  // Only the levels this pass will actually render may widen the fence: past
-  // MAX_RENDER_DEPTH renderBlock emits nothing, so counting deeper containers
-  // would size a fence for output that does not exist. A hand-built AST (an
-  // `--from-json` document, say) can nest far past the cap the parser enforces.
-  return ':'.repeat(colonFenceWidth(children, ctx, MAX_RENDER_DEPTH - ctx.blockDepth))
+function colonFenceFor(ctx: CarveContext): string {
+  return ':'.repeat(3 + ctx.colonFenceDepth)
 }
 
-/**
- * Memoized per child list FOR ONE PASS: a container's width is asked for while
- * rendering it, and its own scan already visited every container below it, so
- * caching keeps the whole walk linear instead of rescanning each subtree once
- * per level (MAX_NESTING_DEPTH allows 200 of them). The memo lives on the pass
- * context, never module-wide: a caller may mutate a `children` array between
- * renders, and a width cached across calls would then emit a fence too short
- * for the container that was added.
- */
-function colonFenceWidth(children: BlockNode[], ctx: CarveContext, budget: number): number {
-  if (budget <= 0) return 3
-  const byBudget = ctx.fenceWidths.get(children)
-  const cached = byBudget?.get(budget)
-  if (cached !== undefined) return cached
-  let widest = 0
-  const scan = (blocks: BlockNode[]): void => {
-    for (const child of blocks) {
-      if (child.type === 'admonition' || child.type === 'div' || child.type === 'line_block') {
-        // The child's own width already covers its whole subtree.
-        widest = Math.max(widest, colonFenceWidth(child.children, ctx, budget - 1))
-      } else {
-        for (const nested of childBlockLists(child)) scan(nested)
-      }
-    }
-  }
-  scan(children)
-  const width = widest ? widest + 1 : 3
-  if (byBudget) byBudget.set(budget, width)
-  else ctx.fenceWidths.set(children, new Map([[budget, width]]))
-  return width
-}
-
-/**
- * The block lists a non-container block can carry containers in - a fenced
- * container nested inside a list item or a blockquote still constrains the
- * enclosing fence's width.
- */
-function childBlockLists(node: BlockNode): BlockNode[][] {
-  switch (node.type) {
-    case 'block_quote':
-      return [node.children]
-    case 'figure':
-      return [[node.target]]
-    case 'list':
-      return node.items.map((item) => item.children)
-    case 'definition_list':
-      return node.items.flatMap((item) => item.definitions)
-    default:
-      // A table cell holds inlines, so no container can hide there.
-      return []
+function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
+  ctx.colonFenceDepth++
+  try {
+    return renderBlocks(children, ctx)
+  } finally {
+    ctx.colonFenceDepth--
   }
 }
 
