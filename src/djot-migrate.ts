@@ -182,6 +182,42 @@ const RULES: Rule[] = [
       'Djot/Markdown `+` bullet is not a Carve bullet (`+` is the list-continuation marker) — this line renders as a paragraph.',
     suggestion: () => '-',
   },
+  // Block-level (line-anchored): Djot folds the line under a heading INTO that
+  // heading — a plain line, or one carrying the same number of `#`. Carve ends
+  // a heading at the newline (SINGLE-LINE HEADINGS), so the same two lines are
+  // a heading plus a block, and the heading's auto-id changes with it. Valid
+  // Carve either way, hence `djot-shift`: it matters only when the source came
+  // from Djot. The match is the line break itself, so the fix joins the two
+  // lines and keeps the Djot reading.
+  // One rule, both forms, and the WHOLE run: Djot keeps folding line after line
+  // until a blank line or a block opener, so `# A` / `B` / `C` is one heading.
+  // Matching only the first break would "fix" it to `# A B` plus a stray
+  // paragraph — a different document from either language. The match therefore
+  // spans every folded line, and the fix rebuilds the heading from the original
+  // source (group 1), stripping each same-count `#` marker exactly as Djot's
+  // fold does; joining those raw would leave a literal `##` in the title.
+  //
+  // Anchored at the heading line and matching FORWARD: anchoring on the line
+  // break needs a variable-length lookbehind at every newline, which made the
+  // whole scan quadratic.
+  //
+  // A BARE same-count marker line (`#` alone, which Djot also folds) ends the
+  // run here: it contributes no text, so no join reproduces the Djot reading,
+  // and a wrong fix is worse than a missing one.
+  {
+    id: 'djot-heading-continuation',
+    category: 'djot-shift',
+    family: 'heading-continuation',
+    pattern:
+      /^((#{1,6})[ ]+[^\n]*\S(?:\n(?:\2[ ]+\S[^\n]*|(?![ \t]*$)(?!#)(?![>|])(?![-*+][ \t])(?!\d+[.)][ \t])(?!:{2,})(?![`~]{3,})(?!\^[ \t])(?!%{3,})(?!\{)(?!\[[^\]\n]*\]:)[^\n]*\S))+)/gmd,
+    message: () =>
+      'Djot folds the line(s) below a heading INTO it (a plain line, or one with the same number of `#`); Carve ends the heading at the newline, so they are separate blocks and the heading id changes.',
+    suggestion: (m) => {
+      const [first, ...rest] = m[1]!.split('\n')
+      const marker = new RegExp(`^#{${m[2]!.length}}[ ]+`)
+      return [first, ...rest.map((l) => l.replace(marker, ''))].join(' ')
+    },
+  },
   // NOTE: full Djot reference links `[text][ref]` are NOT flagged — Carve
   // resolves them identically against a `[ref]: url` definition (corpus
   // 34-reference-link), so there is no silent mis-render. Math (`$`x``)

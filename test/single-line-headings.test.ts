@@ -3,10 +3,12 @@ import { carveToHtml } from '../src/index.js'
 
 const html = (s: string) => carveToHtml(s)
 
-describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
-  it('folds a following non-blank line into the heading', () => {
+describe('single-line headings — a heading ends at the newline', () => {
+  it('leaves a following non-blank line as its own paragraph', () => {
+    // The id follows the heading LINE (it used to be Title-outside), which is
+    // what made the old fold a silent corruption of `</#id>` and the TOC.
     expect(html('# Title\noutside')).toBe(
-      '<section id="Title-outside">\n  <h1>Title\noutside</h1>\n</section>',
+      '<section id="Title">\n  <h1>Title</h1>\n  <p>outside</p>\n</section>',
     )
   })
 
@@ -22,21 +24,21 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('a same-level # continuation line is folded with its marker stripped', () => {
+  it('a same-level # line is simply the next heading', () => {
+    // Djot's explicit continuation form. It no longer continues anything.
     expect(html('# H\n# sib')).toBe(
-      '<section id="H-sib">\n  <h1>H\nsib</h1>\n</section>',
+      '<section id="H">\n  <h1>H</h1>\n</section>\n<section id="sib">\n  <h1>sib</h1>\n</section>',
     )
   })
 
-  it('a same-level ## continuation line folds (same number of #)', () => {
+  it('a same-level ## line is simply the next heading', () => {
     expect(html('## H\n## more')).toBe(
-      '<section id="H-more">\n  <h2>H\nmore</h2>\n</section>',
+      '<section id="H">\n  <h2>H</h2>\n</section>\n<section id="more">\n  <h2>more</h2>\n</section>',
     )
   })
 
-  it('a fewer-# marker ends the heading and starts a new heading', () => {
-    // Djot continuation requires EXACTLY the same number of `#`. A line with
-    // fewer `#` is no longer folded; it opens a new heading at that level.
+  it('a fewer-# marker starts a new heading', () => {
+    // This one never folded, and now every `#` line answers the same way.
     expect(html('## H\n# more')).toBe(
       '<section id="H">\n  <h2>H</h2>\n</section>\n<section id="more">\n  <h1>more</h1>\n</section>',
     )
@@ -67,9 +69,9 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('plain text still folds into the heading', () => {
+  it('plain text after a heading is a paragraph', () => {
     expect(html('# H\nplain words')).toBe(
-      '<section id="H-plain-words">\n  <h1>H\nplain words</h1>\n</section>',
+      '<section id="H">\n  <h1>H</h1>\n  <p>plain words</p>\n</section>',
     )
   })
 
@@ -79,19 +81,19 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     )
   })
 
-  it('a preceding block-attribute line applies to the whole multi-line heading', () => {
+  it('a preceding block-attribute line applies to the heading alone', () => {
     // Strict djot: heading attributes come from the PRECEDING block-attribute
-    // line, not a trailing `{…}` on the last line. The id covers the folded
-    // multi-line heading.
+    // line, not a trailing `{…}` on the heading line. It reaches the heading,
+    // not the paragraph beneath it.
     expect(html('{#id}\n# Title\nmore')).toBe(
-      '<section id="id">\n  <h1>Title\nmore</h1>\n</section>',
+      '<section id="id">\n  <h1>Title</h1>\n  <p>more</p>\n</section>',
     )
   })
 
-  // §756 (NORMATIVE): the FINAL line's trailing whitespace is stripped; interior
-  // trailing (before a soft break) is kept. A leading TAB after the delimiter is
-  // content (kept), unlike leading spaces which fold into the delimiter.
-  it('strips the final line trailing whitespace', () => {
+  // §756 (NORMATIVE): the heading line's trailing whitespace is stripped. A
+  // leading TAB after the delimiter is content (kept), unlike leading spaces
+  // which fold into the delimiter.
+  it('strips the heading line trailing whitespace', () => {
     expect(html('# x ')).toBe('<section id="x">\n  <h1>x</h1>\n</section>')
   })
 
@@ -112,8 +114,9 @@ describe('multi-line (lazy) headings — like Djot and blockquotes', () => {
     expect(html('# ')).toBe('<p>#</p>')
   })
 
-  it('keeps interior trailing whitespace but strips the final line', () => {
-    expect(html('# a \nb')).toBe('<section id="a-b">\n  <h1>a \nb</h1>\n</section>')
-    expect(html('# a\nb ')).toBe('<section id="a-b">\n  <h1>a\nb</h1>\n</section>')
+  it('strips trailing whitespace on the heading and on the line beneath', () => {
+    const expected = '<section id="a">\n  <h1>a</h1>\n  <p>b</p>\n</section>'
+    expect(html('# a \nb')).toBe(expected)
+    expect(html('# a\nb ')).toBe(expected)
   })
 })

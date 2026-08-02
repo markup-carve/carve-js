@@ -16,10 +16,12 @@ describe('trailing backslash at end of input is a hard break', () => {
   })
 })
 
-describe('bare same-level # continues a heading', () => {
-  it('joins marker lines with a single newline, contributing no content', () => {
+describe('bare same-level # does not continue a heading', () => {
+  it('is a paragraph between two headings, contributing no title text', () => {
+    // Nothing folds into a heading any more, and a bare `#` has no content so
+    // it is not a heading itself.
     expect(carveToHtml('# h\n#\n# x')).toBe(
-      '<section id="h-x">\n  <h1>h\nx</h1>\n</section>',
+      '<section id="h">\n  <h1>h</h1>\n  <p>#</p>\n</section>\n<section id="x">\n  <h1>x</h1>\n</section>',
     )
   })
 
