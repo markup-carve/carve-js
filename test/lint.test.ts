@@ -366,3 +366,46 @@ describe('lintCarve — indented fence rule inline-span guard', () => {
     expect(rulesOf('  ```foo bar```\n')).not.toContain('fence-delimiter-indentation')
   })
 })
+
+describe('lintCarve - unclosed container fence', () => {
+  const unclosed = (source: string): number[] =>
+    lintCarve(source)
+      .filter((w) => w.rule === 'unclosed-container-fence')
+      .map((w) => w.line)
+
+  it('reports a container that never closes', () => {
+    // Since PART 9 section 12 took exact-length closers, this no longer turns
+    // the rest of the document into literal text - it closes at end of input.
+    // Which is why it needs saying: the container silently runs further than
+    // the author meant, and everything still renders.
+    expect(unclosed('::: note\nbody\n')).toEqual([1])
+  })
+
+  it('says nothing about a closed one', () => {
+    expect(unclosed('::: note\nbody\n:::\n')).toEqual([])
+    expect(unclosed(':::\n:::: note\nx\n::::\n:::\n')).toEqual([])
+  })
+
+  it('matches a closer against the innermost fence only', () => {
+    // `:::` does not reach past the open `::::` to close the outer container -
+    // it opens a THIRD one. The parser renders exactly that (an empty div
+    // inside the admonition), so all three are unclosed.
+    expect(unclosed(':::\n:::: note\nx\n:::\n')).toEqual([1, 2, 4])
+  })
+
+  it('ignores a line that opens nothing', () => {
+    // No space after the fence, so the grammar makes this a paragraph.
+    expect(unclosed(':::note\nbody\n')).toEqual([])
+  })
+
+  it('ignores a fence inside a code block', () => {
+    expect(unclosed('```\n::: note\n```\n')).toEqual([])
+  })
+
+  it('names the width, because that is the fix', () => {
+    const [warning] = lintCarve(':::: wide\nbody\n').filter(
+      (w) => w.rule === 'unclosed-container-fence',
+    )
+    expect(warning?.message).toContain('exactly 4')
+  })
+})

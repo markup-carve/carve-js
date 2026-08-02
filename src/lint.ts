@@ -639,6 +639,56 @@ function collectSilentFailures(
         `the enclosing list item's content column.`,
     )
   }
+
+  // 5. A colon fence with no closer. Since PART 9 section 12 took exact-length
+  //    closers, a container without a matching closer no longer degrades the
+  //    rest of the document to literal text - it closes at end of input. That
+  //    is the right parser behavior (one mistyped character should not cost the
+  //    document), and it is exactly why it needs a diagnostic: the failure is
+  //    now SILENT. The container simply extends further than the author meant,
+  //    and everything still renders.
+  //
+  //    A closer matches only its own length, so this tracks a stack and reports
+  //    what is still open at the end. Reported at the OPENER, which is where
+  //    the fix goes, and named with its length, because a document with several
+  //    widths is where this happens.
+  const openFences: Array<{ line: number; col: number; len: number }> = []
+  for (let i = 0; i < lines.length; i++) {
+    if (verbatimLines.has(i + 1)) continue
+    const m = /^(\s*)(:{3,})(.*)$/.exec(lines[i]!)
+    if (!m) continue
+    const indent = m[1]!.length
+    const colons = m[2]!
+    const rest = m[3]!
+
+    // A bare run closes the INNERMOST open fence, and only if its length
+    // matches exactly. It is not searched for down the stack: with `:::` open
+    // and `::::` open inside it, a trailing `:::` does not reach past the
+    // `::::` to close the outer one - it opens a third container. Verified
+    // against the parser, which renders exactly that.
+    const innermost = openFences[openFences.length - 1]
+    if (rest.trim() === '' && innermost !== undefined && innermost.len === colons.length) {
+      openFences.pop()
+      continue
+    }
+
+    // An opener needs a space before its info word (grammar section 12); without
+    // one the line is a paragraph, so it opens nothing and must not be tracked.
+    if (rest !== '' && !/^[ \t]/.test(rest)) continue
+
+    openFences.push({ line: i + 1, col: indent + 1, len: colons.length })
+  }
+  for (const fence of openFences) {
+    push(
+      fence.line,
+      fence.col,
+      fence.len,
+      'unclosed-container-fence',
+      `This ${fence.len}-colon container is never closed; it now runs to the end of the ` +
+        `document instead of ending where you meant. A closer must be exactly ${fence.len} ` +
+        `colons - a longer or shorter run opens a nested container rather than closing this one.`,
+    )
+  }
 }
 
 function collectFootnoteDefinitionWarnings(
