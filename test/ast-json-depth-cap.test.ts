@@ -82,6 +82,37 @@ describe('fromAstJson depth cap', () => {
   })
 })
 
+describe('a payload with no nodes in it at all', () => {
+  /**
+   * An array is a child LIST rather than a level of its own, which is the right
+   * way to count NODES - a `children` array should not make a document twice as
+   * deep as it reads. But then a payload of nothing but nested arrays measures
+   * ZERO nodes, clears the node cap, and the conversion walk recurses over it
+   * until the stack gives out. So this shape still raised the `RangeError` that
+   * `AstJsonDepthError` exists to replace.
+   */
+  it('refuses nested arrays with the typed error rather than a RangeError', () => {
+    let arrays: unknown = []
+    for (let i = 0; i < 200_000; i++) arrays = [arrays]
+
+    let thrown: unknown
+    try {
+      fromAstJson({ type: 'document', children: arrays } as never)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(AstJsonDepthError)
+    expect(thrown).not.toBeInstanceOf(RangeError)
+  })
+
+  it('still accepts the arrays an ordinary document is made of', () => {
+    // The guard has to be loose enough that normal nesting - one array plus one
+    // node per level - is nowhere near it.
+    const json = toAstJson(parse('- a\n- b\n\n> q\n\n| x |\n'))
+    expect(JSON.stringify(toAstJson(fromAstJson(json)))).toBe(JSON.stringify(json))
+  })
+})
+
 describe('measuring the depth is linear in the payload', () => {
   it('does not double its work per level of a nested list', () => {
     // `items` sits in CHILD_FIELDS, and pushing it a second time doubled the

@@ -263,6 +263,22 @@ export class AstJsonDepthError extends Error {
  */
 export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
 
+/**
+ * Deepest WALK the reader will follow, arrays counted.
+ *
+ * Node depth alone does not bound the walk. An array is a child list rather
+ * than a level of its own, which is the right way to count NODES - but a
+ * payload of nothing but nested arrays then measures zero nodes, passes the cap
+ * above, and the conversion walk recurses over it until the stack gives out. So
+ * `[[[[ ... ]]]]` still raised a `RangeError`, the exact failure
+ * `AstJsonDepthError` was added to replace.
+ *
+ * Every level counts here: one array plus one node per level is the worst an
+ * honest payload does, so twice the node cap clears anything the encoder emits,
+ * and the constant keeps this off the boundary.
+ */
+export const MAX_AST_JSON_WALK = MAX_AST_JSON_DEPTH * 2 + 32
+
 /** The child-bearing fields, `target` included, each named exactly once. */
 const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, 'target'])]
 
@@ -274,19 +290,29 @@ const DEPTH_WALK_FIELDS = [...new Set<string>([...CHILD_FIELDS, 'target'])]
  * is meant to refuse. Stops as soon as the cap is exceeded rather than walking
  * a whole hostile tree.
  */
-function astJsonDepth(root: unknown, limit: number): number {
+function astJsonDepth(
+  root: unknown,
+  limit: number,
+  walkLimit: number,
+): { nodes: number; walk: number } {
   let deepest = 0
-  const stack: Array<{ node: unknown; depth: number }> = [{ node: root, depth: 0 }]
+  let deepestWalk = 0
+  const stack: Array<{ node: unknown; depth: number; walk: number }> = [
+    { node: root, depth: 0, walk: 0 },
+  ]
 
   while (stack.length > 0) {
-    const { node, depth } = stack.pop()!
-    if (depth > deepest) {
-      deepest = depth
-      if (deepest > limit) return deepest
-    }
+    const { node, depth, walk } = stack.pop()!
+    if (depth > deepest) deepest = depth
+    if (walk > deepestWalk) deepestWalk = walk
+    // Either bound is enough to refuse the payload, and stopping at the first
+    // one keeps a hostile tree from being walked in full.
+    if (deepest > limit || deepestWalk > walkLimit) return { nodes: deepest, walk: deepestWalk }
+
     if (Array.isArray(node)) {
       // An array is a child LIST, not a level of its own - the nodes in it are.
-      for (const child of node) stack.push({ node: child, depth })
+      // It IS a level of the walk, though: the conversion recurses through it.
+      for (const child of node) stack.push({ node: child, depth, walk: walk + 1 })
       continue
     }
     if (typeof node !== 'object' || node === null) continue
@@ -296,16 +322,18 @@ function astJsonDepth(root: unknown, limit: number): number {
     // every level of a nested list, so measuring a 30-deep list took minutes and
     // a 40-deep one never finished. The fields are walked ONCE each.
     for (const field of DEPTH_WALK_FIELDS) {
-      if (record[field] !== undefined) stack.push({ node: record[field], depth: depth + 1 })
+      if (record[field] !== undefined)
+        stack.push({ node: record[field], depth: depth + 1, walk: walk + 1 })
     }
   }
 
-  return deepest
+  return { nodes: deepest, walk: deepestWalk }
 }
 
 export function fromAstJson(json: AstJsonDocument): Document {
-  const depth = astJsonDepth(json, MAX_AST_JSON_DEPTH)
-  if (depth > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(depth)
+  const { nodes, walk } = astJsonDepth(json, MAX_AST_JSON_DEPTH, MAX_AST_JSON_WALK)
+  if (nodes > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(nodes)
+  if (walk > MAX_AST_JSON_WALK) throw new AstJsonDepthError(walk)
 
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
