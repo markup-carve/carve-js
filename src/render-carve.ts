@@ -199,7 +199,22 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
   const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
   switch (node.type) {
     case 'heading': {
-      const text = trimNonNbsp(renderInlines(node.children, ctx))
+      // A heading is SINGLE-LINE (PART 2), so its text must not contain a
+      // newline: emitting one would end the heading and silently re-parse the
+      // remainder as a following block. No parse can build such a heading, but
+      // an ingested AST can - PART 12 lets any inline sit in a heading, break
+      // nodes included - so a break collapses to a single space here rather
+      // than corrupting the document it is written back to.
+      //
+      // Only an ODD run of backslashes before the newline is a hard break's
+      // marker; an even run is literal backslashes that happen to end the line,
+      // and dropping one there would eat the escape and swallow the space.
+      const text = trimNonNbsp(
+        trimNonNbsp(renderInlines(node.children, ctx)).replace(
+          /(\\*)\n[ \t]*/g,
+          (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
+        ),
+      )
       return withAttrs(`${'#'.repeat(node.level)} ${text}`)
     }
     case 'paragraph':

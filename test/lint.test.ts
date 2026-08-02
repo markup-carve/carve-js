@@ -366,3 +366,87 @@ describe('lintCarve — indented fence rule inline-span guard', () => {
     expect(rulesOf('  ```foo bar```\n')).not.toContain('fence-delimiter-indentation')
   })
 })
+
+describe('lintCarve - unclosed container', () => {
+  const unclosed = (source: string) =>
+    lintCarve(source)
+      .filter((w) => w.rule === 'unclosed-container-fence')
+      .map((w) => ({
+        line: w.line,
+        column: w.column,
+        start: w.start,
+        end: w.end,
+        message: w.message,
+      }))
+
+  it('reports a single unclosed opener at its opener fence run', () => {
+    // Since PART 9 section 12 took exact-length closers, this no longer turns
+    // the rest of the document into literal text - it closes at end of input.
+    // Which is why it needs saying: the container silently runs further than
+    // the author meant, and everything still renders.
+    const [warning] = unclosed('💡\n:::: note\nbody\n')
+    expect(warning).toMatchObject({ line: 2, column: 1, start: 3, end: 7 })
+    expect(warning?.message).toContain('runs to the end of the document')
+    expect(warning?.message).toContain('bare fence of 4 colons')
+  })
+
+  it('says nothing when every container is closed', () => {
+    expect(unclosed('::: note\nbody\n:::\n')).toEqual([])
+    expect(unclosed('::::\n::: note\nx\n:::\n::::\n')).toEqual([])
+  })
+
+  it('reports a closed container nested inside an unclosed one', () => {
+    expect(unclosed(':::: note\nouter\n:::\ninner\n:::\n')).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+    ])
+  })
+
+  it('reports all openers left open when a would-be outer closer is blocked by an inner opener', () => {
+    expect(unclosed('::::\n::: note\nbody\n::::\n')).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+      expect.objectContaining({ line: 2, column: 1 }),
+      expect.objectContaining({ line: 4, column: 1 }),
+    ])
+  })
+
+  it('reports both sides of a wrong-width closer typo', () => {
+    const warnings = unclosed(':::: note\nbody\n:::\n')
+    expect(warnings).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+      expect.objectContaining({ line: 3, column: 1 }),
+    ])
+    expect(warnings[0]?.message).toContain('bare fence of 4 colons')
+    expect(warnings[1]?.message).toContain('bare fence of 3 colons')
+  })
+
+  it('ignores a line that opens nothing', () => {
+    // No space after the fence, so the grammar makes this a paragraph.
+    expect(unclosed(':::note\nbody\n')).toEqual([])
+  })
+
+  it('does not treat a bare fence inside a code fence as a closer', () => {
+    expect(unclosed('::: note\n```text\n:::\n```\n')).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+    ])
+  })
+
+  it('does not treat a bare fence inside a comment block as a closer', () => {
+    expect(unclosed('::: note\n%%%\n:::\n%%%\n')).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+    ])
+  })
+
+  it('does not report a container opener inside an opaque code or comment block', () => {
+    expect(unclosed('```\n::: note\n```\n')).toEqual([])
+    expect(unclosed('%%%\n::: note\n%%%\n')).toEqual([])
+  })
+
+  it('reports line-block and hard-break-block openers', () => {
+    expect(unclosed('::: |\nline\n')).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+    ])
+    expect(unclosed('::: \\\nline\n')).toEqual([
+      expect.objectContaining({ line: 1, column: 1 }),
+    ])
+  })
+})

@@ -7,6 +7,41 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `fmt` collapses a break inside a heading to a space instead of emitting it.
+  No parse produces such a heading, but an ingested AST can (PART 12 permits any
+  inline in a heading), and writing it out verbatim split the heading and moved
+  text out of the title on re-parse. Only an odd run of backslashes before the
+  newline is a hard break's marker, so a literal backslash ending a line
+  survives.
+
+- **BREAKING: a heading ends at the newline** (spec markup-carve/carve#451,
+  markup-carve/carve#434). Nothing folds into a heading any more - neither a
+  plain line nor a same-count `#` line - so `# Title` with prose beneath is a
+  heading plus a paragraph, and its id comes from the heading line alone
+  (`Title`, not `Title-Some-text`). Documents that relied on the fold change
+  meaning; anything with a blank line after the heading is unaffected.
+
+  The fold was a silent corruption for anyone arriving from Markdown: the title
+  text and the derived id were both wrong, `</#id>` cross-references and TOC
+  anchors broke, and the intended body paragraph disappeared into the title with
+  nothing to report. Lazy continuation now means one thing across the language -
+  it continues an open paragraph - and a heading is not a paragraph.
+
+  A flush-left line after a heading nested in a list item still belongs to that
+  item; it is now the item's own content beside the heading instead of title
+  text (corpus 73-list-nesting-and-looseness-4).
+
+### Added
+
+- **Two `--from-djot` lint rules for heading continuation lines**
+  (`djot-heading-continuation`, `djot-heading-continuation-marker`). A Djot
+  document that wraps a heading renders differently under Carve, and the fix
+  joins the lines back onto the heading - stripping the `#` marker on the
+  same-count form, as Djot's fold does. Both are `djot-shift`, so `carve lint`
+  shows them only with `--from-djot`.
+
 ### Fixed
 
 - **A fence opened with a non-Tier-1 word classifies as `div` for profiles,
