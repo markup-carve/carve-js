@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parse } from '../src/parse.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
 import { carveToAstJson, carveToHtml, renderHtml } from '../src/index.js'
+import { renderCarve } from '../src/render-carve.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('emits a root of exactly type, children and srcByteLength', () => {
@@ -256,5 +257,33 @@ describe('definition lists on the wire (PART 12)', () => {
     toAstJson(doc)
 
     expect(Array.isArray((doc.children[0] as { items: { terms: unknown }[] }).items[0]?.terms)).toBe(true)
+  })
+})
+
+describe('runtime-only fields stay off the wire (PART 12)', () => {
+  // `resources/ast-schema.json` pins each node with `additionalProperties:
+  // false`, so a field this engine keeps for itself - one the schema does not
+  // name and carve-php / carve-rs do not publish - cannot ride along.
+  it('does not publish the bareMarker a list carries', () => {
+    const wire = JSON.stringify(carveToAstJson('. a\n. b\n'))
+
+    expect(wire).not.toContain('bareMarker')
+  })
+
+  it('still records it on the runtime tree, so fmt keeps the spelling', () => {
+    // Which is the point of the field: source -> fmt round-trips both
+    // spellings, because the writer reads the runtime tree, not the wire.
+    expect(renderCarve(parse('. a\n. b\n'))).toBe('. a\n. b\n')
+    expect(renderCarve(parse('1. a\n2. b\n'))).toBe('1. a\n2. b\n')
+  })
+
+  it('loses the spelling through a JSON round trip, and says so', () => {
+    // The stated cost of keeping the field off the wire: an AST that came
+    // back from JSON has no record of the bare form, so the writer falls back
+    // to the explicit one. Same class as the authored-form losses the other
+    // engines' codecs already list.
+    const back = fromAstJson(carveToAstJson('. a\n. b\n'))
+
+    expect(renderCarve(back)).toBe('1. a\n2. b\n')
   })
 })

@@ -324,11 +324,28 @@ function renderList(node: List, ctx: CarveContext): string {
     // adjacent sibling lists on re-parse (carve issue 286).
     const delim = node.delim ?? '.'
     const bullet = node.bulletChar ?? '-'
+    // The bare dot is written back only where the author wrote one (carve#315).
+    // PART 11 §6: `fmt` does not respell a construct to a synonym, because the
+    // choice is the author's and the AST records it - the same rule, and the
+    // same remedy, as the combined bold-italic form. `bareMarker` is that
+    // record; picking a canonical spelling instead would rewrite every
+    // `1.`/`2.`/`3.` list in existing documents on the next format.
+    //
+    // The other three conditions are belt and braces for a hand-built tree: a
+    // bare dot cannot carry a start, a dialect or the `)` delimiter, so a mark
+    // that contradicts one of them is ignored rather than written as source
+    // that reads back differently.
+    const bareDot =
+      node.ordered &&
+      node.bareMarker === true &&
+      delim === '.' &&
+      node.olType === undefined &&
+      (node.start ?? 1) === 1
     node.items.forEach((item, idx) => {
       const indent = '  '.repeat(ctx.listDepth - 1)
       let prefix: string
       if (node.ordered) {
-        prefix = `${orderedMarker(counter, node.olType)}${delim} `
+        prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
         counter++
       } else if (item.checked !== undefined) {
         prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `
