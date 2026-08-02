@@ -33,6 +33,10 @@ describe('a table row needs a closing pipe', () => {
 
   it('an incomplete row does not interrupt a paragraph or heading', () => {
     expect(html('para\n| a')).toBe('<p>para\n| a</p>')
-    expect(html('# H\n| a')).toBe('<section id="H-a">\n  <h1>H\n| a</h1>\n</section>')
+    // The incomplete row opens no table; after a heading it is a paragraph,
+    // since a heading ends at its newline and folds nothing in.
+    expect(html('# H\n| a')).toBe(
+      '<section id="H">\n  <h1>H</h1>\n  <p>| a</p>\n</section>',
+    )
   })
 })
