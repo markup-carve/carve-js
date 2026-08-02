@@ -496,6 +496,64 @@ describe('markdownToCarve — HTML entities', () => {
     expect(carve).toBe('a &nbsp; b')
     expect(carveToHtml(carve)).toBe('<p>a &amp;nbsp; b</p>')
   })
+
+  // A destination is protected from the text-level decode pass, so leaving it
+  // out meant the migrated link pointed somewhere the source did not: the href
+  // kept a literal `&amp;`. cmark resolves each of these to the decoded form.
+  it('decodes a link and image destination and title', () => {
+    expect(conv('[t](http://x/?a=1&amp;b=2)')).toBe('[t](http://x/?a=1&b=2)')
+    expect(conv('![a](http://x/?a=1&amp;b=2)')).toBe('![a](http://x/?a=1&b=2)')
+    expect(conv('[t](/u "a &amp; b")')).toBe('[t](/u "a & b")')
+    expect(carveToHtml(conv('[t](http://x/?a=1&amp;b=2)'))).toBe(
+      '<p><a href="http://x/?a=1&amp;b=2">t</a></p>',
+    )
+  })
+
+  it('decodes a reference definition destination and title', () => {
+    const carve = conv('[t][ref]\n\n[ref]: /u?a=1&amp;b=2 "T &amp; T"')
+    expect(carve).toBe('[t][ref]\n\n[ref]: /u?a=1&b=2 "T & T"')
+    expect(carveToHtml(carve)).toBe(
+      '<p><a href="/u?a=1&amp;b=2" title="T &amp; T">t</a></p>',
+    )
+  })
+
+  // A raw space would end the destination and turn the rest into a title, so
+  // whitespace a decode introduces is percent-encoded through
+  // encodeURIComponent - a non-ASCII space becomes its UTF-8 bytes, the answer
+  // cmark gives (`%C2%A0`, not `%A0`).
+  it('percent-encodes whitespace a destination decode introduces', () => {
+    expect(conv('[t](/a&#32;b)')).toBe('[t](/a%20b)')
+    expect(conv('[t](/a&#9;b)')).toBe('[t](/a%09b)')
+    expect(conv('[t](/a&nbsp;b)')).toBe('[t](/a%C2%A0b)')
+    expect(conv('[t](/a&emsp;b)')).toBe('[t](/a%E2%80%83b)')
+    expect(carveToHtml(conv('[t](/a&#32;b)'))).toBe('<p><a href="/a%20b">t</a></p>')
+  })
+
+  // `&quot;` decodes to the character that CLOSES the title it sits in, so an
+  // unescaped one stops the link parsing at all.
+  it('escapes a decoded delimiter inside a title', () => {
+    expect(conv('[x](u "a &quot;q&quot;")')).toBe('[x](u "a \\"q\\"")')
+    expect(carveToHtml(conv('[x](u "a &quot;q&quot;")'))).toBe(
+      '<p><a href="u" title="a &quot;q&quot;">x</a></p>',
+    )
+    expect(conv("[x](u 'a &#39;q&#39;')")).toBe("[x](u 'a \\'q\\'')")
+  })
+
+  it('does not backslash-escape a decoded delimiter inside a destination', () => {
+    // Escaping is for inline text; in a URL the backslash would be part of it.
+    expect(conv('[t](/u?a=&ast;)')).toBe('[t](/u?a=*)')
+  })
+
+  // U+0000 is the one code point that cannot pass through: cmark replaces it
+  // with U+FFFD, and this module wraps its own placeholders in NUL, so a
+  // decoded one would collide with the stash/protect sentinels.
+  it('replaces a NUL entity rather than emitting one', () => {
+    for (const markdown of ['&#0;', '&#x0;']) {
+      const carve = conv(markdown)
+      expect(carve).toBe('\ufffd')
+      expect(carve).not.toContain('\u0000')
+    }
+  })
 })
 
 describe('markdownToCarve — block spacing', () => {

@@ -141,7 +141,10 @@ const RE_HTML_ENTITY = /&(?:#([0-9]+)|#[xX]([0-9A-Fa-f]+)|([A-Za-z][A-Za-z0-9]+)
 const RE_DECODED_CARVE_PUNCTUATION = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$:;?]/g
 
 function decodeCodePoint(n: number): string {
-  return n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)
+  // U+0000 joins the out-of-range and surrogate cases: cmark replaces a NUL
+  // with U+FFFD, and this module wraps its own placeholders in NUL, so a
+  // decoded one would collide with the stash/protect sentinels.
+  return n > 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)
     ? String.fromCodePoint(n)
     : '\ufffd'
 }
@@ -150,17 +153,70 @@ function escapeDecodedForCarve(s: string): string {
   return s.replace(RE_DECODED_CARVE_PUNCTUATION, '\\$&')
 }
 
+function resolveEntity(
+  match: string,
+  dec: string | undefined,
+  hex: string | undefined,
+  named: string | undefined,
+): string {
+  const decoded =
+    dec !== undefined
+      ? decodeCodePoint(Number(dec))
+      : hex !== undefined
+        ? decodeCodePoint(Number.parseInt(hex, 16))
+        : NAMED_HTML_ENTITIES[named ?? '']
+  return decoded ?? match
+}
+
+/** Resolve every entity reference in `s`, with no Carve escaping applied. */
+function decodeHtmlEntitiesRaw(s: string): string {
+  return s.replace(
+    RE_HTML_ENTITY,
+    (match, dec: string | undefined, hex: string | undefined, named: string | undefined) =>
+      resolveEntity(match, dec, hex, named),
+  )
+}
+
+/**
+ * Decode entities in a link/image DESTINATION. Unlike inline text the result is
+ * not Carve-escaped: a backslash would be part of the URL. Whitespace a decode
+ * introduces (`&#32;`, `&nbsp;`) is percent-encoded through
+ * `encodeURIComponent`, so a non-ASCII space becomes its UTF-8 bytes the way
+ * cmark writes it (`%C2%A0`, not `%A0`); a raw space would end the destination
+ * and turn the rest into a title. A destination holds no raw whitespace before
+ * decoding -- it is matched as `\S+` -- so every match here came from an entity.
+ */
+function decodeEntitiesInDestination(url: string): string {
+  return decodeHtmlEntitiesRaw(url).replace(/\s/g, (c) => encodeURIComponent(c))
+}
+
+/** A quoted title and the whitespace around it: ` "a & b"` / ` 'a & b'`. */
+const RE_QUOTED_TITLE = /^(\s*)(["'])([\s\S]*)\2(\s*)$/
+
+/**
+ * Decode entities in a link/image TITLE. The decoded text is ordinary prose but
+ * it sits inside a delimiter: `&quot;` in a double-quoted title decodes to the
+ * very character that closes it, and emitting that raw stops the link parsing
+ * at all. Carve reads a backslash-escaped delimiter inside a title, so the
+ * delimiter (and any backslash) is escaped on the way out. A title in a shape
+ * this does not recognize is left exactly as it was rather than guessed at.
+ */
+function decodeEntitiesInTitle(rest: string): string {
+  const m = RE_QUOTED_TITLE.exec(rest)
+  if (!m) return rest
+  const [, lead, quote, body, trail] = m
+  const decoded = decodeHtmlEntitiesRaw(body!)
+  if (decoded === body) return rest
+  const escaped = decoded.replace(/\\/g, '\\\\').split(quote!).join('\\' + quote)
+  return `${lead}${quote}${escaped}${quote}${trail}`
+}
+
 function decodeHtmlEntities(s: string): string {
   return s.replace(
     RE_HTML_ENTITY,
     (match, dec: string | undefined, hex: string | undefined, named: string | undefined) => {
-      const decoded =
-        dec !== undefined
-          ? decodeCodePoint(Number(dec))
-          : hex !== undefined
-            ? decodeCodePoint(Number.parseInt(hex, 16))
-            : NAMED_HTML_ENTITIES[named ?? '']
-      return decoded === undefined ? match : escapeDecodedForCarve(decoded)
+      const decoded = resolveEntity(match, dec, hex, named)
+      return decoded === match ? match : escapeDecodedForCarve(decoded)
     },
   )
 }
@@ -419,8 +475,14 @@ function convertInline(input: string): string {
     const m = inner.match(/^(\S+)([\s\S]*)$/)
     const url = m ? m[1]! : inner
     const rest = m ? m[2]! : ''
-    const enc = url.replace(/[()]/g, (c) => (c === '(' ? '%28' : '%29'))
-    return `(${enc}${rest})`
+    // A destination and title are entity-decoded by cmark like any other text,
+    // and this whole construct is protected from the later decode pass, so it
+    // happens here or not at all. `&amp;` in a query string is the canonical
+    // case: left literal, the migrated link points somewhere else.
+    const enc = decodeEntitiesInDestination(url).replace(/[()]/g, (c) =>
+      c === '(' ? '%28' : '%29',
+    )
+    return `(${enc}${decodeEntitiesInTitle(rest)})`
   }
 
   // Images `![alt](dest)`: Carve renders the alt as raw text, so protect the
@@ -458,7 +520,13 @@ function convertInline(input: string): string {
   // the colon). The whole line is consumed literally by Carve's ref-link
   // parser, so protect it. A footnote definition `[^id]: body` is excluded —
   // its body is normal inline content that must still be converted.
-  line = line.replace(/^\s*\[[^^\]][^\]]*\]:\s*\S.*$/, (m) => protect(m))
+  // The destination and title are entity-decoded here for the same reason the
+  // inline form is (encodeDest): protecting the line puts it out of reach of
+  // the later decode pass, and a literal `&amp;` in the definition points the
+  // link somewhere the Markdown source did not.
+  line = line.replace(/^(\s*\[[^^\]][^\]]*\]:\s*)(\S+)([\s\S]*)$/, (_m, head, dest, rest) =>
+    protect(head + decodeEntitiesInDestination(dest) + decodeEntitiesInTitle(rest)),
+  )
 
   // Math, converted and protected before the emphasis passes so a formula
   // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup.
