@@ -274,4 +274,27 @@ describe('fmt keeps a heading on one line', () => {
     expect(out).toBe('{#a-b}\n# para x y\n')
     expect(carveToHtml(out)).toBe('<section id="a-b">\n  <h1>para x y</h1>\n</section>')
   })
+  it('keeps a literal backslash that sits before the collapsed break', async () => {
+    // Only an ODD run of backslashes is a hard break's marker. Dropping one
+    // unconditionally wrote `# a\\ b`, where the escape swallows the space and
+    // the author's backslash disappears on re-parse.
+    const { fromAstJson, renderCarve } = await import('../src/index.js')
+    const doc = fromAstJson({
+      type: 'document',
+      children: [
+        {
+          type: 'heading',
+          level: 1,
+          children: [
+            { type: 'text', value: 'a\\' },
+            { type: 'soft_break' },
+            { type: 'text', value: 'b' },
+          ],
+        },
+      ],
+    } as never)
+    const out = renderCarve(doc)
+    expect(out).toBe('# a\\\\ b\n')
+    expect(carveToHtml(out)).toBe('<section id="a-b">\n  <h1>a\\ b</h1>\n</section>')
+  })
 })

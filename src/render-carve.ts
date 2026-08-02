@@ -205,8 +205,15 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // an ingested AST can - PART 12 lets any inline sit in a heading, break
       // nodes included - so a break collapses to a single space here rather
       // than corrupting the document it is written back to.
+      // Only an ODD run of backslashes before the newline is a hard break's
+      // marker; an even run is literal backslashes that happen to sit at the end
+      // of the line. Dropping one unconditionally turned `a\` + soft break into
+      // `a\ b`, where the escape swallows the space and the backslash is gone.
       const text = trimNonNbsp(
-        trimNonNbsp(renderInlines(node.children, ctx)).replace(/\\?\n[ \t]*/g, ' '),
+        trimNonNbsp(renderInlines(node.children, ctx)).replace(
+          /(\\*)\n[ \t]*/g,
+          (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
+        ),
       )
       return withAttrs(`${'#'.repeat(node.level)} ${text}`)
     }
