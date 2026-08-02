@@ -148,10 +148,11 @@ describe('colon fences with exact-length closers', () => {
   })
 
   it('ignores a colon-fence-shaped line inside a comment block', () => {
+    // The comment block renders to nothing and contributes no line, so the
+    // note's body is `body` alone - what this pins is where the note ends.
     expect(h('::: note\n%%%\n::: tip\n%%%\nbody\n:::\nafter')).toBe(
       [
         '<aside class="admonition note">',
-        '',
         '  <p>body</p>',
         '</aside>',
         '<p>after</p>',

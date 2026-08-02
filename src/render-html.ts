@@ -683,7 +683,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
   return {
     level,
     indent,
-    renderChildren: (nodes, lvl) => nodes.map((c) => renderBlock(c, opts, lvl)).join('\n'),
+    renderChildren: (nodes, lvl) => renderBlocks(nodes, opts, lvl),
     renderInlines: (nodes) => renderInlines(nodes, opts),
     escapeHtml,
     escapeAttr,
@@ -742,6 +742,23 @@ function renderHeadingElement(
     }
   }
   return undefined
+}
+
+/** Render a container's children into its body.
+ *
+ *  A block that renders to nothing - a comment, an abbreviation definition, a
+ *  non-HTML raw block - contributes no line. Joining its `''` in leaves a blank
+ *  line where the block stood (`<div>\n\n  <p>a</p>`), which carve-php never
+ *  emitted. The list item filtered already; every other container did not.
+ *
+ *  An all-empty body comes back as `''`, which each caller hands to the same
+ *  path a childless container takes, so a genuinely empty container renders as
+ *  it always did. */
+function renderBlocks(nodes: BlockNode[], opts: RenderOptions, level: number): string {
+  return nodes
+    .map((c) => renderBlock(c, opts, level))
+    .filter((s) => s !== '')
+    .join('\n')
 }
 
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
@@ -820,10 +837,10 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       // extension consumes the node before it reaches core, so there is no
       // double rendering when one is active.)
       const floor = labelFloor(node.label, level + 1)
-      if (node.children.length === 0) {
+      const body = renderBlocks(node.children, opts, level + 1)
+      if (body === '') {
         return floor ? `${open}\n${floor}\n${pad}</div>` : `${open}\n${pad}</div>`
       }
-      const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
       return `${open}\n${floor ? `${floor}\n` : ''}${body}\n${pad}</div>`
     }
     case 'line_block': {
@@ -832,8 +849,8 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
       // what records that every newline inside is a hard break, so a plain div
       // an author gave that class stays an ordinary div.
       const open = `${pad}<div${renderAttrs2(node.attrs, { trailingClass: 'line-block' })}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
-      if (node.children.length === 0) return `${open}\n${pad}</div>`
-      const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+      const body = renderBlocks(node.children, opts, level + 1)
+      if (body === '') return `${open}\n${pad}</div>`
       return `${open}\n${body}\n${pad}</div>`
     }
     case 'definition_list': {
@@ -852,8 +869,15 @@ function renderBlock(node: BlockNode, opts: RenderOptions, level: number): strin
               `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((d[0] as Paragraph).children, opts)}</dd>`,
             )
           } else {
-            const body = d.map((b) => renderBlock(b, opts, level + 2)).join('\n')
-            lines.push(`${pad}  <dd${sourceLineAttr(opts, ddLine)}>\n${body}\n${pad}  </dd>`)
+            const body = renderBlocks(d, opts, level + 2)
+            // A definition whose whole body renders to nothing (a lone comment)
+            // closes on its own line, like the single-paragraph form above and
+            // like carve-php.
+            lines.push(
+              body === ''
+                ? `${pad}  <dd${sourceLineAttr(opts, ddLine)}></dd>`
+                : `${pad}  <dd${sourceLineAttr(opts, ddLine)}>\n${body}\n${pad}  </dd>`,
+            )
           }
         }
       }
@@ -890,7 +914,7 @@ function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number):
     const inner = renderInlines(para.children, opts)
     return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
   }
-  const inner = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+  const inner = renderBlocks(node.children, opts, level + 1)
   return `${pad}<blockquote${attrs}>\n${inner}\n${pad}</blockquote>`
 }
 
@@ -1150,7 +1174,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   // title is rendered first when a block carries both).
   const floor = labelFloor(node.label, level + 1)
   const labelLine = floor ? `${floor}\n` : ''
-  const body = node.children.map((c) => renderBlock(c, opts, level + 1)).join('\n')
+  const body = renderBlocks(node.children, opts, level + 1)
   // Leading block attributes (§15) merge with the admonition's own
   // wrapper class: extra classes append, id/key attach to the wrapper.
   const canonical = CANONICAL_ADMONITION_KINDS.has(node.kind)
