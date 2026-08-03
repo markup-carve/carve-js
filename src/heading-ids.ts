@@ -530,10 +530,26 @@ export function resolveHeadingIds(
             href: `#${tgtId}`,
             children,
             fromCrossref: true,
+            // The crossref's OWN span: `</#target>` is the source this link was
+            // written as, so §4 is satisfied without inventing anything. The
+            // node used to be built without one, which left every resolved
+            // crossref unplaceable - 13 of the reference's conformance findings
+            // (carve-js#549 follow-up).
+            //
+            // The CHILDREN keep the target heading's spans, because that is
+            // genuinely where their text came from; only the link itself points
+            // at the reference site.
+            ...(n.pos ? { pos: n.pos } : {}),
           }
           nodes[i] = link
         } else {
-          const txt: Text = { type: 'text', value: `</#${n.target}>` }
+          // Same for the unresolved fallback: the literal text is the source
+          // run the crossref occupied.
+          const txt: Text = {
+            type: 'text',
+            value: `</#${n.target}>`,
+            ...(n.pos ? { pos: n.pos } : {}),
+          }
           nodes[i] = txt
         }
         continue
