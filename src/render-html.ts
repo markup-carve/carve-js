@@ -128,6 +128,20 @@ export interface RenderOptions {
    */
   sections?: boolean
   /**
+   * Turn the smart-typography substitution OFF for the whole document
+   * (default `true`, i.e. on). PART 9 §8's optional off switch.
+   *
+   * This is a RENDERING decision, not a parsing one: the nodes are still
+   * produced, so the AST does not depend on it. With it off, each
+   * `smart_punctuation` node emits the author's SOURCE RUN instead of its
+   * glyph - dashes, ellipsis, quotes, arrows, comparisons and the typographic
+   * symbols - exactly as the canonical writer already does.
+   *
+   * Escaping is unaffected, deliberately: that is a separate concern with its
+   * own rationale (carve#357).
+   */
+  smartTypography?: boolean
+  /**
    * Opt in to a strict ALLOWLIST instead of the default denylist: when set,
    * ONLY these schemes pass on `href`/`src` (case-insensitive); everything
    * else is blanked. No effect when `sanitizeUrls` is `false`.
@@ -1467,6 +1481,9 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       // Comments are not rendered (§4.13); inline form mirrors the block one.
       return ''
     case 'smart_punctuation':
+      // With the switch off, emit what the author typed. The node carries the
+      // source run in `value`, so this needs no parser cooperation (PART 9 §8).
+      if (opts.smartTypography === false) return escapeHtml(node.value)
       // The resolved glyph, escaped like any other text: a locale quote glyph
       // can carry a non-breaking space (French guillemets are `«` + U+00A0).
       return escapeHtml(node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
