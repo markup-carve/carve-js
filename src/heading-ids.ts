@@ -393,10 +393,15 @@ export function resolveHeadingIds(
           n.href = `#${id}`
           delete n.ref
           delete n.rawRef
-        } else {
-          nodes[i] = { type: 'text', value: n.rawRef ?? '' } as Text
-          continue
         }
+        // An UNRESOLVED reference stays a `link` carrying `ref` and `rawRef`
+        // (PART 12 §3a). It used to become a text node here, which lost the
+        // fact that the author wrote a reference at all: on the wire
+        // `see [a][] here` came out as three adjacent text nodes - breaking
+        // §3a, §1a (they are adjacent and unmerged) and §6 (the parsed tree
+        // holds a link, so the round trip was not an identity) in one move.
+        // The renderers turn a surviving `ref` back into its literal source
+        // (carve#486).
       }
       if (n.type === 'image' && n.ref !== undefined) {
         // A reference image resolves only against explicit `[label]: url`
@@ -711,6 +716,16 @@ export function resolveHeadingIds(
     for (const n of nodes) {
       switch (n.type) {
         case 'link': {
+          // An UNRESOLVED reference is not a link the reader ever sees - it is
+          // literal source (PART 12 §3a), and it only reaches here as a node at
+          // all so the serialized tree can keep the reference. Unwrapping it to
+          // its children would print the LABEL where the author wrote the whole
+          // `[x][missing]`, so nested-inside-a-link it becomes its raw source
+          // instead (carve#486).
+          if (insideLink && n.ref !== undefined) {
+            out.push({ type: 'text', value: n.rawRef ?? '' } as Text)
+            break
+          }
           const children = enforceNoNesting(n.children, true)
           if (insideLink) {
             // Non-spread push: `children` may be unbounded (a large link label),

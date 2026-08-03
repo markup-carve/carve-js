@@ -1273,6 +1273,10 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
     case 'code':
       return `<code${renderAttrs(node.attrs)}>${escapeHtml(node.value)}</code>`
     case 'link': {
+      // An unresolved reference is literal source, not a link (PART 12 §3a):
+      // the node survives serialization so the reference is not lost from the
+      // tree, and every render target writes it back out as written.
+      if (node.ref !== undefined) return escapeHtml(node.rawRef ?? '')
       const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
       const href = escapeAttr(sanitizeUrl(node.href, opts))
       // The sanitized structural href wins; never re-emit an author-supplied
