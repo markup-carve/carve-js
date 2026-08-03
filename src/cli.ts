@@ -12,7 +12,9 @@
  * real process I/O and invokes it only when executed as the binary.
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
 import {
@@ -44,6 +46,7 @@ import {
   type ProfileOptions,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
+import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
 import { LIB_VERSION, SPEC_VERSION } from './version.js'
 
 /** Injectable I/O so `run` is testable without real fs / stdin / exit. */
@@ -69,6 +72,8 @@ Usage:
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
   carve diff [--json] a.crv b.crv  Report what changed in the DOCUMENT
+  carve portability [files...]     Report where a document reads differently
+                                   in Djot (needs @djot/djot)
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -130,6 +135,21 @@ so it works as a gate over stored content.
   diff options:
         --json     Emit the changes as JSON (kind, type, path, line, detail)
 
+portability - does this document MEAN the same thing in Djot? Renders it with
+both engines and reports the first place they disagree. This is a measurement,
+not a heuristic: it reports a divergence exactly when the two renderings differ,
+so it cannot be wrong about one. Note that Carve's deliberate departures from
+Djot (\`/italic/\` vs \`_underline_\`, \`=mark=\`, quoted link titles) ARE
+divergences and are reported as such - a document using them does not mean the
+same thing in Djot, which is the question being asked. Exits 1 when any document
+diverges, 0 when all are portable.
+
+  Needs djot.js, which this package does not depend on:
+      npm install @djot/djot
+
+  portability options:
+        --json     Emit the report as JSON (file, portable, line, carve, djot)
+
 lint - report silent-failure problems as \`file:line:col rule - message\`:
 broken </#id> cross-references, unresolved reference links, duplicate heading
 ids, missing/duplicate/unused footnotes, trailing {…} attribute blocks on
@@ -145,7 +165,10 @@ exits 1 if anything is reported, 0 if clean.
                      \`{=x=}\` highlight) — noise for hand-written Carve, useful
                      when checking a document migrated from Djot.
         --portable   Deprecated compatibility option; blockquote marker spacing
-                     is now core Carve syntax and is always checked.
+                     is now core Carve syntax and is always checked. For an
+                     actual portability check see the \`portability\`
+                     subcommand, which measures the difference instead of
+                     guessing at it.
   -h, --help     Show this help
 `
 
@@ -676,6 +699,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   if (sub === 'diff') return runDiff(rest, io)
+  if (sub === 'portability') return runPortability(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
   // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
@@ -749,6 +773,130 @@ async function runDiff(args: string[], io: CliIO): Promise<number> {
   io.write(values.json ? `${JSON.stringify(changes, null, 2)}\n` : formatChanges(changes))
 
   return changes.length > 0 ? 1 : 0
+}
+
+/**
+ * Load djot.js, or explain how to get it.
+ *
+ * Deliberately not a dependency of this package: `carve` has none, and every
+ * user who never runs this subcommand should keep it that way. It is declared
+ * as an OPTIONAL peer instead, so a project that wants the check installs it
+ * explicitly and npm does not pull a second parser into everyone else's tree.
+ */
+/**
+ * Pick the engine out of a loaded module, whichever shape it arrived in.
+ *
+ * djot.js is CommonJS. Imported by its package specifier it comes through the
+ * package's own export map with the functions at the top level; imported by
+ * RESOLVED PATH - which the cwd fallback below has to do - Node's interop puts
+ * the same functions on `default` instead. Checking for the methods rather than
+ * assuming either shape also means a module that is not djot at all is
+ * rejected here instead of failing later as "parse is not a function".
+ */
+function asDjotEngine(mod: unknown): DjotEngine | undefined {
+  for (const candidate of [mod, (mod as { default?: unknown } | undefined)?.default]) {
+    const engine = candidate as Partial<DjotEngine> | undefined
+    if (typeof engine?.parse === 'function' && typeof engine?.renderHTML === 'function') {
+      return engine as DjotEngine
+    }
+  }
+  return undefined
+}
+
+async function loadDjot(io: CliIO): Promise<DjotEngine | undefined> {
+  const beside = await import('@djot/djot').then(asDjotEngine, () => undefined)
+  if (beside) return beside
+  // Not beside `carve` itself. The common case for a CLI is a GLOBAL install
+  // (`npm i -g @markup-carve/carve`) checking a document in some project, and
+  // `npm install @djot/djot` there puts the peer in THAT project's
+  // node_modules - which a bare import from this module cannot see. So try
+  // again from the working directory before giving up.
+  try {
+    const fromCwd = createRequire(join(process.cwd(), 'noop.js'))
+    const resolved = fromCwd.resolve('@djot/djot')
+    const engine = asDjotEngine(await import(pathToFileURL(resolved).href))
+    if (engine) return engine
+  } catch {
+    // Fall through to the hint: not resolvable from here either.
+  }
+  io.writeErr(
+    'carve portability: needs djot.js, which carve does not depend on.\n' +
+      '  npm install @djot/djot\n',
+  )
+  return undefined
+}
+
+/** `carve portability file.crv` - render with both engines and compare. */
+async function runPortability(args: string[], io: CliIO): Promise<number> {
+  let values: { json?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: { json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve portability: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const djot = await loadDjot(io)
+  if (!djot) return 2
+
+  const inputs: Array<{ file: string; source: string }> = []
+  if (positionals.length === 0) {
+    inputs.push({ file: '<stdin>', source: await io.readStdin() })
+  } else {
+    for (const file of positionals) {
+      try {
+        inputs.push({ file, source: io.readFile(file) })
+      } catch {
+        io.writeErr(`carve portability: cannot read ${file}\n`)
+        return 2
+      }
+    }
+  }
+
+  // `sourceLine` is what lets the report name a line: the attribute rides on
+  // the rendered blocks, and the comparison drops it on both sides.
+  const render = (src: string) => carveToHtml(src, { sourceLine: true })
+  const reports = inputs.map((i) => ({
+    file: i.file,
+    report: checkPortability(i.source, djot, render),
+  }))
+
+  if (values.json) {
+    io.write(
+      JSON.stringify(
+        reports.map(({ file, report }) => ({ file, ...flattenReport(report) })),
+        null,
+        2,
+      ) + '\n',
+    )
+  } else {
+    for (const { file, report } of reports) io.write(formatPortability(file, report))
+  }
+  return reports.some((r) => !r.report.portable) ? 1 : 0
+}
+
+function flattenReport(report: PortabilityReport): Record<string, unknown> {
+  if (report.portable) return { portable: true }
+  const d = report.divergence!
+  return { portable: false, ...(d.line !== undefined ? { line: d.line } : {}), carve: d.carve, djot: d.djot }
+}
+
+function formatPortability(file: string, report: PortabilityReport): string {
+  if (report.portable) return `${file}: portable\n`
+  const d = report.divergence!
+  const where = d.line !== undefined ? `${file}:${d.line}` : file
+  return `${where}: diverges from Djot\n  carve: ${d.carve}\n  djot:  ${d.djot}\n`
 }
 
 async function runLint(args: string[], io: CliIO): Promise<number> {

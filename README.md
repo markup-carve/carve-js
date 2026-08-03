@@ -151,6 +151,7 @@ carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate
 carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
+carve portability file.crv # report where the document reads differently in Djot
 carve --help
 ```
 
@@ -203,6 +204,16 @@ ids, unresolved reference links, missing/duplicate/unused footnotes, a trailing
 this engine does not implement. It exits non-zero when it reports anything, so it
 works as a CI gate. The same checks surface live in editors
 through [carve-lsp](https://github.com/markup-carve/carve-lsp).
+
+`carve portability` answers a different question: not "is this right in Carve"
+but "does it mean the same thing in Djot" - for a document that has to survive
+both readers. It renders with both engines and reports the first place they
+disagree, so it is a measurement rather than a heuristic; a first attempt that
+*reasoned* about the same question as a lint rule was withdrawn for
+unsoundness (carve-js#546). Carve's deliberate departures (`/italic/`, `=mark=`,
+quoted link titles) are genuine divergences and are reported as such. It needs
+djot.js, which this package does not depend on - `npm install @djot/djot`
+alongside. See [Portability](docs/migration.md#portability).
 
 `carve-version-unsupported` reads a frontmatter `carve-version:` key - the
 author-facing declaration of which Carve version a document targets - and warns

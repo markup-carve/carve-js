@@ -56,10 +56,19 @@
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs"
   },
   "devDependencies": {
+    "@djot/djot": "^0.3.2",
     "@types/node": "^22.19.20",
     "prettier": "^3.9.6",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "yaml": "^2.9.0"
+  },
+  "peerDependencies": {
+    "@djot/djot": "^0.3.2"
+  },
+  "peerDependenciesMeta": {
+    "@djot/djot": {
+      "optional": true
+    }
   }
 }
