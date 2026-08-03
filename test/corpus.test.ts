@@ -207,6 +207,9 @@ const IMPLEMENTED = new Set([
   'attribute-order-on-an-unwrapped-heading',
   'attribute-braces-on-a-list-item-marker-line',
   'implicit-heading-references-with-no-definition',
+  'a-repeated-definition-which-one-wins',
+  'a-marker-separator-is-a-space-never-a-tab',
+  'two-abbreviation-definitions',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
