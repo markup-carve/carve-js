@@ -9,6 +9,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A content-less `::` is paragraph text** (markup-carve/carve#512). PART 9's
+  MARKER REQUIRES CONTENT covers every marker that takes a separator space, and
+  the definition-term marker was never extended to. `::` and `:: ` were already
+  paragraphs, but `::` plus a SECOND space produced `<dl><dt> </dt></dl>` with
+  the space itself as the term - so deleting one invisible character changed the
+  document's structure, which is precisely what the rule's rationale exists to
+  prevent. The three engines carried three answers here; carve-rs was right.
+
+### Fixed
+
 - **An unresolved reference is published as a `link`, not as text**
   (markup-carve/carve#486, spec markup-carve/carve#518 §3a). `parse()` always
   produced a `link` carrying `ref` and `rawRef`; `resolve()` then replaced it

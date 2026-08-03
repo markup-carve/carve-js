@@ -261,7 +261,13 @@ const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
 // Definition list (§4.5). A TERM line is exactly two colons + space(s)
 // + text — the `(?!:)` keeps it distinct from a `:::` div/admonition. A
 // DEFINITION line is a colon + two-or-more spaces + text.
-const RE_DEFLIST_TERM = /^::(?!:)\s+(.+)$/
+// MARKER REQUIRES CONTENT (PART 9): the content must be non-empty, so `(.+)`
+// is not enough - it matches a lone trailing space. `::` and `:: ` were already
+// paragraphs here, but `::` plus a SECOND space produced `<dl><dt> </dt></dl>`,
+// with the space as the term. Deleting one invisible character then changed the
+// document's structure, which is the exact thing the rule exists to prevent
+// (carve#512).
+const RE_DEFLIST_TERM = /^::(?!:)\s+(\S.*)$/
 const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // A definition marker's separator must START with a literal space (U+0020),
 // not a tab (#288) -- matching carve-rs and every marker whose grammar
