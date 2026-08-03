@@ -2474,6 +2474,21 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     state.paragraphOpen = false
     return
   }
+  // Two more kinds that leave no paragraph, for the same S4 reason. A
+  // definition TERM is bounded like a heading - it holds inline content, not a
+  // paragraph - and a reference, footnote or abbreviation definition is
+  // invisible, so there is nothing on the page for a lazy line to continue.
+  // Without these, `>:: t` / `~` produced `<dt>t ~</dt>` and `>[f]: ~` / `/`
+  // put the `/` inside the quote (carve-js#554).
+  if (
+    RE_DEFLIST_TERM.test(content) ||
+    RE_ABBR_DEF.test(content) ||
+    RE_FOOTNOTE_DEF.test(content) ||
+    RE_LINK_DEF.test(content)
+  ) {
+    state.paragraphOpen = false
+    return
+  }
   // The remaining structural openers (fence/comment/div) only start a block
   // when NO paragraph is already open: Carve has no paragraph-interrupting
   // block mode, so a fence/comment-looking line WHILE a quoted paragraph is
