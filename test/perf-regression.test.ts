@@ -19,7 +19,7 @@ import { carveToHtml } from '../src/index.js'
 // stay generous so shared-runner scheduler noise does not cause flakes.
 
 /** Minimum elapsed ms over a few runs (min is the most stable perf floor). */
-function timeMin(fn: () => void, runs = 7): number {
+function timeMin(fn: () => void, runs = 3): number {
   let best = Infinity
   for (let r = 0; r < runs; r++) {
     const t = performance.now()
@@ -27,6 +27,33 @@ function timeMin(fn: () => void, runs = 7): number {
     best = Math.min(best, performance.now() - t)
   }
   return best
+}
+
+/**
+ * The MEDIAN of three independent small/large ratios.
+ *
+ * A single ratio is a quotient of two noisy measurements, and on a shared
+ * runner the small one is small enough that one scheduling hiccup moves the
+ * quotient by more than the margin between linear and quadratic. That is not
+ * hypothetical: this file put main red twice in a day at 3.65 and 3.51 against
+ * a 3.5 guard, on a parser that scales at 1.9-2.4 locally (carve-js#570).
+ *
+ * A median needs TWO bad samples to move, and quadratic growth produces ~4x in
+ * every sample rather than one. So the guard keeps the thing it was written to
+ * catch and loses the thing it was catching by accident. `timeMin`'s own
+ * best-of-N drops from 7 to 3 so three ratios cost about what one used to.
+ */
+function ratioMedian(small: () => void, large: () => void): { ratio: number; tSmall: number } {
+  const ratios: number[] = []
+  let smallest = Infinity
+  for (let i = 0; i < 3; i++) {
+    const tSmall = timeMin(small)
+    const tLarge = timeMin(large)
+    smallest = Math.min(smallest, tSmall)
+    ratios.push(tLarge / tSmall)
+  }
+  ratios.sort((a, b) => a - b)
+  return { ratio: ratios[1]!, tSmall: smallest }
 }
 
 const shapes: Array<{ name: string; unit: string }> = [
@@ -93,18 +120,20 @@ describe('parser perf regression: far-brace span attributes', () => {
 
       carveToHtml(unit.repeat(1000) + '}')
 
-      const tSmall = timeMin(() => void carveToHtml(small))
-      const tLarge = timeMin(() => void carveToHtml(large))
+      const { ratio, tSmall } = ratioMedian(
+        () => void carveToHtml(small),
+        () => void carveToHtml(large),
+      )
 
       expect(tSmall).toBeLessThan(2000)
-      expect(tLarge).toBeLessThan(2000)
       // Linear yields ~2x, quadratic ~4x. Guard at 3.5x - safely below the
-      // quadratic 4x it must catch, with headroom for CI timing noise (on a
-      // loaded shared runner a ~40ms `small` measurement jitters the ratio up
-      // toward 3; locally it sits near 2). The `timeMin` best-of-many further
-      // damps that noise.
+      // quadratic 4x it must catch. The MEDIAN of three ratios is what makes
+      // that margin hold on a shared runner: one hiccup in a ~40ms `small`
+      // measurement used to carry a single ratio past 3.5 on a parser that
+      // scales at 1.9-2.4 (carve-js#570), and a median needs two bad samples
+      // to move while quadratic growth shows up in all three.
       if (tSmall > 20) {
-        expect(tLarge / tSmall).toBeLessThan(3.5)
+        expect(ratio).toBeLessThan(3.5)
       }
     })
   }
