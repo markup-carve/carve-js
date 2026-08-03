@@ -298,4 +298,35 @@ describe('fmt keeps a heading on one line', () => {
     expect(out).toBe('# a\\\\ b\n')
     expect(carveToHtml(out)).toBe('<section id="a-b">\n  <h1>a\\ b</h1>\n</section>')
   })
+
+  it('keeps the innermost content of a document nested at the parser cap', async () => {
+    // The writer's recursion bound was the parser's own MAX_NESTING_DEPTH, so a
+    // document nested at exactly the cap parsed fine and then wrote back with
+    // its innermost block replaced by an empty line - `fmt` deleting content
+    // with no error, and PART 11's semantic invariant broken at the boundary
+    // (issue 517). All three engines shared the defect.
+    const { MAX_NESTING_DEPTH } = await import('../src/parse.js')
+    const src = '::: note\n'.repeat(MAX_NESTING_DEPTH) + 'body\n'
+    expect(carveToHtml(src)).toContain('<p>body</p>')
+
+    const written = carveToCarve(src)
+    expect(written).toContain('body')
+    expect(carveToHtml(written)).toBe(carveToHtml(src))
+  })
+
+  it('still bounds a hand-built AST deeper than any parse can reach', async () => {
+    // Raising the bound must not retire it: the guard is there for ASTs that
+    // did not come from the parser, which can nest without limit.
+    const { renderCarve } = await import('../src/index.js')
+    const build = (depth: number): unknown => {
+      let node: unknown = { type: 'paragraph', children: [{ type: 'text', value: 'body' }] }
+      for (let i = 0; i < depth; i++) node = { type: 'admonition', kind: 'note', children: [node] }
+      return { type: 'doc', children: [node] }
+    }
+    const bounded = renderCarve(build(50_000) as never)
+    // Truncated rather than overflowing the stack, and truncated at the SAME
+    // point as a tree two orders of magnitude shallower.
+    expect(bounded).not.toContain('body')
+    expect(bounded.length).toBe(renderCarve(build(1_000) as never).length)
+  })
 })
