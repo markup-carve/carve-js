@@ -144,6 +144,10 @@ exits 1 if anything is reported, 0 if clean.
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
                      \`{=x=}\` highlight) — noise for hand-written Carve, useful
                      when checking a document migrated from Djot.
+        --portable   Also flag whitespace that parses differently under Djot
+                     (a block opener with no blank line above it, a \`>\` with
+                     no space after it) - advisory, the document is correct in
+                     Carve either way.
   -h, --help     Show this help
 `
 
@@ -687,6 +691,7 @@ function reportLint(
   file: string,
   io: CliIO,
   fromDjot: boolean,
+  portable: boolean,
 ): number {
   // Default lint targets hand-written Carve, so it reports only constructs
   // that mis-render in Carve (`carve-breakage`). Djot-semantic shifts such as
@@ -695,7 +700,7 @@ function reportLint(
   const migration = djotMigrationWarnings(source).filter(
     (w) => fromDjot || w.category === 'carve-breakage',
   )
-  const semantic = lintCarve(source)
+  const semantic = lintCarve(source, { portable })
   if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
   if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
   return migration.length + semantic.length
@@ -751,12 +756,14 @@ async function runDiff(args: string[], io: CliIO): Promise<number> {
 async function runLint(args: string[], io: CliIO): Promise<number> {
   let positionals: string[]
   let fromDjot: boolean
+  let portable: boolean
   try {
     const parsed = parseArgs({
       args,
       options: {
         help: { type: 'boolean', short: 'h' },
         'from-djot': { type: 'boolean' },
+        portable: { type: 'boolean' },
       },
       allowPositionals: true,
     })
@@ -766,6 +773,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     }
     positionals = parsed.positionals
     fromDjot = parsed.values['from-djot'] ?? false
+    portable = parsed.values.portable ?? false
   } catch (e) {
     io.writeErr(`carve lint: ${(e as Error).message}\n`)
     return 2
@@ -773,7 +781,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
 
   if (positionals.length === 0) {
     const src = await io.readStdin()
-    return reportLint(src, '<stdin>', io, fromDjot) > 0 ? 1 : 0
+    return reportLint(src, '<stdin>', io, fromDjot, portable) > 0 ? 1 : 0
   }
 
   let total = 0
@@ -787,7 +795,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
       hadError = true
       continue
     }
-    total += reportLint(src, file, io, fromDjot)
+    total += reportLint(src, file, io, fromDjot, portable)
   }
   if (hadError) return 2
   return total > 0 ? 1 : 0
