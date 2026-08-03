@@ -82,26 +82,6 @@ export interface AstJsonDocument {
 const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title'] as const
 
 /**
- * Runtime-only fields, dropped on the way to the wire.
- *
- * PART 12 makes the serialized AST an interchange format, and
- * `resources/ast-schema.json` pins it with `additionalProperties: false` per
- * node - so a field this engine keeps for itself, that the schema does not name
- * and the other engines do not publish, cannot ride along. `bareMarker` records
- * which spelling an ordered marker was written with (`. a` vs `1. a`) so the
- * canonical writer can put it back; the writer reads the runtime tree, so
- * source -> fmt keeps it and only a JSON round trip forgets it, the same stated
- * loss the other engines' codecs already carry for authored form.
- *
- * If the bare-dot proposal (markup-carve/carve#315) is accepted, the field
- * belongs in the schema beside `delim` and `bulletChar` - the author-choice
- * fields it is exactly like - and this entry goes away.
- */
-const RUNTIME_ONLY_FIELDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  list: ['bareMarker'],
-})
-
-/**
  * Rewrite definition lists into their wire shape, everywhere in a subtree, and
  * drop the runtime-only fields above.
  *
@@ -123,15 +103,6 @@ function definitionListsToWire<T>(node: T): T {
 
   const record = node as Record<string, unknown>
   let out: Record<string, unknown> | undefined
-
-  const runtimeOnly = RUNTIME_ONLY_FIELDS[String(record['type'])]
-  if (runtimeOnly !== undefined) {
-    for (const field of runtimeOnly) {
-      if (!(field in record)) continue
-      out = { ...(out ?? record) }
-      delete out[field]
-    }
-  }
 
   if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
     const items = record['items']
