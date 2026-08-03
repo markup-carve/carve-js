@@ -9,6 +9,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An unresolved reference IMAGE is an image node, and every target writes its
+  source** (PART 12 §3a, carve-php#624). The link half of §3a shipped; the image
+  half did not. `resolve()` still replaced `![alt][nope]` with a text node, so
+  the HTML path looked correct while the image node had no renderer arm at all -
+  and the serialized tree kept the image, so a document decoded from JSON
+  rendered `<img src="">` where the same document parsed from source rendered
+  `![alt][nope]`. One document, two shapes, decided by the entry point. The node
+  now survives, and the HTML, Markdown, plain-text and ANSI writers reproduce
+  the authored source the way the Carve writer already did. A lone unresolved
+  reference image is still not promoted to a block image, so it keeps its `<p>`.
+
 - **An unresolved reference is published as a `link`, not as text**
   (markup-carve/carve#486, spec markup-carve/carve#518 §3a). `parse()` always
   produced a `link` carrying `ref` and `rawRef`; `resolve()` then replaced it

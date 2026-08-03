@@ -483,6 +483,9 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
 }
 
 function renderImage(node: Image): string {
+  // An unresolved reference image writes back as its source, like the link
+  // arm above; `![alt]()` would claim an image the document never had.
+  if (node.ref !== undefined) return escapeText(node.rawRef ?? '')
   const src = markdownDestination(node.src)
   const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined

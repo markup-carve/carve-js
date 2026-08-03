@@ -92,7 +92,7 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
-      return `${stripControls(node.alt)}\n\n`
+      return `${renderImageText(node)}\n\n`
     case 'raw_block':
     case 'abbreviation_def':
     case 'comment':
@@ -170,6 +170,15 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
   return out
 }
 
+// An image contributes its alt text, EXCEPT when it is an unresolved reference
+// (PART 12 §3a): there the document has no image, only the source the author
+// wrote, and `alt` is the label out of its brackets.
+function renderImageText(node: { alt: string; ref?: string; rawRef?: string }): string {
+  if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
+
+  return stripControls(node.alt)
+}
+
 function renderInlines(nodes: InlineNode[], ctx: PlainContext): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
   ctx.inlineDepth++
@@ -211,7 +220,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
       return renderInlines(node.children, ctx)
     case 'image':
-      return stripControls(node.alt)
+      return renderImageText(node)
     case 'math':
       return stripControls(node.content)
     case 'raw_inline':
