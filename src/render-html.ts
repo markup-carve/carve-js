@@ -1230,6 +1230,12 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
 }
 
 function renderImage(img: Image, opts: RenderOptions): string {
+  // An unresolved reference image is literal source, not an image (PART 12
+  // §3a), exactly like the unresolved reference link above. Without this the
+  // node rendered as `<img src="">` - it only looked right because resolve()
+  // used to replace it with a text node first, which a document decoded from
+  // JSON never goes through.
+  if (img.ref !== undefined) return escapeHtml(img.rawRef ?? '')
   const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
   const src = escapeAttr(sanitizeUrl(img.src, opts))
   // The sanitized structural src wins; never re-emit an author-supplied

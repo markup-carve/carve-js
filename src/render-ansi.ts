@@ -469,7 +469,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   }
 }
 
-function renderImage(node: { alt: string }): string {
+function renderImage(node: { alt: string; ref?: string; rawRef?: string }): string {
+  // An unresolved reference image writes back as its source, like the link
+  // arm above; `[img: alt]` would announce an image the document never had.
+  if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

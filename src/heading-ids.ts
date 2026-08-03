@@ -403,13 +403,15 @@ export function resolveHeadingIds(
         // The renderers turn a surviving `ref` back into its literal source
         // (carve#486).
       }
-      if (n.type === 'image' && n.ref !== undefined) {
-        // A reference image resolves only against explicit `[label]: url`
-        // defs (applyLinkDefs); an unresolved one is literal source. It never
-        // matches heading text like a link ref does.
-        nodes[i] = { type: 'text', value: n.rawRef ?? '' } as Text
-        continue
-      }
+      // A reference IMAGE resolves only against explicit `[label]: url` defs
+      // (applyLinkDefs); it never matches heading text the way a link ref does,
+      // so nothing left to try here. An unresolved one STAYS an image node for
+      // the same reason the link above stays a link (PART 12 §3a): reverting it
+      // to a text node here discarded the fact that the author wrote a
+      // reference, and it did so only on the HTML path - the serialized tree
+      // kept the image - so one document had two shapes depending on which
+      // entry point produced it. The renderers write it back out as its
+      // literal source (carve#486, carve-php#624).
       switch (n.type) {
         case 'emphasis':
         case 'strong':
