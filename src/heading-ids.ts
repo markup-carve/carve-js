@@ -506,6 +506,21 @@ export function resolveHeadingIds(
    * later `enforceNoNesting` walk (`RangeError: Maximum call stack size
    * exceeded`) -- a crash-DoS reachable from every public API on tiny input.
    */
+  /**
+   * Drop `pos` from a cloned subtree, at every depth.
+   *
+   * Cloned display text is not a slice of the source where it now sits, so a
+   * span on it points somewhere else. Omitting it is what PART 12 §4 permits;
+   * keeping it is what the containment rule catches.
+   */
+  const stripPositions = (nodes: InlineNode[]): void => {
+    for (const node of nodes) {
+      delete (node as { pos?: unknown }).pos
+      const children = (node as { children?: InlineNode[] }).children
+      if (Array.isArray(children)) stripPositions(children)
+    }
+  }
+
   const resolveCrossrefs = (nodes: InlineNode[]): void => {
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!
@@ -530,6 +545,13 @@ export function resolveHeadingIds(
             const source = pristineTargets.get(tgtId) ?? tgt
             children = JSON.parse(JSON.stringify(source)) as InlineNode[]
             flattenNestedCrossrefs(children)
+            // The clone came from the HEADING, so its spans point at the
+            // heading's source, not at the `</#id>` this link was written as -
+            // which put a span from one construct inside another's. PART 12 §4
+            // lets a node whose content is not a contiguous slice of its own
+            // source omit `pos` rather than invent one, and cloned display text
+            // is that case exactly (carve#565).
+            stripPositions(children)
             crossrefCloneCache.set(tgtId, children)
           }
           const link: Link = {
