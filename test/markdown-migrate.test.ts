@@ -280,6 +280,14 @@ describe('markdownToCarve — prefixed multiline inline mapping', () => {
     expect(carveToHtml(carve)).toBe('<blockquote><p><strong>quoted\nbody</strong> end</p></blockquote>')
   })
 
+  it('normalizes tight Markdown blockquote markers to Carve spacing', () => {
+    const carve = conv(['>quote', '>>nested'].join('\n'))
+    expect(carve).toBe(['> quote', '> > nested'].join('\n'))
+    expect(carveToHtml(carve)).toBe(
+      '<blockquote>\n  <p>quote</p>\n  <blockquote><p>nested</p></blockquote>\n</blockquote>',
+    )
+  })
+
   it('leaves a fenced code block inside a list item untouched', () => {
     const md = ['- item', '  ```', '  **no**', '  ```'].join('\n')
     const carve = conv(md)

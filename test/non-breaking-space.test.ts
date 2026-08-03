@@ -161,9 +161,9 @@ describe('non-breaking-space handling', () => {
       expect(carveToHtml(`${NBSP}[r]: /url`)).toBe('<p>&nbsp;[r]: /url</p>')
     })
 
-    it('keeps an NBSP that directly follows a blockquote marker', () => {
+    it('keeps an NBSP after > as prose because only a literal space is a quote separator', () => {
       // `>` + U+00A0 (no ASCII space): the NBSP is content, not marker padding.
-      expect(carveToHtml(`>${NBSP}x`)).toBe('<blockquote><p>&nbsp;x</p></blockquote>')
+      expect(carveToHtml(`>${NBSP}x`)).toBe('<p>&gt;&nbsp;x</p>')
     })
 
     it('requires real whitespace after a reference-definition colon', () => {

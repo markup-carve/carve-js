@@ -1029,9 +1029,15 @@ function restorePrefixedInlineRun(run: readonly PrefixedInlineLine[]): string[] 
 }
 
 function blockquotePrefix(line: string): { prefix: string; text: string } | null {
-  const match = line.match(/^(>[ \t]?)(.*)$/)
-  if (!match) return null
-  return { prefix: match[1]!, text: match[2]! }
+  let rest = line
+  let prefix = ''
+  while (rest.startsWith('>')) {
+    rest = rest.slice(1)
+    if (rest.startsWith(' ') || rest.startsWith('\t')) rest = rest.slice(1)
+    prefix += '> '
+  }
+  if (prefix === '') return null
+  return { prefix, text: rest }
 }
 
 function collectBlockquoteInlineRun(lines: readonly string[], start: number): {

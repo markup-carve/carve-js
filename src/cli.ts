@@ -144,9 +144,8 @@ exits 1 if anything is reported, 0 if clean.
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
                      \`{=x=}\` highlight) — noise for hand-written Carve, useful
                      when checking a document migrated from Djot.
-        --portable   Also flag a \`>\` blockquote marker with no space after it,
-                     which parses differently under Djot - advisory, the
-                     document is correct in Carve either way.
+        --portable   Deprecated compatibility option; blockquote marker spacing
+                     is now core Carve syntax and is always checked.
   -h, --help     Show this help
 `
 

@@ -29,13 +29,13 @@ describe('lazy continuation into a block quote', () => {
   it('does not fold after a definition term', () => {
     // A term holds inline content, not a paragraph, so there is nothing to
     // extend. This produced `<dt>t ~</dt>`.
-    expect(squash(carveToHtml('>:: t\n~\n'))).toBe(
+    expect(squash(carveToHtml('> :: t\n~\n'))).toBe(
       '<blockquote> <dl> <dt>t</dt> </dl> </blockquote> <p>~</p>',
     )
   })
 
   it('does not fold after a footnote definition', () => {
-    expect(squash(carveToHtml('>[f]: ~\n/\n'))).toBe('<blockquote> </blockquote> <p>/</p>')
+    expect(squash(carveToHtml('> [f]: ~\n/\n'))).toBe('<blockquote> </blockquote> <p>/</p>')
   })
 
   it('does not fold after a link reference definition', () => {

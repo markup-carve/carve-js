@@ -258,14 +258,7 @@ export function lintCarve(
   opts: {
     asciiHeadingIds?: AsciiHeadingIdMode
     lowercaseHeadingIds?: boolean
-    /**
-     * Report the advisory portable-whitespace rule (`portable-quote-marker-space`).
-     *
-     * Off by default. This does NOT describe a problem in Carve: the document
-     * renders exactly as written. It describes source whose whitespace parses
-     * differently under a Djot processor, so it only matters to an author who
-     * wants the source to stay valid Djot.
-     */
+    /** Deprecated compatibility option; blockquote marker spacing is now core syntax. */
     portable?: boolean
   } = {},
 ): LintWarning[] {
@@ -428,8 +421,6 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
-  if (opts.portable) collectPortableWhitespace(source, doc, verbatimLines, out)
-
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
 }
@@ -440,6 +431,8 @@ export function lintCarve(
 const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
 /** A fenced block whose info string is the legacy `raw FORMAT` form. */
 const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
+/** A line that looks like the old tight blockquote spelling. */
+const BLOCKQUOTE_WITHOUT_SPACE = /^(>)([^ ].*)$/
 /** A line that opens like a block construct (`:::`, `{#`, `{.`). */
 const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // A fenced-code delimiter (opener or closer) with leading whitespace. A Carve
@@ -553,7 +546,23 @@ function collectSilentFailures(
     )
   }
 
-  // 3. A paragraph whose first inline text opens like a block construct: the
+  // 3. The pre-0.1.x tight blockquote spelling. `>` must be bare or followed
+  //    by a literal space, so `>quote`, `>>=`, and `>\tquote` are prose.
+  for (let i = 0; i < lines.length; i++) {
+    if (verbatimLines.has(i + 1)) continue
+    const m = BLOCKQUOTE_WITHOUT_SPACE.exec(lines[i]!)
+    if (!m) continue
+    push(
+      i + 1,
+      1,
+      lines[i]!.length,
+      'blockquote-marker-without-space',
+      `A blockquote marker must be either bare ">" or followed by a space. ` +
+        `This line renders as literal text; write "> ${m[2]}" to quote it.`,
+    )
+  }
+
+  // 4. A paragraph whose first inline text opens like a block construct: the
   //    block never opened, so the marker leaked as plain text. Gating on the
   //    text content (not the source line) avoids a false positive when a valid
   //    container's child paragraph reports its parent's start line.
@@ -565,7 +574,7 @@ function collectSilentFailures(
     const m = LEAKED_BLOCK_MARKER.exec(first.value)
     if (!m) continue
     const loc = locate(first as Positioned, toUtf16)
-    // 3a. The common authoring mistakes on a fence opener get a targeted
+    // 4a. The common authoring mistakes on a fence opener get a targeted
     //     hint instead of the generic marker warning: an unquoted trailing
     //     title (the VitePress/Docusaurus habit), typographic quotes (a CMS
     //     "smart quote" filter rewrote the source before Carve saw it), or a
@@ -631,7 +640,7 @@ function collectSilentFailures(
     })
   }
 
-  // 4. An indented fenced-code OPENER. A Carve fence is column-exact - it sits
+  // 5. An indented fenced-code OPENER. A Carve fence is column-exact - it sits
   //    at its container's content column (column 0 at the top level), like every
   //    other block opener. An indented run of backticks/tildes therefore does
   //    NOT open a code block; the opener degrades to a paragraph (its run
@@ -830,6 +839,10 @@ function collectPortableWhitespace(
     }
   }
 }
+
+// Deprecated compatibility path retained for the CLI option docs/history; the
+// blockquote marker rule is now core syntax and is reported by default.
+void collectPortableWhitespace
 
 function collectFootnoteDefinitionWarnings(
   source: string,
