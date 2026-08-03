@@ -63,6 +63,7 @@ export interface LintWarning {
 interface Positioned {
   pos?: {
     startLine: number
+    endLine?: number
     startColumn?: number
     startOffset?: number
     endOffset?: number
@@ -427,7 +428,7 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
-  if (opts.portable) collectPortableWhitespace(source, doc, out, toUtf16)
+  if (opts.portable) collectPortableWhitespace(source, doc, verbatimLines, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -684,43 +685,68 @@ function collectSilentFailures(
 function collectPortableWhitespace(
   source: string,
   doc: Document,
+  verbatimLines: Set<number>,
   out: LintWarning[],
-  toUtf16: (offset: number) => number,
 ): void {
   const lines = source.split('\n')
+  // A source-relative table of each line's UTF-16 start offset, so a
+  // continuation line (which has no AST node of its own to read a position
+  // from) can still report a `start`/`end` in the same units as every other
+  // LintWarning.
+  const lineStart: number[] = []
+  for (let off = 0, i = 0; i < lines.length; i++) {
+    lineStart[i] = off
+    off += lines[i]!.length + 1
+  }
 
   // A `>` blockquote marker with no space after it. Djot has no `>>` marker at
   // all, so a nested quote must be written `> > q`; anchoring on each
   // block_quote node's OWN startColumn reports each level separately.
   //
+  // A block_quote node's own position spans its ENTIRE range (startLine to
+  // endLine), including every continuation line at this nesting depth - not
+  // just the line it opens on - so each of those lines needs its own marker
+  // check: djot does not strip an unspaced `>` on a continuation line either;
+  // it falls through to lazy paragraph continuation and the `>` survives as
+  // literal text, which is a silent divergence from Carve (which always
+  // strips it) exactly like the opening-line case this rule already covers.
+  //
   // Exempt: whitespace of any kind (a tab and two spaces both parse identically
-  // in the two engines) and end of line (a bare `>` separator line likewise).
+  // in the two engines), end of line (a bare `>` separator line likewise), a
+  // lazy continuation line that carries no marker at this column at all (there
+  // is nothing to make portable), and any line inside a verbatim (code/raw)
+  // region, where the character at this column is sample text, not a marker.
   const quotes: Positioned[] = []
   walkDocument(doc, (node) => {
     if (node.type === 'block_quote') quotes.push(node as Positioned)
   })
   quotes.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
   for (const q of quotes) {
-    const line = q.pos?.startLine
+    const startLine = q.pos?.startLine
+    const endLine = q.pos?.endLine ?? startLine
     const col = q.pos?.startColumn
-    if (!line || !col) continue
-    const text = lines[line - 1] ?? ''
-    // Guard against position drift: only flag where the marker really is.
-    if (text[col - 1] !== '>') continue
-    const after = text[col]
-    if (after === undefined || after === ' ' || after === '\t' || after === '\r') continue
-    const loc = locate(q, toUtf16)
-    out.push({
-      line,
-      column: col,
-      rule: 'portable-quote-marker-space',
-      message:
-        'This ">" blockquote marker has no space after it. Carve opens a blockquote; ' +
-        'djot leaves the line as text. Write "> " with a space - and a nested quote ' +
-        'as "> > ", since djot has no ">>" marker.',
-      start: loc.start,
-      end: loc.start + 1,
-    })
+    if (!startLine || !endLine || !col) continue
+    for (let line = startLine; line <= endLine; line++) {
+      if (verbatimLines.has(line)) continue
+      const text = lines[line - 1] ?? ''
+      // Guard against position drift, and skip a lazy continuation line: only
+      // flag where this node's own marker really is.
+      if (text[col - 1] !== '>') continue
+      const after = text[col]
+      if (after === undefined || after === ' ' || after === '\t' || after === '\r') continue
+      const start = (lineStart[line - 1] ?? 0) + (col - 1)
+      out.push({
+        line,
+        column: col,
+        rule: 'portable-quote-marker-space',
+        message:
+          'This ">" blockquote marker has no space after it. Carve opens a blockquote; ' +
+          'djot leaves the line as text. Write "> " with a space - and a nested quote ' +
+          'as "> > ", since djot has no ">>" marker.',
+        start,
+        end: start + 1,
+      })
+    }
   }
 }
 

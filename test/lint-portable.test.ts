@@ -46,4 +46,24 @@ describe('lintCarve - portable-quote-marker-space', () => {
   it('does not fire on a ">" inside a code block', () => {
     expect(portableRules('```\n>quote\n```\n')).toEqual([])
   })
+
+  it('flags an unspaced marker on a continuation line of an open blockquote', () => {
+    const w = lintCarve('> ok\n>bad\n', { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.rule).toBe('portable-quote-marker-space')
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.column).toBe(1)
+  })
+
+  it('does not flag a spaced marker on a continuation line', () => {
+    expect(portableRules('> ok\n> good\n')).toEqual([])
+  })
+
+  it('does not flag a lazy continuation line that carries no marker at all', () => {
+    expect(portableRules('> ok\nbad\n')).toEqual([])
+  })
+
+  it('does not fire on an unspaced ">" inside a code fence nested in a blockquote', () => {
+    expect(portableRules('> ```\n>x\n> ```\n')).toEqual([])
+  })
 })
