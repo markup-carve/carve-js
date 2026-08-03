@@ -7,6 +7,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **An abbreviation definition written inside a container is now a child of the
+  document** (carve-php#631, spec markup-carve/carve#518). PART 12 §7 puts a
+  definition at document level even when it was authored inside a div, a list
+  item or a block quote, because its scope is the document wherever it sits. A
+  footnote definition already worked that way here; an `abbreviation_def` was
+  left nested, which is what split the engines - all three rendered identical
+  HTML, so nothing about the document changes, only the tree. `pos` still
+  records where the author wrote it.
+
+  The hoist is part of `parse()`, not of serialization: §6 requires
+  `parse(x)` serialized and deserialized to equal `parse(x)`, so hoisting on the
+  way out would satisfy §7 and break §6 on the same document - the mistake §1a
+  already records for text-run coalescing.
+
 ### Added
 
 - **Bare-dot ordered markers** (proposal for markup-carve/carve#315, DRAFT -
