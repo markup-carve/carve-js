@@ -121,6 +121,33 @@ describe('lintCarve - portable-blank-line-before-block', () => {
     expect(w[0]!.message).toContain('blank line')
   })
 
+  it('spans exactly the opening line for a single-line opener', () => {
+    const src = 'text\n# H\n'
+    const w = lintCarve(src, { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.column).toBe(1)
+    expect(src.slice(w[0]!.start, w[0]!.end)).toBe('# H')
+  })
+
+  it('spans only the opening line of a multi-line table, not the whole table', () => {
+    const src = 'text\n| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n'
+    const w = lintCarve(src, { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.column).toBe(1)
+    expect(src.slice(w[0]!.start, w[0]!.end)).toBe('| a | b |')
+  })
+
+  it('spans only the opening line of a multi-line admonition, not its whole body', () => {
+    const src = 'text\n::: note\nbody\n:::\n'
+    const w = lintCarve(src, { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.column).toBe(1)
+    expect(src.slice(w[0]!.start, w[0]!.end)).toBe('::: note')
+  })
+
   it('flags every other interrupting opener', () => {
     expect(portableRules('text\n> q\n')).toEqual(['portable-blank-line-before-block'])
     expect(portableRules('text\n```\nx\n```\n')).toEqual(['portable-blank-line-before-block'])

@@ -798,9 +798,21 @@ function collectPortableWhitespace(
       if (prev?.type !== 'paragraph') continue
       const node = blocks[i] as (Positioned & { type?: string }) | undefined
       const prevEnd = prev.pos?.endLine
-      const start = node?.pos?.startLine
-      if (!prevEnd || !start || start !== prevEnd + 1) continue
+      const openingLine = node?.pos?.startLine
+      if (!prevEnd || !openingLine || openingLine !== prevEnd + 1) continue
       const loc = locate(node as Positioned, toUtf16)
+      // Report only the opening line, not the node's full range: for a
+      // multi-line block (a table, an admonition, a fenced code block) `loc.end`
+      // spans every line of the block, which would underline the whole thing in
+      // an editor even though only the opening line is what interrupted the
+      // paragraph. `lines`/`lineStart` are plain JS-string splits of `source`,
+      // already in UTF-16 code units - the unit LintWarning.start/end use - so
+      // this end offset is computed directly from them with no `toUtf16` call,
+      // the same convention `collectSilentFailures`' `push` helper uses for a
+      // line-derived offset. `loc.start` still comes through `locate`/`toUtf16`
+      // because it is derived from the node's AST codepoint offset, not a line
+      // index.
+      const lineEnd = (lineStart[openingLine - 1] ?? 0) + (lines[openingLine - 1] ?? '').length
       out.push({
         line: loc.line,
         column: loc.column,
@@ -810,7 +822,7 @@ function collectPortableWhitespace(
           'block; djot folds the opener into the paragraph as text. Add a blank line ' +
           'above it.',
         start: loc.start,
-        end: loc.end,
+        end: lineEnd,
       })
     }
   }
