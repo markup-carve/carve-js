@@ -260,14 +260,24 @@ describe('definition lists on the wire (PART 12)', () => {
   })
 })
 
-describe('runtime-only fields stay off the wire (PART 12)', () => {
+describe('author-choice list fields on the wire (PART 12)', () => {
   // `resources/ast-schema.json` pins each node with `additionalProperties:
   // false`, so a field this engine keeps for itself - one the schema does not
   // name and carve-php / carve-rs do not publish - cannot ride along.
-  it('does not publish the bareMarker a list carries', () => {
-    const wire = JSON.stringify(carveToAstJson('. a\n. b\n'))
+  it('publishes the bareMarker a list carries', () => {
+    // PART 12 §1a's neighbour: `bareMarker` is an AUTHOR-CHOICE field beside
+    // `delim` and `bulletChar`, so it belongs on the wire (carve#480). It used
+    // to be stripped here only because the schema had no field to hold it.
+    const wire = carveToAstJson('. a\n. b\n')
 
-    expect(wire).not.toContain('bareMarker')
+    expect((wire.children[0] as Record<string, unknown>).bareMarker).toBe(true)
+  })
+
+  it('omits it when the author numbered the list', () => {
+    // Absent at the default, exactly like `delim` and `bulletChar`.
+    const wire = carveToAstJson('1. a\n2. b\n')
+
+    expect((wire.children[0] as Record<string, unknown>).bareMarker).toBeUndefined()
   })
 
   it('still records it on the runtime tree, so fmt keeps the spelling', () => {
@@ -277,13 +287,11 @@ describe('runtime-only fields stay off the wire (PART 12)', () => {
     expect(renderCarve(parse('1. a\n2. b\n'))).toBe('1. a\n2. b\n')
   })
 
-  it('loses the spelling through a JSON round trip, and says so', () => {
-    // The stated cost of keeping the field off the wire: an AST that came
-    // back from JSON has no record of the bare form, so the writer falls back
-    // to the explicit one. Same class as the authored-form losses the other
-    // engines' codecs already list.
+  it('keeps the spelling through a JSON round trip', () => {
+    // The loss this used to assert is what carve#480 was about: with no field
+    // on the wire, `. a` came back as `1. a` and no engine could do better.
     const back = fromAstJson(carveToAstJson('. a\n. b\n'))
 
-    expect(renderCarve(back)).toBe('1. a\n2. b\n')
+    expect(renderCarve(back)).toBe('. a\n. b\n')
   })
 })
