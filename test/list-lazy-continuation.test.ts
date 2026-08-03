@@ -38,10 +38,21 @@ describe('list lazy continuation', () => {
     )
   })
 
-  it('a fenced code line ends the list', () => {
-    expect(html('- a\n```\nx')).toBe(
+  it('a CLOSED fenced code line ends the list', () => {
+    expect(html('- a\n```\nx\n```')).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<pre><code>x\n</code></pre>',
     )
+  })
+
+  it('an UNTERMINATED fence does not end the list', () => {
+    // §10 I4: the closer lookahead guards the verbatim fence, so an
+    // unterminated ``` is not a code block - it is an inline verbatim run that
+    // belongs to the item's paragraph.
+    //
+    // This case previously asserted the opposite, with the input `- a\n```\nx`
+    // and no closer. carve-rs produces what is expected here; carve-js broke
+    // out of the list, which is the defect carve-js#540 fixed.
+    expect(html('- a\n```\nx')).toBe('<ul>\n  <li>a\n<code>\nx</code></li>\n</ul>')
   })
 
   it('a blockquote line ends the list', () => {

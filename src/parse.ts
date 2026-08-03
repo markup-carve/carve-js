@@ -2832,10 +2832,20 @@ function lineOpensBlock(line: string): boolean {
   )
 }
 
-function lazyContinuationEndsList(line: string): boolean {
+function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
+  // A VERBATIM fence ends the fold only WITH a closer ahead (§10 I4): an
+  // unterminated ``` is not a code block, it is an inline verbatim run that
+  // belongs to the item's paragraph. Without this the item was closed and the
+  // fence became a top-level code block, which the top-level path already got
+  // right (corpus 81-paragraph-interruption-18) and carve-rs got right
+  // everywhere (carve-js#540).
+  //
+  // The `:::` arms below stay lexer-free deliberately - I4 does not guard a
+  // colon fence (markup-carve/carve#514), and the comment there gives the
+  // separate reason.
+  if (RE_RAW_FENCE.test(line)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(line)![1]!)
+  if (RE_FENCE.test(line)) return fenceHasCloser(lexer, RE_FENCE.exec(line)![2]!)
   return (
-    RE_RAW_FENCE.test(line) ||
-    RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
     // A flush-left colon-fence shaped line ends list lazy continuation
     // regardless of outer-stream closer lookahead. If the line belongs to the
@@ -3291,7 +3301,7 @@ function parseList(lexer: Lexer): List {
         // an inline-verbatim run that is part of the paragraph, so a dedented
         // line folds into it (matching the §10 closer-lookahead rule).
         (((lazyState.lazyFoldable || lazyState.inFence) &&
-          !lazyContinuationEndsList(l)) ||
+          !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
           // symmetric §10 no list marker interrupts a paragraph, so on the
