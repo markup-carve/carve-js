@@ -840,7 +840,6 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   lexer.consumeFrontmatter()
   // First pass: collect abbreviation and reference-link definitions so
   // they can be resolved regardless of document order (grammar §6).
-  collectAbbrDefs(lexer)
   collectLinkDefs(lexer)
 
   const prevMatchers = activeMatchers
@@ -912,7 +911,6 @@ function parseBlockSource(source: string, opts: ParseOptions, root: Lexer): Bloc
   for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
   sub.footnoteDefs = root.footnoteDefs
   sub.footnoteDefPos = root.footnoteDefPos
-  collectAbbrDefs(sub)
   collectLinkDefs(sub)
   if (!activeMatchers.length) return parseBlocks(sub, 0)
   const prevCtx = activeMatcherCtx
@@ -955,14 +953,6 @@ function tryInlineMatchers(text: string, pos: number): InlineMatch | null {
   return null
 }
 
-function collectAbbrDefs(lexer: Lexer) {
-  for (let idx = 0; idx < lexer.lines.length; idx++) {
-    // Skip leading frontmatter (opaque metadata); see collectLinkDefs.
-    if (idx < lexer.pos) continue
-    const m = RE_ABBR_DEF.exec(lexer.lines[idx]!)
-    if (m) lexer.abbrDefs.set(m[1]!, m[2]!)
-  }
-}
 
 /**
  * Normalize an explicit `[label]: url` reference label for matching:
@@ -1039,6 +1029,10 @@ function stripContainerPrefixes(raw: string): string {
  */
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number; contentCol: number; quoted: boolean } | null = null
+  // A LINE BLOCK is verse: a definition written inside one is text the author
+  // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
+  // closed on its own width so a wider `:::: |` is not closed by a narrower run.
+  let verse: number | null = null
   // Track the enclosing list item's content column so a fenced-code delimiter
   // is tested at its container's content column (PART 2), not blindly at
   // column 0. Without this the prepass cannot tell a real fence nested at a
@@ -1106,6 +1100,16 @@ function collectLinkDefs(lexer: Lexer) {
       '',
     )
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
+    if (verse !== null) {
+      const close = line.trim().match(/^(:{3,})$/)
+      if (close && close[1]!.length >= verse) verse = null
+      continue
+    }
+    const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
+    if (verseOpen) {
+      verse = verseOpen[1]!.length
+      continue
+    }
     if (fence) {
       // CLOSER: strip a blockquote prefix only when the fence is quoted, and
       // NEVER a list marker -- a fence delimiter is a continuation line of pure
@@ -1139,8 +1143,16 @@ function collectLinkDefs(lexer: Lexer) {
     // footnote opener enters the body; a non-blank line at column 0 leaves it.
     if (RE_FOOTNOTE_DEF.test(raw)) inFootnoteBody = true
     else if (raw.trim() !== '' && leadingWhitespace(raw) === 0) inFootnoteBody = false
-    // An abbreviation def (`*[ABBR]: ...`) is not a link def.
-    if (RE_ABBR_DEF.test(line)) continue
+    // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
+    // HERE rather than by a scan of its own, because a scan of its own knew
+    // nothing about what is opaque: it registered a definition written inside a
+    // fenced code SAMPLE, so documenting the syntax changed the prose around it
+    // (carve#573).
+    const abbr = RE_ABBR_DEF.exec(line)
+    if (abbr) {
+      lexer.abbrDefs.set(abbr[1]!, abbr[2]!)
+      continue
+    }
     // A footnote def (`[^label]: body`) is parsed as a block in
     // parseFootnoteDef; skip here so RE_LINK_DEF can't capture `^label`.
     if (RE_FOOTNOTE_DEF.test(line)) continue
