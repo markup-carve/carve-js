@@ -5103,7 +5103,13 @@ function scanInlineInner(
     // inside a code span never reaches here (code is consumed opaquely), and
     // `\%%` is already handled by the escape branch. (§4.13, grammar
     // inline_comment.)
-    if (c === '%' && text[i + 1] === '%' && (i === 0 || /[ \t]/.test(text[i - 1]!))) {
+    // A NEWLINE counts as the whitespace before it: `%%` at the start of a
+    // later line is a comment exactly as it is on the first. A paragraph never
+    // showed the difference - a comment-only line is handled at the block layer
+    // there - but inside a line block the whole stanza is inline content, so
+    // the verse kept `%% c` as text where the other engines drop it, and this
+    // one dropped it on the first line and not the second (carve#574).
+    if (c === '%' && text[i + 1] === '%' && (i === 0 || /[ \t\n]/.test(text[i - 1]!))) {
       // Absorb the whitespace run immediately before `%%` so the visible text
       // keeps no trailing space. Flush the trimmed buffer with a source span
       // that ends where that whitespace begins, and start the comment node
