@@ -3053,6 +3053,25 @@ interface ItemLazyState {
  * quote's own lazy continuation. After a code fence or a table (no open
  * trailing paragraph) the dedented line must END the item instead.
  */
+/**
+ * A quote marker with NOTHING after it opens a quote holding no paragraph.
+ *
+ * PART 1 S4: NO OPEN PARAGRAPH, NO LAZY LINE. `- >` + a column-0 line closes
+ * the item; `- > q` + the same line folds, because there the quote holds one.
+ * Treating every quote line as paragraph-opening kept the line inside the item
+ * - the answer S4 names as wrong (carve#561, carve#572).
+ */
+function isEmptyQuoteLine(content: string): boolean {
+  let rest = content
+  let sawQuote = false
+  // `> > q` holds a paragraph; `> >` does not.
+  for (let m = RE_BLOCKQUOTE.exec(rest); m; m = RE_BLOCKQUOTE.exec(rest)) {
+    sawQuote = true
+    rest = m[1] ?? ''
+  }
+  return sawQuote && rest.trim() === ''
+}
+
 function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (state.inComment) {
     const c = /^(%{3,})\s*$/.exec(content)
@@ -3123,9 +3142,10 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     return
   }
   // A blockquote line keeps the fold open: the quote's trailing paragraph
-  // absorbs the dedented line via the quote's own lazy continuation.
+  // absorbs the dedented line via the quote's own lazy continuation. An EMPTY
+  // quote holds no paragraph, so it does not (PART 1 S4).
   if (RE_BLOCKQUOTE.test(content)) {
-    state.lazyFoldable = true
+    state.lazyFoldable = !isEmptyQuoteLine(content)
     state.inDefList = false
     return
   }
@@ -3310,7 +3330,7 @@ function parseList(lexer: Lexer): List {
       fenceClose: null,
       inComment: false,
       commentLen: 0,
-      lazyFoldable: !isBlankLine(content),
+      lazyFoldable: !isBlankLine(content) && !isEmptyQuoteLine(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
     while (!lexer.eof()) {
