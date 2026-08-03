@@ -59,16 +59,44 @@ function mergeRun(
   }
   if (!adjacent) return null
 
+  // Parts are collected and joined ONCE per run. Appending to the previous
+  // node's value as the run grows is quadratic in the run's total bytes, and
+  // this pass runs inside `resolve()` - so `carveToHtml` on a pathological
+  // document (a thousand unclosed `{` openers, which is what the far-brace
+  // perf guard feeds) pays that cost on every render.
   const out: Array<Record<string, unknown>> = []
+  let run: Record<string, unknown> | null = null
+  let parts: string[] = []
+  let pos: unknown
+
+  const flush = (): void => {
+    if (run === null) return
+    if (parts.length > 1) {
+      run['value'] = parts.join('')
+      run['pos'] = pos
+    }
+    out.push(run)
+    run = null
+    parts = []
+    pos = undefined
+  }
+
   for (const node of nodes) {
-    const previous = out[out.length - 1]
-    if (previous?.['type'] === 'text' && node?.['type'] === 'text') {
-      previous['value'] = String(previous['value'] ?? '') + String(node['value'] ?? '')
-      previous['pos'] = joinPos(previous['pos'], node['pos'])
+    if (node?.['type'] === 'text') {
+      if (run === null) {
+        run = node
+        parts = [String(node['value'] ?? '')]
+        pos = node['pos']
+        continue
+      }
+      parts.push(String(node['value'] ?? ''))
+      pos = joinPos(pos, node['pos'])
       continue
     }
+    flush()
     out.push(node)
   }
+  flush()
   return out
 }
 
