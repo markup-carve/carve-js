@@ -2393,6 +2393,13 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         continuationLines++
         lexer.consume()
       }
+      // Trailing whitespace on the last line is not content, and every other
+      // block drops it - a paragraph, a heading, a quoted paragraph. The term
+      // kept it, so `:: t ` published `<dt>t </dt>` where carve-rs and
+      // carve-php publish `<dt>t</dt>` (carve#510, found by the fuzzer).
+      // Trimming the END only: interior runs are the author's, and the start is
+      // where the term's own offsets are anchored.
+      termText = termText.replace(/[^\S\n]+$/, '')
       const termStart = lexer.lines[termLineIndex]!.indexOf(t[1]!)
       // A continuation line folds in whole, indent included, and the scanner
       // strips that indent when it builds the text node - so a single base
