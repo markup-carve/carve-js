@@ -7,6 +7,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An unresolved reference is published as a `link`, not as text**
+  (markup-carve/carve#486, spec markup-carve/carve#518 §3a). `parse()` always
+  produced a `link` carrying `ref` and `rawRef`; `resolve()` then replaced it
+  with a text node, and every wire path resolves first - so the serialized tree
+  lost it. `see [a][] here` came out as three adjacent text nodes, breaking
+  three rules at once: §3a (the wire could not tell a reference from literal
+  text the author typed), §1a (the runs were adjacent and unmerged) and §6 (the
+  parsed tree held a link, so the wire shape and the tree disagreed). It went
+  unnoticed because encoding the PARSED tree was always an identity - the loss
+  only happened on the resolving path.
+
+  No rendered output changes. Every target - HTML, Markdown, plain text, ANSI,
+  Carve - writes the reference back out as the author wrote it, which is what
+  the surviving `rawRef` is for. A reference nested inside a link label also
+  keeps its literal source rather than being unwrapped to its label, since
+  "links never nest" now meets a node that is not really a link.
+
 ### Changed
 
 - **An abbreviation definition written inside a container is now a child of the
