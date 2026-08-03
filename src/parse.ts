@@ -267,7 +267,12 @@ const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
 // the `(?=\S)`, `:: ` was a paragraph and `::··` a definition list - stripping
 // one trailing space changed the document's structure, which is what the rule
 // exists to prevent (markup-carve/carve#512).
-const RE_DEFLIST_TERM = /^::(?!:)\s+(?=\S)(.+)$/
+// The separator after `::` is the SPACE character, per
+// `definition_term = "::", space, inline_content` and `space = ' '`. A tab
+// does not satisfy it and the line stays paragraph text - the same rule the
+// bullet, ordered, heading, quote and definition markers already follow
+// (carve#532).
+const RE_DEFLIST_TERM = /^::(?!:) +(?=\S)(.+)$/
 const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // A definition marker's separator must START with a literal space (U+0020),
 // not a tab (#288) -- matching carve-rs and every marker whose grammar
