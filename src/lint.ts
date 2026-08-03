@@ -428,7 +428,7 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
-  if (opts.portable) collectPortableWhitespace(source, doc, verbatimLines, out, toUtf16)
+  if (opts.portable) collectPortableWhitespace(source, doc, verbatimLines, out)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -687,7 +687,6 @@ function collectPortableWhitespace(
   doc: Document,
   verbatimLines: Set<number>,
   out: LintWarning[],
-  toUtf16: (offset: number) => number,
 ): void {
   const lines = source.split('\n')
   // A source-relative table of each line's UTF-16 start offset, so a
@@ -745,11 +744,19 @@ function collectPortableWhitespace(
   // (there is nothing to make portable), and any line inside a verbatim
   // (code/raw) region, where the character at this column is sample text, not
   // a marker.
+  //
+  // KNOWN LIMITATION: a `>` marker followed by a fence opener on the SAME line
+  // (for example `>` immediately followed by three backticks) is skipped,
+  // because collectVerbatimLines marks that line verbatim, so the unspaced
+  // marker is never checked. This is a miss, not a false positive: the rule
+  // simply says nothing about that line rather than reporting it wrongly.
+  //
+  // No sort is needed here: `lintCarve` already sorts `out` by `start` at the
+  // end, and two quote warnings from this loop can never share a `start`.
   const quotes: Positioned[] = []
   walkDocument(doc, (node) => {
     if (node.type === 'block_quote') quotes.push(node as Positioned)
   })
-  quotes.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
   for (const q of quotes) {
     const startLine = q.pos?.startLine
     const endLine = q.pos?.endLine ?? startLine
@@ -778,83 +785,6 @@ function collectPortableWhitespace(
       })
     }
   }
-
-  // A block opener on the line directly under a paragraph line. In Carve a
-  // visible opener interrupts an open paragraph (PART 9 section 10); in djot it
-  // folds into the paragraph as text. Verified for every opener - heading,
-  // blockquote, code/raw fence, thematic break, admonition, div, line block,
-  // table, definition list, and a nested list marker - so there is no
-  // construct that breaks the paragraph in BOTH engines, and matching on the
-  // adjacency alone cannot false-positive.
-  //
-  // A top-level list marker does NOT interrupt (grammar.ebnf:891-895), so
-  // `text\n- a` is one paragraph, the adjacency never arises, and no special
-  // case is needed to keep it silent.
-  const scanSiblings = (blocks: unknown[]): void => {
-    for (let i = 1; i < blocks.length; i++) {
-      const prev = blocks[i - 1] as { type?: string; pos?: { endLine?: number } } | undefined
-      // An inline array never holds a `paragraph`, so this guard is also what
-      // keeps the walk below from inspecting a paragraph's own children.
-      if (prev?.type !== 'paragraph') continue
-      const node = blocks[i] as (Positioned & { type?: string }) | undefined
-      const prevEnd = prev.pos?.endLine
-      const openingLine = node?.pos?.startLine
-      if (!prevEnd || !openingLine || openingLine !== prevEnd + 1) continue
-      const loc = locate(node as Positioned, toUtf16)
-      // Report only the opening line, not the node's full range: for a
-      // multi-line block (a table, an admonition, a fenced code block) `loc.end`
-      // spans every line of the block, which would underline the whole thing in
-      // an editor even though only the opening line is what interrupted the
-      // paragraph. `lines`/`lineStart` are plain JS-string splits of `source`,
-      // already in UTF-16 code units - the unit LintWarning.start/end use - so
-      // this end offset is computed directly from them with no `toUtf16` call,
-      // the same convention `collectSilentFailures`' `push` helper uses for a
-      // line-derived offset. `loc.start` still comes through `locate`/`toUtf16`
-      // because it is derived from the node's AST codepoint offset, not a line
-      // index.
-      const openingText = lines[openingLine - 1] ?? ''
-      // `lines` comes from `source.split('\n')`, so a CRLF line keeps its
-      // trailing `\r` - drop it from the reported span, the same way this
-      // function already treats `\r` as end-of-line whitespace rather than
-      // marker content (the `after === '\r'` exemption above). This only
-      // fixes the trailing `\r` this end offset would otherwise include; it
-      // does not address the separate, pre-existing whole-document CRLF
-      // offset drift in `locate()` (parser codepoint offsets do not account
-      // for `\r` at all), which is a carve-js bug that predates this rule.
-      const openingLen = openingText.endsWith('\r') ? openingText.length - 1 : openingText.length
-      const lineEnd = (lineStart[openingLine - 1] ?? 0) + openingLen
-      out.push({
-        line: loc.line,
-        column: loc.column,
-        rule: 'portable-blank-line-before-block',
-        message:
-          'This line opens a block directly under a paragraph line. Carve starts the ' +
-          'block; djot folds the opener into the paragraph as text. Add a blank line ' +
-          'above it.',
-        start: loc.start,
-        end: lineEnd,
-      })
-    }
-  }
-
-  const visitBlocks = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      scanSiblings(value)
-      for (const item of value) visitBlocks(item)
-      return
-    }
-    if (!value || typeof value !== 'object') return
-    const node = value as Record<string, unknown>
-    for (const key of Object.keys(node)) {
-      if (key !== 'pos' && key !== 'attrs') visitBlocks(node[key])
-    }
-  }
-  visitBlocks(doc.children)
-  // A footnote definition body is a normal block sequence living outside
-  // `doc.children` (see the Document.footnoteDefs docblock in ast.ts), so the
-  // sibling-adjacency check above never reaches it without this. Same guard
-  // shape as walkDocument's own footnote-def pass, above.
-  if (doc.footnoteDefs) visitBlocks(Object.values(doc.footnoteDefs))
 }
 
 function collectFootnoteDefinitionWarnings(
