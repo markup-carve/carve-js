@@ -204,7 +204,13 @@ describe('carve lint --portable', () => {
   it('composes with --from-djot', async () => {
     const t = makeIO({ files: { 'q.crv': '>quote\n\n_x_\n' } })
     expect(await run(['lint', '--portable', '--from-djot', 'q.crv'], t.io)).toBe(1)
+    // Both rule sets must be active together: the portable rule from
+    // --portable, and the djot-shift rule from --from-djot (only --from-djot
+    // reports underline-vs-emphasis for `_x_`). Asserting only the portable
+    // rule here would also pass if --from-djot were silently ignored
+    // whenever --portable is set.
     expect(t.out).toContain('portable-quote-marker-space')
+    expect(t.out).toContain('djot-emphasis-underscore')
   })
 
   it('documents the flag in help', async () => {
