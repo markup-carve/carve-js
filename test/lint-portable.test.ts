@@ -157,4 +157,20 @@ describe('lintCarve - portable-blank-line-before-block', () => {
   it('is off by default', () => {
     expect(lintCarve('text\n# H\n')).toEqual([])
   })
+
+  it('reaches a paragraph inside a footnote definition body', () => {
+    const w = lintCarve('x[^a]\n\n[^a]: text\n    # H\n', { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.rule).toBe('portable-blank-line-before-block')
+    expect(w[0]!.line).toBe(4)
+  })
+
+  it('does not flag a footnote definition body separated by a blank line', () => {
+    expect(portableRules('x[^a]\n\n[^a]: text\n\n    # H\n')).toEqual([])
+  })
+
+  it('does not double-report a footnote definition referenced more than once', () => {
+    const w = lintCarve('a[^x] b[^x]\n\n[^x]: text\n    # H\n', { portable: true })
+    expect(w.map((x) => x.rule)).toEqual(['portable-blank-line-before-block'])
+  })
 })

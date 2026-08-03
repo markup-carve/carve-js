@@ -828,6 +828,11 @@ function collectPortableWhitespace(
     }
   }
   visitBlocks(doc.children)
+  // A footnote definition body is a normal block sequence living outside
+  // `doc.children` (see the Document.footnoteDefs docblock in ast.ts), so the
+  // sibling-adjacency check above never reaches it without this. Same guard
+  // shape as walkDocument's own footnote-def pass, above.
+  if (doc.footnoteDefs) visitBlocks(Object.values(doc.footnoteDefs))
 }
 
 function collectFootnoteDefinitionWarnings(
