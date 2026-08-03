@@ -428,7 +428,7 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
-  if (opts.portable) collectPortableWhitespace(source, doc, verbatimLines, out)
+  if (opts.portable) collectPortableWhitespace(source, doc, verbatimLines, out, toUtf16)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -687,6 +687,7 @@ function collectPortableWhitespace(
   doc: Document,
   verbatimLines: Set<number>,
   out: LintWarning[],
+  toUtf16: (offset: number) => number,
 ): void {
   const lines = source.split('\n')
   // A source-relative table of each line's UTF-16 start offset, so a
@@ -777,6 +778,56 @@ function collectPortableWhitespace(
       })
     }
   }
+
+  // A block opener on the line directly under a paragraph line. In Carve a
+  // visible opener interrupts an open paragraph (PART 9 section 10); in djot it
+  // folds into the paragraph as text. Verified for every opener - heading,
+  // blockquote, code/raw fence, thematic break, admonition, div, line block,
+  // table, definition list, and a nested list marker - so there is no
+  // construct that breaks the paragraph in BOTH engines, and matching on the
+  // adjacency alone cannot false-positive.
+  //
+  // A top-level list marker does NOT interrupt (grammar.ebnf:891-895), so
+  // `text\n- a` is one paragraph, the adjacency never arises, and no special
+  // case is needed to keep it silent.
+  const scanSiblings = (blocks: unknown[]): void => {
+    for (let i = 1; i < blocks.length; i++) {
+      const prev = blocks[i - 1] as { type?: string; pos?: { endLine?: number } } | undefined
+      // An inline array never holds a `paragraph`, so this guard is also what
+      // keeps the walk below from inspecting a paragraph's own children.
+      if (prev?.type !== 'paragraph') continue
+      const node = blocks[i] as (Positioned & { type?: string }) | undefined
+      const prevEnd = prev.pos?.endLine
+      const start = node?.pos?.startLine
+      if (!prevEnd || !start || start !== prevEnd + 1) continue
+      const loc = locate(node as Positioned, toUtf16)
+      out.push({
+        line: loc.line,
+        column: loc.column,
+        rule: 'portable-blank-line-before-block',
+        message:
+          'This line opens a block directly under a paragraph line. Carve starts the ' +
+          'block; djot folds the opener into the paragraph as text. Add a blank line ' +
+          'above it.',
+        start: loc.start,
+        end: loc.end,
+      })
+    }
+  }
+
+  const visitBlocks = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      scanSiblings(value)
+      for (const item of value) visitBlocks(item)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'attrs') visitBlocks(node[key])
+    }
+  }
+  visitBlocks(doc.children)
 }
 
 function collectFootnoteDefinitionWarnings(

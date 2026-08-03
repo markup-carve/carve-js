@@ -111,3 +111,50 @@ describe('lintCarve - portable-quote-marker-space', () => {
     expect(portableRules('- > a\n  > good\n')).toEqual([])
   })
 })
+
+describe('lintCarve - portable-blank-line-before-block', () => {
+  it('flags a heading directly under a paragraph line', () => {
+    const w = lintCarve('text\n# H\n', { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.rule).toBe('portable-blank-line-before-block')
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.message).toContain('blank line')
+  })
+
+  it('flags every other interrupting opener', () => {
+    expect(portableRules('text\n> q\n')).toEqual(['portable-blank-line-before-block'])
+    expect(portableRules('text\n```\nx\n```\n')).toEqual(['portable-blank-line-before-block'])
+    expect(portableRules('text\n---\n')).toEqual(['portable-blank-line-before-block'])
+    expect(portableRules('text\n::: note\nx\n:::\n')).toEqual(['portable-blank-line-before-block'])
+    expect(portableRules('text\n| a |\n|---|\n| 1 |\n')).toEqual(['portable-blank-line-before-block'])
+  })
+
+  it('flags a nested list marker directly under its item paragraph', () => {
+    const w = lintCarve('- a\n  - b\n', { portable: true })
+    expect(w.map((x) => x.rule)).toEqual(['portable-blank-line-before-block'])
+    expect(w[0]!.line).toBe(2)
+  })
+
+  it('does not flag anything separated by a blank line', () => {
+    expect(portableRules('text\n\n# H\n')).toEqual([])
+    expect(portableRules('text\n\n> q\n')).toEqual([])
+    expect(portableRules('- a\n\n  - b\n')).toEqual([])
+  })
+
+  it('does not flag a top-level list, which does not interrupt in either engine', () => {
+    expect(portableRules('text\n- a\n')).toEqual([])
+  })
+
+  it('does not flag consecutive paragraphs', () => {
+    expect(portableRules('a\n\nb\n')).toEqual([])
+  })
+
+  it('reaches a paragraph nested inside a blockquote', () => {
+    const w = lintCarve('> text\n> # H\n', { portable: true })
+    expect(w.map((x) => x.rule)).toEqual(['portable-blank-line-before-block'])
+  })
+
+  it('is off by default', () => {
+    expect(lintCarve('text\n# H\n')).toEqual([])
+  })
+})
