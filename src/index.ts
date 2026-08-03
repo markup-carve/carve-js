@@ -47,6 +47,7 @@ import {
 import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-ansi.js'
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
+import { coalesceTextRuns } from './coalesce-text-runs.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
@@ -279,7 +280,11 @@ export function resolve(
   // resolution result rather than a rendering one. `renderHtml()` numbers
   // the same way standalone (carve-js#479) via the same shared pass.
   numberFootnotes(resolved)
-  return resolved
+  // §1a again, because this stage breaks it: `parse()` returns a coalesced tree
+  // and the passes above re-split runs when a reference degrades to text or a
+  // nested autolink is unwrapped. The resolved tree is what the CLI and every
+  // `carveToAstJson` caller publish, so it has to hold (carve-js#549).
+  return coalesceTextRuns(resolved)
 }
 
 /** Convenience: parse + resolve + render in one call. */

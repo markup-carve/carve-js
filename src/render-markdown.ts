@@ -326,8 +326,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
 
   switch (node.type) {
     case 'text':
-      if (/^<\/#[^>]+>$/.test(node.value)) return node.value
-      return escapeText(cleanEscapedText(node))
+      return escapeUnresolvedCrossrefs(cleanEscapedText(node))
     case 'escaped_text':
       // Reproduce the author's escape. `\-\-` was written precisely so a
       // downstream processor with smart punctuation on would not read an en
@@ -550,6 +549,29 @@ function markdownDestination(url: string): string {
 
 function fragmentId(href: string): string | undefined {
   return href.startsWith('#') ? href.slice(1) : undefined
+}
+
+/**
+ * Escape a text value, leaving any UNRESOLVED crossref in it verbatim.
+ *
+ * `</#nope>` is source the resolver declined, and escaping it to
+ * `&lt;/\#nope&gt;` turns a marker a reader can still act on into noise.
+ *
+ * The test used to be anchored - the whole text node had to BE the crossref -
+ * which quietly depended on the resolver leaving it in a text node of its own.
+ * PART 12 §1a coalesces adjacent runs, so it is now one node with the crossref
+ * in the middle of it (carve-js#549), and an anchored test stopped matching.
+ * Scanning the value works either way and does not care how the run was split.
+ */
+function escapeUnresolvedCrossrefs(value: string): string {
+  const pattern = /<\/#[^>\s]+>/g
+  let out = ''
+  let last = 0
+  for (const match of value.matchAll(pattern)) {
+    out += escapeText(value.slice(last, match.index)) + match[0]
+    last = match.index + match[0].length
+  }
+  return out + escapeText(value.slice(last))
 }
 
 function escapeText(text: string): string {
