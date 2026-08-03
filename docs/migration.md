@@ -101,7 +101,12 @@ manual-review collisions, so it drops into a pre-commit hook or CI step.
 
 `djotMigrationWarnings` catches *source-level* delimiter collisions;
 `lintCarve` catches *silent-failure* problems - markup that parses without
-error but renders as the wrong thing, so nothing throws:
+error but renders as the wrong thing, so nothing throws. One rule,
+`portable-quote-marker-space`, is the exception: it is advisory, not a
+silent failure - Carve renders the flagged source exactly as written, and
+the rule only matters to an author who wants that source to also stay valid
+Djot. It is opt-in, both from the CLI (`--portable`) and programmatically
+(`lintCarve(src, { portable: true })`):
 
 ```ts
 import { lintCarve } from '@markup-carve/carve'
@@ -125,7 +130,7 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
 | `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
 | `fence-delimiter-indentation` | an indented fenced-code delimiter (`` ``` `` / `~~~`); a Carve fence is column-exact and must sit at its container's content column (column 0 at the top level), so an indented run does not open a code block - it renders as inline code with the body as plain text |
-| `portable-quote-marker-space` | opt-in via `--portable`; a `>` blockquote marker with no space after it. Carve treats it as a real quote marker regardless; a Djot processor only recognizes it with a space and otherwise leaves the `>` as literal text. The document is correct as written in Carve either way - this only matters to an author who wants the source to stay valid Djot |
+| `portable-quote-marker-space` | *(advisory, opt-in)* a `>` blockquote marker with no space after it. Carve treats it as a real quote marker regardless; a Djot processor only recognizes it when followed by a space, a tab, or the end of the line, and otherwise leaves the `>` as literal text. The document is correct as written in Carve either way |
 
 The `carve lint` CLI reports both the collision warnings and these lint
 findings as `file:line:col rule - message`, and exits non-zero if anything is

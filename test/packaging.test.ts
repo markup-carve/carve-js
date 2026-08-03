@@ -71,7 +71,12 @@ describe('GitHub Action', () => {
     const script = action.runs.steps.map((s) => s.run ?? '').join('\n')
     const help = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
 
-    for (const invocation of ['carve fmt --check', 'carve lint --from-djot', 'carve lint']) {
+    for (const invocation of [
+      'carve fmt --check',
+      'carve lint --from-djot',
+      'carve lint --portable',
+      'carve lint',
+    ]) {
       expect(script).toContain(invocation)
       const [, subcommand, flag] = invocation.split(' ')
       expect(help).toContain(`'${subcommand}'`)

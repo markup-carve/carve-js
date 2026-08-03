@@ -11,7 +11,7 @@ describe('lintCarve - portable-quote-marker-space', () => {
     expect(w[0]!.rule).toBe('portable-quote-marker-space')
     expect(w[0]!.line).toBe(1)
     expect(w[0]!.column).toBe(1)
-    expect(w[0]!.message).toContain('djot')
+    expect(w[0]!.message).toContain('Djot')
   })
 
   it('does not flag a spaced marker', () => {
@@ -109,5 +109,59 @@ describe('lintCarve - portable-quote-marker-space', () => {
 
   it('does not flag a spaced list-nested quote continuation line', () => {
     expect(portableRules('- > a\n  > good\n')).toEqual([])
+  })
+
+  // A lazy continuation line carries no marker of its own at all, at ANY
+  // enclosing level - it is ordinary paragraph text. A `>` that happens to
+  // land at a nested quote's recorded column there (e.g. ">90%", meaning
+  // "greater than 90 percent") is coincidence, not syntax: flagging it is a
+  // false positive, and taking the advice would corrupt a document the two
+  // engines already agree on (Carve gains a real space before "90%"; Djot
+  // reads the now-spaced ">" as a real, oddly placed, blockquote marker and
+  // drops it, so the two outputs diverge where they used to match). Fixing
+  // this requires every ENCLOSING quote's own marker to be present at its
+  // own column on the same physical line before this node's column can be
+  // trusted as a marker position - see the comment on the rule.
+  it('does not flag literal ">" content on a lazy continuation line under a nested quote', () => {
+    const w = lintCarve('> > As the report says.\n  >90% of cases fail.\n', {
+      portable: true,
+    })
+    expect(w).toEqual([])
+  })
+
+  it('does not flag literal ">" content on a lazy continuation line three levels deep', () => {
+    // Line 2 is a lazy continuation at the MIDDLE level (no marker at column
+    // 3, the middle quote's own recorded column), even though the outermost
+    // marker (column 1) and a coincidental ">" at the innermost quote's
+    // recorded column (5) are both present. The broken link anywhere in the
+    // ancestor chain - not only at the outermost level - must still skip it.
+    const w = lintCarve('> > > a\n> zz>bad\n', { portable: true })
+    expect(w).toEqual([])
+  })
+
+  it('still flags an unspaced innermost marker three levels deep when every ancestor marker is present', () => {
+    const w = lintCarve('> > > a\n> > >bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 5]])
+  })
+
+  // The four cases verified against the false-positive fix above, pinned
+  // together so a regression in any one of them is caught here too.
+  it('fix verification: no report when the outer ancestor marker is missing on a lazy line', () => {
+    expect(portableRules('> > As the report says.\n  >90% of cases fail.\n')).toEqual([])
+  })
+
+  it('fix verification: still fires at depth 1 with no ancestors', () => {
+    const w = lintCarve('> ok\n>bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 1]])
+  })
+
+  it('fix verification: still fires on the inner marker when the ancestor marker is present', () => {
+    const w = lintCarve('> > a\n> >bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 3]])
+  })
+
+  it('fix verification: outer still fires and the drift-hidden inner is still skipped', () => {
+    const w = lintCarve('> > a\n>>bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 1]])
   })
 })

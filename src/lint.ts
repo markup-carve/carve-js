@@ -259,12 +259,12 @@ export function lintCarve(
     asciiHeadingIds?: AsciiHeadingIdMode
     lowercaseHeadingIds?: boolean
     /**
-     * Report the advisory portable-whitespace rules (`portable-*`).
+     * Report the advisory portable-whitespace rule (`portable-quote-marker-space`).
      *
-     * Off by default. These do NOT describe a problem in Carve: the document
-     * renders exactly as written. They describe source whose whitespace parses
-     * differently under a djot processor, so they only matter to an author who
-     * wants the source to stay valid djot.
+     * Off by default. This does NOT describe a problem in Carve: the document
+     * renders exactly as written. It describes source whose whitespace parses
+     * differently under a Djot processor, so it only matters to an author who
+     * wants the source to stay valid Djot.
      */
     portable?: boolean
   } = {},
@@ -674,13 +674,13 @@ function collectSilentFailures(
 }
 
 /**
- * PORTABILITY (advisory) - source whose whitespace parses differently in djot.
+ * PORTABILITY (advisory) - source whose whitespace parses differently in Djot.
  *
- * Nothing here is a defect in the document: Carve renders all of it as the
- * author intended. Each rule marks a place where Carve accepts whitespace that
- * djot does not, so a document that avoids them is valid djot source as well.
- * The portable form is also the CommonMark-safe form in every case, so the
- * advice costs no Markdown compatibility.
+ * Nothing here is a defect in the document: Carve renders it exactly as the
+ * author intended. The rule marks a place where Carve accepts whitespace that
+ * Djot does not, so a document that avoids it is valid Djot source as well.
+ * The portable form is also the CommonMark-safe form, so the advice costs no
+ * Markdown compatibility.
  */
 function collectPortableWhitespace(
   source: string,
@@ -710,10 +710,29 @@ function collectPortableWhitespace(
   // A block_quote node's own position spans its ENTIRE range (startLine to
   // endLine), including every continuation line at this nesting depth - not
   // just the line it opens on - so each of those lines needs its own marker
-  // check: djot does not strip an unspaced `>` on a continuation line either;
+  // check: Djot does not strip an unspaced `>` on a continuation line either;
   // it falls through to lazy paragraph continuation and the `>` survives as
   // literal text, which is a silent divergence from Carve (which always
   // strips it) exactly like the opening-line case this rule already covers.
+  //
+  // A LAZY continuation line carries no marker of its own at all - not even
+  // the outermost one - and is ordinary paragraph text that happens to be
+  // laid out under the quote. Nothing on that line is a marker, so a `>`
+  // that lands at a node's recorded column there is coincidence, not syntax
+  // (e.g. "> > As the report says.\n  >90% of cases fail." - line 2 is a
+  // lazy continuation, and its literal ">90%" happens to sit at the inner
+  // quote's recorded column 3). Checking it anyway would both false-positive
+  // AND, if the advice were taken, corrupt a document the two engines
+  // already agree on: adding the suggested space turns "&gt;90%" (Carve and
+  // Djot: identical today) into "&gt; 90%" in Carve but a dropped chevron
+  // ("90%") in Djot, since Djot would then read it as a real, if oddly
+  // placed, blockquote marker. So before trusting a node's own column on a
+  // given physical line, EVERY enclosing block_quote's marker must also be
+  // present at ITS OWN recorded column on that same line - if any ancestor's
+  // marker is missing, the line is a lazy continuation at that outer level
+  // and this node's column carries no marker either, so the line is skipped
+  // entirely for this node. `ancestorCols` is collected once while walking
+  // the tree, outermost first, rather than re-derived from the text.
   //
   // KNOWN LIMITATION: on a continuation line, this still checks each node at
   // its OWN recorded startColumn, which was computed from the node's OPENING
@@ -753,11 +772,31 @@ function collectPortableWhitespace(
   //
   // No sort is needed here: `lintCarve` already sorts `out` by `start` at the
   // end, and two quote warnings from this loop can never share a `start`.
-  const quotes: Positioned[] = []
-  walkDocument(doc, (node) => {
-    if (node.type === 'block_quote') quotes.push(node as Positioned)
-  })
-  for (const q of quotes) {
+  const quotes: Array<{ node: Positioned; ancestorCols: number[] }> = []
+  const collectQuotes = (value: unknown, ancestorCols: number[]): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) collectQuotes(item, ancestorCols)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    let childAncestorCols = ancestorCols
+    if (node.type === 'block_quote') {
+      const q = node as Positioned
+      quotes.push({ node: q, ancestorCols })
+      const col = q.pos?.startColumn
+      if (col) childAncestorCols = [...ancestorCols, col]
+    }
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'attrs') collectQuotes(node[key], childAncestorCols)
+    }
+  }
+  collectQuotes(doc.children, [])
+  // A footnote definition body is a normal block sequence living outside
+  // `doc.children` (see the Document.footnoteDefs docblock in ast.ts).
+  if (doc.footnoteDefs) collectQuotes(Object.values(doc.footnoteDefs), [])
+
+  for (const { node: q, ancestorCols } of quotes) {
     const startLine = q.pos?.startLine
     const endLine = q.pos?.endLine ?? startLine
     const col = q.pos?.startColumn
@@ -765,6 +804,10 @@ function collectPortableWhitespace(
     for (let line = startLine; line <= endLine; line++) {
       if (verbatimLines.has(line)) continue
       const text = lines[line - 1] ?? ''
+      // Every enclosing quote's own marker must be present at ITS OWN
+      // recorded column on this physical line before this node's column can
+      // be trusted as a marker position at all - see the comment above.
+      if (ancestorCols.some((aCol) => text[aCol - 1] !== '>')) continue
       // Guard against position drift, and skip a lazy continuation line: only
       // flag where this node's own marker really is.
       if (text[col - 1] !== '>') continue
@@ -777,9 +820,10 @@ function collectPortableWhitespace(
         rule: 'portable-quote-marker-space',
         message:
           'This ">" blockquote marker has no space after it. Carve treats it as a real ' +
-          'quote marker regardless; djot only recognizes it with a space and otherwise ' +
-          'leaves the ">" as literal text. Write "> " with a space - and a nested quote ' +
-          'as "> > ", since djot has no ">>" marker.',
+          'quote marker regardless; Djot only recognizes it when followed by a space, a ' +
+          'tab, or the end of the line, and otherwise leaves the ">" as literal text. ' +
+          'Write "> " with a space - and a nested quote as "> > ", since Djot has no ' +
+          '">>" marker.',
         start,
         end: start + 1,
       })
