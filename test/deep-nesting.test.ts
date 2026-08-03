@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parse, carveToHtml, carveToCarve, renderCarve, type BlockNode, type Document } from '../src/index.js'
+import { MAX_RENDER_DEPTH } from '../src/render-carve.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -80,6 +81,10 @@ describe('the canonical writer respects the render depth cap', () => {
     const formatted = renderCarve(doc)
     expect(Date.now() - started).toBeLessThan(5000)
     const widest = Math.max(...formatted.split('\n').map((line) => (/^:+$/.test(line) ? line.length : 0)))
-    expect(widest).toBeLessThanOrEqual(202)
+    // Derived, not pinned: the outermost fence is `:::` and each level inward
+    // adds a colon, so the widest a bounded writer can emit is fixed by the cap
+    // itself. Writing the number out instead made this test track the old cap
+    // rather than the rule (issue 517).
+    expect(widest).toBeLessThanOrEqual(3 + MAX_RENDER_DEPTH - 1)
   })
 })

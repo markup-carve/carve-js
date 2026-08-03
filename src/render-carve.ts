@@ -13,12 +13,28 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { parse } from './parse.js'
+import { MAX_NESTING_DEPTH, parse } from './parse.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 
 export interface CarveRenderOptions {}
 
-const MAX_RENDER_DEPTH = 200
+/**
+ * The writer's recursion bound, and it must sit ABOVE the parser's.
+ *
+ * The guard exists for hand-built ASTs, which can nest arbitrarily deep. It is
+ * not a language rule, and reusing the parser's own number made it one: a
+ * document nested at exactly `MAX_NESTING_DEPTH` parses fine, and the writer
+ * then returned '' for its innermost block, so `fmt` deleted the content
+ * silently and PART 11's semantic invariant broke at the boundary (issue 517).
+ *
+ * A parsed tree is one level deeper than the containers that produced it - the
+ * paragraph inside the innermost container - so the slack has to cover the
+ * blocks a container subtree adds, not just one. Same reasoning as
+ * `MAX_AST_JSON_DEPTH` in ast-json.ts, which is above the parser cap for the
+ * same reason: the two counts measure different things, so one cannot be the
+ * bound for the other.
+ */
+export const MAX_RENDER_DEPTH = MAX_NESTING_DEPTH + 32
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 interface CarveContext {
