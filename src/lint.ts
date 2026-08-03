@@ -812,7 +812,17 @@ function collectPortableWhitespace(
       // line-derived offset. `loc.start` still comes through `locate`/`toUtf16`
       // because it is derived from the node's AST codepoint offset, not a line
       // index.
-      const lineEnd = (lineStart[openingLine - 1] ?? 0) + (lines[openingLine - 1] ?? '').length
+      const openingText = lines[openingLine - 1] ?? ''
+      // `lines` comes from `source.split('\n')`, so a CRLF line keeps its
+      // trailing `\r` - drop it from the reported span, the same way this
+      // function already treats `\r` as end-of-line whitespace rather than
+      // marker content (the `after === '\r'` exemption above). This only
+      // fixes the trailing `\r` this end offset would otherwise include; it
+      // does not address the separate, pre-existing whole-document CRLF
+      // offset drift in `locate()` (parser codepoint offsets do not account
+      // for `\r` at all), which is a carve-js bug that predates this rule.
+      const openingLen = openingText.endsWith('\r') ? openingText.length - 1 : openingText.length
+      const lineEnd = (lineStart[openingLine - 1] ?? 0) + openingLen
       out.push({
         line: loc.line,
         column: loc.column,

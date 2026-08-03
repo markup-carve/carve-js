@@ -148,6 +148,19 @@ describe('lintCarve - portable-blank-line-before-block', () => {
     expect(src.slice(w[0]!.start, w[0]!.end)).toBe('::: note')
   })
 
+  it('excludes a trailing CR from the span when only the opening line is CRLF', () => {
+    // LF before the reported line, CRLF on the reported line only - isolates
+    // the `end` computation from the separate, pre-existing whole-document
+    // CRLF offset drift in `locate()` (parser codepoint offsets do not
+    // account for `\r`), which is out of scope for this rule.
+    const src = 'text\n# H\r\n'
+    const w = lintCarve(src, { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.line).toBe(2)
+    expect(w[0]!.column).toBe(1)
+    expect(src.slice(w[0]!.start, w[0]!.end)).toBe('# H')
+  })
+
   it('flags every other interrupting opener', () => {
     expect(portableRules('text\n> q\n')).toEqual(['portable-blank-line-before-block'])
     expect(portableRules('text\n```\nx\n```\n')).toEqual(['portable-blank-line-before-block'])
