@@ -373,7 +373,12 @@ function renderList(node: List, ctx: CarveContext): string {
       const first = lines.shift() ?? ''
       out += `${indent}${prefix}${first || '+'}\n`
       const continuation = ' '.repeat(prefix.length)
-      for (const line of lines) out += `${indent}${continuation}${line}\n`
+      // An EMPTY continuation line stays empty. Indenting it produces a line of
+      // nothing but spaces, which the writer must never emit - the blank line
+      // inside a fenced block in a list item was the one place it did (corpus
+      // 75-list-nesting-and-looseness-5). The content is unchanged either way,
+      // since the reader strips the item's columns back off.
+      for (const line of lines) out += line ? `${indent}${continuation}${line}\n` : '\n'
       if (!node.tight && idx < node.items.length - 1) out += '\n'
     })
     return trimEndNonNbsp(out)
@@ -954,7 +959,18 @@ function protectVerbatim(content: string): string {
 }
 
 function restoreVerbatim(text: string): string {
-  return text.replace(/\ue001/g, ' ').replace(/\ue002/g, '\t').replace(/\ue003/g, '')
+  return (
+    text
+      // A blank line inside verbatim content is carried as U+E003 so trimming
+      // cannot eat it - which also makes it NON-EMPTY while a host indents its
+      // lines, so a list item turned it into a line of nothing but spaces. The
+      // host's indent goes with the sentinel: the line was blank in the source
+      // and stays blank, and the reader strips those columns back off anyway.
+      .replace(/^[ \t]+\ue003$/gm, '')
+      .replace(/\ue001/g, ' ')
+      .replace(/\ue002/g, '\t')
+      .replace(/\ue003/g, '')
+  )
 }
 
 function trimNonNbsp(text: string): string {
