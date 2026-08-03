@@ -148,6 +148,9 @@ describe('package metadata', () => {
     exports: Record<string, unknown>
     files: string[]
     bin: Record<string, string>
+    dependencies?: Record<string, string>
+    peerDependencies?: Record<string, string>
+    peerDependenciesMeta?: Record<string, { optional?: boolean }>
   }
 
   it('exports the prettier plugin under a stable specifier', () => {
@@ -170,5 +173,23 @@ describe('package metadata', () => {
   it('still exposes the binary both integrations invoke', () => {
     expect(pkg.bin.carve).toBeTypeOf('string')
     expect(root).toBeTypeOf('string')
+  })
+
+  it('installs nothing at runtime', () => {
+    // `carve portability` runs djot.js, and the obvious way to give it one is
+    // a dependency. That would put a second markup parser in the tree of every
+    // consumer, including the ones embedding this in a browser bundle, to
+    // serve one subcommand. Instead the engine is injected (src/portability.ts)
+    // and the CLI imports it lazily, which only works as long as this stays
+    // empty.
+    expect(pkg.dependencies ?? {}).toEqual({})
+  })
+
+  it('declares djot.js as an OPTIONAL peer', () => {
+    // Optional, so npm does not install it for people who never run the
+    // subcommand; declared, so a project that does run it gets a version
+    // warning instead of a surprise at the first parse difference.
+    expect(pkg.peerDependencies?.['@djot/djot']).toBeTypeOf('string')
+    expect(pkg.peerDependenciesMeta?.['@djot/djot']?.optional).toBe(true)
   })
 })

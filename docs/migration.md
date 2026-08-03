@@ -101,12 +101,10 @@ manual-review collisions, so it drops into a pre-commit hook or CI step.
 
 `djotMigrationWarnings` catches *source-level* delimiter collisions;
 `lintCarve` catches *silent-failure* problems - markup that parses without
-error but renders as the wrong thing, so nothing throws. One rule,
-`portable-quote-marker-space`, is the exception: it is advisory, not a
-silent failure - Carve renders the flagged source exactly as written, and
-the rule only matters to an author who wants that source to also stay valid
-Djot. It is opt-in, both from the CLI (`--portable`) and programmatically
-(`lintCarve(src, { portable: true })`):
+error but renders as the wrong thing, so nothing throws. Every rule here is
+about Carve alone; for "does this document also mean the same thing in Djot"
+see [Portability](#portability), which measures the answer rather than
+linting for it.
 
 ```ts
 import { lintCarve } from '@markup-carve/carve'
@@ -130,7 +128,7 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
 | `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
 | `fence-delimiter-indentation` | an indented fenced-code delimiter (`` ``` `` / `~~~`); a Carve fence is column-exact and must sit at its container's content column (column 0 at the top level), so an indented run does not open a code block - it renders as inline code with the body as plain text |
-| `portable-quote-marker-space` | *(advisory, opt-in)* a `>` blockquote marker with no space after it. Carve treats it as a real quote marker regardless; a Djot processor only recognizes it when followed by a space, a tab, or the end of the line, and otherwise leaves the `>` as literal text. The document is correct as written in Carve either way |
+| `blockquote-marker-without-space` | a `>` blockquote marker with no space after it. Carve requires the separator space, so the marker does not open a quote |
 
 The `carve lint` CLI reports both the collision warnings and these lint
 findings as `file:line:col rule - message`, and exits non-zero if anything is
@@ -140,3 +138,75 @@ found:
 carve lint doc.crv …   # report; exit 1 if any finding (CI / pre-commit)
 carve lint < doc.crv   # read stdin
 ```
+
+## Portability
+
+Linting answers "is this document right in Carve". A different question comes
+up when a file has to survive both readers - a README rendered by Carve here
+and by a Djot processor somewhere else: **does it mean the same thing in
+Djot?**
+
+That one is not a lint. It was tried as one (carve-js#546): a rule reasoned
+about when a block opener would be absorbed into a paragraph by Djot but not by
+Carve. The divergence it described is real, but the rule tested a property of
+the *Carve* tree while the divergence is a statement about *Djot's* block
+model, and the two came apart on documents where Djot absorbs the paragraph
+into something before it. Measured false positives ran from 11.5% to 36.5%
+depending on the generator, and its advice - "add a blank line" - changed the
+Carve document in the cases it got wrong.
+
+So `carve portability` does not reason about it. It renders the document with
+both engines and reports the first place they disagree:
+
+```sh
+carve portability doc.crv     # exit 0 portable, 1 diverges
+carve portability --json *.crv
+```
+
+```
+doc.crv:1: diverges from Djot
+  carve: </p><blockquote><p>A quote.</p></blockquote>
+  djot:   &gt; A quote.</p>
+```
+
+It needs djot.js, which Carve does not depend on - install it alongside:
+
+```sh
+npm install @djot/djot
+```
+
+Two things to expect from the output:
+
+- **Carve's deliberate departures are divergences.** `/italic/`, `=mark=` and a
+  quoted link title mean something else in Djot, so a document using them is
+  reported. That is the honest answer to the question being asked, not noise -
+  but it does mean a Carve-flavored document is rarely portable, and the check
+  is most useful on prose you intend to keep neutral.
+- **Only the first divergence is reported.** Once the engines disagree about a
+  block boundary everything after it is displaced, so the rest of the report
+  would restate one difference as many.
+
+Differences in how the two renderers *write* the same document are not
+divergences: attribute order, a boolean attribute spelled `disabled` or
+`disabled=""`, a self-closing slash, and whitespace at a block boundary are all
+normalized away first. Whitespace between inline siblings and inside `` <pre> ``
+is content and is compared as-is.
+
+Programmatically the engine is injected, so importing `@markup-carve/carve`
+never pulls in a Djot parser:
+
+```ts
+import { checkPortability, carveToHtml } from '@markup-carve/carve'
+import { parse, renderHTML } from '@djot/djot'
+
+const report = checkPortability(
+  source,
+  { parse, renderHTML },
+  (src) => carveToHtml(src, { sourceLine: true }),
+)
+// { portable: false, divergence: { line: 1, carve: '…', djot: '…' } }
+```
+
+The `sourceLine` render option is what lets the report name a line: the check
+reads Carve's own `data-source-line` output and drops it before comparing, so
+the line comes from the parser rather than from a guess about the source.

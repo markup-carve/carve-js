@@ -626,3 +626,64 @@ describe('carve diff', () => {
     expect(t.out).toContain('carve diff')
   })
 })
+
+describe('carve portability', () => {
+  it('reports a portable document and exits 0', async () => {
+    const t = makeIO({ files: { 'a.crv': 'Plain prose.\n\nMore prose.\n' } })
+    expect(await run(['portability', 'a.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('a.crv: portable')
+  })
+
+  it('reports a divergence with a line and both renderings, and exits 1', async () => {
+    const t = makeIO({ files: { 'a.crv': 'Some intro prose.\n> A quote.\n' } })
+    expect(await run(['portability', 'a.crv'], t.io)).toBe(1)
+    expect(t.out).toContain('a.crv:1: diverges from Djot')
+    expect(t.out).toContain('carve:')
+    expect(t.out).toContain('djot:')
+  })
+
+  it('does not fire on the shapes the withdrawn lint rule got wrong', async () => {
+    // carve-js#546: a bullet under a paragraph line is the same document in
+    // both engines, and the old rule both flagged it and advised an edit that
+    // changed the Carve document.
+    const t = makeIO({ files: { 'a.crv': 'Some prose.\n- item\n' } })
+    expect(await run(['portability', 'a.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('portable')
+  })
+
+  it('emits JSON with --json', async () => {
+    const t = makeIO({ files: { 'a.crv': 'Some intro prose.\n> A quote.\n' } })
+    expect(await run(['portability', '--json', 'a.crv'], t.io)).toBe(1)
+    const parsed = JSON.parse(t.out) as Array<Record<string, unknown>>
+    expect(parsed[0]!.file).toBe('a.crv')
+    expect(parsed[0]!.portable).toBe(false)
+    expect(parsed[0]!.line).toBe(1)
+  })
+
+  it('checks several files and exits 1 if any diverges', async () => {
+    const t = makeIO({
+      files: { 'a.crv': 'Plain prose.\n', 'b.crv': 'Some intro prose.\n> A quote.\n' },
+    })
+    expect(await run(['portability', 'a.crv', 'b.crv'], t.io)).toBe(1)
+    expect(t.out).toContain('a.crv: portable')
+    expect(t.out).toContain('b.crv:1: diverges')
+  })
+
+  it('reads stdin when given no files', async () => {
+    const t = makeIO({ stdin: 'Plain prose.\n' })
+    expect(await run(['portability'], t.io)).toBe(0)
+    expect(t.out).toContain('<stdin>: portable')
+  })
+
+  it('reports an unreadable file as a usage error', async () => {
+    const t = makeIO()
+    expect(await run(['portability', 'nope.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('cannot read nope.crv')
+  })
+
+  it('appears in --help', async () => {
+    const t = makeIO()
+    await run(['--help'], t.io)
+    expect(t.out).toContain('carve portability')
+  })
+})

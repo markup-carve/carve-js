@@ -7,6 +7,40 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`carve portability` - does this document mean the same thing in Djot?**
+  (carve-js#546). A first attempt answered this with a lint rule that *reasoned*
+  about it: flag a block opener directly under a paragraph line, since Carve
+  interrupts the paragraph there and Djot folds the opener into it. The rule
+  was withdrawn before merge. Its predicate tested a property of the **Carve**
+  tree while the divergence is a statement about **Djot's** block model, and
+  those come apart wherever Djot absorbs the paragraph into what precedes it (a
+  multi-line heading, a `: term` list, a footnote-definition lazy continuation);
+  its remedy split a blockquote in two; and its opener set included shapes the
+  two engines already agree on, where every firing was a false positive *and*
+  the advice changed the Carve document. Measured false positives ran 11.5% to
+  36.5% depending on the generator.
+
+  So this does not reason about it. It renders the document with both engines
+  and reports the first place they disagree, which is the property the rule was
+  approximating - there is no predicate left to be unsound. Every shape the old
+  rule got wrong (`- item`, `1. item` and an unterminated `` ``` `` fence under
+  a paragraph line) now comes out portable, and it prescribes no edit, so there is
+  no advice left to be wrong either. Reports a line, both renderings, `--json`,
+  and exit 1 on divergence.
+
+  Carve's deliberate departures from Djot (`/italic/`, `=mark=`, quoted link
+  titles) are genuine divergences and are reported as such. Differences in how
+  the two renderers *write* the same document are not: attribute order, boolean
+  attribute spelling, a self-closing slash and whitespace at a block boundary are
+  normalized away, while whitespace between inline siblings and inside `` <pre> ``
+  is content and is compared as-is.
+
+  Needs djot.js, declared as an **optional peer** - `npm install @djot/djot`.
+  `carve` still installs nothing at runtime: the engine is injected into
+  `checkPortability`, and only the CLI imports it, lazily.
+
 ### Fixed
 
 - **An unresolved reference IMAGE is an image node, and every target writes its

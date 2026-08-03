@@ -53,6 +53,14 @@ export * from './ast.js'
 export type { ParseOptions } from './parse.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
+  checkPortability,
+  normalizeHtml,
+  type DjotEngine,
+  type Divergence,
+  type NormalizedHtml,
+  type PortabilityReport,
+} from './portability.js'
+export {
   toAstJson,
   fromAstJson,
   AstJsonDepthError,
