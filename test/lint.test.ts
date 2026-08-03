@@ -185,6 +185,24 @@ describe('lintCarve — block marker leaked as text', () => {
   })
 })
 
+describe('lintCarve — blockquote marker without space', () => {
+  it('flags the old tight blockquote spelling', () => {
+    const w = lintCarve('>quote')
+    expect(w.map((x) => x.rule)).toEqual(['blockquote-marker-without-space'])
+    expect(w[0]!.message).toContain('> quote')
+  })
+
+  it('flags operators and tabs that now stay prose', () => {
+    expect(rules('>>= operator')).toEqual(['blockquote-marker-without-space'])
+    expect(rules('>\tquote')).toEqual(['blockquote-marker-without-space'])
+  })
+
+  it('does not flag valid quote markers or escaped prose', () => {
+    expect(lintCarve('> quote\n>\n>  indented')).toEqual([])
+    expect(lintCarve('\\>quote')).toEqual([])
+  })
+})
+
 describe('lintCarve — fence opener title syntax', () => {
   it('flags an unquoted trailing title with a quoted suggestion', () => {
     const w = lintCarve('::: note Custom Title\nbody\n:::')

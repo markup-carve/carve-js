@@ -213,7 +213,7 @@ function isBlankLine(line: string | undefined): boolean {
   return line !== undefined && trimStructural(line) === ''
 }
 
-const RE_BLOCKQUOTE = /^>[^\S ]?(.*)$/
+const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
 // Fences are a run of 3+ colons (group 1). A longer opener nests: a
 // `::::` block contains `:::` blocks, and only a bare closer of equal-or-
 // greater length closes it (djot fence-length rule).
@@ -990,7 +990,7 @@ function stripContainerPrefixesKeepIndent(raw: string): string {
   do {
     prev = line
     line = line
-      .replace(/^[^\S\u00a0]*>[^\S\u00a0]?/, '') // blockquote (NBSP is content)
+      .replace(/^[^\S\u00a0]*>(?: |$)/, '') // blockquote (NBSP is content)
       .replace(/^[^\S\u00a0]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP is content)
   } while (line !== prev)
   return line
@@ -1074,7 +1074,7 @@ function collectLinkDefs(lexer: Lexer) {
       const rawTrimmed = raw.trim()
       const startsBlock =
         /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
-        rawTrimmed.startsWith('>') ||
+        RE_BLOCKQUOTE.test(rawTrimmed) ||
         /^(`{3,}|~{3,})/.test(rawTrimmed) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
       if (marker && /\S/.test(raw.slice(marker[0].length))) {
@@ -1094,13 +1094,13 @@ function collectLinkDefs(lexer: Lexer) {
       /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +(?:\[[ xX\-_>?]\] +)?/,
       '',
     )
-    const rawIsQuoted = /^(?:[^\S ]*>[^\S ]?)+/.test(raw) || /^(?:[^\S ]*>[^\S ]?)+/.test(afterMarker)
+    const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
     if (fence) {
       // CLOSER: strip a blockquote prefix only when the fence is quoted, and
       // NEVER a list marker -- a fence delimiter is a continuation line of pure
       // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
       // is not a closer. Re-base to the column the fence opened at.
-      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>[^\S ]?)+/, '') : raw
+      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
       const ki = k.length - k.replace(/^[ \t]+/, '').length
       const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
       const close = d.match(/^([`~]{3,})\s*$/)
