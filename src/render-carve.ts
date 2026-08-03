@@ -943,7 +943,7 @@ function normalize(text: string): string {
   // A line block's indent is the other user of this sentinel and is already
   // routed through the verbatim scheme before this runs, so what is left here
   // is an escaped space and nothing else.
-  const lines = trimNonNbsp(text.replace(/\ue000/g, '\\ ')).split('\n')
+  const lines = trimNonNbspKeepingGuard(text.replace(/\ue000/g, '\\ ')).split('\n')
   const swept = lines.map((line, i) => {
     // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
     // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
@@ -961,7 +961,7 @@ function normalize(text: string): string {
     const endsBlock = next === undefined || next.trim() === ''
     return endsBlock ? line.replace(/[^\S\u00a0]+$/g, '') : line
   })
-  const cleaned = trimNonNbsp(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
+  const cleaned = trimNonNbspKeepingGuard(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
   return `${restoreVerbatim(cleaned)}\n`
 }
 
@@ -998,6 +998,27 @@ function restoreVerbatim(text: string): string {
 
 function trimNonNbsp(text: string): string {
   return text.replace(TRIM_NON_NBSP_RE, '')
+}
+
+/**
+ * `trimNonNbsp`, except it keeps leading whitespace that is load-bearing.
+ *
+ * `guardThematicBreakLines` re-indents a paragraph line that would otherwise
+ * re-parse as a thematic break. That space is the whole protection, and
+ * `normalize` trims BOTH its input and its joined output - so on the document's
+ * FIRST line, the only line either trim can reach, the guard was undone and the
+ * marker landed back at column 0. The next parse then read `<hr>` where the
+ * source had a paragraph, breaking `to_html(fmt(x)) == to_html(x)` and
+ * `fmt(fmt(x)) == fmt(x)` together (carve-js#566).
+ *
+ * A REAL thematic break is unaffected: the writer emits it at column 0 with no
+ * guard space, so there is nothing here to preserve.
+ */
+function trimNonNbspKeepingGuard(text: string): string {
+  if (/^[^\S\u00a0]+-{3,}[ \t]*(\n|$)/.test(text)) {
+    return text.replace(/[^\S\u00a0]+$/, '')
+  }
+  return trimNonNbsp(text)
 }
 
 function trimEndNonNbsp(text: string): string {
