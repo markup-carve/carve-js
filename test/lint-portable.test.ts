@@ -66,4 +66,48 @@ describe('lintCarve - portable-quote-marker-space', () => {
   it('does not fire on an unspaced ">" inside a code fence nested in a blockquote', () => {
     expect(portableRules('> ```\n>x\n> ```\n')).toEqual([])
   })
+
+  // KNOWN LIMITATION (documented on the rule): each block_quote node is
+  // checked at its OWN recorded startColumn, computed from the line it
+  // opens on. When an unspaced OUTER marker on a later line shifts where an
+  // INNER marker actually sits on that physical line, the inner node's
+  // recorded column no longer matches, and its check is silently skipped.
+  // The three cases below pin that this converges rather than hides the
+  // divergence forever: fixing the reported outer marker and re-linting
+  // moves the inner marker back onto its recorded column, so it is then
+  // reported too - a divergent document is never reported clean.
+  it('flags only the outer marker when an unspaced outer shifts an unspaced inner one', () => {
+    const w = lintCarve('> > a\n>>bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 1]])
+  })
+
+  it('flags the inner marker once the outer is fixed (convergence)', () => {
+    // Same document as above with the outer marker spaced - the inner
+    // marker (still unspaced) is no longer hidden by the drift.
+    const w = lintCarve('> > a\n> >bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 3]])
+  })
+
+  it('does not flag a fully spaced two-level continuation line', () => {
+    expect(portableRules('> > a\n> > b\n')).toEqual([])
+  })
+
+  it('flags an unspaced inner marker past a tab-separated outer marker', () => {
+    const w = lintCarve('>\t>bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[1, 3]])
+  })
+
+  it('flags an unspaced marker on a quote nested in a list item content column', () => {
+    const w = lintCarve('- >quote\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[1, 3]])
+  })
+
+  it('flags an unspaced marker on a list-nested quote continuation line', () => {
+    const w = lintCarve('- > a\n  >bad\n', { portable: true })
+    expect(w.map((x) => [x.line, x.column])).toEqual([[2, 3]])
+  })
+
+  it('does not flag a spaced list-nested quote continuation line', () => {
+    expect(portableRules('- > a\n  > good\n')).toEqual([])
+  })
 })

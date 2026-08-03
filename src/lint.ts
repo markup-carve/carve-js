@@ -701,7 +701,11 @@ function collectPortableWhitespace(
 
   // A `>` blockquote marker with no space after it. Djot has no `>>` marker at
   // all, so a nested quote must be written `> > q`; anchoring on each
-  // block_quote node's OWN startColumn reports each level separately.
+  // block_quote node's OWN startColumn (as the parser itself recorded it, not
+  // a hardcoded column) reports each level separately, and is naturally
+  // correct through arbitrary interposed containers - a list item, a div, an
+  // admonition - since it never has to walk the raw text past their syntax to
+  // reach a nested quote's real column.
   //
   // A block_quote node's own position spans its ENTIRE range (startLine to
   // endLine), including every continuation line at this nesting depth - not
@@ -711,11 +715,35 @@ function collectPortableWhitespace(
   // literal text, which is a silent divergence from Carve (which always
   // strips it) exactly like the opening-line case this rule already covers.
   //
+  // KNOWN LIMITATION: on a continuation line, this still checks each node at
+  // its OWN recorded startColumn, which was computed from the node's OPENING
+  // line. When an OUTER quote's marker is unspaced on a LATER line, every
+  // INNER level's marker on that same physical line shifts one column to the
+  // left of where the inner node's own recorded startColumn expects it, so
+  // the inner check silently misses it on that line (e.g. `> > a\n>>bad\n`
+  // reports only the outer, at [2,1] - not the inner, which sits at column 2
+  // on that line, not its own recorded column 3). This is bounded, not open-
+  // ended: fixing the reported outer marker and re-running the linter moves
+  // the inner marker back to its recorded column, so it is then reported too
+  // - a divergent document is never reported clean, just not fully explained
+  // in one pass. A version of this rule that also gets nested mixed-spacing
+  // right in one pass would need to walk each line's live text forward from
+  // its enclosing container's column, consuming each level's marker as it is
+  // actually spaced on THAT line rather than trusting a recorded column - but
+  // that walk cannot generically tell a quote's own repeated `>` prefix apart
+  // from another container's marker syntax (a list bullet, a div fence)
+  // interposed between two quote levels on the same line, and misidentifying
+  // that syntax as content would be a worse, non-convergent miss than this
+  // one. Per-node anchoring stays correct through any such interposition,
+  // which is why it is what this rule uses despite the narrower limitation
+  // above.
+  //
   // Exempt: whitespace of any kind (a tab and two spaces both parse identically
-  // in the two engines), end of line (a bare `>` separator line likewise), a
-  // lazy continuation line that carries no marker at this column at all (there
-  // is nothing to make portable), and any line inside a verbatim (code/raw)
-  // region, where the character at this column is sample text, not a marker.
+  // in the two engines) and end of line (a bare `>` separator line likewise),
+  // a lazy continuation line that carries no marker at this column at all
+  // (there is nothing to make portable), and any line inside a verbatim
+  // (code/raw) region, where the character at this column is sample text, not
+  // a marker.
   const quotes: Positioned[] = []
   walkDocument(doc, (node) => {
     if (node.type === 'block_quote') quotes.push(node as Positioned)
@@ -740,8 +768,9 @@ function collectPortableWhitespace(
         column: col,
         rule: 'portable-quote-marker-space',
         message:
-          'This ">" blockquote marker has no space after it. Carve opens a blockquote; ' +
-          'djot leaves the line as text. Write "> " with a space - and a nested quote ' +
+          'This ">" blockquote marker has no space after it. Carve treats it as a real ' +
+          'quote marker regardless; djot only recognizes it with a space and otherwise ' +
+          'leaves the ">" as literal text. Write "> " with a space - and a nested quote ' +
           'as "> > ", since djot has no ">>" marker.',
         start,
         end: start + 1,
