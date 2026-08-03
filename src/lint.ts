@@ -71,35 +71,56 @@ interface Positioned {
 }
 
 /**
- * Codepoint offset -> UTF-16 offset, for a source containing a surrogate pair.
+ * Parser offset -> UTF-16 offset into the source the CALLER passed.
  *
- * The AST carries codepoint positions (PART 12 section 4); a LintWarning reports
- * the unit its JavaScript consumers index a string with. Identity unless the
- * document has an astral character, since UTF-16 and codepoints agree across the
- * whole Basic Multilingual Plane.
+ * Two things separate the two units, and the map has to undo both:
+ *
+ *   ASTRAL CHARACTERS. The AST carries codepoint positions (PART 12 section 4);
+ *   a LintWarning reports the unit its JavaScript consumers index a string with.
+ *   UTF-16 and codepoints agree across the whole Basic Multilingual Plane, so
+ *   this only matters above it.
+ *
+ *   CRLF. The parser measures offsets over line-ending-NORMALIZED text
+ *   (`source.replace(/\r\n?/g, '\n')`), where a `\r\n` pair has collapsed to
+ *   one codepoint. Every preceding CRLF line therefore makes a raw offset
+ *   undercount by one against the original string.
+ *
+ * The second was missed because this returned identity whenever the document
+ * had no astral character - which is exactly the CRLF case, so the drift was
+ * invisible to the very map meant to correct it (carve-js#545). Only the
+ * offsets were affected; line and column come from the parser and were always
+ * right, which is why the CLI never showed it and an editor integration would.
+ *
+ * A LONE `\r` normalizes to `\n` and so still costs one codepoint - only the
+ * pair collapses.
  */
 function codepointToUtf16Map(source: string): Uint32Array | undefined {
-  let hasAstral = false
+  let needsMap = false
   for (let i = 0; i < source.length; i++) {
     const code = source.charCodeAt(i)
-    if (code >= 0xd800 && code <= 0xdbff) {
-      hasAstral = true
+    if ((code >= 0xd800 && code <= 0xdbff) || code === 0x0d) {
+      needsMap = true
       break
     }
   }
-  if (!hasAstral) return undefined
+  if (!needsMap) return undefined
 
-  const codepoints = [...source].length
-  const utf16At = new Uint32Array(codepoints + 1)
-  let cp = 0
-  for (let i = 0; i < source.length; i++) {
-    utf16At[cp] = i
+  // One entry per NORMALIZED codepoint - the unit the parser counts in - each
+  // holding the UTF-16 index of that codepoint in the ORIGINAL source.
+  const utf16At: number[] = []
+  for (let i = 0; i < source.length; ) {
     const code = source.charCodeAt(i)
-    if (code >= 0xd800 && code <= 0xdbff && i + 1 < source.length) i++
-    cp++
+    if (code === 0x0d && source.charCodeAt(i + 1) === 0x0a) {
+      // The `\r` of a CRLF pair is gone from the text the parser measured, so
+      // it contributes no entry; the `\n` that follows carries the position.
+      i++
+      continue
+    }
+    utf16At.push(i)
+    i += code >= 0xd800 && code <= 0xdbff && i + 1 < source.length ? 2 : 1
   }
-  utf16At[codepoints] = source.length
-  return utf16At
+  utf16At.push(source.length)
+  return Uint32Array.from(utf16At)
 }
 
 function locate(
@@ -267,9 +288,9 @@ export function lintCarve(
     positions: true,
     onUnclosedContainer: (container) => unclosedContainers.push(container),
   })
-  // The AST carries codepoint positions; a LintWarning reports UTF-16, so a JS
-  // consumer can slice the source with it. Identity unless the document has an
-  // astral character.
+  // The AST carries codepoint positions over line-ending-normalized text; a
+  // LintWarning reports UTF-16 into the source the caller passed, so a JS
+  // consumer can slice it. Identity only when neither differs.
   const utf16At = codepointToUtf16Map(source)
   const toUtf16 = (offset: number): number => (utf16At ? (utf16At[offset] ?? source.length) : offset)
   const slugOpts = headingIdSlugOpts(opts)
