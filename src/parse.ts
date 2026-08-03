@@ -4299,7 +4299,12 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // literal by the §14 rule; `soft_break`/`hard_break` are whitespace; `mention`
 // and `tag` are inert stable spans that do not take attributes. After any of
 // these the `{...}` stays literal text (matches carve-rs / carve-php).
-const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 'tag'])
+// `heading_ref` belongs here for the same reason as the rest: a cross-reference
+// renders either as its literal source (unresolved) or as a link whose href is
+// structural, and neither emits the attached attributes - so `</#h>{i}` dropped
+// the `{i}` entirely. carve-rs and carve-php keep it literal in both cases
+// (carve-js#537).
+const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 'tag', 'heading_ref'])
 
 // Tail patterns parsed after a `[…]` (or `![…]`) whose close bracket was
 // found by balance (buildBracketMap), so the inner text may hold nested
