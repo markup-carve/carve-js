@@ -755,6 +755,59 @@ function toCodepointPositions(doc: Document, source: string): void {
   walk(doc)
 }
 
+/**
+ * Move every `abbreviation_def` authored inside a container up to the document.
+ *
+ * PART 12 §7: a definition is a child of the DOCUMENT even when it was written
+ * inside a div, a list item or a block quote, because its scope is the document
+ * wherever it sits. A footnote definition already worked this way here - the
+ * parser never emits a block for it, it goes to `lexer.footnoteDefs` and the
+ * encoder appends it - and the clause covers every definition kind, not only
+ * footnotes (carve-php#631).
+ *
+ * Done in `parse`, NOT in the encoder. §6 requires `parse(x)` serialized and
+ * deserialized to equal `parse(x)`; a producer that leaves the node nested in
+ * the parsed tree and hoists it on the way out satisfies §7 and breaks §6 on
+ * the same document. That is the mistake §1a already records for text-run
+ * coalescing, and it is the same mistake here.
+ *
+ * Appended at the end, which is where both a footnote definition and
+ * carve-php's abbreviation definition already land, so `fmt` writes them in one
+ * place rather than two. `pos` is untouched: it still says where the author
+ * wrote it, which is what §7 relies on for nothing being lost by the move.
+ */
+function hoistAbbreviationDefs(doc: Document): void {
+  const hoisted: BlockNode[] = []
+
+  const strip = (blocks: BlockNode[]): BlockNode[] =>
+    blocks.filter((block) => {
+      if (block.type === 'abbreviation_def') {
+        hoisted.push(block)
+        return false
+      }
+      descend(block)
+      return true
+    })
+
+  const descend = (block: BlockNode): void => {
+    const node = block as { children?: BlockNode[]; items?: { children?: BlockNode[] }[] }
+    if (Array.isArray(node.children)) node.children = strip(node.children)
+    // A list's items and a definition list's descriptions hold blocks too, so a
+    // definition written inside one is nested exactly as deeply.
+    if (Array.isArray(node.items)) {
+      for (const item of node.items) {
+        if (Array.isArray(item.children)) item.children = strip(item.children)
+      }
+    }
+  }
+
+  // The document's own children are already at document level: descend into
+  // them, but leave any definition sitting there where the author put it.
+  for (const block of doc.children) descend(block)
+
+  if (hoisted.length) doc.children = [...doc.children, ...hoisted]
+}
+
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
   // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
@@ -786,6 +839,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   try {
     const children = parseBlocks(lexer, 0)
     const doc: Document = { type: 'document', children }
+    hoistAbbreviationDefs(doc)
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = utf8ByteLength(source)
