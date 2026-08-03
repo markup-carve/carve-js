@@ -365,6 +365,10 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'code':
       return renderCode(stripControls(node.value))
     case 'link':
+      // An unresolved reference is literal source, not a link (PART 12 §3a):
+      // the node survives serialization so the reference is not lost from the
+      // tree, and every render target writes it back out as written.
+      if (node.ref !== undefined) return escapeText(node.rawRef ?? '')
       return renderLink(node, ctx)
     case 'image':
       return renderImage(node)
