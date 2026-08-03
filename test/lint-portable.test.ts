@@ -1,0 +1,49 @@
+import { describe, it, expect } from 'vitest'
+import { lintCarve } from '../src/lint.js'
+
+const portableRules = (src: string) =>
+  lintCarve(src, { portable: true }).map((w) => w.rule)
+
+describe('lintCarve - portable-quote-marker-space', () => {
+  it('flags a blockquote marker with no space after it', () => {
+    const w = lintCarve('>quote\n', { portable: true })
+    expect(w).toHaveLength(1)
+    expect(w[0]!.rule).toBe('portable-quote-marker-space')
+    expect(w[0]!.line).toBe(1)
+    expect(w[0]!.column).toBe(1)
+    expect(w[0]!.message).toContain('djot')
+  })
+
+  it('does not flag a spaced marker', () => {
+    expect(portableRules('> quote\n')).toEqual([])
+  })
+
+  it('does not flag a tab, two spaces, or a bare marker line', () => {
+    expect(portableRules('>\tquote\n')).toEqual([])
+    expect(portableRules('>  quote\n')).toEqual([])
+    expect(portableRules('> a\n>\n> b\n')).toEqual([])
+  })
+
+  it('flags only the outer marker of ">> q", whose inner marker is spaced', () => {
+    const w = lintCarve('>> q\n', { portable: true })
+    expect(w.map((x) => x.rule)).toEqual(['portable-quote-marker-space'])
+    expect(w[0]!.column).toBe(1)
+  })
+
+  it('flags both levels of ">>q"', () => {
+    const w = lintCarve('>>q\n', { portable: true })
+    expect(w.map((x) => x.column)).toEqual([1, 2])
+  })
+
+  it('accepts the djot-valid nested form', () => {
+    expect(portableRules('> > q\n')).toEqual([])
+  })
+
+  it('is off by default', () => {
+    expect(lintCarve('>quote\n')).toEqual([])
+  })
+
+  it('does not fire on a ">" inside a code block', () => {
+    expect(portableRules('```\n>quote\n```\n')).toEqual([])
+  })
+})

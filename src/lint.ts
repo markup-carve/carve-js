@@ -254,7 +254,19 @@ function declaredVersion(source: string, doc: Document): { version: string; offs
 
 export function lintCarve(
   source: string,
-  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
+  opts: {
+    asciiHeadingIds?: AsciiHeadingIdMode
+    lowercaseHeadingIds?: boolean
+    /**
+     * Report the advisory portable-whitespace rules (`portable-*`).
+     *
+     * Off by default. These do NOT describe a problem in Carve: the document
+     * renders exactly as written. They describe source whose whitespace parses
+     * differently under a djot processor, so they only matter to an author who
+     * wants the source to stay valid djot.
+     */
+    portable?: boolean
+  } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
   const doc = parse(source, {
@@ -415,6 +427,7 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
+  if (opts.portable) collectPortableWhitespace(source, doc, out, toUtf16)
 
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -657,6 +670,58 @@ function collectSilentFailures(
     )
   }
 
+}
+
+/**
+ * PORTABILITY (advisory) - source whose whitespace parses differently in djot.
+ *
+ * Nothing here is a defect in the document: Carve renders all of it as the
+ * author intended. Each rule marks a place where Carve accepts whitespace that
+ * djot does not, so a document that avoids them is valid djot source as well.
+ * The portable form is also the CommonMark-safe form in every case, so the
+ * advice costs no Markdown compatibility.
+ */
+function collectPortableWhitespace(
+  source: string,
+  doc: Document,
+  out: LintWarning[],
+  toUtf16: (offset: number) => number,
+): void {
+  const lines = source.split('\n')
+
+  // A `>` blockquote marker with no space after it. Djot has no `>>` marker at
+  // all, so a nested quote must be written `> > q`; anchoring on each
+  // block_quote node's OWN startColumn reports each level separately.
+  //
+  // Exempt: whitespace of any kind (a tab and two spaces both parse identically
+  // in the two engines) and end of line (a bare `>` separator line likewise).
+  const quotes: Positioned[] = []
+  walkDocument(doc, (node) => {
+    if (node.type === 'block_quote') quotes.push(node as Positioned)
+  })
+  quotes.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+  for (const q of quotes) {
+    const line = q.pos?.startLine
+    const col = q.pos?.startColumn
+    if (!line || !col) continue
+    const text = lines[line - 1] ?? ''
+    // Guard against position drift: only flag where the marker really is.
+    if (text[col - 1] !== '>') continue
+    const after = text[col]
+    if (after === undefined || after === ' ' || after === '\t' || after === '\r') continue
+    const loc = locate(q, toUtf16)
+    out.push({
+      line,
+      column: col,
+      rule: 'portable-quote-marker-space',
+      message:
+        'This ">" blockquote marker has no space after it. Carve opens a blockquote; ' +
+        'djot leaves the line as text. Write "> " with a space - and a nested quote ' +
+        'as "> > ", since djot has no ">>" marker.',
+      start: loc.start,
+      end: loc.start + 1,
+    })
+  }
 }
 
 function collectFootnoteDefinitionWarnings(
