@@ -109,24 +109,23 @@ function stableJson(value: unknown): string {
  * so a plain JSON.stringify comparison reports a difference that does not
  * exist and escalates the whole document to conservative escaping for nothing.
  *
- * `pos`, `srcByteLength` and `footnoteDefPos` describe where the text sat
+ * `pos`, `footnoteDefPos` and `srcByteLength` describe where the text sat
  * rather than what it says, and the writer legitimately renormalizes
  * indentation, so they are dropped rather than compared.
  *
- * `footnoteDefPos` was missed, and it is positional by the same argument: it
- * records where each footnote definition started. An escape shifts every offset
- * after it, so ANY document containing a footnote reported a difference here
- * that does not exist, and W4 escalated the whole document to conservative
- * escaping - which is the exact failure this function's docblock warns about,
- * one key short of preventing it. It cost `Carve has footnotes\.[^fn]` where
- * the minimal form was safe, in twelve corpus documents (carve#478).
+ * `footnoteDefPos` is the one that bites: it is a root-level MAP of positions
+ * whose key is not `pos`, so the name-based skip missed it. Adding an escape
+ * lengthens the source and shifts every offset in that map, so the comparison
+ * reported a difference on EVERY document carrying a footnote and escalated it
+ * to conservative escaping - 12 of the 14 cross-engine writer diffs in
+ * carve#478 were this one line.
  */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      if (key === 'pos' || key === 'srcByteLength' || key === 'footnoteDefPos') continue
+      if (key === 'pos' || key === 'footnoteDefPos' || key === 'srcByteLength') continue
       out[key] = canonical((value as Record<string, unknown>)[key])
     }
     return out

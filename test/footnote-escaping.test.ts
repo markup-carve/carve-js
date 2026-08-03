@@ -31,12 +31,18 @@ describe('footnotes do not force conservative escaping', () => {
   })
 
   it('still escapes where the minimal form would change meaning', () => {
-    // The fallback must remain reachable: a document whose minimal form
-    // re-parses differently still gets the conservative treatment. Without a
-    // case like this, dropping every positional key would look like a fix.
-    const source = '\\- not a list\n'
-
-    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+    // The fallback must remain reachable: dropping one key too many would look
+    // like a fix while quietly disabling W4 for every document.
+    //
+    // These two need it. An indented `# H` and an indented `***` are a
+    // paragraph, because both markers are column-0 only; the minimal writer
+    // emits them unindented, where they would re-parse as a heading and a
+    // thematic break. Only the conservative pass escapes them. Disabling the
+    // fallback changes the rendered HTML of both, which is what makes this
+    // assertion bite - a round-trip that holds either way would not.
+    for (const source of ['   # H\n', ' ***\n']) {
+      expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+    }
   })
 
   it('preserves the document either way', () => {
