@@ -83,6 +83,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same-count form, as Djot's fold does. Both are `djot-shift`, so `carve lint`
   shows them only with `--from-djot`.
 
+- **`carve lint --portable`**, the outbound twin of `--from-djot`: an
+  advisory rule for a document that has to stay valid Djot source.
+  `portable-quote-marker-space` flags a `>` blockquote marker with no space
+  after it - Carve treats it as a real quote marker regardless, but a Djot
+  processor only recognizes it when followed by a space, a tab, or the end
+  of the line, and otherwise leaves the `>` as literal text. Nothing here is
+  a defect: the document renders exactly as written in Carve either way. Off
+  by default, and composes with `--from-djot`.
+
 ### Fixed
 
 - **A block that renders to nothing no longer leaves a blank line inside its

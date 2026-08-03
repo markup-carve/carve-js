@@ -39,6 +39,14 @@ inputs:
       while migrating a Djot corpus.
     required: false
     default: 'false'
+  portable:
+    description: >
+      Also flag whitespace that parses differently under Djot (a `>` blockquote
+      marker with no space after it). Advisory: the document is correct in
+      Carve either way, and this only matters to an author who wants the
+      source to stay valid Djot.
+    required: false
+    default: 'false'
   version:
     description: 'npm version or dist-tag of @markup-carve/carve to run.'
     required: false
@@ -58,6 +66,7 @@ runs:
         CARVE_FMT: ${{ inputs.fmt }}
         CARVE_LINT: ${{ inputs.lint }}
         CARVE_FROM_DJOT: ${{ inputs.from-djot }}
+        CARVE_PORTABLE: ${{ inputs.portable }}
       run: |
         set -euo pipefail
         shopt -s globstar nullglob
@@ -88,8 +97,12 @@ runs:
         fi
 
         if [ "$CARVE_LINT" = "true" ]; then
-          if [ "$CARVE_FROM_DJOT" = "true" ]; then
+          if [ "$CARVE_FROM_DJOT" = "true" ] && [ "$CARVE_PORTABLE" = "true" ]; then
+            carve lint --from-djot --portable "${documents[@]}" || status=1
+          elif [ "$CARVE_FROM_DJOT" = "true" ]; then
             carve lint --from-djot "${documents[@]}" || status=1
+          elif [ "$CARVE_PORTABLE" = "true" ]; then
+            carve lint --portable "${documents[@]}" || status=1
           else
             carve lint "${documents[@]}" || status=1
           fi

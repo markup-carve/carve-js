@@ -46,3 +46,13 @@
   entry: carve lint --from-djot
   language: node
   files: \.(crv|carve)$
+
+- id: carve-lint-portable
+  name: carve lint (--portable)
+  description: >
+    carve-lint, plus a `>` blockquote marker with no space after it, which
+    parses differently under Djot. Advisory: the document is correct in Carve
+    either way; useful for a document that has to stay valid Djot source.
+  entry: carve lint --portable
+  language: node
+  files: \.(crv|carve)$

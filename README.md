@@ -232,7 +232,7 @@ even when the first fails, so one push shows every problem rather than the
 formatting one today and the lint one tomorrow. A repository with no Carve
 documents yet passes rather than failing on an empty glob.
 
-Inputs: `files`, `fmt`, `lint`, `from-djot`, `version`.
+Inputs: `files`, `fmt`, `lint`, `from-djot`, `portable`, `version`.
 
 ### pre-commit
 
