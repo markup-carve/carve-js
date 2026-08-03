@@ -2071,6 +2071,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // everything after it - so a stanza containing one stays unanchored, which
     // is what PART 12 §4 asks for when a position cannot be produced.
     const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.aligned)
+    let breakIndex = 0
     const inline = parseInline(
       lines.map((l) => l.text).join('\n'),
       lexer.abbrDefs,
@@ -2091,12 +2092,30 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       // Keep the break's span: it is the same source, just a different meaning
       // inside a line block. Building a fresh object dropped it.
       const hardBreak = { type: 'hard_break' } as InlineNode
-      if (node.pos) hardBreak.pos = node.pos
+      // The stanza's text is `lines` joined by '\n' and holds no other newline,
+      // so the k-th break IS the newline ending lines[k] - which line geometry
+      // knows even when a tab left the INLINE offsets unanchored. Without this
+      // the break inherited the unanchored parse and came out unplaced (#549).
+      const line = lines[breakIndex++]
+      if (node.pos) {
+        hardBreak.pos = node.pos
+      } else if (lexer.hasDocumentOffsets && line) {
+        const end = lexer.lineOffset(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0)
+        const column = lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0)
+        hardBreak.pos = {
+          startLine: lexer.lineNumber(line.lineIndex),
+          endLine: lexer.lineNumber(line.lineIndex),
+          startColumn: column,
+          endColumn: column + 1,
+          startOffset: end,
+          endOffset: end + 1,
+        }
+      }
       return hardBreak
     })
 
     const paragraph: Paragraph = { type: 'paragraph', children: inline }
-    if (anchorable) {
+    if (lexer.hasDocumentOffsets) {
       const first = lines[0]!
       const last = lines[lines.length - 1]!
       paragraph.pos = {

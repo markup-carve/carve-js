@@ -340,13 +340,39 @@ describe('line blocks', () => {
     }
   })
 
-  it('declines to anchor a TAB-indented stanza', () => {
+  it('declines to anchor the TEXT of a TAB-indented stanza', () => {
     // A tab expands to up to four sentinels, so everything after it shifts and
-    // no offset here is trustworthy. Absent beats wrong.
+    // no offset inside a line is trustworthy. Absent beats wrong.
     const src = '::: |\nRoses are red,\n\tViolets are blue.\n:::\n'
     for (const node of textNodesOf(parse(src))) {
-      expect(node.pos).toBeUndefined()
+      if (node.type === 'text') expect(node.pos).toBeUndefined()
     }
+  })
+
+  it('still anchors the BREAKS of a TAB-indented stanza', () => {
+    // The break is the newline ENDING a line, which line geometry knows exactly
+    // - the tab shifts offsets within a line, not the line's own extent. Losing
+    // these to the blanket rule above left them unplaced for no reason (#549).
+    const src = '::: |\nRoses are red,\n\tViolets are blue.\n:::\n'
+    const breaks = textNodesOf(parse(src)).filter((n) => n.type === 'hard_break')
+    expect(breaks).toHaveLength(1)
+    for (const node of breaks) {
+      expect(node.pos).toBeDefined()
+      expect(src.slice(node.pos!.startOffset, node.pos!.endOffset)).toBe('\n')
+    }
+  })
+
+  it('anchors the PARAGRAPH of a TAB-indented stanza', () => {
+    // The stanza's own extent is first-line start to last-line end, which no
+    // amount of in-line tab expansion moves. It was being dropped along with
+    // the inline offsets by a single over-broad gate (#549).
+    const src = '::: |\nRoses are red,\n\tViolets are blue.\n:::\n'
+    const para = (parse(src).children[0] as any).children[0]
+    expect(para.type).toBe('paragraph')
+    expect(para.pos).toBeDefined()
+    expect(src.slice(para.pos.startOffset, para.pos.endOffset)).toBe(
+      'Roses are red,\n\tViolets are blue.',
+    )
   })
 })
 
