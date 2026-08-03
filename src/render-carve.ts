@@ -109,16 +109,23 @@ function stableJson(value: unknown): string {
  * so a plain JSON.stringify comparison reports a difference that does not
  * exist and escalates the whole document to conservative escaping for nothing.
  *
- * `pos` and `srcByteLength` describe where the text sat rather than what it
- * says, and the writer legitimately renormalizes indentation, so they are
- * dropped rather than compared.
+ * `pos`, `footnoteDefPos` and `srcByteLength` describe where the text sat
+ * rather than what it says, and the writer legitimately renormalizes
+ * indentation, so they are dropped rather than compared.
+ *
+ * `footnoteDefPos` is the one that bites: it is a root-level MAP of positions
+ * whose key is not `pos`, so the name-based skip missed it. Adding an escape
+ * lengthens the source and shifts every offset in that map, so the comparison
+ * reported a difference on EVERY document carrying a footnote and escalated it
+ * to conservative escaping - 12 of the 14 cross-engine writer diffs in
+ * carve#478 were this one line.
  */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      if (key === 'pos' || key === 'srcByteLength') continue
+      if (key === 'pos' || key === 'footnoteDefPos' || key === 'srcByteLength') continue
       out[key] = canonical((value as Record<string, unknown>)[key])
     }
     return out
