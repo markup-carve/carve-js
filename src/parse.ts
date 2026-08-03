@@ -1970,11 +1970,11 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     /**
      * The expansion kept the line's LENGTH, so document offsets still line up.
      *
-     * Each leading space becomes exactly one U+E000 sentinel, so a space-
-     * indented line is not a verbatim slice but every character still sits at
-     * its own offset - the indent is consumed as indentation and never reaches
-     * a text node's value. A TAB expands to up to four sentinels, which shifts
-     * everything after it, so those stay unanchored.
+     * Each preserved space becomes exactly one U+E000 sentinel, so a line with
+     * an indent or a medial gap is not a verbatim slice but every character
+     * still sits at its own offset - the whitespace is consumed as layout and
+     * never reaches a text node's value. A TAB expands to up to four sentinels,
+     * which shifts everything after it, so those stay unanchored.
      */
     aligned: boolean
   }
@@ -1992,7 +1992,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       }
       continue
     }
-    const expanded = expandLineBlockLeadingWhitespace(ln)
+    const expanded = expandLineBlockWhitespace(ln)
     stanza.push({ text: expanded, lineIndex, aligned: expanded.length === ln.length })
   }
   if (stanza.length) stanzas.push(stanza)
@@ -2057,21 +2057,44 @@ function parseLineBlock(lexer: Lexer): LineBlock {
   return node
 }
 
-function expandLineBlockLeadingWhitespace(line: string): string {
+/**
+ * Rewrites the whitespace a line block preserves to the U+E000 sentinel.
+ *
+ * Leading whitespace is always kept, down to a single column. An inner or
+ * trailing run of TWO OR MORE columns is a medial gap - the inline alignment a
+ * caesura or a column of aligned text is made of - and is kept too. A lone
+ * inner space stays an ordinary collapsible space, so a long line can still
+ * wrap between words.
+ *
+ * Use the internal non-breaking-space placeholder (U+E000) - the same
+ * private-use sentinel as an escaped space - so preserved columns never collide
+ * with a literal U+00A0 in the author's text and are converted per renderer
+ * (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
+ */
+function expandLineBlockWhitespace(line: string): string {
+  let out = ''
   let i = 0
-  let columns = 0
+  let column = 0
+  let seenContent = false
   while (i < line.length) {
     const ch = line[i]
-    if (ch === ' ') columns++
-    else if (ch === '\t') columns += 4 - (columns % 4)
-    else break
-    i++
+    if (ch !== ' ' && ch !== '\t') {
+      out += ch
+      seenContent = true
+      column++
+      i++
+      continue
+    }
+    let width = 0
+    while (i < line.length && (line[i] === ' ' || line[i] === '\t')) {
+      if (line[i] === '\t') width += 4 - ((column + width) % 4)
+      else width++
+      i++
+    }
+    column += width
+    out += !seenContent || width >= 2 ? '\ue000'.repeat(width) : ' '
   }
-  // Use the internal non-breaking-space placeholder (U+E000) - the same
-  // private-use sentinel as an escaped space - so the indent never collides
-  // with a literal U+00A0 in the author's text and is converted per renderer
-  // (HTML &nbsp;, Markdown U+00A0, plain/ANSI an ordinary space).
-  return '\ue000'.repeat(columns) + line.slice(i)
+  return out
 }
 
 // `::: \` hard-break block. Unlike the line block, the body is parsed as
