@@ -1906,13 +1906,21 @@ function consumeOpaqueColonFenceBodySpan(
   lines: ColonFenceBodyLine[],
   lineIndex: number,
   text: string,
-  paragraphOpen: boolean,
 ): boolean {
   const rawOpen = RE_RAW_FENCE.exec(text)
   const codeOpen = rawOpen === null ? RE_FENCE.exec(text) : null
   const marker = rawOpen?.[1] ?? codeOpen?.[2]
   if (marker !== undefined) {
-    if (paragraphOpen && !startsInterruptingBlock(lexer)) return false
+    // A closer is required whether or not a paragraph is open. Only a fence
+    // that closes is opaque; an unterminated one would otherwise consume the
+    // container's own `:::` as content and run to the end of the document,
+    // dragging every following block inside (carve#515).
+    //
+    // The comment-fence branch below has always required its closer. This one
+    // asked only when a paragraph was open, so the rule held for a fence that
+    // interrupted prose and lapsed for one that opened a body - which is why
+    // the `paragraphOpen` argument is gone.
+    if (!startsInterruptingBlock(lexer)) return false
     const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
     const isCodeFence = codeOpen !== null
     lexer.consume()
@@ -1955,7 +1963,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
     const lineIndex = lexer.pos
     const text = lexer.peek()!
     const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text, paragraphOpen)) {
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) {
       paragraphOpen = false
       continue
     }
