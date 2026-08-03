@@ -54,3 +54,25 @@ describe('non-html renderer parity fixes', () => {
     expect(carveToAnsi(src)).toContain('\x1b[1mc\x1b[0m')
   })
 })
+
+describe('renderer depth caps (issue 517)', () => {
+  it('keeps the innermost content of a document nested at the parser cap, in every target', async () => {
+    // Each renderer bounded its recursion at the parser's own MAX_NESTING_DEPTH
+    // and emits nothing past the bound, so a document nested at exactly the cap
+    // parsed fine and then rendered with its content in HTML and without it in
+    // markdown, plain text and ansi.
+    const { MAX_NESTING_DEPTH } = await import('../src/parse.js')
+    const {
+      carveToHtml: html,
+      carveToMarkdown: md,
+      carveToPlainText: plain,
+      carveToAnsi: ansi,
+      carveToCarve: carve,
+    } = await import('../src/index.js')
+
+    const src = '::: note\n'.repeat(MAX_NESTING_DEPTH) + 'body\n'
+    for (const [target, render] of Object.entries({ html, md, plain, ansi, carve })) {
+      expect(render(src), `${target} dropped the innermost content`).toContain('body')
+    }
+  })
+})

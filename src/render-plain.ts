@@ -1,10 +1,22 @@
+import { MAX_NESTING_DEPTH } from './parse.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 
 export interface PlainTextRenderOptions {}
 
-const MAX_RENDER_DEPTH = 200
+/**
+ * The renderer's recursion bound, and it must sit ABOVE the parser's.
+ *
+ * The guard is for hand-built ASTs, which nest without limit. It is not a
+ * language rule, and the parser's own number made it one: a document nested at
+ * exactly `MAX_NESTING_DEPTH` parses fine, and this renderer then emitted
+ * nothing for its innermost blocks, so the same document kept its content in
+ * HTML and lost it here (issue 517). Same reasoning as `MAX_AST_JSON_DEPTH` in
+ * ast-json.ts, which is above the parser cap because the two counts measure
+ * different things.
+ */
+const MAX_RENDER_DEPTH = MAX_NESTING_DEPTH + 32
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {}): string {
