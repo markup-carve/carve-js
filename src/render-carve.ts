@@ -286,7 +286,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
         ctx.colonFenceDepth--
         ctx.lineBlockDepth--
       }
-      return withAttrs(fence + ' |\n' + lineBlockIndent(body) + '\n' + fence)
+      return withAttrs(fence + ' |\n' + lineBlockLayoutWhitespace(body) + '\n' + fence)
     }
     case 'div': {
       // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
@@ -894,20 +894,27 @@ function alignMarker(align: TableCell['align']): string {
 }
 
 /**
- * Write a line block's leading indentation back as ordinary spaces.
+ * Write a line block's preserved whitespace back as ordinary spaces.
  *
- * The parser records that indentation as the U+E000 placeholder (the same
- * sentinel an escaped space uses, so the two never collide with a literal
- * nbsp). normalize() resolves every remaining U+E000 to a real nbsp, which is
- * right for an escaped space and wrong here: the source form of a line block's
- * indent is a plain space, and a real nbsp re-parses as literal text rather
- * than as indentation, so the text node came back different (issue 359).
+ * The parser records it as the U+E000 placeholder (the same sentinel an escaped
+ * space uses, so the two never collide with a literal nbsp). normalize()
+ * resolves every remaining U+E000 to a real nbsp, which is right for an escaped
+ * space and wrong here: the source form of a line block's layout is plain
+ * spaces, and a real nbsp re-parses as literal text rather than as layout, so
+ * the text node came back different (issue 359).
  *
- * Hand the run to the verbatim scheme instead, which restores plain spaces
+ * Hand those runs to the verbatim scheme instead, which restores plain spaces
  * after normalize() has run.
+ *
+ * The runs handed over are exactly the ones the parser reproduces from plain
+ * spaces: a LEADING run of any width, and a medial or trailing run of two or
+ * more. A lone medial sentinel can then only have come from an escaped space,
+ * so `a\ b` still round-trips as written. Two adjacent escaped spaces are the
+ * one case that changes form - `a\ \ b` is written back as `a  b` - because the
+ * two are the same document here: both parse to the same pair of sentinels.
  */
-function lineBlockIndent(body: string): string {
-  return body.replace(/^\ue000+/gm, (run) => '\ue001'.repeat(run.length))
+function lineBlockLayoutWhitespace(body: string): string {
+  return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => '\ue001'.repeat(run.length))
 }
 
 function normalize(text: string): string {
