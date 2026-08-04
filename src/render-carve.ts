@@ -1070,7 +1070,18 @@ function cleanEscapedText(node: Text): string {
 // the two renders differ by a FIGURE node rather than by a boolean, and that
 // difference the comparison already sees.
 const UNCONDITIONAL_ESCAPES = /[\\`"']/g
-const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
+const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=;"']/g
+// A colon is a candidate only where it can OPEN something: at the start of a
+// line, which is where `:: term`, `:  def` and a `:::` fence live. Mid-line it
+// is ordinary punctuation and escaping it is exactly the over-escaping PART 11
+// section 4 forbids - `\\^ Figure 1: moon` came out `\\^ Figure 1\\: moon`, where the
+// caret on that line is ALREADY escaped, so the line is a paragraph and nothing
+// downstream reads the colon (carve-js#614).
+//
+// Kept in the CONSERVATIVE form only, like every other candidate: the
+// round-trip check decides whether it is needed. Dropping it outright breaks
+// seven corpus round-trips whose text runs hold a line-initial `::`/`:::`.
+const LINE_INITIAL_COLON = /(^|\\n)(:+)/g
 
 // Which set the writer is escaping right now. renderCarve renders the document
 // minimally, checks that it re-parses to the same AST, and re-renders
@@ -1105,7 +1116,15 @@ function guardThematicBreakLines(body: string): string {
 
 function escapeText(text: string): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
-  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '').replace(escapes, '\\$&')
+  const out = text
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+    .replace(escapes, '\\$&')
+  if (escapeMode === 'minimal') return out
+  // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
+  // single character: `:::` needs only its first colon neutralized to stop
+  // being a fence, and escaping each one would be the same over-escaping in a
+  // different place.
+  return out.replace(LINE_INITIAL_COLON, (_m, lead: string, colons: string) => `${lead}\\${colons}`)
 }
 
 function escapePlainLine(text: string): string {

@@ -43,6 +43,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer escapes a colon only where one can open something**
+  (PART 11 §4, carve-js#614). A colon opens a construct at the START of a line -
+  `:: term`, `:  def`, a `:::` fence - and is ordinary punctuation anywhere
+  else, so escaping every colon in a text run is the over-escaping §4 forbids.
+  `\^ Figure 1: moon` was written `\^ Figure 1\: moon`, where the caret on
+  that line is already escaped, the line is therefore a paragraph, and nothing
+  downstream reads the colon. carve-rs already wrote the minimal form.
+
+  Dropping the colon from the candidate set outright is NOT the fix: seven
+  corpus round-trips hold a line-initial `::` or `:::` inside a text run and
+  need it. The escape now applies to a line-initial colon RUN, once - `:::`
+  needs only its first colon neutralized to stop being a fence.
+
 - **A definition only opens AT its content column** (carve-js#613). A
   definition-shaped line indented PAST a list item's content column rendered as
   item text - correctly - and was collected anyway, so the same line was both
