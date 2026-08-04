@@ -178,6 +178,12 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
       return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
     case 'abbreviation_def':
+      // PART 10 §10a: a definition NOTHING references still reaches this
+      // target. HTML drops it because it has nowhere to put one; Markdown,
+      // plain text and the terminal do not get to drop content the author
+      // wrote, and dropping it made the output depend on whether a reference
+      // exists elsewhere in the document (carve#589).
+      return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
     case 'comment':
       return ''
     default: {

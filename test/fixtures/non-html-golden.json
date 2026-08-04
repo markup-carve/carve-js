@@ -140,8 +140,8 @@
     "footnote": {
         "carve": "Text[^a] here.\n\n[^a]: the note.\n",
         "markdown": "Text[^a] here.\n\n[^a]: the note.\n",
-        "plain": "Text[a] here.\n\n[a]: the note.\n",
-        "ansi": "Text\u001b[36m\u001b[1m[a]\u001b[0m here.\n\n\u001b[36m\u001b[2m[a]\u001b[0m the note.\n"
+        "plain": "Text[a] here.\n\n[^a]: the note.\n",
+        "ansi": "Text\u001b[36m\u001b[1m[a]\u001b[0m here.\n\n\u001b[36m\u001b[2m[^a]\u001b[0m the note.\n"
     },
     "inline-footnote": {
         "carve": "Text^[an aside] here.\n",
