@@ -397,7 +397,7 @@ function renderList(node: List, ctx: CarveContext): string {
       node.olType === undefined &&
       (node.start ?? 1) === 1
     node.items.forEach((item, idx) => {
-      const indent = '  '.repeat(ctx.listDepth - 1)
+      const indent = ''
       let prefix: string
       if (node.ordered) {
         prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
@@ -414,9 +414,6 @@ function renderList(node: List, ctx: CarveContext): string {
           : `${bullet}${itemAttrs}${item.checked !== undefined ? ` [${item.checked ? 'x' : ' '}] ` : ' '}`
       }
       let content = trimNonNbsp(renderListItem(item, ctx, node.tight))
-      if (item.children.length === 1 && item.children[0]?.type === 'list') {
-        content = content.replace(/^  /gm, '')
-      }
       const lines = content ? content.split('\n') : ['']
       const first = lines.shift() ?? ''
       out += `${indent}${prefix}${first || '+'}\n`
