@@ -1039,6 +1039,11 @@ function stripContainerPrefixes(raw: string): string {
  * are conventionally blank-line-separated; the jammed-in form is
  * pathological and intentionally not special-cased.
  */
+// The list marker the definition pre-pass tracks content columns with. Applied
+// REPEATEDLY along a line, so `- - a` contributes both of its columns.
+const RE_PREPASS_MARKER =
+  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +/
+
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number; contentCol: number; quoted: boolean } | null = null
   // A LINE BLOCK is verse: a definition written inside one is text the author
@@ -1086,9 +1091,7 @@ function collectLinkDefs(lexer: Lexer) {
       // bullets are `-`/`*` (not `+`, the continuation marker); ordered markers
       // cover every dialect the parser accepts (decimal, roman, single-letter);
       // an optional abutting `{…}` attribute block is part of the marker width
-      const marker = raw.match(
-        /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +/,
-      )
+      const marker = raw.match(RE_PREPASS_MARKER)
       const indent = raw.length - raw.replace(/^[ \t]+/, '').length
       // Test the RAW line for a block starter: a blockquote `>` is stripped by
       // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
@@ -1100,8 +1103,23 @@ function collectLinkDefs(lexer: Lexer) {
         /^(`{3,}|~{3,})/.test(rawTrimmed) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
       if (marker && /\S/.test(raw.slice(marker[0].length))) {
-        while (listCols.length && listCols[listCols.length - 1]! > marker[1]!.length) listCols.pop()
-        listCols.push(marker[0].length)
+        // Every marker on the line, not just the first: `- - see` opens TWO
+        // items and its content column is 4, not 2. Tracking only the first
+        // understated the column, and a definition written at the real one
+        // then read as "past the column" (carve-js#613's guard) or as a fence
+        // at the wrong base. Each marker pops the stack against its own indent
+        // and pushes its cumulative content column.
+        let rest = raw
+        let base = 0
+        for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
+          while (listCols.length && listCols[listCols.length - 1]! > base + m2[1]!.length) {
+            listCols.pop()
+          }
+          base += m2[0].length
+          listCols.push(base)
+          rest = rest.slice(m2[0].length)
+          m2 = rest.match(RE_PREPASS_MARKER)
+        }
       } else if (raw.trim() !== '' && (wasPrevBlank || startsBlock)) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
@@ -1220,12 +1238,20 @@ function collectLinkDefs(lexer: Lexer) {
     // stripping the marker leaves indent 0 against a content column of 2, so
     // comparing the STRIPPED indent would reject the one shape that is at its
     // content column by construction.
-    const belowContentColumn =
-      contentCol > 0 && kept === raw && leadingWhitespace(raw) < contentCol
+    //
+    // The comparison is EXACT, not "at least". A def PAST the column is item
+    // content: the block parser dedents it into the item and the residual
+    // indent makes it literal text there, so the line renders - and a line that
+    // renders was not taken as a definition. Collecting it anyway is the
+    // contradiction carve-js#613 reports: the reader sees `[r]: /u` as prose
+    // while a reference elsewhere silently resolves through it. `<` caught only
+    // the below-column half of the same rule.
+    const notAtContentColumn =
+      kept === raw && !inFootnoteBody && leadingWhitespace(raw) !== contentCol
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
     const [defLine, defAttrText] = splitTrailingAttrBlock(line)
-    const m = topLevelIndentedDef || belowContentColumn ? null : RE_LINK_DEF.exec(defLine)
+    const m = topLevelIndentedDef || notAtContentColumn ? null : RE_LINK_DEF.exec(defLine)
     if (m) {
       const def: LinkDef = { href: m[2]! }
       const title = m[3] ?? m[4]
