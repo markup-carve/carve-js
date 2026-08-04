@@ -160,7 +160,7 @@ describe('resolveHeadingIds', () => {
 
     expect(elapsed).toBeLessThan(1000)
     expect(para.type).toBe('paragraph')
-    expect(para.children[0]?.type).toBe('link')
+    expect(para.children[0]?.type).toBe('heading_ref')
     expect(para.children[0]?.href).toBe('#target')
   })
 

@@ -595,8 +595,22 @@ export interface AutoLink extends BaseNode {
 
 export interface CrossRef extends BaseNode {
   type: 'heading_ref'
-  /** Raw id between `</#` and `>`. */
+  /** Raw id between `</#` and `>`, as the author spelled it. */
   target: string
+  /**
+   * The resolved destination (`#` + the heading's id), present only where the
+   * crossref resolved. PART 12 §3a: the resolution is published BESIDE the
+   * authored construct, not in place of it - ids resolve case-insensitively,
+   * so `href` alone cannot say which spelling the author wrote.
+   */
+  href?: string
+  /**
+   * The target heading's inline content, for the renderers to emit as the
+   * link's text. NOT serialized (§3a: the display text stays out of the node,
+   * because the heading is in the same document and copying its content into
+   * every reference is unbounded). `toAstJson` strips it.
+   */
+  resolvedText?: InlineNode[]
 }
 
 /**

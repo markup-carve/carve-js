@@ -131,6 +131,16 @@ function definitionListsToWire<T>(node: T): T {
     if (mapped !== target) out = { ...(out ?? record), target: mapped }
   }
 
+  // A resolved crossref carries the target heading's inline content for the
+  // renderers, and PART 12 §3a keeps it OFF the wire: the heading is in the
+  // same document, so a consumer reads the text from there rather than from a
+  // copy in every reference. `target` and `href` - the authored construct and
+  // its resolution - are what the node publishes.
+  if ((out ?? record)['type'] === 'heading_ref' && (out ?? record)['resolvedText'] !== undefined) {
+    const { resolvedText: _resolvedText, ...rest } = out ?? record
+    out = rest
+  }
+
   return (out ?? record) as T
 }
 

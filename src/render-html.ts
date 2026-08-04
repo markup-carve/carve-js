@@ -539,6 +539,16 @@ function collectFootnotes(ast: Document): FootnoteState {
  * selector). Indentation follows Carve's house style.
  */
 function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOptions): string {
+  // The endnotes render outside every anchor, whatever the reference sites
+  // were inside, so a crossref in a note body is a real link again.
+  return outsideLink(() => renderFootnoteSectionInner(ast, st, opts))
+}
+
+function renderFootnoteSectionInner(
+  ast: Document,
+  st: FootnoteState,
+  opts: RenderOptions,
+): string {
   const defs = ast.footnoteDefs ?? {}
   const lines: string[] = ['<section role="doc-endnotes">', `${indent(1)}<hr>`, `${indent(1)}<ol>`]
   st.order.forEach((entry, idx) => {
@@ -1301,6 +1311,35 @@ function renderImage(img: Image, opts: RenderOptions): string {
 // Inline rendering
 // ============================================================================
 
+/**
+ * Is the renderer inside a link's text right now?
+ *
+ * Module-scoped rather than threaded through every signature: rendering is
+ * synchronous and single-threaded, and the only reader is the crossref arm.
+ * A footnote body renders outside any anchor, so the flag is cleared for it.
+ */
+let insideLink = false
+
+function withinLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = true
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
+function outsideLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = false
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
 function renderInlines(nodes: InlineNode[], opts: RenderOptions): string {
   return nodes.map((n) => renderInline(n, opts)).join('')
 }
@@ -1351,7 +1390,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       const href = escapeAttr(sanitizeUrl(node.href, opts))
       // The sanitized structural href wins; never re-emit an author-supplied
       // `href` from an attribute block, which would bypass sanitization.
-      return `<a href="${href}"${titleAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${renderInlines(node.children, opts)}</a>`
+      const label = withinLink(() => renderInlines(node.children, opts))
+      return `<a href="${href}"${titleAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
     }
     case 'image':
       return renderImage(node, opts)
@@ -1500,6 +1540,19 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'critic_comment':
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'heading_ref':
+      // Inside a link's text an anchor may not nest (CommonMark), and the node
+      // is still in the tree because PART 12 §3a keeps it there - so the
+      // suppression is here, at the point of rendering, rather than by
+      // dropping the node during resolution.
+      if (node.href && insideLink) return renderInlines(node.resolvedText ?? [], opts)
+      // Resolved: the anchor this crossref always rendered as. The node keeps
+      // the authored `target` (PART 12 §3a) and carries the destination in
+      // `href`, so the rendering is unchanged - only the tree moved.
+      if (node.href) {
+        const crossrefHref = escapeAttr(sanitizeUrl(node.href, opts))
+        return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${renderInlines(node.resolvedText ?? [], opts)}</a>`
+      }
+      // Unresolved: literal source, the same as an unresolved reference link.
       return `&lt;/#${escapeHtml(node.target)}&gt;`
     case 'caption_number':
       // Filled by resolve(); an unresolved placeholder renders empty.

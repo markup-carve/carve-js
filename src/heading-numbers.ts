@@ -1,4 +1,4 @@
-import type { BlockNode, Document, Heading, Link, Span, Text } from './ast.js'
+import type { BlockNode, CrossRef, Document, Heading, Span, Text } from './ast.js'
 import type { CarveExtension } from './extension.js'
 import { inlineText } from './heading-ids.js'
 
@@ -77,20 +77,24 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
         h.children = [span, { type: 'text', value: ' ' } as Text, ...h.children]
       })
 
-      // Pass 2: rewrite auto-filled cross-references. Only links resolve()
-      // tagged as `</#id>` crossrefs are touched (via the non-rendered
-      // `fromCrossref` flag), so ordinary `[text](#id)` links and implicit
-      // `[label][]` references keep their text. Skipped for `crossref: 'title'`.
+      // Pass 2: rewrite auto-filled cross-references. Only `</#id>` crossrefs
+      // are touched - they are their own node type (PART 12 §3a), so ordinary
+      // `[text](#id)` links and implicit `[label][]` references keep their text
+      // without needing a flag to tell them apart. Skipped for
+      // `crossref: 'title'`.
       if (crossref !== 'title')
-        walkLinks(doc, (link) => {
-          if (!link.fromCrossref || !link.href.startsWith('#')) return
-          const entry = byId.get(link.href.slice(1))
+        walkCrossrefs(doc, (ref) => {
+          if (!ref.href?.startsWith('#')) return
+          const entry = byId.get(ref.href.slice(1))
           if (!entry) return // crossref to an unnumbered heading: leave the title
           const text =
             crossref === 'number'
               ? `${label} ${entry.number}`
               : `${label} ${entry.number} - ${entry.title}`
-          link.children = [{ type: 'text', value: text } as Text]
+          // The DISPLAY text, not the authored `target`: what the reference
+          // renders as is a rendering decision, and `target` records what the
+          // author wrote.
+          ref.resolvedText = [{ type: 'text', value: text } as Text]
         })
 
       return doc
@@ -149,15 +153,15 @@ function walkHeadings(
   }
 }
 
-/** Depth-first visit of every `link` node anywhere in the tree. Generic field
- *  walk; skips `pos` metadata. */
-function walkLinks(node: unknown, fn: (l: Link) => void): void {
+/** Depth-first visit of every `heading_ref` node anywhere in the tree. Generic
+ *  field walk; skips `pos` metadata. */
+function walkCrossrefs(node: unknown, fn: (r: CrossRef) => void): void {
   if (!node || typeof node !== 'object') return
-  if ((node as { type?: string }).type === 'link') fn(node as Link)
+  if ((node as { type?: string }).type === 'heading_ref') fn(node as CrossRef)
   for (const key of Object.keys(node as Record<string, unknown>)) {
     if (key === 'pos') continue
     const v = (node as Record<string, unknown>)[key]
-    if (Array.isArray(v)) for (const el of v) walkLinks(el, fn)
-    else if (v && typeof v === 'object') walkLinks(v, fn)
+    if (Array.isArray(v)) for (const el of v) walkCrossrefs(el, fn)
+    else if (v && typeof v === 'object') walkCrossrefs(v, fn)
   }
 }
