@@ -61,10 +61,17 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   })
   walkBlocks(allBlocks, (_node, inlines) => {
     if (!inlines) return
-    walkInlines(inlines, (node) => {
+    walkInlines(inlines, (node, insideLink) => {
       // A crossref is its own node type (PART 12 §3a), so a scan that only
       // looked at links stopped seeing `</#id>` references - and the heading
       // lost the `{#id}` anchor its own reference still pointed at.
+      //
+      // A crossref INSIDE a link renders as its display text, not as a link
+      // (anchors do not nest), so it is not a reference in the output and must
+      // not pull an anchor onto the heading. Counting it left `# H {#H}` in a
+      // document whose only `</#H>` had rendered as the word `H` - a dangling
+      // anchor, which is the same defect carve#352 fixed from the other side.
+      if (insideLink) return
       const href = node.type === 'link' || node.type === 'heading_ref' ? node.href : undefined
       if (href === undefined) return
       const id = fragmentId(href)
@@ -796,12 +803,13 @@ function walkBlocks(
 
 function walkInlines(
   nodes: InlineNode[],
-  visit: (node: InlineNode) => void,
+  visit: (node: InlineNode, insideLink: boolean) => void,
   depth = 0,
+  insideLink = false,
 ): void {
   if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   for (const node of nodes) {
-    visit(node)
+    visit(node, insideLink)
     switch (node.type) {
       case 'emphasis':
       case 'strong':
@@ -814,14 +822,17 @@ function walkInlines(
       case 'span':
       case 'insert':
       case 'delete':
-        walkInlines(node.children, visit, depth + 1)
+        // A link's own label is inside a link; everything else inherits.
+        walkInlines(node.children, visit, depth + 1, insideLink || node.type === 'link')
         break
       case 'inline_extension':
-        walkInlines(node.content, visit, depth + 1)
+        walkInlines(node.content, visit, depth + 1, insideLink)
         break
       case 'footnote_ref':
-    case 'inline_footnote':
-        if (node.inline) walkInlines(node.inline, visit, depth + 1)
+      case 'inline_footnote':
+        // A note body renders in the endnotes, outside any anchor, so a
+        // reference in it IS a reference in the output.
+        if (node.inline) walkInlines(node.inline, visit, depth + 1, false)
         break
       default:
         break
