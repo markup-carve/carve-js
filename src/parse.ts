@@ -3062,7 +3062,17 @@ function isInvisibleLine(line: string): boolean {
   // `RE_COMMENT_LINE` matches a `%%%` opener too, so exclude the block form
   // explicitly - skipping it lands the scan on the block's BODY.
   if (RE_COMMENT_BLOCK.test(l)) return false
-  return RE_COMMENT_LINE.test(l) || RE_LINK_DEF.test(l) || RE_FOOTNOTE_DEF.test(l)
+  if (RE_COMMENT_LINE.test(l) || RE_LINK_DEF.test(l) || RE_FOOTNOTE_DEF.test(l)) return true
+
+  // A bare attribute line renders nothing either, but unlike the others it is
+  // COLUMN-STRICT (§15): it opens only AT its container's content column, and
+  // one column further in it is literal paragraph text that really does render
+  // `<p>{.c}</p>`. These lines arrive dedented to that column, so the test is
+  // column 0 - without it the exemption would swallow a visible paragraph.
+  //
+  // `extractItemAttr` would not do here: it needs a MARKER before the braces,
+  // so it never matches a standalone `{.c}` - a check that could not fire.
+  return indentColumns(line) === 0 && isBlockAttributeLine(l)
 }
 
 function lineOpensBlock(line: string): boolean {
@@ -3684,7 +3694,12 @@ function parseList(lexer: Lexer): List {
     for (let k = nested.length - 1; k >= 0; k--) {
       const ln = nested[k]!
       if (isBlankLine(ln)) {
-        blankBeforeInvisible = k < nested.length - 1
+        // A `+`-injected separator is not a blank line the author wrote, and
+        // never loosens - the same exemption the second-paragraph scan below
+        // makes for it. Without this the item went loose through the back door:
+        // `- a` / `+` / `%% note` / `- b` came out loose where the identical
+        // document without the comment is tight.
+        blankBeforeInvisible = k < nested.length - 1 && !plusSeparators.has(k)
         break
       }
       if (!isInvisibleLine(ln)) break

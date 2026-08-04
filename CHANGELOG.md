@@ -43,6 +43,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The invisible-line looseness rule stops at two boundaries it was crossing**
+  (PART 9 §17 L1, markup-carve/carve#621, follows #619). Both were measured
+  against carve-php, which agrees on both.
+
+  A `+`-injected separator is not a blank line the author wrote. The
+  second-paragraph scan had always exempted it, but the sibling clause did not,
+  so `- a` / `+` / `%% note` / `- b` went loose where the identical document
+  without the comment is tight - the comment was changing an answer it has no
+  say in.
+
+  A bare `{.c}` attribute line renders nothing, so it belongs in the invisible
+  set; it was missing, and an item holding one came back wrapped in `<p>`.
+  Unlike a comment it is COLUMN-STRICT (§15): one column past its container's
+  content column it is literal paragraph text that really does render
+  `<p>{.c}</p>`, so it is a visible second paragraph and still loosens. Only
+  that arm carries the column test.
+
 - **The canonical writer escapes a colon only where one can open something**
   (PART 11 §4, carve-js#614). A colon opens a construct at the START of a line -
   `:: term`, `:  def`, a `:::` fence - and is ordinary punctuation anywhere
