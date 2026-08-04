@@ -1096,6 +1096,13 @@ function collectLinkDefs(lexer: Lexer) {
   // back at column 0 (a new top-level block) leaves it; blank/indented lines
   // stay inside.
   let inFootnoteBody = false
+  // A lone `+` at column 0 ATTACHES the following flush-left block to the item
+  // above it (PART 9 §17 L3/L4), so that block is item content written at
+  // column 0. The column stack still holds the item's own content column, so a
+  // definition in the attached block looked below-column and was skipped -
+  // while the item collector took the line, leaving it rendered nowhere AND
+  // defining nothing (carve#665). carve-php and carve-rs both collect it.
+  let plusAttached = false
   for (let idx = 0; idx < lexer.lines.length; idx++) {
     // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
     // none, including an unclosed opener that is NOT frontmatter), so a
@@ -1319,10 +1326,14 @@ function collectLinkDefs(lexer: Lexer) {
     // nobody - the author's line vanished and a reference to it stayed literal,
     // which is the "neither visible nor active" outcome carve#624 named
     // (carve-js#643). The FOOTNOTE prepass here already reads it this way.
+    if (raw.trim() === '+') plusAttached = true
+    else if (raw.trim() === '') plusAttached = false
     const rawIndent = leadingWhitespace(unquoted)
-    const atAnOpenContentColumn = listCols.length
-      ? listCols.includes(rawIndent)
-      : rawIndent === contentCol
+    const atAnOpenContentColumn = plusAttached
+      ? rawIndent === 0
+      : listCols.length
+        ? listCols.includes(rawIndent)
+        : rawIndent === contentCol
     // Compared against the QUOTE-STRIPPED view, not the raw line. `kept` has
     // both the quote prefix and any list marker removed, so `kept === raw` was
     // really asking "does this line carry a marker of its own?" - the exemption
