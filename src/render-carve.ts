@@ -37,7 +37,34 @@ export interface CarveRenderOptions {}
  * same reason: the two counts measure different things, so one cannot be the
  * bound for the other.
  */
-const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
+/**
+ * Whitespace that is NOT a non-breaking space. Applied one character at a
+ * time by the trim helpers below, deliberately: the equivalent anchored
+ * pattern `/[^\S\u00a0]+$/` is quadratic on its input, because the engine
+ * retries the run from every start position before it can fail. The writer
+ * trims whole rendered subtrees, whose length grows with nesting depth, so
+ * that cost compounded per level - `fmt` on an 80-level list took 88 seconds
+ * here against 0.24 in carve-php and 0.009 in carve-rs, all of it inside
+ * these two patterns (carve-js#638). A scan from the end is linear in the
+ * run it removes.
+ */
+const WS_NON_NBSP_RE = /[^\S\u00a0]/
+
+function isWsNonNbsp(ch: string): boolean {
+  return WS_NON_NBSP_RE.test(ch)
+}
+
+function trimEndNonNbsp(text: string): string {
+  let end = text.length
+  while (end > 0 && isWsNonNbsp(text[end - 1]!)) end--
+  return end === text.length ? text : text.slice(0, end)
+}
+
+function trimStartNonNbsp(text: string): string {
+  let start = 0
+  while (start < text.length && isWsNonNbsp(text[start]!)) start++
+  return start === 0 ? text : text.slice(start)
+}
 
 interface CarveContext {
   blockDepth: number
@@ -977,7 +1004,7 @@ function normalize(text: string): string {
     // break, so nothing caught it.
     const next = lines[i + 1]
     const endsBlock = next === undefined || next.trim() === ''
-    return endsBlock ? line.replace(/[^\S\u00a0]+$/g, '') : line
+    return endsBlock ? trimEndNonNbsp(line) : line
   })
   const cleaned = trimNonNbspKeepingGuard(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
   return `${restoreVerbatim(cleaned)}\n`
@@ -1015,7 +1042,7 @@ function restoreVerbatim(text: string): string {
 }
 
 function trimNonNbsp(text: string): string {
-  return text.replace(TRIM_NON_NBSP_RE, '')
+  return trimEndNonNbsp(trimStartNonNbsp(text))
 }
 
 /**
@@ -1034,13 +1061,9 @@ function trimNonNbsp(text: string): string {
  */
 function trimNonNbspKeepingGuard(text: string): string {
   if (/^[^\S\u00a0]+-{3,}[ \t]*(\n|$)/.test(text)) {
-    return text.replace(/[^\S\u00a0]+$/, '')
+    return trimEndNonNbsp(text)
   }
   return trimNonNbsp(text)
-}
-
-function trimEndNonNbsp(text: string): string {
-  return text.replace(/[^\S\u00a0]+$/g, '')
 }
 
 function cleanEscapedText(node: Text): string {
