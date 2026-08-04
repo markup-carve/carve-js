@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, parse, renderCarve } from '../src/index.js'
 
 describe('trailing line comments', () => {
   it('strips a trailing comment, keeps the visible prefix', () => {
@@ -170,5 +170,38 @@ describe('an indented comment fence', () => {
     expect(carveToHtml('- a\n %%%% n\n x\n   %%%%\n tail\n')).toBe(
       '<ul>\n  <li>a\n    tail\n  </li>\n</ul>',
     )
+  })
+})
+
+describe('a comment body is indented relative to its fence', () => {
+  // A code fence's body is measured from its opener, and a comment fence is no
+  // different: an opener at column 1 makes a body line at column 1 flush. This
+  // engine kept the absolute text, so the same document parsed to a different
+  // comment content here than in carve-rs and carve-php, and `carve fmt` wrote
+  // the body one column further in each time it ran (carve#653).
+  it('drops the fence indent from a below-column body in a list item', () => {
+    const ast = parse('- a\n %%% n\n x\n %%%\n tail\n')
+    const comments: string[] = []
+    const walk = (n: any): void => {
+      if (n.type === 'comment') comments.push(n.content)
+      for (const c of [...(n.children ?? []), ...(n.items ?? [])]) walk(c)
+    }
+    walk(ast)
+
+    expect(comments).toEqual(['n\nx'])
+  })
+
+  it('keeps indentation the body has BEYOND the fence', () => {
+    const ast = parse('%%%\n  x\n%%%\n')
+
+    expect((ast.children[0] as any).content).toBe('  x')
+  })
+
+  it('round-trips a below-column body without moving it', () => {
+    const src = '- a\n %%% n\n x\n %%%\n tail\n'
+    const once = renderCarve(parse(src))
+
+    expect(once).toBe('- a\n  %%%\n  n\n  x\n  %%%\n  tail\n')
+    expect(renderCarve(parse(once))).toBe(once)
   })
 })
