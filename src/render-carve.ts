@@ -48,6 +48,11 @@ interface CarveContext {
   lineBlockDepth: number
   /** Number of colon-fence containers enclosing the block currently rendering. */
   colonFenceDepth: number
+  /**
+   * Inside a table cell, where a leading `^` cannot open a caption: a caption
+   * marker is a BLOCK line, and a cell's content is not one.
+   */
+  tableCellDepth: number
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -58,12 +63,34 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   const minimal = renderWithEscapes(ast, 'minimal')
   const conservative = renderWithEscapes(ast, 'conservative')
   if (minimal === conservative) return minimal
-  return escapingIsRedundant(minimal, conservative) ? minimal : conservative
+  if (escapingIsRedundant(minimal, conservative)) return minimal
+  // The minimal form changed the parse, and the usual answer is to escape
+  // EVERY candidate in the document. That is a heavy instrument: one dangerous
+  // character escalates characters that were never at risk, which is how
+  // `\^ Figure 1: moon` became `\^ Figure 1\: moon` - a colon escape that
+  // changes no parse in any engine (carve-js#614).
+  //
+  // So try one step in between: minimal, plus the escapes for caption markers,
+  // which is the construct a line-initial `^ ` forms. If that reproduces the
+  // conservative parse, it is the least escaping that preserves meaning, which
+  // is what PART 11 §4 asks for. Where the caret is NOT the problem this
+  // renders identically to minimal and the check falls through.
+  const withCaptionEscapes = renderWithEscapes(ast, 'minimal', true)
+  if (withCaptionEscapes !== minimal && escapingIsRedundant(withCaptionEscapes, conservative)) {
+    return withCaptionEscapes
+  }
+  return conservative
 }
 
-function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
+function renderWithEscapes(
+  ast: Document,
+  mode: 'minimal' | 'conservative',
+  captionMarkers = false,
+): string {
   const previous = escapeMode
+  const previousCaptions = forceCaptionEscapes
   escapeMode = mode
+  forceCaptionEscapes = captionMarkers
   try {
     const ctx: CarveContext = {
       blockDepth: 0,
@@ -71,6 +98,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
       listDepth: 0,
       lineBlockDepth: 0,
       colonFenceDepth: 0,
+      tableCellDepth: 0,
     }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
@@ -81,6 +109,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
     return normalize(parts.join('\n\n'))
   } finally {
     escapeMode = previous
+    forceCaptionEscapes = previousCaptions
   }
 }
 
@@ -599,7 +628,10 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   if (cell.span === 'rowspan') return { text: `${attrs}^`, tight: true }
   if (cell.span === 'colspan') return { text: `${attrs}<`, tight: true }
   const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${alignMarker(cell.align)}`
-  return { text: `${prefix}${renderInlines(cell.children, ctx)}`, tight: prefix !== '' }
+  ctx.tableCellDepth++
+  const content = renderInlines(cell.children, ctx)
+  ctx.tableCellDepth--
+  return { text: `${prefix}${content}`, tight: prefix !== '' }
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {
@@ -646,7 +678,12 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
   const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
   switch (node.type) {
     case 'text':
-      return escapeText(cleanEscapedText(node))
+      // Does this node's first character sit at the start of a block line?
+      // Only there can a `^ ` be read back as a caption marker.
+      return escapeText(
+        cleanEscapedText(node),
+        (prevChar === '' || prevChar === '\n') && ctx.tableCellDepth === 0,
+      )
     case 'escaped_text':
       // The author escaped this character; the writer says so again. No
       // minimal/conservative decision applies - the node IS the decision.
@@ -708,7 +745,7 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
     case 'inline_extension':
       return withAttrs(`:${escapeIdentifier(node.name)}[${renderInlines(node.content, ctx)}]`)
     case 'abbreviation':
-      return escapeText(node.abbr)
+      return escapeText(node.abbr, false)
     case 'footnote_ref':
     case 'inline_footnote':
       return withAttrs(node.inline
@@ -1076,6 +1113,8 @@ const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 // minimally, checks that it re-parses to the same AST, and re-renders
 // conservatively only when it does not (PART 11 section 4).
 let escapeMode: 'minimal' | 'conservative' = 'conservative'
+/** Whether the current render forces caption-marker escapes - see renderCarve. */
+let forceCaptionEscapes = false
 
 /**
  * Protect a paragraph line that would re-parse as a thematic break.
@@ -1103,9 +1142,35 @@ function guardThematicBreakLines(body: string): string {
     .join('\n')
 }
 
-function escapeText(text: string): string {
+function escapeText(text: string, opensBlockLine = false): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
-  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '').replace(escapes, '\\$&')
+  const stripped = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+  const escaped = stripped.replace(escapes, '\\$&')
+  return forceCaptionEscapes ? forceCaptionMarkerEscape(escaped, opensBlockLine) : escaped
+}
+
+/**
+ * A `^` followed by a space at the start of a block line is a caption marker,
+ * so its escape is load-bearing in BOTH modes.
+ *
+ * Leaving it to the minimal/conservative vote does not work, because that vote
+ * is per DOCUMENT: rendered bare in the minimal pass the marker becomes a
+ * caption, the two passes differ, and the whole document escalates to the
+ * conservative form - which then escapes every candidate in it, including
+ * characters that needed nothing. That is what produced `\^ Figure 1\: moon`
+ * for corpus `158-indented-image-and-caption-stay-literal`, where the colon
+ * escape changes no parse in any engine (carve-js#614).
+ *
+ * `^sup^` is NOT this shape - superscript is braced-only, and a caption needs
+ * the space - so it is left to the vote and comes out bare.
+ */
+function forceCaptionMarkerEscape(text: string, opensBlockLine: boolean): string {
+  return text
+    .split('\n')
+    .map((line, index) =>
+      (index > 0 || opensBlockLine) && /^\^[ \t]/.test(line) ? `\\${line}` : line,
+    )
+    .join('\n')
 }
 
 function escapePlainLine(text: string): string {
