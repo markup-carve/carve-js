@@ -173,7 +173,11 @@ function collectUnresolvedRefLinks(
 ): Array<{ ref: string; rawRef: string; node: Positioned }> {
   const found: Array<{ ref: string; rawRef: string; node: Positioned }> = []
   walkDocument(doc, (node) => {
+    // UNRESOLVED means no destination. PART 12 §3a keeps `ref` and `rawRef` on
+    // a RESOLVED reference too, so a ref alone no longer answers this
+    // (carve#596) - flagging on it reported every working reference link.
     if (node.type !== 'link' || typeof node.ref !== 'string') return
+    if (typeof node.href === 'string' && node.href !== '') return
     found.push({
       ref: node.ref,
       rawRef: typeof node.rawRef === 'string' ? node.rawRef : `[${node.ref}]`,

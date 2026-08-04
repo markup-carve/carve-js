@@ -29,6 +29,16 @@ import { TRANSLIT_MAP } from './translit-map.js'
  * case-sensitive in normalizeRefLabel). `[getting started][]` should still
  * resolve `# Getting Started`, so heading-text matching folds case here.
  */
+/**
+ * An image the document never resolved: it carries a reference and no source.
+ *
+ * PART 12 §3a keeps `ref` and `rawRef` on a RESOLVED reference as well, so the
+ * presence of a ref stopped answering this on its own (carve#596).
+ */
+function isUnresolvedImage(image: Image): boolean {
+  return image.ref !== undefined && !image.src
+}
+
 function normalizeHeadingRefLabel(label: string): string {
   return normalizeRefLabel(label).toLowerCase()
 }
@@ -383,16 +393,21 @@ export function resolveHeadingIds(
   const resolveRefs = (nodes: InlineNode[]): void => {
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]!
-      if (n.type === 'link' && n.ref !== undefined) {
+      // A link that ALREADY has a destination was resolved by an explicit
+      // `[label]: url` definition, and an explicit definition wins over the
+      // implicit heading index. It used to be told apart by `ref` being gone;
+      // PART 12 §3a keeps `ref` on a resolved reference, so the test is the
+      // destination itself (carve#596).
+      if (n.type === 'link' && n.ref !== undefined && !n.href) {
         // No explicit `[label]: url` def matched in applyLinkDefs.
         // Try the implicit-heading index; otherwise fall back to the
         // raw source text. Explicit defs win because applyLinkDefs
         // already resolved those before this pass.
         const id = headingRefs.get(normalizeHeadingRefLabel(n.ref))
         if (id) {
+          // PART 12 §3a - see the note in parse.ts: the authored `ref` and
+          // `rawRef` survive beside the resolved destination.
           n.href = `#${id}`
-          delete n.ref
-          delete n.rawRef
         }
         // An UNRESOLVED reference stays a `link` carrying `ref` and `rawRef`
         // (PART 12 §3a). It used to become a text node here, which lost the
@@ -762,7 +777,10 @@ export function resolveHeadingIds(
           // its children would print the LABEL where the author wrote the whole
           // `[x][missing]`, so nested-inside-a-link it becomes its raw source
           // instead (carve#486).
-          if (insideLink && n.ref !== undefined) {
+          // UNRESOLVED means no destination: §3a keeps `ref` on a resolved
+          // reference too, and a RESOLVED one nested in a link unwraps to its
+          // display text like any other nested link (carve#596).
+          if (insideLink && n.ref !== undefined && !n.href) {
             out.push({ type: 'text', value: n.rawRef ?? '' } as Text)
             break
           }
@@ -889,10 +907,12 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       b.children.length === 1 &&
       b.children[0]!.type === 'image' &&
       // Only a REAL image (direct or resolved reference) promotes; an
-      // unresolved reference image keeps its `ref` and renders as literal text
-      // (in HTML mode it is already a Text node here, so this only matters for
-      // the parse-only formatter path, where the unresolved Image survives).
-      !(b.children[0] as Image).ref
+      // unresolved reference image renders as literal text (in HTML mode it is
+      // already a Text node here, so this only matters for the parse-only
+      // formatter path, where the unresolved Image survives). UNRESOLVED means
+      // no destination: PART 12 §3a keeps `ref` on a resolved reference too
+      // (carve#596).
+      !isUnresolvedImage(b.children[0] as Image)
     ) {
       const img = b.children[0] as Image
       // A leading block-attribute line (`{#id}`) landed on the paragraph; carry
@@ -916,7 +936,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       b.children[0]!.type === 'image' &&
       // A REAL image only (see above): an unresolved reference is literal text,
       // not a figure target.
-      !(b.children[0] as Image).ref &&
+      !isUnresolvedImage(b.children[0] as Image) &&
       // Strict column-0 rule: an image+caption forms a <figure> ONLY when the
       // image begins at its container's content column. parseParagraph strips a
       // paragraph's leading indentation, so the AST text alone can't tell an

@@ -373,7 +373,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined) return escapeText(node.rawRef ?? '')
+      if (node.ref !== undefined && !node.href) return escapeText(node.rawRef ?? '')
       return renderLink(node, ctx)
     case 'image':
       return renderImage(node)
@@ -491,7 +491,10 @@ function renderLink(node: Link, ctx: MarkdownContext): string {
 function renderImage(node: Image): string {
   // An unresolved reference image writes back as its source, like the link
   // arm above; `![alt]()` would claim an image the document never had.
-  if (node.ref !== undefined) return escapeText(node.rawRef ?? '')
+  // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
+  // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
+  // no longer answers this question (carve#596).
+  if (node.ref !== undefined && !node.src) return escapeText(node.rawRef ?? '')
   const src = markdownDestination(node.src)
   const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined
