@@ -1104,6 +1104,13 @@ function collectLinkDefs(lexer: Lexer) {
     if (idx < lexer.pos) continue
     const raw = lexer.lines[idx]!
     const line = stripContainerPrefixes(raw)
+    // Content columns are measured INSIDE the block quote. `> - a` puts the
+    // item's content column at 2 of the quoted content, not of the raw line -
+    // which carries the `> ` and matches no marker, so the column stayed 0 and
+    // a definition at it was rejected as "indented at top level". The item
+    // consumed the line anyway, so it rendered nothing AND defined nothing
+    // (carve#658). The footnote prepass already reads the quoted line.
+    const unquoted = raw.replace(/^(?:[^\S\u00a0]*>(?: |$))+/, '')
     const wasPrevBlank = prevBlank
     prevBlank = raw.trim() === ''
     if (!fence) {
@@ -1114,8 +1121,8 @@ function collectLinkDefs(lexer: Lexer) {
       // bullets are `-`/`*` (not `+`, the continuation marker); ordered markers
       // cover every dialect the parser accepts (decimal, roman, single-letter);
       // an optional abutting `{…}` attribute block is part of the marker width
-      const marker = raw.match(RE_PREPASS_MARKER)
-      const indent = raw.length - raw.replace(/^[ \t]+/, '').length
+      const marker = unquoted.match(RE_PREPASS_MARKER)
+      const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
       // Test the RAW line for a block starter: a blockquote `>` is stripped by
       // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
       // interrupting a list item would not pop the stack.
@@ -1132,7 +1139,7 @@ function collectLinkDefs(lexer: Lexer) {
         // then read as "past the column" (carve-js#613's guard) or as a fence
         // at the wrong base. Each marker pops the stack against its own indent
         // and pushes its cumulative content column.
-        let rest = raw
+        let rest = unquoted
         let base = 0
         for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
           while (listCols.length && listCols[listCols.length - 1]! > base + m2[1]!.length) {
@@ -1294,7 +1301,7 @@ function collectLinkDefs(lexer: Lexer) {
     // nobody - the author's line vanished and a reference to it stayed literal,
     // which is the "neither visible nor active" outcome carve#624 named
     // (carve-js#643). The FOOTNOTE prepass here already reads it this way.
-    const rawIndent = leadingWhitespace(raw)
+    const rawIndent = leadingWhitespace(unquoted)
     const atAnOpenContentColumn = listCols.length
       ? listCols.includes(rawIndent)
       : rawIndent === contentCol
