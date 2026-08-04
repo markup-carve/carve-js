@@ -214,6 +214,8 @@ const IMPLEMENTED = new Set([
   'a-marker-separator-is-a-space-never-a-tab',
   'two-abbreviation-definitions',
   'openers-past-the-nesting-cap-are-one-paragraph',
+  'a-comment-is-recognized-at-any-column',
+  'a-definition-below-every-content-column-folds-as-text',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
