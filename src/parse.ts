@@ -1067,6 +1067,12 @@ function collectLinkDefs(lexer: Lexer) {
   // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
   // closed on its own width so a wider `:::: |` is not closed by a narrower run.
   let verse: number | null = null
+  // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
+  // written inside `%%%` registered and a reference elsewhere resolved against
+  // text the author commented out - invisible in the output AND active in the
+  // link table (carve-js#634). The footnote path already treats a comment as
+  // opaque; this one did not.
+  let commentFence: number | null = null
   // Div nesting depth, for the abbreviation branch below. A div is the one
   // container that adds NO per-line prefix, so `raw` alone cannot tell a
   // document-level definition from one written inside `:::`. Colon fences close
@@ -1152,6 +1158,23 @@ function collectLinkDefs(lexer: Lexer) {
       '',
     )
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
+    // A comment fence's closer is a leading `%` run of the SAME length;
+    // trailing text is allowed, so `%%% end` closes a `%%%` fence.
+    if (commentFence !== null) {
+      const close = RE_COMMENT_BLOCK_ANY.exec(line)
+      if (close && close[1]!.length === commentFence) commentFence = null
+      continue
+    }
+    {
+      const open = RE_COMMENT_BLOCK_ANY.exec(line)
+      // Only a fence that CLOSES opens the opaque region. An unterminated
+      // `%%%` degrades to a single-line comment, and treating it as open would
+      // suppress every definition in the rest of the document.
+      if (open && commentBlockHasCloser(lexer, open[1]!.length)) {
+        commentFence = open[1]!.length
+        continue
+      }
+    }
     if (verse !== null) {
       const close = line.trim().match(/^(:{3,})$/)
       if (close && close[1]!.length >= verse) verse = null
