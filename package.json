@@ -53,7 +53,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs"
+    "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
+    "drift": "node scripts/published-drift.mjs"
   },
   "devDependencies": {
     "@djot/djot": "^0.3.2",
