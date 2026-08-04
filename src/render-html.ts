@@ -141,7 +141,7 @@ export interface RenderOptions {
    * Escaping is unaffected, deliberately: that is a separate concern with its
    * own rationale (carve#357).
    */
-  smartTypography?: boolean
+  smartTypography?: 'glyph' | 'source' | boolean
   /**
    * Opt in to a strict ALLOWLIST instead of the default denylist: when set,
    * ONLY these schemes pass on `href`/`src` (case-insensitive); everything
@@ -1586,7 +1586,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'smart_punctuation':
       // With the switch off, emit what the author typed. The node carries the
       // source run in `value`, so this needs no parser cooperation (PART 9 §8).
-      if (opts.smartTypography === false) return escapeHtml(node.value)
+      if (opts.smartTypography === false || opts.smartTypography === 'source')
+        return escapeHtml(node.value)
       // The resolved glyph, escaped like any other text: a locale quote glyph
       // can carry a non-breaking space (French guillemets are `«` + U+00A0).
       return escapeHtml(node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
