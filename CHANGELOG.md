@@ -43,6 +43,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A definition only opens AT its content column** (carve-js#613). A
+  definition-shaped line indented PAST a list item's content column rendered as
+  item text - correctly - and was collected anyway, so the same line was both
+  visible content and an active definition: a reader saw `[r]: /u` as prose
+  while a reference elsewhere silently resolved through it. A definition renders
+  nothing, so a line that renders was never taken as one.
+
+  The column comparison is EXACT now rather than "at least"; the below-column
+  half of the same rule was already fixed in carve-js#597. The pre-pass also
+  counts EVERY marker on a line - `- - see` has a content column of 4, not 2 -
+  so a definition written at a doubly-nested item's real column still resolves.
+
 - **An invisible construct in a list item does not loosen it** (PART 9 §17 L1,
   carve#621). §17 L1 loosens on a blank-line-separated second PARAGRAPH, and a
   comment renders nothing at all, so
