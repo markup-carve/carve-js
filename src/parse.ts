@@ -295,6 +295,57 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]: \s*(.+)$/
 // The title groups allow a backslash-escaped quote inside (`"a\"b"`) so the run
 // does not truncate at the first inner quote; the captured value is then run
 // through unescapeAttrValue at consumption, matching the inline title path.
+/**
+ * A link reference definition, as PART 9R's `linkDefs` symbol table describes
+ * it: `label -> (url, title?, attrs?)`. `attrs` come from a TRAILING attribute
+ * block on the definition line and transfer to every link that resolves the
+ * label (PART 9R R1, carve#604).
+ */
+export interface LinkDef {
+  href: string
+  title?: string
+  attrs?: Attrs
+}
+
+/**
+ * Split a TRAILING attribute block off a definition line (carve#604).
+ *
+ * Scanned rather than matched: an attribute value may hold a `}` inside quotes
+ * (`{data-x="}"}`), and a `\{[^}]*\}` pattern stops at that brace and drops
+ * every attribute on the line silently. Only a `}` outside quotes closes it.
+ *
+ * The block must be preceded by whitespace and end the line, so `[a]: /u{.x}`
+ * keeps the braces in the DESTINATION, matching the production's
+ * `space, attributes`.
+ */
+function splitTrailingAttrBlock(line: string): [string, string | null] {
+  const end = line.replace(/\s+$/, '')
+  if (!end.endsWith('}')) return [line, null]
+  let quote: string | null = null
+  let open = -1
+  for (let i = 0; i < end.length; i++) {
+    const c = end[i]!
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = null
+      continue
+    }
+    if (c === '"' || c === "'") {
+      quote = c
+      continue
+    }
+    if (c === '{') {
+      if (open === -1) open = i
+      continue
+    }
+    if (c === '}' && open !== -1 && i === end.length - 1) {
+      if (open === 0 || !/\s/.test(end[open - 1]!)) return [line, null]
+      return [end.slice(0, open).replace(/\s+$/, ''), end.slice(open)]
+    }
+  }
+  return [line, null]
+}
+
 const RE_LINK_DEF =
   /^[^\S ]*\[(?!@)([^\]]+)\]: [^\S ]*(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
@@ -427,7 +478,7 @@ class Lexer {
    * false, which is what makes a container-authored `*[X]: y` inert.
    */
   atDocumentLevel = false
-  linkDefs: Map<string, { href: string; title?: string }> = new Map()
+  linkDefs: Map<string, LinkDef> = new Map()
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
   footnoteDefs: Map<string, BlockNode[]> = new Map()
@@ -1171,11 +1222,20 @@ function collectLinkDefs(lexer: Lexer) {
     // content column by construction.
     const belowContentColumn =
       contentCol > 0 && kept === raw && leadingWhitespace(raw) < contentCol
-    const m = topLevelIndentedDef || belowContentColumn ? null : RE_LINK_DEF.exec(line)
+    // The trailing attribute block comes off BEFORE the regex runs: the
+    // pattern's `.*$` tail would otherwise swallow it (carve#604).
+    const [defLine, defAttrText] = splitTrailingAttrBlock(line)
+    const m = topLevelIndentedDef || belowContentColumn ? null : RE_LINK_DEF.exec(defLine)
     if (m) {
-      const def: { href: string; title?: string } = { href: m[2]! }
+      const def: LinkDef = { href: m[2]! }
       const title = m[3] ?? m[4]
       if (title !== undefined) def.title = unescapeAttrValue(title)
+      if (defAttrText) {
+        const parsed = parseAttrs(defAttrText)
+        if (parsed.id !== undefined || parsed.classes?.length || parsed.keyValues) {
+          def.attrs = parsed
+        }
+      }
       lexer.linkDefs.set(normalizeRefLabel(m[1]!), def)
       continue
     }
@@ -4976,7 +5036,7 @@ function smartToken(
 function parseInline(
   text: string,
   abbrDefs: Map<string, string>,
-  linkDefs: Map<string, { href: string; title?: string }> = new Map(),
+  linkDefs: Map<string, LinkDef> = new Map(),
   source: InlineSource = inlineSource(),
   captionContext = false,
 ): InlineNode[] {
@@ -6139,7 +6199,7 @@ function applyAbbreviations(
  */
 function applyLinkDefs(
   nodes: InlineNode[],
-  defs: Map<string, { href: string; title?: string }>,
+  defs: Map<string, LinkDef>,
 ): InlineNode[] {
   const out: InlineNode[] = []
   for (const node of nodes) {
@@ -6163,6 +6223,12 @@ function applyLinkDefs(
       if (def) {
         node.href = def.href
         if (def.title !== undefined) node.title = def.title
+        // PART 9R R1: the definition's attributes transfer to the link, and
+        // the link's own override per key. "Per key" is §15 A3's merge - the
+        // one stacked attribute lists already use - so a repeated id or key
+        // takes the LAST value (the link's) and classes ACCUMULATE across the
+        // two. Definition first, link second (carve#604).
+        if (def.attrs) node.attrs = mergeAttrs(def.attrs, node.attrs ?? {})
       }
         // PART 12 §3a, A RESOLVED REFERENCE KEEPS ITS DESTINATION: `ref` and
         // `rawRef` stay BESIDE `href`, exactly as §5 has footnote numbering
