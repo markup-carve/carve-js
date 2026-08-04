@@ -276,6 +276,9 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'critic_comment':
       return stripControls(node.text)
     case 'heading_ref':
+      // Resolved: the target heading's text, which is what a reader of plain
+      // text can act on. The authored `</#target>` stays in the tree.
+      if (node.href) return renderInlines(node.resolvedText ?? [], ctx)
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)

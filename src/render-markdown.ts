@@ -62,8 +62,12 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   walkBlocks(allBlocks, (_node, inlines) => {
     if (!inlines) return
     walkInlines(inlines, (node) => {
-      if (node.type !== 'link') return
-      const id = fragmentId(node.href)
+      // A crossref is its own node type (PART 12 §3a), so a scan that only
+      // looked at links stopped seeing `</#id>` references - and the heading
+      // lost the `{#id}` anchor its own reference still pointed at.
+      const href = node.type === 'link' || node.type === 'heading_ref' ? node.href : undefined
+      if (href === undefined) return
+      const id = fragmentId(href)
       if (id && headingIds.has(id)) referencedHeadingIds.add(id)
     })
   })
@@ -455,8 +459,21 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // carve-php kept it (carve#352, corpus 33-editorial-markup); the plain and
       // ANSI targets were fixed in carve-js#429.
       return escapeText(node.text)
-    case 'heading_ref':
-      return `</#${stripControls(node.target)}>`
+    case 'heading_ref': {
+      if (!node.href) return `</#${stripControls(node.target)}>`
+      const crossrefText = renderInlines(node.resolvedText ?? [], ctx)
+      // Inside a link's text, and for a target this format cannot anchor: the
+      // display text alone. Markdown can carry `{#id}` on a heading and
+      // nothing else, so a crossref to a figure or a table renders as the
+      // words it resolved to - the same rule `renderLink` applies to an
+      // ordinary `#fragment` link.
+      const crossrefId = fragmentId(node.href)
+      if (insideLink || !crossrefId || !ctx.headingIds.has(crossrefId)) return crossrefText
+      // Resolved: the Markdown link this crossref always rendered as. The
+      // authored `</#target>` stays in the tree (PART 12 §3a); only this
+      // target's OUTPUT resolves it.
+      return `[${crossrefText}](${markdownFragmentDestination(crossrefId)})`
+    }
     case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)
     case 'citation_group':
@@ -477,8 +494,24 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
   }
 }
 
+/** See the note on the same pair in render-html.ts. */
+let insideLink = false
+
+function withinLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = true
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
 function renderLink(node: Link, ctx: MarkdownContext): string {
-  const text = renderInlines(node.children, ctx)
+  // Markdown has no nested links either: `[see [H](#H)](/outer)` is not a link
+  // with a link inside, it is broken. A crossref in the label renders as its
+  // text, the same suppression the HTML target makes.
+  const text = withinLink(() => renderInlines(node.children, ctx))
   const id = fragmentId(node.href)
   if (id && !ctx.headingIds.has(id)) return text
   const destination = id ? markdownFragmentDestination(id) : markdownDestination(node.href)

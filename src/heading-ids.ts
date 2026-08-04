@@ -16,7 +16,6 @@ import type {
   Figure,
   Image,
   InlineNode,
-  Link,
   Text,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -569,33 +568,32 @@ export function resolveHeadingIds(
             stripPositions(children)
             crossrefCloneCache.set(tgtId, children)
           }
-          const link: Link = {
-            type: 'link',
-            href: `#${tgtId}`,
-            children,
-            fromCrossref: true,
-            // The crossref's OWN span: `</#target>` is the source this link was
-            // written as, so §4 is satisfied without inventing anything. The
-            // node used to be built without one, which left every resolved
-            // crossref unplaceable - 13 of the reference's conformance findings
-            // (carve-js#549 follow-up).
-            //
-            // The CHILDREN keep the target heading's spans, because that is
-            // genuinely where their text came from; only the link itself points
-            // at the reference site.
-            ...(n.pos ? { pos: n.pos } : {}),
-          }
-          nodes[i] = link
-        } else {
-          // Same for the unresolved fallback: the literal text is the source
-          // run the crossref occupied.
-          const txt: Text = {
-            type: 'text',
-            value: `</#${n.target}>`,
-            ...(n.pos ? { pos: n.pos } : {}),
-          }
-          nodes[i] = txt
+          // The node STAYS a `heading_ref` (PART 12 §3a, carve#614): the
+          // authored construct survives and the resolution is published
+          // beside it. Replacing it with a `link` published a later stage -
+          // and, because ids resolve case-insensitively, discarded which
+          // spelling the author wrote: `</#intro>` and `</#Intro>` both
+          // produced `href: "#Intro"`, so a document that had been through
+          // the wire format came back respelled.
+          n.href = `#${tgtId}`
+          // The display text is NOT part of the serialized node (§3a: the
+          // heading is in the same document, and copying its inline content
+          // into every reference is unbounded where `href` is fixed-size).
+          // The renderers need it, so it rides on the runtime node and
+          // `toAstJson` strips it.
+          n.resolvedText = children
+          // `pos` is already the crossref's own span, which is what §4 wants:
+          // `</#target>` is the source this node was written as. The children
+          // keep the target heading's spans, which is genuinely where their
+          // text came from - and `stripPositions` above removes them, because
+          // cloned display text is not a contiguous slice of its own source
+          // (carve#565).
         }
+        // An UNRESOLVED crossref keeps its node too, rather than flattening to
+        // a text node holding `</#target>`. §3a forbids that for the same
+        // reason it forbids it for `[a][]`: flattening discards the fact that
+        // the author wrote a reference at all, and makes the same document
+        // have two node counts depending on which engine produced it.
         continue
       }
       switch (n.type) {
@@ -796,6 +794,22 @@ export function resolveHeadingIds(
           }
           break
         }
+        case 'heading_ref':
+          // A resolved crossref renders as an anchor, so inside a link it
+          // would nest one - but it is NOT unwrapped here, because the node
+          // has to reach the serialized tree (PART 12 §3a). Dropping it would
+          // publish `[see H](/outer)` for `[see </#H>](/outer)`: the authored
+          // crossref gone from the wire, which is the flattening §3a exists to
+          // prevent. The renderers suppress the nested anchor instead.
+          //
+          // Its DISPLAY text is a clone of the target heading, which may itself
+          // contain a link - and that one renders inside this crossref's own
+          // anchor, so it nests whether or not the crossref is inside a link.
+          // The clone is runtime-only, so unwrapping it loses nothing from the
+          // wire.
+          if (n.resolvedText) n.resolvedText = enforceNoNesting(n.resolvedText, true)
+          out.push(n)
+          break
         case 'autolink':
           if (insideLink) {
             const value = n.href.startsWith('mailto:')

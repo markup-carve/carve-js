@@ -325,6 +325,19 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   return out
 }
 
+/** See the note on the same pair in render-html.ts. */
+let insideLink = false
+
+function withinLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = true
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
 function renderInlines(nodes: InlineNode[], ctx: AnsiContext): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderAnsi', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
@@ -379,7 +392,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
       if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
-      const text = renderInlines(node.children, ctx)
+      const text = withinLink(() => renderInlines(node.children, ctx))
       const href = stripControls(node.href)
       let out = style(text, UNDERLINE + FG_BLUE)
       if (href && !href.startsWith('#') && href !== stripAnsi(text)) {
@@ -454,6 +467,13 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'critic_comment':
       return stripControls(node.text)
     case 'heading_ref':
+      // Already inside a link's text: no second styling run, matching the HTML
+      // target's suppression of the nested anchor.
+      if (node.href && insideLink) return renderInlines(node.resolvedText ?? [], ctx)
+      // Resolved: styled like the link this crossref always rendered as. The
+      // href is a same-document `#id`, which the link arm above deliberately
+      // does not print, so neither does this.
+      if (node.href) return style(renderInlines(node.resolvedText ?? [], ctx), UNDERLINE + FG_BLUE)
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)
