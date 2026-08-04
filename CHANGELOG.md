@@ -43,6 +43,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An invisible construct in a list item does not loosen it** (PART 9 §17 L1,
+  carve#621). §17 L1 loosens on a blank-line-separated second PARAGRAPH, and a
+  comment renders nothing at all, so
+
+  ```
+  - a
+
+    %% just a note
+  ```
+
+  stays tight. An item wrapped in `<p>` because of a line that produces no
+  output was the blank line showing through. A link reference definition in the
+  same position was already tight here, so the two invisible kinds disagreed for
+  no stated reason.
+
+  The blank is still REMEMBERED: with a sibling item after it, L1's other clause
+  applies - the item is followed by a blank before the next marker, and an
+  invisible line in the gap does not fill it - so the list is loose. A visible
+  paragraph BEHIND the invisible line still loosens too; the scan looks past the
+  comment rather than stopping at it.
+
 - **A definition one column in folds as text** (PART 1 S4, carve-js#597). A
   definition line below every content column is lazy text, the same as any
   other opener there - a construct opens only AT its container's content

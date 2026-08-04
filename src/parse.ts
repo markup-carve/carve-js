@@ -3019,6 +3019,26 @@ function orderedContinues(line: string, kind: OlKind, delim: string): boolean {
  * item tight. Lexer-free (no `:::` closer lookahead — for the loose decision a
  * `:::`-shaped opener counts as a block regardless).
  */
+/**
+ * A ONE-LINE construct that renders nothing: a line comment or a reference /
+ * footnote definition (§17 L1's "not a paragraph" set, carve#621).
+ *
+ * Used for looseness only, and deliberately single-line. A comment BLOCK is
+ * invisible too, but `lineOpensBlock` already claims its `%%%` opener, and
+ * skipping past that opener would land the scan on the block's BODY - ordinary
+ * text - and loosen the item on content the reader never sees.
+ *
+ * `RE_ABBR_DEF` is not in the set: a definition inside a container is no longer
+ * recognized as one, so the line renders as text and is genuinely visible.
+ */
+function isInvisibleLine(line: string): boolean {
+  const l = line.replace(/^[ \t]+/, '')
+  // `RE_COMMENT_LINE` matches a `%%%` opener too, so exclude the block form
+  // explicitly - skipping it lands the scan on the block's BODY.
+  if (RE_COMMENT_BLOCK.test(l)) return false
+  return RE_COMMENT_LINE.test(l) || RE_LINK_DEF.test(l) || RE_FOOTNOTE_DEF.test(l)
+}
+
 function lineOpensBlock(line: string): boolean {
   return (
     RE_RAW_FENCE.test(line) ||
@@ -3626,12 +3646,30 @@ function parseList(lexer: Lexer): List {
       }
     }
 
+    // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
+    // not loosen the item on its own - it is not a second paragraph - but it
+    // does not FILL the gap either. So when the item's tail after its last
+    // blank is nothing but invisible lines, the item is still "followed by a
+    // blank line before the next marker" and L1's other clause applies. Without
+    // this, attaching the comment consumed the signal and `- a` / blank /
+    // `  %% n` / `- b` came out tight, where the same document without the
+    // comment is loose.
+    let blankBeforeInvisible = false
+    for (let k = nested.length - 1; k >= 0; k--) {
+      const ln = nested[k]!
+      if (isBlankLine(ln)) {
+        blankBeforeInvisible = k < nested.length - 1
+        break
+      }
+      if (!isInvisibleLine(ln)) break
+    }
+
     // Blank line(s) before the next sibling marker make the list loose.
     // The next marker must be a real sibling of THIS list: same kind and
     // (for unordered) same marker character. A blank line before a
     // different marker (`- a\n\n+ b`) separates two distinct lists
     // (§11), so it must not loosen this one.
-    if (pendingBlanks > 0 && !lexer.eof()) {
+    if ((pendingBlanks > 0 || blankBeforeInvisible) && !lexer.eof()) {
       const nextLine = lexer.peek()!
       const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
       if (
@@ -3690,7 +3728,13 @@ function parseList(lexer: Lexer): List {
       // quote/code/table (Bug B, corpus 83-list-continuation-marker family).
       if (plusSeparators.has(k)) continue
       let j = k + 1
-      while (j < nested.length && nested[j] === '') j++
+      // Skip blanks AND invisible lines: §17 L1 loosens on a second PARAGRAPH,
+      // and a comment or a definition renders nothing, so it is neither the
+      // paragraph that loosens nor a wall that hides one behind it. Stopping at
+      // the invisible line instead of looking past it kept `%% n` / `text`
+      // tight, which is the opposite error - the item does hold a second
+      // paragraph, it just has a comment in front of it (carve#621).
+      while (j < nested.length && (nested[j] === '' || isInvisibleLine(nested[j]!))) j++
       if (j >= nested.length) continue
       // A blank followed by content the item's SUB-LIST consumes does not
       // loosen THIS item: that content belongs to the sub-list, whose looseness
@@ -3705,6 +3749,8 @@ function parseList(lexer: Lexer): List {
         const subCol = markerContentColumn(nested[firstBlockIdx]!)
         if (subCol >= 0 && indentColumns(nested[j]!) >= subCol) continue
       }
+      // `j` can no longer be an invisible line (skipped above), so this is the
+      // plain "is the next visible thing a paragraph" test it always was.
       if (!lineOpensBlock(nested[j]!)) {
         loose = true
         break
