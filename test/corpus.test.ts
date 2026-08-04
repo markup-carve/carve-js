@@ -224,6 +224,7 @@ const IMPLEMENTED = new Set([
   'a-definition-inside-a-comment-registers-nothing',
   'a-blank-after-a-comment-still-ends-the-item',
   'a-comment-fence-under-a-nested-item-does-not-close-it-either',
+  'a-collapsed-reference-is-matched-by-the-label-the-author-wrote',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
