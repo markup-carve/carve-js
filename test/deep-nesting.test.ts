@@ -88,3 +88,37 @@ describe('the canonical writer respects the render depth cap', () => {
     expect(widest).toBeLessThanOrEqual(3 + MAX_RENDER_DEPTH - 1)
   })
 })
+
+// PART 9 §25: past the cap an opener IS ordinary paragraph text, so it groups
+// by the ordinary paragraph rule rather than by where the degrade path happens
+// to hand back to the block parser. This engine used to emit one paragraph per
+// over-cap opener EXCEPT the last, which grouped with the text after it - not a
+// rule anyone would state, and the reason carve#494 could not be settled by
+// deferring to the reference.
+describe('over-cap openers group as one paragraph (carve#494)', () => {
+  const OVER_CAP = 203
+
+  it('groups consecutive over-cap openers and the text after them', () => {
+    const html = carveToHtml(':::: note\n'.repeat(OVER_CAP) + 'x\n')
+    const paragraphs = html.match(/<p>[\s\S]*?<\/p>/g) ?? []
+    expect(paragraphs).toEqual(['<p>:::: note\n:::: note\n:::: note\nx</p>'])
+  })
+
+  it('emits no trailing newline before the closing tag', () => {
+    const html = carveToHtml(':::: note\n'.repeat(OVER_CAP))
+    expect(html).toContain('<p>:::: note\n:::: note\n:::: note</p>')
+    expect(html).not.toContain('\n</p>')
+  })
+
+  it('ends the flattened paragraph at the first blank line', () => {
+    const html = carveToHtml(':::: note\n'.repeat(OVER_CAP) + '\ny\n')
+    const paragraphs = html.match(/<p>[\s\S]*?<\/p>/g) ?? []
+    expect(paragraphs).toEqual(['<p>:::: note\n:::: note\n:::: note</p>', '<p>y</p>'])
+  })
+
+  it('keeps every over-cap opener rather than discarding it', () => {
+    const html = carveToHtml(':::: note\n'.repeat(OVER_CAP) + 'x\n')
+    // 200 open containers plus the three flattened lines.
+    expect((html.match(/note/g) ?? []).length).toBe(OVER_CAP)
+  })
+})

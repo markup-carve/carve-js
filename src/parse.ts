@@ -1409,7 +1409,10 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Past the nesting limit, stop opening recursive containers and treat the
   // line as paragraph text. Prevents a call-stack overflow on pathologically
   // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
-  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer)
+  // `flattened` because past the cap a marker is not a construct at all, so
+  // nothing on these lines can interrupt: they group by the ordinary paragraph
+  // rule and end at the first blank line (PART 9 §25).
+  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer, true)
 
   // Block-level constructs in priority order
   if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
@@ -4298,7 +4301,17 @@ function endsHeadingOrQuote(lexer: Lexer): boolean {
   return startsInterruptingBlock(lexer)
 }
 
-function parseParagraph(lexer: Lexer): Paragraph {
+/**
+ * `flattened` marks the MAX_NESTING_DEPTH degrade path. Past the cap an opener
+ * IS ordinary paragraph text (PART 9 §25), so it groups the way the same
+ * characters typed by an author would: consecutive over-cap openers and any
+ * text after them are ONE paragraph, ending at the first blank line. Letting
+ * the interruption test run there produced one paragraph per opener, except
+ * for the last, which grouped with the text following it — an artifact of
+ * where the degrade path hands back to the block parser rather than a rule
+ * (carve#494).
+ */
+function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
   const lines: string[] = []
   const startLineIndex = lexer.pos
   while (!lexer.eof()) {
@@ -4321,6 +4334,7 @@ function parseParagraph(lexer: Lexer): Paragraph {
     // without this guard startsInterruptingBlock would break before consuming,
     // looping forever on the same line.
     if (
+      !flattened &&
       lines.length > 0 &&
       startsInterruptingBlock(lexer) &&
       !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
