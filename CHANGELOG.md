@@ -69,6 +69,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   definition that IS an item's content (`- [ref]: /url`) is unaffected: it sits
   on the marker line, at its content column by construction.
 
+- **A below-column line folds at every depth, not only one column in**
+  (PART 9 §24 C3, carve#603). A folded line kept its own indentation, which two
+  columns in REACHED the sub-list's content column inside the re-parsed stream
+  and opened a list there - `-   x` / `    - a` / `  - b` nested `b` under `a`,
+  as it did in all three engines. C3 does not ask how deep the indent is, and
+  C4 scopes Rule B's "any indent" to where a TOP-LEVEL list may open. A folded
+  line now carries exactly one column, which reaches no content column at all.
+
 - **A floating attribute skips what renders nothing** (§15 A2a,
   markup-carve/carve#571). `{#i}` followed by a reference, footnote or
   abbreviation definition, a line comment or a comment block now attaches to the

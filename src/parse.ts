@@ -3546,6 +3546,16 @@ function parseList(lexer: Lexer): List {
         let lazyLine = l
         if (lazyState.inDefList && indentColumns(l) < contentCol) {
           lazyLine = l.replace(/^[ \t]+/, '')
+        } else if (indentColumns(l) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
+          // A block-SHAPED line below the content column opens nothing (§24 C3:
+          // below it a marker folds as lazy item text and no other opener nests
+          // either), and it is folding here for that reason. It must not carry
+          // enough indentation to reach the SUB-list's content column on the
+          // recursive reparse, though, or it opens a list one level down -
+          // which is what `-   x` / `    - a` / `  - b` did, nesting `b` under
+          // `a` where the executable spec folds it (carve#603). One column
+          // reaches no content column at all, so the fold holds at every depth.
+          lazyLine = ' ' + l.replace(/^[ \t]+/, '')
         }
         nested.push(lazyLine)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))

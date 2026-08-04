@@ -78,4 +78,27 @@ describe('list lazy continuation', () => {
       '<ul>\n  <li>\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
     )
   })
+  it('folds a below-column marker at every depth, not only one column in', () => {
+    // PART 9 §24 C3: below the content column a marker folds as lazy item text,
+    // with no mention of how deep the indent is, and C4 scopes Rule B's "any
+    // indent" to where a TOP-LEVEL list may open. This engine nested `b` under
+    // `a` two columns in, because the folded line kept its own indentation and
+    // that reached the sub-list's content column on the reparse (carve#603).
+    expect(html('-   x\n    - a\n  - b')).toBe(
+      '<ul>\n  <li>x\n    <ul>\n      <li>a\n- b</li>\n    </ul>\n  </li>\n</ul>',
+    )
+    expect(html('-   x\n    - a\n   - b')).toBe(
+      '<ul>\n  <li>x\n    <ul>\n      <li>a\n- b</li>\n    </ul>\n  </li>\n</ul>',
+    )
+    // The threshold is the content column, not a distance from column 0.
+    expect(html('  - x\n    - a\n   - b')).toBe(
+      '<ul>\n  <li>x\n    <ul>\n      <li>a\n- b</li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  it('still opens a sublist at the content column', () => {
+    expect(html('-   x\n    - a\n    - b')).toBe(
+      '<ul>\n  <li>x\n    <ul>\n      <li>a</li>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
 })
