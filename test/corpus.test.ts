@@ -34,6 +34,8 @@ if (!existsSync(corpusDir)) {
  */
 const IMPLEMENTED = new Set([
   'a-flush-left-line-needs-an-open-paragraph-to-fold-into',
+  'a-list-item-does-not-define-an-abbreviation-either',
+  'an-abbreviation-definition-is-recognized-only-at-document-level',
   'opaque-spans-inside-a-container',
   'blocks-that-render-to-nothing',
   'bare-dot-ordered-markers',
