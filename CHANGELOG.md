@@ -43,6 +43,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A definition past the content column is text, quoted or not**
+  (carve-js#648). Past a list item's content column a definition is literal
+  text, and this engine declined it outside a block quote while COLLECTING it
+  inside one - so `> - a` / `>    [r]: /u` rendered the line as prose and
+  resolved a reference through it at the same time. Content columns are measured
+  inside the quote (carve#658), so the quote must not change the answer.
+
+  The prepass guard asked `kept === raw`, which really means "does this line
+  carry a marker of its own?" - the exemption that keeps `- [ref]: /url`, where
+  the definition IS the item's content. A quote prefix makes those two differ
+  for the same reason a marker does, so every quoted line skipped the guard. It
+  now compares against the quote-stripped view.
+
 - **An empty footnote label is not a footnote** (carve#589, carve-js#631).
   `footnote_label` is one-or-more characters, so `[^]: /x` is a LINK reference
   definition whose label is `^` - it registers as one, leaves no node in the

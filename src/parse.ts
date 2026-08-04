@@ -1305,7 +1305,17 @@ function collectLinkDefs(lexer: Lexer) {
     const atAnOpenContentColumn = listCols.length
       ? listCols.includes(rawIndent)
       : rawIndent === contentCol
-    const notAtContentColumn = kept === raw && !inFootnoteBody && !atAnOpenContentColumn
+    // Compared against the QUOTE-STRIPPED view, not the raw line. `kept` has
+    // both the quote prefix and any list marker removed, so `kept === raw` was
+    // really asking "does this line carry a marker of its own?" - the exemption
+    // that keeps `- [ref]: /url`, where the definition IS the item's content and
+    // sits at its column by construction. A quote prefix made the two differ for
+    // the same reason a marker does, so every quoted line skipped the guard and
+    // a definition PAST the column collected inside a quote while the identical
+    // shape outside one stayed literal (carve-js#648). Content columns are
+    // measured inside the quote (carve#658), so the quote must not change the
+    // answer.
+    const notAtContentColumn = kept === unquoted && !inFootnoteBody && !atAnOpenContentColumn
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
     const [defLine, defAttrText] = splitTrailingAttrBlock(line)
