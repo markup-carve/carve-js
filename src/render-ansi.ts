@@ -1,4 +1,4 @@
-import { MAX_NESTING_DEPTH } from './parse.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
@@ -17,7 +17,6 @@ export interface AnsiRenderOptions {}
  * ast-json.ts, which is above the parser cap because the two counts measure
  * different things.
  */
-const MAX_RENDER_DEPTH = MAX_NESTING_DEPTH + 32
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 const RESET = '\x1b[0m'
@@ -76,7 +75,7 @@ function style(text: string, codes: string): string {
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: AnsiContext): string {
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderAnsi', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
     return blocks.map((b) => renderBlock(b, ctx)).join('')
@@ -327,7 +326,7 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
 }
 
 function renderInlines(nodes: InlineNode[], ctx: AnsiContext): string {
-  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderAnsi', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
     return nodes.map((node) => renderInline(node, ctx)).join('')

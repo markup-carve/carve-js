@@ -13,7 +13,10 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { MAX_NESTING_DEPTH, parse } from './parse.js'
+import { parse } from './parse.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+
+export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 
 export interface CarveRenderOptions {}
@@ -34,7 +37,6 @@ export interface CarveRenderOptions {}
  * same reason: the two counts measure different things, so one cannot be the
  * bound for the other.
  */
-export const MAX_RENDER_DEPTH = MAX_NESTING_DEPTH + 32
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 interface CarveContext {
@@ -142,6 +144,12 @@ function canonical(value: unknown): unknown {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       if (key === 'pos' || key === 'footnoteDefPos' || key === 'srcByteLength') continue
+      // `escapedLeadingCaret` records that a leading caret was escaped, which
+      // is the escape itself rather than a consequence of it - comparing it
+      // would escalate every document whose text starts with a caret. Where
+      // the escape is load-bearing, dropping it promotes an image to a FIGURE,
+      // and that is a structural difference this comparison sees anyway.
+      if (key === 'escapedLeadingCaret') continue
       out[key] = canonical((value as Record<string, unknown>)[key])
     }
     return out
@@ -173,13 +181,10 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
     const previous = out[out.length - 1] as Record<string, unknown> | undefined
     if (isTextish && previous !== undefined && previous['type'] === 'text') {
       previous['value'] = String(previous['value'] ?? '') + String(current!['value'] ?? '')
-      if (current!['escapedLeadingCaret'] === true) previous['escapedLeadingCaret'] = true
       continue
     }
     if (isTextish) {
-      const merged: Record<string, unknown> = { type: 'text', value: String(current!['value'] ?? '') }
-      if (current!['escapedLeadingCaret'] === true) merged['escapedLeadingCaret'] = true
-      out.push(merged)
+      out.push({ type: 'text', value: String(current!['value'] ?? '') })
       continue
     }
     out.push(node)
@@ -188,7 +193,7 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
     return blocks
@@ -420,7 +425,7 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
   // blank-line join here would loosen a tight item that has more than one child
   // (e.g. text after a fenced block), breaking toHtml(fmt(x)) == toHtml(x).
   if (!tight) return renderBlocks(item.children, ctx)
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
     return item.children
@@ -622,7 +627,7 @@ function renderFootnoteDefs(ast: Document, ctx: CarveContext): string {
 }
 
 function renderInlines(nodes: InlineNode[], ctx: CarveContext): string {
-  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
     return nodes
@@ -728,7 +733,17 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
     case 'citation_group':
       return node.raw
     case 'comment':
-      return ` %% ${node.content}`
+      // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
+      // joins the opener rather than being separated from it by a space: a
+      // comment whose content is `%` is written ` %%%`, not ` %% %`, which
+      // splits a three-character opener run into an opener plus a stray
+      // character - "a shape that happens to work rather than one that says
+      // what it means". Both re-parse to the same content, so the invariant
+      // never saw it; §1's `to_html(fmt(x)) == to_html(x)` is necessary, not
+      // sufficient. (carve#581, carve#544)
+      return node.content.startsWith('%')
+        ? ` %%${node.content}`
+        : ` %% ${node.content}`
     case 'smart_punctuation':
       // The whole point: reproduce the author's source run verbatim.
       return node.value
@@ -1041,15 +1056,20 @@ function cleanEscapedText(node: Text): string {
 // the writer as TEXT is one the author escaped and stays escaped. The
 // CANDIDATE set is every other character the grammar can read as an opener,
 // escaped only when the minimal form fails to round-trip.
-// The caret joins this set even though it opens nothing on its own. Its
-// escape carries information the AST records separately - a text node whose
-// LEADING caret came from an escape is flagged, so an image followed by a
-// caret line is not promoted to a figure. Comparing that flag would escalate
-// any document whose text starts with a caret; ignoring it would silently
-// turn the image case into a figure. Escaping the caret in both modes keeps
-// the two renders identical on that point and sidesteps the question, at the
-// cost of one escape on a character that is rare in prose.
-const UNCONDITIONAL_ESCAPES = /[\\`"'^]/g
+// The caret is a CANDIDATE, not unconditional. It opens nothing on its own,
+// and section 2's test is whether omitting the escape changes the RE-PARSED
+// AST: `}^p` re-parses identically bare, so nothing there needs escaping, and
+// writing it with two backslashes was over-escaping by two characters
+// (carve#581).
+//
+// It used to be unconditional because a text node whose LEADING caret came
+// from an escape is flagged (`escapedLeadingCaret`), so an image followed by a
+// caret line is not promoted to a figure - and comparing that flag escalated
+// any document whose text starts with a caret. The flag is now dropped from
+// the comparison instead (see `canonical`): where the escape actually matters,
+// the two renders differ by a FIGURE node rather than by a boolean, and that
+// difference the comparison already sees.
+const UNCONDITIONAL_ESCAPES = /[\\`"']/g
 const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 
 // Which set the writer is escaping right now. renderCarve renders the document

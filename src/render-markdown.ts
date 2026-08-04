@@ -1,4 +1,4 @@
-import { MAX_NESTING_DEPTH } from './parse.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type {
   BlockNode,
   DefinitionItem,
@@ -44,7 +44,6 @@ export interface MarkdownRenderOptions {
  * ast-json.ts, which is above the parser cap because the two counts measure
  * different things.
  */
-const MAX_RENDER_DEPTH = MAX_NESTING_DEPTH + 32
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
@@ -102,7 +101,7 @@ interface MarkdownContext {
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
     return blocks.map((b) => renderBlock(b, ctx)).join('')
@@ -328,7 +327,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
 }
 
 function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
-  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
     return nodes.map((node) => renderInline(node, ctx)).join('')
@@ -714,10 +713,17 @@ function trimNonNbsp(text: string): string {
   return text.replace(TRIM_NON_NBSP_RE, '')
 }
 
+/**
+ * Bounded by `MAX_RENDER_DEPTH`, like the render pass it runs ahead of: §25
+ * requires the resolve passes to be bounded too, and a pre-pass that overflows
+ * the host stack refuses nothing (carve#526).
+ */
 function walkBlocks(
   blocks: BlockNode[],
   visit: (node: BlockNode, inlines?: InlineNode[]) => void,
+  depth = 0,
 ): void {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   for (const block of blocks) {
     visit(block)
     switch (block.type) {
@@ -729,15 +735,15 @@ function walkBlocks(
       case 'admonition':
       case 'div':
       case 'line_block':
-        walkBlocks(block.children, visit)
+        walkBlocks(block.children, visit, depth + 1)
         break
       case 'list':
-        for (const item of block.items) walkBlocks(item.children, visit)
+        for (const item of block.items) walkBlocks(item.children, visit, depth + 1)
         break
       case 'definition_list':
         for (const item of block.items) {
           for (const term of item.terms) visit(block, term)
-          for (const def of item.definitions) walkBlocks(def, visit)
+          for (const def of item.definitions) walkBlocks(def, visit, depth + 1)
         }
         break
       case 'table':
@@ -746,8 +752,8 @@ function walkBlocks(
         break
       case 'figure':
         visit(block, block.caption)
-        if (block.target.type === 'block_quote') walkBlocks(block.target.children, visit)
-        else if (block.target.type === 'table') walkBlocks([block.target], visit)
+        if (block.target.type === 'block_quote') walkBlocks(block.target.children, visit, depth + 1)
+        else if (block.target.type === 'table') walkBlocks([block.target], visit, depth + 1)
         break
       default:
         break
@@ -755,7 +761,12 @@ function walkBlocks(
   }
 }
 
-function walkInlines(nodes: InlineNode[], visit: (node: InlineNode) => void): void {
+function walkInlines(
+  nodes: InlineNode[],
+  visit: (node: InlineNode) => void,
+  depth = 0,
+): void {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   for (const node of nodes) {
     visit(node)
     switch (node.type) {
@@ -770,14 +781,14 @@ function walkInlines(nodes: InlineNode[], visit: (node: InlineNode) => void): vo
       case 'span':
       case 'insert':
       case 'delete':
-        walkInlines(node.children, visit)
+        walkInlines(node.children, visit, depth + 1)
         break
       case 'inline_extension':
-        walkInlines(node.content, visit)
+        walkInlines(node.content, visit, depth + 1)
         break
       case 'footnote_ref':
     case 'inline_footnote':
-        if (node.inline) walkInlines(node.inline, visit)
+        if (node.inline) walkInlines(node.inline, visit, depth + 1)
         break
       default:
         break

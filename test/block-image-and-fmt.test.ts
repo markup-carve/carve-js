@@ -60,8 +60,12 @@ describe('fmt emits an unescaped figure caption (portable round-trip)', () => {
     inv('![a](/u "t\\"i")\n^ cap')
   })
 
-  it('an UNresolved reference image is not a figure: its caret stays escaped', () => {
-    expect(carveToCarve('![a][nope]\n^ cap').trim()).toBe('![a][nope]\n\\^ cap')
+  it('an UNresolved reference image is not a figure, so the caret needs no escape', () => {
+    // The image does not resolve, so the caret line does not promote anything -
+    // and PART 11 §2's test is whether omitting the escape changes the
+    // re-parsed AST. It does not, so the escape was over-escaping (carve#581).
+    // The RESOLVED forms above are where the caret is load-bearing.
+    expect(carveToCarve('![a][nope]\n^ cap').trim()).toBe('![a][nope]\n^ cap')
     inv('![a][nope]\n^ cap')
   })
 

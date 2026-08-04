@@ -21,6 +21,7 @@
  */
 
 import type { BlockNode, Document, FootnoteRef, InlineFootnote, InlineNode } from './ast.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 /** A footnote instance in document order; index + 1 = its assigned number. */
 export interface FootnoteOrderEntry {
@@ -47,8 +48,21 @@ export interface FootnoteNumbering {
   refs: FootnoteRefVisit[]
 }
 
-/** Visit every inline array under a block subtree (depth-first). */
-function walkBlockInlines(node: BlockNode, visit: (xs: InlineNode[]) => void): void {
+/**
+ * Visit every inline array under a block subtree (depth-first).
+ *
+ * Bounded by `MAX_RENDER_DEPTH`, like the renderers this pass runs ahead of.
+ * §25 requires recursive RENDER / RESOLVE / FILTER passes to be bounded, not
+ * only the parse path - and a pre-pass that overflows the host stack refuses
+ * nothing, it crashes, which is what `renderHtml` did on a 2000-deep tree
+ * before the renderer's own ceiling was ever reached (carve#526).
+ */
+function walkBlockInlines(
+  node: BlockNode,
+  visit: (xs: InlineNode[]) => void,
+  depth = 0,
+): void {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('numberFootnotes', MAX_RENDER_DEPTH)
   switch (node.type) {
     case 'heading':
     case 'paragraph':
@@ -56,22 +70,22 @@ function walkBlockInlines(node: BlockNode, visit: (xs: InlineNode[]) => void): v
       break
     case 'block_quote':
       if (node.attribution) visit(node.attribution)
-      node.children.forEach((c) => walkBlockInlines(c, visit))
+      node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'list':
-      for (const it of node.items) it.children.forEach((c) => walkBlockInlines(c, visit))
+      for (const it of node.items) it.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'admonition':
       if (node.title) visit(node.title)
-      node.children.forEach((c) => walkBlockInlines(c, visit))
+      node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'div':
-      node.children.forEach((c) => walkBlockInlines(c, visit))
+      node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'definition_list':
       for (const it of node.items) {
         for (const t of it.terms) visit(t)
-        for (const d of it.definitions) for (const b of d) walkBlockInlines(b, visit)
+        for (const d of it.definitions) for (const b of d) walkBlockInlines(b, visit, depth + 1)
       }
       break
     case 'table':
@@ -81,20 +95,25 @@ function walkBlockInlines(node: BlockNode, visit: (xs: InlineNode[]) => void): v
     case 'figure':
       visit(node.caption)
       if (node.target.type === 'block_quote' || node.target.type === 'table')
-        walkBlockInlines(node.target, visit)
+        walkBlockInlines(node.target, visit, depth + 1)
       break
     default:
       break
   }
 }
 
-function visitInlineTree(nodes: InlineNode[], fn: (n: InlineNode) => void): void {
+function visitInlineTree(
+  nodes: InlineNode[],
+  fn: (n: InlineNode) => void,
+  depth = 0,
+): void {
+  if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('numberFootnotes', MAX_RENDER_DEPTH)
   for (const n of nodes) {
     fn(n)
     const kids =
       (n as { children?: InlineNode[]; content?: InlineNode[] }).children ??
       (n as { content?: InlineNode[] }).content
-    if (Array.isArray(kids)) visitInlineTree(kids, fn)
+    if (Array.isArray(kids)) visitInlineTree(kids, fn, depth + 1)
   }
 }
 

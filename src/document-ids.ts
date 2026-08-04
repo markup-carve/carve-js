@@ -47,18 +47,27 @@ export class DocumentIdRegistry {
  */
 export function collectDocumentIds(doc: Document): DocumentIdRegistry {
   const registry = new DocumentIdRegistry()
-  const visit = (value: unknown): void => {
+  // Walked with an EXPLICIT STACK rather than by recursion. §25 requires a
+  // recursive resolve pass over a programmatically built tree to be bounded,
+  // and a generic walk like this one cannot use the renderers' block-depth
+  // ceiling honestly: it descends through arrays and wrapper objects too, so a
+  // frame budget of MAX_RENDER_DEPTH would refuse a list the parser itself
+  // produces at a quarter of the cap. An explicit stack has no frame budget to
+  // exceed, so the pass is bounded by memory alone and never crashes ahead of
+  // the renderer's own ceiling (carve#526).
+  const stack: unknown[] = [doc]
+  while (stack.length > 0) {
+    const value = stack.pop()
     if (Array.isArray(value)) {
-      for (const v of value) visit(v)
-      return
+      for (const v of value) stack.push(v)
+      continue
     }
-    if (value === null || typeof value !== 'object') return
+    if (value === null || typeof value !== 'object') continue
     const attrs = (value as { attrs?: { id?: unknown } }).attrs
     if (attrs && typeof attrs.id === 'string') registry.reserve(attrs.id)
     for (const v of Object.values(value)) {
-      if (v !== null && typeof v === 'object') visit(v)
+      if (v !== null && typeof v === 'object') stack.push(v)
     }
   }
-  visit(doc)
   return registry
 }

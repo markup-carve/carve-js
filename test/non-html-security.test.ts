@@ -7,6 +7,8 @@ import {
   renderAnsi,
   renderMarkdown,
   renderPlainText,
+  RenderDepthError,
+  MAX_RENDER_DEPTH,
   type Document,
 } from '../src/index.js'
 
@@ -177,16 +179,25 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
   })
 
   it('caps recursive rendering depth in non-HTML renderers', () => {
-    let content: Document['children'][number]['children'] = [{ type: 'text', value: 'x' }]
-    for (let i = 0; i < 500; i++) content = [{ type: 'span', children: content }]
-    const doc: Document = {
-      type: 'document',
-      children: [{ type: 'paragraph', children: content }],
+    const nest = (depth: number): Document => {
+      let content: Document['children'][number]['children'] = [{ type: 'text', value: 'x' }]
+      for (let i = 0; i < depth; i++) content = [{ type: 'span', children: content }]
+      return { type: 'document', children: [{ type: 'paragraph', children: content }] }
     }
 
-    expect(() => renderMarkdown(doc)).not.toThrow()
-    expect(() => renderPlainText(doc)).not.toThrow()
-    expect(() => renderAnsi(doc)).not.toThrow()
+    // Under the ceiling the content is rendered, not merely "not thrown": a
+    // renderer that dropped everything would also pass a no-throw assertion.
+    for (const render of [renderMarkdown, renderPlainText, renderAnsi]) {
+      expect(render(nest(MAX_RENDER_DEPTH - 2))).toContain('x')
+    }
+
+    // At and past it the render REFUSES with a typed error naming the bound
+    // (§25), instead of overflowing the host stack or - the older behavior -
+    // emitting the nested markers with the body deleted, which produces a
+    // document that looks complete and is not.
+    for (const render of [renderMarkdown, renderPlainText, renderAnsi]) {
+      expect(() => render(nest(500))).toThrow(RenderDepthError)
+    }
   })
 })
 

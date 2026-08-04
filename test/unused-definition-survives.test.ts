@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToMarkdown, carveToPlainText, carveToAnsi } from '../src/index.js'
+import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToCarve } from '../src/index.js'
 
 /*
  * PART 10 §10a: an unused definition survives the non-HTML targets.
@@ -35,6 +35,29 @@ describe('an abbreviation definition nothing references', () => {
     const md = carveToMarkdown('*[AB]: expansion\n\nAB here.\n')
     expect(md).toContain('*[AB]: expansion')
     expect(md).toContain('expansion">AB</abbr> here.')
+  })
+})
+
+describe('a footnote definition with an EMPTY label', () => {
+  // `[^]: %` is the clause's own example. carve-js used to require at least one
+  // label character, so this line fell through to the link-definition rule,
+  // which captured `^` as a reference label and consumed it - the construct
+  // vanished from every target, HTML included. `[^ ]: x` already produced a
+  // footnote with an empty label, so the two spellings disagreed.
+  it('is a footnote definition, not a link definition', () => {
+    expect(carveToMarkdown('[^]: %\n')).toBe('[^]: %\n')
+    expect(carveToPlainText('[^]: %\n')).toBe('[^]: %\n')
+  })
+
+  it('keeps its caret - the marker is emitted as written', () => {
+    // `[]: %` is a LINK reference definition; emitting one where the author
+    // wrote a footnote turns a definition into a different construct.
+    expect(carveToMarkdown('[^]: %\n')).toContain('[^]')
+    expect(plain(carveToAnsi('[^]: %\n'))).toContain('[^]')
+  })
+
+  it('survives a formatter round trip', () => {
+    expect(carveToCarve('[^]: %\n')).toBe('[^]: %\n')
   })
 })
 

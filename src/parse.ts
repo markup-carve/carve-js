@@ -299,7 +299,14 @@ const RE_LINK_DEF =
   /^[^\S ]*\[(?!@)([^\]]+)\]: [^\S ]*(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: \s*(.+)$/
+//
+// The label may be EMPTY. `[^]: %` is a footnote definition (PART 10 §10a,
+// carve#577) and renders with its caret on the non-HTML targets; requiring one
+// label character sent it to RE_LINK_DEF instead, which captured `^` as a
+// reference label and consumed the line -- so the construct vanished from every
+// target, HTML included. `[^ ]: x` already produced a footnote with an empty
+// label, so the two spellings now agree.
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]*)\]: \s*(.+)$/
 // A caption line mirrors a heading's first line (§4/§553): `^` + one-or-more
 // literal spaces (the grammar delimiter is a space, not a tab) + content that
 // carries at least one non-ASCII-whitespace character. Leading spaces are
@@ -1183,8 +1190,28 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
     }
 
     const node = parseBlock(lexer)
+    // A2a AN INVISIBLE CONSTRUCT IS NOT THE NEXT BLOCK (§15, carve#529):
+    // `pending` floats PAST anything that renders nothing and attaches to the
+    // next VISIBLE block, so
+    //
+    //     {#i}
+    //     [^f]: note
+    //
+    //     e
+    //
+    // is `<p id="i">e</p>`. The attribute is the author's instruction about a
+    // rendered element; attaching it to a construct that emits nothing silently
+    // discards it, and A4 reserves discarding for the one case where there is
+    // genuinely nothing left -- end of document.
+    //
+    // Five kinds are invisible. A reference definition and a footnote
+    // definition leave NO node (the first pass collected them), so the null
+    // return is what identifies them; an abbreviation definition and the two
+    // comment forms leave a node that renders nothing.
+    const invisible =
+      node === null || node.type === 'abbreviation_def' || node.type === 'comment'
     if (node) {
-      if (pending) {
+      if (pending && !invisible) {
         // Leading attrs are earlier in source; the block's own trailing
         // attrs win on conflict (id/key last), classes accumulate (§15).
         node.attrs = mergeAttrs(pending, node.attrs ?? {})
@@ -1214,11 +1241,9 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
       }
       out.push(node)
     }
-    // The block absorbs any pending attrs -- including a non-rendering
-    // block such as a consumed reference/abbreviation definition (which
-    // returns no node). So `{.x}\n[ref]: /u\nText` drops `.x` rather
-    // than leaking it onto `Text`, matching djot and carve-php.
-    pending = null
+    // A VISIBLE block absorbs any pending attrs; an invisible one leaves them
+    // pending for the next block (A2a, above).
+    if (!invisible) pending = null
   }
   // A dangling pending run (no following block) is dropped.
   return out
@@ -1389,7 +1414,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Past the nesting limit, stop opening recursive containers and treat the
   // line as paragraph text. Prevents a call-stack overflow on pathologically
   // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
-  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer)
+  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer, true)
 
   // Block-level constructs in priority order
   if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
@@ -3057,6 +3082,20 @@ function isEmptyQuoteLine(content: string): boolean {
   return sawQuote && rest.trim() === ''
 }
 
+/**
+ * A `{…}` line that is a block-attribute line rather than paragraph text.
+ *
+ * Recognition mirrors `tryCollectBlockAttributes` for the SINGLE-LINE form,
+ * which is all this caller can see: it is handed one dedented item line at a
+ * time, so a block whose `}` arrives on a later line (§15 A5) reads as ordinary
+ * text here. That errs toward the old answer (the item stays open), never
+ * toward closing an item the author kept open.
+ */
+function isBlockAttributeLine(content: string): boolean {
+  if (!content.startsWith('{') || !content.includes('}')) return false
+  return parseBlockAttributeRun(content) !== null
+}
+
 function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (state.inComment) {
     const c = /^(%{3,})\s*$/.exec(content)
@@ -3131,6 +3170,16 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   // quote holds no paragraph, so it does not (PART 1 S4).
   if (RE_BLOCKQUOTE.test(content)) {
     state.lazyFoldable = !isEmptyQuoteLine(content)
+    state.inDefList = false
+    return
+  }
+  // A block-attribute line renders nothing and opens nothing: it collects into
+  // `pending` and floats forward to the next block (§15 A1/A2). So there is no
+  // open paragraph for a following column-0 line to fold into, and PART 1 S4
+  // closes the item and re-classifies the line at the top level - the same
+  // answer, for the same reason, as the empty quote above.
+  if (isBlockAttributeLine(content)) {
+    state.lazyFoldable = false
     state.inDefList = false
     return
   }
@@ -3315,7 +3364,12 @@ function parseList(lexer: Lexer): List {
       fenceClose: null,
       inComment: false,
       commentLen: 0,
-      lazyFoldable: !isBlankLine(content) && !isEmptyQuoteLine(content),
+      // The lead text opens a paragraph unless it is one of the shapes that
+      // open nothing: a blank, an empty quote, or a block-attribute line (which
+      // renders nothing and floats forward). `trackItemLazyState` applies the
+      // same three to every later line; this is the lead-line copy of it.
+      lazyFoldable:
+        !isBlankLine(content) && !isEmptyQuoteLine(content) && !isBlockAttributeLine(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
     while (!lexer.eof()) {
@@ -4284,7 +4338,16 @@ function endsHeadingOrQuote(lexer: Lexer): boolean {
   return startsInterruptingBlock(lexer)
 }
 
-function parseParagraph(lexer: Lexer): Paragraph {
+/**
+ * `flattened` marks the MAX_NESTING_DEPTH degradation path (§25): past the cap
+ * every opener "becomes literal paragraph text", so NOTHING interrupts here and
+ * consecutive flattened openers plus any text after them form ONE paragraph,
+ * ending at the first blank line. Grouping them one-per-opener was an artifact
+ * of where the degrade path handed back to the block parser, not a rule -
+ * "degrades to literal text" is the whole rule, and literal text groups the way
+ * the same characters typed by an author would. (carve#547, carve#494)
+ */
+function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
   const lines: string[] = []
   const startLineIndex = lexer.pos
   while (!lexer.eof()) {
@@ -4307,6 +4370,7 @@ function parseParagraph(lexer: Lexer): Paragraph {
     // without this guard startsInterruptingBlock would break before consuming,
     // looping forever on the same line.
     if (
+      !flattened &&
       lines.length > 0 &&
       startsInterruptingBlock(lexer) &&
       !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
@@ -5569,6 +5633,13 @@ function scanInlineInner(
             (prev as { attrs?: Attrs }).attrs,
             parsed,
           )
+          // A TRAILING ATTRIBUTE BLOCK IS THE NODE'S OWN MARKUP (PART 12 §4,
+          // carve#521), so the span covers it: `*x*{#i}` gives the `strong`
+          // offsets 0..7, not 0..3. The braces are where the node's `attrs`
+          // came from, and a span stopping at `*x*` says the node ends before
+          // the markup that gave it half its content -- the same reading that
+          // already puts a break's backslash inside the break.
+          extendPosTo(prev, source, text, i + attr[0].length)
           i += attr[0].length
           continue
         }
@@ -5769,6 +5840,22 @@ function withPos<T extends InlineNode>(
   if (source.anchored === false) return node
   node.pos = sourcePos(source, text, start, end)
   return node
+}
+
+/**
+ * Move a node's span end out to `end`, keeping its start where it was.
+ *
+ * Used when markup that belongs to an already-emitted node is read after it -
+ * a trailing attribute block. A node parsed with `anchored: false` carries no
+ * `pos` at all, and there is nothing to extend.
+ */
+function extendPosTo(node: InlineNode, source: InlineSource, text: string, end: number): void {
+  const pos = (node as { pos?: Position }).pos
+  if (!pos) return
+  const point = pointAt(source, text, end)
+  pos.endLine = point.line
+  pos.endColumn = point.column
+  pos.endOffset = point.offset
 }
 
 function sourcePos(
