@@ -44,8 +44,11 @@ describe('a block that renders to nothing contributes no line', () => {
     )
   })
 
-  it('an abbreviation definition inside a div', () => {
-    expect(h(':::\n*[HTML]: HyperText Markup Language\n\nbody\n:::')).toBe(
+  it('an abbreviation definition at document level', () => {
+    // Only at document level is it a definition, and only there does it render
+    // to nothing. Inside the div the same line is paragraph text, so it is not
+    // an empty block at all (PART 12 §7).
+    expect(h('*[HTML]: HyperText Markup Language\n\n:::\nbody\n:::')).toBe(
       ['<div>', '  <p>body</p>', '</div>'].join('\n'),
     )
   })

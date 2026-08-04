@@ -42,8 +42,11 @@ describe('lazy continuation into a block quote', () => {
     expect(squash(carveToHtml('> [r]: u\nc\n'))).toBe('<blockquote> </blockquote> <p>c</p>')
   })
 
-  it('does not fold after an abbreviation definition', () => {
-    expect(squash(carveToHtml('> *[A]: b\nc\n'))).toBe('<blockquote> </blockquote> <p>c</p>')
+  it('folds after an abbreviation-definition-shaped line, which is text here', () => {
+    // Inside a container the definition form is not recognized (PART 12 §7),
+    // so it IS an open paragraph and a lazy line continues it - unlike the
+    // link and footnote definitions above, which stay definitions in a quote.
+    expect(squash(carveToHtml('> *[A]: b\nc\n'))).toBe('<blockquote><p>*[A]: b c</p></blockquote>')
   })
 
   it('still does not fold after a heading, table row or thematic break', () => {

@@ -413,6 +413,13 @@ class Lexer {
   parseOptions: ParseOptions
   unclosedContainerKeys: Set<string> | undefined
   abbrDefs: Map<string, string> = new Map()
+  /**
+   * True only for the lexer over the whole document. PART 12 §7 recognizes an
+   * abbreviation definition ONLY at document level: inside a block quote, list
+   * item or div the line is ordinary paragraph text. Sub-lexers leave this
+   * false, which is what makes a container-authored `*[X]: y` inert.
+   */
+  atDocumentLevel = false
   linkDefs: Map<string, { href: string; title?: string }> = new Map()
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
@@ -766,59 +773,6 @@ function toCodepointPositions(doc: Document, source: string): void {
   walk(doc)
 }
 
-/**
- * Move every `abbreviation_def` authored inside a container up to the document.
- *
- * PART 12 §7: a definition is a child of the DOCUMENT even when it was written
- * inside a div, a list item or a block quote, because its scope is the document
- * wherever it sits. A footnote definition already worked this way here - the
- * parser never emits a block for it, it goes to `lexer.footnoteDefs` and the
- * encoder appends it - and the clause covers every definition kind, not only
- * footnotes (carve-php#631).
- *
- * Done in `parse`, NOT in the encoder. §6 requires `parse(x)` serialized and
- * deserialized to equal `parse(x)`; a producer that leaves the node nested in
- * the parsed tree and hoists it on the way out satisfies §7 and breaks §6 on
- * the same document. That is the mistake §1a already records for text-run
- * coalescing, and it is the same mistake here.
- *
- * Appended at the end, which is where both a footnote definition and
- * carve-php's abbreviation definition already land, so `fmt` writes them in one
- * place rather than two. `pos` is untouched: it still says where the author
- * wrote it, which is what §7 relies on for nothing being lost by the move.
- */
-function hoistAbbreviationDefs(doc: Document): void {
-  const hoisted: BlockNode[] = []
-
-  const strip = (blocks: BlockNode[]): BlockNode[] =>
-    blocks.filter((block) => {
-      if (block.type === 'abbreviation_def') {
-        hoisted.push(block)
-        return false
-      }
-      descend(block)
-      return true
-    })
-
-  const descend = (block: BlockNode): void => {
-    const node = block as { children?: BlockNode[]; items?: { children?: BlockNode[] }[] }
-    if (Array.isArray(node.children)) node.children = strip(node.children)
-    // A list's items and a definition list's descriptions hold blocks too, so a
-    // definition written inside one is nested exactly as deeply.
-    if (Array.isArray(node.items)) {
-      for (const item of node.items) {
-        if (Array.isArray(item.children)) item.children = strip(item.children)
-      }
-    }
-  }
-
-  // The document's own children are already at document level: descend into
-  // them, but leave any definition sitting there where the author put it.
-  for (const block of doc.children) descend(block)
-
-  if (hoisted.length) doc.children = [...doc.children, ...hoisted]
-}
-
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
   // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
@@ -835,6 +789,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     0,
     opts.onUnclosedContainer ? new Set<string>() : undefined,
   )
+  lexer.atDocumentLevel = true
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
   lexer.consumeFrontmatter()
@@ -849,7 +804,6 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   try {
     const children = parseBlocks(lexer, 0)
     const doc: Document = { type: 'document', children }
-    hoistAbbreviationDefs(doc)
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = utf8ByteLength(source)
@@ -1033,6 +987,11 @@ function collectLinkDefs(lexer: Lexer) {
   // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
   // closed on its own width so a wider `:::: |` is not closed by a narrower run.
   let verse: number | null = null
+  // Div nesting depth, for the abbreviation branch below. A div is the one
+  // container that adds NO per-line prefix, so `raw` alone cannot tell a
+  // document-level definition from one written inside `:::`. Colon fences close
+  // on an exact length match (carve#455), which is what the stack records.
+  const divs: number[] = []
   // Track the enclosing list item's content column so a fenced-code delimiter
   // is tested at its container's content column (PART 2), not blindly at
   // column 0. Without this the prepass cannot tell a real fence nested at a
@@ -1110,6 +1069,14 @@ function collectLinkDefs(lexer: Lexer) {
       verse = verseOpen[1]!.length
       continue
     }
+    // Track `:::` nesting so the abbreviation branch can require document
+    // level. Only the depth matters here, not what kind of div it is.
+    const colon = line.trim().match(/^(:{3,})[ \t]*(.*)$/)
+    if (colon) {
+      const width = colon[1]!.length
+      if (colon[2] === '' && divs.length && divs[divs.length - 1] === width) divs.pop()
+      else divs.push(width)
+    }
     if (fence) {
       // CLOSER: strip a blockquote prefix only when the fence is quoted, and
       // NEVER a list marker -- a fence delimiter is a continuation line of pure
@@ -1148,7 +1115,20 @@ function collectLinkDefs(lexer: Lexer) {
     // nothing about what is opaque: it registered a definition written inside a
     // fenced code SAMPLE, so documenting the syntax changed the prose around it
     // (carve#573).
-    const abbr = RE_ABBR_DEF.exec(line)
+    // PART 12 §7: an abbreviation definition is recognized ONLY at document
+    // level. Tested against `raw`, NOT the container-stripped `line`: stripping
+    // is what made `> *[X]: y` register a document-wide expansion, which is the
+    // one definition kind with no marker at the use site to point back at it.
+    // The anchored pattern rules out an indented (list-item continuation) line
+    // on its own; `divs` covers the one container that adds no line prefix.
+    // `listCols` covers the remaining container: a flush-left definition line
+    // that directly follows an open list item is that item's lazy continuation
+    // (text), not a document-level definition. A blank line first pops the
+    // stack, and then it is one.
+    const abbr =
+      divs.length === 0 && listCols.length === 0 && !inFootnoteBody
+        ? RE_ABBR_DEF.exec(raw)
+        : null
     if (abbr) {
       lexer.abbrDefs.set(abbr[1]!, abbr[2]!)
       continue
@@ -1435,7 +1415,9 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Bare `:::` or attributes-only `::: {…}` opens a generic div (the
   // admonition branch above already claimed the `::: word` form).
   if (RE_DIV_OPEN.test(line)) return parseDiv(lexer)
-  if (RE_ABBR_DEF.test(line)) {
+  // PART 12 §7: only at document level. In a container the line falls through
+  // to the paragraph branch and is preserved as the text the author typed.
+  if (lexer.atDocumentLevel && RE_ABBR_DEF.test(line)) {
     return parseAbbrDef(lexer)
   }
   // Footnote definition: consume the def line + indented continuation
@@ -2529,9 +2511,11 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
   // invisible, so there is nothing on the page for a lazy line to continue.
   // Without these, `>:: t` / `~` produced `<dt>t ~</dt>` and `>[f]: ~` / `/`
   // put the `/` inside the quote (carve-js#554).
+  // No RE_ABBR_DEF: this content is inside a block quote, and PART 12 SS7
+  // recognizes an abbreviation definition only at document level - so the line
+  // IS a paragraph here, and a lazy line continues it.
   if (
     RE_DEFLIST_TERM.test(content) ||
-    RE_ABBR_DEF.test(content) ||
     RE_FOOTNOTE_DEF.test(content) ||
     RE_LINK_DEF.test(content)
   ) {
@@ -2939,7 +2923,7 @@ function lineOpensBlock(line: string): boolean {
     RE_RAW_FENCE.test(line) ||
     RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
-    RE_ABBR_DEF.test(line) ||
+    // No RE_ABBR_DEF: these lines are item content, never document level.
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
     RE_HR.test(line) ||
@@ -2981,7 +2965,8 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_DIV_OPEN.test(line) ||
     RE_LINE_BLOCK_OPEN.test(line) ||
     RE_HARDBREAKS_OPEN.test(line) ||
-    RE_ABBR_DEF.test(line) ||
+    // No RE_ABBR_DEF: a lazy line is item content, so the definition form is
+    // not recognized and the line folds into the item as text.
     RE_FOOTNOTE_DEF.test(line) ||
     RE_LINK_DEF.test(line) ||
     RE_HR.test(line) ||
@@ -4159,9 +4144,10 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       // `+` is the list-continuation marker, never an interrupter.
       return false
     case '*':
-      // abbreviation definition (invisible) or thematic break. A bullet/task
-      // does NOT interrupt (symmetric, §10).
-      return RE_ABBR_DEF.test(ln) || RE_HR.test(ln)
+      // abbreviation definition (invisible, and only at document level - PART
+      // 12 §7) or thematic break. A bullet/task does NOT interrupt
+      // (symmetric, §10).
+      return (lexer.atDocumentLevel && RE_ABBR_DEF.test(ln)) || RE_HR.test(ln)
     case '_':
       return RE_HR.test(ln)
     case ':':
