@@ -221,6 +221,9 @@ const IMPLEMENTED = new Set([
   'a-comment-fence-is-a-comment-at-any-column-too',
   'a-floating-attribute-stops-at-the-item-boundary',
   'a-comment-under-a-nested-item-does-not-close-it',
+  'a-definition-inside-a-comment-registers-nothing',
+  'a-blank-after-a-comment-still-ends-the-item',
+  'a-comment-fence-under-a-nested-item-does-not-close-it-either',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
