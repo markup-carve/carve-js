@@ -1155,7 +1155,23 @@ function collectLinkDefs(lexer: Lexer) {
     // NOT reject them.
     const topLevelIndentedDef =
       contentCol === 0 && !inFootnoteBody && /^[ \t]/.test(deIndented)
-    const m = topLevelIndentedDef ? null : RE_LINK_DEF.exec(line)
+    // The same rule one level out: a line BELOW the enclosing content column is
+    // not a definition either, it is that container's lazy text. Collecting it
+    // let a reference resolve against a line the renderer prints verbatim - so
+    // `- - a` / ` [r]: /u` folded as text AND defined `r` (carve-js#597). The
+    // `contentCol === 0` case above is this same test where the column is zero;
+    // it stays separate because it also has to spare a footnote body, whose
+    // real content column this flat pass cannot model.
+    //
+    // Measured on the RAW line, and only when the line supplies no container
+    // prefix of its own (`kept === raw`). A def that IS an item's content sits
+    // on the marker line - `- [ref]: /url`, corpus 16-reference-link-4 - where
+    // stripping the marker leaves indent 0 against a content column of 2, so
+    // comparing the STRIPPED indent would reject the one shape that is at its
+    // content column by construction.
+    const belowContentColumn =
+      contentCol > 0 && kept === raw && leadingWhitespace(raw) < contentCol
+    const m = topLevelIndentedDef || belowContentColumn ? null : RE_LINK_DEF.exec(line)
     if (m) {
       const def: { href: string; title?: string } = { href: m[2]! }
       const title = m[3] ?? m[4]
@@ -2992,8 +3008,20 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_HARDBREAKS_OPEN.test(line) ||
     // No RE_ABBR_DEF: a lazy line is item content, so the definition form is
     // not recognized and the line folds into the item as text.
-    RE_FOOTNOTE_DEF.test(line) ||
-    RE_LINK_DEF.test(line) ||
+    //
+    // The other two are gated on the line being FLUSH, which is what every
+    // other predicate here gets for free from its own anchor. RE_LINK_DEF is
+    // deliberately whitespace-tolerant - other passes need it to recognize a
+    // quoted or nested def - and its leading class is "whitespace except NBSP",
+    // so it matches a leading SPACE. Unguarded, that made a definition ONE
+    // COLUMN IN end the fold, where a heading, quote, table row, colon fence or
+    // bullet in the same position folds as text (PART 1 S4). It also swallowed
+    // the footnote form, since `[^f]: x` has the link-def shape too, which is
+    // why the flush-anchored RE_FOOTNOTE_DEF above never had to match for the
+    // footnote case to break. A definition opens only AT its container's
+    // content column - the same strict rule `parseBlockInner` applies
+    // (carve-js#597).
+    (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || RE_LINK_DEF.test(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     // A caption line (`^ …`) ends the item's lazy continuation rather than
@@ -4222,7 +4250,16 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       return RE_DEFLIST_TERM.test(ln)
     case '[':
       // link or footnote reference definition (invisible)
-      return RE_LINK_DEF.test(ln) || RE_FOOTNOTE_DEF.test(ln)
+      //
+      // Flush only, for the reason the `::` arm above spells out: a definition
+      // opens at its container's CONTENT COLUMN (column 0 in every lexer, since
+      // nested content is dedented into a sub-lexer), so an indented one is
+      // below every content column and folds as lazy text - exactly as an
+      // indented heading, quote, table row or `:: term` already does. The
+      // anchor does that work for every other pattern here; RE_LINK_DEF is
+      // whitespace-tolerant on purpose (other passes need it to see a quoted or
+      // nested def) and so needs the test written out (carve-js#597).
+      return i === 0 && (RE_LINK_DEF.test(ln) || RE_FOOTNOTE_DEF.test(ln))
     case '%':
       // line or block comment (invisible)
       return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)

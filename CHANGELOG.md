@@ -43,6 +43,32 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A definition one column in folds as text** (PART 1 S4, carve-js#597). A
+  definition line below every content column is lazy text, the same as any
+  other opener there - a construct opens only AT its container's content
+  column. The footnote and link forms used to end the list and reappear as a
+  document paragraph:
+
+  ```
+  - - a
+   [^f]: x
+  ```
+
+  now folds the line into the item's open paragraph, as the heading, quote,
+  table row, colon fence and bullet in that position already did.
+
+  Both went through `RE_LINK_DEF`, which is whitespace-tolerant on purpose -
+  other passes need it to see a quoted or nested definition - and whose leading
+  character class is "whitespace except NBSP", so it matched a leading SPACE
+  where every other predicate's anchor rejected one. `[^f]: x` has the link-def
+  shape too, which is why the flush-anchored footnote pattern never had to
+  match for the footnote case to break.
+
+  The line is also no longer COLLECTED, so a reference elsewhere in the
+  document does not resolve against a line the renderer prints verbatim. A
+  definition that IS an item's content (`- [ref]: /url`) is unaffected: it sits
+  on the marker line, at its content column by construction.
+
 - **A floating attribute skips what renders nothing** (§15 A2a,
   markup-carve/carve#571). `{#i}` followed by a reference, footnote or
   abbreviation definition, a line comment or a comment block now attaches to the
