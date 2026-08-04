@@ -178,8 +178,11 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
 // An image contributes its alt text, EXCEPT when it is an unresolved reference
 // (PART 12 §3a): there the document has no image, only the source the author
 // wrote, and `alt` is the label out of its brackets.
-function renderImageText(node: { alt: string; ref?: string; rawRef?: string }): string {
-  if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
+function renderImageText(node: { alt: string; src?: string; ref?: string; rawRef?: string }): string {
+  // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
+  // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
+  // no longer answers this question (carve#596).
+  if (node.ref !== undefined && !node.src) return stripControls(node.rawRef ?? '')
 
   return stripControls(node.alt)
 }
@@ -222,7 +225,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
+      if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
       return renderInlines(node.children, ctx)
     case 'image':
       return renderImageText(node)

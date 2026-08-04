@@ -744,7 +744,10 @@ function renderLink(node: Link, ctx: CarveContext): string {
   // no matching `[label]: url` def) round-trips via its verbatim source. resolve
   // either matches it to a heading later or renders it literally; emitting the
   // raw reference reproduces that exactly, where `[text]()` would not.
-  if (node.ref !== undefined && node.rawRef !== undefined) {
+  // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
+  // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
+  // no longer answers this question (carve#596).
+  if (node.ref !== undefined && node.rawRef !== undefined && !node.href) {
     return node.rawRef
   }
   const text = renderInlines(node.children, ctx)
@@ -756,7 +759,7 @@ function renderImage(node: Image): string {
   // An unresolved reference image round-trips via its verbatim source, exactly
   // like an unresolved reference link (renderLink); `![alt]()` would change the
   // rendered text and break the carveToHtml(fmt(x)) == carveToHtml(x) invariant.
-  if (node.ref !== undefined && node.rawRef !== undefined) {
+  if (node.ref !== undefined && node.rawRef !== undefined && !node.src) {
     return node.rawRef
   }
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`

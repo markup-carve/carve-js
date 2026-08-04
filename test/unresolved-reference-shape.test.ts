@@ -65,11 +65,19 @@ describe('an unresolved reference stays a link on the wire (PART 12 §3a)', () =
     expect(fromAstJson(toAstJson(doc))).toEqual(doc)
   })
 
-  it('still resolves a reference that has a definition', () => {
+  it('still resolves a reference that has a definition, and keeps the reference', () => {
+    // §3a's second half: A RESOLVED REFERENCE KEEPS ITS DESTINATION - the
+    // authored `ref` and `rawRef` survive BESIDE `href`, the same way §5 has
+    // footnote numbering added alongside rather than in place of the
+    // reference. This asserted `ref` was gone, which made `[a][]` and
+    // `[a](/url)` the same tree (carve#596).
     const json = carveToAstJson('see [a][] here\n\n[a]: /url\n')
-    const link = (json.children[0] as { children: { ref?: string; href?: string }[] }).children[1]!
+    const link = (
+      json.children[0] as { children: { ref?: string; rawRef?: string; href?: string }[] }
+    ).children[1]!
     expect(link.href).toBe('/url')
-    expect(link.ref).toBeUndefined()
+    expect(link.ref).toBe('a')
+    expect(link.rawRef).toBe('[a][]')
   })
 })
 

@@ -6043,9 +6043,14 @@ function applyLinkDefs(
       if (def) {
         node.href = def.href
         if (def.title !== undefined) node.title = def.title
-        delete node.ref
-        delete node.rawRef
       }
+        // PART 12 §3a, A RESOLVED REFERENCE KEEPS ITS DESTINATION: `ref` and
+        // `rawRef` stay BESIDE `href`, exactly as §5 has footnote numbering
+        // added alongside rather than in place of the reference. Deleting them
+        // made `[a][]` and `[a](#a)` the same tree, which is the distinction
+        // the clause exists to protect - and the clause names all three
+        // engines as missing this half (carve#596).
+
       // If unresolved, KEEP the placeholder so a post-parse pass
       // (resolveImplicitHeadingRefs in heading-ids.ts) can match it
       // against the document's parsed headings, or finalize it to
@@ -6059,9 +6064,14 @@ function applyLinkDefs(
       if (def) {
         node.src = def.href
         if (def.title !== undefined) node.title = def.title
-        delete node.ref
-        delete node.rawRef
       }
+        // PART 12 §3a, A RESOLVED REFERENCE KEEPS ITS DESTINATION: `ref` and
+        // `rawRef` stay BESIDE `href`, exactly as §5 has footnote numbering
+        // added alongside rather than in place of the reference. Deleting them
+        // made `[a][]` and `[a](#a)` the same tree, which is the distinction
+        // the clause exists to protect - and the clause names all three
+        // engines as missing this half (carve#596).
+
       // Unresolved image refs do NOT match heading text; the resolve pass
       // finalizes any survivor to literal source (rawRef).
       out.push(node)

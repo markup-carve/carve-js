@@ -379,7 +379,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
+      if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
       const text = renderInlines(node.children, ctx)
       const href = stripControls(node.href)
       let out = style(text, UNDERLINE + FG_BLUE)
@@ -472,10 +472,13 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   }
 }
 
-function renderImage(node: { alt: string; ref?: string; rawRef?: string }): string {
+function renderImage(node: { alt: string; src?: string; ref?: string; rawRef?: string }): string {
   // An unresolved reference image writes back as its source, like the link
   // arm above; `[img: alt]` would announce an image the document never had.
-  if (node.ref !== undefined) return stripControls(node.rawRef ?? '')
+  // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
+  // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
+  // no longer answers this question (carve#596).
+  if (node.ref !== undefined && !node.src) return stripControls(node.rawRef ?? '')
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

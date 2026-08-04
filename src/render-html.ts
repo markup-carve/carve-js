@@ -1249,7 +1249,10 @@ function renderImage(img: Image, opts: RenderOptions): string {
   // node rendered as `<img src="">` - it only looked right because resolve()
   // used to replace it with a text node first, which a document decoded from
   // JSON never goes through.
-  if (img.ref !== undefined) return escapeHtml(img.rawRef ?? '')
+  // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
+  // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
+  // no longer answers this question (carve#596).
+  if (img.ref !== undefined && !img.src) return escapeHtml(img.rawRef ?? '')
   const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
   const src = escapeAttr(sanitizeUrl(img.src, opts))
   // The sanitized structural src wins; never re-emit an author-supplied
@@ -1296,7 +1299,7 @@ function renderInline(node: InlineNode, opts: RenderOptions): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined) return escapeHtml(node.rawRef ?? '')
+      if (node.ref !== undefined && !node.href) return escapeHtml(node.rawRef ?? '')
       const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
       const href = escapeAttr(sanitizeUrl(node.href, opts))
       // The sanitized structural href wins; never re-emit an author-supplied
