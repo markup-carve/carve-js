@@ -54,20 +54,27 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
       // and key bytes), nowhere near the ~100MB naive blowup. A loose 3x-budget
       // ceiling proves the bound without being brittle.
       expect(out!.length).toBeLessThan(budget * 3)
-      // Only as many full expansions as fit in the budget are emitted.
+      // Only as many full expansions as fit in the budget are emitted, PLUS the
+      // one in the definition line itself: PART 10 §10a keeps the definition on
+      // this target, and one copy per definition is bounded by the input rather
+      // than by the number of uses - which is what the guard is for (carve#589).
       const fullExpansions = out!.split(expansion).length - 1
-      expect(fullExpansions).toBeLessThanOrEqual(Math.ceil(budget / EXPANSION_LEN))
+      expect(fullExpansions).toBeLessThanOrEqual(Math.ceil(budget / EXPANSION_LEN) + 1)
       // Fast: a real document is far below budget; even this worst case is quick.
       expect(ms).toBeLessThan(2000)
     })
   }
 
-  it('plain text drops the expansion entirely (no amplification possible)', () => {
+  it('plain text emits the expansion once, in the definition, and never per use', () => {
+    // This target does not expand an abbreviation in the body at all, so the
+    // amplification vector is absent whatever the definition does. What it now
+    // carries is the definition LINE (PART 10 §10a) - exactly one copy, however
+    // many times the abbreviation is used.
     let out: string | undefined
     expect(() => {
       out = carveToPlainText(src)
     }).not.toThrow()
-    expect(out!.includes(expansion)).toBe(false)
+    expect(out!.split(expansion).length - 1).toBe(1)
   })
 
   it('a normal small abbreviation still renders <abbr title=...> under budget', () => {

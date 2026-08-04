@@ -93,8 +93,10 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
       return `${renderImageText(node)}\n\n`
-    case 'raw_block':
     case 'abbreviation_def':
+      // PART 10 §10a - see the note in render-markdown.
+      return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
+    case 'raw_block':
     case 'comment':
       return ''
     default: {
@@ -165,7 +167,10 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[${stripControls(label)}]: ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
+    // The MARKER AS WRITTEN (PART 10 §10a): `[n]: …` is a link reference
+    // definition, so emitting one where the author wrote a footnote definition
+    // turns it into a different construct on the way back.
+    out += `[^${stripControls(label)}]: ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
   }
   return out
 }

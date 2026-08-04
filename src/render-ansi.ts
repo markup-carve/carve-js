@@ -155,6 +155,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'raw_block':
       return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
     case 'abbreviation_def':
+      // PART 10 §10a - see the note in render-markdown.
+      return `${style(`*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}`, DIM)}\n\n`
     case 'comment':
       return ''
     default: {
@@ -318,7 +320,8 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `${style(`[${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
+    // The marker as written (PART 10 §10a): the caret is part of the construct.
+    out += `${style(`[^${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
   }
   return out
 }
