@@ -81,6 +81,21 @@ describe('a crossref serializes as a heading_ref', () => {
     )
   })
 
+  it('does not anchor a heading whose only crossref renders as text', () => {
+    // The crossref inside the link label renders as the word `H`, so the
+    // Markdown output contains no reference to `#H` - and a `{#H}` on the
+    // heading would be an anchor nothing points at. Caught by carve-php
+    // disagreeing in the cross-engine comparison, not by any test here.
+    expect(carveToMarkdown('# H\n\n[see </#H>](/outer)\n')).toBe('# H\n\n[see H](/outer)\n')
+  })
+
+  it('still anchors a heading a footnote body references', () => {
+    // A note body renders in the endnotes, outside every anchor, so a crossref
+    // there IS a reference in the output.
+    const markdown = carveToMarkdown('# H\n\nText[^a]\n\n[^a]: see </#H>\n')
+    expect(markdown).toContain('# H {#H}')
+  })
+
   it('does not nest an anchor inside a link, and keeps the node anyway', () => {
     // "Links never nest" is a rendering rule; §3a is a tree rule. Both hold:
     // the anchor is suppressed, the crossref is still in the tree.
