@@ -1110,7 +1110,12 @@ function collectLinkDefs(lexer: Lexer) {
     // a definition at it was rejected as "indented at top level". The item
     // consumed the line anyway, so it rendered nothing AND defined nothing
     // (carve#658). The footnote prepass already reads the quoted line.
-    const unquoted = raw.replace(/^(?:[^\S\u00a0]*>(?: |$))+/, '')
+    // Only a COLUMN-0 marker is stripped. An indented one is inside something -
+    // `- a` / `  > [r]: /u` puts the quote at the item's content column - and
+    // eating that indentation here loses the very column the definition has to
+    // reach, which is what emptied the stack and dropped that definition
+    // (carve-js#649).
+    const unquoted = raw.replace(/^(?:>(?: |$))+/, '')
     const wasPrevBlank = prevBlank
     prevBlank = raw.trim() === ''
     if (!fence) {
@@ -1221,6 +1226,19 @@ function collectLinkDefs(lexer: Lexer) {
     // spurious link (or, for a quoted fence in a deeply/exotically nested list,
     // an unresolved reference). The sound fix is collecting defs during block
     // parsing.
+    // An INDENTED `>` is a blockquote marker only at an open item's content
+    // column (`- a` / `  > [r]: /u`). Anywhere else the line renders as
+    // ordinary text - all three engines publish `> [r]: /u` as prose there -
+    // and collecting from it made the definition VISIBLE AND ACTIVE: a
+    // reference elsewhere resolved through a line the reader sees as text
+    // (carve-js#649). The container strippers are whitespace-tolerant, so the
+    // check has to happen here.
+    const quoteIndent = leadingWhitespace(raw)
+    const quoteAtWrongColumn =
+      quoteIndent > 0 &&
+      raw.slice(quoteIndent).startsWith('>') &&
+      !listCols.includes(quoteIndent)
+    if (quoteAtWrongColumn) continue
     const kept = stripContainerPrefixesKeepIndent(raw)
     const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
     const deIndented = keptIndent >= contentCol ? kept.slice(contentCol) : kept
