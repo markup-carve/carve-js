@@ -423,7 +423,18 @@ const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*=([a-zA-Z][\w-]*)\s*$/
 // `%%% html` are fences, not raw blocks — `%%%` carries no info string (the raw
 // block is a code fence with an `=FORMAT` info string). Capture group 1 is the
 // delimiter run, whose length must match to close.
+//
+// Indentation does not matter, exactly as for the line form above: a comment is
+// recognized at ANY column (carve#624). Anchoring this one at column 0 left an
+// indented `%%%` to the line-comment rule, which consumed the opener and the
+// closer one line at a time and rendered everything BETWEEN them — a comment
+// that showed its contents while hiding its delimiters (carve-js#630).
 const RE_COMMENT_BLOCK = /^(%{3,})(.*)$/
+// The same fence seen from a position that CONSUMES it. A comment is recognized
+// at any column (carve#624), but where a line ENDS an item or opens a block the
+// strict form above still decides, so an indented fence does not close the item
+// it sits in.
+const RE_COMMENT_BLOCK_ANY = /^[ \t]*(%{3,})(.*)$/
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
@@ -1525,7 +1536,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // with NO matching closer ahead does not open a block (PART 9 §28) — it falls
   // through to the line-comment rule below, so the following blocks still
   // render instead of being swallowed to EOF.
-  const commentFence = RE_COMMENT_BLOCK.exec(line)
+  const commentFence = RE_COMMENT_BLOCK_ANY.exec(line)
   if (commentFence && commentBlockHasCloser(lexer, commentFence[1]!.length)) {
     return parseCommentBlock(lexer)
   }
@@ -1791,7 +1802,7 @@ function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
   if (lastByWidth === undefined) {
     lastByWidth = new Map<number, number>()
     for (let i = 0; i < lexer.lines.length; i++) {
-      const c = RE_COMMENT_BLOCK.exec(lexer.lines[i]!)
+      const c = RE_COMMENT_BLOCK_ANY.exec(lexer.lines[i]!)
       if (c) lastByWidth.set(c[1]!.length, i)
     }
     lexer.commentFenceLastIndex = lastByWidth
@@ -1809,14 +1820,14 @@ function parseCommentBlock(lexer: Lexer): Comment {
   // document. The opener's trailing text is kept as the body's first line so
   // `carve fmt` round-trips the words instead of deleting them; a closer's
   // trailing text is discarded, like a code fence's closing info.
-  const m = RE_COMMENT_BLOCK.exec(lexer.consume())!
+  const m = RE_COMMENT_BLOCK_ANY.exec(lexer.consume())!
   const fence = m[1]!.length
   const lines: string[] = []
   const openerTail = m[2]!.trim()
   if (openerTail !== '') lines.push(openerTail)
   while (!lexer.eof()) {
     const ln = lexer.peek()!
-    const c = RE_COMMENT_BLOCK.exec(ln)
+    const c = RE_COMMENT_BLOCK_ANY.exec(ln)
     if (c && c[1]!.length === fence) {
       lexer.consume()
       break
