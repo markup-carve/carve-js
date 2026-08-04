@@ -43,11 +43,44 @@ describe('block attribute lines (§15)', () => {
     expect(h('Text\n\n{.note}')).toBe('<p>Text</p>')
   })
 
-  it('does not leak attributes past a reference definition', () => {
-    // The attr line attaches to the (non-rendering) link definition and
-    // is dropped — it does NOT float onto the following paragraph.
-    // Matches djot and carve-php.
-    expect(h('{.note}\n[ref]: /u\nText')).toBe('<p>Text</p>')
+  describe('A2a: an invisible construct is not the next block (carve#529)', () => {
+    // `pending` floats PAST anything that renders nothing and attaches to the
+    // next VISIBLE block. The attribute is the author's instruction about a
+    // rendered element, and attaching it to a construct that emits nothing
+    // silently discards it - which A4 reserves for the one case where there is
+    // genuinely nothing left, end of document.
+    //
+    // One case per kind, because no engine was self-consistent across the five:
+    // carve-js dropped the attribute over all of them, carve-rs over the
+    // abbreviation definition only, carve-php over the two reference kinds.
+
+    it('floats past a reference definition', () => {
+      expect(h('{.note}\n[ref]: /u\n\nText')).toBe('<p class="note">Text</p>')
+    })
+
+    it('floats past a footnote definition', () => {
+      expect(h('{#i}\n[^f]: note\n\ne')).toBe('<p id="i">e</p>')
+    })
+
+    it('floats past an abbreviation definition', () => {
+      expect(h('{#i}\n*[A]: alpha\n\ne')).toBe('<p id="i">e</p>')
+    })
+
+    it('floats past a line comment', () => {
+      expect(h('{#i}\n%% aside\n\ne')).toBe('<p id="i">e</p>')
+    })
+
+    it('floats past a comment block', () => {
+      expect(h('{#i}\n%%%\naside\n%%%\n\ne')).toBe('<p id="i">e</p>')
+    })
+
+    it('floats past several in a row', () => {
+      expect(h('{#i}\n[ref]: /u\n%% aside\n*[A]: alpha\n\ne')).toBe('<p id="i">e</p>')
+    })
+
+    it('is still dropped when only invisible constructs follow (A4)', () => {
+      expect(h('{#i}\n[ref]: /u\n')).toBe('')
+    })
   })
 
   it('parses a multi-line attribute block', () => {

@@ -124,12 +124,21 @@ describe('renderCarve targeted canonicalization', () => {
     )
   })
 
-  it('keeps a literal caret escaped and a literal comma unescaped', () => {
-    // `^sup^` / `,sub,` are plain text (no bare sup/sub delimiter): the comma
-    // needs no escape; the caret keeps one (footnote/caption channels).
-    expect(carveToCarve('^sup^ ,sub, stays literal')).toBe(
-      '\\^sup\\^ ,sub, stays literal\n',
-    )
+  it('leaves a literal caret and a literal comma unescaped', () => {
+    // `^sup^` / `,sub,` are plain text (no bare sup/sub delimiter), and PART 11
+    // §2's test is whether omitting the escape changes the RE-PARSED AST. It
+    // does not here, so neither character needs escaping. The caret used to be
+    // escaped unconditionally, which §2 calls a defect rather than a safe
+    // default: over-escaping is invisible to every gate the project runs - the
+    // HTML matches and the round trip holds, and only the AST shows the
+    // `escaped_text` node nobody wrote (carve#581).
+    expect(carveToCarve('^sup^ ,sub, stays literal')).toBe('^sup^ ,sub, stays literal\n')
+  })
+
+  it('still escapes a caret where dropping it WOULD change the parse', () => {
+    // A caret line after a resolvable image promotes the paragraph to a figure,
+    // so there the escape is load-bearing and stays.
+    expect(carveToCarve('![a](/u)\n\\^ cap')).toBe('![a](/u)\n\\^ cap\n')
   })
 
   it('keeps a quoted admonition title stable across fmt passes (issue 295)', () => {
@@ -314,19 +323,25 @@ describe('fmt keeps a heading on one line', () => {
     expect(carveToHtml(written)).toBe(carveToHtml(src))
   })
 
-  it('still bounds a hand-built AST deeper than any parse can reach', async () => {
+  it('REFUSES a hand-built AST deeper than any parse can reach', async () => {
     // Raising the bound must not retire it: the guard is there for ASTs that
     // did not come from the parser, which can nest without limit.
-    const { renderCarve } = await import('../src/index.js')
+    //
+    // §25: AT THE RENDER CEILING, A RENDERER REFUSES. This used to truncate -
+    // emit the nested markers and delete the body - which is the worse half of
+    // the two failure modes even though it looks tidier: this is the CANONICAL
+    // WRITER, so a tree built through the API came back as a document whose
+    // body was gone, with nothing in the return value to say so (carve#526).
+    const { renderCarve, RenderDepthError } = await import('../src/index.js')
     const build = (depth: number): unknown => {
       let node: unknown = { type: 'paragraph', children: [{ type: 'text', value: 'body' }] }
       for (let i = 0; i < depth; i++) node = { type: 'admonition', kind: 'note', children: [node] }
       return { type: 'doc', children: [node] }
     }
-    const bounded = renderCarve(build(50_000) as never)
-    // Truncated rather than overflowing the stack, and truncated at the SAME
-    // point as a tree two orders of magnitude shallower.
-    expect(bounded).not.toContain('body')
-    expect(bounded.length).toBe(renderCarve(build(1_000) as never).length)
+    expect(() => renderCarve(build(50_000) as never)).toThrow(RenderDepthError)
+    expect(() => renderCarve(build(1_000) as never)).toThrow(RenderDepthError)
+    // The failure names the bound rather than being whatever the host raises
+    // when the stack runs out.
+    expect(() => renderCarve(build(1_000) as never)).toThrow(/render cap of 232/)
   })
 })

@@ -37,6 +37,20 @@ describe('a list item whose only content is an empty quote', () => {
     }
   })
 
+  it('closes after a block-attribute lead too - it opens nothing either', () => {
+    // `{i}` renders nothing and floats forward (§15 A1/A2), so there is no
+    // paragraph for the column-0 line to continue. The attribute is left
+    // dangling with no following block INSIDE the item and dropped (A4).
+    expect(norm(carveToHtml('. {i}\n`\n'))).toBe('<ol><li></li></ol><p><code></code></p>')
+    expect(norm(carveToHtml('. {i}\nX\n'))).toBe('<ol><li></li></ol><p>X</p>')
+  })
+
+  it('keeps a brace line that is NOT an attribute line inside the item', () => {
+    // `{1a}` is a digit-first identifier: the block stays literal (§15 A6), so
+    // it is paragraph text and it does hold a paragraph open.
+    expect(norm(carveToHtml('. {1a}\nX\n'))).toBe('<ol><li>{1a}\nX</li></ol>')
+  })
+
   it('still folds when the quote holds a paragraph', () => {
     expect(norm(carveToHtml('- > q\nlazy\n'))).toBe(
       '<ul><li><blockquote><p>q\nlazy</p></blockquote></li></ul>',

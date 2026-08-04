@@ -1,4 +1,4 @@
-import { MAX_NESTING_DEPTH } from './parse.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
@@ -16,7 +16,6 @@ export interface PlainTextRenderOptions {}
  * ast-json.ts, which is above the parser cap because the two counts measure
  * different things.
  */
-const MAX_RENDER_DEPTH = MAX_NESTING_DEPTH + 32
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {}): string {
@@ -43,7 +42,7 @@ interface PlainContext {
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
-  if (ctx.blockDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderPlainText', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
     return blocks.map((b) => renderBlock(b, ctx)).join('')
@@ -188,7 +187,7 @@ function renderImageText(node: { alt: string; src?: string; ref?: string; rawRef
 }
 
 function renderInlines(nodes: InlineNode[], ctx: PlainContext): string {
-  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) return ''
+  if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderPlainText', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
     return nodes.map((node) => renderInline(node, ctx)).join('')

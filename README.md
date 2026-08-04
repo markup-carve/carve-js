@@ -60,6 +60,29 @@ HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
 mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes
 render literally.
 
+### Renderers refuse a tree that nests too deeply
+
+Every `render*` function stops at `MAX_RENDER_DEPTH` and throws a
+`RenderDepthError` naming the bound, rather than truncating the output or
+letting the host stack run out:
+
+```ts
+import { renderHtml, RenderDepthError, MAX_RENDER_DEPTH } from '@markup-carve/carve'
+
+try {
+  renderHtml(doc)
+} catch (err) {
+  if (err instanceof RenderDepthError) {
+    // err.renderer, err.depth === MAX_RENDER_DEPTH
+  }
+}
+```
+
+Nothing `parse` produces can reach the ceiling - it sits above the parser's own
+nesting cap - so this only applies to a tree you built through the API or
+decoded from somewhere else. A renderer that stopped emitting instead would
+hand back a document that looks complete and is not.
+
 ### Heading ids
 
 Every heading gets an automatic id derived from its text. Ids are

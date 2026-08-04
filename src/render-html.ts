@@ -35,6 +35,7 @@ import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
+import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -794,7 +795,43 @@ function renderBlocks(nodes: BlockNode[], opts: RenderOptions, level: number): s
     .join('\n')
 }
 
+/**
+ * Block-nesting depth of the render in progress, and its inline counterpart.
+ *
+ * Module-scoped rather than threaded through `opts` because `renderBlock` and
+ * `renderInline` are both reached from several call sites that do not go
+ * through `renderBlocks`/`renderInlines` (a figure's target, a details body),
+ * so counting at the two dispatch functions is the only placement that bounds
+ * EVERY path. The `finally` unwind means a refusal thrown deep in a tree leaves
+ * the counters where the next render expects them.
+ *
+ * DELIBERATELY NOT SAVED AND RESTORED across a nested `renderHtml()`, unlike
+ * `abbrBudget` and `docIds` above. Those are per-DOCUMENT resources, so a
+ * nested document rightly gets its own; depth is a property of the HOST STACK,
+ * which a nested render adds to rather than restarts. Resetting it would hand
+ * an extension a way to defeat the ceiling entirely - re-enter `renderHtml()`
+ * at each level and the count never reaches the cap while the real stack does,
+ * which is the `RangeError` §25 forbids. So an extension that renders a
+ * sub-document 100 levels down has 132 levels left, not another 232.
+ */
+let blockDepth = 0
+let inlineDepth = 0
+
 function renderBlock(node: BlockNode, opts: RenderOptions, level: number): string {
+  // §25: AT THE RENDER CEILING, A RENDERER REFUSES. This renderer had no
+  // ceiling at all and recursed until the host stack gave out with a
+  // `RangeError` -- the "crashing" §25 forbids, and the one renderer in the
+  // ecosystem that behaved unlike its own siblings (carve#526).
+  if (blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderHtml', MAX_RENDER_DEPTH)
+  blockDepth++
+  try {
+    return renderBlockNode(node, opts, level)
+  } finally {
+    blockDepth--
+  }
+}
+
+function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   // Extension block renderers (keyed by node type) get first claim, tried in
   // registration order: each may return undefined to defer to the next
@@ -1269,6 +1306,16 @@ function renderInlines(nodes: InlineNode[], opts: RenderOptions): string {
 }
 
 function renderInline(node: InlineNode, opts: RenderOptions): string {
+  if (inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderHtml', MAX_RENDER_DEPTH)
+  inlineDepth++
+  try {
+    return renderInlineNode(node, opts)
+  } finally {
+    inlineDepth--
+  }
+}
+
+function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
   node = normalizeLegacyInline(node)

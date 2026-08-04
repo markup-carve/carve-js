@@ -70,6 +70,7 @@ export {
   type FrontmatterNode,
   type FootnoteDefNode,
 } from './ast-json.js'
+export { RenderDepthError, MAX_RENDER_DEPTH } from './render-depth.js'
 export type { RenderOptions } from './render-html.js'
 export type { MarkdownRenderOptions } from './render-markdown.js'
 export type { CarveRenderOptions } from './render-carve.js'

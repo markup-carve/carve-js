@@ -43,6 +43,53 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A floating attribute skips what renders nothing** (§15 A2a,
+  markup-carve/carve#571). `{#i}` followed by a reference, footnote or
+  abbreviation definition, a line comment or a comment block now attaches to the
+  next VISIBLE block, so
+
+  ```
+  {#i}
+  [^f]: note
+
+  e
+  ```
+
+  gives `<p id="i">e</p>`. §15 said "the NEXT block element" and left open
+  whether an invisible construct is one; three engines answered three ways and
+  none was self-consistent across the five kinds. carve-js was the consistent
+  one and also the only one that threw the attribute away, which A4 reserves for
+  the single case where there is genuinely nothing left - end of document.
+
+- **A flush-left line with nothing open closes the item** (PART 1 S4,
+  markup-carve/carve#576). A lazy continuation needs an OPEN PARAGRAPH, and a
+  block-attribute line renders nothing and opens nothing. So
+
+  ```
+  . {i}
+  X
+  ```
+
+  closes the item and re-classifies `X` at the top level, where it used to fold
+  in and take the attribute with it. The empty-quote half of the same rule
+  already shipped; a `{1a}` line is literal text (§15 A6) and still holds a
+  paragraph open.
+
+- **Over-cap openers group as one paragraph** (§25, markup-carve/carve#547).
+  Past `MAX_NESTING_DEPTH` an opener "becomes literal paragraph text", so it
+  groups by the ordinary paragraph rule: consecutive flattened openers and any
+  text after them form ONE paragraph ending at the first blank line. carve-js
+  emitted one paragraph per opener except the last, which grouped with the
+  following text - an artifact of where the degrade path handed back to the
+  block parser rather than a rule.
+
+- **`[^]: %` is a footnote definition** (PART 10 §10a,
+  markup-carve/carve#577). An empty label sent the line to the
+  reference-definition rule, which captured `^` as a label and consumed it, so
+  the construct vanished from every target including HTML. It now renders with
+  its caret on the Markdown, plain-text and terminal targets, matching `[^ ]: x`
+  which already produced a footnote with an empty label.
+
 - **An unresolved reference IMAGE is an image node, and every target writes its
   source** (PART 12 §3a, carve-php#624). The link half of §3a shipped; the image
   half did not. `resolve()` still replaced `![alt][nope]` with a text node, so
@@ -72,6 +119,45 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "links never nest" now meets a node that is not really a link.
 
 ### Changed
+
+- **BREAKING: a renderer REFUSES at the render ceiling instead of truncating**
+  (§25, markup-carve/carve#548). `renderHtml`, `renderMarkdown`, `renderCarve`,
+  `renderPlainText` and `renderAnsi` now throw `RenderDepthError` - exported
+  alongside `MAX_RENDER_DEPTH` - when a tree reaches the ceiling. This makes the
+  five renderers fallible, which is a signature change rather than an internal
+  one, and it costs nothing on any path a document travels: the ceiling exceeds
+  `MAX_NESTING_DEPTH` by construction, so no tree from `parse` can reach it, and
+  `fromAstJson` already refuses a deeper ingested tree. What is left is a tree
+  built through the API, where the caller built it and can act on the error.
+
+  Four of the five used to emit the nested markers and delete only the BODY, so
+  the output looked complete and was not - and one of them is `renderCarve`, the
+  canonical writer. `renderHtml` had no ceiling at all and recursed until the
+  host stack gave out with a `RangeError`, the "crashing" §25 forbids. The
+  pre-passes those renderers run first are bounded too, since a pre-pass that
+  overflows refuses nothing.
+
+  Depth is counted against the HOST STACK, so an extension that calls
+  `renderHtml()` recursively spends from the same budget rather than restarting
+  it.
+
+- **An inline node's span covers its trailing attribute block** (PART 12 §4,
+  markup-carve/carve#596). `*x*{#i}` gives the `strong` offsets 0..7, not 0..3.
+  The braces are where the node's `attrs` came from, so a span stopping at `*x*`
+  said the node ended before the markup that gave it half its content. A
+  consumer could not select the styled text from an inline span without knowing
+  which engine produced the tree.
+
+- **The canonical writer does not substitute one construct for another, and
+  escapes less** (PART 11 §2, markup-carve/carve#581). `| %%%` was written
+  `| %% %`, splitting a comment opener run into an opener plus a stray
+  character; it now writes the run whole. `}^p` was written with two escapes and
+  `[^` with one, and both re-parse identically bare, so §2's test says neither
+  needs escaping - the caret is a candidate escape now rather than an
+  unconditional one, and keeps its escape only where dropping it would change
+  the parse (a caption line after a resolvable image). All three defects held
+  `to_html(fmt(x)) == to_html(x)` while the output was wrong, which is what
+  "necessary, not sufficient" means.
 
 - **An abbreviation definition written inside a container is now a child of the
   document** (carve-php#631, spec markup-carve/carve#518). PART 12 §7 puts a
