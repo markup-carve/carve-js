@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToCarve } from '../src/index.js'
+import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToCarve, carveToHtml } from '../src/index.js'
+import { carveToAstJson } from '../src/index.js'
 
 /*
  * PART 10 §10a: an unused definition survives the non-HTML targets.
@@ -38,26 +39,33 @@ describe('an abbreviation definition nothing references', () => {
   })
 })
 
-describe('a footnote definition with an EMPTY label', () => {
-  // `[^]: %` is the clause's own example. carve-js used to require at least one
-  // label character, so this line fell through to the link-definition rule,
-  // which captured `^` as a reference label and consumed it - the construct
-  // vanished from every target, HTML included. `[^ ]: x` already produced a
-  // footnote with an empty label, so the two spellings disagreed.
-  it('is a footnote definition, not a link definition', () => {
-    expect(carveToMarkdown('[^]: %\n')).toBe('[^]: %\n')
-    expect(carveToPlainText('[^]: %\n')).toBe('[^]: %\n')
+describe('an EMPTY footnote label is not a footnote at all', () => {
+  // `footnote_label` is one-or-more characters, so `[^]: /x` is a LINK
+  // reference definition whose label is `^`.
+  //
+  // This file briefly asserted the opposite, on PART 11 §10a's then-example
+  // `[^]: %`. The clause has since withdrawn that example for this exact
+  // reason, and §10a covers only the definition kinds that HAVE a node - a link
+  // reference definition does not. Building a footnote made the non-HTML
+  // targets emit `[^]: %` where carve-rs and carve-php emit nothing, which
+  // looked like §10a compliance and was its opposite (carve#589, carve-js#631).
+  it('registers a link reference labeled `^`', () => {
+    expect(carveToHtml('[^]: /x\n\nsee [^][]\n')).toBe('<p>see <a href="/x">^</a></p>')
   })
 
-  it('keeps its caret - the marker is emitted as written', () => {
-    // `[]: %` is a LINK reference definition; emitting one where the author
-    // wrote a footnote turns a definition into a different construct.
-    expect(carveToMarkdown('[^]: %\n')).toContain('[^]')
-    expect(plain(carveToAnsi('[^]: %\n'))).toContain('[^]')
+  it('leaves no node in the tree', () => {
+    expect(carveToAstJson('[^]: /x\n').children).toEqual([])
   })
 
-  it('survives a formatter round trip', () => {
-    expect(carveToCarve('[^]: %\n')).toBe('[^]: %\n')
+  it('emits nothing on the non-HTML targets, like every link definition', () => {
+    expect(carveToMarkdown('[^]: %\n').trim()).toBe('')
+    expect(carveToPlainText('[^]: %\n').trim()).toBe('')
+  })
+
+  it('a label of one SPACE is still a footnote', () => {
+    // `[^ ]: x` has a one-character label, so the one-or-more rule is met and
+    // this stays a footnote - the boundary the empty case sits just below.
+    expect(carveToAstJson('[^ ]: x\n').children.map((b) => b.type)).toEqual(['footnote'])
   })
 })
 

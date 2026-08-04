@@ -351,13 +351,19 @@ const RE_LINK_DEF =
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 //
-// The label may be EMPTY. `[^]: %` is a footnote definition (PART 10 §10a,
-// carve#577) and renders with its caret on the non-HTML targets; requiring one
-// label character sent it to RE_LINK_DEF instead, which captured `^` as a
-// reference label and consumed the line -- so the construct vanished from every
-// target, HTML included. `[^ ]: x` already produced a footnote with an empty
-// label, so the two spellings now agree.
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]*)\]: \s*(.+)$/
+// The label is ONE-OR-MORE characters, per `footnote_label` in the grammar, so
+// `[^]: /x` is NOT a footnote: it is a LINK reference definition whose label is
+// `^`, and it falls through to RE_LINK_DEF to be collected as one.
+//
+// This engine briefly read the empty label as a footnote, on PART 11 §10a's
+// then-example `[^]: %`. The clause has since withdrawn that example for this
+// exact reason - the label was never optional - and §10a covers only the
+// definition kinds that HAVE a node, which a link reference definition does
+// not. Building the node made the non-HTML targets emit `[^]: %` where carve-rs
+// and carve-php emit nothing, which looked like §10a compliance and was its
+// opposite. (carve#589, carve-js#631; `[^ ]: x`, whose label is a space, is a
+// footnote and is unaffected.)
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: \s*(.+)$/
 // A caption line mirrors a heading's first line (§4/§553): `^` + one-or-more
 // literal spaces (the grammar delimiter is a space, not a tab) + content that
 // carries at least one non-ASCII-whitespace character. Leading spaces are
