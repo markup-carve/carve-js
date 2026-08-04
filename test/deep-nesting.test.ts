@@ -82,6 +82,26 @@ describe('over-cap openers group as one paragraph', () => {
     expect(html.match(/<blockquote>/g)?.length).toBe(MAX_NESTING_DEPTH)
     expect(html.match(/<p>/g)?.length).toBe(1)
   })
+
+  it('emits no trailing newline before the closing tag', () => {
+    // The third answer the engines gave: carve-php grouped them all with a
+    // trailing newline and carve-rs without one, and both satisfied "becomes
+    // literal paragraph text". An ordinary paragraph has no trailing newline,
+    // so neither does this one.
+    const html = carveToHtml(Array(MAX_NESTING_DEPTH + 3).fill(':::: note').join('\n') + '\n')
+    expect(html).toContain('<p>:::: note\n:::: note\n:::: note</p>')
+    expect(html).not.toContain('\n</p>')
+  })
+
+  it('keeps every over-cap opener rather than discarding it', () => {
+    // Degrading to text is not the same as dropping: 200 open containers plus
+    // the three flattened lines must all still be in the output.
+    const over = 3
+    const html = carveToHtml(
+      Array(MAX_NESTING_DEPTH + over).fill(':::: note').join('\n') + '\nx\n',
+    )
+    expect((html.match(/note/g) ?? []).length).toBe(MAX_NESTING_DEPTH + over)
+  })
 })
 
 describe('the canonical writer survives deep container nesting', () => {
