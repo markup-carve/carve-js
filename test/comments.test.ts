@@ -136,3 +136,39 @@ describe('block comment fence lines (PART 9 §28)', () => {
     expect(perByteLarge / Math.max(perByteSmall, 1e-9)).toBeLessThan(1.1)
   })
 })
+
+describe('an indented comment fence', () => {
+  // The line form has always been column-free, and carve#624 pinned that a
+  // comment is recognized at ANY column. The fence form was anchored at column
+  // 0, so an indented `%%%` fell to the line-comment rule: the opener and the
+  // closer were each consumed as their own one-line comment and everything
+  // between them rendered - a comment that hid its delimiters and showed its
+  // contents (carve-js#630).
+  it('hides its body inside a list item, below the content column', () => {
+    const html = carveToHtml('- a\n %%% n\n x\n %%%\n tail\n')
+
+    expect(html).not.toContain('x')
+    expect(html).not.toContain('%')
+    // The comment does not end the item either: `tail` is still item content,
+    // the same shape carve-rs#572 settled for a column-0 comment.
+    expect(html).toBe('<ul>\n  <li>a\n    tail\n  </li>\n</ul>')
+  })
+
+  it('hides its body under a top-level paragraph', () => {
+    expect(carveToHtml('a\n  %%% x\n  b\n  %%%\n')).toBe('<p>a</p>')
+  })
+
+  it('is still a line comment when nothing closes it', () => {
+    // An unclosed fence opens no block (PART 9 §28), indented or not, so the
+    // opener renders nothing and the item survives it.
+    expect(carveToHtml('- a\n %%% n\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+  })
+
+  it('closes on a delimiter run of its own width at any indent', () => {
+    // Opener indented one column, closer three: the width matches, the indent
+    // is not part of the delimiter.
+    expect(carveToHtml('- a\n %%%% n\n x\n   %%%%\n tail\n')).toBe(
+      '<ul>\n  <li>a\n    tail\n  </li>\n</ul>',
+    )
+  })
+})
