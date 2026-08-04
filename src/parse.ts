@@ -1849,8 +1849,21 @@ function parseCommentBlock(lexer: Lexer): Comment {
   // document. The opener's trailing text is kept as the body's first line so
   // `carve fmt` round-trips the words instead of deleting them; a closer's
   // trailing text is discarded, like a code fence's closing info.
-  const m = RE_COMMENT_BLOCK_ANY.exec(lexer.consume())!
+  const openerLine = lexer.consume()
+  const m = RE_COMMENT_BLOCK_ANY.exec(openerLine)!
   const fence = m[1]!.length
+  // The body is indented RELATIVE to its fence, the way a code fence's body is:
+  // an opener at column 1 makes a body line at column 1 flush, not
+  // one-indented. Keeping the absolute text left `- a` / ` %%% n` / ` x`
+  // holding `n\n x` here and `n\nx` in carve-rs and carve-php - a cross-engine
+  // AST difference that surfaced as `carve fmt` writing the body one column
+  // further in on every reformat (carve#653).
+  const openerIndent = /^[ \t]*/.exec(openerLine)![0].length
+  const dedent = (line: string): string => {
+    let cut = 0
+    while (cut < openerIndent && (line[cut] === ' ' || line[cut] === '\t')) cut++
+    return line.slice(cut)
+  }
   const lines: string[] = []
   const openerTail = m[2]!.trim()
   if (openerTail !== '') lines.push(openerTail)
@@ -1862,7 +1875,7 @@ function parseCommentBlock(lexer: Lexer): Comment {
       break
     }
     lexer.consume()
-    lines.push(ln)
+    lines.push(dedent(ln))
   }
   return { type: 'comment', block: true, content: lines.join('\n') }
 }
