@@ -43,6 +43,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An empty footnote label is not a footnote** (carve#589, carve-js#631).
+  `footnote_label` is one-or-more characters, so `[^]: /x` is a LINK reference
+  definition whose label is `^` - it registers as one, leaves no node in the
+  tree, and emits nothing on the non-HTML targets, matching carve-rs.
+
+  This engine read it as a footnote with an empty label, on PART 11 §10a's
+  then-example `[^]: %`. The clause has since withdrawn that example for this
+  exact reason, and §10a covers only the definition kinds that HAVE a node.
+  Building the node made `renderMarkdown` and `renderPlainText` emit `[^]: %`
+  where the other engines emit nothing - which looked like §10a compliance and
+  was its opposite. `[^ ]: x`, whose label is a space, is still a footnote.
+
 - **The invisible-line looseness rule stops at two boundaries it was crossing**
   (PART 9 §17 L1, markup-carve/carve#621, follows #619). Both were measured
   against carve-php, which agrees on both.
