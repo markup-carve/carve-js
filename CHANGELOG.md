@@ -43,6 +43,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer no longer inflates a nested list** (carve-js#641). Each
+  level was indented twice - once by an absolute `'  '.repeat(listDepth)` and
+  again by the parent item's continuation prefix - with a two-space strip as
+  partial compensation, so the per-level indent GREW: `0 2 4 6 8 10` came back
+  as `0 4 10 18 28 40`. Output was O(depth^3) bytes where the source is
+  O(depth^2), and a 10 KB ladder at depth 100 came back as 344 KB.
+
+  A ladder now returns byte-identical at every depth. That was also most of what
+  made `fmt` look superlinear in depth - time was roughly linear in the bytes it
+  emitted, and the bytes were the defect: depth 200 went from ~1.0s to ~0.18s,
+  and depth 400 completes at all. A residual superlinear factor above output
+  size remains and is separate.
+
+  Nothing caught it because every existing check compared HTML or asserted
+  idempotence, and the inflated form is equivalent HTML and a fixed point. The
+  new guard is on BYTES, which is deterministic, rather than wall clock.
+
 - **A definition past the content column is text, quoted or not**
   (carve-js#648). Past a list item's content column a definition is literal
   text, and this engine declined it outside a block quote while COLLECTING it
