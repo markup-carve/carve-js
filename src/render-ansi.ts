@@ -3,8 +3,13 @@ import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Tab
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
+import { smartTypographyIsSource } from './render-plain.js'
+import type { SmartTypographyMode } from './render-markdown.js'
 
-export interface AnsiRenderOptions {}
+export interface AnsiRenderOptions {
+  /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
+  smartTypography?: SmartTypographyMode | boolean
+}
 
 /**
  * The renderer's recursion bound, and it must sit ABOVE the parser's.
@@ -38,8 +43,9 @@ const FG_BRIGHT_BLUE = '\x1b[94m'
 const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
-export function renderAnsi(ast: Document, _opts: AnsiRenderOptions = {}): string {
+export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
   const ctx: AnsiContext = {
+    smartSource: smartTypographyIsSource(opts.smartTypography),
     listDepth: 0,
     blockQuoteDepth: 0,
     ordered: [],
@@ -54,6 +60,7 @@ export function renderAnsi(ast: Document, _opts: AnsiRenderOptions = {}): string
 }
 
 interface AnsiContext {
+  smartSource: boolean
   listDepth: number
   blockQuoteDepth: number
   ordered: number[]
@@ -483,6 +490,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'comment':
       return ''
     case 'smart_punctuation':
+      // Same rule as every other target: the switch asks for the authored run.
+      if (ctx.smartSource) return node.value
       return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node

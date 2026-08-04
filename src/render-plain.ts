@@ -2,8 +2,25 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
+import type { SmartTypographyMode } from './render-markdown.js'
 
-export interface PlainTextRenderOptions {}
+export interface PlainTextRenderOptions {
+  /**
+   * `'source'` (or `false`) emits the run the author typed instead of the
+   * resolved glyph. Accepted in both spellings because the HTML renderer took
+   * the boolean and the Markdown one took the mode, so a caller passing the
+   * shape it learned from one target silently got glyphs from another
+   * (carve#560).
+   */
+  smartTypography?: SmartTypographyMode | boolean
+}
+
+/** Whether the switch asks for the authored run rather than the glyph. */
+export function smartTypographyIsSource(
+  value: SmartTypographyMode | boolean | undefined,
+): boolean {
+  return value === 'source' || value === false
+}
 
 /**
  * The renderer's recursion bound, and it must sit ABOVE the parser's.
@@ -18,8 +35,9 @@ export interface PlainTextRenderOptions {}
  */
 const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
-export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {}): string {
+export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
   const ctx: PlainContext = {
+    smartSource: smartTypographyIsSource(opts.smartTypography),
     blockDepth: 0,
     inlineDepth: 0,
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
@@ -30,6 +48,7 @@ export function renderPlainText(ast: Document, _opts: PlainTextRenderOptions = {
 }
 
 interface PlainContext {
+  smartSource: boolean
   blockDepth: number
   inlineDepth: number
   /**
@@ -288,6 +307,9 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'comment':
       return ''
     case 'smart_punctuation':
+      // The node carries the source run in `value`, so honoring the switch
+      // needs no parser cooperation (PART 9 §8).
+      if (ctx.smartSource) return node.value
       return node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value
     default: {
       const t: never = node

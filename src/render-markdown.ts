@@ -30,7 +30,7 @@ export type SmartTypographyMode = 'glyph' | 'source'
 
 export interface MarkdownRenderOptions {
   /** Defaults to `'glyph'`. */
-  smartTypography?: SmartTypographyMode
+  smartTypography?: SmartTypographyMode | boolean
 }
 
 /**
@@ -86,7 +86,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     blockDepth: 0,
     inlineDepth: 0,
     abbrBudget: new AbbrBudget(ast.srcByteLength),
-    smartTypography: opts.smartTypography ?? 'glyph',
+    smartTypography: opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph',
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
