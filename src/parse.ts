@@ -1286,8 +1286,19 @@ function collectLinkDefs(lexer: Lexer) {
     // contradiction carve-js#613 reports: the reader sees `[r]: /u` as prose
     // while a reference elsewhere silently resolves through it. `<` caught only
     // the below-column half of the same rule.
-    const notAtContentColumn =
-      kept === raw && !inFootnoteBody && leadingWhitespace(raw) !== contentCol
+    // ANY open column, not just the innermost. `- - a` opens two items and
+    // both their content columns are live under it (2 and 4): a definition at
+    // either belongs to that item and renders nothing, and between them it
+    // reaches neither and folds as text. Testing only the innermost left a
+    // definition at the OUTER column consumed by the item and registered by
+    // nobody - the author's line vanished and a reference to it stayed literal,
+    // which is the "neither visible nor active" outcome carve#624 named
+    // (carve-js#643). The FOOTNOTE prepass here already reads it this way.
+    const rawIndent = leadingWhitespace(raw)
+    const atAnOpenContentColumn = listCols.length
+      ? listCols.includes(rawIndent)
+      : rawIndent === contentCol
+    const notAtContentColumn = kept === raw && !inFootnoteBody && !atAnOpenContentColumn
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
     const [defLine, defAttrText] = splitTrailingAttrBlock(line)
