@@ -1217,7 +1217,14 @@ function collectLinkDefs(lexer: Lexer) {
   // definition in the attached block looked below-column and was skipped -
   // while the item collector took the line, leaving it rendered nowhere AND
   // defining nothing (carve#665). carve-php and carve-rs both collect it.
-  let plusAttached = false
+  // The COLUMN of an open `+` continuation marker, or null when none is open.
+  // A `+` at column 0 attaches a flush-left block; §17 also lets the marker sit
+  // at an item's own content column, and the attached block then sits at THAT
+  // column. This was a boolean and the column was assumed to be 0, so a
+  // definition under an indented `+` matched no open column: the line was
+  // consumed and registered by nobody, so it vanished AND defined nothing
+  // (carve-js#736).
+  let plusColumn: number | null = null
   for (let idx = 0; idx < lexer.lines.length; idx++) {
     // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
     // none, including an unclosed opener that is NOT frontmatter), so a
@@ -1472,9 +1479,9 @@ function collectLinkDefs(lexer: Lexer) {
     // nobody - the author's line vanished and a reference to it stayed literal,
     // which is the "neither visible nor active" outcome carve#624 named
     // (carve-js#643). The FOOTNOTE prepass here already reads it this way.
-    if (raw.trim() === '+') plusAttached = true
-    else if (raw.trim() === '') plusAttached = false
     const rawIndent = leadingWhitespace(unquoted)
+    if (raw.trim() === '+') plusColumn = leadingWhitespace(unquoted)
+    else if (raw.trim() === '') plusColumn = null
     // Inside a footnote body the column is KNOWN - it is two, §16's own
     // (carve#717) - so the body no longer needs the blanket exemption it used to
     // carry below. With the exemption a definition anywhere in a note body was
@@ -1482,8 +1489,8 @@ function collectLinkDefs(lexer: Lexer) {
     // the reader saw `[r]: /u` as prose while a reference to it silently
     // resolved (the `VA` rows of carve#669 and carve#701, at indents 1 and 3).
     const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
-    const atAnOpenContentColumn = plusAttached
-      ? rawIndent === 0
+    const atAnOpenContentColumn = plusColumn !== null
+      ? rawIndent === plusColumn
       : listCols.length
         ? listCols.includes(rawIndent)
         : rawIndent === openColumn
