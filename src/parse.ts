@@ -1162,7 +1162,27 @@ function collectLinkDefs(lexer: Lexer) {
           rest = rest.slice(m2[0].length)
           m2 = rest.match(RE_PREPASS_MARKER)
         }
-      } else if (raw.trim() !== '' && (wasPrevBlank || startsBlock)) {
+      } else if (
+        raw.trim() !== '' &&
+        // A LINK REFERENCE DEFINITION at column 0 ends the item too, so it has
+        // to pop the stack like any other block start. It is not in
+        // `startsBlock` because it is invisible, and being left out meant the
+        // stack still held the item's content column: the definition read as
+        // BELOW that column and was skipped, while the block lexer ended the
+        // list at it anyway. The line was rendered nowhere and defined nothing
+        // (carve-js#657) - the one outcome a definition may never have.
+        //
+        // At the content column this changes nothing: the `> indent` test pops
+        // only what sits DEEPER than the line, so a definition written at the
+        // column it belongs to still keeps its item open.
+        //
+        // The footnote form is already handled - its own prepass reads the line
+        // independently - and an ABBREVIATION definition deliberately does not
+        // qualify: all four implementations fold `- x` / `*[A]: b` as item text,
+        // because PART 12 §7 recognizes one only as a direct child of the
+        // document.
+        (wasPrevBlank || startsBlock || RE_LINK_DEF.test(rawTrimmed))
+      ) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
     }
