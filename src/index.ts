@@ -64,6 +64,7 @@ export {
   toAstJson,
   fromAstJson,
   AstJsonDepthError,
+  AstJsonRootError,
   MAX_AST_JSON_DEPTH,
   type AstJsonDocument,
   type AstJsonBlock,
