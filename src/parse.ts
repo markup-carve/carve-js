@@ -3310,6 +3310,10 @@ interface ItemLazyState {
   fenceClose: RegExp | null
   inComment: boolean
   commentLen: number
+  // `lazyFoldable` as it stood when the comment block opened. A comment renders
+  // NOTHING, so closing one may not change whether the item ends in an open
+  // paragraph - it has to restore what was there before the fence.
+  lazyFoldableBeforeComment: boolean
   // Whether the item's collected content currently ends in an OPEN paragraph
   // that a dedented (below content-column) non-blank line lazily continues
   // (CommonMark family-D rule). True after plain prose, a blockquote line, or
@@ -3372,9 +3376,15 @@ function isBlockAttributeLine(content: string): boolean {
 
 function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (state.inComment) {
+    // A CLOSER is a bare run, so this test stays anchored - unlike the opener
+    // below, which may carry an info string.
     const c = /^(%{3,})\s*$/.exec(content)
-    if (c && c[1]!.length >= state.commentLen) state.inComment = false
-    state.lazyFoldable = false
+    if (c && c[1]!.length >= state.commentLen) {
+      state.inComment = false
+      state.lazyFoldable = state.lazyFoldableBeforeComment
+    } else {
+      state.lazyFoldable = false
+    }
     state.inDefList = false
     return
   }
@@ -3416,10 +3426,17 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     state.inDefList = false
     return
   }
-  const comment = /^(%{3,})\s*$/.exec(content)
+  // An OPENER may carry an info string: `%%% x` is a comment fence, exactly as
+  // the block parser reads it via RE_COMMENT_BLOCK_ANY. Requiring a bare run
+  // here missed that opener entirely and then matched the CLOSER as an opener,
+  // leaving the tracker permanently inside a comment: every later line read as
+  // unfoldable, the item ended at the fence, and a following sibling marker
+  // started a SECOND list (carve-js#659).
+  const comment = /^(%{3,})(.*)$/.exec(content)
   if (comment) {
     state.inComment = true
     state.commentLen = comment[1]!.length
+    state.lazyFoldableBeforeComment = state.lazyFoldable
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -3638,6 +3655,7 @@ function parseList(lexer: Lexer): List {
       fenceClose: null,
       inComment: false,
       commentLen: 0,
+      lazyFoldableBeforeComment: false,
       // The lead text opens a paragraph unless it is one of the shapes that
       // open nothing: a blank, an empty quote, or a block-attribute line (which
       // renders nothing and floats forward). `trackItemLazyState` applies the
@@ -3759,7 +3777,12 @@ function parseList(lexer: Lexer): List {
         // An UNTERMINATED fence (inFence still open) is NOT a code block -- it is
         // an inline-verbatim run that is part of the paragraph, so a dedented
         // line folds into it (matching the §10 closer-lookahead rule).
-        (((lazyState.lazyFoldable || lazyState.inFence) &&
+        // `inComment` counts like `inFence`: an UNCLOSED comment fence opens no
+        // block (§28) and is still a comment, so a below-column line after it is
+        // part of the paragraph the fence never interrupted. Without this, giving
+        // the opener its info string (see trackItemLazyState) latched the tracker
+        // inside a comment that never closes, and the item ended there.
+        (((lazyState.lazyFoldable || lazyState.inFence || lazyState.inComment) &&
           !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
