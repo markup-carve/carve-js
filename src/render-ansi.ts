@@ -5,6 +5,7 @@ import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
+import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
@@ -22,7 +23,6 @@ export interface AnsiRenderOptions {
  * ast-json.ts, which is above the parser cap because the two counts measure
  * different things.
  */
-const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
@@ -618,14 +618,6 @@ function normalize(text: string): string {
   // ordinary space in terminal output. Done after trimming so placeholder-
   // derived leading indentation survives; a literal U+00A0 is left intact.
   return `${trimNonNbsp(text.replace(/\n{3,}/g, '\n\n'))}\n`.replace(/\ue000/g, ' ')
-}
-
-function trimNonNbsp(text: string): string {
-  return text.replace(TRIM_NON_NBSP_RE, '')
-}
-
-function trimEndNonNbsp(text: string): string {
-  return text.replace(/[^\S\u00a0]+$/g, '')
 }
 
 function cleanEscapedText(node: Text): string {

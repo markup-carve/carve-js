@@ -16,6 +16,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
+import { trimNonNbsp } from './trim-non-nbsp.js'
 
 /**
  * Whether smart typography renders as its glyph or as the source run the author
@@ -44,7 +45,6 @@ export interface MarkdownRenderOptions {
  * ast-json.ts, which is above the parser cap because the two counts measure
  * different things.
  */
-const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
   const headingIds = new Set<string>()
@@ -752,10 +752,6 @@ function normalize(text: string): string {
   )
 
   return resolveUnderscoreEscapes(collapsed)
-}
-
-function trimNonNbsp(text: string): string {
-  return text.replace(TRIM_NON_NBSP_RE, '')
 }
 
 /**
