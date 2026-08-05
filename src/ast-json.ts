@@ -464,5 +464,61 @@ export function fromAstJson(json: AstJsonDocument): Document {
   if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
   if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
   if (json.srcByteLength !== undefined) doc.srcByteLength = json.srcByteLength
+
+  // RE-DERIVED, not adopted. `number` is a resolution result PART 12 §5
+  // serializes, and the payload's value describes the document the payload was
+  // made from - not this one. An editor that deletes a footnote definition and
+  // hands the tree back leaves a reference whose definition is gone, and copying
+  // its number republished the number of a footnote that is not in the document,
+  // while this engine's own renderer showed the reference as literal `[^a]`
+  // (carve#758).
+  //
+  // The same argument the profile filter already makes, from the other
+  // direction: `footnote-numbering.ts` clears a number it cannot justify because
+  // "the profile filter can take a definition away AFTER the document was
+  // numbered". Deserializing an edited tree is the other way for that to happen,
+  // and it lands in the same place. carve-php recomputes here too.
+  //
+  // CLEARS, NEVER ASSIGNS. Running the full numbering pass here breaks §6: the
+  // round trip is `parse(x)` serialized and deserialized, and `parse()` alone
+  // does no numbering - resolution does - so a tree that legitimately carries no
+  // numbers would come back carrying them. What this must not do is keep a
+  // number it can no longer justify; inventing one is a different act entirely.
+  //
+  // An inline footnote carries its own body, so it cannot lose a definition and
+  // is left alone. Only a reference can be orphaned.
+  clearUnbackedFootnoteNumbers(doc, footnoteDefs)
+
   return doc
+}
+
+/**
+ * Drop `number` from any footnote REFERENCE whose definition is not in `defs`.
+ *
+ * Iterative, so a tree deeper than any renderer's ceiling - this reader accepts
+ * up to MAX_AST_JSON_DEPTH, which is higher - is walked rather than refused. A
+ * recursive version would also have to answer which depth bound applies, and the
+ * two count different units (JSON structural levels against render levels), which
+ * is the comparison §25 warns against making.
+ */
+function clearUnbackedFootnoteNumbers(
+  doc: Document,
+  defs: Record<string, BlockNode[]>,
+): void {
+  const stack: unknown[] = [doc.children, Object.values(defs)]
+  while (stack.length > 0) {
+    const cur = stack.pop()
+    if (Array.isArray(cur)) {
+      for (const item of cur) stack.push(item)
+      continue
+    }
+    if (cur === null || typeof cur !== 'object') continue
+    const node = cur as { type?: string; id?: string; number?: number }
+    if (node.type === 'footnote_ref' && node.number !== undefined) {
+      if (node.id === undefined || defs[node.id] === undefined) delete node.number
+    }
+    for (const value of Object.values(cur)) {
+      if (value !== null && typeof value === 'object') stack.push(value)
+    }
+  }
 }
