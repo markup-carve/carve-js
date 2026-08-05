@@ -13,7 +13,10 @@
  * disagree. Rather than keep two implementations of the numbering rule in
  * sync by hand, both call sites share this one. Re-running it against an
  * already-numbered document is a no-op (same document order, same numbers),
- * never a renumbering.
+ * never a renumbering - PROVIDED the set of definitions has not moved. When it
+ * has, re-running is exactly what is wanted, and the pass clears the number of
+ * any reference that no longer resolves rather than leaving the old one in
+ * place (carve-js#698).
  *
  * `refId` (the backlink anchor id) is deliberately NOT assigned here - it is
  * a rendering concern, format chosen by whichever renderer builds the
@@ -140,7 +143,14 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       return
     }
     // Reference footnote (`[^label]`): numbered at first resolved reference.
-    if (!n.id || !defs[n.id]) return
+    if (!n.id || !defs[n.id]) {
+      // DELETE rather than skip. Re-running this pass is a no-op only while
+      // `defs` is unchanged; the profile filter can take a definition away
+      // AFTER the document was numbered, and a skip would leave the number of
+      // a footnote that no longer exists (carve-js#698).
+      delete n.number
+      return
+    }
     let idx = labelIndexes.get(n.id)
     if (idx === undefined) {
       const entry: FootnoteOrderEntry = { label: n.id }

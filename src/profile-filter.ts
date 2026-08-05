@@ -19,6 +19,7 @@
  */
 
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
+import { numberFootnotes } from './footnote-numbering.js'
 import type {
   Attrs,
   BlockNode,
@@ -218,11 +219,14 @@ export interface ProfileFilterResult {
 
 class ProfileFilter {
   private violations: ProfileViolation[] = []
+  /** Whether this run removed something that changes footnote numbering. */
+  private footnotesChanged = false
 
   constructor(private readonly baseHost: string | null) {}
 
   filter(doc: Document, profile: Profile): ProfileFilterResult {
     this.violations = []
+    this.footnotesChanged = false
     // carve-php starts the document's direct children at depth 0 and checks
     // `depth > maxNesting`, incrementing depth on *every* descend (block and
     // inline alike, since getChildren() includes inline children).
@@ -244,6 +248,18 @@ class ProfileFilter {
     if (defs) {
       for (const blocks of Object.values(defs)) this.cleanupArray(blocks)
     }
+    // The numbers were assigned by `resolve()`, BEFORE this filter ran, so a
+    // denied definition or a dropped reference leaves the survivors numbered
+    // for a document that no longer exists. `renderHtml` renumbers off the
+    // filtered tree, so without this the published AST and the rendered
+    // document disagree (carve-js#698).
+    //
+    // Gated rather than unconditional: `numberFootnotes` carries the renderers'
+    // depth ceiling and this filter does not, so renumbering every profiled
+    // document would start refusing deep trees that pass today. A document that
+    // is both past the ceiling AND lost a footnote is refused, which is the
+    // right way round - the alternative is publishing numbers known to be stale.
+    if (this.footnotesChanged) numberFootnotes(doc)
     return { doc, violations: this.violations }
   }
 
@@ -424,11 +440,29 @@ class ProfileFilter {
   }
 
   private removeAt(slot: ChildSlot): void {
+    this.noteFootnoteLoss(slot.list[slot.index])
     slot.list.splice(slot.index, 1)
   }
 
   private replaceAt(slot: ChildSlot, replacement: NodeLike): void {
+    this.noteFootnoteLoss(slot.list[slot.index])
     slot.list[slot.index] = replacement
+  }
+
+  /**
+   * Flag a removal that can change footnote numbering.
+   *
+   * Both mutating paths funnel through here, so a footnote nested inside a
+   * removed CONTAINER counts too - dropping a div that held `[^a]` renumbers
+   * every note after it, exactly as a dropped reference does.
+   *
+   * Scanning only what is being removed keeps this off the cost of an ordinary
+   * filter run: an unbounded depth here would be a scan of a subtree the walk
+   * has already descended once.
+   */
+  private noteFootnoteLoss(node: NodeLike | undefined): void {
+    if (this.footnotesChanged || node === undefined) return
+    if (subtreeHasFootnote(node)) this.footnotesChanged = true
   }
 
   private convertToText(node: NodeLike, slot: ChildSlot): void {
@@ -543,6 +577,8 @@ class ProfileFilter {
     if (root.footnoteDefs !== undefined && !profile.isTypeAllowed('footnote', true)) {
       this.denyRootField(profile, 'footnote')
       delete root.footnoteDefs
+      // Every reference in the tree just became unresolved.
+      this.footnotesChanged = true
     }
   }
 
@@ -860,6 +896,32 @@ const INLINE_CONCAT = new Set([
   'inline_extension',
   'paragraph',
 ])
+
+/**
+ * Whether a subtree about to be dropped holds a footnote of either form.
+ *
+ * Every child-bearing field is followed by NAME rather than by a per-type
+ * switch: this runs on nodes that are being deleted, so a field it does not
+ * know about is a footnote it fails to see and a renumber that never happens -
+ * the kind of miss nothing downstream would report.
+ */
+function subtreeHasFootnote(node: NodeLike): boolean {
+  const stack: unknown[] = [node]
+  while (stack.length > 0) {
+    const cur = stack.pop()
+    if (Array.isArray(cur)) {
+      for (const item of cur) stack.push(item)
+      continue
+    }
+    if (cur === null || typeof cur !== 'object') continue
+    const type = (cur as NodeLike).type
+    if (type === 'footnote_ref' || type === 'inline_footnote') return true
+    for (const value of Object.values(cur)) {
+      if (value !== null && typeof value === 'object') stack.push(value)
+    }
+  }
+  return false
+}
 
 /**
  * Apply a profile to a resolved Document, returning the filtered document and
