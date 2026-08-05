@@ -212,6 +212,7 @@ const IMPLEMENTED = new Set([
   'implicit-heading-references-with-no-definition',
   'a-repeated-definition-which-one-wins',
   'a-marker-separator-is-a-space-never-a-tab',
+  'a-tab-as-the-first-character-of-a-definition-term',
   'two-abbreviation-definitions',
   'openers-past-the-nesting-cap-are-one-paragraph',
   'a-comment-is-recognized-at-any-column',
