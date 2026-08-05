@@ -149,7 +149,21 @@ const RE_FENCE =
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
 // item only with non-empty content: a content-less marker (`-`, `- `, `-   ` --
 // bare or trailing whitespace only) is NOT a list, it is paragraph text.
-const RE_UNORDERED = /^([^\S\u00a0]*)[-*] +([\S\u00a0].*)$/
+// The leading indentation is matched ATOMICALLY, via the `(?=(...))\1` idiom.
+// A plain `([^\S\u00a0]*)` is greedy and BACKTRACKS: on a line the pattern does
+// not match, the engine gives back one whitespace character at a time and retries
+// the marker at every position, so the test costs O(indent) attempts rather than
+// one. Deeply indented lines are exactly where these run most - a nested list
+// tests every marker shape on every line at every level - and it dominated
+// parsing a list ladder: RE_ORDERED alone took 2.1 us per call at indent 400
+// against 20 ns at indent 0, and 15% of the whole parse.
+//
+// Semantics are unchanged, and provably so: every alternation after the prefix
+// begins with a NON-whitespace character, so a shorter whitespace run can never
+// let the rest of the pattern match. Backtracking into it could only ever fail.
+// The capture numbering is unchanged too - the lookahead's group takes slot 1 and
+// holds the same indent the old group did.
+const RE_UNORDERED = /^(?=([^\S\u00a0]*))\1[-*] +([\S\u00a0].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
@@ -162,10 +176,10 @@ const RE_UNORDERED = /^([^\S\u00a0]*)[-*] +([\S\u00a0].*)$/
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 const RE_ORDERED =
-  /^([^\S\u00a0]*)([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([\S\u00a0].*)$/
+  /^(?=([^\S\u00a0]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([\S\u00a0].*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^([^\S\u00a0]*)[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
+const RE_TASK = /^(?=([^\S\u00a0]*))\1[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
