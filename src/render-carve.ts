@@ -658,8 +658,23 @@ function renderTableRow(cells: RenderedCell[], attrs: string): string {
 
 function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): RenderedCell {
   const attrs = renderAttrs(cell.attrs)
-  if (cell.span === 'rowspan') return { text: `${attrs}^`, tight: true }
-  if (cell.span === 'colspan') return { text: `${attrs}<`, tight: true }
+  // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
+  // is also the left-alignment sigil, and the two readings differ: the
+  // executable spec reads `|<|` as alignment where all three engines read a
+  // colspan (markup-carve/carve#710). The padded form is unambiguous under either
+  // reading - `alignment_marker` is defined as glued, `colspan_marker` allows
+  // surrounding whitespace - so the writer should never emit the ambiguous one.
+  // `^` is not an alignment sigil and needs no disambiguation, but it takes the
+  // same shape so a row of span cells stays readable.
+  //
+  // With a cell attribute the block stays GLUED to the pipe, which is where the
+  // grammar puts it, and the space goes between it and the marker.
+  const spanMarker = cell.span === 'rowspan' ? '^' : '<'
+  if (cell.span === 'rowspan' || cell.span === 'colspan') {
+    return attrs === ''
+      ? { text: spanMarker, tight: false }
+      : { text: `${attrs} ${spanMarker}`, tight: true }
+  }
   const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${alignMarker(cell.align)}`
   return { text: `${prefix}${renderInlines(cell.children, ctx)}`, tight: prefix !== '' }
 }
