@@ -141,6 +141,25 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  // A footnote reference's `refId` is a RENDERING convention - `fnref1`, the
+  // anchor an endnotes section links back to - not a resolution result. The
+  // schema declared it and no engine ever produced one, so carve#762 removed
+  // it, and `additionalProperties: false` now makes a tree carrying it invalid.
+  //
+  // This engine never wrote one. It ECHOED one: the wire record is copied
+  // wholesale, so a `refId` that arrived on a payload came straight back out,
+  // and a document read and re-published here became one the format rejects
+  // (carve-js#707). The runtime field stays - `renderHtml` assigns it to build
+  // the backlinks - it just does not cross the wire in either direction.
+  if (
+    ((out ?? record)['type'] === 'footnote_ref' ||
+      (out ?? record)['type'] === 'inline_footnote') &&
+    (out ?? record)['refId'] !== undefined
+  ) {
+    const { refId: _refId, ...rest } = out ?? record
+    out = rest
+  }
+
   return (out ?? record) as T
 }
 
@@ -166,6 +185,17 @@ function definitionListsFromWire<T>(node: T): T {
     if (record[field] !== undefined) record[field] = definitionListsFromWire(record[field])
   }
   if (record['target'] !== undefined) record['target'] = definitionListsFromWire(record['target'])
+
+  // Not read either, so an ingested reference does not arrive already carrying a
+  // backlink anchor from whoever wrote the payload. `renderHtml` assigns
+  // `refId` itself from the number, and an inherited one would be the previous
+  // document's numbering rather than this one's (carve-js#707).
+  if (
+    (record['type'] === 'footnote_ref' || record['type'] === 'inline_footnote') &&
+    record['refId'] !== undefined
+  ) {
+    delete record['refId']
+  }
 
   return record as T
 }
