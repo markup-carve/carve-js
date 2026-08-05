@@ -323,6 +323,31 @@ export interface AbbreviationDef extends BaseNode {
   expansion: string
 }
 
+/**
+ * The `[label]: /url "title" {attrs}` definition line.
+ *
+ * PART 12 §10 (NORMATIVE): a link reference definition is a NODE, so a writer can
+ * reproduce it. Before it had one, the canonical writer had nowhere to write the
+ * definition back from and INLINED every resolved reference instead - which lost
+ * `ref`/`rawRef` on the reparse and duplicated one destination into N
+ * (carve-js#690, carve#642).
+ *
+ * It HOISTS to the document exactly as §7 requires of the other definition kinds:
+ * a definition authored inside a block quote or list item is a child of the
+ * document, and `pos` still says where it was written.
+ *
+ * Renders nothing in HTML itself; it feeds every link or image that resolves the
+ * label (PART 9R R1).
+ */
+export interface LinkReferenceDefinition extends BaseNode {
+  type: 'link_reference_definition'
+  /** The label as the AUTHOR wrote it, before any folding. */
+  label: string
+  /** Present and non-empty: a definition with an empty destination is not one. */
+  href: string
+  title?: string
+}
+
 export interface RawBlock extends BaseNode {
   type: 'raw_block'
   format: string
@@ -350,6 +375,7 @@ export type BlockNode =
   | Figure
   | Image
   | AbbreviationDef
+  | LinkReferenceDefinition
   | RawBlock
   | Comment
 

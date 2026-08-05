@@ -55,6 +55,7 @@ import type {
   ThematicBreak,
   FootnoteRef,
   InlineFootnote,
+  LinkReferenceDefinition,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
@@ -302,6 +303,12 @@ const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]: \s*(.+)$/
  * label (PART 9R R1, carve#604).
  */
 export interface LinkDef {
+  /**
+   * Zero-based index of the line the definition was written on. Kept so PART 12
+   * §10's node can carry a `pos` and so the hoisted definitions come out in
+   * SOURCE order rather than map order (carve-js#690).
+   */
+  line?: number
   href: string
   title?: string
   attrs?: Attrs
@@ -883,6 +890,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   activeMatcherCtx = activeMatchers.length ? makeMatcherCtx(lexer, opts) : null
   try {
     const children = parseBlocks(lexer, 0)
+    appendLinkReferenceDefinitions(children, lexer, source)
     const doc: Document = { type: 'document', children }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
@@ -895,6 +903,67 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   } finally {
     activeMatchers = prevMatchers
     activeMatcherCtx = prevCtx
+  }
+}
+
+/**
+ * Hoist every authored `[label]: /url` definition into the document as a
+ * `link_reference_definition` node (PART 12 §10, NORMATIVE).
+ *
+ * It is a NODE rather than a root map because §4 requires a `pos` on everything
+ * but the root and a root FIELD cannot carry one - a definition occupies real
+ * bytes, and an editor, a formatter and a language server all need to find them.
+ * Without it the canonical writer had nowhere to write a definition back from and
+ * INLINED every resolved reference instead, which lost `ref`/`rawRef` on the
+ * reparse and turned one destination into N (carve-js#690).
+ *
+ * SOURCE ORDER, not map order: §10 answers "which definition wins" by document
+ * order, and the writer has to reproduce the lines where the author put them.
+ *
+ * Definitions authored inside a block quote or a list item hoist to the document
+ * too, which is what §7 already requires of the other two definition kinds; the
+ * container keeps the author's remaining content.
+ */
+function appendLinkReferenceDefinitions(
+  children: BlockNode[],
+  lexer: Lexer,
+  source: string,
+): void {
+  const authored: LinkReferenceDefinition[] = []
+  for (const [label, def] of lexer.linkDefs) {
+    // A definition with no recorded line came from somewhere other than the
+    // source scan (a sub-lexer copy for extension content), so there is no line
+    // to reproduce and nothing to hoist.
+    if (def.line === undefined) continue
+    const node: LinkReferenceDefinition = {
+      type: 'link_reference_definition',
+      label,
+      href: def.href,
+    }
+    if (def.title !== undefined) node.title = def.title
+    if (def.attrs) node.attrs = def.attrs
+    node.pos = wholeLinePos(lexer, def.line, source)
+    authored.push(node)
+  }
+  authored.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+  children.push(...authored)
+}
+
+/** The span of a whole source line, for a node reassembled from one line. */
+function wholeLinePos(lexer: Lexer, line: number, source: string): Position {
+  const text = lexer.lines[line] ?? ''
+  let offset = 0
+  for (let i = 0; i < line; i++) offset += (lexer.lines[i] ?? '').length + 1
+  // Clamp rather than trust the running total: a document whose final line has
+  // no trailing newline would otherwise claim one byte past the end.
+  const startOffset = Math.min(offset, source.length)
+  return {
+    startLine: line + 1,
+    endLine: line + 1,
+    startColumn: 1,
+    endColumn: text.length + 1,
+    startOffset,
+    endOffset: Math.min(startOffset + text.length, source.length),
   }
 }
 
@@ -1409,6 +1478,7 @@ function collectLinkDefs(lexer: Lexer) {
       // is deliberately fuzzier: heading-ids.ts and lint.ts both wrap it in
       // `.toLowerCase()`, and all four implementations fold whitespace AND case
       // when matching `[Some Heading][]` against a heading's text.
+      def.line = idx
       lexer.linkDefs.set(m[1]!, def)
       continue
     }
