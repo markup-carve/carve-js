@@ -43,6 +43,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The writer's escape decision costs one parse, not two** (carve-js#641,
+  residual half). `renderCarve` chooses between the minimal and conservative
+  escape forms by PARSING both and comparing the trees (PART 11 §4). Two full
+  parses, paid by every document holding a single escapable character in text -
+  which is nearly all of them.
+
+  A middle tier answers it with one parse where it can: if the minimal form
+  re-parses to the tree the writer was handed, it is faithful and there is
+  nothing left to compare. Strictly stronger than "the two renders agree", and a
+  miss falls through to the same comparison as before - the single parse of the
+  minimal form is reused, so a miss still costs two, never three.
+
+  Measured on a 40 KB `- x` ladder: the ladder alone formatted in ~6 ms and one
+  `-` in a paragraph took it to ~186 ms; now ~100 ms. `fmt` output is
+  byte-identical across all 600 corpus documents.
+
 - **The canonical writer no longer inflates a nested list** (carve-js#641). Each
   level was indented twice - once by an absolute `'  '.repeat(listDepth)` and
   again by the parent item's continuation prefix - with a two-space strip as
