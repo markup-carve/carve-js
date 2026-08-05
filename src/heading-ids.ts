@@ -377,9 +377,26 @@ export function resolveHeadingIds(
       else if (v && typeof v === 'object') reserveExplicitIds(v)
     }
   }
+  // A FOOTNOTE BODY is document content too. Its blocks live in
+  // `doc.footnoteDefs`, not in `doc.children`, so this pass never reached them
+  // and a heading inside a note body rendered with NO id - while the same
+  // heading in a list item, block quote, div or definition list got one
+  // (carve-js#669). The executable spec, carve-rs and carve-php all assign it.
+  //
+  // AFTER the body, because the dedup counter follows OUTPUT order and the
+  // endnotes section renders last: with `# H` at top level and `# H` in a note,
+  // all three give `H` to the top-level one and `H-2` to the note's, whichever
+  // order they appear in the SOURCE.
+  const noteBodies = Object.values(doc.footnoteDefs ?? {})
   for (const b of doc.children) reserveExplicitIds(b)
+  for (const body of noteBodies) {
+    for (const b of body) reserveExplicitIds(b)
+  }
 
   assignIds(doc.children, false)
+  for (const body of noteBodies) {
+    assignIds(body, false)
+  }
 
   // Two-pass resolution: implicit-heading refs must be finalized
   // BEFORE crossref cloning, otherwise a forward `</#id>` could clone
