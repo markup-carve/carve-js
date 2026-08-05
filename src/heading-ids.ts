@@ -38,8 +38,26 @@ function isUnresolvedImage(image: Image): boolean {
   return image.ref !== undefined && !image.src
 }
 
-function normalizeHeadingRefLabel(label: string): string {
-  return normalizeRefLabel(label).toLowerCase()
+/**
+ * The key an implicit heading reference and a heading's text are compared on:
+ * trimmed, internal whitespace collapsed (both in `normalizeRefLabel`),
+ * NFC-normalized, then case-folded - PART 9R R1.
+ *
+ * NFC is here because heading IDS are NFC-normalized (§25), and without it a
+ * document publishes `id="Café"` and then declines `[Café][]` against the very
+ * heading that produced it. It is also a WEAKER fold than the case fold beside
+ * it: case folding relates codepoints Unicode calls distinct, NFC relates
+ * sequences Unicode DEFINES as the same (carve#725).
+ *
+ * NFC and NOT NFKC: `[file][]` must not reach `# ﬁle`. Compatibility folding
+ * changes which text the author is quoting, not how it is spelled.
+ *
+ * Exported because `lint.ts` carried a second copy of this predicate. Two
+ * copies of a matching rule drift, and this fix would have landed in one of
+ * them.
+ */
+export function normalizeHeadingRefLabel(label: string): string {
+  return normalizeRefLabel(label).normalize('NFC').toLowerCase()
 }
 
 /**
