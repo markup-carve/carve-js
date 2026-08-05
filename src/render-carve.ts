@@ -82,6 +82,9 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // escapes changes nothing, and fall back to the conservative form when it
   // does. The check is the parser's, not a table's, so the writer cannot drift
   // as the grammar grows.
+  // Choose the verbatim sentinels before anything is rendered, so both escape
+  // passes below agree on them.
+  sentinels = pickSentinels(collectStrings(ast))
   const minimal = renderWithEscapes(ast, 'minimal')
   const conservative = renderWithEscapes(ast, 'conservative')
   if (minimal === conservative) return minimal
@@ -972,7 +975,7 @@ function alignMarker(align: TableCell['align']): string {
  * two are the same document here: both parse to the same pair of sentinels.
  */
 function lineBlockLayoutWhitespace(body: string): string {
-  return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => '\ue001'.repeat(run.length))
+  return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => sentinels[0].repeat(run.length))
 }
 
 function normalize(text: string): string {
@@ -1008,6 +1011,76 @@ function normalize(text: string): string {
 }
 
 /**
+ * The three writer-only sentinels, chosen per render from code points the
+ * DOCUMENT does not contain.
+ *
+ * They used to be the fixed U+E001..U+E003. An author who wrote one of those in
+ * a code block - where arbitrary bytes are the whole point - had it silently
+ * rewritten on the way out: U+E001 became a space, U+E002 a tab, U+E003 nothing
+ * at all. Three of those are worse than a deletion, because a space or a tab in
+ * a code block is plausible content and the diff reads as whitespace
+ * (carve#678).
+ *
+ * Escaping the authored occurrences cannot fix it: any escape needs a reserved
+ * character, and that character has the same collision. Picking characters the
+ * document does not use does fix it, and cannot fail in practice - the BMP
+ * private-use area alone has 6400 code points.
+ *
+ * U+E000 is NOT here. It is the parser's in-band marker for a non-breaking
+ * space, shared with the HTML, plain, ANSI and Markdown renderers, so an
+ * authored U+E000 is already indistinguishable from a parsed nbsp before the
+ * writer runs. That is the other half of carve#678 and needs a decision about
+ * what the parsed text of an nbsp is, not a change here.
+ */
+const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003'] as const
+let sentinels: readonly [string, string, string] = ['\ue001', '\ue002', '\ue003']
+
+/**
+ * Every string in the tree, joined. ITERATIVE on purpose: `JSON.stringify` would
+ * be one line, and it recurses - so on an AST deeper than the JS stack it throws
+ * a RangeError before the writer can reach its own §25 depth REFUSAL, which is
+ * a documented behaviour with tests on it. An explicit stack has no such limit.
+ */
+function collectStrings(root: unknown): string {
+  const parts: string[] = []
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (typeof node === 'string') {
+      parts.push(node)
+      continue
+    }
+    if (node === null || typeof node !== 'object') continue
+    if (Array.isArray(node)) {
+      for (const item of node) stack.push(item)
+      continue
+    }
+    for (const value of Object.values(node)) stack.push(value)
+  }
+
+  return parts.join('\u0000')
+}
+
+function pickSentinels(text: string): readonly [string, string, string] {
+  // The common case: none of the defaults occur, so keep them and skip the scan
+  // of the private-use area entirely.
+  if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
+    return ['\ue001', '\ue002', '\ue003']
+  }
+  for (let base = 0xe004; base <= 0xf8fd; base += 3) {
+    const trio = [
+      String.fromCharCode(base),
+      String.fromCharCode(base + 1),
+      String.fromCharCode(base + 2),
+    ] as const
+    if (!trio.some((c) => text.includes(c))) return trio
+  }
+
+  // Unreachable for any real document; keep the old behaviour rather than throw.
+  return ['\ue001', '\ue002', '\ue003']
+}
+
+/**
  * Whole-document normalization (trailing-whitespace strip, blank-line
  * collapsing) must not reach inside verbatim content - code blocks, raw
  * blocks, frontmatter, and block comments reproduce their content
@@ -1016,10 +1089,12 @@ function normalize(text: string): string {
  * U+E000 is already the NBSP sentinel; U+E001..U+E003 extend the scheme.
  */
 function protectVerbatim(content: string): string {
+  const [sp, tab, blank] = sentinels
+
   return content
-    .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, '\ue001').replace(/\t/g, '\ue002'))
+    .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, sp).replace(/\t/g, tab))
     .split('\n')
-    .map((line) => (line === '' ? '\ue003' : line))
+    .map((line) => (line === '' ? blank : line))
     .join('\n')
 }
 
@@ -1031,10 +1106,10 @@ function restoreVerbatim(text: string): string {
       // lines, so a list item turned it into a line of nothing but spaces. The
       // host's indent goes with the sentinel: the line was blank in the source
       // and stays blank, and the reader strips those columns back off anyway.
-      .replace(/^[ \t]+\ue003$/gm, '')
-      .replace(/\ue001/g, ' ')
-      .replace(/\ue002/g, '\t')
-      .replace(/\ue003/g, '')
+      .replace(new RegExp(`^[ \\t]+${sentinels[2]}$`, 'gm'), '')
+      .replace(new RegExp(sentinels[0], 'g'), ' ')
+      .replace(new RegExp(sentinels[1], 'g'), '\t')
+      .replace(new RegExp(sentinels[2], 'g'), '')
   )
 }
 
