@@ -2132,8 +2132,14 @@ function parseFootnoteDef(lexer: Lexer): null {
       }
       continue
     }
-    const ws = leadingWhitespace(ln)
-    if (ws >= 2) {
+    // §16 asks for COLUMNS, not characters, and §24 C1 gives a tab a column
+    // value - so a bare tab reaches column 4 and continues the note exactly as
+    // two spaces do. Matching characters here accepted `<SPACE><TAB>` and
+    // refused a bare tab, while carve-php refused the mixture and took the bare
+    // tab: three engines, three readings (carve#796, carve-js#725). A rejected
+    // continuation does not indent differently, it LEAVES the note and lands in
+    // the document body, so the split moved content between blocks.
+    if (indentColumns(ln) >= FOOTNOTE_BODY_COLUMN) {
       // Dedent by the body's own column, which is TWO - the indent §16 requires
       // of a continuation line - not by whatever the first continuation line
       // happens to carry. Anything beyond two is residual indent the body's
@@ -2145,7 +2151,7 @@ function parseFootnoteDef(lexer: Lexer): null {
       }
       pendingBlanks = 0
       pendingBlankLineNumbers = []
-      bodyLines.push(ln.slice(FOOTNOTE_BODY_COLUMN))
+      bodyLines.push(sliceColumns(ln, FOOTNOTE_BODY_COLUMN))
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       lexer.consume()
     } else {
