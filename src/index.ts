@@ -244,7 +244,30 @@ function byteLength(s: string): number {
  * `renderHtml(resolve(parse(src)))`.
  */
 export function parse(source: string, opts: ParseOptions = {}): Document {
-  return parseImpl(source, opts)
+  const doc = parseImpl(source, opts)
+  // A reference image with a caption is a FIGURE in the published tree, not a
+  // paragraph holding `[Image, SoftBreak, "^ cap"]`. The syntactic
+  // block-image/caption pass runs during parsing and only knows the inline
+  // `![…](…)` form, so the reference form arrives here unpromoted - and the
+  // reference itself was already resolved during parsing (`src` is filled in),
+  // which is what made the leftover paragraph inconsistent: a resolved image
+  // whose caption was still sitting in a text node as `^ cap` (carve-js#680).
+  //
+  // `figuresOnly` deliberately: the sole-image -> block-image promotion stays
+  // out of `parse`, because a one-image PARAGRAPH can carry a leading
+  // block-attribute line (`{#id}`) that a bare block image would have to move
+  // inline, which the formatter relies on. That leaves `![a][ok]` alone still a
+  // paragraph here where carve-rs gives an image - reported separately rather
+  // than traded for a formatter change.
+  //
+  // This is representation, not resolution: no ids, numbering or default attrs
+  // are applied, and `carveToHtml` / `carveToCarve` produce byte-identical
+  // output before and after, since both already ran this pass themselves.
+  promoteBlockImages(doc.children, true)
+  if (doc.footnoteDefs) {
+    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
+  }
+  return doc
 }
 
 /** Render a Carve AST to HTML matching the spec corpus. */
