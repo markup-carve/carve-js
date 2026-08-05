@@ -364,6 +364,11 @@ const RE_LINK_DEF =
 // opposite. (carve#589, carve-js#631; `[^ ]: x`, whose label is a space, is a
 // footnote and is unaffected.)
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: \s*(.+)$/
+
+// A footnote body's own column: the indent §16 requires of a continuation line.
+// The body is dedented by exactly this much, never by the first continuation
+// line's actual indent - see `parseFootnoteDef` (carve-js#677).
+const FOOTNOTE_BODY_COLUMN = 2
 // A caption line mirrors a heading's first line (§4/§553): `^` + one-or-more
 // literal spaces (the grammar delimiter is a space, not a tab) + content that
 // carries at least one non-ASCII-whitespace character. Leading spaces are
@@ -1988,7 +1993,6 @@ function parseFootnoteDef(lexer: Lexer): null {
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
   let pendingBlanks = 0
   let pendingBlankLineNumbers: number[] = []
-  let contentCol = -1
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     if (isBlankLine(ln)) {
@@ -2025,16 +2029,18 @@ function parseFootnoteDef(lexer: Lexer): null {
     }
     const ws = leadingWhitespace(ln)
     if (ws >= 2) {
-      // Dedent by the FIRST continuation line's indent (not strip-all),
-      // so deeper-indented nested structure inside the note is preserved.
-      if (contentCol === -1) contentCol = ws
+      // Dedent by the body's own column, which is TWO - the indent §16 requires
+      // of a continuation line - not by whatever the first continuation line
+      // happens to carry. Anything beyond two is residual indent the body's
+      // blocks read themselves, so an opener one column in is lazy text rather
+      // than a block, the same way it is inside a list item (carve-js#677).
       for (let k = 0; k < pendingBlanks; k++) {
         bodyLines.push('')
         bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
       }
       pendingBlanks = 0
       pendingBlankLineNumbers = []
-      bodyLines.push(ln.slice(Math.min(contentCol, ws)))
+      bodyLines.push(ln.slice(FOOTNOTE_BODY_COLUMN))
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       lexer.consume()
     } else {
