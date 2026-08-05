@@ -1268,10 +1268,18 @@ function collectLinkDefs(lexer: Lexer) {
     if (quoteAtWrongColumn) continue
     const kept = stripContainerPrefixesKeepIndent(raw)
     const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
-    const deIndented = keptIndent >= contentCol ? kept.slice(contentCol) : kept
+    // A FOOTNOTE BODY has a content column too, and it is not a list column.
+    // `contentCol` tracks only list items, so inside a note body it is 0 and an
+    // INDENTED fence opener matched nothing - the fence went untracked and the
+    // definition-shaped line inside it was collected as a real definition, so a
+    // reference below the note resolved against a code sample (carve-js#667).
+    // The opener's own indent is the column to re-base on; the closer check below
+    // already re-bases to whatever `fence.contentCol` says.
+    const openerCol = inFootnoteBody && contentCol === 0 ? keptIndent : contentCol
+    const deIndented = keptIndent >= openerCol ? kept.slice(openerCol) : kept
     const open = RE_FENCE.exec(deIndented)
     if (open) {
-      fence = { ch: open[2]![0]!, len: open[2]!.length, contentCol, quoted: rawIsQuoted }
+      fence = { ch: open[2]![0]!, len: open[2]!.length, contentCol: openerCol, quoted: rawIsQuoted }
       continue
     }
     // Maintain footnote-body context (see `inFootnoteBody` above): a flush
