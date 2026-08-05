@@ -30,9 +30,9 @@ import {
   slugify,
   inlineText,
   headingIdSlugOpts,
+  normalizeHeadingRefLabel,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
-import { normalizeRefLabel } from './parse.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import type { BlockNode, Document, Heading } from './ast.js'
@@ -151,10 +151,6 @@ function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) 
   }
   visit(doc.children)
   if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
-}
-
-function normalizeHeadingRefLabel(label: string): string {
-  return normalizeRefLabel(label).toLowerCase()
 }
 
 /** Every `crossref` node anywhere under the document, with its raw target. */
