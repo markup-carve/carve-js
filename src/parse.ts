@@ -295,7 +295,12 @@ const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // requires that first space, then folds any further whitespace into the
 // separator; `\s+` alone would wrongly accept a leading tab. A tab after the
 // colon therefore forms no definition and the line stays a paragraph.
-const RE_ABBR_DEF = /^\*\[([A-Z][A-Z0-9]*)\]: \s*(.+)$/
+// The term is `(letter | digit)+`, and the grammar enumerates `letter` as ASCII
+// a-z plus A-Z: no case rule, no length rule, no Unicode. This required ALL
+// UPPERCASE, so `*[d]: dozen` was a paragraph here and a definition in carve-rs
+// and carve-php - and a definition renders nothing, so the document quietly
+// lost either the line or the expansion when it moved (carve#791).
+const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: \s*(.+)$/
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
