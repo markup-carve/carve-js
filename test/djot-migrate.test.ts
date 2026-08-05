@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   djotMigrationWarnings,
   applyMigrationFixes,
+  migrateScanSteps,
 } from '../src/djot-migrate.js'
 
 const rules = (src: string) =>
@@ -376,35 +377,46 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
   })
 
   it('scales near-linearly with the number of constructs (scan)', () => {
-    // Measure the scan/overlap detection (the part this fix made near-linear).
-    // `applyMigrationFixes` also splices each edit into the output string,
-    // which is a separate, pre-existing per-edit string cost - so the scaling
-    // guarantee is asserted against djotMigrationWarnings, which scans only.
-    // Cost PER CONSTRUCT, not total elapsed: "linear" means this stays flat as
-    // the input grows, so the metric is ~1 for a healthy scan and ~4 (the size
-    // multiple) if quadratic scanning returns.
-    const perConstruct = (n: number): number => {
-      const src = '**a** '.repeat(n)
-      const t0 = performance.now()
-      djotMigrationWarnings(src)
-      return (performance.now() - t0) / n
-    }
-    const median = (xs: number[]): number =>
-      [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!
+    // COUNTED, not timed. The previous version of this test measured wall-clock
+    // cost per construct at two input sizes and compared the ratio. It flaked on
+    // CI at 2.079 against a bound of 2 (carve-js#656) - the two measurements are
+    // seconds apart, so a runner busy for part of the run skews one relative to
+    // the other, and interleaving and medians cannot fix that.
+    //
+    // The scan's work is countable, so count it. A healthy scan is O(n log n),
+    // making steps PER CONSTRUCT grow like log n; the regression this guards - a
+    // linear scan of the growing `taken` array - makes it O(n^2) and the
+    // per-construct count grow like n.
+    //
+    // Measured on this commit: healthy gives 1.20, and reinstating the linear
+    // scan gives exactly 4.00. A bound of 2 separates them with room on both
+    // sides, and neither number depends on the machine.
+    const stepsPerConstruct = (n: number): number => {
+      migrateScanSteps.count = 0
+      djotMigrationWarnings('**a** '.repeat(n))
 
-    perConstruct(2000) // warm up
-
-    // Interleave the two sizes so a runner that is busy for only part of the
-    // run cannot skew one sample relative to the other, and take the median so
-    // a single stall is discarded (a mean would still be dragged by it).
-    const smalls: number[] = []
-    const larges: number[] = []
-    for (let round = 0; round < 5; round++) {
-      smalls.push(perConstruct(4000))
-      larges.push(perConstruct(16000)) // 4x the constructs
+      return migrateScanSteps.count / n
     }
-    // Linear -> ~1; quadratic -> ~4 at 4x input. 2 sits clear of both.
-    expect(median(larges) / median(smalls)).toBeLessThan(2)
+
+    const small = stepsPerConstruct(4000)
+    const large = stepsPerConstruct(16000) // 4x the constructs
+
+    expect(small).toBeGreaterThan(0)
+    expect(large / small).toBeLessThan(2)
+  })
+
+  it('the step counter is deterministic across runs', () => {
+    // The whole point of the change: the same input must give the same count
+    // every time, or the guard is just a slower timing test.
+    const count = (): number => {
+      migrateScanSteps.count = 0
+      djotMigrationWarnings('**a** '.repeat(2000))
+
+      return migrateScanSteps.count
+    }
+
+    expect(count()).toBe(count())
+    expect(count()).toBe(count())
   })
 
   it('still detects and skips a genuine crossing collision', () => {

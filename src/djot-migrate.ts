@@ -351,6 +351,25 @@ function stripHit(h: ScanHit): MigrationWarning {
  * change meaning under Carve. Empty array means the source is free of the
  * known Djot/Carve delimiter collisions.
  */
+/**
+ * Comparison counter for the same-family overlap scan, for TESTS only.
+ *
+ * The scan's cost is what carve-js#653's fix made near-linear, and the guard for
+ * it was a wall-clock RATIO between two input sizes. That flaked on CI at 2.079
+ * against a bound of 2 (carve-js#656): the two measurements are seconds apart, so
+ * a runner that is busy for part of the run skews one relative to the other, and
+ * no amount of interleaving or median-taking fixes that.
+ *
+ * Steps are deterministic. A healthy scan is O(n log n), so steps PER CONSTRUCT
+ * grow like log n - a ratio of ~1.2 across a 4x input. A linear scan of the
+ * growing array, which is the regression this guards, makes it O(n^2) and the
+ * ratio 4. Nothing in between, and nothing that depends on the machine.
+ *
+ * carve-js#653 reached for the same idea from the other side, swapping a timing
+ * guard for one on bytes emitted.
+ */
+export const migrateScanSteps = { count: 0 }
+
 export function djotMigrationWarnings(source: string): MigrationWarning[] {
   return scanHits(source).map(stripHit)
 }
@@ -405,6 +424,7 @@ function scanHits(source: string): ScanHit[] {
     let lo = 0
     let hi = list.length
     while (lo < hi) {
+      migrateScanSteps.count++
       const mid = (lo + hi) >> 1
       if (list[mid]![0] < e) lo = mid + 1
       else hi = mid
@@ -429,6 +449,7 @@ function scanHits(source: string): ScanHit[] {
     let lo = 0
     let hi = list.length
     while (lo < hi) {
+      migrateScanSteps.count++
       const mid = (lo + hi) >> 1
       if (list[mid]![0] < s) lo = mid + 1
       else hi = mid
