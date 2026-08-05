@@ -6521,6 +6521,17 @@ function applyLinkDefs(
       if (def) {
         node.src = def.href
         if (def.title !== undefined) node.title = def.title
+        // AN IMAGE REFERENCE RESOLVES THE SAME ENTRY - NORMATIVE. It looks the
+        // label up in the same table and takes the same three fields, so a
+        // definition's attributes reach the image exactly as they reach a link:
+        // `[ex]: /i.png {.wide}` gives `class="wide"`. This took `href` and
+        // `title` and stopped, which is not a rule, it is where the
+        // implementation stopped (carve#697).
+        //
+        // Same §15 A3 merge as the link branch above - definition first, use
+        // site second, so a repeated key takes the LAST value and classes
+        // ACCUMULATE in source order.
+        if (def.attrs) node.attrs = mergeAttrs(def.attrs, node.attrs ?? {})
       }
         // PART 12 §3a, A RESOLVED REFERENCE KEEPS ITS DESTINATION: `ref` and
         // `rawRef` stay BESIDE `href`, exactly as §5 has footnote numbering
