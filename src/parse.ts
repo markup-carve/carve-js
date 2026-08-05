@@ -1116,7 +1116,19 @@ export function normalizeRefLabel(label: string): string {
  * near-impossible input, and skipping the strip avoids the more common false
  * positive of fabricating a def from ordinary prose).
  */
-function stripContainerPrefixesKeepIndent(raw: string): string {
+// A definition list's DESCRIPTION marker, which opens entry content exactly as a
+// bullet does - so a definition written on that line is collected from it (§801,
+// carve-js#730). It is NOT unconditional: a `:` line with no term above it is
+// not a description at all but paragraph text, and a definition in it defines
+// nothing (corpus 216-a-description-line-needs-a-term-above-it). Hence the
+// `afterTerm` gate, which the caller answers from the preceding line.
+//
+// `::` is the TERM marker and a `:::` fence opener is a fence; both need
+// whitespace after a SINGLE colon and neither has it, so neither matches.
+const RE_DESCRIPTION_PREFIX = /^[^\S\u00a0]*:[^\S\u00a0]+/
+const RE_AFTER_TERM = /^[^\S\u00a0]*(?:::(?!:)|:)[^\S\u00a0]/
+
+function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): string {
   let line = raw
   let prev: string
   do {
@@ -1124,13 +1136,14 @@ function stripContainerPrefixesKeepIndent(raw: string): string {
     line = line
       .replace(/^[^\S\u00a0]*>(?: |$)/, '') // blockquote (NBSP is content)
       .replace(/^[^\S\u00a0]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP is content)
+    if (afterTerm) line = line.replace(RE_DESCRIPTION_PREFIX, '')
   } while (line !== prev)
   return line
 }
 
-function stripContainerPrefixes(raw: string): string {
+function stripContainerPrefixes(raw: string, afterTerm = false): string {
   // residual indentation (keep a content NBSP)
-  return stripContainerPrefixesKeepIndent(raw).replace(/^[^\S\u00a0]+/, '')
+  return stripContainerPrefixesKeepIndent(raw, afterTerm).replace(/^[^\S\u00a0]+/, '')
 }
 
 /**
@@ -1212,7 +1225,10 @@ function collectLinkDefs(lexer: Lexer) {
     // unclosed opener still is.
     if (idx < lexer.pos) continue
     const raw = lexer.lines[idx]!
-    const line = stripContainerPrefixes(raw)
+    // A description continues an entry opened by a `::` term or by a previous
+    // description, and only then does its marker open content here.
+    const afterTerm = RE_AFTER_TERM.test(lexer.lines[idx - 1] ?? '')
+    const line = stripContainerPrefixes(raw, afterTerm)
     // Content columns are measured INSIDE the block quote. `> - a` puts the
     // item's content column at 2 of the quoted content, not of the raw line -
     // which carries the `> ` and matches no marker, so the column stayed 0 and
@@ -1368,7 +1384,7 @@ function collectLinkDefs(lexer: Lexer) {
       raw.slice(quoteIndent).startsWith('>') &&
       !listCols.includes(quoteIndent)
     if (quoteAtWrongColumn) continue
-    const kept = stripContainerPrefixesKeepIndent(raw)
+    const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
     const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
     // A FOOTNOTE BODY has a content column too, and it is not a list column.
     // `contentCol` tracks only list items, so inside a note body it is 0 and an
