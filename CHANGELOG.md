@@ -43,6 +43,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`fmt` keeps a lone table span marker padded.** Glued to the opening pipe,
+  `<` is also the LEFT-ALIGNMENT sigil, and the two readings differ: the
+  executable spec reads `|<|` as alignment on an empty cell where all three
+  engines read a colspan (markup-carve/carve#710). The writer was turning the
+  unambiguous `| < |` the author wrote into the ambiguous form, so a document
+  formatted here and read anywhere else could change meaning. `^` takes the
+  same shape - it is not an alignment sigil, but a row of span cells stays
+  readable that way. With a cell attribute the block stays glued to the pipe,
+  where the grammar puts it, and the space goes between it and the marker.
+
 - **The writer's escape decision costs one parse, not two** (carve-js#641,
   residual half). `renderCarve` chooses between the minimal and conservative
   escape forms by PARSING both and comparing the trees (PART 11 §4). Two full
