@@ -22,8 +22,15 @@ describe('tableOfContents extension', () => {
 
   it('inserts after the content when position is bottom', () => {
     const html = carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })
+    // The TOC's own lines are still column 0 (the parity contract above); what
+    // is indented is where the block STARTS, the same as any other block gets
+    // (carve-js#727). Here that is inside the heading's `<section>`, because
+    // this engine appends a bottom TOC to the document's block list and the
+    // section wrapper takes it in - carve-php emits it after `</section>`
+    // instead, which is a placement difference this assertion used to hide
+    // (carve-js#728).
     expect(html).toContain(
-      '<h1>A</h1>\n<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>',
+      '<h1>A</h1>\n  <nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>',
     )
     expect(html.indexOf('<nav')).toBeGreaterThan(html.indexOf('<h1>A</h1>'))
   })
