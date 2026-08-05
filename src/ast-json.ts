@@ -364,6 +364,17 @@ function astJsonDepth(
 }
 
 export function fromAstJson(json: AstJsonDocument): Document {
+  // A STRING is the mistake the name invites - `fromAstJson` reads as "from AST
+  // JSON", carve-php spells the same entry point `decodeJson`, and carve-rs's
+  // CLI flag is `--from-json`; all three of those take text. This one takes the
+  // parsed tree. Without this arm the string falls through to the root check and
+  // is reported as `AST root type undefined is not "document"`, which sends the
+  // caller looking at their document instead of at their call (carve-js#703).
+  if (typeof json === 'string') {
+    throw new TypeError(
+      'fromAstJson takes a parsed AST object, not a JSON string; call JSON.parse first',
+    )
+  }
   // Checked BEFORE the depth walk: a foreign payload should be turned away for
   // being foreign, not for however deep it happens to be.
   if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
