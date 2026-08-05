@@ -43,6 +43,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The list-marker patterns no longer backtrack through indentation**
+  (carve-js#641, parse half). They begin with a greedy `([^\S ]*)` so they
+  tolerate indentation; on a line they do NOT match, that prefix backtracks -
+  giving back one whitespace character at a time and retrying every marker
+  alternation at each position. `RE_ORDERED` cost 20 ns per call at indent 0 and
+  2055 ns at indent 400, and 15% of the whole parse of a 200-level ladder.
+
+  The prefix is now atomic (the `(?=(...))\1` idiom), which is
+  semantics-preserving here because every alternation after it begins with a
+  NON-whitespace character - a shorter whitespace run can never let the rest
+  match, so backtracking into it could only ever fail. Group numbering is
+  unchanged: the lookahead's group takes slot 1 and holds the same indent.
+
+  Parsing a 200-level ladder drops about 20% (72 ms to 60 ms, best of 25).
+  Output is unchanged: `fmt` byte-identical across all 600 corpus documents, and
+  the corpus HTML is clean.
+
 - **`fmt` keeps a lone table span marker padded.** Glued to the opening pipe,
   `<` is also the LEFT-ALIGNMENT sigil, and the two readings differ: the
   executable spec reads `|<|` as alignment on an empty cell where all three
