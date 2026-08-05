@@ -991,7 +991,30 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       const first = caption[0] as Text
       const stripped = first.value.replace(/^\^ +/, '')
       if (stripped === '') caption.shift()
-      else caption[0] = { ...first, value: stripped }
+      else {
+        // The span has to move with the value. Keeping the paragraph's span
+        // while dropping `^ ` from the text leaves a node whose own span does
+        // not slice back to it: `value: "cap"` over a range covering "^ cap".
+        // The marker is ASCII (`^` plus spaces), so the count is the same in
+        // offsets and in codepoint columns; only the START moves.
+        // carve-rs has the same defect and is tracked at carve-rs#620; carve-php
+        // already advances it.
+        const removed = first.value.length - stripped.length
+        const pos = first.pos
+          ? {
+              ...first.pos,
+              // Each field is optional on its own, so advance only what is there
+              // rather than inventing a zero origin for a missing one.
+              ...(first.pos.startOffset !== undefined
+                ? { startOffset: first.pos.startOffset + removed }
+                : {}),
+              ...(first.pos.startColumn !== undefined
+                ? { startColumn: first.pos.startColumn + removed }
+                : {}),
+            }
+          : undefined
+        caption[0] = pos ? { ...first, value: stripped, pos } : { ...first, value: stripped }
+      }
       // Carry a leading block-attribute line (`{#id}` etc.) from the paragraph
       // onto the figure, matching a direct-image figure (which takes the attrs
       // at parse time) and carve-php -- otherwise `carve fmt` would drop it.
