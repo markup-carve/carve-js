@@ -240,6 +240,11 @@ const IMPLEMENTED = new Set([
   'a-definition-below-a-footnote-body-s-column-is-the-document-s-own-text',
   'a-definition-past-a-footnote-body-s-column-is-the-body-s-own-text',
   'a-heading-in-a-footnote-body-takes-an-id-but-no-section-wrapper',
+  // The `[Café][]` half folds NFC, the `[file][]` half must NOT fold
+  // compatibility - `# ﬁle` (U+FB01) stays unreachable. #694 landed the folding
+  // half; this engine renders the fixture byte-for-byte, so the entry is the
+  // whole change (carve#725, carve#729).
+  'a-heading-reference-folds-unicode-normalization-but-not-compatibility',
   'a-nested-list-in-a-footnote-body-stays-nested',
   'a-quote-marker-is-plus-a-space-and-a-lazy-line-keeps-its-own-text',
   'a-reference-image-takes-a-caption',
