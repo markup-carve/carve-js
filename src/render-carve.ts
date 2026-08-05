@@ -647,7 +647,12 @@ function renderFootnoteDefs(ast: Document, ctx: CarveContext): string {
     const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
     const lines = body.split('\n')
     const defLines = [`[^${escapeFootnoteLabel(label)}]: ${lines.shift() ?? ''}`]
-    for (const line of lines) defLines.push(`   ${line}`)
+    // TWO spaces, the body's own column (PART 9 §16). Three is legal
+    // continuation, but it leaves the body's blocks at a relative column above
+    // zero - and a reader that takes the body's column as two then sees an
+    // indented block opener, which does not open. This engine reads three back
+    // fine; the executable spec, carve-rs and carve-php do not.
+    for (const line of lines) defLines.push(`  ${line}`)
     out.push(defLines.join('\n'))
   }
   return out.join('\n\n')
