@@ -46,6 +46,11 @@ export const CANONICAL_BLOCK_TYPES = [
   'comment',
   'figure',
   'caption',
+  // Listed by profiles.md's block vocabulary and missing here until carve-js#712:
+  // the page publishes frontmatter as a root field (PART 12 section 2), so denying it
+  // is a real decision about what leaves the engine even though the HTML is
+  // unchanged. carve-rs and carve-php both name it.
+  'frontmatter',
 ] as const
 
 /** Canonical inline node-type vocabulary (snake_case). */
@@ -76,6 +81,16 @@ export const CANONICAL_INLINE_TYPES = [
   'symbol',
   'math',
   'abbreviation',
+  // Listed by profiles.md's inline vocabulary and missing here until carve-js#712.
+  // `canonicalType`'s default arm already calls four of these "their own canonical
+  // names, not absences" (carve-js#472) - so the mapper and the vocabulary
+  // disagreed, and `isTypeAllowed(type)` with no axis fell through to step 3 and
+  // ALLOWED a type the caller had just denied.
+  'caption_number',
+  'citation_group',
+  'critic_comment',
+  'heading_ref',
+  'substitution',
 ] as const
 
 const BLOCK_SET: ReadonlySet<string> = new Set(CANONICAL_BLOCK_TYPES)
