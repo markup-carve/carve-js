@@ -245,6 +245,28 @@ export class AstJsonDepthError extends Error {
 }
 
 /**
+ * Thrown when the payload's root is not a `document`.
+ *
+ * PART 12 §9 closes with the reason: "The root type is not a leniency point:
+ * §7 fixes it at `document`, and the schema pins it as a `const`. An ingest
+ * accepting some other root (`doc`, say, which is ProseMirror's) will half-read
+ * a foreign format rather than reject it."
+ *
+ * This reader used to write `type: 'document'` into the tree it returned no
+ * matter what arrived, so a ProseMirror payload - the clause's own example -
+ * was accepted AND had the evidence normalized away: the caller got a valid
+ * Carve document back and no way to learn its input had not been one.
+ */
+export class AstJsonRootError extends Error {
+  constructor(readonly found: unknown) {
+    super(
+      `AST root type ${JSON.stringify(found)} is not "document"; the root is fixed by PART 12 §7`,
+    )
+    this.name = 'AstJsonRootError'
+  }
+}
+
+/**
  * Deepest node nesting `fromAstJson` will ingest.
  *
  * PART 12 §9 states the contract as a property, not a number: ingest MUST
@@ -342,6 +364,10 @@ function astJsonDepth(
 }
 
 export function fromAstJson(json: AstJsonDocument): Document {
+  // Checked BEFORE the depth walk: a foreign payload should be turned away for
+  // being foreign, not for however deep it happens to be.
+  if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
+
   const { nodes, walk } = astJsonDepth(json, MAX_AST_JSON_DEPTH, MAX_AST_JSON_WALK)
   if (nodes > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(nodes)
   if (walk > MAX_AST_JSON_WALK) throw new AstJsonDepthError(walk)

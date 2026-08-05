@@ -43,6 +43,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Ingest rejects a foreign AST root instead of adopting it** (PART 12 §9). The
+  clause names the exact case: "An ingest accepting some other root (`doc`, say,
+  which is ProseMirror's) will half-read a foreign format rather than reject it."
+  `fromAstJson` wrote `type: 'document'` into the tree it returned whatever
+  arrived, so a ProseMirror payload was accepted AND had the evidence normalized
+  away - the caller got a valid Carve document back with no way to learn its input
+  had not been one. It now throws `AstJsonRootError`, naming the type it found and
+  the one the root is fixed at. carve-rs and carve-php both already rejected it.
+
 - **The list-marker patterns no longer backtrack through indentation**
   (carve-js#641, parse half). They begin with a greedy `([^\S ]*)` so they
   tolerate indentation; on a line they do NOT match, that prefix backtracks -
