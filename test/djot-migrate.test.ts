@@ -405,6 +405,26 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
     expect(large / small).toBeLessThan(2)
   })
 
+  it('the step counter tracks the scan, not a constant', () => {
+    // The hole the two guards around this one leave open. A counter that
+    // always reports the same number is deterministic, and its per-construct
+    // figure SHRINKS as the input grows - 500/4000 against 500/16000 is a
+    // ratio of 0.25, comfortably under the bound. Measured: replacing the two
+    // increments with a fixed `count = 500` passes all 60 tests in this file.
+    //
+    // So the count has to be tied to the work. More constructs, more steps.
+    const count = (n: number): number => {
+      migrateScanSteps.count = 0
+      djotMigrationWarnings('**a** '.repeat(n))
+
+      return migrateScanSteps.count
+    }
+
+    expect(count(100)).toBeGreaterThan(0)
+    expect(count(1000)).toBeGreaterThan(count(100))
+    expect(count(4000)).toBeGreaterThan(count(1000))
+  })
+
   it('the step counter is deterministic across runs', () => {
     // The whole point of the change: the same input must give the same count
     // every time, or the guard is just a slower timing test.
