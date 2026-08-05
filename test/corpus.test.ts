@@ -228,6 +228,23 @@ const IMPLEMENTED = new Set([
   'an-abbreviation-at-a-list-item-s-content-column-is-still-not-a-definition',
   'a-definition-inside-a-container-is-collected-at-that-container-s-content-column',
   'trailing-attributes-on-a-link-reference-definition',
+  'a-block-attribute-line-inside-a-quote-ends-the-paragraph-above-it',
+  'a-collapsed-image-reference-uses-its-alt-text-as-the-label',
+  'a-combined-bold-italic-span-may-cross-a-line',
+  'a-comment-ends-the-paragraph-it-sits-under',
+  'a-definition-on-a-footnote-body-s-continuation-line-is-collected',
+  'a-div-does-not-define-an-abbreviation-either',
+  'a-flush-left-line-after-a-footnote-definition-belongs-to-the-document',
+  'a-footnote-body-holds-blocks-and-they-render-where-they-were-written',
+  'a-heading-in-a-footnote-body-takes-an-id-but-no-section-wrapper',
+  'a-nested-list-in-a-footnote-body-stays-nested',
+  'a-quote-marker-is-plus-a-space-and-a-lazy-line-keeps-its-own-text',
+  'a-reference-image-takes-a-caption',
+  'an-attribute-line-inside-a-footnote-body-attaches-inside-it',
+  'an-image-takes-a-reference-the-way-a-link-does',
+  'an-unresolved-image-reference-stays-literal',
+  'an-unresolved-reference-image-takes-no-caption',
+  'one-definition-serves-a-link-and-an-image',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
