@@ -729,7 +729,14 @@ function rendersNothing(node: NodeLike): boolean {
     // `abbreviation` nodes that do. Degrading it to text has nothing to
     // substitute, so it took the missing-extractor path and injected a literal
     // `[abbreviation_def]` paragraph into the document.
-    node.type === 'abbreviation_def'
+    node.type === 'abbreviation_def' ||
+    // The same shape, and left behind when the line above was added: a link
+    // reference definition renders nothing where it was written either, it
+    // feeds the `link` or `image` that does. profiles.md names the two
+    // together - "`link_reference_definition` is the `abbreviation_def` case
+    // exactly" - so denying one injected `[link_reference_definition]` into the
+    // page while denying the other did not (carve-js#701).
+    node.type === 'link_reference_definition'
   )
 }
 
