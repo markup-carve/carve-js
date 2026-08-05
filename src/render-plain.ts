@@ -3,6 +3,7 @@ import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Tab
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import type { SmartTypographyMode } from './render-markdown.js'
+import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 
 export interface PlainTextRenderOptions {
   /**
@@ -33,7 +34,6 @@ export function smartTypographyIsSource(
  * ast-json.ts, which is above the parser cap because the two counts measure
  * different things.
  */
-const TRIM_NON_NBSP_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
 
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
   const ctx: PlainContext = {
@@ -340,14 +340,6 @@ function normalize(text: string): string {
   // cell renders `x | ` and that space is an artifact of the separator.
   const body = trimEndNonNbsp(text.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, ''))
   return `${body}\n`.replace(/\ue000/g, ' ')
-}
-
-function trimNonNbsp(text: string): string {
-  return text.replace(TRIM_NON_NBSP_RE, '')
-}
-
-function trimEndNonNbsp(text: string): string {
-  return text.replace(/[^\S\u00a0]+$/g, '')
 }
 
 function cleanEscapedText(node: Text): string {
