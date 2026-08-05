@@ -378,8 +378,20 @@ export function resolveHeadingIds(
     }
   }
   for (const b of doc.children) reserveExplicitIds(b)
+  // A footnote body is part of the same DOCUMENT and renders into the same
+  // page, so its ids share one pool with everything else - two elements with
+  // the same DOM id is invalid HTML whichever container they sit in. The map
+  // was already walked for reference resolution and caption numbering below;
+  // id assignment was the one pass that skipped it, so a heading in a note
+  // came out with no id at all while the same heading in a quote, a div or a
+  // list item got one (carve-js#669).
+  for (const body of Object.values(doc.footnoteDefs ?? {}))
+    for (const b of body) reserveExplicitIds(b)
 
   assignIds(doc.children, false)
+  // Not `inBlockquote`: a note body is not quoted material, and the flag only
+  // exists to keep a quoted heading out of the section-wrapping path.
+  for (const body of Object.values(doc.footnoteDefs ?? {})) assignIds(body, false)
 
   // Two-pass resolution: implicit-heading refs must be finalized
   // BEFORE crossref cloning, otherwise a forward `</#id>` could clone
