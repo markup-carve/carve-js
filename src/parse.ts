@@ -1362,11 +1362,18 @@ function collectLinkDefs(lexer: Lexer) {
     if (raw.trim() === '+') plusAttached = true
     else if (raw.trim() === '') plusAttached = false
     const rawIndent = leadingWhitespace(unquoted)
+    // Inside a footnote body the column is KNOWN - it is two, §16's own
+    // (carve#717) - so the body no longer needs the blanket exemption it used to
+    // carry below. With the exemption a definition anywhere in a note body was
+    // collected, including at columns where the body renders the line as text:
+    // the reader saw `[r]: /u` as prose while a reference to it silently
+    // resolved (the `VA` rows of carve#669 and carve#701, at indents 1 and 3).
+    const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
     const atAnOpenContentColumn = plusAttached
       ? rawIndent === 0
       : listCols.length
         ? listCols.includes(rawIndent)
-        : rawIndent === contentCol
+        : rawIndent === openColumn
     // Compared against the QUOTE-STRIPPED view, not the raw line. `kept` has
     // both the quote prefix and any list marker removed, so `kept === raw` was
     // really asking "does this line carry a marker of its own?" - the exemption
@@ -1377,7 +1384,7 @@ function collectLinkDefs(lexer: Lexer) {
     // shape outside one stayed literal (carve-js#648). Content columns are
     // measured inside the quote (carve#658), so the quote must not change the
     // answer.
-    const notAtContentColumn = kept === unquoted && !inFootnoteBody && !atAnOpenContentColumn
+    const notAtContentColumn = kept === unquoted && !atAnOpenContentColumn
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
     const [defLine, defAttrText] = splitTrailingAttrBlock(line)
