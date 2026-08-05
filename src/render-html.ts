@@ -971,10 +971,20 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'raw_block':
       // Raw HTML passthrough; escape it instead when raw HTML is disabled
       // (untrusted input). Non-HTML raw formats are always dropped.
+      //
+      // `pad` places the block where any other block would sit - inside a
+      // footnote body or a list item it had been emitted flush at column 0,
+      // breaking the surrounding markup's indentation (carve-js#727, corpus
+      // 225-...-for-the-backlink-5). Only the OPENING position is indented: the
+      // content's own line structure is passed through untouched, because
+      // re-indenting a raw block's interior changes bytes the author wrote and
+      // is visible inside a `<pre>`. Which of the three readings is canonical
+      // for a multi-line raw block is open at markup-carve/carve#800; this
+      // matches what the corpus pins without deciding it.
       return node.format === 'html'
         ? opts.allowRawHtml === false
-          ? escapeHtml(node.content)
-          : node.content
+          ? `${pad}${escapeHtml(node.content)}`
+          : `${pad}${node.content}`
         : ''
     case 'comment':
       // Comments are not rendered (§4.13).
