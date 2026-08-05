@@ -88,8 +88,46 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   const minimal = renderWithEscapes(ast, 'minimal')
   const conservative = renderWithEscapes(ast, 'conservative')
   if (minimal === conservative) return minimal
-  return escapingIsRedundant(minimal, conservative) ? minimal : conservative
+  // A cheaper sufficient reason to prefer the minimal form: it RE-PARSES TO THE
+  // TREE WE WERE GIVEN. That is strictly stronger than "the two renders agree" -
+  // a form that reproduces the input tree cannot have changed the document, so
+  // there is nothing left for the comparison below to decide.
+  //
+  // Worth a tier of its own because that comparison costs TWO full parses, and
+  // it was paid by every document holding a single escapable character in text,
+  // which is nearly all of them. It showed up as depth sensitivity rather than
+  // as what it is: on a 40 KB `- x` ladder, adding one `-` to a paragraph took
+  // `fmt` from 6 ms to 186 ms - about twice the parse - while the ladder alone
+  // stayed at 6 ms.
+  //
+  // A MISS costs nothing but the parse it just did: it falls through to the same
+  // comparison as before. The tree here is parse-only plus block-image
+  // promotion, so a document whose sole image was promoted misses and is decided
+  // the old way.
+  // ONE parse of the minimal form, reused by both tiers below. Parsing it here
+  // and again inside the comparison would make a MISS cost three parses where it
+  // used to cost two - paying for the shortcut exactly on the documents it
+  // cannot help.
+  const minimalTree = treeOf(minimal)
+  if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
+  return escapingIsRedundant(minimalTree, conservative) ? minimal : conservative
 }
+
+/**
+ * The canonical tree of `src`, or null when it does not parse.
+ *
+ * Null answers "cannot tell" for every caller: a writer bug that produces
+ * unparseable source must not throw out of the renderer, and the conservative
+ * form is what the writer emitted before minimal escaping existed.
+ */
+function treeOf(src: string): string | null {
+  try {
+    return stableJson(parse(src))
+  } catch {
+    return null
+  }
+}
+
 
 function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
   const previous = escapeMode
@@ -134,15 +172,12 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
  * reference link comes back with an empty href and reports a difference that
  * escaping never caused.
  */
-function escapingIsRedundant(minimal: string, conservative: string): boolean {
-  try {
-    return stableJson(parse(minimal)) === stableJson(parse(conservative))
-  } catch {
-    // A writer bug that produces unparseable source must not throw out of the
-    // renderer: fall back to the conservative form, which is what the writer
-    // emitted before minimal escaping existed.
-    return false
-  }
+function escapingIsRedundant(minimalTree: string | null, conservative: string): boolean {
+  // `minimalTree` is the caller's single parse of the minimal form; null means it
+  // did not parse, which answers the question conservatively.
+  if (minimalTree === null) return false
+  const conservativeTree = treeOf(conservative)
+  return conservativeTree !== null && minimalTree === conservativeTree
 }
 
 function stableJson(value: unknown): string {
