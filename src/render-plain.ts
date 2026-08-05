@@ -117,6 +117,9 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'raw_block':
     case 'comment':
       return ''
+    case 'link_reference_definition':
+      // Renders nothing: a definition line is not prose.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderPlainText: unknown block ${(t as { type: string }).type}`)

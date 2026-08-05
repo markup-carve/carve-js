@@ -165,6 +165,9 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return `${style(`*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}`, DIM)}\n\n`
     case 'comment':
       return ''
+    case 'link_reference_definition':
+      // Renders nothing: a definition line is not prose.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderAnsi: unknown block ${(t as { type: string }).type}`)

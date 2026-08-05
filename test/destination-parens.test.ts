@@ -54,21 +54,35 @@ describe('the writer escapes only what the scan would misread', () => {
     expect(carveToCarve(out)).toBe(out)
   }
 
+  // These used to drive the writer through a REFERENCE plus a definition,
+  // because a resolved reference was inlined and the destination therefore ended
+  // up inside `(...)`. It is not inlined any more (carve-js#690), so the vehicle
+  // is an INLINE link - the claim is unchanged: the writer escapes a parenthesis
+  // exactly when the destination scan would misread it.
   it('leaves a balanced pair bare', () => {
-    const src = '[wiki][w]\n\n[w]:  https://en.wikipedia.org/wiki/Foo_(bar)\n'
+    const src = '[wiki](https://en.wikipedia.org/wiki/Foo_(bar))\n'
     expect(carveToCarve(src)).toContain('(https://en.wikipedia.org/wiki/Foo_(bar))')
     roundTrips(src)
   })
 
   it('escapes an unbalanced parenthesis', () => {
-    const src = '[x][w]\n\n[w]:  http://a/b)c\n'
+    const src = '[x](http://a/b\\)c)\n'
     expect(carveToCarve(src)).toContain('(http://a/b\\)c)')
     roundTrips(src)
   })
 
   it('escapes an opener that never closes', () => {
-    const src = '[x][w]\n\n[w]:  http://a/b(c\n'
+    const src = '[x](http://a/b\\(c)\n'
     expect(carveToCarve(src)).toContain('(http://a/b\\(c)')
+    roundTrips(src)
+  })
+
+  it('writes a DEFINITION destination unescaped, where nothing wraps it', () => {
+    // The other half, now that a reference survives: on a definition line the
+    // destination is not inside `(...)`, so a parenthesis needs no escape and
+    // must not gain one. Byte-identical to carve-php.
+    const src = '[x][w]\n\n[w]: http://a/b)c\n'
+    expect(carveToCarve(src)).toBe('[x][w]\n\n[w]: http://a/b)c\n')
     roundTrips(src)
   })
 

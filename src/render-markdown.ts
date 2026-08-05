@@ -196,6 +196,11 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
     case 'comment':
       return ''
+    case 'link_reference_definition':
+      // Renders nothing, same as carve-php on this target. The definition's
+      // destination already reached every link that resolved it, and Markdown's
+      // own reference form is not what this writer emits.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown block ${(t as { type: string }).type}`)

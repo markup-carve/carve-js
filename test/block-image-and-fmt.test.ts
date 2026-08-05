@@ -32,7 +32,11 @@ describe('fmt of an unresolved reference image round-trips verbatim', () => {
   })
 
   it('a resolved reference image normalizes to the inline form', () => {
-    expect(carveToCarve('![alt][ref]\n\n[ref]: /u "t"').trim()).toBe('![alt](/u "t")')
+    // A resolved reference now stays a reference and its definition is written
+    // back, instead of being inlined (carve-js#690). Byte-identical to carve-php.
+    expect(carveToCarve('![alt][ref]\n\n[ref]: /u "t"').trim()).toBe(
+      '![alt][ref]\n\n[ref]: /u "t"',
+    )
     inv('![alt][ref]\n\n[ref]: /u "t"')
   })
 })
@@ -46,12 +50,16 @@ describe('fmt emits an unescaped figure caption (portable round-trip)', () => {
   const inv = (src: string) => expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
 
   it('resolved reference image + caption', () => {
-    expect(carveToCarve('![a][r]\n^ cap\n\n[r]: /u').trim()).toBe('![a](/u)\n^ cap')
+    expect(carveToCarve('![a][r]\n^ cap\n\n[r]: /u').trim()).toBe(
+      '![a][r]\n^ cap\n\n[r]: /u',
+    )
     inv('![a][r]\n^ cap\n\n[r]: /u')
   })
 
   it('reference image with attributes + caption', () => {
-    expect(carveToCarve('![a][r]{.c}\n^ cap\n\n[r]: /u').trim()).toBe('![a](/u){.c}\n^ cap')
+    expect(carveToCarve('![a][r]{.c}\n^ cap\n\n[r]: /u').trim()).toBe(
+      '![a][r]{.c}\n^ cap\n\n[r]: /u',
+    )
     inv('![a][r]{.c}\n^ cap\n\n[r]: /u')
   })
 
@@ -70,7 +78,9 @@ describe('fmt emits an unescaped figure caption (portable round-trip)', () => {
   })
 
   it('a leading block-attribute line is kept on a promoted reference figure', () => {
-    expect(carveToCarve('{#f}\n![a][r]\n^ cap\n\n[r]: /u').trim()).toBe('{#f}\n![a](/u)\n^ cap')
+    expect(carveToCarve('{#f}\n![a][r]\n^ cap\n\n[r]: /u').trim()).toBe(
+      '{#f}\n![a][r]\n^ cap\n\n[r]: /u',
+    )
     inv('{#f}\n![a][r]\n^ cap\n\n[r]: /u')
   })
 
@@ -81,6 +91,12 @@ describe('fmt emits an unescaped figure caption (portable round-trip)', () => {
     // reference sole-image has a PRE-EXISTING carve-js/-rs HTML divergence -- the
     // `{#f}` is dropped on the reference form but kept on the resolved direct
     // form -- so the round-trip changes the id independently of this change.)
-    expect(carveToCarve('{#f}\n![a][r]\n\n[r]: /u').trim()).toBe('{#f}\n![a](/u)')
+    // carve-php DROPS the `{#f}` line here and loses `id="f"` on the reparse,
+    // so this row is deliberately NOT byte-matched against it
+    // (markup-carve/carve-php#831). Keeping the attribute line is the point of
+    // this test and the round trip below proves it.
+    expect(carveToCarve('{#f}\n![a][r]\n\n[r]: /u').trim()).toBe(
+      '{#f}\n![a][r]\n\n[r]: /u',
+    )
   })
 })

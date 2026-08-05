@@ -53,8 +53,15 @@ describe('an EMPTY footnote label is not a footnote at all', () => {
     expect(carveToHtml('[^]: /x\n\nsee [^][]\n')).toBe('<p>see <a href="/x">^</a></p>')
   })
 
-  it('leaves no node in the tree', () => {
-    expect(carveToAstJson('[^]: /x\n').children).toEqual([])
+  it('is published as a link reference definition, not a footnote', () => {
+    // The premise here CHANGED. This asserted an empty tree because the
+    // vocabulary had no node for a link reference definition, so nothing could
+    // carry the line (carve#592). PART 12 §10 added one, and `[^]: /x` is a
+    // link definition whose label happens to be `^` - carve-php publishes the
+    // same node for the same input, and both write the line back unchanged.
+    expect(carveToAstJson('[^]: /x\n').children.map((c) => c.type)).toEqual([
+      'link_reference_definition',
+    ])
   })
 
   it('emits nothing on the non-HTML targets, like every link definition', () => {

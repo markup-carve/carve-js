@@ -979,6 +979,11 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'comment':
       // Comments are not rendered (§4.13).
       return ''
+    case 'link_reference_definition':
+      // PART 12 §10: the definition line renders NOTHING itself - it feeds every
+      // link or image that resolves the label (PART 9R R1). carve-php emits nothing
+      // for it on this target too, which is what keeps the two in agreement.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderHtml: unknown block ${(t as { type: string }).type}`)

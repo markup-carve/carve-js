@@ -398,6 +398,14 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     }
     case 'abbreviation_def':
       return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
+    case 'link_reference_definition': {
+      // PART 12 §10 gave this a node precisely so the writer can put the line
+      // back. Before that there was nowhere to write it from, which is why every
+      // resolved reference was INLINED instead (carve-js#690).
+      const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
+      const attrs = renderAttrs(node.attrs)
+      return `[${node.label}]: ${node.href}${title}${attrs === '' ? '' : ` ${attrs}`}`
+    }
     case 'comment':
       return node.block ? renderBlockComment(node.content) : `%% ${node.content}`
     default: {
@@ -847,6 +855,22 @@ function renderLink(node: Link, ctx: CarveContext): string {
   if (node.ref !== undefined && node.rawRef !== undefined && !node.href) {
     return node.rawRef
   }
+  // A RESOLVED reference stays a reference. Inlining it satisfied
+  // toHtml(fmt(x)) == toHtml(x) and broke PART 11 §1: `ref`/`rawRef` - which §3a
+  // keeps so `[a][r]` and `[a](/u)` stay distinguishable - were absent from the
+  // reparse, and one destination became N after a single pass, which is the
+  // duplication the definition form exists to avoid (carve-js#690, carve#642).
+  //
+  // `rawRef` is the authored source VERBATIM and already carries any attribute
+  // block written at the reference, so it is emitted as-is rather than having
+  // renderAttrs appended - which would write the block twice.
+  // No heading-reference guard is needed here, unlike carve-php's: this engine
+  // DELETES `ref`/`rawRef` when a heading resolves a reference, and `carveToCarve`
+  // does not run resolve() at all - so a heading-derived link never reaches this
+  // branch carrying a ref.
+  if (node.ref !== undefined && node.rawRef !== undefined) {
+    return node.rawRef
+  }
   const text = renderInlines(node.children, ctx)
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
   return `[${text}](${escapeDestination(node.href)}${title})${renderAttrs(node.attrs)}`
@@ -857,6 +881,10 @@ function renderImage(node: Image): string {
   // like an unresolved reference link (renderLink); `![alt]()` would change the
   // rendered text and break the carveToHtml(fmt(x)) == carveToHtml(x) invariant.
   if (node.ref !== undefined && node.rawRef !== undefined && !node.src) {
+    return node.rawRef
+  }
+  // A RESOLVED reference image stays a reference, for the same reason as a link.
+  if (node.ref !== undefined && node.rawRef !== undefined) {
     return node.rawRef
   }
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`

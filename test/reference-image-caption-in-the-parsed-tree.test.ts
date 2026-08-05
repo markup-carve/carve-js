@@ -35,7 +35,10 @@ const DIRECT_CAPTION = '![a](/p.png)\n^ cap\n'
 describe('a reference image with a caption', () => {
   it('is a figure in the parsed tree', () => {
     const doc = parse(REF_CAPTION)
-    expect(doc.children.map((c) => c.type)).toEqual(['figure'])
+    // The definition node comes along: PART 12 §10 hoists it to the document so
+    // the writer can reproduce it (carve-js#690). Asserting the whole list rather
+    // than just the first entry keeps that visible.
+    expect(doc.children.map((c) => c.type)).toEqual(['figure', 'link_reference_definition'])
   })
 
   it('carries the caption with the marker stripped', () => {
@@ -83,7 +86,7 @@ describe('a reference image with a caption', () => {
     // The row deliberately NOT changed here (see the note above). Pinned so the
     // choice is visible: if someone promotes it, this test says what to check.
     const doc = parse('![a][ok]\n\n[ok]: /p.png\n')
-    expect(doc.children.map((c) => c.type)).toEqual(['paragraph'])
+    expect(doc.children.map((c) => c.type)).toEqual(['paragraph', 'link_reference_definition'])
   })
 
   it('does not promote an image indented above the content column', () => {
