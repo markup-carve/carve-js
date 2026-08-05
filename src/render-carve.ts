@@ -908,6 +908,13 @@ function renderEmphasis(
 
 
 function renderCode(content: string): string {
+  // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
+  // much as it is inside a fence - and `normalize()` would otherwise rewrite it
+  // to `\ `, which inside backticks is a literal backslash and a space
+  // (carve-js#688). Same sentinel as protectVerbatim uses; `restoreVerbatim`
+  // puts the character back at the end of normalization. carve-rs already emits
+  // it as itself here.
+  content = content.replace(/\ue000/g, sentinels[3])
   const fence = safeFence(content, 1)
   // Pad exactly when the parser will strip, so the strip is reversible and fmt
   // stays idempotent; the padding sits INSIDE the fence, so a trailing attribute
@@ -1087,8 +1094,13 @@ function normalize(text: string): string {
  * writer runs. That is the other half of carve#678 and needs a decision about
  * what the parsed text of an nbsp is, not a change here.
  */
-const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003'] as const
-let sentinels: readonly [string, string, string] = ['\ue001', '\ue002', '\ue003']
+const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004'] as const
+let sentinels: readonly [string, string, string, string] = [
+  '\ue001',
+  '\ue002',
+  '\ue003',
+  '\ue004',
+]
 
 /**
  * Every string in the tree, joined. ITERATIVE on purpose: `JSON.stringify` would
@@ -1116,23 +1128,24 @@ function collectStrings(root: unknown): string {
   return parts.join('\u0000')
 }
 
-function pickSentinels(text: string): readonly [string, string, string] {
+function pickSentinels(text: string): readonly [string, string, string, string] {
   // The common case: none of the defaults occur, so keep them and skip the scan
   // of the private-use area entirely.
   if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
-    return ['\ue001', '\ue002', '\ue003']
+    return ['\ue001', '\ue002', '\ue003', '\ue004']
   }
-  for (let base = 0xe004; base <= 0xf8fd; base += 3) {
-    const trio = [
+  for (let base = 0xe005; base <= 0xf8fc; base += 4) {
+    const quad = [
       String.fromCharCode(base),
       String.fromCharCode(base + 1),
       String.fromCharCode(base + 2),
+      String.fromCharCode(base + 3),
     ] as const
-    if (!trio.some((c) => text.includes(c))) return trio
+    if (!quad.some((c) => text.includes(c))) return quad
   }
 
   // Unreachable for any real document; keep the old behaviour rather than throw.
-  return ['\ue001', '\ue002', '\ue003']
+  return ['\ue001', '\ue002', '\ue003', '\ue004']
 }
 
 /**
@@ -1144,9 +1157,18 @@ function pickSentinels(text: string): readonly [string, string, string] {
  * U+E000 is already the NBSP sentinel; U+E001..U+E003 extend the scheme.
  */
 function protectVerbatim(content: string): string {
-  const [sp, tab, blank] = sentinels
+  const [sp, tab, blank, nbsp] = sentinels
 
   return content
+    // An authored U+E000 inside verbatim content is the CHARACTER, not an
+    // escape. `normalize()` rewrites every U+E000 to `\ `, which is right
+    // outside verbatim and wrong inside it - escapes do not resolve in a code
+    // block, so `\ ` there is a literal backslash and a space and
+    // toHtml(fmt(x)) != toHtml(x) (carve-js#688). Carrying it through
+    // normalization under its own sentinel keeps it out of that rewrite;
+    // `restoreVerbatim` puts the character back. carve-rs already emits it as
+    // itself.
+    .replace(/\ue000/g, nbsp)
     .replace(/[ \t]+(?=\n|$)/g, (run) => run.replace(/ /g, sp).replace(/\t/g, tab))
     .split('\n')
     .map((line) => (line === '' ? blank : line))
@@ -1165,6 +1187,8 @@ function restoreVerbatim(text: string): string {
       .replace(new RegExp(sentinels[0], 'g'), ' ')
       .replace(new RegExp(sentinels[1], 'g'), '\t')
       .replace(new RegExp(sentinels[2], 'g'), '')
+      // Back to the character itself - see protectVerbatim.
+      .replace(new RegExp(sentinels[3], 'g'), '\ue000')
   )
 }
 
