@@ -26,6 +26,7 @@
 
 import type { BlockNode, Document, Position } from './ast.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
+import { numberCaptionsIn } from './heading-ids.js'
 import {
   entriesFromWire,
   entriesToWire,
@@ -488,8 +489,58 @@ export function fromAstJson(json: AstJsonDocument): Document {
   // An inline footnote carries its own body, so it cannot lose a definition and
   // is left alone. Only a reference can be orphaned.
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
+  renumberCaptionsIfPublished(doc)
 
   return doc
+}
+
+/**
+ * Re-derive `caption_number.n` when the payload published numbers at all.
+ *
+ * The other PART 12 §5 result on this path, and the worse one: a stale footnote
+ * number contradicted the renderer, a stale caption number is what the renderer
+ * PRINTS. Delete the first of two numbered figures from a published tree and the
+ * survivor still rendered `Figure 2` - for the only figure in the document,
+ * where a fresh parse gives `Figure 1` (carve#758).
+ *
+ * CONDITIONAL, for the same §6 reason the footnote pass clears rather than
+ * assigns: `parse()` alone does no numbering in this engine, so its serialized
+ * tree carries no `n`, and assigning here unconditionally would make the round
+ * trip add numbers that were never there. A payload that published numbers is
+ * one whose numbers have to describe THIS document; a payload that published
+ * none is pre-resolve and stays that way.
+ *
+ * carve-rs runs its pass unconditionally instead, and is right to: numbering
+ * happens during `parse` there, so an ingested tree numbered the same way agrees
+ * with a parsed one.
+ */
+function renumberCaptionsIfPublished(doc: Document): void {
+  const bodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
+  if (!hasPublishedCaptionNumber(doc.children) && !bodies.some(hasPublishedCaptionNumber)) return
+
+  const counters = new Map<string, number>()
+  numberCaptionsIn(doc.children, counters)
+  for (const body of bodies) numberCaptionsIn(body, counters)
+}
+
+/** Whether any `caption_number` in `blocks` arrived carrying a number. */
+function hasPublishedCaptionNumber(blocks: unknown): boolean {
+  const stack: unknown[] = [blocks]
+  while (stack.length > 0) {
+    const cur = stack.pop()
+    if (Array.isArray(cur)) {
+      for (const item of cur) stack.push(item)
+      continue
+    }
+    if (cur === null || typeof cur !== 'object') continue
+    const node = cur as { type?: string; n?: number }
+    if (node.type === 'caption_number' && node.n !== undefined) return true
+    for (const value of Object.values(cur)) {
+      if (value !== null && typeof value === 'object') stack.push(value)
+    }
+  }
+
+  return false
 }
 
 /**

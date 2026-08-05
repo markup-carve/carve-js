@@ -25,6 +25,13 @@ import { carveToAstJson, fromAstJson, parse, renderHtml, toAstJson } from '../sr
  *
  * INLINE FOOTNOTES ARE LEFT ALONE. One carries its own body, so it cannot be
  * orphaned by a missing definition; only a reference can.
+ *
+ * CAPTION NUMBERS are the other §5 result on this path, and the worse one: a
+ * stale footnote number contradicted the renderer, a stale caption number is what
+ * the renderer PRINTS. They are re-derived rather than cleared, because unlike a
+ * footnote there is no local fact that makes one wrong - the survivor of a deleted
+ * figure is stale only relative to the figures before it. Conditional on the
+ * payload having published numbers at all, for the same §6 reason.
  */
 
 const SOURCE = 'see[^a]\n\n[^a]: note\n'
@@ -110,5 +117,76 @@ describe('a footnote number on an ingested tree', () => {
     const back = toAstJson(fromAstJson(JSON.parse(JSON.stringify(tree)) as never))
 
     expect(back).toEqual(tree)
+  })
+})
+
+describe('a caption number on an ingested tree', () => {
+  const TWO_FIGURES = '![a](/1.png)\n^ Figure #: one\n\n![b](/2.png)\n^ Figure #: two\n'
+
+  /** The published tree with the FIRST figure deleted. */
+  const withoutFirstFigure = (): Record<string, unknown> => {
+    const tree = carveToAstJson(TWO_FIGURES) as unknown as { children: { type?: string }[] }
+    const copy = JSON.parse(JSON.stringify(tree)) as typeof tree
+    copy.children.splice(
+      copy.children.findIndex((c) => c.type === 'figure'),
+      1,
+    )
+
+    return copy as unknown as Record<string, unknown>
+  }
+
+  const captionNumbers = (tree: unknown): (number | undefined)[] => {
+    const found: (number | undefined)[] = []
+    const walk = (n: unknown): void => {
+      if (n === null || typeof n !== 'object') return
+      const node = n as { type?: string; n?: number }
+      if (node.type === 'caption_number') found.push(node.n)
+      for (const v of Object.values(n)) walk(v)
+    }
+    walk(tree)
+
+    return found
+  }
+
+  it('numbers both figures while both are there', () => {
+    expect(captionNumbers(carveToAstJson(TWO_FIGURES))).toEqual([1, 2])
+  })
+
+  it('renumbers the survivor when the first figure is deleted', () => {
+    // Removing the figure a caption belongs to takes the caption with it and
+    // proves nothing; the SURVIVOR is the one whose number goes stale.
+    const republished = toAstJson(fromAstJson(withoutFirstFigure() as never))
+
+    expect(captionNumbers(republished)).toEqual([1])
+  })
+
+  it('renders the number it publishes', () => {
+    // The half that makes this a defect rather than a wire detail: the stale
+    // value was PRINTED. A fresh parse of the same one-figure document is the
+    // reference point.
+    const html = renderHtml(fromAstJson(withoutFirstFigure() as never))
+
+    expect(html).toContain('Figure 1: two')
+    expect(html).not.toContain('Figure 2')
+  })
+
+  it('leaves an unedited tree exactly as it arrived', () => {
+    // The pass runs on every ingest, so the no-op case matters more than the fix
+    // case: both numbers, in order, unchanged.
+    const tree = carveToAstJson(TWO_FIGURES)
+    const back = toAstJson(fromAstJson(JSON.parse(JSON.stringify(tree)) as never))
+
+    expect(back).toEqual(tree)
+  })
+
+  it('does not number a tree that published no numbers', () => {
+    // §6, and the reason this is conditional. `parse()` does no caption
+    // numbering in this engine, so its serialized tree carries no `n` - and
+    // reading it back must not add any.
+    const json = toAstJson(parse(TWO_FIGURES))
+    expect(captionNumbers(json)).toEqual([undefined, undefined])
+
+    const back = toAstJson(fromAstJson(JSON.parse(JSON.stringify(json))))
+    expect(back).toEqual(json)
   })
 })

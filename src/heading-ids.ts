@@ -707,16 +707,13 @@ export function resolveHeadingIds(
   const footnoteBodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []
   const counters = new Map<string, number>()
 
-  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined): void => {
-    const idx = caption.findIndex((n) => n.type === 'caption_number')
-    if (idx === -1) return
-    const labelNodes = caption.slice(0, idx)
-    const label = inlineText(labelNodes).replace(/\s+$/, '')
-    const next = (counters.get(label) ?? 0) + 1
-    counters.set(label, next)
-    ;(caption[idx] as CaptionNumber).n = next
-    const id = attrs?.id
-    if (id !== undefined && !targets.has(id)) {
+  // The numbering itself is shared with `fromAstJson`, which has to re-derive
+  // these on an ingested tree (carve#758). What stays here is the crossref
+  // target registration, which only makes sense while resolution is running.
+  const numberBlocks = (blocks: BlockNode[]): void => {
+    numberCaptionsIn(blocks, counters, (labelNodes, next, attrs) => {
+      const id = attrs?.id
+      if (id === undefined || targets.has(id)) return
       // Clean "Label N" auto-text: clone the label inlines, trim trailing
       // whitespace on the final text node, then append " N". Markup in the
       // label is preserved.
@@ -727,41 +724,9 @@ export function resolveHeadingIds(
       }
       autoNodes.push({ type: 'text', value: ` ${next}` } as Text)
       targets.set(id, autoNodes)
-    }
+    })
   }
 
-  const numberBlocks = (blocks: BlockNode[]): void => {
-    for (const b of blocks) {
-      if (b.type === 'figure') {
-        numberCaption(b.caption, b.attrs)
-      } else if (b.type === 'table' && b.caption) {
-        numberCaption(b.caption, b.attrs)
-      }
-      switch (b.type) {
-        case 'block_quote':
-        case 'admonition':
-        case 'div':
-          numberBlocks(b.children)
-          break
-        case 'list':
-          for (const it of b.items) numberBlocks(it.children)
-          break
-        case 'definition_list':
-          for (const it of b.items) for (const d of it.definitions) numberBlocks(d)
-          break
-        case 'figure':
-          // A figure wraps an image / blockquote / table; descend into a
-          // blockquote or table target so a nested captioned element is
-          // numbered too (mirrors walkBlock's figure-target descent).
-          if (b.target.type === 'block_quote') numberBlocks(b.target.children)
-          else if (b.target.type === 'table' && b.target.caption)
-            numberCaption(b.target.caption, b.target.attrs)
-          break
-        default:
-          break
-      }
-    }
-  }
   for (const block of doc.children) walkBlock(block, resolveRefs)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveRefs)
 
@@ -1057,4 +1022,80 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
         break
     }
   }
+}
+
+
+/**
+ * Called for each caption as it is numbered, with the label inlines preceding
+ * the `#` placeholder, the number assigned, and the captioned element's attrs.
+ */
+type CaptionNumbered = (
+  labelNodes: InlineNode[],
+  n: number,
+  attrs: Attrs | undefined,
+) => void
+
+/**
+ * Assign `caption_number.n` per label, in document order, over `blocks`.
+ *
+ * Extracted from `resolveHeadingIds` so `fromAstJson` can re-derive these on an
+ * INGESTED tree without also re-registering crossref targets, which only makes
+ * sense while resolution is running. A published caption number describes the
+ * document it was written from, and an editor that deletes a captioned element
+ * leaves the survivors numbered for a document that no longer exists - visibly,
+ * since this number is what the renderer prints (carve#758).
+ *
+ * `counters` is the caller's, so a document and its footnote bodies share one
+ * sequence per label.
+ */
+export function numberCaptionsIn(
+  blocks: BlockNode[],
+  counters: Map<string, number>,
+  onNumbered?: CaptionNumbered,
+): void {
+  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined): void => {
+    const idx = caption.findIndex((n) => n.type === 'caption_number')
+    if (idx === -1) return
+    const labelNodes = caption.slice(0, idx)
+    const label = inlineText(labelNodes).replace(/\s+$/, '')
+    const next = (counters.get(label) ?? 0) + 1
+    counters.set(label, next)
+    ;(caption[idx] as CaptionNumber).n = next
+    onNumbered?.(labelNodes, next, attrs)
+  }
+
+  const walk = (bs: BlockNode[]): void => {
+    for (const b of bs) {
+      if (b.type === 'figure') {
+        numberCaption(b.caption, b.attrs)
+      } else if (b.type === 'table' && b.caption) {
+        numberCaption(b.caption, b.attrs)
+      }
+      switch (b.type) {
+        case 'block_quote':
+        case 'admonition':
+        case 'div':
+          walk(b.children)
+          break
+        case 'list':
+          for (const it of b.items) walk(it.children)
+          break
+        case 'definition_list':
+          for (const it of b.items) for (const d of it.definitions) walk(d)
+          break
+        case 'figure':
+          // A figure wraps an image / blockquote / table; descend into a
+          // blockquote or table target so a nested captioned element is
+          // numbered too (mirrors walkBlock's figure-target descent).
+          if (b.target.type === 'block_quote') walk(b.target.children)
+          else if (b.target.type === 'table' && b.target.caption)
+            numberCaption(b.target.caption, b.target.attrs)
+          break
+        default:
+          break
+      }
+    }
+  }
+
+  walk(blocks)
 }
