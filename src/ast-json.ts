@@ -161,6 +161,18 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  // Same shape, same answer (carve#793). `escapedLeadingCaret` records that a
+  // text node's leading `^` came from `\^`, which keeps the image above it
+  // from being promoted to a figure - a fact the parser needs and the WIRE
+  // already carries, since an `escaped_text` node holding `"^"` sits
+  // immediately before the flagged node. carve-rs and carve-php publish
+  // neither, and a field one engine publishes alone is one no consumer can
+  // rely on. Internal from here; stripped at the boundary like `refId`.
+  if ((out ?? record)['type'] === 'text' && (out ?? record)['escapedLeadingCaret'] !== undefined) {
+    const { escapedLeadingCaret: _flag, ...rest } = out ?? record
+    out = rest
+  }
+
   return (out ?? record) as T
 }
 
