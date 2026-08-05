@@ -287,7 +287,16 @@ const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
 // does not satisfy it and the line stays paragraph text - the same rule the
 // bullet, ordered, heading, quote and definition markers already follow
 // (carve#532).
-const RE_DEFLIST_TERM = /^::(?!:) +(?=\S)(.+)$/
+// The separator is ONE literal space; whitespace after it is stripped, not
+// content. `(?=\S)` straight after ` +` required the term to start on a
+// non-space, so `:: <TAB>x` fell through to a paragraph while `::   x` was a
+// term (carve-js#722, spec markup-carve/carve#794).
+//
+// The leading space stays REQUIRED - `::<TAB>x` is still a paragraph, because
+// a tab does not satisfy the marker's separator at all (corpus
+// 176-a-marker-separator-is-a-space-never-a-tab). What changed is only what
+// may follow that space.
+const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=\S)(.+)$/
 const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // A definition marker's separator must START with a literal space (U+0020),
 // not a tab (#288) -- matching carve-rs and every marker whose grammar
