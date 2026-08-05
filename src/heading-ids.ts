@@ -1002,6 +1002,12 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // onto the figure, matching a direct-image figure (which takes the attrs
       // at parse time) and carve-php -- otherwise `carve fmt` would drop it.
       const figure: Figure = { type: 'figure', target: b.children[0] as Image, caption }
+      // The PARAGRAPH's span is the figure's: it covered the image line and the
+      // caption line, which is exactly what this figure now holds. Without it
+      // the node is published with no position at all - the four figure sites in
+      // parse.ts get one from the block loop, and this one, which promotes a
+      // paragraph after parsing, was left out (PART 12 §4, carve-js#727).
+      if (b.pos) figure.pos = b.pos
       if (b.attrs) figure.attrs = b.attrs
       blocks[i] = figure as unknown as BlockNode
       continue
