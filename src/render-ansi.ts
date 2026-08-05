@@ -3,6 +3,7 @@ import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Tab
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
+import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
@@ -403,10 +404,27 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // tree, and every render target writes it back out as written.
       if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
       const text = withinLink(() => renderInlines(node.children, ctx))
-      const href = stripControls(node.href)
+      // PART 9 §25 binds every target that emits a resolvable URL, and this
+      // parenthetical IS the destination: a terminal autolinks it and hands the
+      // scheme to the OS handler on click, which is the same "deferred by one
+      // step" the clause describes for Markdown. It printed `javascript:` and
+      // the OS protocol-handler schemes verbatim, in all three engines, where
+      // Markdown already blanked them (carve#765).
+      //
+      // The destination is blanked, not the parenthetical dropped: §25 says to
+      // emit an EMPTY value, and the empty parenthetical is what tells a reader
+      // a destination was withheld rather than never written. The link TEXT is
+      // untouched, exactly as in HTML - where a denied autolink still shows its
+      // URL as text inside `<a href="">`.
+      // WHETHER to show the parenthetical is decided from the AUTHORED
+      // destination, and WHAT goes in it from the sanitized one. Deciding both
+      // from the sanitized value turns a denied autolink - where the text IS the
+      // URL, so no parenthetical was ever shown - into `javascript:alert(1) ()`.
+      const authored = stripControls(node.href)
+      const shows = authored && !authored.startsWith('#') && authored !== stripAnsi(text)
       let out = style(text, UNDERLINE + FG_BLUE)
-      if (href && !href.startsWith('#') && href !== stripAnsi(text)) {
-        out += style(` (${href})`, DIM)
+      if (shows) {
+        out += style(` (${blankDeniedDestination(authored)})`, DIM)
       }
       return out
     }

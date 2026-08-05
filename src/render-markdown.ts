@@ -14,7 +14,7 @@ import type {
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
-import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
+import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 
@@ -671,10 +671,7 @@ function escapeText(text: string): string {
  * carve#385).
  */
 function sanitizeMdUrl(url: string): string {
-  const probe = url.replace(SCHEME_PROBE_STRIP_RE, '')
-  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(probe)
-  if (m && DANGEROUS_URL_SCHEMES.includes(m[1].toLowerCase())) return ''
-  return url
+  return blankDeniedDestination(url)
 }
 
 /**
