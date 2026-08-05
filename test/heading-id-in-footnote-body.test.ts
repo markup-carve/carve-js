@@ -71,3 +71,25 @@ describe('heading ids inside a footnote body', () => {
     expect(html).toContain('<h1>H</h1>')
   })
 })
+
+describe('two shapes that read the intuitive way and are not', () => {
+  it('slugs a trailing brace run as TEXT, not as an explicit id', () => {
+    // Carve is djot-strict: a trailing `{...}` on a heading is NOT an attribute
+    // list, so `# H {#mine}` is a heading whose text is `H {#mine}` and the slug
+    // follows from that. `id="mine"` is the intuitive reading and it is wrong -
+    // the executable spec, carve-rs and carve-php all produce `H-mine`.
+    //
+    // The form that DOES set an id is a PRECEDING attribute line, which the test
+    // above this block already covers.
+    expect(carveToHtml('[^a]: note\n\n  # H {#mine}\n\nsee[^a]\n')).toContain('id="H-mine"')
+  })
+
+  it('emits NO section wrapper for the heading in the note body', () => {
+    // The other half of the document-level assertion above: nested headings carry
+    // the id on the `<h*>` and nothing else, so a note body must not grow a
+    // `<section>` around it.
+    const html = carveToHtml('[^a]: note\n\n  # H\n\nsee[^a]\n')
+    expect(html).toContain('<h1 id="H">')
+    expect(html).not.toContain('<section id="H"')
+  })
+})
