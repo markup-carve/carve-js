@@ -31,14 +31,27 @@ describe('reference-link resolution (grammar §6)', () => {
     )
   })
 
-  it('collapses label whitespace but matches case-sensitively', () => {
-    // Whitespace is trimmed/collapsed on both sides, so internal or padded
-    // spaces still resolve when the case matches.
+  it('matches labels EXACTLY - no whitespace folding, case-sensitive', () => {
+    // This test previously asserted the opposite of the spec: it pinned
+    // whitespace folding, which is the behaviour §6 and PART 9R R1 both forbid
+    // in the same words - "case-sensitive, no whitespace folding". Rewritten to
+    // pin the rule rather than the engine (carve-js#673); the executable spec and
+    // carve-rs both leave these literal.
+    //
+    // Differing whitespace does NOT resolve, in either direction.
     expect(html('[Foo][  bar  baz ]\n\n[bar baz]: /u')).toBe(
+      '<p>[Foo][  bar  baz ]</p>',
+    )
+    expect(html('[Foo][bar baz]\n\n[  bar  baz ]: /u')).toBe(
+      '<p>[Foo][bar baz]</p>',
+    )
+    // IDENTICAL whitespace does resolve, including padding and doubled internal
+    // spaces - exact means exact, not stripped.
+    expect(html('[Foo][ bar  baz ]\n\n[ bar  baz ]: /u')).toBe(
       '<p><a href="/u">Foo</a></p>',
     )
-    // Case is NOT normalized (djot: "no case normalization on reference
-    // definitions"); a case-mismatched label stays unresolved -> literal.
+    // Case is NOT normalized either (djot: "no case normalization on reference
+    // definitions"); this half was always right.
     expect(html('[Foo][BAR baz]\n\n[bar baz]: /u')).toBe(
       '<p>[Foo][BAR baz]</p>',
     )

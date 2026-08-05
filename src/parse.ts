@@ -1387,7 +1387,17 @@ function collectLinkDefs(lexer: Lexer) {
           def.attrs = parsed
         }
       }
-      lexer.linkDefs.set(normalizeRefLabel(m[1]!), def)
+      // EXACT, not folded. §6 and PART 9R R1 both say matching is
+      // "case-sensitive, no whitespace folding", and this engine folded the
+      // definition key and the lookup symmetrically - so `[t][ b  c]` resolved
+      // against `[b c]: /u`, where the executable spec and carve-rs both leave it
+      // literal (carve-js#673). The label goes in as written.
+      //
+      // `normalizeRefLabel` stays for the IMPLICIT heading-reference path, which
+      // is deliberately fuzzier: heading-ids.ts and lint.ts both wrap it in
+      // `.toLowerCase()`, and all four implementations fold whitespace AND case
+      // when matching `[Some Heading][]` against a heading's text.
+      lexer.linkDefs.set(m[1]!, def)
       continue
     }
   }
@@ -6467,7 +6477,7 @@ function applyLinkDefs(
       )
     }
     if (node.type === 'link' && node.ref !== undefined) {
-      const def = defs.get(normalizeRefLabel(node.ref))
+      const def = defs.get(node.ref)
       if (def) {
         node.href = def.href
         if (def.title !== undefined) node.title = def.title
@@ -6494,7 +6504,7 @@ function applyLinkDefs(
       continue
     }
     if (node.type === 'image' && node.ref !== undefined) {
-      const def = defs.get(normalizeRefLabel(node.ref))
+      const def = defs.get(node.ref)
       if (def) {
         node.src = def.href
         if (def.title !== undefined) node.title = def.title
