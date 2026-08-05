@@ -245,6 +245,11 @@ const IMPLEMENTED = new Set([
   'an-unresolved-image-reference-stays-literal',
   'an-unresolved-reference-image-takes-no-caption',
   'one-definition-serves-a-link-and-an-image',
+  'a-comment-fence-at-column-0-ends-the-item-a-line-does-not',
+  'a-description-line-needs-a-term-above-it',
+  'a-heading-id-keeps-a-non-ascii-space',
+  'a-marker-attribute-may-hold-a-quoted-brace',
+  'a-tag-inside-a-literal-brace-run-is-still-a-tag',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
