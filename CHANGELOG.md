@@ -83,6 +83,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   destination, unchanged; a leading no-break space before the `[` is still
   content, not indentation.
 
+- **An ingested node with a missing or non-string `type` is refused at decode**
+  (PART 12 §12(c), markup-carve/carve#881). The clause puts the refusal at
+  decode and says why: "Not in a renderer, one step later. The renderer's error
+  names a RENDERING problem for what is really a payload problem, and it only
+  ever arrives for a caller who renders." This engine implemented it only for a
+  `type` that IS a string the schema does not name; a missing `type`, or one
+  carrying a number, `null`, an array, an object or a boolean, fell through to
+  `renderHtml: unknown block undefined`, and never surfaced at all for
+  `carve fmt --from-json`, a linter or an indexer. It now throws the new
+  `AstJsonNodeTypeError`, naming the path, alongside the existing
+  `AstJsonUnknownNodeTypeError`. carve-rs and carve-php both already refused at
+  decode.
+
+  The positions where the schema itself puts a record with no `type` - a
+  citation group's items - are unaffected, as is the older definition-list
+  grouping form stored trees carry. The wrong-TYPE rows of that ticket (a
+  non-array `children`, a `null` or string child) are a separate open question
+  and are unchanged.
+
 - **Ingest rejects a foreign AST root instead of adopting it** (PART 12 §9). The
   clause names the exact case: "An ingest accepting some other root (`doc`, say,
   which is ProseMirror's) will half-read a foreign format rather than reject it."

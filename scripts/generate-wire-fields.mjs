@@ -81,6 +81,76 @@ export function wireFieldsSource(schema) {
       if (holdsNode(property)) nodeFields.add(name);
     }
   }
+  /*
+   * WHAT EACH NODE POSITION HOLDS, spelled `<owning type>.<field>` (PART 12
+   * section 12(c)).
+   *
+   * Section 12(c) refuses a node whose `type` the schema does not name, and a
+   * missing or non-string `type` is that case - so the walk requires a string
+   * `type` at every position where a NODE is what the schema puts. `NODE_FIELDS`
+   * alone cannot answer that, because one field name means different things in
+   * different places, and the differences all matter:
+   *
+   *   "nodes"   an ARRAY of nodes; each ELEMENT must carry a string `type`.
+   *   "node"    a SINGLE node, e.g. `figure.target`; the object itself must.
+   *   "records" an array of PLAIN RECORDS the schema gives no `type` at all -
+   *             only `citation_group.items` today. Requiring one there would
+   *             refuse a tree this engine's own parser produced, which section
+   *             9(a) forbids.
+   *
+   * `attrs` and `pos` are the other two typeless objects and cannot appear here
+   * at all: neither name reaches `NODE_FIELDS`, because `holdsNode` skips those
+   * two refs outright.
+   *
+   * The "nodes" case is deliberately about the ELEMENTS and not the container.
+   * A non-array sitting where an array belongs - `children: {}` - is the
+   * wrong-TYPE class, which markup-carve/carve#881 leaves unruled and this
+   * engine deliberately degrades to an empty document rather than deciding by
+   * accident.
+   *
+   * Derived, not listed, for the same reason the rest of this file is. A hand
+   * written table is the schema expressed a second time, and this one would be
+   * silently wrong the day a second plain record is added.
+   */
+  const plainRecords = new Set(
+    Object.entries(defs)
+      .filter(
+        ([name, def]) =>
+          name !== "attrs" &&
+          name !== "pos" &&
+          def?.type === "object" &&
+          def?.properties !== undefined &&
+          def.properties.type === undefined,
+      )
+      .map(([name]) => name),
+  );
+  const refsPlainRecord = (schemaNode) => {
+    if (Array.isArray(schemaNode)) return schemaNode.some(refsPlainRecord);
+    if (schemaNode === null || typeof schemaNode !== "object") return false;
+    for (const [key, value] of Object.entries(schemaNode)) {
+      if (key === "$ref" && typeof value === "string") {
+        if (plainRecords.has(value.replace("#/$defs/", ""))) return true;
+        continue;
+      }
+      if (refsPlainRecord(value)) return true;
+    }
+    return false;
+  };
+  const positionKind = new Map();
+  for (const def of Object.values(defs)) {
+    const owner = def?.properties?.type?.const;
+    if (typeof owner !== "string") continue;
+    for (const [name, property] of Object.entries(def.properties)) {
+      if (!holdsNode(property)) continue;
+      const kind = refsPlainRecord(property)
+        ? "records"
+        : property.type === "array"
+          ? "nodes"
+          : "node";
+      positionKind.set(`${owner}.${name}`, kind);
+    }
+  }
+
   const entry = ([name, fields]) =>
     `  ${JSON.stringify(name)}: [${fields.map((f) => JSON.stringify(f)).join(", ")}],`;
   const header = [
@@ -124,7 +194,34 @@ export function wireFieldsSource(schema) {
     .sort()
     .map((name) => `  ${JSON.stringify(name)},`)
     .join("\n");
-  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n]\n`;
+  const kindDoc = [
+    "]",
+    "",
+    "/**",
+    " * What the schema puts at each node position, keyed `<owning type>.<field>`,",
+    " * so section 12(c)'s string-`type` requirement lands where a NODE belongs and",
+    " * nowhere else.",
+    " *",
+    ' * - `"nodes"` - an array of nodes; each ELEMENT carries a string `type`. About',
+    " *   the elements, not the container: a non-array sitting where the array",
+    " *   belongs is the unruled wrong-TYPE class, not this clause's business.",
+    ' * - `"node"` - a single node, e.g. `figure.target`; the object itself carries',
+    " *   one.",
+    ' * - `"records"` - an array of plain records the schema gives no `type` at all.',
+    " *   Only `citation_group.items` today: a citation item is",
+    " *   `{key, suppressAuthor, prefix?, locator?, suffix?}`.",
+    " *",
+    " * The owning type is part of the key because one field name means different",
+    " * things in different places: `items` holds nodes on `list` and plain records",
+    " * on `citation_group`.",
+    " */",
+    "export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'records'>> = {",
+  ].join("\n");
+  const kindList = [...positionKind.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([name, kind]) => `  ${JSON.stringify(name)}: ${JSON.stringify(kind)},`)
+    .join("\n");
+  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n}\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
