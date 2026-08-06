@@ -3010,8 +3010,8 @@ function parseDiv(lexer: Lexer): Div {
 }
 
 // Definition list (§4.5). An entry is 1+ `:: term` lines followed by 1+
-// `:  definition` lines; a definition continues on lines indented >= 3
-// spaces. A `:: term` after a definition starts a new entry; a single
+// `:  definition` lines; a definition continues on lines indented to COLUMN 3
+// or beyond. A `:: term` after a definition starts a new entry; a single
 // blank line between entries is allowed, anything else ends the list.
 function parseDefinitionList(lexer: Lexer): DefinitionList {
   const items: DefinitionItem[] = []
@@ -3083,7 +3083,15 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         continue
       }
       // Form A: an indented continuation line (with no intervening blank).
-      if (!isBlankLine(ln) && leadingWhitespace(ln) >= 3) {
+      // The indent is a COLUMN claim, not a character count: `definition_
+      // continuation` is a leading indentation run, so a tab is syntax there and
+      // advances to the next multiple of 4 (markup-carve/carve#888's signoff,
+      // reaffirmed by markup-carve/carve#901; the same family as #692, #796 and
+      // #905). Counting characters made a lone tab - column 4, past the content
+      // column - end the body, while three spaces continued it, and made the
+      // answer depend on how the author spelled a run rather than where it
+      // landed (markup-carve/carve-js#812).
+      if (!isBlankLine(ln) && indentColumns(ln) >= 3) {
         // Strip the structural indentation but keep a content U+00A0.
         const lineIndex = lexer.pos
         bodyLines.push(ln.replace(/^[^\S\u00a0]+/, ''))
@@ -3099,7 +3107,11 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         let look = 1
         while (isBlankLine(lexer.peek(look))) look++
         const after = lexer.peek(look)
-        if (after !== undefined && !isBlankLine(after) && leadingWhitespace(after) >= 3) {
+        // The SECOND spelling of the same rule, and it has its own job: this one
+        // decides whether the body survives the blank at all, the Form A branch
+        // above decides whether a line folds. Both read columns, or a lone tab
+        // after a blank ends the body while Form A would have kept it.
+        if (after !== undefined && !isBlankLine(after) && indentColumns(after) >= 3) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos
             bodyLines.push('')
