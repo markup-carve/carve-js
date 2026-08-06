@@ -274,6 +274,20 @@ describe('the Markdown migrator does not percent-encode a BOM', () => {
     )
   })
 
+  it('splits destination from title at whitespace, so the URL half is decoded as one', () => {
+    // The split point is where the two halves stop being decoded the same way:
+    // an entity in the destination becomes its character, an entity in what
+    // follows is only decoded inside a quoted title. Cutting at the BOM put the
+    // rest of the URL on the title side, where `&amp;` was left as written and
+    // the migrated link pointed somewhere the Markdown source did not.
+    expect(markdownToCarve(`[x](https://e${BOM}.com/?a&amp;b)\n`)).toContain(
+      `https://e${BOM}.com/?a&b`,
+    )
+    expect(markdownToCarve(`[r]: https://e${BOM}.com/?a&amp;b\n`)).toContain(
+      `https://e${BOM}.com/?a&b`,
+    )
+  })
+
   it('still percent-encodes a real space it decoded from an entity', () => {
     // The control: `&#32;` decodes to a space, which would end the destination,
     // so it has to come back out percent-encoded.
