@@ -178,10 +178,23 @@ describe('mixed tab+space aligned sub-items are siblings (visual columns)', () =
     )
   })
 
-  it('nests a tab-indented block quote under an item (lead block, whole-tab dedent)', () => {
-    // A lead block (no preceding sub-list) is dedented whole-tab, so the block
-    // opener reaches column 0 and parses.
-    expect(h('1. a\n\t> quote')).toBe(
+  it('reads a tab-indented block opener as the column it reaches, not as flush', () => {
+    // `1. ` claims columns 0-2, so the content column is 3 and a tab reaches
+    // column 4 - one column PAST it. The space spellings settle what that
+    // means and all three engines agree on them: at the content column the
+    // quote nests, one column past it is text.
+    //
+    // This used to assert the opposite, because a lead block was dedented
+    // whole-tab and the opener arrived flush at column 0. That made the same
+    // column mean two things depending on how it was written (carve-js#767).
+    expect(h('1. a\n\t> quote')).toBe(h('1. a\n    > quote'))
+    expect(h('1. a\n\t> quote')).not.toContain('<blockquote>')
+  })
+
+  it('still nests a block opener AT the content column', () => {
+    // The boundary the assertion above needs: making every indented opener
+    // text would satisfy it and break the shape authors write.
+    expect(h('1. a\n   > quote')).toBe(
       '<ol>\n  <li>a\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ol>',
     )
   })
