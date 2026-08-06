@@ -223,10 +223,8 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
     }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
-    const body = renderBlocks(ast.children, ctx)
+    const body = renderDocumentBody(ast, ctx)
     if (body) parts.push(body)
-    const footnotes = renderFootnoteDefs(ast, ctx)
-    if (footnotes) parts.push(footnotes)
     return normalize(parts.join('\n\n'))
   } finally {
     escapeMode = previous
@@ -853,15 +851,84 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
   return defLines.join('\n')
 }
 
-function renderFootnoteDefs(ast: Document, ctx: CarveContext): string {
-  if (!ast.footnoteDefs) return ''
-  const out: string[] = []
-  for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
+/** Child kinds that are HOISTED definitions rather than body blocks. */
+const HOISTED_DEFINITION_TYPES = new Set(['link_reference_definition', 'abbreviation_def'])
+
+/**
+ * The document's body, then its hoisted definitions in source-position order.
+ *
+ * §7 puts hoisted definitions after the body and orders them among themselves
+ * by source position; this engine publishes them that way since carve#746, and
+ * PART 11 §6 then binds the writer - "fmt does not reorder ... those are the
+ * author's choices and the AST records them".
+ *
+ * The writer used to render `children` and append every footnote afterwards,
+ * because the runtime keeps footnote bodies in a label-keyed map where their
+ * position is not part of what it walks. A link definition hoisted from INSIDE
+ * a footnote body therefore came out BEFORE the footnote containing it, though
+ * the tree has the footnote first (carve-js#750).
+ *
+ * Positions order the definitions, and only when every one of them has a
+ * position: a hand-built or `pos`-less tree has no order to honor, and there the
+ * old behavior - children as they come, then the footnotes - is the only
+ * defensible one.
+ */
+function renderDocumentBody(ast: Document, ctx: CarveContext): string {
+  type Piece = { at: number | undefined; text: string }
+  const body: BlockNode[] = []
+  const hoisted: BlockNode[] = []
+
+  for (const child of ast.children) {
+    if (HOISTED_DEFINITION_TYPES.has(child.type)) {
+      hoisted.push(child)
+      continue
+    }
+    body.push(child)
+  }
+
+  // THE BODY IS RENDERED FIRST, whatever the output order. A definition written
+  // inside a definition-list description is emitted on that line and marked, and
+  // `renderBlock` then returns '' for it here (carve-js#748) - so rendering the
+  // definitions before the body wrote them twice.
+  const bodyText = renderBlocks(body, ctx)
+
+  const definitions: Piece[] = hoisted.map((child) => ({
+    at: (child as { pos?: { startOffset?: number } }).pos?.startOffset,
+    text: renderBlockAtTop(child, ctx),
+  }))
+
+  for (const [label, blocks] of Object.entries(ast.footnoteDefs ?? {})) {
     // Unless a definition list already wrote it where the author put it.
     if (footnotesWrittenInPlace.has(label)) continue
-    out.push(renderOneFootnoteDef(label, blocks, ctx))
+    definitions.push({
+      at: ast.footnoteDefPos?.[label]?.startOffset,
+      text: renderOneFootnoteDef(label, blocks, ctx),
+    })
   }
-  return out.join('\n\n')
+
+  const ordered = definitions.every((piece) => piece.at !== undefined)
+    ? definitions
+        .map((piece, index) => ({ piece, index }))
+        // STABLE: two definitions at the same offset keep the order they were
+        // collected in, which is the tree's.
+        .sort((a, b) => a.piece.at! - b.piece.at! || a.index - b.index)
+        .map(({ piece }) => piece)
+    : definitions
+
+  return [bodyText, ...ordered.map((piece) => piece.text)]
+    .filter((text) => text.length > 0)
+    .join('\n\n')
+}
+
+/** One top-level block, with the depth accounting `renderBlocks` does. */
+function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
+  if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
+  ctx.blockDepth++
+  try {
+    return renderBlock(block, ctx)
+  } finally {
+    ctx.blockDepth--
+  }
 }
 
 function renderInlines(nodes: InlineNode[], ctx: CarveContext): string {
