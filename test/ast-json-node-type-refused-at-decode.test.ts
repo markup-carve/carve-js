@@ -185,6 +185,10 @@ describe('the unruled wrong-type rows', () => {
     // Also the wrong-type class. A `null` in a node position is not an object,
     // so it is not a node missing a `type` - it is a value of the wrong type,
     // and which of those an ingest refuses is the open question on that ticket.
+    //
+    // A CONTROL: no mutation of the type check breaks it, because the walk
+    // returns on a non-object before reaching the check at all. It records the
+    // boundary rather than proving anything about the fix.
     expect(() => fromAstJson(doc(null))).not.toThrow()
     expect(() => fromAstJson(doc('nope'))).not.toThrow()
   })
