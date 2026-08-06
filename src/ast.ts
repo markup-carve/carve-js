@@ -304,6 +304,20 @@ export interface DefinitionItem {
    * `:  +` first-block form).
    */
   definitionLines?: number[]
+  /**
+   * The source extent of each definition's own lines - from its `:  ` marker to
+   * the end of the last line it consumed - parallel to `definitions`. Only
+   * populated when parsing with document offsets.
+   *
+   * A description whose ONLY content hoists to the document root (PART 12 §7:
+   * a link reference, footnote or abbreviation definition) ends up with no
+   * children, and a span derived from children is then no span at all. That is
+   * not §4's exemption: the lines are contiguous, unmoved and still in the
+   * source, and docs/ast-json.md:116-117 narrows the exemption to "nodes that
+   * *cannot* be placed, not nodes that have not been placed yet"
+   * (markup-carve/carve-js#813). This is where the placeable span comes from.
+   */
+  definitionSpans?: (Position | undefined)[]
 }
 
 export interface DefinitionList extends BaseNode {

@@ -1289,9 +1289,43 @@ function toCodepointPositions(doc: Document, source: string): void {
     if (source.charCodeAt(i) === 10) lineStartCodepoint.push(map(i + 1))
   }
 
+  const convert = (pos: Position): void => {
+    const startOffset = pos.startOffset
+    const endOffset = pos.endOffset
+    if (typeof startOffset === 'number') {
+      pos.startOffset = map(startOffset)
+      const lineStart = lineStartCodepoint[pos.startLine - 1]
+      if (lineStart !== undefined && pos.startColumn !== undefined) {
+        pos.startColumn = pos.startOffset - lineStart + 1
+      }
+    }
+    if (typeof endOffset === 'number') {
+      pos.endOffset = map(endOffset)
+      const lineStart = lineStartCodepoint[pos.endLine - 1]
+      if (lineStart !== undefined && pos.endColumn !== undefined) {
+        pos.endColumn = pos.endOffset - lineStart + 1
+      }
+    }
+  }
+
   // A generic walk rather than a per-node-type visitor: a node type added later
   // must not silently keep UTF-16 positions, and this file has been bitten
   // before by walkers that could not see every node.
+  //
+  // A POSITION IS RECOGNIZED BY ITS SHAPE, NOT BY THE KEY IT HANGS FROM. It was
+  // recognized by the key `pos`, which meant every position stored under any
+  // other name kept UTF-16 offsets while its neighbours were converted - one
+  // document, two units. `footnoteDefPos` is a root-level MAP of positions and
+  // was wrong for exactly that reason: with one emoji ahead of it, a footnote
+  // definition published a span one codepoint late, slicing to `^f]: body` where
+  // the heading beside it sliced correctly. Nothing could see it, because the
+  // only fixture that can tell the two units apart is one carrying a surrogate
+  // pair.
+  //
+  // This is the same name-keyed miss as `canonical`'s skip list in
+  // render-carve.ts, which the identical field tripped in the same change
+  // (markup-carve/carve-js#813). Recognizing the shape is what stops there being
+  // a fourth.
   const seen = new Set<object>()
   const walk = (value: unknown): void => {
     if (!value || typeof value !== 'object') return
@@ -1302,29 +1336,14 @@ function toCodepointPositions(doc: Document, source: string): void {
       return
     }
     const record = value as Record<string, unknown>
-    const pos = record['pos'] as Position | undefined
-    if (pos && typeof pos === 'object') {
-      const startOffset = pos.startOffset
-      const endOffset = pos.endOffset
-      if (typeof startOffset === 'number') {
-        pos.startOffset = map(startOffset)
-        const lineStart = lineStartCodepoint[pos.startLine - 1]
-        if (lineStart !== undefined && pos.startColumn !== undefined) {
-          pos.startColumn = pos.startOffset - lineStart + 1
-        }
-      }
-      if (typeof endOffset === 'number') {
-        pos.endOffset = map(endOffset)
-        const lineStart = lineStartCodepoint[pos.endLine - 1]
-        if (lineStart !== undefined && pos.endColumn !== undefined) {
-          pos.endColumn = pos.endOffset - lineStart + 1
-        }
-      }
+    if (typeof record['startLine'] === 'number' && typeof record['endLine'] === 'number') {
+      // A Position and nothing else: no node type in this engine carries
+      // `startLine` directly, they all carry it inside a `pos`. Its fields are
+      // scalars, so there is nothing below it to walk.
+      convert(record as unknown as Position)
+      return
     }
-    for (const key of Object.keys(record)) {
-      if (key === 'pos') continue
-      walk(record[key])
-    }
+    for (const key of Object.keys(record)) walk(record[key])
   }
   walk(doc)
 }
@@ -3262,10 +3281,38 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
     return parseBlocks(sub, 0)
   }
+  /**
+   * The span covering document lines `first`..`last` inclusive, marker and all.
+   *
+   * `last` is never a blank line, and this does NOT trim one. `parseDefBody`
+   * absorbs a blank only when it has already looked ahead and found a line that
+   * still continues the body, so the next turn of its loop always consumes that
+   * line - the last thing it takes is a content line by construction.
+   *
+   * A trimming loop was written here first and could not be made to fire: with
+   * it removed the engine renders all 1373 corpus documents and eight probes
+   * built specifically to leave a trailing blank byte-identically. It came out
+   * rather than shipping as a guard nothing can exercise (markup-carve/carve#755).
+   */
+  function lineRange(lx: Lexer, first: number, last: number): Position | undefined {
+    const lastLine = lx.lines[last]
+    if (lastLine === undefined) return undefined
+
+    return {
+      startLine: lx.lineNumber(first),
+      endLine: lx.lineNumber(last),
+      startColumn: lx.lineStartColumn(first),
+      endColumn: lx.lineStartColumn(last) + lastLine.length,
+      startOffset: lx.lineOffset(first),
+      endOffset: lx.lineOffset(last) + lastLine.length,
+    }
+  }
+
   while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
     const terms: InlineNode[][] = []
     const definitions: BlockNode[][] = []
     const definitionLines: number[] = []
+    const definitionSpans: (Position | undefined)[] = []
     while (!lexer.eof()) {
       const t = RE_DEFLIST_TERM.exec(lexer.peek()!)
       if (!t) break
@@ -3344,8 +3391,20 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       lexer.consume()
       definitionLines.push(lexer.lineNumber(defLineIndex))
       definitions.push(parseDefBody(d[1]!, defLineIndex))
+      // The description's own extent, recorded from the lines it CONSUMED
+      // rather than derived from the children it produced - because a
+      // description whose only content hoists to the root produces none, and a
+      // derived span then reports absence for a construct that is still sitting
+      // in the source (markup-carve/carve-js#813).
+      //
+      // `parseDefBody` has returned, so `lexer.pos - 1` is the last line it
+      // took. It always takes at least the marker line, so the range is never
+      // empty and never runs backwards.
+      definitionSpans.push(
+        lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, lexer.pos - 1) : undefined,
+      )
     }
-    items.push({ terms, definitions, definitionLines })
+    items.push({ terms, definitions, definitionLines, definitionSpans })
     // Allow a single blank line before the next entry's `:: term`.
     if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
       let look = 1

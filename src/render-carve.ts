@@ -302,13 +302,30 @@ function stableJson(value: unknown): string {
  * reported a difference on EVERY document carrying a footnote and escalated it
  * to conservative escaping - 12 of the 14 cross-engine writer diffs in
  * carve#478 were this one line.
+ *
+ * `definitionSpans` is the SECOND one, and it arrived the same way: a positions
+ * array on a definition-list entry, added for markup-carve/carve-js#813 so an
+ * emptied description could still be placed. Escaping a character in ANY
+ * description shifts every offset after it, so with the key compared, every
+ * document carrying a definition list escalated to conservative escaping and two
+ * corpus round-trips came back with escapes the formatter would not have written.
+ *
+ * The rule, since this is now twice: a NAME-based skip is the whole hazard here.
+ * Any field holding offsets belongs on this list whatever it is called, and the
+ * test that catches a missing one is the corpus round-trip, not this comment.
  */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      if (key === 'pos' || key === 'footnoteDefPos' || key === 'srcByteLength') continue
+      if (
+        key === 'pos' ||
+        key === 'footnoteDefPos' ||
+        key === 'definitionSpans' ||
+        key === 'srcByteLength'
+      )
+        continue
       // `escapedLeadingCaret` records that a leading caret was escaped, which
       // is the escape itself rather than a consequence of it - comparing it
       // would escalate every document whose text starts with a caret. Where
