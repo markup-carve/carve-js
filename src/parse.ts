@@ -802,30 +802,72 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // Among the candidates for this number, take the first that both keeps
     // document order and actually ends with this line - the suffix test is what
     // makes the offset arithmetic exact, so it decides which candidate is meant.
+    // The suffix test tolerates SYNTHESIZED leading spaces for the same reason
+    // the anchor arithmetic below does: a line dedented past a straddling tab
+    // carries spaces the source never held, so it is not a literal suffix while
+    // its content still is (carve-js#771).
+    const anchorsTo = (candidate: number): boolean => {
+      const parentLine = parent.lines[candidate] ?? ''
+      return parentLine.endsWith(subLine) || parentLine.endsWith(withoutSyntheticIndent(subLine))
+    }
     const parentIndex =
       mapped === undefined
         ? startLineIndex + i
         : (parentIndicesOf.get(mapped) ?? []).find(
-            (candidate) =>
-              candidate >= previousIndex && (parent.lines[candidate] ?? '').endsWith(subLine),
+            (candidate) => candidate >= previousIndex && anchorsTo(candidate),
           )
-    if (parentIndex === undefined) return
+    if (parentIndex === undefined) return declinePositions(sub)
     // Document order must not go backwards, or a block spanning first-to-last
     // line reports an end before its start. A map that jumps back is one this
     // cannot reason about, so it declines rather than emitting that.
-    if (i > 0 && parentIndex < previousIndex) return
+    if (i > 0 && parentIndex < previousIndex) return declinePositions(sub)
     previousIndex = parentIndex
     const parentLine = parent.lines[parentIndex]
     if (parentLine === undefined) return
-    if (!parentLine.endsWith(subLine)) return
+    // SYNTHESIZED LEADING SPACES. Dedenting a line whose indentation ends in a
+    // tab that straddles the content column re-emits the unconsumed columns as
+    // spaces (`sliceColumns` with keepResidual), so the sub-line is no longer a
+    // literal suffix of its document line - ` \t- c` dedented by 2 becomes
+    // `  - c`. Those spaces are not in the source, and charging them to it is
+    // what put a nested paragraph at document offset 0 (carve-js#771).
+    //
+    // The line's real content still IS a suffix, so the anchor is exact when
+    // the synthetic run fits inside the prefix the strip removed. Where it does
+    // not, there is no honest offset to record and this declines - which now
+    // means NO positions rather than local ones (see below).
+    const trimmed = withoutSyntheticIndent(subLine)
+    const synthetic = subLine.length - trimmed.length
+    let prefix = parentLine.length - subLine.length
+    if (!parentLine.endsWith(subLine)) {
+      if (synthetic === 0 || !parentLine.endsWith(trimmed)) return declinePositions(sub)
+      prefix = parentLine.length - trimmed.length - synthetic
+      if (prefix < 0) return declinePositions(sub)
+    }
 
-    const prefix = parentLine.length - subLine.length
     offsets.push(parent.lineOffset(parentIndex) + prefix)
     widths.push(parent.lineStartColumn(parentIndex) - 1 + prefix)
   }
 
   sub.sourceOffsetMap = offsets
   sub.linePrefixWidths = widths
+}
+
+/** A dedented line's content, with any synthesized leading spaces removed. */
+function withoutSyntheticIndent(line: string): string {
+  return line.replace(/^[^\S\u00a0]+/, '')
+}
+
+/**
+ * A sub-lexer that cannot be anchored publishes NO positions.
+ *
+ * Declining used to mean falling back to the sub-lexer's own local offsets,
+ * which are indistinguishable from document ones downstream: a nested paragraph
+ * reported `[0, 1]` inside a list item at `[6, 11]`, so a span sat outside its
+ * parent and two siblings overlapped. A missing `pos` is a state PART 12 §4
+ * already lets a consumer detect; a confidently wrong one is not (carve-js#771).
+ */
+function declinePositions(sub: Lexer): void {
+  sub.suppressPositions = true
 }
 
 
