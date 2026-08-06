@@ -40,14 +40,27 @@ const corpusDir = resolve(__dirname, '../spec/tests/corpus')
  *
  * A RATCHET, not a verdict. Each entry is a document where writing the resolved
  * tree back differs from writing the parsed tree back - which is what an editor
- * does when it round-trips through the published AST. The heading-id case is
- * classified (carve-js#738, spec markup-carve/carve#814); the rest are recorded
- * as observed and are NOT all known to be defects, since resolution legitimately
- * changes some nodes and the writer is entitled to reflect that.
+ * does when it round-trips through the published AST.
  *
- * The value is the boundary: a new document joining this list means a change
- * started losing source that did not before, and that is worth knowing whatever
- * the eventual ruling on the entries already here.
+ * All 41 are now classified, and they are TWO causes, not a long tail:
+ *
+ *   39  A GENERATED HEADING ID gains an attribute line the author never wrote.
+ *       Spelled `{#Notes}`, or `{id=Café}` when the id cannot be written as a
+ *       `#id` slot, and carried on the container's own line inside a quote or an
+ *       item (`> {#Quoted}`). One cause, three spellings - which is why an
+ *       eyeball scan of the list reads as more variety than it has.
+ *       carve-js#738, spec markup-carve/carve#814.
+ *
+ *    2  A NESTED LINK or an AUTOLINK inside a link label is flattened into text
+ *       on the wire, so `[[x](y)](z)` comes back as `[x](z)` - the inner
+ *       destination is not in the tree at all - and `[pre <http://h> post](/u)`
+ *       comes back with a bare URL where an autolink was.
+ *       03-links-11.crv, 03-links-12.crv. Spec markup-carve/carve#817.
+ *
+ * Both are open spec questions about what the wire must carry, so neither is
+ * fixed here. The value is the boundary: a new document joining this list means
+ * a change started losing source that did not before, and a THIRD cause
+ * appearing is the thing most worth knowing.
  */
 const KNOWN_LOSSES = new Set<string>([
   "02-headings-2.crv",
