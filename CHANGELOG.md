@@ -43,6 +43,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A blank line is space and tab and nothing else** (markup-carve/carve#890).
+  The grammar names the class twice - `blank_line = {whitespace}, newline` over
+  `whitespace = ' ' | '\t'` - and PART 1 states the U+FEFF row of it outright:
+  "ONE, and only there: a U+FEFF anywhere else is an ordinary zero-width
+  character." The blank-line test trimmed with `\s` minus U+00A0 instead, and in
+  JavaScript `\s` is Unicode White_Space PLUS U+FEFF MINUS U+0085 - a legacy
+  set, not a property. So a line holding only a byte order mark ended the
+  paragraph in this engine and nowhere else, while the same mark rendered as
+  ordinary text inside a paragraph; eleven further characters (U+000B, U+000C,
+  U+1680, U+2000, U+2009, U+200A, U+2028, U+2029, U+202F, U+205F, U+3000) ended
+  one too. All twelve now read as content, which is what carve-rs does.
+
 - **Ingest rejects a foreign AST root instead of adopting it** (PART 12 §9). The
   clause names the exact case: "An ingest accepting some other root (`doc`, say,
   which is ProseMirror's) will half-read a foreign format rather than reject it."

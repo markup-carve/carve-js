@@ -198,9 +198,9 @@ const RE_FENCE =
 // means the marker opens nothing. This engine also rendered the same mark into
 // a paragraph's text, so it was content in one position and absent in another.
 //
-// Scoped to marker RECOGNITION on purpose. `TRIM_STRUCTURAL_RE` below decides
-// what a BLANK LINE is, which moves document structure rather than what a line
-// opens, and is the open question in carve#890 - it is deliberately unchanged.
+// Scoped to marker RECOGNITION on purpose. `RE_BLANK_LINE` below decides what a
+// BLANK LINE is, which moves document structure rather than what a line opens;
+// it is narrower still, because the grammar names that class outright.
 const RE_UNORDERED = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +([\S\u00a0].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
@@ -260,10 +260,29 @@ function trimStructural(text: string): string {
   return text.replace(TRIM_STRUCTURAL_RE, '')
 }
 
+// A BLANK LINE IS SPACE AND TAB AND NOTHING ELSE. The grammar names the class
+// twice over: `blank_line = {whitespace}, newline` (grammar.ebnf:246) over
+// `whitespace = ' ' | '\t'` (:2206). Nothing widens it for this position.
+//
+// It was `trimStructural(line) === ''`, i.e. `\s` minus U+00A0, which in
+// JavaScript specifically is Unicode White_Space PLUS U+FEFF MINUS U+0085 - a
+// legacy set rather than a property. Twelve characters the grammar calls content
+// therefore ended a paragraph here, and a U+FEFF ended one in this engine alone,
+// while the very same mark rendered as ordinary text INSIDE a paragraph: content
+// in one position and absence of content in another, which PART 1 rules out in
+// as many words ("ONE, and only there: a U+FEFF anywhere else is an ordinary
+// zero-width character", grammar.ebnf:85-90). carve-rs reads exactly this class
+// already; carve-php reads it but for U+000B (markup-carve/carve#890).
+//
+// A literal class, not a trim, because a trim is what let a wider set in: there
+// is no `String.prototype` method that spells THIS class, and the native `trim()`
+// fast path `trimStructural` takes carries the legacy set too.
+const RE_BLANK_LINE = /^[ \t]*$/
+
 function isBlankLine(line: string | undefined): boolean {
   // A non-existent line (past EOF) is NOT a blank line: lookahead loops must
   // terminate at EOF, not treat it as an endless run of blank lines.
-  return line !== undefined && trimStructural(line) === ''
+  return line !== undefined && RE_BLANK_LINE.test(line)
 }
 
 const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
@@ -1464,7 +1483,11 @@ function collectLinkDefs(lexer: Lexer) {
     // (carve-js#649).
     const unquoted = raw.replace(/^(?:>(?: |$))+/, '')
     const wasPrevBlank = prevBlank
-    prevBlank = raw.trim() === ''
+    // `isBlankLine`, not `raw.trim() === ''`: this prepass decides the same
+    // `blank_line` the block lexer does, and the native trim carries the wider
+    // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
+    // two answers drift.
+    prevBlank = isBlankLine(raw)
     if (!fence) {
       // maintain the content-column stack (same rule as the migrator): a
       // marker opens an item at its marker width; a blank is transparent; a
@@ -1503,7 +1526,7 @@ function collectLinkDefs(lexer: Lexer) {
           m2 = rest.match(RE_PREPASS_MARKER)
         }
       } else if (
-        raw.trim() !== '' &&
+        !isBlankLine(raw) &&
         // A LINK REFERENCE DEFINITION at column 0 ends the item too, so it has
         // to pop the stack like any other block start. It is not in
         // `startsBlock` because it is invisible, and being left out meant the
@@ -1625,7 +1648,7 @@ function collectLinkDefs(lexer: Lexer) {
     // Maintain footnote-body context (see `inFootnoteBody` above): a flush
     // footnote opener enters the body; a non-blank line at column 0 leaves it.
     if (RE_FOOTNOTE_DEF.test(raw)) inFootnoteBody = true
-    else if (raw.trim() !== '' && leadingWhitespace(raw) === 0) inFootnoteBody = false
+    else if (!isBlankLine(raw) && leadingWhitespace(raw) === 0) inFootnoteBody = false
     // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
     // HERE rather than by a scan of its own, because a scan of its own knew
     // nothing about what is opaque: it registered a definition written inside a
@@ -1696,7 +1719,7 @@ function collectLinkDefs(lexer: Lexer) {
     // (carve-js#643). The FOOTNOTE prepass here already reads it this way.
     const rawIndent = leadingWhitespace(unquoted)
     if (raw.trim() === '+') plusColumn = leadingWhitespace(unquoted)
-    else if (raw.trim() === '') plusColumn = null
+    else if (isBlankLine(raw)) plusColumn = null
     // Inside a footnote body the column is KNOWN - it is two, §16's own
     // (carve#717) - so the body no longer needs the blanket exemption it used to
     // carry below. With the exemption a definition anywhere in a note body was
