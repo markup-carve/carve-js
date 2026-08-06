@@ -5,9 +5,35 @@ import { fileURLToPath } from 'node:url'
 import { carveToMarkdown, carveToPlainText, carveToAnsi } from '../src/index.js'
 
 /**
- * Parity oracle for the non-HTML renderers. There is no cross-impl corpus for
- * non-HTML output, so carve-php's Markdown / PlainText / ANSI output (captured
- * in fixtures/non-html-golden.json) is the reference these must reproduce.
+ * SELF-REGRESSION snapshots for the non-HTML renderers: this engine's own
+ * Markdown / PlainText / ANSI output, captured in
+ * fixtures/non-html-golden.json, which it must keep reproducing.
+ *
+ * IT DOES NOT CHECK CROSS-ENGINE AGREEMENT, and it used to say it did - the
+ * header called the golden "carve-php's output" and the twin file in carve-rs
+ * concluded from the same premise that "all three impls agree". Nothing here
+ * invokes carve-php. A committed snapshot cannot enforce a statement about
+ * another engine in either direction: carve-php could move away from it with
+ * nothing failing, and the file could be regenerated from this engine with
+ * nothing checking that carve-php still produces it.
+ *
+ * Both happened. carve-php ran a block image into the following paragraph on
+ * the plain and ANSI targets while both snapshots stayed green, and the two
+ * files had drifted apart from each other - 31 cases here against 34 there,
+ * different names for the same constructs, and a same-named case with
+ * different source input. Two hand-maintained files both calling themselves
+ * "carve-php's output" is the evidence that neither was derived from carve-php
+ * (carve-js#762, carve-rs#692).
+ *
+ * THE THREE-WAY PROPERTY LIVES IN `npm run compare:impls` in the spec repo,
+ * which runs markdown, plain and ansi through all three engines over the whole
+ * corpus and reports engine-to-engine diffs per target. That gate can fail,
+ * and it is where a shape has to be COVERED for the property to mean anything:
+ * the block-image case was invisible to it only because no corpus document had
+ * a block image followed by another block (fixed in markup-carve/carve#849).
+ *
+ * So: keep adding cases here to pin THIS engine against its own regressions.
+ * To assert that the engines agree, put the shape in the spec corpus.
  */
 const here = dirname(fileURLToPath(import.meta.url))
 const golden = JSON.parse(
