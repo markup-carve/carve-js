@@ -33,7 +33,7 @@ import {
   isRuntimeEntry,
   type DefinitionEntryNode,
 } from './definition-list-wire.js'
-import { WIRE_FIELDS, WIRE_HELPER_FIELDS } from './wire-fields.js'
+import { NODE_FIELDS, WIRE_FIELDS, WIRE_HELPER_FIELDS } from './wire-fields.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -349,6 +349,59 @@ export class AstJsonRootError extends Error {
 }
 
 /**
+ * Thrown when the root omits one of the three fields PART 12 §7 fixes.
+ *
+ * §12(a): "A ROOT MISSING ANY OF THE THREE FIELDS. Not defaulted, not inferred.
+ * A reader that supplies `children: []` for a payload that carried no
+ * `children` has turned a truncated document into an empty one and reported
+ * success."
+ *
+ * This reader used to do exactly that - a missing `children` fell through to
+ * `Array.isArray(json.children) ? json.children : []` and produced an empty
+ * document, and a missing `srcByteLength` was simply left off the result. Both
+ * handed the caller a valid-looking Carve document with no way to learn the
+ * input had not been one, which is the same objection `AstJsonRootError` above
+ * makes to accepting a foreign root type.
+ */
+export class AstJsonRootFieldError extends Error {
+  constructor(readonly field: string) {
+    super(
+      `AST root is missing ${JSON.stringify(field)}; PART 12 §7 fixes the root at ` +
+        '"type", "children" and "srcByteLength", and §12 refuses a root without one',
+    )
+    this.name = 'AstJsonRootFieldError'
+  }
+}
+
+/**
+ * Thrown when a node's `type` is a name the schema does not have.
+ *
+ * §12(c) puts this refusal AT DECODE rather than in a renderer. This engine
+ * used to accept the node and throw `renderHtml: unknown block ...` one step
+ * later, which reads to a caller as a rendering problem for what is really a
+ * payload problem - and never arrives at all for a formatter, a linter, a
+ * language server or an indexer that holds the tree and never renders it.
+ *
+ * The walk follows NODE POSITIONS (`NODE_FIELDS`, derived from the schema) and
+ * deliberately never enters `attrs.keyValues`: attribute names are ordinary
+ * identifiers, so `[x](/u){type=widget}` puts an object literally shaped
+ * `{"type":"widget"}` in the tree, and refusing that would refuse a document
+ * this engine's own parser just produced - which §9(a) forbids.
+ */
+export class AstJsonUnknownNodeTypeError extends Error {
+  constructor(
+    readonly nodeType: string,
+    readonly path: string,
+  ) {
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has type ${JSON.stringify(nodeType)}, ` +
+        'which the schema does not name (PART 12 §12)',
+    )
+    this.name = 'AstJsonUnknownNodeTypeError'
+  }
+}
+
+/**
  * Thrown when a node carries a property the schema does not name.
  *
  * PART 12 §11: "An ingest MUST REFUSE it with AN ERROR OF ITS OWN -- a typed,
@@ -426,6 +479,28 @@ function refuseUnknownFields(node: unknown, path: string): void {
   }
   for (const [key, value] of Object.entries(record)) {
     refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)
+  }
+}
+
+function refuseUnknownNodeTypes(node: unknown, path: string): void {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => refuseUnknownNodeTypes(item, `${path}[${index}]`))
+    return
+  }
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  const type = record.type
+  if (typeof type === 'string' && WIRE_FIELDS[type] === undefined) {
+    throw new AstJsonUnknownNodeTypeError(type, path)
+  }
+  // Only node-bearing fields, never every key: `attrs.keyValues` is a
+  // string-to-string map whose keys are ordinary attribute identifiers, so a
+  // blanket walk finds `{"type":"widget"}` there and refuses a document the
+  // parser produced.
+  for (const field of NODE_FIELDS) {
+    const value = record[field]
+    if (value === undefined) continue
+    refuseUnknownNodeTypes(value, path === '' ? field : `${path}.${field}`)
   }
 }
 
@@ -541,6 +616,14 @@ export function fromAstJson(json: AstJsonDocument): Document {
   // Checked BEFORE the depth walk: a foreign payload should be turned away for
   // being foreign, not for however deep it happens to be.
   if (json?.type !== 'document') throw new AstJsonRootError(json?.type)
+  // PART 12 §12(a), and before the depth walk for the same reason the root type
+  // is: a payload that is not this format should be turned away for that, not
+  // for however deep it happens to be. `in` rather than a value test - (a) is
+  // about the field being PRESENT, and the value of `srcByteLength` is
+  // explicitly not this clause's business.
+  for (const field of ['children', 'srcByteLength'] as const) {
+    if (!(field in json)) throw new AstJsonRootFieldError(field)
+  }
 
   const { nodes, walk } = astJsonDepth(json, MAX_AST_JSON_DEPTH, MAX_AST_JSON_WALK)
   if (nodes > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(nodes)
@@ -548,6 +631,7 @@ export function fromAstJson(json: AstJsonDocument): Document {
 
   // AFTER the depth bound, so a payload built to blow the stack is turned away
   // by the cheap check rather than by a full walk of itself (PART 12 §9).
+  refuseUnknownNodeTypes(json, '')
   refuseUnknownFields(json, '')
 
   const children: BlockNode[] = []

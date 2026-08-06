@@ -439,7 +439,17 @@ function renderFromJson(
     return 2
   }
 
-  let doc = fromAstJson(json)
+  // PART 12 §9(b) and §12 both require the refusal to be a typed, DOCUMENTED
+  // failure. Uncaught, every one of them reached the user as a stack trace -
+  // the depth cap, the unknown property, and now the root-shape rules - which
+  // is not a documented failure however typed the error is.
+  let doc
+  try {
+    doc = fromAstJson(json)
+  } catch (e) {
+    io.writeErr(`carve render: --from-json input is not a Carve AST (${(e as Error).message})\n`)
+    return 2
+  }
   if (opts.profile) {
     doc = applyProfile(doc, opts.profile, opts.profileBaseHost ?? null).doc
   }

@@ -72,3 +72,28 @@ export const WIRE_HELPER_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "attrs": ["classes", "id", "keyValues", "order"],
   "pos": ["endColumn", "endLine", "endOffset", "startColumn", "startLine", "startOffset"],
 }
+
+/**
+ * Field names that hold NODES, so section 12(c)'s unknown-type check knows
+ * where a node can be. A union across types: `content` holds nodes on
+ * `inline_extension` and a string on `code_block`, and descending a name into
+ * a string finds nothing, so the union is safe in both directions.
+ *
+ * `keyValues` is absent, and that is the point: its values are strings, and an
+ * attribute may legally be named `type`, so `{type=widget}` puts an object
+ * shaped {"type":"widget"} in the tree.
+ */
+export const NODE_FIELDS: readonly string[] = [
+  "caption",
+  "cells",
+  "children",
+  "content",
+  "inline",
+  "items",
+  "locator",
+  "prefix",
+  "rows",
+  "suffix",
+  "target",
+  "title",
+]

@@ -97,7 +97,7 @@ describe('a payload with no nodes in it at all', () => {
 
     let thrown: unknown
     try {
-      fromAstJson({ type: 'document', children: arrays } as never)
+      fromAstJson({ type: 'document', srcByteLength: 0, children: arrays } as never)
     } catch (error) {
       thrown = error
     }

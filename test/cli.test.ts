@@ -532,9 +532,36 @@ describe('carve CLI — --json / --from-json (PART 12 exchange format)', () => {
 
 describe('carve CLI — --from-json is hostile-input tolerant', () => {
   it('does not throw when children is not an array', async () => {
-    const t = makeIO({ stdin: '{"type":"document","children":{}}' })
+    // §12(a) is about a field being PRESENT; the VALUE of `children` is not
+    // ruled, so a non-array one still degrades to an empty document rather than
+    // turning malformed input into a stack trace at the CLI.
+    const t = makeIO({ stdin: '{"type":"document","srcByteLength":0,"children":{}}' })
     expect(await run(['--from-json', '--html'], t.io)).toBe(0)
     expect(t.out.trim()).toBe('')
+  })
+
+  it('reports a root missing a §7 field instead of raising through the CLI', async () => {
+    // PART 12 §12(a). The refusal has to reach the user as a documented failure;
+    // before this, every typed ingest error - depth cap included - escaped
+    // `fromAstJson` uncaught and surfaced as a stack trace.
+    const t = makeIO({ stdin: '{"type":"document","children":[]}' })
+    expect(await run(['--from-json', '--html'], t.io)).toBe(2)
+    expect(t.err).toContain('srcByteLength')
+    expect(t.err).not.toContain('at Object')
+  })
+
+  it('reports an unknown node type instead of rendering it', async () => {
+    // §12(c) puts the refusal at DECODE. This engine used to accept the node and
+    // fail in the renderer, which names a rendering problem for a payload one.
+    const t = makeIO({
+      stdin: JSON.stringify({
+        type: 'document',
+        srcByteLength: 0,
+        children: [{ type: 'zzNotInTheSchema', children: [] }],
+      }),
+    })
+    expect(await run(['--from-json', '--html'], t.io)).toBe(2)
+    expect(t.err).toContain('zzNotInTheSchema')
   })
 
   it('drops a footnote definition whose body is not a list of blocks', async () => {
