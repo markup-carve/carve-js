@@ -76,6 +76,15 @@ describe('an ingested node', () => {
     ).toThrow(/children\[0\]\.target/)
   })
 
+  it('describes the value it found rather than stringifying it', () => {
+    // The renderer reported `unknown block [object Object]`, which tells a
+    // caller nothing about their payload. Reporting the raw value here would
+    // reproduce that exactly, so the message carries the JSON form.
+    expect(() => fromAstJson(doc({ type: {}, children: [] }))).toThrow(/a "type" of \{\}/)
+    expect(() => fromAstJson(doc({ type: {}, children: [] }))).not.toThrow(/\[object Object\]/)
+    expect(() => fromAstJson(doc({ children: [] }))).toThrow(/has no "type"/)
+  })
+
   it('still refuses a string `type` the schema does not name', () => {
     // The CONTROL for the clause's already-implemented half: this was correct
     // before the change and must stay correct, and it must keep its own error
