@@ -97,3 +97,58 @@ export const NODE_FIELDS: readonly string[] = [
   "target",
   "title",
 ]
+
+/**
+ * What the schema puts at each node position, keyed `<owning type>.<field>`,
+ * so section 12(c)'s string-`type` requirement lands where a NODE belongs and
+ * nowhere else.
+ *
+ * - `"nodes"` - an array of nodes; each ELEMENT carries a string `type`. About
+ *   the elements, not the container: a non-array sitting where the array
+ *   belongs is the unruled wrong-TYPE class, not this clause's business.
+ * - `"node"` - a single node, e.g. `figure.target`; the object itself carries
+ *   one.
+ * - `"records"` - an array of plain records the schema gives no `type` at all.
+ *   Only `citation_group.items` today: a citation item is
+ *   `{key, suppressAuthor, prefix?, locator?, suffix?}`.
+ *
+ * The owning type is part of the key because one field name means different
+ * things in different places: `items` holds nodes on `list` and plain records
+ * on `citation_group`.
+ */
+export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'records'>> = {
+  "admonition.children": "nodes",
+  "admonition.title": "nodes",
+  "block_quote.children": "nodes",
+  "citation_group.items": "records",
+  "definition_description.children": "nodes",
+  "definition_list.items": "nodes",
+  "definition_term.children": "nodes",
+  "delete.children": "nodes",
+  "div.children": "nodes",
+  "document.children": "nodes",
+  "emphasis.children": "nodes",
+  "figure.caption": "nodes",
+  "figure.target": "node",
+  "footnote.children": "nodes",
+  "heading.children": "nodes",
+  "highlight.children": "nodes",
+  "inline_extension.content": "nodes",
+  "inline_footnote.inline": "nodes",
+  "insert.children": "nodes",
+  "line_block.children": "nodes",
+  "link.children": "nodes",
+  "list.items": "nodes",
+  "list_item.children": "nodes",
+  "paragraph.children": "nodes",
+  "span.children": "nodes",
+  "strike.children": "nodes",
+  "strong.children": "nodes",
+  "subscript.children": "nodes",
+  "superscript.children": "nodes",
+  "table.caption": "nodes",
+  "table.rows": "nodes",
+  "table_cell.children": "nodes",
+  "table_row.cells": "nodes",
+  "underline.children": "nodes",
+}

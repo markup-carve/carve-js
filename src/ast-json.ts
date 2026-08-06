@@ -33,7 +33,12 @@ import {
   isRuntimeEntry,
   type DefinitionEntryNode,
 } from './definition-list-wire.js'
-import { NODE_FIELDS, WIRE_FIELDS, WIRE_HELPER_FIELDS } from './wire-fields.js'
+import {
+  NODE_FIELDS,
+  NODE_POSITION_KIND,
+  WIRE_FIELDS,
+  WIRE_HELPER_FIELDS,
+} from './wire-fields.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -418,6 +423,43 @@ export class AstJsonUnknownNodeTypeError extends Error {
 }
 
 /**
+ * Thrown when a node in a node position has no usable `type` at all - the key is
+ * absent, or it is present carrying something that is not a string.
+ *
+ * The SAME clause as the error above, §12(c), and separated from it only because
+ * that one's `nodeType` is typed `string` and there is no string to report here.
+ * A `type` of `7` or `null` or `{}` names no schema type just as surely as
+ * `"wat"` does, so the refusal belongs at decode for the same reason:
+ *
+ *     (c) A NODE WHOSE `type` THE SCHEMA DOES NOT NAME, AT DECODE. Not in a
+ *     renderer, one step later.
+ *
+ * This engine used to carry such a node all the way into `renderHtml`, which
+ * reported `unknown block undefined` - a RENDERING problem for what is a payload
+ * problem, and one that never arrives at all for a caller that holds the tree
+ * without rendering it: `carve fmt --from-json`, a linter, a language server, an
+ * indexer. carve-rs and carve-php both refuse at decode
+ * (markup-carve/carve#881).
+ *
+ * The reported value is `typeof`-and-JSON rather than the raw value, because the
+ * raw value is what produced `[object Object]` in the old message.
+ */
+export class AstJsonNodeTypeError extends Error {
+  constructor(
+    readonly found: unknown,
+    readonly path: string,
+  ) {
+    const described =
+      found === undefined ? 'no "type"' : `a "type" of ${JSON.stringify(found) ?? typeof found}`
+    super(
+      `AST node at ${path === '' ? 'the root' : path} has ${described}; ` +
+        'every node carries a string "type" the schema names (PART 12 §12)',
+    )
+    this.name = 'AstJsonNodeTypeError'
+  }
+}
+
+/**
  * Thrown when a node carries a property the schema does not name.
  *
  * PART 12 §11: "An ingest MUST REFUSE it with AN ERROR OF ITS OWN -- a typed,
@@ -498,15 +540,50 @@ function refuseUnknownFields(node: unknown, path: string): void {
   }
 }
 
-function refuseUnknownNodeTypes(node: unknown, path: string): void {
+/**
+ * A node position where a LEGACY payload carries a record with no `type`.
+ *
+ * The same shape of exception as `LEGACY_ALIASES` above, and it earns its place
+ * the same way: the decoder demonstrably reads the old form. A definition list
+ * used to be published as `items: [{terms, definitions}]` - a grouping record,
+ * not a node - and `definitionListsFromWire` still maps it, because trees
+ * written then are stored and a stored document cannot be recalled.
+ *
+ * Deliberately ONE entry and hand written rather than generated: the schema
+ * describes the CURRENT form, where `definition_list.items` holds
+ * `definition_term` and `definition_description` nodes, and it is right to. This
+ * records that the decoder accepts more than the schema describes at exactly one
+ * position, which is a fact about this engine's history rather than about the
+ * format.
+ */
+const LEGACY_TYPELESS_POSITIONS: ReadonlySet<string> = new Set(['definition_list.items'])
+
+/**
+ * Refuse, at decode, a node whose `type` the schema does not name (PART 12
+ * §12(c)) - whether the name is unknown, absent, or not a string at all.
+ *
+ * @param requireType whether THIS value sits where a node must be. It is decided
+ *   by the caller from `NODE_POSITION_KIND`, because one field name means
+ *   different things in different places: `items` holds nodes on `list` and
+ *   plain `citation` records on `citation_group`.
+ */
+function refuseUnknownNodeTypes(node: unknown, path: string, requireType: boolean): void {
   if (Array.isArray(node)) {
-    node.forEach((item, index) => refuseUnknownNodeTypes(item, `${path}[${index}]`))
+    node.forEach((item, index) => refuseUnknownNodeTypes(item, `${path}[${index}]`, requireType))
     return
   }
+  // A `null` or a string in a node position is NOT this check's business: it is
+  // part of the wrong-type class markup-carve/carve#881 leaves unruled, and
+  // refusing it here would decide that question by accident.
   if (node === null || typeof node !== 'object') return
   const record = node as Record<string, unknown>
   const type = record.type
-  if (typeof type === 'string' && WIRE_FIELDS[type] === undefined) {
+  if (typeof type !== 'string') {
+    // §12(c). A missing `type`, or one carrying a number, `null`, an array, an
+    // object or a boolean, names no schema type - so it is refused HERE and not
+    // by the renderer two steps later.
+    if (requireType) throw new AstJsonNodeTypeError(type, path)
+  } else if (WIRE_FIELDS[type] === undefined) {
     throw new AstJsonUnknownNodeTypeError(type, path)
   }
   // Only node-bearing fields, never every key: `attrs.keyValues` is a
@@ -516,7 +593,24 @@ function refuseUnknownNodeTypes(node: unknown, path: string): void {
   for (const field of NODE_FIELDS) {
     const value = record[field]
     if (value === undefined) continue
-    refuseUnknownNodeTypes(value, path === '' ? field : `${path}.${field}`)
+    const position = typeof type === 'string' ? `${type}.${field}` : undefined
+    // A record with no `type` of its own is one the schema gives none - a
+    // citation item today - and its own array fields hold real nodes, so the
+    // requirement comes back on for them.
+    const kind =
+      position === undefined
+        ? 'nodes'
+        : LEGACY_TYPELESS_POSITIONS.has(position)
+          ? 'records'
+          : NODE_POSITION_KIND[position]
+    refuseUnknownNodeTypes(
+      value,
+      path === '' ? field : `${path}.${field}`,
+      // `nodes` is about the ELEMENTS: a non-array where the array belongs is
+      // the unruled wrong-type class, and `children: {}` still degrades to an
+      // empty document rather than being decided here.
+      kind === 'node' ? true : kind === 'nodes' ? Array.isArray(value) : false,
+    )
   }
 }
 
@@ -647,7 +741,7 @@ export function fromAstJson(json: AstJsonDocument): Document {
 
   // AFTER the depth bound, so a payload built to blow the stack is turned away
   // by the cheap check rather than by a full walk of itself (PART 12 §9).
-  refuseUnknownNodeTypes(json, '')
+  refuseUnknownNodeTypes(json, '', true)
   refuseUnknownFields(json, '')
 
   const children: BlockNode[] = []
