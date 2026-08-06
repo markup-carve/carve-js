@@ -318,7 +318,16 @@ const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // UPPERCASE, so `*[d]: dozen` was a paragraph here and a definition in carve-rs
 // and carve-php - and a definition renders nothing, so the document quietly
 // lost either the line or the expansion when it moved (carve#791).
-const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: \s*(.+)$/
+// The separator run uses the White_Space PROPERTY, not `\s`, for the reason
+// RE_DESTINATION_WHITESPACE below spells out: JavaScript's `\s` is White_Space
+// plus U+FEFF, so a byte-order mark at the start of an expansion was eaten here
+// and kept by carve-rs and carve-php. U+0085 went the other way - it IS
+// White_Space, is NOT in `\s`, and stayed in the title. Same swap, same fix,
+// one production over from markup-carve/carve#806 (carve#844).
+//
+// The literal space after `]:` stays literal: the separator MUST start with
+// one, which is what makes a tab-first line a paragraph.
+const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: \p{White_Space}*(.+)$/u
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
