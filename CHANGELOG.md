@@ -43,6 +43,28 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A nested container no longer re-scans its own body once per level**
+  (markup-carve/carve#752). Parsing a container handed its body to a nested
+  parse as a joined string, which the nested lexer split straight back apart -
+  two full copies of the body at every level - every level re-measured each
+  line's whole indentation run to compare it against a column two or three wide,
+  and the position anchor asked the same suffix question of the same line twice.
+  All three are `O(depth)` character work per line per level. On the deepest
+  ladder a conforming document can reach (depth 200, 40,600 bytes) the layout
+  machinery walked 10,865,804 characters, 267.6x the document's own size and
+  still climbing with depth; it now walks 140,298, 3.5x, and its counted growth
+  per depth doubling is 3.99x against the document's own 3.94x. Parsing that
+  ladder went from 88.0 ms to 49.9 ms, and the nesting penalty against
+  size-matched flat prose from 13.6x to 7.6x.
+
+  The penalty is reduced, not removed: the remaining per-line predicates read
+  through the indentation too, so growth per depth doubling is 5.36x where a
+  linear parse would be 3.94x. Every parse result is unchanged - the whole spec
+  corpus renders byte-identically on all five targets (HTML, AST JSON, Markdown,
+  Carve, plain text), the same SHA-256 over 675 documents before and after, and
+  83,521 generated container-shaped documents agree on all three of HTML, AST
+  JSON and Carve.
+
 - **A blank line is space and tab and nothing else** (markup-carve/carve#890).
   The grammar names the class twice - `blank_line = {whitespace}, newline` over
   `whitespace = ' ' | '\t'` - and PART 1 states the U+FEFF row of it outright:
