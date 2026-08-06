@@ -80,42 +80,34 @@ interface Positioned {
  *   UTF-16 and codepoints agree across the whole Basic Multilingual Plane, so
  *   this only matters above it.
  *
- *   CRLF. The parser measures offsets over line-ending-NORMALIZED text
- *   (`source.replace(/\r\n?/g, '\n')`), where a `\r\n` pair has collapsed to
- *   one codepoint. Every preceding CRLF line therefore makes a raw offset
- *   undercount by one against the original string.
+ * CRLF USED TO BE A SECOND CONCERN HERE AND NO LONGER IS. The parser measured
+ * offsets over line-ending-normalized text, so every preceding CRLF line made a
+ * raw offset undercount by one against the original string, and this map
+ * compensated by skipping the `\r` of each pair. The undercount was missed for
+ * a long time because the map returned identity whenever the document had no
+ * astral character - exactly the CRLF case (carve-js#545).
  *
- * The second was missed because this returned identity whenever the document
- * had no astral character - which is exactly the CRLF case, so the drift was
- * invisible to the very map meant to correct it (carve-js#545). Only the
- * offsets were affected; line and column come from the parser and were always
- * right, which is why the CLI never showed it and an editor integration would.
- *
- * A LONE `\r` normalizes to `\n` and so still costs one codepoint - only the
- * pair collapses.
+ * The parser now measures the source as given (carve#876), so the compensation
+ * would double-count and this is a plain codepoint-to-UTF-16 map again. The
+ * CRLF tests in `test/lint-offsets-crlf.test.ts` still hold, which is what says
+ * the fix moved rather than disappeared.
  */
 function codepointToUtf16Map(source: string): Uint32Array | undefined {
   let needsMap = false
   for (let i = 0; i < source.length; i++) {
     const code = source.charCodeAt(i)
-    if ((code >= 0xd800 && code <= 0xdbff) || code === 0x0d) {
+    if (code >= 0xd800 && code <= 0xdbff) {
       needsMap = true
       break
     }
   }
   if (!needsMap) return undefined
 
-  // One entry per NORMALIZED codepoint - the unit the parser counts in - each
-  // holding the UTF-16 index of that codepoint in the ORIGINAL source.
+  // One entry per codepoint OF THE SOURCE AS GIVEN - the unit the parser now
+  // counts in - each holding the UTF-16 index of that codepoint.
   const utf16At: number[] = []
   for (let i = 0; i < source.length; ) {
     const code = source.charCodeAt(i)
-    if (code === 0x0d && source.charCodeAt(i + 1) === 0x0a) {
-      // The `\r` of a CRLF pair is gone from the text the parser measured, so
-      // it contributes no entry; the `\n` that follows carries the position.
-      i++
-      continue
-    }
     utf16At.push(i)
     i += code >= 0xd800 && code <= 0xdbff && i + 1 < source.length ? 2 : 1
   }

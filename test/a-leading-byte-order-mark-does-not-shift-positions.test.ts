@@ -58,4 +58,22 @@ describe('a leading byte order mark', () => {
 
     expect(source.slice(doc.children[0].children[0].pos.startOffset, doc.children[0].children[0].pos.endOffset)).toBe(`a${BOM}b`)
   })
+
+  it('is not the only normalization that used to shift them', () => {
+    // CRLF is the same defect through the other half of the normalization: the
+    // parser counted `+1` per line ending where `\r\n` is two characters, so
+    // every span landed one character early per preceding line. Fixing the BOM
+    // alone left this (carve#876).
+    const source = '# T\r\n\r\nabc\r\n'
+    const doc = carveToAstJson(source) as any
+
+    expect([...source].slice(doc.children[1].children[0].pos.startOffset, doc.children[1].children[0].pos.endOffset).join('')).toBe('abc')
+  })
+
+  it('handles a lone carriage return the same way', () => {
+    const source = '# T\r\rabc\r'
+    const doc = carveToAstJson(source) as any
+
+    expect([...source].slice(doc.children[1].children[0].pos.startOffset, doc.children[1].children[0].pos.endOffset).join('')).toBe('abc')
+  })
 })
