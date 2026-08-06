@@ -146,3 +146,28 @@ describe("the unknown-type check never reaches attrs.keyValues", () => {
     expect(WIRE_FIELDS.document).toEqual(["children", "srcByteLength", "type"]);
   });
 });
+
+describe("the encoder always publishes the field the decoder now requires", () => {
+  it("emits `srcByteLength` for a Document that never came from parse", () => {
+    // §9(a): ingest must accept anything this engine can produce. `parse` is not
+    // the only producer - an editor, a language server or an extension hands a
+    // Document over too, and `srcByteLength` is optional on the runtime type. The
+    // encoder used to omit it for exactly those, publishing a tree the schema
+    // marks invalid, and §12 then refused this engine's own output.
+    const handBuilt = {
+      type: "document",
+      children: [{ type: "paragraph", children: [{ type: "text", value: "x" }] }],
+    };
+    const encoded = toAstJson(handBuilt as never);
+    // The VALUE, not just presence: a check for the key alone passes against an
+    // encoder that writes `undefined`, which JSON.stringify then drops again.
+    expect(encoded.srcByteLength).toBe(0);
+    expect(JSON.stringify(encoded)).toContain('"srcByteLength":0');
+    expect(() => fromAstJson(encoded)).not.toThrow();
+  });
+
+  it("keeps the real length when there is one", () => {
+    // The control: the fallback must not overwrite a length the parser measured.
+    expect(toAstJson(parse("hello")).srcByteLength).toBe(5);
+  });
+});

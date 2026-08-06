@@ -290,8 +290,17 @@ export function toAstJson(doc: Document): AstJsonDocument {
 
   orderCollectedDefinitions(children)
 
-  const out: AstJsonDocument = { type: 'document', children }
-  if (doc.srcByteLength !== undefined) out.srcByteLength = doc.srcByteLength
+  // ALWAYS emitted, even when the runtime document has no length to report.
+  // `srcByteLength` is `required` in the schema, so a root without it is not a
+  // Carve AST - and `parse` is not the only way a `Document` gets built: an
+  // editor, a language server or an extension can hand one over, and this
+  // encoder used to publish an invalid tree for exactly those. §12 then refused
+  // this engine's OWN output, which §9(a) forbids.
+  //
+  // 0 is the honest answer to "how much source was this" for a tree that came
+  // from no source, and §12 explicitly does not check the value. carve-php took
+  // the same route for the same reason (carve-php#917).
+  const out: AstJsonDocument = { type: 'document', children, srcByteLength: doc.srcByteLength ?? 0 }
   return out
 }
 
