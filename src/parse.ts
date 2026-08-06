@@ -3613,6 +3613,20 @@ interface ItemLazyState {
   // D, "lenient - still a definition"). An OVER-indented marker still folds
   // (it reaches the item via sliceColumns, not this lazy path).
   inDefList: boolean
+  // Whether the item's open paragraph has absorbed a MALFORMED colon fence and
+  // is therefore taking the next fence-shaped line as text too (PART 9 §12,
+  // "a colon-fence line that fails the opener test leaves the paragraph
+  // expecting a closer"). The block layer has implemented that rule at top
+  // level for a long time; this tracker did not, so it read the trailing `:::`
+  // of `- item` / `  :::note` / `  body` / `  :::` as a div opener and closed
+  // the item, where PART 1 S4 folds the following flush-left line into the
+  // paragraph that was never interrupted (carve#891).
+  absorbingFence: boolean
+  // How many colon-fence containers the item's own content currently holds
+  // open. A bare `:::` with one open is that container's CLOSER, not an opener
+  // and not absorbable text - which is why a malformed fence INSIDE an open
+  // container arms nothing: the closer below it still has a container to close.
+  divDepth: number
 }
 
 /**
@@ -3660,6 +3674,14 @@ function isBlockAttributeLine(content: string): boolean {
 }
 
 function trackItemLazyState(content: string, state: ItemLazyState): void {
+  // Absorption belongs to ONE open paragraph, so it ends wherever that
+  // paragraph does. Clearing it here and re-arming it only in the two branches
+  // that continue the same paragraph is what keeps a heading, a table or a code
+  // fence between the malformed fence and a later bare `:::` from leaving the
+  // flag set: at the top level those end the paragraph and the later fence
+  // opens a real div, and this tracker has to give the same answer.
+  const wasAbsorbing = state.absorbingFence
+  state.absorbingFence = false
   if (state.inComment) {
     // A CLOSER is a bare run, so this test stays anchored - unlike the opener
     // below, which may carry an info string.
@@ -3683,6 +3705,9 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     // A blank is a separator; a `:  def` may follow it (djot allows a blank
     // between a term and its definition), so leave inDefList unchanged.
     state.lazyFoldable = false
+    // The paragraph that was absorbing fences ends here, so the next
+    // fence-shaped line is an opener again.
+    state.absorbingFence = false
     return
   }
   // A definition-list term or definition marker opens (or continues) a def
@@ -3762,19 +3787,63 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   // A div / admonition / line-block OPENER is structural; it opens no paragraph
   // itself, but plain text on a later line inside it does (handled by the
   // fall-through below once the opener line has been seen).
+  const bareFence = /^:{3,}[ \t]*$/.test(content)
+  // A bare run with a container open is that container's closer.
+  if (bareFence && state.divDepth > 0) {
+    state.divDepth--
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
   if (
     RE_DIV_OPEN.test(content) ||
     (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
     RE_LINE_BLOCK_OPEN.test(content) ||
     RE_HARDBREAKS_OPEN.test(content)
   ) {
+    // ...unless the paragraph above it already absorbed a malformed fence AND
+    // this line is a BARE run, in which case §12 takes it as text too and the
+    // paragraph stays open. Not width-tagged: after a malformed `:::note` a
+    // following `::::` is absorbed as readily as a `:::`.
+    //
+    // ONLY A BARE RUN. A line that opens something of its own - `::: note`,
+    // `::: |`, `::: [label]` - interrupts the absorbing paragraph exactly as it
+    // does at the top level, which is where this rule is already implemented
+    // and where it was measured: `:::note` over `::: note` is a paragraph plus
+    // an admonition in all three engines, while `:::note` over `:::` is one
+    // paragraph in all three.
+    if (wasAbsorbing && bareFence) {
+      state.absorbingFence = true
+      state.lazyFoldable = true
+      return
+    }
+    state.divDepth++
+    // A valid opener ENDS the absorbing paragraph, so the bare fence that
+    // closes the block it opens is that block's closer rather than more
+    // absorbed text - and a closed block leaves no open paragraph.
     state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
+  // A fence-shaped line that is NOT a valid opener is ordinary paragraph text,
+  // and from here the paragraph absorbs the next fence-shaped line as well.
+  // `:::note` fails §12's opener test because a type word must be separated
+  // from the fence by a space; `::: note` passes it and takes the branch above.
+  if (/^:{3,}/.test(content)) {
+    // ...but only at the item's own level. Inside an open container the line is
+    // ordinary body text and the container's closer below it is still a closer,
+    // so arming here would swallow it and hold the paragraph open past the
+    // block's end.
+    state.absorbingFence = state.divDepth === 0
+    state.lazyFoldable = true
     state.inDefList = false
     return
   }
   // Everything else (plain prose, list-marker content, div body text) leaves an
   // open paragraph the dedented line can continue. Prose folds into a def body,
-  // so an open def list stays open (inDefList unchanged).
+  // so an open def list stays open (inDefList unchanged) - and it is the SAME
+  // paragraph, so an absorption already under way survives it.
+  state.absorbingFence = wasAbsorbing
   state.lazyFoldable = true
 }
 
@@ -3941,6 +4010,8 @@ function parseList(lexer: Lexer): List {
       inComment: false,
       commentLen: 0,
       lazyFoldableBeforeComment: false,
+      absorbingFence: false,
+      divDepth: 0,
       // The lead text opens a paragraph unless it is one of the shapes that
       // open nothing: a blank, an empty quote, or a block-attribute line (which
       // renders nothing and floats forward). `trackItemLazyState` applies the
@@ -3949,6 +4020,15 @@ function parseList(lexer: Lexer): List {
         !isBlankLine(content) && !isEmptyQuoteLine(content) && !isBlockAttributeLine(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
+    // The lead line may itself be the malformed fence (`- :::note`), and then
+    // the paragraph it opens is already absorbing: the `:::` below it is text,
+    // not a closer for a block nothing opened (PART 9 §12, carve#891).
+    lazyState.absorbingFence =
+      /^:{3,}/.test(content) &&
+      !RE_DIV_OPEN.test(content) &&
+      !RE_ADMONITION_OPEN.test(content) &&
+      !RE_LINE_BLOCK_OPEN.test(content) &&
+      !RE_HARDBREAKS_OPEN.test(content)
     while (!lexer.eof()) {
       const l = lexer.peek()!
       if (isBlankLine(l)) {
