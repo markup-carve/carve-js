@@ -261,23 +261,30 @@ const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
 // The type word is a grammar `identifier`: `(letter | '_'), {letter | digit
 // | '_' | '-'}`, so it may start with an underscore (matches carve-php /
 // carve-rs). Groups: 2 kind, 3 header (quoted), 4 label (bracketed).
-// TWO ROLES ON ONE LINE, and they take different terminals. PART 7's
-// MARKER SEPARATORS AND PADDING SLOTS is normative about the split:
+// TWO ROLES ON ONE LINE, ONE TERMINAL. PART 7's MARKER SEPARATORS AND
+// PADDING SLOTS decides the terminal by POSITION, not by role: "A tab is
+// syntax ONLY in a line's LEADING INDENTATION RUN. From the first
+// non-whitespace character of the line onward a tab is not relevant to
+// syntax at all." Every slot on this line sits after the fence run, so
+// every slot is `space`:
 //
 //   - the slot immediately after the fence run is a MARKER SEPARATOR,
-//     spelled `space` (U+0020 only), because the token after it selects
-//     which of the four blocks the line opens;
-//   - the admonition's title and label slots are PADDING, spelled
-//     `whitespace`, which the grammar defines as a space or a tab and
-//     nothing else.
+//     because the token after it selects which of the four blocks the
+//     line opens;
+//   - the admonition's title and label slots are PADDING, because the
+//     type word has already decided the block.
 //
-// So sweeping the whole line one way is wrong in one direction or the
-// other. The separators were a space-or-tab class, so a tabbed opener
-// opened an admonition where the grammar makes it a paragraph; the padding
-// slots were the regex whitespace class, which in JavaScript also admits a
-// form feed, a vertical tab and every Unicode space, none of which
-// `whitespace` names (#786, spec carve#886).
-const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z_][\w-]*)(?:[ \t]+("[^"]*"))?(?:[ \t]+(\[[^\]]*\]))?[ \t]*$/
+// The roles survive, but only to decide what a FAILED match means. A
+// separator that does not match leaves the line unrecognized as that
+// construct; a padding slot that does not match leaves a token unconsumed
+// and the surrounding production then rejects the line. Both land on
+// prose, which is what `admonition_open`'s own prose states outright:
+// "`::: note<TAB>\"T\"` is not an admonition opener -- the line stays
+// prose". Neither slot may be spelled `\s` either: in JavaScript that also
+// admits a form feed, a vertical tab and every Unicode space, none of
+// which the grammar names at any position (#786, #795; spec carve#886
+// widened the padding slots and carve#905 reverted them).
+const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?[ \t]*$/
 const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
 // `::: line-block` keyword is no longer special -- it falls through to the
