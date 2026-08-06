@@ -1,4 +1,5 @@
 import type { CarveExtension } from './extension.js'
+import { AUTOLINK_BODY_EXCLUDED } from './parse.js'
 
 /** Options for the {@link autolink} extension. */
 export interface AutolinkOptions {
@@ -52,8 +53,26 @@ export function autolink(opts: AutolinkOptions = {}): CarveExtension {
   // Sticky (`y`) regexes anchored at the scan position via `lastIndex`, so the
   // match starts exactly at `pos` without a per-position `text.slice(pos)`
   // (the old slice made the whole inline scan O(n^2) on adversarial input).
+  //
+  // THE BODY IS SPELLED ONCE, in `AUTOLINK_BODY_EXCLUDED`, and it is the
+  // White_Space PROPERTY rather than `\s`. In JavaScript `\s` is White_Space
+  // PLUS U+FEFF MINUS U+0085, so this matcher linkified a bare URL straight
+  // through a U+0085 and carried the invisible character into the href, exactly
+  // as the core angle autolink did (carve-js#810). The class appears TWICE in
+  // this one pattern -- the body run and the last-character guard -- and a
+  // narrowing that reached only the first would leave a URL that may not
+  // CONTAIN the character still able to END with it.
   const urlRe = urlSchemes.length
-    ? new RegExp('(?:' + urlSchemes.join('|') + ')://[^\\s<>\\[\\](){}]*[^\\s<>\\[\\](){}.,;:!?\'"]', 'y')
+    ? new RegExp(
+        '(?:' +
+          urlSchemes.join('|') +
+          ')://[^' +
+          AUTOLINK_BODY_EXCLUDED +
+          '<>\\[\\](){}]*[^' +
+          AUTOLINK_BODY_EXCLUDED +
+          '<>\\[\\](){}.,;:!?\'"]',
+        'yu',
+      )
     : null
   const mailtoRe = mailto ? new RegExp('mailto:' + EMAIL, 'y') : null
   const emailRe = mailto ? new RegExp(EMAIL, 'y') : null

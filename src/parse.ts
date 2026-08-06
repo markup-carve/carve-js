@@ -128,6 +128,53 @@ const RE_HEADING =
 // spec oracle `/^(-{3,}|\*{3,}|_{3,})[ \t]*$/`. Tested against the RAW line
 // (NOT trimStructural), so leading whitespace correctly disqualifies it.
 const RE_HR = /^([-*_])\1{2,}[ \t]*$/
+
+// THE TRAILING RUN ON A DELIMITER LINE IS `whitespace`, i.e. space and tab.
+//
+// A fence delimiter -- opener or closer, backtick / tilde / colon / `---` --
+// ends at `newline` in the grammar: `code_fence_close = (backtick_fence |
+// tilde_fence):close`, `colon_fence_close = colon_fence:close`,
+// `frontmatter_close = "---", newline`. None of them names a trailing slot at
+// all, so whatever run the engines tolerate there cannot be WIDER than
+// `whitespace = ' ' | '\t'` (grammar.ebnf:2206), the widest class the grammar
+// spells anywhere on a line.
+//
+// It was `\s`, and in JavaScript specifically `\s` is Unicode White_Space PLUS
+// U+FEFF MINUS U+0085 -- a legacy set rather than a property. So a byte order
+// mark closed a fence here (carve-js#805), as did a vertical tab, a form feed,
+// a no-break space and every Unicode space; carve-rs and carve-php read all of
+// them as content. PART 1 rules the U+FEFF row out in as many words: "ONE, and
+// only there: a U+FEFF anywhere else is an ordinary zero-width character."
+//
+// `[ \t]*$` is not a new spelling: `RE_HR` above, `RE_ADMONITION_OPEN` and
+// `RE_LINE_BLOCK_OPEN` already carry it, the last two set by carve-js#794 /
+// carve-js#798. Those narrowed the colon fence's OPENER and left its closer at
+// `\s`, which is how one rule came to have two answers -- `::: note<BOM>` was
+// prose while `:::<BOM>` closed the block it never opened. The opener's
+// spelling is the one that stays.
+//
+// THE TAB ROW IS DELIBERATELY UNCHANGED. Whether this run is `whitespace` or
+// the narrower `space` is the same question PART 7 answers for NAMED slots
+// ("a tab is syntax ONLY in a line's LEADING INDENTATION RUN") and that carve
+// #886 / #894 / #905 have been settling one construct at a time -- but no
+// clause names this run, so there is nothing to apply it to yet. carve-rs
+// accepts a tab after `:::` and after `+` and rejects one after ` ``` `;
+// carve-php accepts it in all three. Narrowing the class to `whitespace` fixes
+// every row all three tickets name without deciding that one.
+const TRAILING_WS = '[ \\t]*$'
+
+/**
+ * The closer for a fence opened with `marker`: the same character, at least as
+ * long, and nothing after it but the trailing run above.
+ *
+ * ONE producer on purpose. This regex was built at eight call sites and spelled
+ * out at four more, and a narrowing pass that reaches twelve of thirteen leaves
+ * exactly the drift carve-js#805 reports.
+ */
+function fenceCloseRe(marker: string): RegExp {
+  return new RegExp(`^${marker[0]}{${marker.length},}${TRAILING_WS}`)
+}
+
 // Info string is a single language token, optionally followed by a bracketed
 // `[label]` (structured metadata; e.g. ```php [NPM] or ```[NPM]). The charset
 // covers real-world tags with punctuation (c++, c#, f#, asp.net, text/html).
@@ -163,11 +210,17 @@ const RE_HR = /^([-*_])\1{2,}[ \t]*$/
 // ``` "T" [L] would disagree about a tab for no reason a reader could state.
 //
 // Cardinality is deliberately unchanged (`space` vs `space+` is a separate
-// question from the terminal), and so is the TRAILING run before end-of-line,
-// which is not a slot in `fenced_code_block` at all.
+// question from the terminal). The TRAILING run before end-of-line is not a
+// slot in `fenced_code_block` either, and carries `TRAILING_WS` above: it was
+// left at `\s` when the slots were narrowed, so ```` ```<BOM> ```` opened a
+// fence in this engine while carve-rs and carve-php both read the line as
+// prose. Opener and closer are one run seen from two ends (carve-js#805).
 // Groups: 3 lang, 4|6 header (quoted, incl. quotes), 5|7|8 label (incl. brackets).
-const RE_FENCE =
-  /^()(`{3,}|~{3,}) *(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?|("[^"]*")(?: +(\[[^\]]*\]))?|(\[[^\]]*\]))?\s*$/
+const RE_FENCE = new RegExp(
+  '^()(`{3,}|~{3,}) *(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\]]*\\]))?' +
+    '|("[^"]*")(?: +(\\[[^\\]]*\\]))?|(\\[[^\\]]*\\]))?' +
+    TRAILING_WS,
+)
 // Bullets are `-` and `*` only. Unlike Markdown/djot, `+` is not a Carve bullet
 // -- it is reserved as the list-continuation marker (PART 9 §17), so a lone `+`
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
@@ -285,6 +338,26 @@ function isBlankLine(line: string | undefined): boolean {
   return line !== undefined && RE_BLANK_LINE.test(line)
 }
 
+// THE CONTINUATION MARKER IS A LONE `+` (PART 9 §17). `continuation_marker =
+// '+', newline` names no whitespace at all; the leading run is the line's
+// INDENTATION (`whitespace`, where a tab IS syntax) and the trailing run is the
+// same tolerated `TRAILING_WS` every delimiter line carries.
+//
+// It was a `trimStructural(l) === '+'` at four sites and a `raw.trim() === '+'`
+// at a fifth -- `\s` minus U+00A0, and the native trim's full `\s` -- so
+// `+<BOM>` opened a continuation here and stayed prose in carve-rs and carve-php
+// (carve-js#811), as did `+<VT>`, `+<FF>`, `+<OGHAM SPACE>` and every Unicode
+// space. The two spellings did not even agree with each other: a `+<NBSP>` line
+// was a marker to the definition prepass and prose to the block lexer, so a
+// definition after it was collected by one and rendered by the other.
+//
+// ONE predicate, for the reason `fenceCloseRe` is one producer.
+const RE_CONTINUATION_MARKER = new RegExp('^[ \\t]*\\+' + TRAILING_WS)
+
+function isContinuationMarker(line: string): boolean {
+  return RE_CONTINUATION_MARKER.test(line)
+}
+
 const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
 // Fences are a run of 3+ colons (group 1). A longer opener nests: a
 // `::::` block contains `:::` blocks, and only a bare closer of equal-or-
@@ -328,7 +401,11 @@ const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
 // which the grammar names at any position (#786, #795; spec carve#886
 // widened the padding slots and carve#905 reverted them).
 const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?[ \t]*$/
-const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
+// The closer takes the OPENER's trailing run (`TRAILING_WS`), not `\s`. This is
+// the pair carve-js#805 names: carve-js#794 / carve-js#798 narrowed
+// `RE_ADMONITION_OPEN` above to `[ \t]*$` and left this one wide, so a mark that
+// could not open a block could still close one.
+const RE_ADMONITION_CLOSE = new RegExp('^(:{3,})' + TRAILING_WS)
 // Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
 // `::: line-block` keyword is no longer special -- it falls through to the
 // admonition branch and renders as an ordinary `<div class="line-block">`
@@ -494,6 +571,16 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
 // is built from this same production.
 const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
 
+// The AUTOLINK body's share of the same rule, as a character-class FRAGMENT to
+// be negated by its users. `url_char` has no zero-width clause of its own, so
+// the two halves are named separately: the White_Space property, which is what
+// ends any URL run, and U+FEFF, which stays out only because
+// markup-carve/carve#860 has not yet said whether a non-ASCII character may be
+// a `url_char` at all (see RE_AUTOLINK). Both spellings of the body -- the core
+// angle autolink here and the bare-URL matcher in `autolink.ts` -- share it, so
+// the parser and the extension cannot answer the question differently.
+export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\uFEFF'
+
 // The SAME production, and therefore the same test. `RE_LINK_DEF` matched the
 // destination with `(\S+)`, skipped the separator run with a class built on
 // `\S`, and introduced the title with `\s+` - so the rule the scanner above
@@ -593,9 +680,9 @@ const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)
 // were already excluded here, because this slot had been narrowed to `[ \t]`
 // rather than left as `\s`; that narrowing was right as far as it went and only
 // the tab had to go.
-const RE_FRONTMATTER_OPEN = /^--- *(\w*)\s*$/
+const RE_FRONTMATTER_OPEN = new RegExp('^--- *(\\w*)' + TRAILING_WS)
 // Frontmatter close fence: bare `---` only.
-const RE_FRONTMATTER_CLOSE = /^---\s*$/
+const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
 // Raw passthrough block: ```=FORMAT … ``` (§4.15, djot raw-block syntax). The
 // info string is `=FORMAT` (a leading `=` immediately followed by the format
 // name), so this never collides with RE_FENCE (whose language charset excludes
@@ -608,7 +695,7 @@ const RE_FRONTMATTER_CLOSE = /^---\s*$/
 // first non-whitespace character of the line (PART 7). `raw_block =
 // code_fence_open, [space], "=", format_name, newline`. It was `\s`, so a tab,
 // a form feed, a vertical tab and every Unicode space opened a raw block.
-const RE_RAW_FENCE = /^(`{3,}|~{3,}) *=([a-zA-Z][\w-]*)\s*$/
+const RE_RAW_FENCE = new RegExp('^(`{3,}|~{3,}) *=([a-zA-Z][\\w-]*)' + TRAILING_WS)
 // Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
 // by length); a `%%` line is a line comment. Neither is rendered. A line
 // comment may be indented: leading whitespace before `%%` does not matter, so an
@@ -635,7 +722,10 @@ const RE_COMMENT_BLOCK_ANY = /^[ \t]*(%{3,})(.*)$/
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
-const RE_FENCE_CLOSER = /^(`{3,}|~{3,})\s*$/
+const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + TRAILING_WS)
+// The same line seen by the definition prepass, which has already re-based it to
+// the fence's content column and so matches the run alone.
+const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + TRAILING_WS)
 
 // Maximum block-container nesting depth, applied UNIFORMLY to blockquote, list,
 // fenced-div / admonition (and footnote) nesting. Each level recurses
@@ -1603,7 +1693,11 @@ function collectLinkDefs(lexer: Lexer) {
       const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
       const ki = k.length - k.replace(/^[ \t]+/, '').length
       const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
-      const close = d.match(/^([`~]{3,})\s*$/)
+      // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
+      // the block lexer does, and a definition written after a fence that only
+      // ONE of the two reads as closed is collected by one and rendered by the
+      // other.
+      const close = d.match(RE_FENCE_CLOSER_PREPASS)
       if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
         fence = null
       continue // definitions inside fenced code are literal samples
@@ -1718,7 +1812,7 @@ function collectLinkDefs(lexer: Lexer) {
     // which is the "neither visible nor active" outcome carve#624 named
     // (carve-js#643). The FOOTNOTE prepass here already reads it this way.
     const rawIndent = leadingWhitespace(unquoted)
-    if (raw.trim() === '+') plusColumn = leadingWhitespace(unquoted)
+    if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
     else if (isBlankLine(raw)) plusColumn = null
     // Inside a footnote body the column is KNOWN - it is two, §16's own
     // (carve#717) - so the body no longer needs the blanket exemption it used to
@@ -2215,7 +2309,7 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
   const labelRaw = m[5] ?? m[7] ?? m[8]
   const header = headerRaw ? headerRaw.slice(1, -1) : undefined
   const label = labelRaw ? labelRaw.slice(1, -1) : undefined
-  const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+  const closeRe = fenceCloseRe(marker)
   const lines: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -2264,7 +2358,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   const m = RE_RAW_FENCE.exec(lexer.consume())!
   const marker = m[1]!
   const format = m[2]!
-  const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+  const closeRe = fenceCloseRe(marker)
   const lines: string[] = []
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -2579,7 +2673,7 @@ function consumeOpaqueColonFenceBodySpan(
     // interrupted prose and lapsed for one that opened a body - which is why
     // the `paragraphOpen` argument is gone.
     if (!startsInterruptingBlock(lexer)) return false
-    const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+    const closeRe = fenceCloseRe(marker)
     const isCodeFence = codeOpen !== null
     lexer.consume()
     lines.push({ text, lineIndex })
@@ -3186,7 +3280,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     if (fence) {
       const marker = fence[2]!
       state.inFence = true
-      state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+      state.fenceClose = fenceCloseRe(marker)
       state.paragraphOpen = false
       return
     }
@@ -3194,7 +3288,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
     if (raw) {
       const marker = raw[1]!
       state.inFence = true
-      state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+      state.fenceClose = fenceCloseRe(marker)
       state.paragraphOpen = false
       return
     }
@@ -3834,7 +3928,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (fence) {
     const marker = fence[2]!
     state.inFence = true
-    state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+    state.fenceClose = fenceCloseRe(marker)
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -3843,7 +3937,7 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   if (raw) {
     const marker = raw[1]!
     state.inFence = true
-    state.fenceClose = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+    state.fenceClose = fenceCloseRe(marker)
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -4055,7 +4149,7 @@ function parseList(lexer: Lexer): List {
     // sole item content is the continuation marker, not literal text
     // (`- + text` keeps `+ text` as literal content). Lets an item start
     // directly with a table, code block, quote or div at column 0.
-    if (trimStructural(content) === '+') {
+    if (isContinuationMarker(content)) {
       const attached: string[] = []
       const attachedLineNumbers: number[] = []
       let attachedStartLineIndex = lexer.pos
@@ -4081,7 +4175,7 @@ function parseList(lexer: Lexer): List {
             RE_UNORDERED.test(a) ||
             RE_TASK.test(a) ||
             extractItemAttr(a) !== null
-          if (sibling || anyMarker || trimStructural(a) === '+') break
+          if (sibling || anyMarker || isContinuationMarker(a)) break
         }
         if (attached.length === 0) attachedStartLineIndex = lexer.pos
         attached.push(sliceColumns(a, baseIndent))
@@ -4154,7 +4248,7 @@ function parseList(lexer: Lexer): List {
       // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
       // injects a blank separator so the block parses on its own; the
       // compact-list rule above then keeps the item tight.
-      if (indentColumns(l) === baseIndent && trimStructural(l) === '+') {
+      if (indentColumns(l) === baseIndent && isContinuationMarker(l)) {
         const plusLineNumber = lexer.lineNumber(lexer.pos)
         lexer.consume()
         pendingBlanks = 0
@@ -4189,7 +4283,7 @@ function parseList(lexer: Lexer): List {
               RE_UNORDERED.test(a) ||
               RE_TASK.test(a) ||
               extractItemAttr(a) !== null
-            if (sibling || anyMarker || trimStructural(a) === '+') break
+            if (sibling || anyMarker || isContinuationMarker(a)) break
           }
           const attached = sliceColumns(a, baseIndent)
           nested.push(attached)
@@ -4966,7 +5060,7 @@ function splitTableRow(line: string): string[] {
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
   const start = lexer.pos + 1
   if (start >= lexer.noFenceCloserFrom) return false // memo: no closer ahead
-  const closeRe = new RegExp(`^${marker[0]}{${marker.length},}\\s*$`)
+  const closeRe = fenceCloseRe(marker)
   let sawAnyCloser = false
   for (let i = start; i < lexer.lines.length; i++) {
     const l = lexer.lines[i]!
@@ -5326,8 +5420,28 @@ const RE_SYMBOL = /^:([a-zA-Z0-9+-][\w+-]*):/
 //   email_autolink = {email_char}+ '@' {email_char}+ '.' {letter}+ -- the
 //                    `.TLD` is MANDATORY and email_char excludes `:`/`@`, so
 //                    `<a@b>` (no TLD) and `<x@y:z>` are not autolinks.
-const RE_AUTOLINK =
-  /^<([a-zA-Z][a-zA-Z0-9+.\-]*:[^>\s<"\\`{}|^]+|[A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+\.[A-Za-z]+)>/
+//
+// WHAT ENDS THE BODY IS THE White_Space PROPERTY, not `\s` -- the same test and
+// the same reason as `RE_DESTINATION_WHITESPACE` above. JavaScript's `\s` is
+// White_Space PLUS U+FEFF MINUS U+0085, so `<https://a/b<NEL>c>` linked here
+// with an invisible U+0085 inside the href, where carve-rs leaves the line
+// literal (carve-js#810). U+0085 is out under BOTH readings of `url_char` --
+// it is whitespace under the lenient one and outside the enumerated ASCII set
+// under the strict one -- so the row is fixable without waiting on
+// markup-carve/carve#860.
+//
+// U+FEFF STAYS EXCLUDED, which is where `\s` happened to leave it. That row is
+// NOT this ticket's: `url_char` enumerates ASCII, and whether it admits
+// non-ASCII at all is exactly what markup-carve/carve#860 is deciding -- the
+// same question that owns U+200B and U+180E, which this engine admits today.
+// The three should end up alike; naming U+FEFF here keeps today's answer for
+// all three until that ruling lands rather than picking a side in passing.
+const RE_AUTOLINK = new RegExp(
+  '^<([a-zA-Z][a-zA-Z0-9+.\\-]*:[^>' +
+    AUTOLINK_BODY_EXCLUDED +
+    '<"\\\\`{}|^]+|[A-Za-z0-9._+\\-]+@[A-Za-z0-9._+\\-]+\\.[A-Za-z]+)>',
+  'u',
+)
 const RE_CROSSREF = /^<\/#([^>\s]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 

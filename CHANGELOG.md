@@ -55,6 +55,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   U+1680, U+2000, U+2009, U+200A, U+2028, U+2029, U+202F, U+205F, U+3000) ended
   one too. All twelve now read as content, which is what carve-rs does.
 
+- **A fence closer, an autolink body and a continuation marker each read the
+  JavaScript whitespace set instead of Carve's** (carve-js#805, carve-js#810,
+  carve-js#811). One cause, three subsystems: JavaScript's `\s` is Unicode
+  White_Space PLUS U+FEFF MINUS U+0085 - a legacy set, not a property - while the
+  grammar spells the class `whitespace = ' ' | '\t'`. So a byte order mark closed
+  a fence, opened a raw block and passed for a list-continuation marker, as did a
+  vertical tab, a form feed, a no-break space and every Unicode space; and on the
+  other side of the same set difference, an autolink linked a URL with a U+0085
+  inside it and carried the invisible character into the `href`. Fence
+  delimiters - code, colon, raw and frontmatter, opener and closer alike - now
+  take spaces and tabs only, the continuation marker likewise, and the autolink
+  body ends at the Unicode White_Space property. carve-rs and carve-php agree on
+  every row that moved. Whether an autolink may hold a non-ASCII character at all
+  is markup-carve/carve#860 and is deliberately unchanged.
+
 - **Ingest rejects a foreign AST root instead of adopting it** (PART 12 §9). The
   clause names the exact case: "An ingest accepting some other root (`doc`, say,
   which is ProseMirror's) will half-read a foreign format rather than reject it."
