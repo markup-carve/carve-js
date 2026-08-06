@@ -61,6 +61,11 @@ describe('a reference definition', () => {
     // The destination must be NON-EMPTY once the run is skipped
     // (grammar.ebnf:1322-1324). Skipping the run must not turn `[r]: <NBSP>`
     // into a definition with an empty href.
+    //
+    // This is the CONTROL: it is the one case here that no mutation of the run's
+    // class breaks, because `\P{White_Space}+` refuses an empty destination
+    // whatever the run admits. It bounds the assertions above rather than
+    // proving any of them.
     expect(carveToHtml('[link][r]\n\n[r]:  \n')).not.toContain('href')
     expect(carveToHtml('[link][r]\n\n[r]:  \n')).not.toContain('href')
   })
@@ -81,8 +86,10 @@ describe('a reference definition', () => {
   })
 
   it('leaves a plain definition and an ASCII run alone', () => {
-    // The CONTROL: no mutation of the run's class breaks these, and they are
-    // here to bound the assertions above rather than to prove them.
+    // Not a bystander: a run written to match ONE character rather than the
+    // whole run passes the single-space case here and fails the three-space one,
+    // which is the same first-character-versus-run mistake the case above tests
+    // from the non-ASCII side.
     expect(defines(' ')).toBe(true)
     expect(defines('   ')).toBe(true)
   })
