@@ -405,8 +405,22 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
 // is built from this same production.
 const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
 
+// The SAME production, and therefore the same test. `RE_LINK_DEF` matched the
+// destination with `(\S+)`, skipped the separator run with a class built on
+// `\S`, and introduced the title with `\s+` - so the rule the scanner above
+// now follows stopped at the inline form. A BOM was dropped as separator
+// whitespace, truncated the destination where it sat mid-string, and made a
+// `<...>` destination collapse to a bare `<`; U+0085, which IS White_Space and
+// is NOT in `\s`, went the other way and stayed in the href where carve-php and
+// carve-rs both ended the destination on it (markup-carve/carve#806).
+//
+// The LEADING class stays on `\s`: it is line indentation, a different
+// production, and all three engines skip a BOM written before the `[`. The NBSP
+// there is now written `\u00a0` - it was a raw U+00A0 in the source, which is
+// exactly the kind of invisible character this rule is about. Its meaning is
+// unchanged: the repo-wide "NBSP is content, not indentation" idiom.
 const RE_LINK_DEF =
-  /^[^\S ]*\[(?!@)([^\]]+)\]: [^\S ]*(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
+  /^[^\S\u00a0]*\[(?!@)([^\]]+)\]: (?:(?!\u00a0)\p{White_Space})*(\P{White_Space}+)(?:\p{White_Space}+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 //

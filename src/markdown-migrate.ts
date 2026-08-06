@@ -464,10 +464,16 @@ function decodeHtmlEntitiesRaw(s: string): string {
  * `encodeURIComponent`, so a non-ASCII space becomes its UTF-8 bytes the way
  * cmark writes it (`%C2%A0`, not `%A0`); a raw space would end the destination
  * and turn the rest into a title. A destination holds no raw whitespace before
- * decoding -- it is matched as `\S+` -- so every match here came from an entity.
+ * decoding -- it is matched against the White_Space property below -- so every
+ * match here came from an entity.
+ *
+ * The test is that property and NOT `/\s/`, which also holds U+FEFF. A BOM is
+ * not whitespace in CommonMark either, so cmark keeps it in the destination;
+ * encoding it turned an invisible character the author wrote into the six
+ * visible ones `%EF%BB%BF` (markup-carve/carve#806).
  */
 function decodeEntitiesInDestination(url: string): string {
-  return decodeHtmlEntitiesRaw(url).replace(/\s/g, (c) => encodeURIComponent(c))
+  return decodeHtmlEntitiesRaw(url).replace(/\p{White_Space}/gu, (c) => encodeURIComponent(c))
 }
 
 /** A quoted title and the whitespace around it: ` "a & b"` / ` 'a & b'`. */
@@ -765,7 +771,11 @@ function convertInline(input: string): string {
   // percent-encoded (Titan_(moon) -> Titan_%28moon%29).
   const encodeDest = (paren: string): string => {
     const inner = paren.slice(1, -1)
-    const m = inner.match(/^(\S+)([\s\S]*)$/)
+    // Split on the White_Space property, not `\S`: `\S` treats a BOM as the
+    // whitespace that separates destination from title, and it is an ordinary
+    // destination character, so the halves were cut in the wrong place and each
+    // ran through the wrong decoder (markup-carve/carve#806).
+    const m = inner.match(/^(\P{White_Space}+)([\s\S]*)$/u)
     const url = m ? m[1]! : inner
     const rest = m ? m[2]! : ''
     // A destination and title are entity-decoded by cmark like any other text,
@@ -817,7 +827,9 @@ function convertInline(input: string): string {
   // inline form is (encodeDest): protecting the line puts it out of reach of
   // the later decode pass, and a literal `&amp;` in the definition points the
   // link somewhere the Markdown source did not.
-  line = line.replace(/^(\s*\[[^^\]][^\]]*\]:\s*)(\S+)([\s\S]*)$/, (_m, head, dest, rest) =>
+  // Destination split on the White_Space property, for the reason `encodeDest`
+  // gives above: `\S` cuts a destination at a BOM.
+  line = line.replace(/^(\s*\[[^^\]][^\]]*\]:\s*)(\P{White_Space}+)([\s\S]*)$/u, (_m, head, dest, rest) =>
     protect(head + decodeEntitiesInDestination(dest) + decodeEntitiesInTitle(rest)),
   )
 
