@@ -335,6 +335,13 @@ const RE_BLANK_LINE = /^[ \t]*$/
 function isBlankLine(line: string | undefined): boolean {
   // A non-existent line (past EOF) is NOT a blank line: lookahead loops must
   // terminate at EOF, not treat it as an endless run of blank lines.
+  //
+  // This is asked of every line at every nesting level, so on a deep container
+  // it is one of the parse's hottest paths (markup-carve/carve#752) - 17.8% of
+  // a depth-200 ladder's parse. Rewriting it as the hand loop the class
+  // describes was measured and was SLOWER, reproducibly: 54.8 ms against 49.9
+  // on that ladder, three runs each. V8 compiles this class to native code, and
+  // the loop's per-character `charCodeAt` does not beat it. Left as the regex.
   return line !== undefined && RE_BLANK_LINE.test(line)
 }
 
@@ -762,6 +769,42 @@ const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + TRAILING_WS)
 // it. Exported so callers/tests can assert the exact, shared cap.
 export const MAX_NESTING_DEPTH = 200
 
+/**
+ * COUNTED instrumentation for the container-layout work (markup-carve/carve#752).
+ *
+ * Every nesting level hands its body to a nested parse, so a line at depth `d`
+ * is handled `d` times. That is unavoidable in this container model; what is
+ * not is doing `O(line length)` character work at each of those handlings,
+ * which turns `O(bytes)` of document into `O(bytes^1.5)` of work.
+ *
+ * The regression guard counts those characters rather than timing them. This
+ * repo already records why a clock cannot express the bound - see
+ * `test/writer-deep-list-perf.test.ts` ("No ratio guard here on purpose... would
+ * also fail on the healthy build") and `test/perf-regression.test.ts` (a ratio
+ * bound "flaked on nearly every run"). A count is a property of the algorithm,
+ * not of the machine: it reproduces byte-identically under any load.
+ *
+ * Off by default, so a normal parse pays one boolean test per counted call.
+ */
+export const layoutWork = {
+  /** Whether to accumulate. Tests turn this on around a single parse. */
+  on: false,
+  /** Characters walked by the indentation gate (`indentColumns`). */
+  gate: 0,
+  /** Characters walked by the column strip (`sliceColumns`). */
+  strip: 0,
+  /** Characters re-copied at a container recursion seam (join/split/normalize). */
+  seam: 0,
+  reset(): void {
+    this.gate = 0
+    this.strip = 0
+    this.seam = 0
+  },
+  get total(): number {
+    return this.gate + this.strip + this.seam
+  },
+}
+
 class Lexer {
   lines: string[]
   lineOffsets: number[]
@@ -825,7 +868,7 @@ class Lexer {
   commentFenceLastIndex: Map<number, number> | undefined = undefined
 
   constructor(
-    source: string,
+    source: string | readonly string[],
     opts: ParseOptions = {},
     lineNumberOffset = 0,
     unclosedContainerKeys?: Set<string>,
@@ -834,7 +877,23 @@ class Lexer {
     this.unclosedContainerKeys = unclosedContainerKeys
     this.lineNumberOffset = lineNumberOffset
     this.defaultFrontmatterFormat = opts.defaultFrontmatterFormat ?? 'yaml'
-    this.lines = source.replace(/\r\n?/g, '\n').split('\n')
+    // ALREADY-SPLIT LINES. A container's body reaches here as the lines its
+    // parent collected, so joining them and splitting them again copies the
+    // whole body twice per nesting level - `depth` times over for a line at
+    // depth `depth` (markup-carve/carve#752). The parent's lines are newline-free
+    // by construction (it split on the same normalization), so the join was a
+    // round trip with no effect other than its cost.
+    //
+    // The one thing the round trip DID do is drop a trailing empty line: a
+    // terminal `''` element joins to a terminal `\n`, which splits back to a
+    // `''` that the pop below removes. Reproduced exactly - one trailing `''`,
+    // not a run - or a body ending in a blank line gains a line it never had.
+    if (typeof source === 'string') {
+      if (layoutWork.on) layoutWork.seam += source.length
+      this.lines = source.replace(/\r\n?/g, '\n').split('\n')
+    } else {
+      this.lines = source.slice()
+    }
     // Drop trailing empty line introduced by terminal newline
     if (this.lines.length && this.lines[this.lines.length - 1] === '') {
       this.lines.pop()
@@ -847,7 +906,10 @@ class Lexer {
     //
     // The widths come from the original endings, which is why this walks the
     // raw string rather than the split result. `newline` admits '\n', '\r\n'
-    // and a lone '\r', so all three are counted at their real width.
+    // and a lone '\r', so all three are counted at their real width. Lines
+    // handed in already split carry no endings at all, so every width is 1 -
+    // which is exactly what the join they replace produced.
+    const raw = typeof source === 'string' ? source : undefined
     this.lineOffsets = []
     let offset = 0
     let index = 0
@@ -855,7 +917,7 @@ class Lexer {
       this.lineOffsets.push(offset)
       index += line.length
       let width = 1
-      if (source[index] === '\r') width = source[index + 1] === '\n' ? 2 : 1
+      if (raw !== undefined && raw[index] === '\r') width = raw[index + 1] === '\n' ? 2 : 1
       offset += line.length + width
       index += width
     }
@@ -945,13 +1007,14 @@ class Lexer {
 }
 
 function normalizedSourceLines(source: string): string[] {
+  if (layoutWork.on) layoutWork.seam += source.length
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines
 }
 
 function subLexer(
-  source: string,
+  source: string | readonly string[],
   opts: ParseOptions,
   lineNumberOffset: number,
   sourceLineMap?: number[],
@@ -962,17 +1025,32 @@ function subLexer(
   return sub
 }
 
+/**
+ * A sub-lexer over a container's body.
+ *
+ * `lines` are the body lines the container already collected. They are handed
+ * over AS LINES: every call site used to join them and the Lexer split them
+ * straight back, which copied the whole body twice at every nesting level and
+ * is the bulk of markup-carve/carve#752's cubic term. Nothing about the round
+ * trip was load-bearing - a parent line never holds a newline, because the
+ * parent split on the same normalization - except the trailing-blank drop,
+ * which the Lexer now reproduces directly.
+ */
 function nestedSubLexer(
   parent: Lexer,
-  source: string,
+  lines: readonly string[],
   startLineIndex: number,
   sourceLineMap?: number[],
 ): Lexer {
+  // The default map is parallel to the Lexer's OWN lines, which drop one
+  // trailing blank (see the constructor), so it is built to that length -
+  // the length `normalizedSourceLines` used to report for the joined text.
+  const mapLength = lines.length > 0 && lines[lines.length - 1] === '' ? lines.length - 1 : lines.length
   const sub = subLexer(
-    source,
+    lines,
     parent.parseOptions,
     parent.lineNumberOffset + startLineIndex,
-    sourceLineMap ?? normalizedSourceLines(source).map((_line, i) => parent.lineNumber(startLineIndex + i)),
+    sourceLineMap ?? Array.from({ length: mapLength }, (_l, i) => parent.lineNumber(startLineIndex + i)),
     parent.unclosedContainerKeys,
   )
   sub.abbrDefs = parent.abbrDefs
@@ -1045,9 +1123,16 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // the anchor arithmetic below does: a line dedented past a straddling tab
     // carries spaces the source never held, so it is not a literal suffix while
     // its content still is (carve-js#771).
+    // The suffix test walks the whole line, and the anchor arithmetic below asks
+    // the SAME question of the SAME candidate - so asking twice doubled the cost
+    // of anchoring a deep container, where every level re-anchors the same body
+    // (markup-carve/carve#752). `find` stops at the first candidate this accepts,
+    // so the last verdict recorded here is the chosen candidate's.
+    let literalSuffix: boolean | undefined
     const anchorsTo = (candidate: number): boolean => {
       const parentLine = parent.lines[candidate] ?? ''
-      return parentLine.endsWith(subLine) || parentLine.endsWith(withoutSyntheticIndent(subLine))
+      literalSuffix = parentLine.endsWith(subLine)
+      return literalSuffix || parentLine.endsWith(withoutSyntheticIndent(subLine))
     }
     const parentIndex =
       mapped === undefined
@@ -1074,10 +1159,13 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // the synthetic run fits inside the prefix the strip removed. Where it does
     // not, there is no honest offset to record and this declines - which now
     // means NO positions rather than local ones (see below).
-    const trimmed = withoutSyntheticIndent(subLine)
-    const synthetic = subLine.length - trimmed.length
     let prefix = parentLine.length - subLine.length
-    if (!parentLine.endsWith(subLine)) {
+    if (!(literalSuffix ?? parentLine.endsWith(subLine))) {
+      // Only reached when the line is NOT a literal suffix, which is the
+      // straddling-tab case alone - so the synthetic-indent trim is computed
+      // here rather than for every line.
+      const trimmed = withoutSyntheticIndent(subLine)
+      const synthetic = subLine.length - trimmed.length
       if (synthetic === 0 || !parentLine.endsWith(trimmed)) return declinePositions(sub)
       prefix = parentLine.length - trimmed.length - synthetic
       if (prefix < 0) return declinePositions(sub)
@@ -2516,7 +2604,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     // tab: three engines, three readings (carve#796, carve-js#725). A rejected
     // continuation does not indent differently, it LEAVES the note and lands in
     // the document body, so the split moved content between blocks.
-    if (indentColumns(ln) >= FOOTNOTE_BODY_COLUMN) {
+    if (indentColumns(ln, FOOTNOTE_BODY_COLUMN) >= FOOTNOTE_BODY_COLUMN) {
       // Dedent by the body's own column, which is TWO - the indent §16 requires
       // of a continuation line - not by whatever the first continuation line
       // happens to carry. Anything beyond two is residual indent the body's
@@ -2536,7 +2624,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     }
   }
   if (!lexer.footnoteDefs.has(label)) {
-    const sub = nestedSubLexer(lexer, bodyLines.join('\n'), defLineIndex, bodyLineNumbers)
+    const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of
@@ -2581,7 +2669,7 @@ function parseAdmonition(lexer: Lexer): Admonition {
     lineIndex: openLineIndex,
     fenceWidth: fence,
   })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
   const children = parseBlocks(subLexer, 0)
   const node: Admonition = { type: 'admonition', kind, children }
   // `!== undefined` (not truthiness): an explicitly empty quoted title
@@ -2965,7 +3053,7 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
     lineIndex: openLineIndex,
     fenceWidth: fence,
   })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
   const children = parseBlocks(subLexer, 0)
   for (const child of children) {
     if (child.type === 'paragraph') {
@@ -2999,7 +3087,7 @@ function parseDiv(lexer: Lexer): Div {
     lineIndex: openLineIndex,
     fenceWidth: fence,
   })
-  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text).join('\n'), openLineIndex + 1)
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
   // No inline opener attributes (strict djot): a bare `:::` carries none;
   // a preceding block-attribute line attaches them in parseBlocks.
   const node: Div = { type: 'div', children: parseBlocks(subLexer, 0) }
@@ -3091,7 +3179,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // column - end the body, while three spaces continued it, and made the
       // answer depend on how the author spelled a run rather than where it
       // landed (markup-carve/carve-js#812).
-      if (!isBlankLine(ln) && indentColumns(ln) >= 3) {
+      if (!isBlankLine(ln) && indentColumns(ln, 3) >= 3) {
         // Strip the structural indentation but keep a content U+00A0.
         const lineIndex = lexer.pos
         bodyLines.push(ln.replace(/^[^\S\u00a0]+/, ''))
@@ -3111,7 +3199,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // decides whether the body survives the blank at all, the Form A branch
         // above decides whether a line folds. Both read columns, or a lone tab
         // after a blank ends the body while Form A would have kept it.
-        if (after !== undefined && !isBlankLine(after) && indentColumns(after) >= 3) {
+        if (after !== undefined && !isBlankLine(after) && indentColumns(after, 3) >= 3) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos
             bodyLines.push('')
@@ -3137,7 +3225,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       }
       break
     }
-    const sub = nestedSubLexer(lexer, bodyLines.join('\n'), firstLineIndex, bodyLineNumbers)
+    const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
     return parseBlocks(sub, 0)
   }
   while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
@@ -3446,7 +3534,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
     trackBlockQuoteLazyState(ln, state)
   }
-  const subLexer = nestedSubLexer(lexer, inner.join('\n'), firstLineIndex, innerLineNumbers)
+  const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'block_quote', children }
   const quoteEndIndex = lexer.pos
@@ -3727,7 +3815,7 @@ function isInvisibleLine(line: string): boolean {
   //
   // `extractItemAttr` would not do here: it needs a MARKER before the braces,
   // so it never matches a standalone `{.c}` - a check that could not fire.
-  return indentColumns(line) === 0 && isBlockAttributeLine(l)
+  return indentColumns(line, 1) === 0 && isBlockAttributeLine(l)
 }
 
 function lineOpensBlock(line: string): boolean {
@@ -4113,7 +4201,7 @@ function parseList(lexer: Lexer): List {
     let k = 1
     for (; lexer.peek(k) !== undefined; k++) {
       const ln = lexer.peek(k)!
-      if (!isBlankLine(ln) && indentColumns(ln) <= baseIndent) break
+      if (!isBlankLine(ln) && indentColumns(ln, baseIndent + 1) <= baseIndent) break
     }
     const nextLine = lexer.peek(k)
     const nextStripped =
@@ -4121,7 +4209,7 @@ function parseList(lexer: Lexer): List {
         ? (extractItemAttr(nextLine)?.stripped ?? nextLine)
         : undefined
     const nm =
-      nextStripped !== undefined && indentColumns(nextLine!) === baseIndent
+      nextStripped !== undefined && indentColumns(nextLine!, baseIndent + 1) === baseIndent
         ? RE_ORDERED.exec(nextStripped)
         : null
     orderedKind = olKindOf(firstOrdered[2]!, nm ? nm[2]! : null)
@@ -4138,7 +4226,7 @@ function parseList(lexer: Lexer): List {
       // below; a stray leading blank just ends the list.
       break
     }
-    if (indentColumns(line) !== baseIndent) break
+    if (indentColumns(line, baseIndent + 1) !== baseIndent) break
     // Strip an abutting `{...}` attribute block off the marker so the bare
     // marker regexes match; remember its attributes to attach to the <li>.
     const la = extractItemAttr(line)
@@ -4190,7 +4278,7 @@ function parseList(lexer: Lexer): List {
       while (!lexer.eof()) {
         const a = lexer.peek()!
         if (isBlankLine(a)) break
-        const ind = indentColumns(a)
+        const ind = indentColumns(a, baseIndent + 1)
         if (ind < baseIndent) break
         if (ind === baseIndent) {
           const am = matchListMarker(a, isTask, isOrdered)
@@ -4216,7 +4304,7 @@ function parseList(lexer: Lexer): List {
         attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
         lexer.consume()
       }
-      const sub = nestedSubLexer(lexer, attached.join('\n'), attachedStartLineIndex, attachedLineNumbers)
+      const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
       const fbChildren = parseBlocks(sub, 0)
       const fbItem: ListItem = { type: 'list_item', children: fbChildren }
       attachBlockPos(lexer, fbItem, itemStartLineIndex, lexer.pos)
@@ -4282,7 +4370,7 @@ function parseList(lexer: Lexer): List {
       // it. A bare `+` is never a bullet (a bullet needs `+ ` + content). It
       // injects a blank separator so the block parses on its own; the
       // compact-list rule above then keeps the item tight.
-      if (indentColumns(l) === baseIndent && isContinuationMarker(l)) {
+      if (indentColumns(l, baseIndent + 1) === baseIndent && isContinuationMarker(l)) {
         const plusLineNumber = lexer.lineNumber(lexer.pos)
         lexer.consume()
         pendingBlanks = 0
@@ -4298,7 +4386,7 @@ function parseList(lexer: Lexer): List {
         while (!lexer.eof()) {
           const a = lexer.peek()!
           if (isBlankLine(a)) break
-          const ind = indentColumns(a)
+          const ind = indentColumns(a, baseIndent + 1)
           if (ind < baseIndent) break
           if (ind === baseIndent) {
             const am = matchListMarker(a, isTask, isOrdered)
@@ -4337,7 +4425,7 @@ function parseList(lexer: Lexer): List {
       // below the content column ends the item body and parses at document level
       // (falling through to the lazy-fold / detach branch below). Intentional
       // divergence from djot, which attaches at any indent past the marker.
-      const lw = indentColumns(l)
+      const lw = indentColumns(l, contentCol)
       if (lw >= contentCol) {
         bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
@@ -4403,7 +4491,7 @@ function parseList(lexer: Lexer): List {
           // and the abutting-attr form `- a`/` -{.x} b` all fold. (At or past
           // the content column the marker nests; at the base column it can start
           // a sibling list, §11 -- so only a below-content indented one folds.)
-          (indentColumns(l) > baseIndent &&
+          (indentColumns(l, baseIndent + 1) > baseIndent &&
             (RE_TASK.test(l) ||
               RE_UNORDERED.test(l) ||
               RE_ORDERED.test(l) ||
@@ -4425,9 +4513,9 @@ function parseList(lexer: Lexer): List {
         // its residual indent preserved), so only the genuinely-under-indented
         // case is stripped.
         let lazyLine = l
-        if (lazyState.inDefList && indentColumns(l) < contentCol) {
+        if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
           lazyLine = l.replace(/^[ \t]+/, '')
-        } else if (indentColumns(l) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
+        } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
           // A block-SHAPED line below the content column opens nothing (§24 C3:
           // below it a marker folds as lazy item text and no other opener nests
           // either), and it is folding here for that reason. It must not carry
@@ -4479,7 +4567,7 @@ function parseList(lexer: Lexer): List {
       const nextLine = lexer.peek()!
       const nextStripped = extractItemAttr(nextLine)?.stripped ?? nextLine
       if (
-        indentColumns(nextLine) === baseIndent &&
+        indentColumns(nextLine, baseIndent + 1) === baseIndent &&
         matchListMarker(nextStripped, isTask, isOrdered) &&
         (isOrdered
           ? orderedContinues(nextStripped, orderedKind, orderedDelim)
@@ -4553,7 +4641,7 @@ function parseList(lexer: Lexer): List {
       // outer item stays tight.
       if (firstBlockIdx !== -1) {
         const subCol = markerContentColumn(nested[firstBlockIdx]!)
-        if (subCol >= 0 && indentColumns(nested[j]!) >= subCol) continue
+        if (subCol >= 0 && indentColumns(nested[j]!, subCol) >= subCol) continue
       }
       // `j` can no longer be an invisible line (skipped above), so this is the
       // plain "is the next visible thing a paragraph" test it always was.
@@ -4616,11 +4704,15 @@ function parseList(lexer: Lexer): List {
       firstBlockIdx === -1 || leadIsMarker || (leadOpensColonFence && !literalBelowColumnColonFence)
     const leadLines = keepStreamWhole ? nested : nested.slice(0, firstBlockIdx)
     const blockLines = keepStreamWhole ? [] : nested.slice(firstBlockIdx)
-    const mkSub = (text: string, startLineIndex: number, sourceLineMap?: number[]): Lexer => {
-      return nestedSubLexer(lexer, text, startLineIndex, sourceLineMap)
+    const mkSub = (
+      lines: readonly string[],
+      startLineIndex: number,
+      sourceLineMap?: number[],
+    ): Lexer => {
+      return nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
     }
     const children = parseBlocks(
-      mkSub([itemLead, ...leadLines].join('\n'), itemStartLineIndex, [
+      mkSub([itemLead, ...leadLines], itemStartLineIndex, [
         lexer.lineNumber(itemStartLineIndex),
         ...nestedLineNumbers.slice(0, leadLines.length),
       ]),
@@ -4630,7 +4722,7 @@ function parseList(lexer: Lexer): List {
       children.push(
         ...parseBlocks(
           mkSub(
-            blockLines.join('\n'),
+            blockLines,
             itemStartLineIndex + 1 + firstBlockIdx,
             nestedLineNumbers.slice(firstBlockIdx),
           ),
@@ -5389,14 +5481,33 @@ function leadingWhitespace(line: string): number {
 // CommonMark tab stop (a multiple of 4). This is the column model used for list
 // nesting comparisons: a space advances one column, a tab advances to the next
 // tab stop. For space-only indentation it equals leadingWhitespace().
-function indentColumns(line: string): number {
+//
+// `cap` bounds the walk. The result is `min(realColumns, cap)`, so a caller
+// that only compares the answer against a threshold can stop the scan there
+// instead of walking an indentation run whose length it does not care about.
+// Every nesting level re-measures the same run, so an unbounded walk costs
+// `O(depth)` per line per level - the larger half of markup-carve/carve#752's
+// cubic term. Pick `cap` by the comparison:
+//
+//   `>= t` / `< t`         -> cap = t
+//   `=== t` / `<= t` / `> t` -> cap = t + 1
+//
+// Both are exact: `min(real, cap)` and `real` compare identically against any
+// threshold strictly below `cap`, and a tab that overshoots `cap` only
+// saturates a value the comparison had already decided. Leave `cap` off where
+// the NUMBER itself is used rather than compared.
+function indentColumns(line: string, cap = Infinity): number {
   let col = 0
-  for (let i = 0; i < line.length; i++) {
-    if (line[i] === ' ') col++
-    else if (line[i] === '\t') col += 4 - (col % 4)
+  let i = 0
+  while (i < line.length && col < cap) {
+    const c = line[i]
+    if (c === ' ') col++
+    else if (c === '\t') col += 4 - (col % 4)
     else break
+    i++
   }
-  return col
+  if (layoutWork.on) layoutWork.gate += i
+  return col > cap ? cap : col
 }
 
 // Dedent counterpart of indentColumns(): drop leading whitespace up to `cols`
@@ -5426,6 +5537,7 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
   // markers stay at the same visual column and the recursive parse re-derives
   // correctly. Lead content uses whole-tab consumption (keepResidual=false) so a
   // block opener reaches column 0. (Space-only indentation has no residual.)
+  if (layoutWork.on) layoutWork.strip += i
   if (keepResidual && col > cols) return ' '.repeat(col - cols) + line.slice(i)
   return line.slice(i)
 }
