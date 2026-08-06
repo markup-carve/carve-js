@@ -213,6 +213,42 @@ function definitionListsFromWire<T>(node: T): T {
   return record as T
 }
 
+/** The definition kinds §7 COLLECTS, which is what §7 then orders. */
+const COLLECTED_DEFINITION_TYPES = new Set([
+  'link_reference_definition',
+  'footnote',
+])
+
+/**
+ * PART 12 §7: "Definitions appear in DOCUMENT ORDER by source position."
+ *
+ * Collection moves a definition to the document and §4 keeps the `pos` it was
+ * written at, so the published order has to follow that `pos` rather than the
+ * machinery that did the collecting. This engine appended link definitions in
+ * the parser and footnotes here, so a link definition preceded a footnote
+ * whatever the author wrote, and `pos` ran backwards between two siblings.
+ *
+ * Only the COLLECTED kinds move. An `abbreviation_def` is not collected out of
+ * the document - §7 refuses that specifically, since hoisting it would empty
+ * the line rather than relocate visible output - so it already sits at its
+ * source position and is left where it is.
+ *
+ * The sort is confined to the slots the collected definitions already occupy,
+ * so no other child changes index. It is stable, which keeps two definitions
+ * that report the same offset in the order they were collected.
+ */
+function orderCollectedDefinitions(children: AstJsonBlock[]): void {
+  const slots: number[] = []
+  for (let i = 0; i < children.length; i++) {
+    if (COLLECTED_DEFINITION_TYPES.has(children[i]!.type)) slots.push(i)
+  }
+  if (slots.length < 2) return
+  const ordered = slots
+    .map((i) => children[i]!)
+    .sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+  for (let k = 0; k < slots.length; k++) children[slots[k]!] = ordered[k]!
+}
+
 /**
  * Map a document onto the exchange shape.
  *
@@ -250,6 +286,8 @@ export function toAstJson(doc: Document): AstJsonDocument {
     if (pos !== undefined) node.pos = pos
     children.push(node)
   }
+
+  orderCollectedDefinitions(children)
 
   const out: AstJsonDocument = { type: 'document', children }
   if (doc.srcByteLength !== undefined) out.srcByteLength = doc.srcByteLength
