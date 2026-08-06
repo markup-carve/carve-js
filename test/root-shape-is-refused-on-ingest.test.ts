@@ -12,6 +12,7 @@
  * missing.
  */
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   AstJsonRootFieldError,
@@ -169,5 +170,22 @@ describe("the encoder always publishes the field the decoder now requires", () =
   it("keeps the real length when there is one", () => {
     // The control: the fallback must not overwrite a length the parser measured.
     expect(toAstJson(parse("hello")).srcByteLength).toBe(5);
+  });
+});
+
+describe("the wire type says what the decoder enforces", () => {
+  it("declares all three §7 root fields as required", () => {
+    // A TypeScript consumer could build an `AstJsonDocument` with no
+    // `srcByteLength`, satisfy the compiler, and only learn at runtime that
+    // `fromAstJson` refuses it. A type check cannot run at runtime, so this
+    // asserts on the emitted declaration instead of on a value.
+    const dts = readFileSync(new URL("../dist/ast-json.d.ts", import.meta.url), "utf8");
+    const root = dts.slice(
+      dts.indexOf("interface AstJsonDocument"),
+      dts.indexOf("}", dts.indexOf("interface AstJsonDocument")),
+    );
+    expect(root).toContain("srcByteLength: number");
+    expect(root).not.toContain("srcByteLength?");
+    expect(root).not.toContain("children?");
   });
 });

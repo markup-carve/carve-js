@@ -66,11 +66,18 @@ export interface FootnoteDefNode {
 
 export type AstJsonBlock = BlockNode | FrontmatterNode | FootnoteDefNode
 
-/** The document root, per PART 12 §7: three fields, nothing else. */
+/**
+ * The document root, per PART 12 §7: three fields, nothing else.
+ *
+ * All three are REQUIRED, matching `resources/ast-schema.json`. `srcByteLength`
+ * was optional here while §12 makes `fromAstJson` refuse a root without it, so
+ * a TypeScript consumer could build a value the compiler accepted and the
+ * decoder rejected - the mismatch this type exists to prevent.
+ */
 export interface AstJsonDocument {
   type: 'document'
   children: AstJsonBlock[]
-  srcByteLength?: number
+  srcByteLength: number
 }
 
 /**
