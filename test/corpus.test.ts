@@ -236,6 +236,7 @@ const IMPLEMENTED = new Set([
   'sibling-markers-that-reach-one-column-are-one-list',
   'the-continuation-marker-at-an-item-s-own-column-and-what-follows-it',
   'a-continuation-marker-after-a-blank-line-in-the-item',
+  'a-continuation-marker-after-a-blank-line-in-a-loose-item',
   'an-attribute-name-admits-no-colon',
   'trailing-whitespace-after-a-block-marker',
   'a-multi-line-raw-block-is-placed-at-its-opening-and-verbatim-after-it',
