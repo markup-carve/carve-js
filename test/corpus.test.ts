@@ -95,6 +95,7 @@ const IMPLEMENTED = new Set([
   'inline-span',
   'superscript-and-subscript',
   'line-blocks',
+  'line-endings-and-a-byte-order-mark',
   'admonitions',
   'abbreviations',
   'mentions-and-tags',
