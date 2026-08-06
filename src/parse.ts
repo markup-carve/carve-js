@@ -297,6 +297,15 @@ const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
 // 176-a-marker-separator-is-a-space-never-a-tab). What changed is only what
 // may follow that space.
 const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=\S)(.+)$/
+// A CONTENT-LESS marker line: `::` or `:` followed by whitespace and nothing
+// else. It is not a marker - both patterns above require content - so it stays
+// paragraph text, and it CLOSES any open term or definition rather than folding
+// into it (carve-js#731; carve-rs and carve-php both close).
+//
+// At least one space is required, so a bare `::` is untouched: all three engines
+// already agree on that line and it is a different shape.
+const RE_DEFLIST_MARKER_EMPTY = /^::?(?!:)[ \t]+$/
+
 const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // A definition marker's separator must START with a literal space (U+0020),
 // not a tab (#288) -- matching carve-rs and every marker whose grammar
@@ -2758,7 +2767,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       }
       // A new term/definition marker ends this definition (the outer loop
       // picks it up).
-      if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
+      if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln) || RE_DEFLIST_MARKER_EMPTY.test(ln)) break
       // Lazy continuation: a flush-left line (no blank before it) that does not
       // start an interrupting block folds into the open paragraph; a block
       // opener ends the definition.
@@ -2795,6 +2804,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
           isBlankLine(next) ||
           RE_DEFLIST_TERM.test(next) ||
           RE_DEFLIST_DEF.test(next) ||
+          RE_DEFLIST_MARKER_EMPTY.test(next) ||
           endsHeadingOrQuote(lexer)
         )
           break

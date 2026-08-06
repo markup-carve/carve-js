@@ -18,6 +18,7 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
+import { resolveHeadingIds } from './heading-ids.js'
 
 export interface CarveRenderOptions {}
 
@@ -85,6 +86,7 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // Choose the verbatim sentinels before anything is rendered, so both escape
   // passes below agree on them.
   sentinels = pickSentinels(collectStrings(ast))
+  redundantIds = findRedundantHeadingIds(ast)
   const minimal = renderWithEscapes(ast, 'minimal')
   const conservative = renderWithEscapes(ast, 'conservative')
   if (minimal === conservative) return minimal
@@ -128,6 +130,69 @@ function treeOf(src: string): string | null {
   }
 }
 
+
+/**
+ * Which headings carry the id a fresh parse would give them.
+ *
+ * Runs `resolveHeadingIds` - the pass the parser itself uses - over a copy with
+ * every heading id stripped, then compares position by position. Reusing that
+ * pass is the point: slug and dedup rules live in one place, so this cannot
+ * answer differently from the parse it is predicting.
+ */
+function findRedundantHeadingIds(ast: Document): WeakSet<object> {
+  const out = new WeakSet<object>()
+  // ITERATIVE, because this runs before the renderer's depth guard: a hand-built
+  // tree 50k nodes deep overflowed the stack here and raised a RangeError where
+  // the caller should see RenderDepthError. Document order is preserved by
+  // pushing children in reverse.
+  const headings = (root: unknown, into: Array<Record<string, unknown>>): void => {
+    const stack: unknown[] = [root]
+    while (stack.length > 0) {
+      const node = stack.pop()
+      if (Array.isArray(node)) {
+        for (let i = node.length - 1; i >= 0; i -= 1) stack.push(node[i])
+        continue
+      }
+      if (!node || typeof node !== 'object') continue
+      const record = node as Record<string, unknown>
+      if (record['type'] === 'heading') into.push(record)
+      const values = Object.values(record)
+      for (let i = values.length - 1; i >= 0; i -= 1) stack.push(values[i])
+    }
+  }
+
+  const original: Array<Record<string, unknown>> = []
+  headings(ast, original)
+  if (original.length === 0) return out
+
+  // A tree too deep to copy is also too deep to render: the depth error the
+  // renderer raises is the one the caller should see, so this pass declines
+  // rather than throwing a stack overflow ahead of it.
+  let copy: Document
+  try {
+    copy = JSON.parse(JSON.stringify(ast)) as Document
+  } catch {
+    return out
+  }
+  const copied: Array<Record<string, unknown>> = []
+  headings(copy, copied)
+  for (const heading of copied) {
+    const attrs = heading['attrs'] as { id?: string; order?: string[] } | undefined
+    if (attrs && attrs.id !== undefined && !(attrs.order ?? []).includes('#id')) {
+      delete attrs.id
+    }
+  }
+  resolveHeadingIds(copy)
+
+  for (const [index, heading] of original.entries()) {
+    const attrs = heading['attrs'] as { id?: string; order?: string[] } | undefined
+    if (!attrs || attrs.id === undefined || (attrs.order ?? []).includes('#id')) continue
+    const fresh = (copied[index]?.['attrs'] as { id?: string } | undefined)?.id
+    if (fresh === attrs.id) out.add(heading)
+  }
+
+  return out
+}
 
 function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
   const previous = escapeMode
@@ -270,6 +335,16 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   }
 }
 
+/** A copy of `attrs` without its `id`, for an id the author did not write. */
+function withoutIdSlot(attrs: Attrs | undefined): Attrs | undefined {
+  if (!attrs || attrs.id === undefined) return attrs
+  const next: Attrs = { ...attrs }
+  delete next.id
+  if (next.order) next.order = next.order.filter((slot) => slot !== '#id')
+
+  return next
+}
+
 /** A copy of `attrs` without one key-value, dropping the slot from `order`. */
 function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
   if (!attrs?.keyValues || !(key in attrs.keyValues)) return attrs
@@ -308,7 +383,18 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
           (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
         ),
       )
-      return withAttrs(`${'#'.repeat(node.level)} ${text}`)
+      // A generated id that a fresh parse would re-derive is not written back:
+      // it is a resolution result, not the author's source (carve-js#741). One
+      // the parse would NOT re-derive - an ingested tree whose text was edited -
+      // is written, because the id lives nowhere else.
+      const headingBody = `${'#'.repeat(node.level)} ${text}`
+      if (redundantIds.has(node as unknown as object)) {
+        const withoutId = renderBlockAttrs(withoutIdSlot(node.attrs))
+
+        return withoutId ? `${withoutId}\n${headingBody}` : headingBody
+      }
+
+      return withAttrs(headingBody)
     }
     case 'paragraph':
       return withAttrs(guardThematicBreakLines(renderInlines(node.children, ctx)))
@@ -1289,6 +1375,22 @@ const LINE_INITIAL_COLON = /(^|\\n)(:+)/g
 // minimally, checks that it re-parses to the same AST, and re-renders
 // conservatively only when it does not (PART 11 section 4).
 let escapeMode: 'minimal' | 'conservative' = 'conservative'
+
+/**
+ * Headings whose published id is the one a fresh parse would assign anyway.
+ *
+ * PART 12 §5 publishes a heading's slugged id, and PART 11 §1 writes the
+ * document back - so the writer must not turn the first into source. An
+ * AUTHORED id carries an `#id` slot and is written; a GENERATED one carries
+ * none and is dropped, EXCEPT where dropping it would change the document: an
+ * ingested tree whose heading text was edited carries an id the text no longer
+ * slugs to, and there the id is the only place that information lives.
+ *
+ * "What a fresh parse would assign" is computed with the parser's own pass over
+ * a copy with the ids removed, rather than a second dedup implementation here
+ * that could drift from it (carve-js#741).
+ */
+let redundantIds = new WeakSet<object>()
 
 /**
  * Protect a paragraph line that would re-parse as a thematic break.
