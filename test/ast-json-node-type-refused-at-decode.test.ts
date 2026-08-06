@@ -189,6 +189,30 @@ describe('a record the schema gives no `type`', () => {
     ).toThrow(AstJsonNodeTypeError)
   })
 
+  it('does not excuse an untyped object that is not the legacy record', () => {
+    // The exemption is granted for a SHAPE, so it is conditional on that shape.
+    // `items: [{children: []}]` is neither a legacy entry nor a node;
+    // `entriesFromWire` drops it, so exempting the whole POSITION would accept
+    // the payload and make the content vanish.
+    expect(() =>
+      fromAstJson(doc({ type: 'definition_list', items: [{ children: [] }] })),
+    ).toThrow(AstJsonNodeTypeError)
+
+    // And the current typed form still decodes, which is what the schema
+    // actually puts there.
+    expect(() =>
+      fromAstJson(
+        doc({
+          type: 'definition_list',
+          items: [
+            { type: 'definition_term', children: [] },
+            { type: 'definition_description', children: [] },
+          ],
+        }),
+      ),
+    ).not.toThrow()
+  })
+
   it('is accepted in the older definition-list grouping form', () => {
     // A legacy acceptance, recorded as one: `items: [{terms, definitions}]` is
     // what this engine published before the wire shape settled, those trees are

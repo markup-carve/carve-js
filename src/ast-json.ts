@@ -555,8 +555,16 @@ function refuseUnknownFields(node: unknown, path: string): void {
  * records that the decoder accepts more than the schema describes at exactly one
  * position, which is a fact about this engine's history rather than about the
  * format.
+ *
+ * The value is the KEYS that identify the legacy record, and the exemption is
+ * conditional on one of them being there. Exempting the whole POSITION would
+ * excuse any untyped object in it - `items: [{children: []}]` is neither a
+ * legacy entry nor a node, and `entriesFromWire` drops it silently, so the
+ * payload would be accepted and the content would vanish.
  */
-const LEGACY_TYPELESS_POSITIONS: ReadonlySet<string> = new Set(['definition_list.items'])
+const LEGACY_TYPELESS_POSITIONS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['definition_list.items', ['terms', 'definitions']],
+])
 
 /**
  * The node-bearing fields of those legacy records, which the schema does not
@@ -592,9 +600,16 @@ const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
  *   CURRENT wire shape with a bad value - rode in on the legacy grouping form's
  *   exemption and was silently dropped by `entriesFromWire`.
  */
-function refuseUnknownNodeTypes(node: unknown, path: string, typeRequired: boolean): void {
+function refuseUnknownNodeTypes(
+  node: unknown,
+  path: string,
+  typeRequired: boolean,
+  legacyKeys?: readonly string[],
+): void {
   if (Array.isArray(node)) {
-    node.forEach((item, index) => refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired))
+    node.forEach((item, index) =>
+      refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired, legacyKeys),
+    )
     return
   }
   // A `null` or a string in a node position is NOT this check's business: it is
@@ -607,7 +622,13 @@ function refuseUnknownNodeTypes(node: unknown, path: string, typeRequired: boole
     // §12(c). A missing `type`, or one carrying a number, `null`, an array, an
     // object or a boolean, names no schema type - so it is refused HERE and not
     // by the renderer two steps later.
-    if (type !== undefined || typeRequired) throw new AstJsonNodeTypeError(type, path)
+    // `legacyKeys` narrows an exemption to the record SHAPE it was granted for:
+    // an untyped object in that position that is not the legacy record is not
+    // exempt, because nothing downstream can read it either.
+    const legacyShaped = legacyKeys === undefined || legacyKeys.some((key) => key in record)
+    if (type !== undefined || typeRequired || !legacyShaped) {
+      throw new AstJsonNodeTypeError(type, path)
+    }
   } else if (WIRE_FIELDS[type] === undefined) {
     throw new AstJsonUnknownNodeTypeError(type, path)
   }
@@ -624,12 +645,9 @@ function refuseUnknownNodeTypes(node: unknown, path: string, typeRequired: boole
     // A record with no `type` of its own is one the schema gives none - a
     // citation item today - and its own array fields hold real nodes, so the
     // requirement comes back on for them.
+    const legacy = position === undefined ? undefined : LEGACY_TYPELESS_POSITIONS.get(position)
     const kind =
-      position === undefined
-        ? 'nodes'
-        : LEGACY_TYPELESS_POSITIONS.has(position)
-          ? 'records'
-          : NODE_POSITION_KIND[position]
+      position === undefined ? 'nodes' : legacy !== undefined ? 'records' : NODE_POSITION_KIND[position]
     refuseUnknownNodeTypes(
       value,
       path === '' ? field : `${path}.${field}`,
@@ -637,6 +655,7 @@ function refuseUnknownNodeTypes(node: unknown, path: string, typeRequired: boole
       // the unruled wrong-type class, and `children: {}` still degrades to an
       // empty document rather than being decided here.
       kind === 'node' ? true : kind === 'nodes' ? Array.isArray(value) : false,
+      legacy,
     )
   }
 }
