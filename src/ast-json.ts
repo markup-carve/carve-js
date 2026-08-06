@@ -33,6 +33,7 @@ import {
   isRuntimeEntry,
   type DefinitionEntryNode,
 } from './definition-list-wire.js'
+import { WIRE_FIELDS, WIRE_HELPER_FIELDS } from './wire-fields.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -348,6 +349,87 @@ export class AstJsonRootError extends Error {
 }
 
 /**
+ * Thrown when a node carries a property the schema does not name.
+ *
+ * PART 12 §11: "An ingest MUST REFUSE it with AN ERROR OF ITS OWN -- a typed,
+ * documented failure naming the offending property and the PATH it appeared at,
+ * so a caller can find it in a tree it did not write. Not a silent drop, and
+ * not a pass-through."
+ *
+ * The pass-through was this engine's behavior, and it failed on its own
+ * contract rather than on taste: the codec copied a wire record wholesale, so
+ * re-serializing echoed the property back and the OUTPUT stopped validating
+ * against a schema that closes every node with `additionalProperties: false`.
+ * Measured before the fix, 29 of 31 injected properties survived a round trip
+ * (carve-js#709).
+ */
+export class AstJsonUnknownFieldError extends Error {
+  constructor(
+    readonly property: string,
+    readonly path: string,
+    readonly nodeType: string,
+  ) {
+    super(
+      `AST node ${nodeType} at ${path} carries ${JSON.stringify(property)}, which the schema does not name (PART 12 §11)`,
+    )
+    this.name = 'AstJsonUnknownFieldError'
+  }
+}
+
+/**
+ * A property this engine READS that the schema does not name.
+ *
+ * §11 refuses what an ingest cannot understand; this one it understands
+ * exactly. `label` is the spec spelling for a footnote definition's label, and
+ * `id` is what this engine and carve-php published before PART 12 §7 settled
+ * it - trees written then are stored, and the decoder already maps the old
+ * spelling onto the new field. Refusing them would not protect a caller from a
+ * half-read tree, it would take away the only reader that reads them whole.
+ *
+ * Deliberately ONE entry rather than an escape hatch: a legacy alias qualifies
+ * only when the decoder demonstrably maps it onto a named field.
+ */
+const LEGACY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  footnote: ['id'],
+}
+
+function refuseUnknownFields(node: unknown, path: string): void {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => refuseUnknownFields(item, `${path}[${index}]`))
+    return
+  }
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  const type = record.type
+  // A node kind the schema does not name at all is NOT this error's business:
+  // the decoder turns an unusable kind away on its own terms, and reporting a
+  // field on a type nobody names would send the caller after the wrong thing.
+  const known = typeof type === 'string' ? WIRE_FIELDS[type] : undefined
+  if (known !== undefined) {
+    const allowed = new Set([...known, ...(LEGACY_ALIASES[type as string] ?? [])])
+    for (const key of Object.keys(record)) {
+      if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
+    }
+    // The two objects that hang off a node without a `type` of their own. They
+    // are closed in the schema too, and every node kind can carry them, which
+    // makes them the easiest place to smuggle a key past a type-keyed check.
+    for (const helper of Object.keys(WIRE_HELPER_FIELDS)) {
+      const value = record[helper]
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) continue
+      const allowedHelper = new Set(WIRE_HELPER_FIELDS[helper])
+      for (const key of Object.keys(value as Record<string, unknown>)) {
+        if (!allowedHelper.has(key)) {
+          throw new AstJsonUnknownFieldError(key, `${path}.${helper}`, helper)
+        }
+      }
+    }
+  }
+  for (const [key, value] of Object.entries(record)) {
+    refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)
+  }
+}
+
+/**
  * Deepest node nesting `fromAstJson` will ingest.
  *
  * PART 12 §9 states the contract as a property, not a number: ingest MUST
@@ -463,6 +545,10 @@ export function fromAstJson(json: AstJsonDocument): Document {
   const { nodes, walk } = astJsonDepth(json, MAX_AST_JSON_DEPTH, MAX_AST_JSON_WALK)
   if (nodes > MAX_AST_JSON_DEPTH) throw new AstJsonDepthError(nodes)
   if (walk > MAX_AST_JSON_WALK) throw new AstJsonDepthError(walk)
+
+  // AFTER the depth bound, so a payload built to blow the stack is turned away
+  // by the cheap check rather than by a full walk of itself (PART 12 §9).
+  refuseUnknownFields(json, '')
 
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
