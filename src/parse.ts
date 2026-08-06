@@ -623,11 +623,25 @@ class Lexer {
     if (this.lines.length && this.lines[this.lines.length - 1] === '') {
       this.lines.pop()
     }
+    // MEASURED ON THE SOURCE AS GIVEN, not on the normalized lines. `+1` per
+    // line assumes every ending is one character, but `\r\n` is two - so a
+    // CRLF document's offsets were short by one per preceding line and every
+    // span landed before the text it named: `abc` on line 3 reported the two
+    // characters ending line 2 instead (carve#876).
+    //
+    // The widths come from the original endings, which is why this walks the
+    // raw string rather than the split result. `newline` admits '\n', '\r\n'
+    // and a lone '\r', so all three are counted at their real width.
     this.lineOffsets = []
     let offset = 0
+    let index = 0
     for (const line of this.lines) {
       this.lineOffsets.push(offset)
-      offset += line.length + 1
+      index += line.length
+      let width = 1
+      if (source[index] === '\r') width = source[index + 1] === '\n' ? 2 : 1
+      offset += line.length + width
+      index += width
     }
     // Frontmatter is document-leading only; the root lexer consumes it
     // explicitly in parse(). Sub-lexers (list items, divs, admonitions)
