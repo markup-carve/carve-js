@@ -3940,12 +3940,7 @@ function parseList(lexer: Lexer): List {
         pendingBlanks = 0
         pendingBlankLineNumbers = []
         // A sub-list marker (ordered, unordered, or task) at or past the content
-        // column starts the item's block stream. A sub-list MARKER line is
-        // dedented residual-aware so tab+space-aligned siblings keep the same
-        // visual column (the recursive parse re-derives the child base from it).
-        // Every other line -- lead text, and block openers (quotes, headings)
-        // before OR after a sub-list -- uses whole-tab dedent so it reaches
-        // column 0 and parses / interrupts; carry the residual only on markers.
+        // column starts the item's block stream.
         const isMarker =
           RE_ORDERED.test(l) ||
           RE_UNORDERED.test(l) ||
@@ -3957,8 +3952,20 @@ function parseList(lexer: Lexer): List {
         if (firstBlockIdx === -1 && isMarker) {
           firstBlockIdx = nested.length
         }
-        const keepResidual = firstBlockIdx !== -1 && isMarker
-        const dedented = sliceColumns(l, contentCol, keepResidual)
+        // RESIDUAL-AWARE FOR EVERY LINE KIND. The residual columns of a
+        // straddling tab are indentation whatever follows them, so dropping
+        // them makes the same column mean two things depending on how it was
+        // written (PART 9 §24 C1).
+        //
+        // This used to apply only to markers, on the premise that "Carve has no
+        // indent-sensitive block where a leftover column would change meaning".
+        // The space spellings disprove it, and all three engines agree on them:
+        // under `1. a` a `> quote` at the content column (three spaces) nests,
+        // one column past (four spaces) is text. A tab reaches column 4, so it
+        // is the four-space case - but consuming the tab whole delivered the
+        // opener flush at column 0 and it nested, which no space spelling of
+        // that column does (carve-js#767, carve-php#890 one layer down).
+        const dedented = sliceColumns(l, contentCol, true)
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         trackItemLazyState(dedented, lazyState)
