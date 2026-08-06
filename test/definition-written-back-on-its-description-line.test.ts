@@ -58,3 +58,51 @@ describe('a definition written inside a description', () => {
     expect(carveToCarve('[^f]: x\n\nsee[^f]\n')).toBe('see[^f]\n\n[^f]: x\n')
   })
 })
+
+/*
+ * The cases above all have ONE entry, and every one of them happens to be
+ * decided by the MINIMAL render. That hid a defect for as long as the shape
+ * stayed that narrow.
+ *
+ * `renderCarve` renders the document TWICE - once minimally escaped, once
+ * conservatively - and picks between them (PART 11 §4). The bookkeeping that
+ * records "this description already wrote that definition" was allocated per
+ * CALL, not per PASS, so the second pass found every definition already marked
+ * as written: the description emitted a bare `:` again, and the document-level
+ * arm, which returns '' for a marked node, emitted nothing either. The
+ * definition was deleted outright.
+ *
+ * Whenever the conservative form wins - which a second entry is enough to
+ * cause, because the writer does not re-emit the blank line between entries and
+ * the minimal form therefore no longer re-parses to the tree it was given - the
+ * document silently lost a link or footnote definition. `to_html(fmt(x)) ==
+ * to_html(x)` (PART 11 §1) fails, and it fails by making a resolved reference
+ * come back as literal text.
+ *
+ * No corpus document has two entries with an emptied description, so none of
+ * this was visible in the corpus sweep.
+ */
+describe('an emptied description survives both escape passes', () => {
+  it('is written back when another entry follows', () => {
+    const src = ':: t1\n:  [r]: /u\n\n:: t2\n:  d2\n\nsee [t][r]\n'
+    expect(carveToCarve(src)).toContain('[r]: /u')
+    expect(roundTrips(src)).toBe(true)
+  })
+
+  it('is written back when it is the last entry', () => {
+    const src = ':: t1\n:  d1\n\n:: t2\n:  [r]: /u\n\nsee [t][r]\n'
+    expect(carveToCarve(src)).toContain('[r]: /u')
+    expect(roundTrips(src)).toBe(true)
+  })
+
+  it('is written back for a footnote when another entry follows', () => {
+    const src = ':: t1\n:  [^f]: x\n\n:: t2\n:  d2\n\nsee[^f]\n'
+    expect(carveToCarve(src)).toContain('[^f]: x')
+    expect(roundTrips(src)).toBe(true)
+  })
+
+  it('still writes the definition exactly once', () => {
+    const out = carveToCarve(':: t1\n:  [r]: /u\n\n:: t2\n:  d2\n\nsee [t][r]\n')
+    expect(out.match(/\[r\]: \/u/g)?.length).toBe(1)
+  })
+})
