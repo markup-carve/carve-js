@@ -390,6 +390,21 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
   return [line, null]
 }
 
+// What ENDS a link destination: the Unicode White_Space property, and only that.
+//
+// NOT `/\s/`. JavaScript's `\s` is White_Space PLUS U+FEFF - a legacy addition
+// in the language, not a Unicode property - so a byte-order mark inside a
+// destination ended it here and the whole link fell back to literal text, while
+// U+200B (also invisible, also not White_Space) was accepted. The grammar says
+// which test to use in as many words: "ZERO-WIDTH characters (U+200B, U+FEFF)
+// are NOT whitespace and ARE ordinary destination characters. The test is the
+// Unicode White_Space property, not 'is invisible'."
+//
+// carve-rs and carve-php both built the link (carve-js#750,
+// markup-carve/carve#806). The same rule governs a reference definition, which
+// is built from this same production.
+const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
+
 const RE_LINK_DEF =
   /^[^\S ]*\[(?!@)([^\]]+)\]: [^\S ]*(\S+)(?:\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
@@ -5074,7 +5089,7 @@ function scanDestination(tail: string): { dest: string; end: number } | null {
     else if (c === ')') {
       if (depth === 0) break
       depth--
-    } else if (/\s/.test(c)) break
+    } else if (RE_DESTINATION_WHITESPACE.test(c)) break
     dest += c
   }
   return { dest, end: i }
