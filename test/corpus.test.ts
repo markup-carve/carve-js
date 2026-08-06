@@ -232,6 +232,7 @@ const IMPLEMENTED = new Set([
   'a-block-image-is-separated-from-the-block-after-it-on-every-target',
   'a-tab-indent-is-the-column-it-reaches-whatever-the-line-holds',
   'the-same-column-written-with-four-spaces',
+  'sibling-markers-that-reach-one-column-are-one-list',
   'a-multi-line-raw-block-is-placed-at-its-opening-and-verbatim-after-it',
   'a-tab-as-the-first-character-of-a-definition-term',
   'an-abbreviation-term-is-one-ascii-alphanumeric-word',
