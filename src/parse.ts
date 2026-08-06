@@ -983,7 +983,8 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   // is a heading, not literal text. Only here in the root entry -- nested
   // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
   // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
-  if (source.charCodeAt(0) === 0xfeff) source = source.slice(1)
+  const strippedBom = source.charCodeAt(0) === 0xfeff
+  if (strippedBom) source = source.slice(1)
   // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
   // byte never reaches output (decided cross-impl behavior; WHATWG-style).
   if (source.includes('\0')) source = source.replace(/\0/g, '�')
@@ -993,6 +994,21 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     0,
     opts.onUnclosedContainer ? new Set<string>() : undefined,
   )
+  // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
+  // shifted every offset in the document by one codepoint, so a consumer that
+  // sliced the original bytes by a reported span got the character before the
+  // one the node holds - `text` at 2..3 was the space, where the node said `T`
+  // (carve#876). All three engines did this the same way.
+  //
+  // `sourceOffsetMap` is the mechanism a container sub-lexer already uses to
+  // map its stripped view back to the document; the BOM is the same problem
+  // with a fixed width of one, so it reuses it rather than adding a second
+  // spelling. `linePrefixWidths` moves with it: the mark occupies the first
+  // column of the first line, so the content of that line starts at column 2.
+  if (strippedBom) {
+    lexer.sourceOffsetMap = lexer.lineOffsets.map((offset) => offset + 1)
+    lexer.linePrefixWidths = lexer.lineOffsets.map((_offset, index) => (index === 0 ? 1 : 0))
+  }
   lexer.atDocumentLevel = true
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
