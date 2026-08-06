@@ -101,6 +101,14 @@ describe('an emptied description survives both escape passes', () => {
     expect(roundTrips(src)).toBe(true)
   })
 
+  it('is written back inside a container', () => {
+    // The line map is keyed on the DOCUMENT's hoisted definitions, so a
+    // description nested in a container has to find its definition there too.
+    const src = '::: note\n:: term\n:  [r]: /u\n:::\n\nsee [t][r]\n'
+    expect(carveToCarve(src)).toBe(src)
+    expect(roundTrips(src)).toBe(true)
+  })
+
   it('still writes the definition exactly once', () => {
     const out = carveToCarve(':: t1\n:  [r]: /u\n\n:: t2\n:  d2\n\nsee [t][r]\n')
     expect(out.match(/\[r\]: \/u/g)?.length).toBe(1)
