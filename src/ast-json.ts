@@ -559,6 +559,24 @@ function refuseUnknownFields(node: unknown, path: string): void {
 const LEGACY_TYPELESS_POSITIONS: ReadonlySet<string> = new Set(['definition_list.items'])
 
 /**
+ * The node-bearing fields of those legacy records, which the schema does not
+ * name and `NODE_FIELDS` therefore cannot know about.
+ *
+ * A legacy definition entry keeps its content under `terms` and `definitions`,
+ * both arrays OF ARRAYS of nodes. Without this the walk reached the entry record
+ * and stopped, so every node inside a stored definition list was unchecked -
+ * including against the string-type half of §12(c) that was already
+ * implemented: `{"type":"wat"}` under `terms` decoded and then failed in the
+ * renderer as `unknown inline wat`, which is the arrival point the clause rules
+ * out.
+ *
+ * Applied only where the record carries no `type` of its own. On a typed node
+ * these names are properties the schema does not name, and §11 refuses them
+ * before this could matter.
+ */
+const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
+
+/**
  * Refuse, at decode, a node whose `type` the schema does not name (PART 12
  * §12(c)) - whether the name is unknown, absent, or not a string at all.
  *
@@ -590,7 +608,9 @@ function refuseUnknownNodeTypes(node: unknown, path: string, requireType: boolea
   // string-to-string map whose keys are ordinary attribute identifiers, so a
   // blanket walk finds `{"type":"widget"}` there and refuses a document the
   // parser produced.
-  for (const field of NODE_FIELDS) {
+  const fields =
+    typeof type === 'string' ? NODE_FIELDS : [...NODE_FIELDS, ...LEGACY_RECORD_FIELDS]
+  for (const field of fields) {
     const value = record[field]
     if (value === undefined) continue
     const position = typeof type === 'string' ? `${type}.${field}` : undefined

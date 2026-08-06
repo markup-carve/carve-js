@@ -147,6 +147,26 @@ describe('a record the schema gives no `type`', () => {
     ).toThrow(AstJsonNodeTypeError)
   })
 
+  it('is still checked INSIDE a legacy definition entry, in both of its slots', () => {
+    // Same rule as the citation item: the exemption is the record, not its
+    // subtree. A legacy entry keeps its content under `terms` and `definitions`,
+    // names the schema does not have, so `NODE_FIELDS` cannot reach them and the
+    // walk stopped at the record - leaving every node in a stored definition
+    // list unchecked, including against the string-type half of §12(c) that was
+    // already implemented.
+    const legacy = (terms: unknown, definitions: unknown) =>
+      doc({ type: 'definition_list', items: [{ terms, definitions }] })
+    const ok = [[{ type: 'paragraph', children: [] }]]
+
+    expect(() => fromAstJson(legacy([[{ value: 'T' }]], ok))).toThrow(AstJsonNodeTypeError)
+    expect(() => fromAstJson(legacy([[{ type: 'wat' }]], ok))).toThrow(
+      AstJsonUnknownNodeTypeError,
+    )
+    expect(() => fromAstJson(legacy([[{ type: 'text', value: 'T' }]], [[{ children: [] }]]))).toThrow(
+      AstJsonNodeTypeError,
+    )
+  })
+
   it('is accepted in the older definition-list grouping form', () => {
     // A legacy acceptance, recorded as one: `items: [{terms, definitions}]` is
     // what this engine published before the wire shape settled, those trees are
