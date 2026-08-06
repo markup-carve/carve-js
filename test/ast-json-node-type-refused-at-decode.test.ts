@@ -167,6 +167,28 @@ describe('a record the schema gives no `type`', () => {
     )
   })
 
+  it('does not let an exempt position excuse a `type` that is PRESENT and unusable', () => {
+    // Only PRESENCE is positional. The exemptions exist for records the schema
+    // gives no `type` at all, so a CURRENT-form definition item carrying
+    // `type: 7` must not ride in on the legacy grouping form's exemption - it
+    // was accepted and then silently dropped by `entriesFromWire`. Same for a
+    // citation item that grew one.
+    expect(() =>
+      fromAstJson(doc({ type: 'definition_list', items: [{ type: 7, children: [] }] })),
+    ).toThrow(AstJsonNodeTypeError)
+
+    expect(() =>
+      fromAstJson(
+        doc({
+          type: 'paragraph',
+          children: [
+            { type: 'citation_group', raw: '[@a]', items: [{ type: null, key: 'a' }] },
+          ],
+        }),
+      ),
+    ).toThrow(AstJsonNodeTypeError)
+  })
+
   it('is accepted in the older definition-list grouping form', () => {
     // A legacy acceptance, recorded as one: `items: [{terms, definitions}]` is
     // what this engine published before the wire shape settled, those trees are

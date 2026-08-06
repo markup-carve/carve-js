@@ -580,14 +580,21 @@ const LEGACY_RECORD_FIELDS: readonly string[] = ['terms', 'definitions']
  * Refuse, at decode, a node whose `type` the schema does not name (PART 12
  * §12(c)) - whether the name is unknown, absent, or not a string at all.
  *
- * @param requireType whether THIS value sits where a node must be. It is decided
- *   by the caller from `NODE_POSITION_KIND`, because one field name means
- *   different things in different places: `items` holds nodes on `list` and
- *   plain `citation` records on `citation_group`.
+ * @param typeRequired whether a `type` must be PRESENT here. Decided by the
+ *   caller from `NODE_POSITION_KIND`, because one field name means different
+ *   things in different places: `items` holds nodes on `list` and plain
+ *   `citation` records on `citation_group`.
+ *
+ *   Only presence is positional. A `type` that IS present must be a string
+ *   everywhere, exempt position or not - the exemptions exist for records the
+ *   schema gives no `type` at all, not for a node that carries an unusable one.
+ *   Without that split, `definition_list.items` holding `{"type": 7}` - the
+ *   CURRENT wire shape with a bad value - rode in on the legacy grouping form's
+ *   exemption and was silently dropped by `entriesFromWire`.
  */
-function refuseUnknownNodeTypes(node: unknown, path: string, requireType: boolean): void {
+function refuseUnknownNodeTypes(node: unknown, path: string, typeRequired: boolean): void {
   if (Array.isArray(node)) {
-    node.forEach((item, index) => refuseUnknownNodeTypes(item, `${path}[${index}]`, requireType))
+    node.forEach((item, index) => refuseUnknownNodeTypes(item, `${path}[${index}]`, typeRequired))
     return
   }
   // A `null` or a string in a node position is NOT this check's business: it is
@@ -600,7 +607,7 @@ function refuseUnknownNodeTypes(node: unknown, path: string, requireType: boolea
     // §12(c). A missing `type`, or one carrying a number, `null`, an array, an
     // object or a boolean, names no schema type - so it is refused HERE and not
     // by the renderer two steps later.
-    if (requireType) throw new AstJsonNodeTypeError(type, path)
+    if (type !== undefined || typeRequired) throw new AstJsonNodeTypeError(type, path)
   } else if (WIRE_FIELDS[type] === undefined) {
     throw new AstJsonUnknownNodeTypeError(type, path)
   }
