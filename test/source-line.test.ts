@@ -61,10 +61,19 @@ describe('sourceLine render option', () => {
   })
 
   it('stamps a plus-attached list block on its real source line after blanks', () => {
+    // The item is TIGHT, so its paragraphs all render bare - PART 9 §17 L1,
+    // "every one of them, not only the first" (carve-js#749). A bare paragraph
+    // has no element to carry `data-source-line`, so the stamp is the `<li>`'s
+    // and the attached paragraph contributes none.
+    //
+    // That is a real cost to editor scroll-sync and it is the rendering rule's,
+    // not this option's: the option adds attributes to elements that exist, and
+    // wrapping a tight item's paragraph in a `<p>` just to have somewhere to put
+    // one would change the document to suit the attribute.
     expect(h('- first\n\n+\nquote')).toBe(
       '<ul data-source-line="1">\n' +
         '  <li data-source-line="1">first\n' +
-        '    <p data-source-line="4">quote</p>\n' +
+        '    quote\n' +
         '  </li>\n' +
         '</ul>',
     )

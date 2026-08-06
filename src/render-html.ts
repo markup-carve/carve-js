@@ -1066,20 +1066,24 @@ function renderListItem(
   // indented one level deeper, with the closing </li> back at item indent.
   let head = `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}`
   const body: string[] = []
-  // A paragraph that immediately follows the lead paragraph (a consecutive
-  // run from index 0, e.g. a `+`-attached second paragraph -- Bug B) renders as
-  // a real <p> even in a tight item, matching carve-php. Once a non-paragraph
-  // block appears, the lead run ends and later paragraphs fall back to the
-  // tight unwrapped form -- this leaves the DEFERRED "plain text after a
-  // block-in-item" family (`- item` / `+` / fence / tail) unchanged.
-  let inLeadRun = true
+  // TIGHTNESS IS A PROPERTY OF THE WHOLE ITEM, not of an individual block. PART 9
+  // §17 L1 is explicit (grammar.ebnf:2991-2994): "a tight item's paragraphs ALL
+  // render WITHOUT `<p>`, every one of them, not only the first".
+  //
+  // This carried an exception for a paragraph in the consecutive run from index
+  // 0 - a `+`-attached second paragraph - which rendered a real `<p>` in a tight
+  // item, on the belief that carve-php did the same. Measured, it does not:
+  // carve-php and carve-rs both render it bare, and the exception was this
+  // engine alone against the stated rule (carve-js#749, markup-carve/carve#809).
+  //
+  // It is also what made corpus 228 fail here: the item is tight, and the second
+  // paragraph was the one getting wrapped.
   item.children.forEach((child, i) => {
     if (child.type === 'paragraph') {
-      const rendered = wrapPara(child as Paragraph, i === 0 || !inLeadRun)
+      const rendered = wrapPara(child as Paragraph, true)
       if (i === 0) head += rendered
       else body.push(`${indent(level + 1)}${rendered}`)
     } else {
-      inLeadRun = false
       // Skip blocks that render to nothing (a comment, an abbreviation def, a
       // non-HTML raw block): pushing `''` would leave stray blank lines inside
       // the <li> (`<p>a</p>\n\n  </li>`). Matches carve-rs.
