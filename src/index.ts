@@ -65,6 +65,13 @@ export {
   fromAstJson,
   AstJsonDepthError,
   AstJsonRootError,
+  // PART 12 §9(b) and §12 both ask for a TYPED, DOCUMENTED refusal. A class a
+  // consumer cannot import is neither, so every ingest error the decoder raises
+  // is exported - `AstJsonUnknownFieldError` included, which §11 added without
+  // a way to catch it by type.
+  AstJsonRootFieldError,
+  AstJsonUnknownFieldError,
+  AstJsonUnknownNodeTypeError,
   MAX_AST_JSON_DEPTH,
   type AstJsonDocument,
   type AstJsonBlock,

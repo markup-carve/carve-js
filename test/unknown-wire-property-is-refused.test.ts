@@ -93,6 +93,7 @@ describe("an unknown wire property is refused on ingest", () => {
     // reads them whole.
     const payload = {
       type: "document",
+      srcByteLength: 0,
       children: [
         { type: "paragraph", children: [{ type: "text", value: "x" }] },
         {
@@ -110,6 +111,7 @@ describe("an unknown wire property is refused on ingest", () => {
     // The boundary: the carve-out is one entry, not an escape hatch.
     const payload = {
       type: "document",
+      srcByteLength: 0,
       children: [{ type: "paragraph", id: "a", children: [] }],
     };
 

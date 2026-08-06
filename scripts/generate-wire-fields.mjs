@@ -45,6 +45,42 @@ export function wireFieldsSource(schema) {
     }
     helpers.set(name, Object.keys(def.properties).sort());
   }
+  /*
+   * Field names that hold NODES somewhere in the schema (PART 12 section 12(c)).
+   *
+   * Derived rather than listed, and derived as a SET OF NAMES rather than
+   * per-type, because the two readings differ and the union is the safe one:
+   * `content` holds nodes on `inline_extension` and a verbatim string on
+   * `code_block`, `title` holds nodes on `admonition` and a string on `link`.
+   * A walker that descends a name only where some type puts nodes there is
+   * correct either way - a string is not an object, so descending into one
+   * finds nothing.
+   *
+   * `attrs.keyValues` can never appear here: its values are strings. That is
+   * load-bearing, not incidental. Attribute names are ordinary identifiers, so
+   * `{type=widget}` puts an object literally shaped {"type":"widget"} in the
+   * tree, and a walker that treated it as a node would refuse a document this
+   * engine's own parser produced - which section 9(a) forbids.
+   */
+  const nodeFields = new Set();
+  const holdsNode = (schemaNode) => {
+    if (Array.isArray(schemaNode)) return schemaNode.some(holdsNode);
+    if (schemaNode === null || typeof schemaNode !== "object") return false;
+    for (const [key, value] of Object.entries(schemaNode)) {
+      if (key === "$ref" && typeof value === "string") {
+        const target = value.replace("#/$defs/", "");
+        if (target === "attrs" || target === "pos") continue;
+        return true;
+      }
+      if (holdsNode(value)) return true;
+    }
+    return false;
+  };
+  for (const def of Object.values(defs)) {
+    for (const [name, property] of Object.entries(def?.properties ?? {})) {
+      if (holdsNode(property)) nodeFields.add(name);
+    }
+  }
   const entry = ([name, fields]) =>
     `  ${JSON.stringify(name)}: [${fields.map((f) => JSON.stringify(f)).join(", ")}],`;
   const header = [
@@ -69,7 +105,26 @@ export function wireFieldsSource(schema) {
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(entry)
       .join("\n");
-  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n}\n`;
+  const tail = [
+    "}",
+    "",
+    "/**",
+    " * Field names that hold NODES, so section 12(c)'s unknown-type check knows",
+    " * where a node can be. A union across types: `content` holds nodes on",
+    " * `inline_extension` and a string on `code_block`, and descending a name into",
+    " * a string finds nothing, so the union is safe in both directions.",
+    " *",
+    " * `keyValues` is absent, and that is the point: its values are strings, and an",
+    " * attribute may legally be named `type`, so `{type=widget}` puts an object",
+    " * shaped {\"type\":\"widget\"} in the tree.",
+    " */",
+    "export const NODE_FIELDS: readonly string[] = [",
+  ].join("\n");
+  const list = [...nodeFields]
+    .sort()
+    .map((name) => `  ${JSON.stringify(name)},`)
+    .join("\n");
+  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n]\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
