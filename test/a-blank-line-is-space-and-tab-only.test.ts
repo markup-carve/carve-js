@@ -92,20 +92,49 @@ describe('a blank line', () => {
  * prepass makes for itself. They were spelled `raw.trim() === ''`, which is the
  * legacy set again through `String.prototype.trim`, so the prepass and the block
  * lexer disagreed about where a blank line was.
+ *
+ * Every case below has the same shape, and it is the shape that makes this worth
+ * pinning: the definition line RENDERS AS PROSE either way, so with the prepass
+ * on the wider class the reader saw `[r]: /u` as text while a reference to it
+ * silently resolved. Visible and active at once - the mirror of the "neither
+ * visible nor active" outcome markup-carve/carve#624 named.
  */
 describe('the definition prepass', () => {
-  it('does not let a mark-only line end a list item for a definition', () => {
-    // `prevBlank` and the content-column stack: with the mark line read as
-    // blank, the prepass saw the definition as a sibling of the item rather than
-    // part of its content, and collected it at document level.
-    const html = carveToHtml('- item\n﻿\n  [r]: /u\n\n[link][r]\n')
+  it('does not collect an abbreviation an item swallowed, after a mark line', () => {
+    // `prevBlank`. With the mark line read as blank the prepass popped the
+    // item's content column, so `*[A]: Ay` looked like a document-level
+    // definition - and the item still rendered the same line as text.
+    const html = carveToHtml('- item\n﻿\n*[A]: Ay\n\n[link][r] A text\n')
 
-    expect(html).toContain('href="/u"')
+    expect(html).toContain('*[A]: Ay')
+    expect(html).not.toContain('<abbr')
   })
 
-  it('does not let a mark-only line close a footnote body', () => {
-    const html = carveToHtml('[^f]: note\n﻿\n  more\n\ntext[^f]\n')
+  it('does not keep a footnote body open across a mark line', () => {
+    // `inFootnoteBody`. A mark-only line at column 0 is content, so it leaves
+    // the body; the indented `[r]: /u` is then below no open column and defines
+    // nothing, which is what the rendered text already says.
+    const html = carveToHtml('[^f]: note\n﻿\n  [r]: /u\n\n[link][r] text[^f]\n')
 
-    expect(html).toContain('more')
+    expect(html).toContain('[r]: /u')
+    expect(html).not.toContain('href="/u"')
+  })
+
+  it('does not keep a continuation marker open across a mark line', () => {
+    // `plusColumn`. The `+` marker holds an item's content column open across a
+    // blank; a mark line is not one, so the column closes with it.
+    const html = carveToHtml('- item\n+\n﻿\n  [r]: /u\n\n[link][r] text\n')
+
+    expect(html).toContain('[r]: /u')
+    expect(html).not.toContain('href="/u"')
+  })
+
+  it('leaves the same three shapes alone when the line really is blank', () => {
+    // The CONTROL for all three: with a genuine blank line each definition is
+    // collected, so the assertions above are about the CLASS and not about
+    // definition collection having been broken outright.
+    expect(carveToHtml('- item\n\n*[A]: Ay\n\n[link][r] A text\n')).toContain('<abbr')
+    expect(carveToHtml('[^f]: note\n\n  [r]: /u\n\n[link][r] text[^f]\n')).toContain('href="/u"')
+    expect(carveToHtml('- item\n+\n\n  [r]: /u\n\n[link][r] text\n')).toContain('href="/u"')
   })
 })
