@@ -96,13 +96,32 @@ describe('the shared trim', () => {
   })
 
   it('trims every other whitespace character, including the exotic ones', () => {
-    // `[^\S\u00a0]` is `\s` minus NBSP, so the replacement has to agree with
+    // `\s` minus NBSP, so the replacement has to agree with
     // `\s` on characters a hand-written ASCII list would miss.
-    for (const ws of [' ', '\t', '\n', '\r', '\v', '\f', ' ', ' ', '　', '﻿']) {
+    for (const ws of [' ', '\t', '\n', '\r', '\v', '\f', ' ', ' ', '　']) {
       expect(trimNonNbsp(`${ws}x${ws}`)).toBe('x')
     }
   })
 
+
+  it('keeps U+FEFF, which JavaScript alone calls whitespace', () => {
+    // This character used to sit in the list above, asserted as trimmed. It is
+    // the second exception, and for the same reason as NBSP: every engine
+    // renders U+FEFF as ordinary content, so trimming it here made
+    // `to_html(fmt(x)) == to_html(x)` false (PART 11 §1, carve#844).
+    //
+    // The list above is `\s`-agreement, and this is where the two part
+    // company: JavaScript's `\s` includes U+FEFF, Rust's `char::is_whitespace`
+    // and PCRE's `\s` do not. Deferring to the regex engine above ASCII is
+    // still right for U+2028 and U+3000; it is wrong for this one character,
+    // so that is answered before the deferral.
+    const BOM = '\ufeff'
+
+    expect(trimNonNbsp(`${BOM}x${BOM}`)).toBe(`${BOM}x${BOM}`)
+    expect(trimNonNbsp(`  ${BOM}x${BOM}  `)).toBe(`${BOM}x${BOM}`)
+    expect(trimStartNonNbsp(`  ${BOM}x`)).toBe(`${BOM}x`)
+    expect(trimEndNonNbsp(`x${BOM}  `)).toBe(`x${BOM}`)
+  })
   it('leaves interior whitespace alone', () => {
     expect(trimNonNbsp('  a  b  ')).toBe('a  b')
     expect(trimNonNbsp('a\n\nb')).toBe('a\n\nb')

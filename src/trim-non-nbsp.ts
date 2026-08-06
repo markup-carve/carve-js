@@ -36,6 +36,15 @@
 function isTrimmable(text: string, index: number): boolean {
   const code = text.charCodeAt(index)
   if (code === 0x00a0) return false
+  // U+FEFF IS NOT WHITESPACE, whatever JavaScript thinks. `\s` includes it in
+  // this language and in no other engine here - Rust's `char::is_whitespace`
+  // and PCRE's `\s` both exclude it - and every engine keeps the character in
+  // the rendered HTML, where it is ordinary content. So trimming it made
+  // `to_html(fmt(x)) == to_html(x)` false (PART 11 §1): `hello<U+FEFF>` was
+  // written back as `hello` and rendered without a character the source
+  // renders with (carve#844). The second exception on this list, and for the
+  // same reason as NBSP - it is content the author wrote.
+  if (code === 0xfeff) return false
   if (code === 0x20 || (code >= 0x09 && code <= 0x0d)) return true
   if (code < 0x80) return false
   return /\s/.test(text[index] as string)
