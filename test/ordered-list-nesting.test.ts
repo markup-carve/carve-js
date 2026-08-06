@@ -178,11 +178,43 @@ describe('mixed tab+space aligned sub-items are siblings (visual columns)', () =
     )
   })
 
-  it('nests a tab-indented block quote under an item (lead block, whole-tab dedent)', () => {
-    // A lead block (no preceding sub-list) is dedented whole-tab, so the block
-    // opener reaches column 0 and parses.
-    expect(h('1. a\n\t> quote')).toBe(
+  it('does NOT nest a tab-indented block quote under a `1. ` item', () => {
+    // A tab advances to column 4 (PART 9 §24 C1), and `1. ` claims columns 0-2,
+    // so the item's content column is 3. Column 4 is one PAST it, and C3 says a
+    // block opener belongs to the item only AT that column - the content column
+    // is the item body's column 0. So this is indented text, exactly as four
+    // spaces are.
+    //
+    // This case previously asserted the opposite, on the reasoning that a lead
+    // block is dedented whole-tab so the opener reaches column 0. That is the
+    // defect (#767): consuming the straddling tab whole DISCARDS the columns
+    // past the boundary, which is the only thing distinguishing "at the column"
+    // from "past it".
+    expect(h('1. a\n\t> quote')).toBe('<ol>\n  <li>a\n&gt; quote</li>\n</ol>')
+  })
+
+  it('answers the same for four spaces, which is what decides the tab case', () => {
+    // The control. All three engines already agreed on both space spellings -
+    // three spaces nests, four is text - and a tab reaching column 4 makes the
+    // same claim as four spaces, so it has to get the same answer.
+    expect(h('1. a\n    > quote')).toBe('<ol>\n  <li>a\n&gt; quote</li>\n</ol>')
+    expect(h('1. a\n   > quote')).toBe(
       '<ol>\n  <li>a\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ol>',
+    )
+  })
+
+  it('applies to every block opener, not just a quote', () => {
+    // A heading at the same column answers the same way, and so does a fence -
+    // C3's block-opener set is uniform and closed.
+    expect(h('1. a\n\t# H')).toBe('<ol>\n  <li>a\n# H</li>\n</ol>')
+    expect(h('1. a\n   # H')).toBe('<ol>\n  <li>a\n    <h1 id="H">H</h1>\n  </li>\n</ol>')
+  })
+
+  it('applies to a `- ` item, whose content column a tab overshoots by two', () => {
+    // `- ` claims columns 0-1, so the content column is 2 and a tab lands at 4.
+    expect(h('- a\n\t> quote')).toBe('<ul>\n  <li>a\n&gt; quote</li>\n</ul>')
+    expect(h('- a\n  > quote')).toBe(
+      '<ul>\n  <li>a\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ul>',
     )
   })
 

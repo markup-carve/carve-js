@@ -3940,12 +3940,11 @@ function parseList(lexer: Lexer): List {
         pendingBlanks = 0
         pendingBlankLineNumbers = []
         // A sub-list marker (ordered, unordered, or task) at or past the content
-        // column starts the item's block stream. A sub-list MARKER line is
-        // dedented residual-aware so tab+space-aligned siblings keep the same
-        // visual column (the recursive parse re-derives the child base from it).
-        // Every other line -- lead text, and block openers (quotes, headings)
-        // before OR after a sub-list -- uses whole-tab dedent so it reaches
-        // column 0 and parses / interrupts; carry the residual only on markers.
+        // column starts the item's block stream. EVERY line is dedented
+        // residual-aware: the columns a straddling tab reaches past the content
+        // column are a claim like any other, and dropping them is what made a
+        // tab-indented block opener nest where the same column written with
+        // four spaces is text (#767).
         const isMarker =
           RE_ORDERED.test(l) ||
           RE_UNORDERED.test(l) ||
@@ -3957,8 +3956,7 @@ function parseList(lexer: Lexer): List {
         if (firstBlockIdx === -1 && isMarker) {
           firstBlockIdx = nested.length
         }
-        const keepResidual = firstBlockIdx !== -1 && isMarker
-        const dedented = sliceColumns(l, contentCol, keepResidual)
+        const dedented = sliceColumns(l, contentCol)
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         trackItemLazyState(dedented, lazyState)
@@ -4985,14 +4983,17 @@ function indentColumns(line: string): number {
 }
 
 // Dedent counterpart of indentColumns(): drop leading whitespace up to `cols`
-// columns. By default a tab straddling the boundary is consumed whole, so a
-// block opener (quote, heading) dedents flush to column 0 and parses -- Carve
-// has no indent-sensitive block where a leftover column would change meaning.
-// With keepResidual (used only for sub-list marker lines), the unconsumed
-// columns of a straddling tab are re-emitted as spaces so tab+space-aligned
-// sibling markers keep the same visual column and the recursive parse re-derives
-// the child base from it. For space-only indentation this equals line.slice(cols).
-function sliceColumns(line: string, cols: number, keepResidual = false): string {
+// columns. A tab straddling the boundary leaves RESIDUAL columns, and they are
+// re-emitted as spaces rather than swallowed with the tab.
+//
+// The residual is load-bearing in both directions. It keeps tab+space-aligned
+// sibling markers at the same visual column so the recursive parse re-derives
+// the child base from it; and it is the only thing that distinguishes a block
+// opener AT the content column from one PAST it. Consuming the tab whole used
+// to dedent a straddling opener flush to column 0, so `1. a` then a tab then
+// `> quote` nested while the same column written with four spaces was text
+// (#767). For space-only indentation this equals line.slice(cols).
+function sliceColumns(line: string, cols: number): string {
   let col = 0
   let i = 0
   while (i < line.length && col < cols) {
@@ -5006,12 +5007,9 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
       break
     }
   }
-  // When dedenting a sub-list block stream, a tab straddling the boundary leaves
-  // residual columns; reinsert them as spaces so tab+space-aligned sibling
-  // markers stay at the same visual column and the recursive parse re-derives
-  // correctly. Lead content uses whole-tab consumption (keepResidual=false) so a
-  // block opener reaches column 0. (Space-only indentation has no residual.)
-  if (keepResidual && col > cols) return ' '.repeat(col - cols) + line.slice(i)
+  // A straddling tab reached past `cols`; give the extra columns back as spaces
+  // so the line still claims them. (Space-only indentation has no residual.)
+  if (col > cols) return ' '.repeat(col - cols) + line.slice(i)
   return line.slice(i)
 }
 
