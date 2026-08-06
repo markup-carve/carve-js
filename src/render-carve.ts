@@ -103,8 +103,13 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
     const line = pos?.startLine
     if (line !== undefined && !footnoteDefsByLine.has(line)) footnoteDefsByLine.set(line, label)
   }
-  const minimal = renderWithEscapes(ast, 'minimal')
-  const conservative = renderWithEscapes(ast, 'conservative')
+  // The two escape passes each render the WHOLE tree, and the write-back sets
+  // below record what a pass has already emitted - so they have to start empty
+  // for each one. Shared across both, the first pass consumed every in-place
+  // definition and the second omitted them, and which output was returned then
+  // decided whether the document kept its definitions (carve-js#754).
+  const minimal = withFreshWriteBackState(() => renderWithEscapes(ast, 'minimal'))
+  const conservative = withFreshWriteBackState(() => renderWithEscapes(ast, 'conservative'))
   if (minimal === conservative) return minimal
   // A cheaper sufficient reason to prefer the minimal form: it RE-PARSES TO THE
   // TREE WE WERE GIVEN. That is strictly stronger than "the two renders agree" -
@@ -582,6 +587,57 @@ function renderList(node: List, ctx: CarveContext): string {
   }
 }
 
+/**
+ * A hoisted definition that sat BETWEEN two of a container's blocks, written
+ * back into the gap it came from.
+ *
+ * A definition collected out of a list item renders nothing, but it still
+ * SEPARATES the blocks around it: `- a` / `  [^f]: x` / `  more` is an item
+ * holding two paragraphs, and writing the definition at document level instead
+ * leaves `- a` / `  more`, which re-reads as one paragraph with a soft break.
+ * The document changes, not just its spelling (carve-js#754, corpus 228).
+ *
+ * The gap is derivable from the blocks' own positions: a definition whose line
+ * falls after one block ends and before the next begins was written there. This
+ * is the same repair markup-carve/carve#805 needed for a definition-list
+ * description, stated for any pair of siblings rather than for one container.
+ */
+/** Run one render pass with the in-place write-back bookkeeping reset. */
+function withFreshWriteBackState<T>(render: () => T): T {
+  definitionsWrittenInPlace = new WeakSet()
+  footnotesWrittenInPlace = new Set()
+  return render()
+}
+
+function definitionInGap(
+  before: BlockNode,
+  after: BlockNode,
+  ctx: CarveContext,
+): string | undefined {
+  const from = before.pos?.endLine
+  const to = after.pos?.startLine
+  if (from === undefined || to === undefined) return undefined
+  for (const [line, node] of definitionsByLine) {
+    if (line > from && line < to && !definitionsWrittenInPlace.has(node as unknown as object)) {
+      const written = renderBlock(node, ctx)
+      definitionsWrittenInPlace.add(node as unknown as object)
+      return written
+    }
+  }
+  // A footnote definition lives in a root map rather than in `children`, so it
+  // is tracked by label - the same split the description write-back has.
+  for (const [line, label] of footnoteDefsByLine) {
+    if (line > from && line < to && !footnotesWrittenInPlace.has(label)) {
+      const blocks = documentFootnoteDefs?.[label]
+      if (blocks === undefined) continue
+      const written = renderOneFootnoteDef(label, blocks, ctx)
+      footnotesWrittenInPlace.add(label)
+      return written
+    }
+  }
+  return undefined
+}
+
 function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
   // A list item is a prefix/indent host: its fences start over at `:::`.
   const outerFenceDepth = ctx.colonFenceDepth
@@ -602,10 +658,17 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
   try {
-    return item.children
-      .map((b) => renderBlock(b, ctx))
-      .filter((s) => s.length > 0)
-      .join('\n')
+    const parts: string[] = []
+    item.children.forEach((b, i) => {
+      const previous = item.children[i - 1]
+      if (previous !== undefined) {
+        const written = definitionInGap(previous, b, ctx)
+        if (written !== undefined && written.length > 0) parts.push(written)
+      }
+      const rendered = renderBlock(b, ctx)
+      if (rendered.length > 0) parts.push(rendered)
+    })
+    return parts.join('\n')
   } finally {
     ctx.blockDepth--
   }
