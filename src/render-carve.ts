@@ -1713,7 +1713,16 @@ function escapeDestinationEscapes(text: string): string {
 function escapeDestination(text: string): string {
   const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
   const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
-  // Whitespace is percent-encoded (it would otherwise end the destination).
+  // Whitespace is percent-encoded (it would otherwise end the destination),
+  // and the test is the Unicode White_Space property -- the same one the reader
+  // uses (`RE_DESTINATION_WHITESPACE` in parse.ts). NOT `/\s/`: that also holds
+  // U+FEFF, which is an ordinary destination character, so a BOM came back out
+  // as the literal text `%FEFF` -- not even a well-formed percent escape. The
+  // reader was corrected for that in carve-js#751 and the writer was not, so
+  // `toHtml(fmt(x)) === toHtml(x)` stopped holding for any destination carrying
+  // one, and a `javascript:` scheme PART 9 §25 had blanked came back visible
+  // behind a prefix the probe no longer recognized (markup-carve/carve#806).
+  //
   // A parenthesis only needs escaping when it is unbalanced, because a
   // balanced pair survives the scan as-is -- and leaving it bare is what keeps
   // the common case (`.../Foo_(bar)`) readable. A backslash is escaped only
@@ -1721,7 +1730,7 @@ function escapeDestination(text: string): string {
   // so backslashes elsewhere in a URL are emitted verbatim.
   const escaped = escapeDestinationEscapes(text)
   return escaped
-    .replace(/\s/g, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
+    .replace(/\p{White_Space}/gu, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))
     .replace(/\\?[()]/g, (m) => (sanitizeBlank ? (m.endsWith('(') ? '%28' : '%29') : m))
 }
 
