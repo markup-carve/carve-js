@@ -134,16 +134,40 @@ const RE_HR = /^([-*_])\1{2,}[ \t]*$/
 // After the language the opener admits, in this fixed order, an optional quoted
 // "header" (carried to the `title` attribute on the <pre>; PART 9 §2) and an
 // optional bracketed [label] (structured metadata a group extension may use).
-// The header/label must be whitespace-separated from the preceding token; a
+// The header/label must be SPACE-separated from the preceding token; a
 // glued quote/bracket (```php"x", ```php "x"[y]) or wrong order (```php [l] "h")
 // is NOT a fence and falls back to inline parsing. A key="value" pair
 // (```js title="x") is likewise not a fence. The first token may sit directly
 // against the fence (```php / ``` php / ```[NPM] / ```"notes"). An info string
 // of the form `=FORMAT` is a raw passthrough block (RE_RAW_FENCE), matched
 // before this; a leading `=` therefore never starts a language token.
+//
+// EVERY SLOT ON THIS LINE IS `space`. PART 7's MARKER SEPARATORS AND PADDING
+// SLOTS decides the terminal by POSITION, not by role: "A tab is syntax ONLY
+// in a line's LEADING INDENTATION RUN. From the first non-whitespace character
+// of the line onward a tab is not relevant to syntax at all." All three slots
+// here -- the one before the info string and `code_fence_info`'s own "header"
+// and [label] slots -- sit after the fence run, so all three are padding (the
+// fence run has already decided the block) and all three take `space`.
+//
+// They were spelled `\s`, which is wider than a tab in JavaScript specifically:
+// `\s` is Unicode White_Space plus U+FEFF minus U+0085, so it also admitted a
+// form feed, a vertical tab and every Unicode space, none of which the grammar
+// names at any position (#806). Narrowing to `[ \t]` would not be the fix here,
+// because the tab has to go too; the terminal the clause writes is a literal
+// space. `#795`/`#798` did the same to the colon fence's slots (spec carve#894
+// widened the padding slots and carve#905 reverted them).
+//
+// The label slot appears in two alternatives and is ONE slot with one role, so
+// both spellings carry the same terminal -- otherwise ```js "T" [L] and
+// ``` "T" [L] would disagree about a tab for no reason a reader could state.
+//
+// Cardinality is deliberately unchanged (`space` vs `space+` is a separate
+// question from the terminal), and so is the TRAILING run before end-of-line,
+// which is not a slot in `fenced_code_block` at all.
 // Groups: 3 lang, 4|6 header (quoted, incl. quotes), 5|7|8 label (incl. brackets).
 const RE_FENCE =
-  /^()(`{3,}|~{3,})\s*(?:([a-zA-Z0-9_+#/.-]+)(?:\s+("[^"]*"))?(?:\s+(\[[^\]]*\]))?|("[^"]*")(?:\s+(\[[^\]]*\]))?|(\[[^\]]*\]))?\s*$/
+  /^()(`{3,}|~{3,}) *(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?|("[^"]*")(?: +(\[[^\]]*\]))?|(\[[^\]]*\]))?\s*$/
 // Bullets are `-` and `*` only. Unlike Markdown/djot, `+` is not a Carve bullet
 // -- it is reserved as the list-continuation marker (PART 9 §17), so a lone `+`
 // is unambiguous and a `+ x` line is ordinary paragraph text. A marker is a list
@@ -540,7 +564,17 @@ const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)
 // optional (lenient input: both `---toml` and `--- toml` are accepted; the
 // no-space form is canonical). The token keeps it distinct from a thematic
 // break (`-{3,}`).
-const RE_FRONTMATTER_OPEN = /^---[ \t]*(\w*)\s*$/
+//
+// That slot is PADDING and takes `space` (PART 7): the `---` pair has already
+// decided the block and the token only names the metadata dialect, but the slot
+// sits after the first non-whitespace character of the line, where a tab is not
+// syntax. `frontmatter_open`'s own prose states the case outright -- "`---<TAB>
+// yaml` is not a typed opener; it is a thematic break followed by ordinary
+// lines" -- so the tab comes out of the class. A form feed and a Unicode space
+// were already excluded here, because this slot had been narrowed to `[ \t]`
+// rather than left as `\s`; that narrowing was right as far as it went and only
+// the tab had to go.
+const RE_FRONTMATTER_OPEN = /^--- *(\w*)\s*$/
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = /^---\s*$/
 // Raw passthrough block: ```=FORMAT … ``` (§4.15, djot raw-block syntax). The
@@ -548,7 +582,14 @@ const RE_FRONTMATTER_CLOSE = /^---\s*$/
 // name), so this never collides with RE_FENCE (whose language charset excludes
 // `=`). The `=` is the block parallel of the inline raw `{=format}` attribute.
 // FORMAT must follow `=` with no intervening space (```= html is not raw).
-const RE_RAW_FENCE = /^(`{3,}|~{3,})\s*=([a-zA-Z][\w-]*)\s*$/
+//
+// The slot between the fence run and the `=` is a MARKER SEPARATOR rather than
+// padding -- the `=` after it SELECTS a raw block over a code block -- but the
+// terminal is the same `space` either way, because the slot sits after the
+// first non-whitespace character of the line (PART 7). `raw_block =
+// code_fence_open, [space], "=", format_name, newline`. It was `\s`, so a tab,
+// a form feed, a vertical tab and every Unicode space opened a raw block.
+const RE_RAW_FENCE = /^(`{3,}|~{3,}) *=([a-zA-Z][\w-]*)\s*$/
 // Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
 // by length); a `%%` line is a line comment. Neither is rendered. A line
 // comment may be indented: leading whitespace before `%%` does not matter, so an

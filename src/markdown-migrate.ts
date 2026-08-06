@@ -1180,8 +1180,14 @@ function escapePlainCarveInlineSyntax(line: string): string {
  * A document-leading frontmatter fence, mirroring the parser's
  * RE_FRONTMATTER_OPEN / RE_FRONTMATTER_CLOSE so a document Carve reads as
  * having frontmatter is migrated as having frontmatter.
+ *
+ * The mirror is the whole point of this pair, so it moves when the parser
+ * moves: the format slot takes `space` (PART 7), and `---<TAB>yaml` is a
+ * thematic break followed by ordinary lines. Left at `[ \t]` this would have
+ * migrated body content AS frontmatter for a document the parser does not read
+ * as having any.
  */
-const RE_MD_FRONTMATTER_OPEN = /^---[ \t]*(\w*)\s*$/
+const RE_MD_FRONTMATTER_OPEN = /^--- *(\w*)\s*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
 
 function htmlBlockAt(lines: readonly string[], start: number): { lines: string[]; end: number } | null {
