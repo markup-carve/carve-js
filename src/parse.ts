@@ -1201,12 +1201,51 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
       const trimmed = withoutSyntheticIndent(subLine)
       const synthetic = subLine.length - trimmed.length
       if (synthetic === 0 || !parentLine.endsWith(trimmed)) return declinePositions(sub)
+      // NEGATIVE IS THE ORDINARY CASE FOR A TAB, NOT A FAILURE. `prefix` is the
+      // base the sub-line's index 0 is charged to, and the synthetic spaces
+      // stand in for the source characters the strip consumed - so it goes
+      // negative exactly when the run re-emits MORE columns than the characters
+      // it replaced. One tab does: `- item` has content column 2, a `<TAB>more`
+      // continuation dedents to `  more`, and two synthetic spaces stand in for
+      // one source character, giving -1.
+      //
+      // The arithmetic is still exact for every character that HAS a source:
+      // sub-index `synthetic` lands on `parent.lineOffset + (prefix + synthetic)`,
+      // which is the first real character. Only the synthetic run itself has no
+      // honest offset, and no node begins inside a line's indentation.
+      //
+      // Rejecting it dropped every position inside the item - the paragraph and
+      // all three of its inlines - while the same document written with two
+      // spaces kept them, and while an ORDERED marker kept them too, because its
+      // wider content column leaves the tab non-straddling
+      // (markup-carve/carve-js#814).
       prefix = parentLine.length - trimmed.length - synthetic
-      if (prefix < 0) return declinePositions(sub)
     }
 
-    offsets.push(parent.lineOffset(parentIndex) + prefix)
-    widths.push(parent.lineStartColumn(parentIndex) - 1 + prefix)
+    const offset = parent.lineOffset(parentIndex) + prefix
+    const width = parent.lineStartColumn(parentIndex) - 1 + prefix
+    // What a negative prefix must NOT do is push a base off the FRONT of the
+    // document, which would make every span on the line a lie rather than a gap.
+    //
+    // NOT REACHABLE TODAY, and kept anyway - stated here rather than presented
+    // as tested. A continuation line always has its marker line above it, so its
+    // document offset is at least that line's length plus a newline, while the
+    // prefix goes no lower than minus the synthetic run. Removing this guard
+    // renders all 1373 corpus documents and eleven probes built from the
+    // shortest possible marker lines byte-identically, and no published offset
+    // in any of them is negative. It is a bound on arithmetic rather than a
+    // check on input: the cliff it guards is a negative offset escaping into a
+    // published position, which no assertion downstream would catch.
+    //
+    // The COLUMN base is deliberately NOT clamped the same way. It is a width
+    // added to a sub-column, and a sub-column starts at 1, so the first real
+    // character still lands on a positive document column - clamping it was the
+    // first fix written here and it declined exactly the documents this issue is
+    // about.
+    if (offset < 0) return declinePositions(sub)
+
+    offsets.push(offset)
+    widths.push(width)
   }
 
   sub.sourceOffsetMap = offsets
