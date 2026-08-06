@@ -722,7 +722,12 @@ const RE_TABLE_CONT = /^\+.*\|\s*$/
 // and the line falls back to a paragraph (inline image + literal braces),
 // matching carve-rs/carve-php. Hence `\)` is directly followed by the optional
 // attr group, with no `\s*` between them.
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)"|\s+'([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+// The title slot here is the SECOND spelling of `image_title` in this file, and
+// it takes the same one literal space `RE_LINK_REST` takes (carve-js#809,
+// markup-carve/carve#912). Two producers for one production is how this class
+// of defect starts: with `\s+` still here, a tab-titled image was literal in a
+// paragraph and a captioned figure on a line of its own.
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "([^"]*)"| '([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
 // Frontmatter open fence: `---` with an optional format token (`---toml`,
 // `---json`); bare `---` uses the default format. The space before the token is
 // optional (lenient input: both `---toml` and `--- toml` are accepted; the
@@ -5652,7 +5657,30 @@ const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 
 // decides span (valid block, possibly empty) vs literal (invalid content).
 // Destination is non-empty (grammar `link_destination = {...}+`), so `[a]()`
 // is NOT a link -- it stays literal (matches carve-php / carve-rs).
-const RE_LINK_REST = /^(?:\s+"((?:[^"\\]|\\.)*)"|\s+'((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
+//
+// THE SLOT BEFORE THE TITLE IS ONE LITERAL SPACE. `link_title` is spelled
+// `space, ('"', ... )` in grammar.ebnf and `image_title = link_title` inherits
+// it, and PART 7 puts it after the first non-whitespace character of the line,
+// where a tab is not syntax at all.
+//
+// It was `\s+`, which in JavaScript is Unicode White_Space PLUS U+FEFF MINUS
+// U+0085 - so EIGHTEEN characters opened a title slot here, measured: the tab,
+// LF, VT, FF, CR, NBSP, the ogham space, six of the U+2000 block, U+2028,
+// U+2029, U+202F, U+205F, U+3000 and the byte order mark (carve-js#809).
+// carve-rs is the reference and leaves every one of them literal.
+//
+// The failure is not "a link without a title" - the whole bracket run stays
+// literal text and the character survives in the output, because the tail
+// pattern matches nothing and no link is built at all.
+//
+// The `+` is gone too, per the markup-carve/carve#912 ruling: the production
+// means exactly ONE space, and accepting a run was the engine being lax rather
+// than the grammar being loose. `[t](/u<SP><SP>"T")` is therefore literal text.
+//
+// ONE producer serves the link tail and the image tail, which is why narrowing
+// it here fixes both. The block-level `RE_BARE_IMAGE` is the SECOND spelling of
+// the same slot and moves with it.
+const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
 
 /**
  * Read a destination out of a link or image tail, starting at the `(`.
