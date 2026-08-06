@@ -228,6 +228,7 @@ const IMPLEMENTED = new Set([
   'a-repeated-definition-which-one-wins',
   'a-marker-separator-is-a-space-never-a-tab',
   'a-link-definition-written-before-a-footnote-stays-before-it',
+  'a-zero-width-character-in-a-reference-definition-destination',
   'a-tab-as-the-first-character-of-a-definition-term',
   'an-abbreviation-term-is-one-ascii-alphanumeric-word',
   'a-definition-attached-by-a-continuation-marker-is-collected-and-the-item-keeps-no-trace',
