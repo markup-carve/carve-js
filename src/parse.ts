@@ -163,7 +163,21 @@ const RE_FENCE =
 // let the rest of the pattern match. Backtracking into it could only ever fail.
 // The capture numbering is unchanged too - the lookahead's group takes slot 1 and
 // holds the same indent the old group did.
-const RE_UNORDERED = /^(?=([^\S\u00a0]*))\1[-*] +([\S\u00a0].*)$/
+// U+FEFF IS NOT INDENTATION. These classes are `\s` minus NBSP, and
+// JavaScript's `\s` uniquely contains U+FEFF - Rust's `char::is_whitespace`
+// and PCRE's `\s` do not - so a mark before a marker was skipped here as
+// indentation while carve-php and carve-rs kept the line literal (#790).
+//
+// PART 9 states that zero-width characters are NOT whitespace and ARE ordinary
+// characters, and the corpus pins the one exception: a mark at the START of a
+// document is not content. Everywhere else it is, and content before a marker
+// means the marker opens nothing. This engine also rendered the same mark into
+// a paragraph's text, so it was content in one position and absent in another.
+//
+// Scoped to marker RECOGNITION on purpose. `TRIM_STRUCTURAL_RE` below decides
+// what a BLANK LINE is, which moves document structure rather than what a line
+// opens, and is the open question in carve#890 - it is deliberately unchanged.
+const RE_UNORDERED = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +([\S\u00a0].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
@@ -176,10 +190,10 @@ const RE_UNORDERED = /^(?=([^\S\u00a0]*))\1[-*] +([\S\u00a0].*)$/
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 const RE_ORDERED =
-  /^(?=([^\S\u00a0]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([\S\u00a0].*)$/
+  /^(?=([^\S\u00a0\ufeff]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([\S\u00a0].*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(?=([^\S\u00a0]*))\1[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
+const RE_TASK = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
@@ -191,7 +205,7 @@ const RE_TASK = /^(?=([^\S\u00a0]*))\1[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
 // space rather than competing with it. A block with nothing after it is not a
 // marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 const RE_ITEM_ATTR =
-  /^([^\S\u00a0]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[\S\u00a0].*)$/
+  /^([^\S\u00a0\ufeff]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[\S\u00a0].*)$/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload
@@ -423,13 +437,20 @@ const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
 // is NOT in `\s`, went the other way and stayed in the href where carve-php and
 // carve-rs both ended the destination on it (markup-carve/carve#806).
 //
-// The LEADING class stays on `\s`: it is line indentation, a different
-// production, and all three engines skip a BOM written before the `[`. The NBSP
-// there is now written `\u00a0` - it was a raw U+00A0 in the source, which is
-// exactly the kind of invisible character this rule is about. Its meaning is
-// unchanged: the repo-wide "NBSP is content, not indentation" idiom.
+// THE LEADING CLASS EXCLUDES U+FEFF, and the reason the old carve-out gave for
+// keeping it is worth recording, because it was measured on the narrower case.
+// It read: "all three engines skip a BOM written before the `[`". True at the
+// DOCUMENT START - and there every engine skips it because the parser STRIPS
+// the document's leading mark before any line is matched, not because this
+// class admits it. On any later line the engines keep the line literal, and
+// this one resolved a definition (#790).
+//
+// So the strip still carries the document-start case, and the class no longer
+// has to. The NBSP is written `\u00a0` - it was a raw U+00A0 in the source,
+// which is exactly the kind of invisible character this rule is about. Its
+// meaning is unchanged: the repo-wide "NBSP is content, not indentation" idiom.
 const RE_LINK_DEF =
-  /^[^\S\u00a0]*\[(?!@)([^\]]+)\]: (?:(?!\u00a0)\p{White_Space})*(\P{White_Space}+)(?:\p{White_Space}+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
+  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: (?:(?!\u00a0)\p{White_Space})*(\P{White_Space}+)(?:\p{White_Space}+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 //
@@ -1244,8 +1265,8 @@ export function normalizeRefLabel(label: string): string {
 //
 // `::` is the TERM marker and a `:::` fence opener is a fence; both need
 // whitespace after a SINGLE colon and neither has it, so neither matches.
-const RE_DESCRIPTION_PREFIX = /^[^\S\u00a0]*:[^\S\u00a0]+/
-const RE_AFTER_TERM = /^[^\S\u00a0]*(?:::(?!:)|:)[^\S\u00a0]/
+const RE_DESCRIPTION_PREFIX = /^[^\S\u00a0\ufeff]*:[^\S\u00a0]+/
+const RE_AFTER_TERM = /^[^\S\u00a0\ufeff]*(?:::(?!:)|:)[^\S\u00a0]/
 
 function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): string {
   let line = raw
@@ -1253,16 +1274,20 @@ function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): strin
   do {
     prev = line
     line = line
-      .replace(/^[^\S\u00a0]*>(?: |$)/, '') // blockquote (NBSP is content)
-      .replace(/^[^\S\u00a0]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP is content)
+      .replace(/^[^\S\u00a0\ufeff]*>(?: |$)/, '') // blockquote (NBSP and U+FEFF are content)
+      .replace(/^[^\S\u00a0\ufeff]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP and U+FEFF are content)
     if (afterTerm) line = line.replace(RE_DESCRIPTION_PREFIX, '')
   } while (line !== prev)
   return line
 }
 
 function stripContainerPrefixes(raw: string, afterTerm = false): string {
-  // residual indentation (keep a content NBSP)
-  return stripContainerPrefixesKeepIndent(raw, afterTerm).replace(/^[^\S\u00a0]+/, '')
+  // Residual indentation, keeping a content NBSP - and a content U+FEFF, for
+  // the same reason. This is the view the definition collector matches
+  // against, so a mark eaten here resolved a reference on a line the renderer
+  // prints verbatim: the definition line rendered literally AND registered
+  // (#790).
+  return stripContainerPrefixesKeepIndent(raw, afterTerm).replace(/^[^\S\u00a0\ufeff]+/, '')
 }
 
 /**
