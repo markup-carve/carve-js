@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from '../src/index.js'
+import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guard for the O(n^2) inline position mapping. pointAt() used to
 // rescan the inline text from offset 0 on every token, so a token-dense or
@@ -7,40 +8,31 @@ import { parse } from '../src/index.js'
 // and binary-searches. Positions must stay byte-for-byte identical.
 
 describe('inline position mapping (perf + correctness)', () => {
-  it('parses a 3000-line single paragraph in linear time', () => {
-    const lines: string[] = []
-    for (let i = 0; i < 3000; i++) {
-      lines.push(`continuation line ${i} of one big paragraph here`)
-    }
-    const source = lines.join('\n')
+  it('parses a many-line single paragraph into one node', () => {
+    // The correctness half, at a size the everyday suite can afford. The
+    // scaling half is the gated guard below.
+    const source = Array.from(
+      { length: 3000 },
+      (_, i) => `continuation line ${i} of one big paragraph here`,
+    ).join('\n')
 
-    // Warm up first: the cold call carries JIT compilation (measured ~2.8x the
-    // steady-state cost here), and under parallel-worker contention that was
-    // enough to push a healthy linear parse past the bound and flake the suite.
-    // Every other perf guard in this repo warms up for the same reason.
-    parse(source)
-
-    const start = performance.now()
-    const doc = parse(source)
-    const elapsed = performance.now() - start
-
-    expect(doc.children).toHaveLength(1)
-    // Linear parse is tens of ms warm; the previous quadratic took ~1s+ at this
-    // size, so a generous bound separates them without timing flakiness.
-    expect(elapsed).toBeLessThan(500)
+    expect(parse(source).children).toHaveLength(1)
   })
 
-  it('parses a quote-dense paragraph in linear time', () => {
+  perfIt('parses a many-line single paragraph in linear time', () => {
+    expectScansLinearly((input) => void parse(input), 'continuation line of one big paragraph\n', {
+      label: 'many-line single paragraph',
+      // A 38-byte fragment: 3000/12000 keeps the samples near the original
+      // 3000-line input rather than building a 2 MB one.
+      smallRepeats: 3000,
+    })
+  })
+
+  perfIt('parses a quote-dense paragraph in linear time', () => {
     // Guard against indexing the growing text buffer (a ConsString) per char
     // in the smart-quote context check: it was O(n^2) with a catastrophic cliff
-    // (32k single quotes took ~10s). Linear is well under the bound below.
-    const source = "'w' ".repeat(40000)
-
-    const start = performance.now()
-    parse(source)
-    const elapsed = performance.now() - start
-
-    expect(elapsed).toBeLessThan(2000)
+    // (32k single quotes took ~10s).
+    expectScansLinearly((input) => void parse(input), "'w' ", { label: 'quote-dense paragraph' })
   })
 
   it('keeps correct line/column across soft breaks', () => {
@@ -62,34 +54,23 @@ describe('inline position mapping (perf + correctness)', () => {
     expect(strong.pos!.startColumn).toBe(4)
   })
 
-  it('parses an unterminated math backtick run in linear time', () => {
-    const start = performance.now()
-    parse('$' + '`'.repeat(20000))
-    const elapsed = performance.now() - start
-
-    expect(elapsed).toBeLessThan(100)
+  perfIt('parses an unterminated math backtick run in linear time', () => {
+    expectScansLinearly((input) => void parse(input), '`', {
+      prefix: '$',
+      label: 'unterminated math backtick run',
+    })
   })
 
-  it('parses repeated unclosed line-block openers in linear time', () => {
-    const source = '::: |\n\n'.repeat(4000)
-
-    const start = performance.now()
-    parse(source)
-    const elapsed = performance.now() - start
-
-    // Isolated runs are well under 100ms on this input; the full Vitest suite
-    // runs perf files concurrently, so keep the guard above the scheduler noise
-    // while still separating the linear cache from the previous O(n^2) scan.
-    expect(elapsed).toBeLessThan(500)
+  perfIt('parses repeated unclosed line-block openers in linear time', () => {
+    expectScansLinearly((input) => void parse(input), '::: |\n\n', {
+      label: 'repeated unclosed line-block openers',
+      smallRepeats: 4000,
+    })
   })
 
-  it('parses repeated emphasis openers with no closer in linear time', () => {
-    const source = '/a '.repeat(20000)
-
-    const start = performance.now()
-    parse(source)
-    const elapsed = performance.now() - start
-
-    expect(elapsed).toBeLessThan(500)
+  perfIt('parses repeated emphasis openers with no closer in linear time', () => {
+    expectScansLinearly((input) => void parse(input), '/a ', {
+      label: 'repeated emphasis openers with no closer',
+    })
   })
 })

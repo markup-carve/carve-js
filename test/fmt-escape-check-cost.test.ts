@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToCarve, carveToHtml } from '../src/index.js'
+import { perfIt } from './helpers/scaling.js'
 
 /*
  * carve-js#641, the residual factor.
@@ -51,7 +52,7 @@ describe('the escape decision does not change what it decides', () => {
 })
 
 describe('formatting a deep document stays bounded', () => {
-  it('formats a 200-level ladder with an escapable character well inside a second', () => {
+  perfIt('formats a 200-level ladder with an escapable character well inside a second', () => {
     // An ABSOLUTE bound with wide headroom, the convention #640 established for
     // this file's neighbours: ~0.2s on an idle machine, and the two-parse form
     // this replaced was ~0.3s, so the bound catches a return to it only when the

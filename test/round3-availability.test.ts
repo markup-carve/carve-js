@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { autolink, carveToHtml } from '../src/index.js'
 import { citations } from '../src/citations.js'
 import { index } from '../src/index-terms.js'
+import { perfIt } from './helpers/scaling.js'
 
 // Round-3 availability / robustness fixes. None change normal output (the spec
 // corpus stays byte-identical); each guards against a crash or DoS on hostile
@@ -128,7 +129,7 @@ describe('Fix 3: index byCodepoint comparator is allocation-free and order-stabl
     expect(bmp.charCodeAt(0)).toBeGreaterThan(astral.charCodeAt(0))
   })
 
-  it('sorts 5000 long-common-prefix terms without per-compare allocation, no slower than before', () => {
+  perfIt('sorts 5000 long-common-prefix terms without per-compare allocation, no slower than before', () => {
     const prefix = 'x'.repeat(1000)
     const terms: string[] = []
     for (let i = 0; i < 5000; i++) terms.push(prefix + String(i).padStart(6, '0'))
@@ -179,7 +180,7 @@ describe('Fix 4: autolink EMAIL scans near-linearly and still matches valid emai
   const median = (xs: number[]): number =>
     [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!
 
-  it('scales near-linearly on the quadratic input shape', () => {
+  perfIt('scales near-linearly on the quadratic input shape', () => {
     // Warm up the JIT so the samples reflect steady-state, not first-call cost.
     perPositionCost(2000)
 
@@ -195,8 +196,18 @@ describe('Fix 4: autolink EMAIL scans near-linearly and still matches valid emai
     const smalls: number[] = []
     const bigs: number[] = []
     for (let round = 0; round < 5; round++) {
-      smalls.push(perPositionCost(SMALL))
-      bigs.push(perPositionCost(BIG))
+      // ALTERNATE which size is measured first. The comment above already
+      // claimed this, but the loop measured SMALL then BIG every round, which
+      // leaves exactly the ordering bias it describes: the second sample is
+      // always taken later, so load that ramps during the test lands on BIG
+      // systematically.
+      if (round % 2 === 0) {
+        smalls.push(perPositionCost(SMALL))
+        bigs.push(perPositionCost(BIG))
+      } else {
+        bigs.push(perPositionCost(BIG))
+        smalls.push(perPositionCost(SMALL))
+      }
     }
 
     // Linear scan  -> per-position cost is constant     -> ratio ~1.

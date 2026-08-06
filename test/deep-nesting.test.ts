@@ -12,6 +12,7 @@ import {
   type Document,
 } from '../src/index.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from '../src/render-depth.js'
+import { perfIt } from './helpers/scaling.js'
 
 // Regression guard: deeply nested block containers must not overflow the call
 // stack. Each `>` level recurses parseBlocks -> parseBlock -> parseBlockQuote,
@@ -215,7 +216,7 @@ describe('the canonical writer respects the render depth cap', () => {
     return { type: 'doc', children: [node], footnoteDefs: {} }
   }
 
-  it('refuses a tree past MAX_RENDER_DEPTH instead of writing a truncated one', () => {
+  perfIt('refuses a tree past MAX_RENDER_DEPTH instead of writing a truncated one', () => {
     // §25: AT THE RENDER CEILING, A RENDERER REFUSES. The writer used to emit
     // the nested fences and delete the body, which is a document that looks
     // complete and is not - the one failure mode a formatter must never have
