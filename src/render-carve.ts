@@ -49,7 +49,12 @@ export interface CarveRenderOptions {}
  * these two patterns (carve-js#638). A scan from the end is linear in the
  * run it removes.
  */
-const WS_NON_NBSP_RE = /[^\S\u00a0]/
+// `\s` minus NBSP and minus U+FEFF. JavaScript counts U+FEFF as whitespace
+// where no other engine here does, and every engine renders it as ordinary
+// content - so trimming it broke `to_html(fmt(x)) == to_html(x)` (PART 11 §1,
+// carve#844). Kept in step with `isTrimmable` in src/trim-non-nbsp.ts, which
+// answers the same question for the other non-HTML targets.
+const WS_NON_NBSP_RE = /[^\S\u00a0\ufeff]/
 
 function isWsNonNbsp(ch: string): boolean {
   return WS_NON_NBSP_RE.test(ch)
