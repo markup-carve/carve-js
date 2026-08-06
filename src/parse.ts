@@ -261,7 +261,23 @@ const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
 // The type word is a grammar `identifier`: `(letter | '_'), {letter | digit
 // | '_' | '-'}`, so it may start with an underscore (matches carve-php /
 // carve-rs). Groups: 2 kind, 3 header (quoted), 4 label (bracketed).
-const RE_ADMONITION_OPEN = /^(:{3,})[ \t]+([a-zA-Z_][\w-]*)(?:\s+("[^"]*"))?(?:\s+(\[[^\]]*\]))?\s*$/
+// TWO ROLES ON ONE LINE, and they take different terminals. PART 7's
+// MARKER SEPARATORS AND PADDING SLOTS is normative about the split:
+//
+//   - the slot immediately after the fence run is a MARKER SEPARATOR,
+//     spelled `space` (U+0020 only), because the token after it selects
+//     which of the four blocks the line opens;
+//   - the admonition's title and label slots are PADDING, spelled
+//     `whitespace`, which the grammar defines as a space or a tab and
+//     nothing else.
+//
+// So sweeping the whole line one way is wrong in one direction or the
+// other. The separators were a space-or-tab class, so a tabbed opener
+// opened an admonition where the grammar makes it a paragraph; the padding
+// slots were the regex whitespace class, which in JavaScript also admits a
+// form feed, a vertical tab and every Unicode space, none of which
+// `whitespace` names (#786, spec carve#886).
+const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z_][\w-]*)(?:[ \t]+("[^"]*"))?(?:[ \t]+(\[[^\]]*\]))?[ \t]*$/
 const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // Line block: the opener is `::: |` ONLY (a bare pipe type token). The old
 // `::: line-block` keyword is no longer special -- it falls through to the
@@ -269,14 +285,14 @@ const RE_ADMONITION_CLOSE = /^(:{3,})\s*$/
 // with NO hard-break / stanza / leading-whitespace handling. Output of the
 // pipe form is unchanged (`<div class="line-block">` with `<br>` breaks).
 // Mirrors carve#119 / carve-php#124.
-const RE_LINE_BLOCK_OPEN = /^(:{3,})[ \t]+\|[ \t]*$/
+const RE_LINE_BLOCK_OPEN = /^(:{3,}) +\|[ \t]*$/
 // Hard-break block: `::: \` (colon fence + a single trailing backslash). Like
 // the line block it emits a `<div>`, but with class `hardbreaks`: the body is
 // parsed as ordinary blocks and soft breaks become hard breaks ONLY in the
 // div's DIRECT paragraph children (nested blocks keep ordinary soft breaks),
 // with no leading-whitespace preservation. carve spec #207 / 88-line-blocks;
 // matches carve-rs / carve-php (carve-js was the lagging impl).
-const RE_HARDBREAKS_OPEN = /^(:{3,})[ \t]+\\[ \t]*$/
+const RE_HARDBREAKS_OPEN = /^(:{3,}) +\\[ \t]*$/
 // Generic fenced div: a bare `:::` opener with NO type word (djot's generic
 // container). A typed `::: word` routes to parseAdmonition. An inline
 // `::: {.class}` is NOT a div (strict djot) -- use a preceding attribute
@@ -286,7 +302,7 @@ const RE_HARDBREAKS_OPEN = /^(:{3,})[ \t]+\\[ \t]*$/
 // code fence allows ```[NPM]; a label after a TYPE word needs a space and is
 // handled by RE_ADMONITION_OPEN. Shares the `:::` closer.
 // Groups: 2 label (bracketed).
-const RE_DIV_OPEN = /^(:{3,})\s*(\[[^\]]*\])?\s*$/
+const RE_DIV_OPEN = /^(:{3,}) *(\[[^\]]*\])?[ \t]*$/
 // Definition list (§4.5). A TERM line is exactly two colons + space(s)
 // + text — the `(?!:)` keeps it distinct from a `:::` div/admonition. A
 // DEFINITION line is a colon + two-or-more spaces + text.
