@@ -33,6 +33,21 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // Added with the spec bump that carries carve#802, #808 and #831: ten rules
+  // the corpus stated and nothing pinned until then, plus the format-character
+  // boundary. This engine passes all of them as they land - they are documents
+  // about rules it already implements, which is why they arrive here rather
+  // than in a skip list.
+  'an-empty-abbreviation-term-is-not-a-definition',
+  'an-at-sign-is-a-reference-label-character-everywhere-but-the-first-position',
+  'a-tab-after-a-heading-quote-or-caption-marker-leaves-the-line-as-prose',
+  'two-dashes-are-not-a-thematic-break',
+  'two-backticks-are-not-a-code-fence-opening-or-closing',
+  'a-single-percent-is-not-a-comment',
+  'an-uppercase-roman-numeral-is-a-list-marker',
+  'a-table-delimiter-cell-needs-at-least-one-dash',
+  'a-continuation-row-carries-no-trailing-text',
+  'a-format-character-before-a-scheme-is-not-stripped-and-is-inert',
   'a-flush-left-line-needs-an-open-paragraph-to-fold-into',
   'a-list-item-does-not-define-an-abbreviation-either',
   'an-abbreviation-definition-is-recognized-only-at-document-level',

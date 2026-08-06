@@ -46,6 +46,18 @@ export const CANONICAL_BLOCK_TYPES = [
   'comment',
   'figure',
   'caption',
+  // A DEFINITION LINE IS CONTENT, so both definition types are deniable
+  // (carve#826, the ruling on carve#771). They render nothing in HTML and are
+  // real output on the `carve`, `markdown` and `plain` targets, so a profile
+  // that cannot name them cannot describe those targets.
+  //
+  // The FILTER already did the right thing; what was wrong is the string-only
+  // query. `isTypeAllowed(t)` has no axis to resolve on, so it fell back to
+  // "not in the vocabulary, therefore allowed" and answered the opposite of
+  // `isTypeAllowed(t, true)` for the same profile - the exact drift carve-js#712
+  // fixed for five other types, with this pair left out (carve-js#753).
+  'abbreviation_def',
+  'link_reference_definition',
   // Listed by profiles.md's block vocabulary and missing here until carve-js#712:
   // the page publishes frontmatter as a root field (PART 12 section 2), so denying it
   // is a real decision about what leaves the engine even though the HTML is
