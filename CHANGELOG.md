@@ -102,6 +102,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   non-array `children`, a `null` or string child) are a separate open question
   and are unchanged.
 
+- **A definition body's continuation is measured in columns, not characters**
+  (carve-js#812). `definition_continuation` is a leading indentation run, so a
+  tab is syntax there and advances to the next multiple of 4 (carve#888's
+  signoff, reaffirmed by carve#901). This engine counted characters, so whether
+  a body continued depended on how a run was spelled rather than where it
+  landed: a lone tab reaches column 4 and ended the body, while three spaces
+  reach column 3 and continued it, and two spaces then a tab (column 4)
+  continued while a tab then a space (column 5) did not. Both spellings of the
+  rule - the blank-line lookahead and the fold branch - now read columns.
+
 - **Ingest rejects a foreign AST root instead of adopting it** (PART 12 §9). The
   clause names the exact case: "An ingest accepting some other root (`doc`, say,
   which is ProseMirror's) will half-read a foreign format rather than reject it."
