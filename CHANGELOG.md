@@ -70,6 +70,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every row that moved. Whether an autolink may hold a non-ASCII character at all
   is markup-carve/carve#860 and is deliberately unchanged.
 
+- **A no-break space after a reference-definition separator space is skipped**
+  (markup-carve/carve#892). `resources/grammar.ebnf:1325-1339` puts the run
+  between the mandatory separator space and the destination under the Unicode
+  White_Space property, and U+00A0 has it. `RE_LINK_DEF` carved that one
+  character out by hand, and because the destination right after the run is
+  `\P{White_Space}+`, a no-break space there could neither be skipped nor
+  started on: the pattern failed outright, so `[r]: <NBSP>https://e.com/` was not
+  a definition at all and every reference to `r` went unresolved. carve-rs and
+  carve-php both define it, and this engine already agreed with them on U+2009,
+  U+202F and U+3000. U+FEFF and U+200B are not White_Space and stay in the
+  destination, unchanged; a leading no-break space before the `[` is still
+  content, not indentation.
+
 - **Ingest rejects a foreign AST root instead of adopting it** (PART 12 §9). The
   clause names the exact case: "An ingest accepting some other root (`doc`, say,
   which is ProseMirror's) will half-read a foreign format rather than reject it."

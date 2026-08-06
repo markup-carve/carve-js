@@ -599,11 +599,33 @@ export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\uFEFF'
 // this one resolved a definition (#790).
 //
 // So the strip still carries the document-start case, and the class no longer
-// has to. The NBSP is written `\u00a0` - it was a raw U+00A0 in the source,
-// which is exactly the kind of invisible character this rule is about. Its
-// meaning is unchanged: the repo-wide "NBSP is content, not indentation" idiom.
+// has to.
+//
+// THE LEADING RUN AFTER THE SEPARATOR SPACE ADMITS U+00A0, and this is the one
+// slot in the file where the repo-wide "NBSP is content, not indentation" idiom
+// does NOT reach. The run used to carve U+00A0 out by hand, and because the
+// destination immediately after it is `\P{White_Space}+`, a no-break space there
+// could neither be skipped nor started on: the whole pattern failed and the line
+// was not a definition AT ALL, so every reference to the label went unresolved.
+// carve-php and carve-rs both skip it and define the reference, and carve-js
+// already agreed with them on U+2009, U+202F and U+3000 - so the divergence was
+// specific to the one character the carve-out named (markup-carve/carve#892).
+//
+// The clause is explicit about both the behavior and the test, at
+// grammar.ebnf:1325-1339 - "Whitespace between the mandatory separator space and
+// the destination is leading whitespace and is skipped" - and at :1313-1323 -
+// "WHITESPACE HERE IS UNICODE WHITESPACE -- NORMATIVE [...] The test is the
+// Unicode White_Space property, not 'is invisible'". U+00A0 has that property.
+//
+// U+FEFF does NOT, which is why it stays out of this run and stays IN the
+// destination: `[r]: <BOM>https://e.com/` keeps the mark in the href on all
+// three engines, and `docs/examples/edge-cases.md:9500-9518` pins that as the
+// discriminator between the two characters.
+//
+// The INDENT class at the front of the pattern is untouched: leading U+00A0 is
+// still content there, so ` <NBSP>[r]: /u` is still not a definition.
 const RE_LINK_DEF =
-  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: (?:(?!\u00a0)\p{White_Space})*(\P{White_Space}+)(?:\p{White_Space}+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
+  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?:\p{White_Space}+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 //
