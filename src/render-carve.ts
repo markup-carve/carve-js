@@ -87,6 +87,22 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // passes below agree on them.
   sentinels = pickSentinels(collectStrings(ast))
   redundantIds = findRedundantHeadingIds(ast)
+  definitionsByLine = new Map()
+  definitionsWrittenInPlace = new WeakSet()
+  for (const child of ast.children) {
+    if (child.type !== 'link_reference_definition') continue
+    const line = child.pos?.startLine
+    // First writer wins for a line, which cannot normally collide: two
+    // definitions on one line is not a shape the parser produces.
+    if (line !== undefined && !definitionsByLine.has(line)) definitionsByLine.set(line, child)
+  }
+  footnoteDefsByLine = new Map()
+  footnotesWrittenInPlace = new Set()
+  documentFootnoteDefs = ast.footnoteDefs
+  for (const [label, pos] of Object.entries(ast.footnoteDefPos ?? {})) {
+    const line = pos?.startLine
+    if (line !== undefined && !footnoteDefsByLine.has(line)) footnoteDefsByLine.set(line, label)
+  }
   const minimal = renderWithEscapes(ast, 'minimal')
   const conservative = renderWithEscapes(ast, 'conservative')
   if (minimal === conservative) return minimal
@@ -488,6 +504,10 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // PART 12 §10 gave this a node precisely so the writer can put the line
       // back. Before that there was nowhere to write it from, which is why every
       // resolved reference was INLINED instead (carve-js#690).
+      //
+      // Unless a definition list already wrote it on its own description line,
+      // where the author put it - writing it twice would define it twice.
+      if (definitionsWrittenInPlace.has(node as unknown as object)) return ''
       const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
       const attrs = renderAttrs(node.attrs)
       return `[${node.label}]: ${node.href}${title}${attrs === '' ? '' : ` ${attrs}`}`
@@ -643,11 +663,39 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
   const out: string[] = []
   for (const item of items) {
     for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
-    for (const def of item.definitions) {
+    item.definitions.forEach((def, index) => {
+      // An EMPTY description whose line carries a hoisted definition is one the
+      // author wrote the definition on: write it back there. Without this the
+      // line came out as a bare `:`, which re-parses into the term above it -
+      // the failure markup-carve/carve#805 describes.
+      if (def.length === 0) {
+        const line = item.definitionLines?.[index]
+        const definition = line === undefined ? undefined : definitionsByLine.get(line)
+        if (definition !== undefined) {
+          // Render BEFORE marking it: the document-level arm returns '' for a
+          // node in this set, so marking first renders the line away.
+          const written = renderBlock(definition, ctx)
+          definitionsWrittenInPlace.add(definition as unknown as object)
+          out.push(`:  ${written}`)
+          return
+        }
+        const label = line === undefined ? undefined : footnoteDefsByLine.get(line)
+        const blocks = label === undefined ? undefined : documentFootnoteDefs?.[label]
+        if (label !== undefined && blocks !== undefined) {
+          const written = renderOneFootnoteDef(label, blocks, ctx)
+          footnotesWrittenInPlace.add(label)
+          // A footnote body can be multi-line; its continuation lines carry the
+          // body's own two-column indent and sit under the description.
+          const [first, ...rest] = written.split('\n')
+          out.push(`:  ${first}`)
+          for (const l of rest) out.push(`   ${l}`)
+          return
+        }
+      }
       const lines = trimNonNbsp(renderHostedBlocks(def, ctx)).split('\n')
       out.push(`:  ${lines.shift() ?? ''}`)
       for (const line of lines) out.push(`   ${line}`)
-    }
+    })
   }
   return out.join('\n')
 }
@@ -783,21 +831,35 @@ function renderFigure(node: Figure, ctx: CarveContext): string {
   return `${target}\n^ ${renderInlines(node.caption, ctx)}`
 }
 
+/**
+ * One footnote definition, marker and body.
+ *
+ * Extracted because a definition list writes one back on its own description
+ * line (markup-carve/carve#805) and a second spelling of the body's indent rule
+ * would be a rule with two implementations - the shape that has produced most of
+ * this engine's cross-engine divergences.
+ */
+function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
+  const rawBody = renderBlocks(blocks, ctx)
+  const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
+  const lines = body.split('\n')
+  const defLines = [`[^${escapeFootnoteLabel(label)}]: ${lines.shift() ?? ''}`]
+  // TWO spaces, the body's own column (PART 9 §16). Three is legal
+  // continuation, but it leaves the body's blocks at a relative column above
+  // zero - and a reader that takes the body's column as two then sees an
+  // indented block opener, which does not open. This engine reads three back
+  // fine; the executable spec, carve-rs and carve-php do not.
+  for (const line of lines) defLines.push(`  ${line}`)
+  return defLines.join('\n')
+}
+
 function renderFootnoteDefs(ast: Document, ctx: CarveContext): string {
   if (!ast.footnoteDefs) return ''
   const out: string[] = []
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    const rawBody = renderBlocks(blocks, ctx)
-    const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
-    const lines = body.split('\n')
-    const defLines = [`[^${escapeFootnoteLabel(label)}]: ${lines.shift() ?? ''}`]
-    // TWO spaces, the body's own column (PART 9 §16). Three is legal
-    // continuation, but it leaves the body's blocks at a relative column above
-    // zero - and a reader that takes the body's column as two then sees an
-    // indented block opener, which does not open. This engine reads three back
-    // fine; the executable spec, carve-rs and carve-php do not.
-    for (const line of lines) defLines.push(`  ${line}`)
-    out.push(defLines.join('\n'))
+    // Unless a definition list already wrote it where the author put it.
+    if (footnotesWrittenInPlace.has(label)) continue
+    out.push(renderOneFootnoteDef(label, blocks, ctx))
   }
   return out.join('\n\n')
 }
@@ -1391,6 +1453,34 @@ let escapeMode: 'minimal' | 'conservative' = 'conservative'
  * that could drift from it (carve-js#741).
  */
 let redundantIds = new WeakSet<object>()
+
+/**
+ * Hoisted definitions keyed by the SOURCE LINE they were written on, and the
+ * ones a definition list has already written back.
+ *
+ * A definition collected from a definition list's description empties the `dd`
+ * (spec markup-carve/carve#801), and an empty description has no source
+ * spelling: the writer emitted a bare `:` line, which re-parses as a
+ * continuation of the term, so `to_html(fmt(x)) == to_html(x)` failed on the
+ * documents that rule added (markup-carve/carve#805).
+ *
+ * Nothing new is needed to fix it. The entry records `definitionLines`, the
+ * definition node keeps the `pos` it was written at (PART 12 §4), and the two
+ * name the SAME LINE - so the description can be written back with the
+ * definition on it, exactly as the author had it, and the document-level pass
+ * skips what a description already claimed.
+ *
+ * This is the same shape as the heading id: the tree already distinguishes
+ * authored from derived, and the writer only had to ask (carve-php#901).
+ */
+let definitionsByLine = new Map<number, BlockNode>()
+let definitionsWrittenInPlace = new WeakSet<object>()
+/** Footnote definitions live in a root map, not in `children`, so these are
+ *  tracked by LABEL rather than by node identity. */
+let footnoteDefsByLine = new Map<number, string>()
+let footnotesWrittenInPlace = new Set<string>()
+/** The document's footnote bodies, so a description can write one back. */
+let documentFootnoteDefs: Record<string, BlockNode[]> | undefined
 
 /**
  * Protect a paragraph line that would re-parse as a thematic break.
