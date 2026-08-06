@@ -78,15 +78,34 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
       if (pos !== undefined) node.pos = pos
       out.push(node)
     }
-    for (const definition of item.definitions ?? []) {
+    ;(item.definitions ?? []).forEach((definition, index) => {
       const node: DefinitionDescriptionNode = {
         type: 'definition_description',
         children: definition,
       }
-      const pos = span(definition)
+      // A description whose only content HOISTED to the document root - a link
+      // reference, footnote or abbreviation definition, PART 12 §7 - has no
+      // children left, so `span` derives nothing and the `<dd>` was the one
+      // thing in the document an editor could not navigate to
+      // (markup-carve/carve-js#813).
+      //
+      // That is not §4's exemption. §4 exempts a node the producer REASSEMBLED,
+      // because its value is not a slice of the source at any offset. These
+      // lines are contiguous, unmoved and still in the source; the parser
+      // recorded exactly which ones it consumed, and `definitionSpans` carries
+      // that. docs/ast-json.md:116-117 narrows the exemption to "nodes that
+      // *cannot* be placed, not nodes that have not been placed yet".
+      //
+      // The derived span still wins when there is one, so the placed `<dd>`s
+      // this engine already publishes do not move. Whether a `<dd>`'s span
+      // should cover its `:  ` marker in the NON-empty case too is the extent
+      // convention, markup-carve/carve#913, tracked for all node types and all
+      // three engines in the spec's resources/ast-span-divergence.txt - not
+      // settled one node type at a time here.
+      const pos = span(definition) ?? item.definitionSpans?.[index]
       if (pos !== undefined) node.pos = pos
       out.push(node)
-    }
+    })
   }
   return out
 }
