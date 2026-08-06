@@ -1272,7 +1272,14 @@ function collectLinkDefs(lexer: Lexer) {
     const raw = lexer.lines[idx]!
     // A description continues an entry opened by a `::` term or by a previous
     // description, and only then does its marker open content here.
-    const afterTerm = RE_AFTER_TERM.test(lexer.lines[idx - 1] ?? '')
+    // Tested on the PREFIX-STRIPPED previous line, the way the current line is
+    // read one line down. Asking the raw line meant `> :: term` did not read as
+    // a term, so the `:  ` marker below it was never stripped and the
+    // definition on it was neither collected nor hoisted - the `dd` was still
+    // emptied, so the author's line vanished and a reference to it stayed
+    // literal (carve#840). A div was the one container that worked, because it
+    // adds no per-line prefix for this to hide behind.
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[idx - 1] ?? ''))
     const line = stripContainerPrefixes(raw, afterTerm)
     // Content columns are measured INSIDE the block quote. `> - a` puts the
     // item's content column at 2 of the quoted content, not of the raw line -
