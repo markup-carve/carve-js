@@ -914,8 +914,21 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
   return defLines.join('\n')
 }
 
-/** Child kinds that are HOISTED definitions rather than body blocks. */
-const HOISTED_DEFINITION_TYPES = new Set(['link_reference_definition', 'abbreviation_def'])
+/**
+ * Child kinds that are HOISTED definitions rather than body blocks.
+ *
+ * ONLY the collected kinds. §7 moves `link_reference_definition` and `footnote`
+ * to the document and orders them by source position, and refuses that for
+ * `abbreviation_def` specifically - "hoisting it would empty the line rather
+ * than relocate visible output" - so an abbreviation definition already sits
+ * where the author wrote it and must be written there.
+ *
+ * Listing it here moved every abbreviation definition to the end of the
+ * document (carve-js#756): `compare:impls` reported five corpus documents at
+ * once, all abbreviation cases, with carve-rs and carve-php agreeing against
+ * this engine.
+ */
+const HOISTED_DEFINITION_TYPES = new Set(['link_reference_definition'])
 
 /**
  * The document's body, then its hoisted definitions in source-position order.
