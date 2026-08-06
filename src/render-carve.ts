@@ -87,8 +87,10 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // passes below agree on them.
   sentinels = pickSentinels(collectStrings(ast))
   redundantIds = findRedundantHeadingIds(ast)
+  // The two "written in place" sets are NOT reset here: they are per-PASS, and
+  // renderWithEscapes owns them. Resetting them here as well would be the same
+  // rule in two places, and the pass-scoped one is the one that has to hold.
   definitionsByLine = new Map()
-  definitionsWrittenInPlace = new WeakSet()
   for (const child of ast.children) {
     if (child.type !== 'link_reference_definition') continue
     const line = child.pos?.startLine
@@ -97,7 +99,6 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
     if (line !== undefined && !definitionsByLine.has(line)) definitionsByLine.set(line, child)
   }
   footnoteDefsByLine = new Map()
-  footnotesWrittenInPlace = new Set()
   documentFootnoteDefs = ast.footnoteDefs
   for (const [label, pos] of Object.entries(ast.footnoteDefPos ?? {})) {
     const line = pos?.startLine
@@ -218,6 +219,16 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
 function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
   const previous = escapeMode
   escapeMode = mode
+  // "Already written on a description line" is true of THIS PASS, not of the
+  // document. renderCarve runs this function twice and picks between the two
+  // forms (PART 11 §4), so a set that survives the first pass tells the second
+  // one that every definition is already placed: the description emits a bare
+  // `:` and the document-level arm - which returns '' for a marked node - emits
+  // nothing either, deleting the definition outright. Whenever the conservative
+  // form then wins, `to_html(fmt(x)) == to_html(x)` fails by turning a resolved
+  // reference back into literal text (markup-carve/carve#805).
+  definitionsWrittenInPlace = new WeakSet()
+  footnotesWrittenInPlace = new Set()
   try {
     const ctx: CarveContext = {
       blockDepth: 0,
