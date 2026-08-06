@@ -313,6 +313,35 @@ function trimStructural(text: string): string {
   return text.replace(TRIM_STRUCTURAL_RE, '')
 }
 
+// A TABLE CELL PADS WITH A SPACE. `delimiter_cell`, `header_cell`, `data_cell`,
+// `rowspan_marker` and `colspan_marker` each spell their padding slots `{space}`
+// (grammar.ebnf), and PART 7's MARKER SEPARATORS AND PADDING SLOTS says a tab is
+// syntax ONLY in a line's leading indentation run. Every one of these slots sits
+// after the row's opening `|`, so every one of them is inline and takes a space.
+//
+// It was `trimStructural`, i.e. `\s` minus U+00A0, so a tab satisfied a padding
+// slot in this engine and in the other two - the production was ahead of every
+// implementation of it (carve#910, carve-js#803).
+//
+// A tab here is not a rejection, it is CONTENT: it stops being padding and stays
+// where it was written. At `delimiter_cell` the consequence is structural rather
+// than textual - the cell is no longer a delimiter cell, so its row promotes no
+// header and assigns no alignment, and the `---` run is prose that smart
+// typography renders as an em dash.
+//
+// A RUN, not a first character. Spelled as "the first character must be a space"
+// this passes `<TAB>a` and still lets `<SP><TAB>a` through; corpus 256 carries a
+// mixed run beside each tab-first case at both ends of all five productions.
+const trimCellPadding = (text: string): string => {
+  let start = 0
+  let end = text.length
+  while (start < end && text.charCodeAt(start) === 0x20) start++
+  while (end > start && text.charCodeAt(end - 1) === 0x20) end--
+  if (start === 0 && end === text.length) return text
+
+  return text.slice(start, end)
+}
+
 // A BLANK LINE IS SPACE AND TAB AND NOTHING ELSE. The grammar names the class
 // twice over: `blank_line = {whitespace}, newline` (grammar.ebnf:246) over
 // `whitespace = ' ' | '\t'` (:2206). Nothing widens it for this position.
@@ -4792,7 +4821,7 @@ function parseCellMarkers(src: string): {
     if (m && isValidAttrPayload(m[1]!)) {
       const attrs = parseAttrs(m[1]!)
       if (!isEmptyAttrs(attrs)) {
-        return { header: false, attrs, content: trimStructural(src.slice(m[0].length)) }
+        return { header: false, attrs, content: trimCellPadding(src.slice(m[0].length)) }
       }
     }
   }
@@ -4801,7 +4830,7 @@ function parseCellMarkers(src: string): {
   // It may fail to merge later (for example in column 0), but it must still
   // render as an empty structural marker cell rather than an empty left-aligned
   // cell. Non-lone prefixes such as `|< text|` remain per-cell alignment.
-  if (trimStructural(src) === '<') return { header: false, span: 'colspan', content: '' }
+  if (trimCellPadding(src) === '<') return { header: false, span: 'colspan', content: '' }
 
   // Tight prefix only: the marker must sit at index 0 of the raw text.
   let i = 0
@@ -4829,13 +4858,13 @@ function parseCellMarkers(src: string): {
 
   if (i > 0) {
     // A tight marker prefix was consumed; the rest is content.
-    const content = trimStructural(src.slice(i))
+    const content = trimCellPadding(src.slice(i))
     return align ? { header, align, content } : { header, content }
   }
 
   // No tight prefix: a lone `^`/`<` (always spaced) is a span marker;
   // otherwise the whole trimmed text is content.
-  const trimmed = trimStructural(src)
+  const trimmed = trimCellPadding(src)
   if (trimmed === '^') return { header: false, span: 'rowspan', content: '' }
   return { header: false, content: trimmed }
 }
@@ -4868,7 +4897,7 @@ interface RawCell {
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
-  !c.span && !c.attrs && /^:?-+:?$/.test(trimStructural(c.raw))
+  !c.span && !c.attrs && /^:?-+:?$/.test(trimCellPadding(c.raw))
 
 const isGfmDelimiterRow = (row: RawCell[]): boolean =>
   row.length > 0 && row.every(isGfmDelimiterCell)
@@ -4928,7 +4957,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         offset: lexer.lineOffset(lineIndex) + line.length,
       }
       splitTableRowSpans(line).forEach(({ text: src }, idx) => {
-        const frag = trimStructural(src)
+        const frag = trimCellPadding(src)
         const target = lastRaw![idx]
         // A fragment on a span (`^`/`<`) column is skipped: the spec's
         // "Combined: Rowspan + Multi-line" example always places the `+`
@@ -5012,7 +5041,15 @@ function parseTable(lexer: Lexer): Table | Figure {
     !isGfmDelimiterRow(rawRows[0]!)
   ) {
     const aligns = rawRows[1]!.map((c) => {
-      const t = trimStructural(c.raw)
+      // DOMINATED, and narrowed anyway. `isGfmDelimiterCell` above already
+      // required `/^:?-+:?$/` of the SAME space-trimmed string, so a cell whose
+      // padding is not a space has already stopped the row from being a
+      // delimiter row and never reaches here - reverting this one site to the
+      // wider trim renders all 1366 corpus documents byte-identically, plus
+      // seven targeted delimiter-row probes. It is narrowed regardless, because
+      // one rule spelled two ways is how this class of defect starts: the
+      // domination is a property of the code above, not of the rule.
+      const t = trimCellPadding(c.raw)
       const left = t.startsWith(':')
       const right = t.endsWith(':')
       return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined
