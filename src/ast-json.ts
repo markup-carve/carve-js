@@ -251,6 +251,35 @@ export function toAstJson(doc: Document): AstJsonDocument {
     children.push(node)
   }
 
+  // PART 12 §7: "Definitions appear in DOCUMENT ORDER by source position."
+  //
+  // The two kinds arrive from two places - link reference definitions from the
+  // parse, footnotes appended just above - so the published order followed the
+  // TABLES and not the source: a footnote written before a link definition came
+  // out after it, and `pos` ran backwards between two adjacent siblings
+  // (carve-js#745). carve-php had the identical cause and fixed it the same way
+  // (carve-php#902).
+  //
+  // Only the trailing DEFINITION run is sorted, and only among itself. Every
+  // hoisted definition sits at the end of the document by construction, so a
+  // sort bounded to that run cannot move a paragraph or reorder anything the
+  // author placed. A node with no `pos` keeps its position rather than sorting
+  // to the front: a definition the parse could not place is not evidence that it
+  // came first.
+  const isHoistedDefinition = (n: { type: string }): boolean =>
+    n.type === 'link_reference_definition' || n.type === 'footnote'
+  let runStart = children.length
+  while (runStart > 0 && isHoistedDefinition(children[runStart - 1]!)) runStart--
+  if (children.length - runStart > 1) {
+    const run = children.slice(runStart)
+    const placed = run.filter((n) => n.pos !== undefined)
+    placed.sort((a, b) => (a.pos?.startOffset ?? 0) - (b.pos?.startOffset ?? 0))
+    let next = 0
+    for (let i = 0; i < run.length; i++) {
+      if (run[i]!.pos !== undefined) children[runStart + i] = placed[next++]!
+    }
+  }
+
   const out: AstJsonDocument = { type: 'document', children }
   if (doc.srcByteLength !== undefined) out.srcByteLength = doc.srcByteLength
   return out
