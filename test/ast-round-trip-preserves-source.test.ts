@@ -42,68 +42,27 @@ const corpusDir = resolve(__dirname, '../spec/tests/corpus')
  * tree back differs from writing the parsed tree back - which is what an editor
  * does when it round-trips through the published AST.
  *
- * All 41 are now classified, and they are TWO causes, not a long tail:
+ * WAS 41, NOW 2. The 39 generated-heading-id documents are gone: publishing the
+ * id is right (PART 12 §5), and 7f86472 stopped the WRITER emitting it, because
+ * an authored id carries its `#id` slot in `attrs.order` and a generated one
+ * does not. carve-php#901 established that mechanism.
  *
- *   39  A GENERATED HEADING ID gains an attribute line the author never wrote.
- *       Spelled `{#Notes}`, or `{id=Café}` when the id cannot be written as a
- *       `#id` slot, and carried on the container's own line inside a quote or an
- *       item (`> {#Quoted}`). One cause, three spellings - which is why an
- *       eyeball scan of the list reads as more variety than it has.
- *       carve-js#738, spec markup-carve/carve#814.
+ * What remains is one cause, and it is an open spec question rather than a bug
+ * anyone has declined to fix:
  *
  *    2  A NESTED LINK or an AUTOLINK inside a link label is flattened into text
  *       on the wire, so `[[x](y)](z)` comes back as `[x](z)` - the inner
  *       destination is not in the tree at all - and `[pre <http://h> post](/u)`
- *       comes back with a bare URL where an autolink was.
- *       03-links-11.crv, 03-links-12.crv. Spec markup-carve/carve#817.
+ *       comes back with a bare URL where an autolink was. All three engines
+ *       flatten identically; markup-carve/carve#817 asks what §3a requires.
  *
- * Both are open spec questions about what the wire must carry, so neither is
- * fixed here. The value is the boundary: a new document joining this list means
- * a change started losing source that did not before, and a THIRD cause
- * appearing is the thing most worth knowing.
+ * The value is the boundary: a document joining this list means a change started
+ * losing source that did not before, and a THIRD cause appearing is the thing
+ * most worth knowing.
  */
 const KNOWN_LOSSES = new Set<string>([
-  "02-headings-2.crv",
-  "02-headings-4.crv",
-  "02-headings-6.crv",
-  "02-headings.crv",
   "03-links-11.crv",
   "03-links-12.crv",
-  "03-links-13.crv",
-  "111-cross-references-resolve-inside-footnote-bodies.crv",
-  "118-cyclic-cross-reference-resolves-to-one-level-2.crv",
-  "118-cyclic-cross-reference-resolves-to-one-level-3.crv",
-  "118-cyclic-cross-reference-resolves-to-one-level.crv",
-  "119-trojan-source-heading-ids-are-nfc-normalized-and-strip-invisible-controls-2.crv",
-  "119-trojan-source-heading-ids-are-nfc-normalized-and-strip-invisible-controls-3.crv",
-  "119-trojan-source-heading-ids-are-nfc-normalized-and-strip-invisible-controls.crv",
-  "122-footnotes-placement.crv",
-  "15-heading-ids-2.crv",
-  "15-heading-ids-3.crv",
-  "15-heading-ids-4.crv",
-  "15-heading-ids-5.crv",
-  "15-heading-ids-6.crv",
-  "15-heading-ids.crv",
-  "170-headings-inside-containers-are-not-wrapped.crv",
-  "173-implicit-heading-references-with-no-definition.crv",
-  "204-a-heading-in-a-footnote-body-takes-an-id-but-no-section-wrapper.crv",
-  "213-a-tag-inside-a-literal-brace-run-is-still-a-tag.crv",
-  "217-a-heading-id-keeps-a-non-ascii-space.crv",
-  "221-a-heading-reference-folds-unicode-normalization-but-not-compatibility.crv",
-  "26-comments-5.crv",
-  "35-cross-reference.crv",
-  "71-attribute-edge-cases-13.crv",
-  "75-list-nesting-and-looseness-4.crv",
-  "75-list-nesting-and-looseness-7.crv",
-  "81-paragraph-interruption-18.crv",
-  "81-paragraph-interruption.crv",
-  "82-blockquote-lazy-continuation-3.crv",
-  "82-blockquote-lazy-continuation-4.crv",
-  "84-single-line-headings-2.crv",
-  "84-single-line-headings-3.crv",
-  "84-single-line-headings-4.crv",
-  "84-single-line-headings.crv",
-  "86-list-lazy-continuation-2.crv",
 ])
 
 describe('a document round-tripped through the AST', () => {
