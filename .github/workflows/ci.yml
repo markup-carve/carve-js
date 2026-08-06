@@ -44,6 +44,31 @@ jobs:
       - name: Build
         run: npm run build
 
+  perf:
+    name: scaling guards
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Skipped in the everyday suite: these are the only tests whose outcome
+      # depends on what else the machine is doing, and vitest runs files
+      # concurrently, so in the default run they measure each other. Here they
+      # get a runner to themselves, with file parallelism off.
+      - name: Scaling guards
+        run: npm run test:perf
+
   mxss:
     name: browser mutation-XSS (svg fence)
     runs-on: ubuntu-latest

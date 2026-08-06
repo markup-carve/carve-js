@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { slugify, inlineText, resolveHeadingIds } from '../src/heading-ids.js'
 import { parse, carveToHtml } from '../src/index.js'
 import type { InlineNode } from '../src/ast.js'
+import { perfIt } from './helpers/scaling.js'
 
 describe('slugify', () => {
   it('dashes spaces, preserves case by default', () => {
@@ -106,7 +107,7 @@ describe('resolveHeadingIds', () => {
       .map((b) => (b as { attrs?: { id?: string } }).attrs?.id)
     expect(ids).toEqual(['Setup', 'Notes', 'Setup-2', 'Setup-3'])
   })
-  it('deduplicates many colliding heading ids in linear time', () => {
+  perfIt('deduplicates many colliding heading ids in linear time', () => {
     const source = ['{#dup}', '# seed', ...Array.from({ length: 5000 }, () => '# dup')].join('\n\n')
     const start = performance.now()
     const doc = parse(source)
@@ -149,7 +150,7 @@ describe('resolveHeadingIds', () => {
     const html = carveToHtml('# Setup\n\n# Setup\n\nGo </#setup>.')
     expect(html).toContain('<a href="#Setup">Setup</a>')
   })
-  it('bounds repeated crossrefs to a large target', () => {
+  perfIt('bounds repeated crossrefs to a large target', () => {
     const heading = `# ${'large target '.repeat(1000)}`
     const refs = Array.from({ length: 3000 }, () => '</#target>').join(' ')
     const start = performance.now()

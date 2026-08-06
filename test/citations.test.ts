@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { carveToHtml, parse } from '../src/index.js'
 import { citations, parseLocator } from '../src/citations.js'
+import { perfIt } from './helpers/scaling.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [citations()] }).trim()
 const ha = (s: string) =>
@@ -86,7 +87,7 @@ describe('citations: defs + numbered rendering', () => {
     expect(h('@alice')).toContain('class="mention"')
   })
 
-  it('declines many unmatched citation openers in linear time', () => {
+  perfIt('declines many unmatched citation openers in linear time', () => {
     const source = '[@x '.repeat(20000)
 
     const start = performance.now()

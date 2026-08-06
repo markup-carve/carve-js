@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToCarve } from '../src/index.js'
+import { perfIt } from './helpers/scaling.js'
 
 // Regression guard for the canonical writer's whitespace trims. They were
 // anchored regexes (`/[^\S ]+$/`), which the engine retries from every
@@ -21,7 +22,7 @@ const ladder = (depth: number): string => {
 }
 
 describe('the canonical writer on a deep list ladder', () => {
-  it('formats 80 levels well inside a second', () => {
+  perfIt('formats 80 levels well inside a second', () => {
     // Warm up: the cold call carries JIT compilation, as every other perf
     // guard in this repo notes.
     carveToCarve(ladder(20))
@@ -36,7 +37,7 @@ describe('the canonical writer on a deep list ladder', () => {
     expect(elapsed).toBeLessThan(5000)
   })
 
-  it('formats the deepest document the parse cap accepts', () => {
+  perfIt('formats the deepest document the parse cap accepts', () => {
     carveToCarve(ladder(20))
 
     const start = performance.now()

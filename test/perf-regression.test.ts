@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
+import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guards for two O(n^2) parser paths:
 //
@@ -29,32 +30,11 @@ function timeMin(fn: () => void, runs = 3): number {
   return best
 }
 
-/**
- * The MEDIAN of three independent small/large ratios.
- *
- * A single ratio is a quotient of two noisy measurements, and on a shared
- * runner the small one is small enough that one scheduling hiccup moves the
- * quotient by more than the margin between linear and quadratic. That is not
- * hypothetical: this file put main red twice in a day at 3.65 and 3.51 against
- * a 3.5 guard, on a parser that scales at 1.9-2.4 locally (carve-js#570).
- *
- * A median needs TWO bad samples to move, and quadratic growth produces ~4x in
- * every sample rather than one. So the guard keeps the thing it was written to
- * catch and loses the thing it was catching by accident. `timeMin`'s own
- * best-of-N drops from 7 to 3 so three ratios cost about what one used to.
- */
-function ratioMedian(small: () => void, large: () => void): { ratio: number; tSmall: number } {
-  const ratios: number[] = []
-  let smallest = Infinity
-  for (let i = 0; i < 3; i++) {
-    const tSmall = timeMin(small)
-    const tLarge = timeMin(large)
-    smallest = Math.min(smallest, tSmall)
-    ratios.push(tLarge / tSmall)
-  }
-  ratios.sort((a, b) => a - b)
-  return { ratio: ratios[1]!, tSmall: smallest }
-}
+// `ratioMedian` lived here: the median of three TOTAL-elapsed ratios, guarding
+// at 3.5 where healthy reads ~2.0 and quadratic ~4.0. The median was the right
+// instinct and it is kept; the metric was the problem, since a 1.14x margin
+// below the quadratic signal cannot survive a shared runner. It moved to
+// test/helpers/scaling.ts as a PER-BYTE ratio with 2x margins on both sides.
 
 const shapes: Array<{ name: string; unit: string }> = [
   { name: 'link/image tail (no closing paren)', unit: '![x](' },
@@ -66,7 +46,10 @@ const shapes: Array<{ name: string; unit: string }> = [
 
 describe('parser perf regression (near-linear scaling)', () => {
   for (const { name, unit } of shapes) {
-    it(`${name} scales near-linearly`, () => {
+    // Left as an ABSOLUTE cap on purpose - see the reasoning inside. Gated only
+    // so it does not run concurrently with the rest of the suite, which is what
+    // made a 2000ms cap on a ~40ms operation fail.
+    perfIt(`${name} scales near-linearly`, () => {
       const n = 50000
       const small = unit.repeat(n)
       const large = unit.repeat(n * 2)
@@ -111,30 +94,21 @@ const farBraceShapes: Array<{ name: string; unit: string }> = [
 
 describe('parser perf regression: far-brace span attributes', () => {
   for (const { name, unit } of farBraceShapes) {
-    it(`${name} scales near-linearly`, () => {
-      const n = 50000
-      // A SINGLE trailing `}` far away: the delimiter exists, so the old suffix
-      // guard passed and the flat regex scanned to it at every `[`.
-      const small = unit.repeat(n) + '}'
-      const large = unit.repeat(n * 2) + '}'
-
+    // A SINGLE trailing `}` far away: the delimiter exists, so the old suffix
+    // guard passed and the flat regex scanned to it at every `[`.
+    //
+    // This used to compare TOTAL elapsed at n and 2n against a 3.5 guard, which
+    // reads ~2.0 when healthy and ~4.0 when quadratic - a 1.14x margin below
+    // the thing it must catch. It went red twice in a day at 3.65 and 3.51
+    // (carve-js#570) and again at 4.49 on a loaded machine. The shared helper
+    // compares cost PER BYTE at a 4x multiple instead: ~1.0 healthy, ~4.0
+    // quadratic, guard at 2.0, so the margin is 2x on both sides.
+    perfIt(`${name} scales near-linearly`, () => {
       carveToHtml(unit.repeat(1000) + '}')
-
-      const { ratio, tSmall } = ratioMedian(
-        () => void carveToHtml(small),
-        () => void carveToHtml(large),
-      )
-
-      expect(tSmall).toBeLessThan(2000)
-      // Linear yields ~2x, quadratic ~4x. Guard at 3.5x - safely below the
-      // quadratic 4x it must catch. The MEDIAN of three ratios is what makes
-      // that margin hold on a shared runner: one hiccup in a ~40ms `small`
-      // measurement used to carry a single ratio past 3.5 on a parser that
-      // scales at 1.9-2.4 (carve-js#570), and a median needs two bad samples
-      // to move while quadratic growth shows up in all three.
-      if (tSmall > 20) {
-        expect(ratio).toBeLessThan(3.5)
-      }
+      expectScansLinearly((input) => void carveToHtml(input), unit, {
+        suffix: '}',
+        label: name,
+      })
     })
   }
 })

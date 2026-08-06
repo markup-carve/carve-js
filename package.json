@@ -49,12 +49,13 @@
   },
   "scripts": {
     "build": "tsc",
+    "drift": "node scripts/published-drift.mjs",
     "prepare": "npm run build",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
-    "drift": "node scripts/published-drift.mjs"
+    "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@djot/djot": "^0.3.2",
