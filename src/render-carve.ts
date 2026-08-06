@@ -589,7 +589,18 @@ function renderList(node: List, ctx: CarveContext): string {
       // inside a fenced block in a list item was the one place it did (corpus
       // 75-list-nesting-and-looseness-5). The content is unchanged either way,
       // since the reader strips the item's columns back off.
-      for (const line of lines) out += line ? `${indent}${continuation}${line}\n` : '\n'
+      for (const line of lines) {
+        if (line.startsWith(MARKER_COLUMN)) {
+          // The continuation marker and the block it attaches sit at the ITEM's
+          // marker column, not at its content column: §17 L3 puts the marker at
+          // "the current container's MARKER COLUMN" and attaches the following
+          // block "with no marker prefix or indentation". Indenting either into
+          // the item is what made the attached paragraph fold (carve#861).
+          out += `${indent}${line.slice(MARKER_COLUMN.length)}\n`
+          continue
+        }
+        out += line ? `${indent}${continuation}${line}\n` : '\n'
+      }
       if (!node.tight && idx < node.items.length - 1) out += '\n'
     })
     return trimEndNonNbsp(out)
@@ -649,6 +660,24 @@ function definitionInGap(
   return undefined
 }
 
+/**
+ * Mark every line of `text` to be written at the ITEM's marker column.
+ *
+ * The list writer prefixes an item's continuation lines with its content
+ * column. A `+` continuation marker and the block it attaches are the two
+ * things that must NOT get that prefix (§17 L3), and they are produced deep
+ * inside the item body where the prefix is not yet known - so they are tagged
+ * here and the prefix loop honours the tag.
+ */
+const MARKER_COLUMN = '\ue005'
+
+function atMarkerColumn(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => MARKER_COLUMN + line)
+    .join('\n')
+}
+
 function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
   // A list item is a prefix/indent host: its fences start over at `:::`.
   const outerFenceDepth = ctx.colonFenceDepth
@@ -672,12 +701,36 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
     const parts: string[] = []
     item.children.forEach((b, i) => {
       const previous = item.children[i - 1]
+      // A definition written back BETWEEN the two blocks already ends the
+      // paragraph above it, so the marker below is not needed - and emitting it
+      // anyway changes the canonical form of corpus 228, whose whole point is
+      // that a line at the definition's own column forms its own tight block.
+      let separated = false
       if (previous !== undefined) {
         const written = definitionInGap(previous, b, ctx)
-        if (written !== undefined && written.length > 0) parts.push(written)
+        if (written !== undefined && written.length > 0) {
+          parts.push(written)
+          separated = true
+        }
       }
       const rendered = renderBlock(b, ctx)
-      if (rendered.length > 0) parts.push(rendered)
+      if (rendered.length === 0) return
+      // §17 L3: a PARAGRAPH after a paragraph needs the continuation marker
+      // written back. Indented under the item it is a LAZY CONTINUATION of the
+      // paragraph above (§10 I2), so the item comes back holding ONE block
+      // where the author wrote two, and `to_html(fmt(x)) != to_html(x)`
+      // (carve#861).
+      //
+      // Only a paragraph reaches this. A fence, quote, heading, table, div or
+      // thematic break cannot fold into an open paragraph, so indenting them
+      // into the item is a different SPELLING of the same document and the
+      // invariant already held - which is why the corpus, which pinned exactly
+      // those kinds, never saw this.
+      if (!separated && previous?.type === 'paragraph' && b.type === 'paragraph') {
+        parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
+        return
+      }
+      parts.push(rendered)
     })
     return parts.join('\n')
   } finally {
