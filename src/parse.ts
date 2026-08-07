@@ -3715,11 +3715,53 @@ function parseDiv(lexer: Lexer): Div {
 // `:  definition` lines; a definition continues on lines indented to COLUMN 3
 // or beyond. A `:: term` after a definition starts a new entry; a single
 // blank line between entries is allowed, anything else ends the list.
+/**
+ * The column a definition body's content sits at - `definition_indent`, the
+ * `:` marker plus its two-space separator. Named because the S4 tracker and the
+ * two indent tests below all measure against it, and a run of bare `3`s is how a
+ * column rule acquires several spellings.
+ */
+const DEFLIST_CONTENT_COL = 3
+
 function parseDefinitionList(lexer: Lexer): DefinitionList {
   const items: DefinitionItem[] = []
   const parseDefBody = (first: string, firstLineIndex: number): BlockNode[] => {
     const bodyLines: string[] = []
     const bodyLineNumbers: number[] = []
+    // AND A DEFINITION BODY IS SUCH A CONTAINER (PART 0 S4,
+    // markup-carve/carve#956). A definition body is the third indented-block
+    // collector and answers S4 the same way the list item and the block quote
+    // do: NO OPEN PARAGRAPH, NO LAZY LINE. It carried no model of that at all -
+    // the lazy branch below asked only "is this line a block opener" - so a
+    // fence opened on the `:  ` marker line left every flush-left line folding
+    // into the code text, body and closer both, where the identical `- ` list
+    // spelling closes the container and re-parses them at document level
+    // (corpus 276).
+    //
+    // The state is the LIST's, driven by the list's own tracker. A definition
+    // body is not a different container kind for this rule (carve#920: the
+    // container kind is not a parameter), so a second spelling of the model
+    // would be a second place for it to drift.
+    const lazyState: ItemLazyState = {
+      inFence: false,
+      fenceClose: null,
+      inComment: false,
+      commentLen: 0,
+      lazyFoldableBeforeComment: false,
+      absorbingFence: false,
+      divDepth: 0,
+      lazyFoldable: false,
+      inDefList: false,
+    }
+    const defFenceMemo: QuotedFenceCloserMemo = new Map()
+    /** Feed one collected body line to the S4 tracker. */
+    const track = (content: string, atLineIndex?: number): void => {
+      trackItemLazyState(content, lazyState, (marker) =>
+        atLineIndex === undefined
+          ? true
+          : itemFenceHasCloser(lexer, marker, atLineIndex, DEFLIST_CONTENT_COL, defFenceMemo),
+      )
+    }
     // First-block form (`:  +`, mirroring the list `- +`): when the sole
     // content is a lone `+`, the definition body is the FOLLOWING flush-left
     // block, with no indentation. `:  \+` keeps a literal `+` instead.
@@ -3737,10 +3779,24 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         lexer.consume()
         bodyLines.push(a)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+        track(a)
       }
     } else {
       bodyLines.push(first)
       bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
+      // The MARKER LINE never goes through the tracker in the list either, and
+      // for the same reason it is seeded by hand here: nothing precedes it, so
+      // no closer lookahead applies and a fence on it opens unconditionally
+      // (markup-carve/carve#950). The lead opens a paragraph unless it is one of
+      // the shapes that open nothing.
+      lazyState.lazyFoldable =
+        !isBlankLine(first) && !isEmptyQuoteLine(first) && !isBlockAttributeLine(first)
+      const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
+      if (leadFence) {
+        lazyState.inFence = true
+        lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(first) ? leadFence[2]! : leadFence[1]!)
+        lazyState.lazyFoldable = false
+      }
     }
     // A definition continues like a list item (PART 9 \u00a717):
     //  - form A: a deeper-indented line (>= the content column) folds in, and a
@@ -3779,7 +3835,11 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         if (attached.length > 0) {
           bodyLines.push('')
           bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
-          for (const a of attached) bodyLines.push(a)
+          track('')
+          for (const a of attached) {
+            bodyLines.push(a)
+            track(a)
+          }
           bodyLineNumbers.push(...attachedLineNumbers)
         }
         continue
@@ -3793,7 +3853,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // column - end the body, while three spaces continued it, and made the
       // answer depend on how the author spelled a run rather than where it
       // landed (markup-carve/carve-js#812).
-      if (!isBlankLine(ln) && indentColumns(ln, 3) >= 3) {
+      if (!isBlankLine(ln) && indentColumns(ln, DEFLIST_CONTENT_COL) >= DEFLIST_CONTENT_COL) {
         // A CONTINUATION INDENTED PAST THE BODY'S COLUMN IS LAZY TEXT
         // (markup-carve/carve#918). `definition_indent` REACHES the body's
         // column and does not measure how far past it a line went, because
@@ -3823,8 +3883,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // A content U+00A0 is still kept: `sliceColumns` counts only spaces and
         // tabs as columns, so a no-break space stops the scan as content.
         const lineIndex = lexer.pos
-        bodyLines.push(sliceColumns(ln, 3, true))
+        const dedented = sliceColumns(ln, DEFLIST_CONTENT_COL, true)
+        bodyLines.push(dedented)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+        track(dedented, lineIndex)
         lexer.consume()
         continue
       }
@@ -3840,11 +3902,16 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // decides whether the body survives the blank at all, the Form A branch
         // above decides whether a line folds. Both read columns, or a lone tab
         // after a blank ends the body while Form A would have kept it.
-        if (after !== undefined && !isBlankLine(after) && indentColumns(after, 3) >= 3) {
+        if (
+          after !== undefined &&
+          !isBlankLine(after) &&
+          indentColumns(after, DEFLIST_CONTENT_COL) >= DEFLIST_CONTENT_COL
+        ) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos
             bodyLines.push('')
             bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+            track('')
             lexer.consume()
           }
           continue
@@ -3857,10 +3924,16 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // Lazy continuation: a flush-left line (no blank before it) that does not
       // start an interrupting block folds into the open paragraph; a block
       // opener ends the definition.
-      if (!startsInterruptingBlock(lexer)) {
+      // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0 S4, markup-carve/carve#956).
+      // `startsInterruptingBlock` asks what THIS line is; `lazyFoldable` asks
+      // what the body currently ends in. Both have to hold: a verbatim body is
+      // not an open paragraph, so there is nothing for a below-column line to
+      // continue and the containers close instead.
+      if (lazyState.lazyFoldable && !startsInterruptingBlock(lexer)) {
         const lineIndex = lexer.pos
         bodyLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
+        track(ln)
         lexer.consume()
         continue
       }

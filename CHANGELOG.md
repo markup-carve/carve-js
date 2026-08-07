@@ -126,6 +126,29 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Both now read the interior, which is the string `parseAttrs` takes everywhere
   else.
 
+- **A definition body answers PART 0 S4 like the other two containers**
+  (markup-carve/carve#956). NO OPEN PARAGRAPH, NO LAZY LINE binds every
+  container that collects an indented block, and a definition body carried no
+  model of it: the lazy branch asked only whether the incoming line was a block
+  opener, never what the `dd` currently ended in.
+
+  ```
+  :: t
+  :  ```
+  body
+  ```
+  ```
+
+  `body` supplies none of the body's column, so the containers close, the `dd`
+  holds an EMPTY code block, and `body` re-parses at document level - byte for
+  byte the answer corpus 276 already pins for the `- ` fence spelling. Before,
+  every flush-left line folded into the code text, body and closer both.
+
+  Four more shapes move with it, each already answered this way inside a list
+  item: a raw fence on the marker line, a CLOSED fence at the body column, an
+  empty block quote, and a block-attribute line. A body that does hold an open
+  paragraph still takes the lazy line.
+
 - **A bottom-positioned table of contents is emitted at document level, after
   the last section** (markup-carve/carve-js#728). `tableOfContents({ position:
   'bottom' })` appended the `<nav>` to the document's block list, so the
