@@ -203,6 +203,30 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     expect(html('> %%%\n> secret\nlazy\n\n%%%\n')).toContain('<p>secret lazy</p>')
   })
 
+  it('does not resume the scan past an unquoted line', () => {
+    // The mutation that turns the bound into a SKIP came back green on every
+    // shape above, because none of them puts a QUOTED fence after an unquoted
+    // line - which is the only way to tell "stop here" from "ignore this line
+    // and keep looking". Found by building the mutant and diffing its output.
+    expect(html('> %%%\n> secret\nlazy\n\n> %%%\n')).toBe(
+      '<blockquote> <p>secret lazy</p> </blockquote> <blockquote> </blockquote>',
+    )
+  })
+
+  it('needs the width to match, with a lazy line to make it observable', () => {
+    // Ignoring the width was green too. The width test only changes an ANSWER
+    // where a lazy line follows the mismatched fence: without one, the quote
+    // ends at the same place either way.
+    const wider = html('> %%%\n> secret\n> %%%%\nlazy\n')
+    const narrower = html('> %%%%\n> secret\n> %%%\nlazy\n')
+
+    expect(wider).toBe('<blockquote> <p>secret</p> <p>lazy</p> </blockquote>')
+    expect(narrower).toBe('<blockquote> <p>secret</p> <p>lazy</p> </blockquote>')
+    // The CONTROL: an exact-width fence really does close, and the lazy line
+    // then ends the quote.
+    expect(html('> %%%\n> secret\n> %%%\nlazy\n')).toBe('<blockquote> </blockquote> <p>lazy</p>')
+  })
+
   it('CONTROL: a nested wider fence still closes its own opener', () => {
     // The other direction, so the width test is not just rejecting everything:
     // `%%%%` opens and `%%%%` closes, with a `%%%` inside it nested and hidden.
