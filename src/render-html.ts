@@ -420,7 +420,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   let footnotesPlaced = false
 
   // Document TRAILERS: blocks held in `children` that belong to the document
-  // rather than to the section a heading opened around them. Deferred here and
+  // rather than to the section a heading opened around them. Skipped here and
   // emitted after `closeTo(1)` below, which is the only way out of a `<section>`
   // - see `Document.trailerBlocks` for why one option produced four placements
   // without it (markup-carve/carve-js#728).
@@ -429,14 +429,19 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   // `children`, so an authored `raw_block` that happens to look like the one an
   // extension inserted is never mistaken for it.
   const trailers = new Set<BlockNode>(ast.trailerBlocks ?? [])
-  const deferred: BlockNode[] = []
+  // The other half of the same identity test, and the one that has to be here.
+  // A profile REMOVES a denied node from `children` while the mark that named
+  // it stays behind, so a trailer loop reading the mark alone would re-emit
+  // content the profile stripped. Answered where the emission happens rather
+  // than where the removal does: this is the only place that can resurrect it,
+  // so it is the only place the check can fail. A copy of it in the filter was
+  // green under every mutation, which is what a check that cannot fail looks
+  // like.
+  const documentChildren = new Set<BlockNode>(ast.children)
 
   for (const node of ast.children) {
     if (node.type === 'abbreviation_def') continue
-    if (trailers.has(node)) {
-      deferred.push(node)
-      continue
-    }
+    if (trailers.has(node)) continue
     // `::: footnotes` flushes the endnotes section HERE instead of at document
     // end. Only the first marker in a document that actually has footnotes
     // places; any other `::: footnotes` (or one in a document with no notes)
@@ -497,7 +502,8 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   // section" means after that one too. carve-php reaches the same place from
   // the other end: its TOC extension is a render listener that appends to the
   // finished HTML string, `$html . $separator . $tocHtml`.
-  for (const node of deferred) {
+  for (const node of trailers) {
+    if (!documentChildren.has(node)) continue
     const rendered = renderBlock(node, opts, 0)
     if (rendered !== '') out.push(rendered)
   }

@@ -492,19 +492,18 @@ class ProfileFilter {
   /**
    * Re-point the document's trailer marks at what survived the filter.
    *
-   * A node that was STRIPPED needs no entry here: it is no longer in
-   * `children`, and the containment test drops it. That test is also what keeps
-   * a mark honest in general - a trailer is by definition a direct child of the
-   * document, so anything else in the list is stale.
+   * REPLACEMENT only. A node that was STRIPPED is left in the list on purpose:
+   * dropping it here would be a second containment test, and the renderer
+   * already has to make that one - it is the only place a stale mark could
+   * resurrect removed content, so it is the only place the check can fail.
+   * A copy of it here would be a check that cannot fail, which is how most of
+   * the defects in this repo got in.
    */
   private remapTrailers(doc: Document): void {
     if (doc.trailerBlocks === undefined) return
-    const present = new Set<unknown>(doc.children)
-    const kept = doc.trailerBlocks
-      .map((node) => this.survivorOf(node as unknown as NodeLike))
-      .filter((node): node is NodeLike => node !== undefined && present.has(node))
-    if (kept.length === 0) delete doc.trailerBlocks
-    else doc.trailerBlocks = kept as unknown as BlockNode[]
+    doc.trailerBlocks = doc.trailerBlocks.map(
+      (node) => (this.survivorOf(node as unknown as NodeLike) ?? node) as unknown as BlockNode,
+    )
   }
 
   /**
