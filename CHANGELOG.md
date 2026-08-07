@@ -43,6 +43,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A padding slot spelled `space` takes exactly one space**
+  (markup-carve/carve#912). Four productions spell their padding slot with a bare
+  `space` - the link and image title, the code fence's slot before its info
+  string, `frontmatter_open`'s slot before the format token, and a reference
+  definition's slot before its trailing attributes - and this engine accepted a
+  RUN at every one of them, as carve-php, carve-rs and the executable spec did.
+  So ``` ```<SP><SP>php ``` opened a php fence, `---<SP><SP>yaml` opened
+  frontmatter, and `[a]: /u<SP><SP>{.c}` attached the attribute block. Each now
+  falls back the way PART 7 promises rather than silently taking the metadata: an
+  invalid fence becomes an inline verbatim span, a frontmatter opener becomes
+  paragraph text with its metadata still visible, and a reference definition
+  keeps its destination without the rejected slot. One space is unaffected
+  everywhere, and the slots spelled `space+` - the fence's own header and label,
+  and the colon fence's separator - keep their run.
+
 - **`carve fmt` keeps every character the renderer keeps** (markup-carve/carve#890,
   markup-carve/carve#924). `whitespace` in this language is a space or a tab, and
   the writer answered that question three different ways, each of them with a
