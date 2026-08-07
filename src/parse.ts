@@ -3430,13 +3430,24 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     text: string
     lineIndex: number
     /**
-     * The expansion kept the line's LENGTH, so document offsets still line up.
+     * The expansion kept every character AT ITS OWN OFFSET, so document offsets
+     * still line up.
      *
      * Each preserved space becomes exactly one U+E000 sentinel, so a line with
      * an indent or a medial gap is not a verbatim slice but every character
      * still sits at its own offset - the whitespace is consumed as layout and
      * never reaches a text node's value. A TAB expands to up to four sentinels,
      * which shifts everything after it, so those stay unanchored.
+     *
+     * Measured BEFORE the trailing-whitespace drop, which is why it is not
+     * simply a length comparison against the source line. Dropping a run at the
+     * END of a line moves nothing: every character that remains is still at the
+     * offset it came from, and the newline after it is placed from line
+     * geometry rather than from this text. Comparing the trimmed length instead
+     * unanchored the WHOLE stanza over one trailing space on one line - so
+     * `abc` on the line above came back unplaced too, even though it is a
+     * verbatim slice of the source and nothing about it had changed
+     * (corpus 268-trailing-whitespace-on-a-content-line-is-dropped-12).
      */
     aligned: boolean
   }
@@ -3455,7 +3466,11 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       continue
     }
     const expanded = expandLineBlockWhitespace(ln)
-    stanza.push({ text: expanded, lineIndex, aligned: expanded.length === ln.length })
+    stanza.push({
+      text: dropTrailingSpaces(expanded),
+      lineIndex,
+      aligned: expanded.length === ln.length,
+    })
   }
   if (stanza.length) stanzas.push(stanza)
 
@@ -3576,13 +3591,26 @@ function expandLineBlockWhitespace(line: string): string {
     out += !seenContent || width >= 2 ? '\ue000'.repeat(width) : ' '
   }
 
-  // NO TRAILING WHITESPACE (PART 2; carve#926), and it reaches this line last.
-  // The MEDIAL GAPS rule above has already converted a trailing run of TWO OR
-  // MORE columns into NBSP CONTENT, which this must not touch - the sentinel is
-  // not a space any more. What is left is a ONE-COLUMN trailing run, still an
-  // ordinary collapsible space, and that is the run the rule drops. So
-  // `abc<SP><SP>` keeps two non-breaking spaces and `def<SP>` keeps none.
-  return out.replace(/ +$/, '')
+  return out
+}
+
+/**
+ * NO TRAILING WHITESPACE (PART 2; carve#926), applied to an expanded line.
+ *
+ * The MEDIAL GAPS rule in `expandLineBlockWhitespace` has already converted a
+ * trailing run of TWO OR MORE columns into NBSP CONTENT, which this must not
+ * touch - the sentinel is not a space any more. What is left is a ONE-COLUMN
+ * trailing run, still an ordinary collapsible space, and that is the run this
+ * drops. So `abc<SP><SP>` keeps two non-breaking spaces and `def<SP>` keeps
+ * none.
+ *
+ * SPLIT OUT of the expansion so the caller can measure alignment against the
+ * untrimmed form. Folded in, the drop made the expansion shorter than the
+ * source line, an equal-length test read that as "the offsets no longer line
+ * up", and one trailing space cost the whole stanza its positions.
+ */
+function dropTrailingSpaces(line: string): string {
+  return line.replace(/ +$/, '')
 }
 
 // `::: \` hard-break block. Unlike the line block, the body is parsed as

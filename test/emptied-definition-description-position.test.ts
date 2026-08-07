@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse, renderCarve, toAstJson } from '../src/index.js'
+import { fromAstJson, parse, renderCarve, toAstJson } from '../src/index.js'
 
 /*
  * An emptied `<dd>` still publishes a position.
@@ -221,5 +221,121 @@ describe('the emptied span is contained by its list and contains nothing', () =>
 
     expect(list.pos!.startOffset).toBeLessThanOrEqual(dd.pos!.startOffset!)
     expect(list.pos!.endOffset).toBeGreaterThanOrEqual(dd.pos!.endOffset!)
+  })
+})
+
+/*
+ * PART 12 §6: serialize, DESERIALIZE, and get the same tree back.
+ *
+ * The position above survived one direction only. `entriesToWire` derives a
+ * description's span from its children and falls back to the recorded extent -
+ * so an EMPTIED description has nothing BUT the fallback - while
+ * `entriesFromWire` rebuilt an entry from `children` alone and dropped it. The
+ * trip came back a field short, which is this engine's own decoder refusing to
+ * reproduce what its own encoder had just written (markup-carve/carve#961,
+ * reported over corpus 227 and its `-2` sibling).
+ *
+ * Measured through `fromAstJson`, not through `JSON.parse(JSON.stringify(x))`:
+ * the latter can only fail on a value JSON cannot represent, so it is a
+ * statement about `JSON.stringify` and leaves the ingest half unmeasured.
+ */
+describe('an emptied description survives the round trip through fromAstJson', () => {
+  const reingest = (source: string) => {
+    const out = toAstJson(parse(source))
+
+    return { out, round: toAstJson(fromAstJson(JSON.parse(JSON.stringify(out)))) }
+  }
+
+  const emptying: Array<[string, string]> = [
+    ['link reference definition', ':: term\n:  [r]: /u\n\nsee [t][r]\n'],
+    ['footnote definition', ':: term\n:  [^f]: x\n\nsee[^f]\n'],
+  ]
+
+  for (const [label, source] of emptying) {
+    it(`is byte-identical after ingest: ${label}`, () => {
+      const { out, round } = reingest(source)
+
+      expect(JSON.stringify(round)).toBe(JSON.stringify(out))
+    })
+  }
+
+  it('keeps the span itself, not merely the byte count', () => {
+    // The identity check above fails on any difference, which makes it a good
+    // gate and a poor diagnosis. This names the field: the `<dd>` still selects
+    // the line the author wrote, after a trip through JSON.
+    const source = ':: term\n:  [r]: /u\n\nsee [t][r]\n'
+    const round = toAstJson(fromAstJson(JSON.parse(JSON.stringify(toAstJson(parse(source))))))
+    const list = (round as unknown as { children: Array<Record<string, unknown>> }).children.find(
+      (c) => c['type'] === 'definition_list',
+    )!
+    const dd = (list['items'] as Array<Record<string, unknown>>).find(
+      (i) => i['type'] === 'definition_description',
+    )!
+    const pos = dd['pos'] as { startOffset: number; endOffset: number }
+
+    expect(source.slice(pos.startOffset, pos.endOffset)).toBe(':  [r]: /u')
+  })
+
+  it('formats an INGESTED tree the same way it formats the parsed one', () => {
+    // The second consumer of what the decoder threw away. `renderCarve` writes a
+    // hoisted definition back onto its `:  ` line by looking the line up
+    // (markup-carve/carve#805); with the entry's lines gone, an ingested tree
+    // emitted a bare `:`, which re-parses INTO THE TERM ABOVE IT. So the same
+    // document formatted two ways depending on whether it had been through JSON,
+    // and one of the two was not the document.
+    const source = ':: term\n:  [r]: /u\n\nsee [t][r]\n'
+
+    expect(renderCarve(fromAstJson(JSON.parse(JSON.stringify(toAstJson(parse(source))))))).toBe(
+      renderCarve(parse(source)),
+    )
+  })
+
+  it('keeps the arrays index-parallel when only some descriptions are placed', () => {
+    // A hand-built payload can place one description and not the next, which the
+    // parser cannot produce. A rebuild that skipped the unplaced one would shift
+    // every later index, so the SECOND `<dd>`'s span would come back on the
+    // third. Written as a payload rather than as source for that reason.
+    const wire = {
+      type: 'document',
+      children: [
+        {
+          type: 'definition_list',
+          items: [
+            { type: 'definition_term', children: [] },
+            { type: 'definition_description', children: [] },
+            {
+              type: 'definition_description',
+              children: [],
+              pos: {
+                startLine: 3,
+                endLine: 3,
+                startColumn: 1,
+                endColumn: 11,
+                startOffset: 20,
+                endOffset: 30,
+              },
+            },
+          ],
+        },
+      ],
+      srcByteLength: 31,
+    }
+    const round = toAstJson(fromAstJson(wire)) as unknown as {
+      children: Array<{ items: Array<Record<string, unknown>> }>
+    }
+    const dds = round.children[0]!.items.filter((i) => i['type'] === 'definition_description')
+
+    expect(dds).toHaveLength(2)
+    expect(dds[0]!['pos']).toBeUndefined()
+    expect((dds[1]!['pos'] as { startOffset: number }).startOffset).toBe(20)
+  })
+
+  it('CONTROL: a description WITH children already round-tripped', () => {
+    // Its span is derived from its children, and the children carry their own
+    // positions across the wire, so it was re-derived identically on the way
+    // back. Green before the fix and after it.
+    const { out, round } = reingest(':: term\n:  body\n\nx\n')
+
+    expect(JSON.stringify(round)).toBe(JSON.stringify(out))
   })
 })

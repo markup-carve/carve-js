@@ -302,8 +302,14 @@ export interface DefinitionItem {
    * `definitions`. Only populated when parsing with positions; used to stamp
    * `<dd>` with its marker line (the body may start on a later line, e.g. the
    * `:  +` first-block form).
+   *
+   * An ENTRY may be undefined while its neighbours are not. `entriesFromWire`
+   * rebuilds this from the wire, where a description that carries no position
+   * sits between two that do, and the array has to stay index-parallel to
+   * `definitions` for the ones that do. A hole reads as "no line recorded",
+   * which is what both consumers already do with a missing array.
    */
-  definitionLines?: number[]
+  definitionLines?: (number | undefined)[]
   /**
    * The source extent of each definition's own lines - from its `:  ` marker to
    * the end of the last line it consumed - parallel to `definitions`. Only
