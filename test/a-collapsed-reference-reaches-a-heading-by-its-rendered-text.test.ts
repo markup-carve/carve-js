@@ -119,6 +119,36 @@ describe('a collapsed reference reaches a heading by its rendered text', () => {
     ])
   })
 
+  it('derives the label key with the SAME function the heading side uses', () => {
+    // Raised by codex review: a label carrying a construct `inlineText` drops -
+    // a footnote reference - now matches a heading without it.
+    //
+    // That is the clause, not a deviation from it. R1 says the label enters as
+    // "the same string kind the heading side already enters as", and a footnote
+    // reference contributes nothing to a HEADING's key either: `# [^x] heading`
+    // is keyed `heading` too. Deriving the label key with a DIFFERENT function
+    // than the heading side is what would break the symmetry the clause states.
+    const withFootnoteInLabel = '[^x]: note\n\n# heading\n\n[[^x] heading][]\n'
+    const withFootnoteInBoth = '[^x]: note\n\n# [^x] heading\n\n[[^x] heading][]\n'
+    expect(href(withFootnoteInLabel)).toBe('#heading')
+    expect(href(withFootnoteInBoth)).toBe('#heading')
+
+    // The resulting anchor nests, and that is a PRE-EXISTING defect of a
+    // footnote reference inside any link label rather than anything this rule
+    // introduces - an ordinary inline link with the same label nests
+    // identically, on this build and on the one before it. Pinned here so the
+    // day it is fixed, this row moves with it instead of being discovered.
+    const nests = (src: string) => /<a [^>]*>(?:(?!<\/a>)[\s\S])*<a /.test(carveToHtml(src))
+    expect(nests('[^x]: note\n\n[see [^x] here](/u)\n')).toBe(true)
+    expect(nests(withFootnoteInLabel)).toBe(true)
+
+    // CONTROL: a nested LINK is unwrapped, which is the rule that construct
+    // does have, so the two are not the same case.
+    expect(carveToHtml('# [a](/u) heading\n\n[[a](/u) heading][]\n')).toContain(
+      '<a href="#a-heading">a heading</a>',
+    )
+  })
+
   it('a FULL reference resolves by the same key', () => {
     // R1 says THE LABEL enters as its rendered plain text; nothing in the
     // clause restricts that to the collapsed spelling, and the same key
