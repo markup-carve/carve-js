@@ -156,8 +156,21 @@ describe('U+0085 is White_Space even though it is not in JavaScript `\\s`', () =
     expect(isLink(`[x](https://e${NEL}.com/)\n`)).toBe(false)
   })
 
-  it('ends a definition destination', () => {
-    expect(href(`[r]: https://e${NEL}.com/\n\nsee [x][r]\n`)).toBe('https://e')
+  it('ends a definition destination, which now ends the definition', () => {
+    // Two rulings meet on this line. The character ENDS the destination, which
+    // is what this file is about and is unchanged. What follows it used to be
+    // swallowed by the pattern's tail, so the definition registered with the
+    // truncated destination; carve#911 anchors `reference_definition` at end
+    // of line, so the remainder is trailing junk and the line is a paragraph.
+    // The executable spec names this exact pair - `[a]: /u<NBSP>` is not a
+    // definition, because a no-break space is content and content after the
+    // production is what the anchor rejects.
+    expect(href(`[r]: https://e${NEL}.com/\n\nsee [x][r]\n`)).toBe(null)
+    // There is no shape that keeps the old answer, and that is the point: the
+    // line's ending run is `whitespace`, space or tab (carve#890), so the
+    // character is trailing junk even with nothing after it. The
+    // destination-ending half is pinned by the INLINE assertion above, which
+    // the anchor does not touch.
   })
 
   it('is skipped as separator whitespace before a definition destination', () => {
@@ -181,7 +194,13 @@ describe('real whitespace still ends a destination', () => {
   })
 
   it('a narrow no-break space ends a definition destination', () => {
-    expect(href(`[r]: https://e${NNBSP}.com/\n\nsee [x][r]\n`)).toBe('https://e')
+    // Same pair as the NEL case above: it ends the destination, and under
+    // carve#911 what follows is trailing junk, so the line is a paragraph.
+    expect(href(`[r]: https://e${NNBSP}.com/\n\nsee [x][r]\n`)).toBe(null)
+    expect(href(`[r]: https://e${NNBSP}\n\nsee [x][r]\n`)).toBe(null)
+    // The CONTROL, so this is not just asserting that everything fails: with
+    // the character gone the same line is a definition.
+    expect(href('[r]: https://e\n\nsee [x][r]\n')).toBe('https://e')
   })
 
   it('a tab is still separator whitespace in a definition', () => {

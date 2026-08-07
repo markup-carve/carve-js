@@ -62,9 +62,15 @@ describe('trailing attributes on a link reference definition', () => {
   })
 
   it('does not change what counts as a definition', () => {
-    // `[a]: /u junk` was a definition with the trailing junk ignored, and the
-    // widened parse must leave that alone.
-    expect(carveToHtml('[x][r]\n\n[r]: /u junk here\n')).toBe('<p><a href="/u">x</a></p>')
+    // Written when `[r]: /u junk here` was a definition with its trailing junk
+    // ignored; carve#911 anchored the production at end of line, so it is a
+    // paragraph now. The property this assertion exists for is unchanged and is
+    // what it still tests: reading a trailing ATTRIBUTE block must not move the
+    // line's classification either way.
+    expect(carveToHtml('[x][r]\n\n[r]: /u junk here\n')).toBe(
+      '<p>[x][r]</p>\n<p>[r]: /u junk here</p>',
+    )
+    expect(carveToHtml('[x][r]\n\n[r]: /u\n')).toBe('<p><a href="/u">x</a></p>')
   })
 
   // The block is SCANNED rather than regex-matched: a value may hold a `}`

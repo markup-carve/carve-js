@@ -7,11 +7,17 @@ const h = (s: string, o = {}) => carveToHtml(s, o)
 // behavior (carve-rs / the grammar). See grammar.ebnf citations per block.
 
 describe('Fix A: reference-definition destination ends at first whitespace', () => {
-  // grammar.ebnf:738,741,755 -- link_destination ends at the first whitespace;
-  // the rest of the line is not a valid title and is ignored, but the def still
-  // registers with the bare token as its destination (it is NOT rejected).
-  it('registers the def with the first token; trailing words are ignored', () => {
-    expect(h('[r][r]\n\n[r]: a b c')).toBe('<p><a href="a">r</a></p>')
+  // grammar.ebnf:738,741,755 -- link_destination ends at the first whitespace.
+  //
+  // What happens to the REST of the line was answered the other way by
+  // carve#911: this asserted that the definition still registered with the bare
+  // token and the trailing words were ignored, and the ruling is that
+  // `reference_definition` ends in `newline`, so trailing words make the
+  // production FAIL. Corpus 16-reference-link-5 moved with it. The half this
+  // block is named for - where the DESTINATION ends - is unchanged, and the
+  // assertion below it still pins it.
+  it('is not a definition at all when words follow the destination', () => {
+    expect(h('[r][r]\n\n[r]: a b c')).toBe('<p>[r][r]</p>\n<p>[r]: a b c</p>')
   })
 
   it('still resolves a plain URL destination', () => {
