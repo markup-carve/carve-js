@@ -145,6 +145,11 @@ describe('a nested link and an autolink stay nodes', () => {
     expect(carveToHtml(src)).toContain('<p>See <a href="#h">a and https://e.com</a>.</p>')
     expect(carveToMarkdown(src)).toContain('See [a and https://e.com](#h).\n')
     expect(carveToPlainText(src)).toContain('See a and https://e.com.\n')
+    // ANSI too. Without this row a mutant that dropped the link context from the
+    // ANSI crossref arm alone passed every other assertion in this file.
+    expect(carveToAnsi(src)).toContain(
+      'See \u001b[4m\u001b[34ma and https://e.com\u001b[0m.\n',
+    )
   })
 
   it('an UNRESOLVED reference nested in a link is still its raw source', () => {
