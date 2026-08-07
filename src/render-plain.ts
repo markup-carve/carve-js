@@ -1,3 +1,4 @@
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -40,6 +41,11 @@ export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}
     smartSource: smartTypographyIsSource(opts.smartTypography),
     blockDepth: 0,
     inlineDepth: 0,
+    // This target expands a crossref label exactly as the other three do, so it
+    // needs the same bound. It is the only expansion here - an abbreviation
+    // renders as its key on this target - which is why there was no budget
+    // until the crossref needed one (markup-carve/carve-js#892).
+    abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
@@ -51,6 +57,8 @@ interface PlainContext {
   smartSource: boolean
   blockDepth: number
   inlineDepth: number
+  /** Per-render derived-text expansion budget (DoS guard). */
+  abbrBudget: AbbrBudget
   /**
    * Labels that actually have a definition. A footnote reference without one did
    * not form a footnote, so it has to be reproduced as source text rather than
@@ -340,7 +348,12 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'heading_ref':
       // Resolved: the target heading's text, which is what a reader of plain
       // text can act on. The authored `</#target>` stays in the tree.
-      if (node.href) return renderInlines(node.resolvedText ?? [], ctx)
+      // Same expansion budget the other targets spend on this label, degrading
+      // to the authored target (markup-carve/carve-js#892).
+      if (node.href) {
+        const label = renderInlines(node.resolvedText ?? [], ctx)
+        return ctx.abbrBudget.charge(utf8ByteLength(label)) ? label : stripControls(node.target)
+      }
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)
