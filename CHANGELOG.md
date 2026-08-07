@@ -1625,8 +1625,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Comparing that flag would escalate any document whose text begins with a
   caret; ignoring it would silently turn the image case into a figure.
 
-## [Unreleased]
-
 ### Changed
 
 - **Smart typography is represented as AST nodes instead of character
