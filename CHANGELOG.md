@@ -43,6 +43,29 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A collapsed reference whose label carries markup now reaches a
+  heading-derived definition** (markup-carve/carve#949). PART 9R R1 keys the
+  heading index by each heading's RENDERED PLAIN TEXT, so `# *bold* heading` is
+  registered as `bold heading`; R1 also says the LABEL enters that comparison
+  as its rendered plain text, i.e. its inline markup is stripped exactly as the
+  heading's was. Without that step no heading containing emphasis, a code span
+  or a link was reachable by its collapsed spelling at all.
+
+  ```
+  # *bold* heading
+
+  [*bold* heading][]
+  ```
+
+  now links to `#bold-heading`. Eleven inline markup kinds move, not the two
+  the report showed, and a FULL reference resolves by the same key.
+
+  The lookup is a RETRY: the label as written is tried first, so a heading
+  whose text literally contains the markup characters still wins. The strip is
+  scoped to the heading index - `linkDefs` matching is unchanged and keys on
+  the label as written, and the tie-break is unaffected. `carve lint` mirrors
+  the resolver and no longer reports a resolvable reference as unresolved.
+
 - **BREAKING: a quoted attribute value stops at the newline, inline and on a
   block-attribute line** (markup-carve/carve#888). `quoted_value` excludes a
   newline in BOTH of its alternatives: the value ends at the closing quote on

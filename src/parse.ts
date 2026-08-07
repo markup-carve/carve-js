@@ -6687,6 +6687,24 @@ function smartToken(
   return null
 }
 
+/**
+ * The inline nodes of a REFERENCE LABEL, for PART 9R R1's heading-index lookup.
+ *
+ * R1 keys the heading index by each heading's RENDERED PLAIN TEXT, and says the
+ * LABEL enters that same comparison as its rendered plain text - its inline
+ * markup stripped exactly as the heading's was. So the label has to be PARSED
+ * to be compared: a fixed-character-list strip gets `*bold* heading` right and
+ * `` `code()` heading `` wrong, which is why the corpus pins both.
+ *
+ * Neither the abbreviation table nor `linkDefs` is applied. The label is being
+ * read for its plain text, not published: a nested reference inside it must not
+ * resolve, and an abbreviation renders as its own text under `inlineText`
+ * anyway.
+ */
+export function parseRefLabelInlines(label: string): InlineNode[] {
+  return scanInline(label, inlineSource(), false)
+}
+
 function parseInline(
   text: string,
   abbrDefs: Map<string, string>,
