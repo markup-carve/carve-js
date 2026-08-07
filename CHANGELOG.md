@@ -147,6 +147,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `A \" B \-\- C` renders as `A \" B \-\- C` rather than `A " B -- C`. A document
   that escapes nothing gains no backslashes.
 
+- **The Markdown target's escaping narrows on the line** (PART 11 §8a,
+  markup-carve/carve#970). `_`, `#` and `[` are escaped if and only if the
+  character is ADJACENT on the emitted line to an unescaped delimiter of the
+  same character. So `company_id`, `C#` and `issue #123` are written as the
+  author typed them, where before they were `company\_id`, `C\#` and
+  `issue \#123` - a backslash inside an identifier breaks exact-match search in
+  the published document and protects nothing that a CommonMark reader would
+  read differently. `a__b` and `[[x]]` keep both escapes, because unescaping
+  would merge the two into one delimiter run. The ASTERISK is exempt and keeps
+  its unconditional escape: this writer spells emphasis with `*`, so a literal
+  asterisk can merge with a delimiter the writer itself just wrote. Nothing
+  else narrows, and an author-escaped character is still emitted as an escape
+  (M2) - including `\_`, which used to lose its backslash to the old intraword
+  rule. Markdown output only; every other target is unchanged.
+
 - **An abbreviation definition written inside a container is a child of the
   document** (PART 12 §7). A footnote definition already worked that way. All
   three engines render identical HTML; only the tree moves, and `pos` still

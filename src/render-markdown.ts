@@ -371,9 +371,15 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Reproduce the author's escape. `\-\-` was written precisely so a
       // downstream processor with smart punctuation on would not read an en
       // dash; emitting the character bare loses exactly that (carve#350).
-      // The underscore still goes through the sentinel, so the intraword rule
-      // can drop the backslash where CommonMark ignores it anyway.
-      return node.value === '_' ? UNDERSCORE_ESCAPE : '\\' + node.value
+      //
+      // NO SENTINEL HERE, and section 8a says why: M1b is a rule about a
+      // character that reached this writer inside a TEXT node - one the Carve
+      // grammar did not read as an opener and the author did not mark. This is
+      // the other case. The author said which reading they meant, M2 gives it
+      // back whatever the character, and the line test never sees it. The
+      // underscore used to take the sentinel here and lose its backslash to
+      // the intraword rule, which is M1b deciding a node M1 never governed.
+      return '\\' + node.value
     case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
     case 'strong':
@@ -750,10 +756,10 @@ function escapeText(text: string): string {
   // too. `&` first so the entities are not re-escaped.
   text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Escape Markdown metacharacters (none overlap with the HTML chars above).
-  // The underscore escape is emitted as a sentinel rather than a backslash:
-  // whether it survives depends on its neighbours in the assembled document,
-  // which only normalize() can see. See UNDERSCORE_ESCAPE.
-  return text.replace(/[\\`*_[\]#]/g, (ch) => (ch === '_' ? UNDERSCORE_ESCAPE : `\\${ch}`))
+  // `_`, `#` and `[` are emitted as SENTINELS rather than as backslashes:
+  // section 8a decides those three on the EMITTED LINE, which only normalize()
+  // can see. `*` and everything else keep M1 here and unconditionally.
+  return text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
 }
 
 /**
@@ -773,12 +779,12 @@ function sanitizeMdUrl(url: string): string {
 
 /**
  * Drop C0/C1 control characters (keeping tab and newline) from author content,
- * and the underscore-escape sentinel with them: author content that carried it
- * would otherwise reach normalize() and be read as an escape this renderer
- * emitted. Every path to the output passes through here.
+ * and the section 8a sentinels with them: author content that carried one would
+ * otherwise reach normalize() and be read as an escape this renderer emitted.
+ * Every path to the output passes through here.
  */
 function stripControls(s: string): string {
-  return s.replace(/\p{Cc}|\ue004/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/\p{Cc}|[\ue004-\ue006]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
@@ -797,40 +803,88 @@ function cleanEscapedText(node: Text): string {
 
 
 /**
- * Sentinel standing in for an underscore escape this renderer emitted, so the
- * final pass can tell those apart from a backslash the author wrote. U+E000 is
- * the NBSP sentinel and render-carve claims U+E001..U+E003; this extends the
- * scheme. Author content never carries it: stripControls() drops it on the way
- * in, and every path to the output runs through stripControls().
+ * Sentinels standing in for the escapes section 8a decides on the LINE.
+ *
+ * One per narrowed character. U+E000 is the NBSP sentinel and render-carve
+ * claims U+E001..U+E003; this extends the scheme. Author content never carries
+ * one: stripControls() drops the whole range on the way in, and every path to
+ * the output runs through stripControls().
  */
-const UNDERSCORE_ESCAPE = '\ue004'
+const NARROWED_SENTINEL: Record<string, string> = {
+  _: '\ue004',
+  '#': '\ue005',
+  '[': '\ue006',
+}
+const NARROWED_CHARACTER: Record<string, string> = {
+  '\ue004': '_',
+  '\ue005': '#',
+  '\ue006': '[',
+}
+const RE_NARROWED_SENTINEL = /[\ue004-\ue006]/g
+const HAS_NARROWED_SENTINEL = /[\ue004-\ue006]/
 
 /**
- * Resolve the underscore escapes, dropping the backslash from an intraword one.
+ * Whether the candidate at `i` is ADJACENT to an unescaped delimiter of the
+ * same character, on the line the writer is building (PART 11 section 8a M1b).
  *
- * CommonMark does not honour an intraword underscore, so `company_id` renders
- * literally with or without the escape - the backslash only litters identifiers
- * in output meant to be read and searched. An asterisk is NOT symmetric here
- * (`a*b*c` does emphasise), so this applies to `_` alone.
+ * `line` is the assembled output with every candidate resolved to its BARE
+ * character, so it is the line as it reads if nothing is escaped, and an offset
+ * in it is an offset in the text being rewritten. "On the emitted line" needs
+ * no line splitting: a neighbour across a newline is a newline, which is never
+ * the same character.
  *
- * Runs on the assembled output rather than in escapeText() because whether an
- * underscore is intraword is a property of the rendered stream, not of one
- * node: the parser splits `company_id` into the text nodes `company` and
- * `_id`, so at escape time the underscore looks like it starts a word.
- *
- * It decides on the sentinel rather than on `\_` because the assembled document
- * also contains regions this renderer must reproduce byte-exact - code spans,
- * code blocks, link destinations, titles, raw HTML - and a backslash there is
- * content, not an escape. Matching `\_` rewrote those too (issue 400).
+ * A neighbour BEFORE the candidate counts only if it is not itself behind a
+ * backslash - the clause's "not behind a backslash" - so the run of backslashes
+ * in front of it is counted and an odd run disqualifies it. A neighbour AFTER
+ * never can be: the character in front of it is the candidate itself.
  */
-function resolveUnderscoreEscapes(text: string): string {
-  return text.replace(
-    /\ue004/g,
-    (_match, offset: number) =>
-      /[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') && /[\p{L}\p{N}]/u.test(text[offset + 1] ?? '')
-        ? '_'
-        : '\\_',
-  )
+function adjacentToLiveDelimiter(line: string, i: number, ch: string): boolean {
+  if (line[i + 1] === ch) return true
+  if (line[i - 1] !== ch) return false
+  let backslashes = 0
+  for (let j = i - 2; j >= 0 && line[j] === '\\'; j--) backslashes++
+
+  return backslashes % 2 === 0
+}
+
+/**
+ * Resolve the narrowed escapes: PART 11 section 8a, M1b.
+ *
+ * `_`, `#` and `[` are escaped IF AND ONLY IF the character is adjacent on the
+ * emitted line to an unescaped delimiter of the same character. Adjacent, and
+ * unescaping would MERGE THE TWO INTO ONE RUN, which every Markdown reader this
+ * target answers to resolves by run length - so that escape is holding a run
+ * boundary apart under all of them at once, and it is kept. Not adjacent, and
+ * the escape protects nothing under any of them: `company_id`, `C#` and
+ * `issue #123` are written as the author typed them, and a backslash inside an
+ * identifier no longer breaks exact-match search in the published document.
+ *
+ * THE ASTERISK IS NOT HERE, and that is M1a rather than an omission. This
+ * writer spells emphasis with `*`, so a literal asterisk is not a character
+ * that MIGHT meet markup on the line - it is the character the line's markup is
+ * made of. `*\*\**` unescaped to `****`, and a CommonMark reader publishes
+ * emphasis-containing-two-asterisks as a thematic break.
+ *
+ * IT RUNS ON THE ASSEMBLED OUTPUT because the test is over the line and not
+ * over the node: the parser splits `company_id` into the text nodes `company`
+ * and `_id`, so at escape time the underscore looks like it starts a word.
+ *
+ * IT DECIDES ON THE SENTINEL rather than on a `\_` in the output, because the
+ * assembled document also contains regions this renderer must reproduce
+ * byte-exact - code spans, code blocks, link destinations, titles, raw HTML -
+ * and a backslash there is content, not an escape. Matching `\_` rewrote those
+ * too (issue 400). It also keeps M2 out of the question: an author-escaped
+ * character is an `escaped_text` node emitted AS AN ESCAPE, and it never
+ * carries a sentinel, so nothing here can unescape it.
+ */
+function resolveNarrowedEscapes(text: string): string {
+  if (!HAS_NARROWED_SENTINEL.test(text)) return text
+  const line = text.replace(RE_NARROWED_SENTINEL, (s) => NARROWED_CHARACTER[s]!)
+
+  return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
+    const ch = NARROWED_CHARACTER[s]!
+    return adjacentToLiveDelimiter(line, offset, ch) ? `\\${ch}` : ch
+  })
 }
 
 function normalize(text: string): string {
@@ -845,7 +899,7 @@ function normalize(text: string): string {
     '\u00a0',
   )
 
-  return resolveUnderscoreEscapes(collapsed)
+  return resolveNarrowedEscapes(collapsed)
 }
 
 /**

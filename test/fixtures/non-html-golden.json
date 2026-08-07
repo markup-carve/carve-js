@@ -163,7 +163,7 @@
     },
     "mention-tag": {
         "carve": "Hi @alice see #topic\n",
-        "markdown": "Hi @alice see \\#topic\n",
+        "markdown": "Hi @alice see #topic\n",
         "plain": "Hi @alice see #topic\n",
         "ansi": "Hi @alice see #topic\n"
     },

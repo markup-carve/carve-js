@@ -52,8 +52,13 @@ describe('an unresolved reference image is an image node that renders as its sou
   it('writes the source back out in every other target', () => {
     const source = 'a ![alt][nope] and [b][no] x\n'
 
-    // Byte-identical to carve-php's four writers on the same input.
-    expect(carveToMarkdown(source).trim()).toBe('a !\\[alt\\]\\[nope\\] and \\[b\\]\\[no\\] x')
+    // The Markdown line is section 8a M1b: a `[` is escaped only where it is
+    // ADJACENT to another `[` on the emitted line, and none of these is, so the
+    // brackets are written bare. The `]` is not narrowed by that clause (M1c),
+    // so it keeps M1. The other three writers are unaffected and stay
+    // byte-identical to carve-php's; the Markdown one diverges from carve-php
+    // until markup-carve/carve#970 lands there too.
+    expect(carveToMarkdown(source).trim()).toBe('a ![alt\\][nope\\] and [b\\][no\\] x')
     expect(carveToPlainText(source).trim()).toBe('a ![alt][nope] and [b][no] x')
     expect(carveToAnsi(source).trim()).toBe('a ![alt][nope] and [b][no] x')
     expect(carveToCarve(source)).toBe(source)
