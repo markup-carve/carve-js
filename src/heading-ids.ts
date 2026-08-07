@@ -19,7 +19,7 @@ import type {
   Text,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
-import { normalizeRefLabel, mergeAttrs } from './parse.js'
+import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
 
 /**
@@ -58,6 +58,28 @@ function isUnresolvedImage(image: Image): boolean {
  */
 export function normalizeHeadingRefLabel(label: string): string {
   return normalizeRefLabel(label).normalize('NFC').toLowerCase()
+}
+
+/**
+ * The heading-index key a REFERENCE LABEL contributes (PART 9R R1,
+ * markup-carve/carve#949).
+ *
+ * The index is keyed by each heading's RENDERED PLAIN TEXT, so `# *bold*
+ * heading` is keyed `bold heading`. R1 says the label enters that comparison as
+ * the same string kind, i.e. its inline markup is stripped exactly as the
+ * heading's was - otherwise no heading containing emphasis, a code span or a
+ * link is reachable by its collapsed spelling at all, and the author sees no
+ * reason why. The four normalizations then apply to that plain text.
+ *
+ * THE STRIP IS SCOPED TO THE HEADING INDEX. `linkDefs` matching keys on the
+ * label AS WRITTEN and is untouched: `[*bold*]: /x` is matched by `[*bold*][]`
+ * and not by `[bold][]`, and `[bold]: /x` is not matched by `[*bold*][]`.
+ * markup-carve/carve-php#768 is the cautionary precedent - it generalized this
+ * into stripping markup from every collapsed label and inverted that rule in
+ * both directions.
+ */
+export function headingRefKeyFromLabel(label: string): string {
+  return normalizeHeadingRefLabel(inlineText(parseRefLabelInlines(label)))
 }
 
 /**
@@ -432,7 +454,14 @@ export function resolveHeadingIds(
         // Try the implicit-heading index; otherwise fall back to the
         // raw source text. Explicit defs win because applyLinkDefs
         // already resolved those before this pass.
-        const id = headingRefs.get(normalizeHeadingRefLabel(n.ref))
+        // The label AS WRITTEN first, then its RENDERED PLAIN TEXT. Both, and
+        // in that order, because the two keys differ only when the label
+        // carries markup: a label with none produces the same string twice, and
+        // one that does must still lose to a heading whose text literally
+        // contains the markup characters.
+        const id =
+          headingRefs.get(normalizeHeadingRefLabel(n.ref)) ??
+          headingRefs.get(headingRefKeyFromLabel(n.ref))
         if (id) {
           // PART 12 §3a - see the note in parse.ts: the authored `ref` and
           // `rawRef` survive beside the resolved destination.

@@ -31,6 +31,7 @@ import {
   inlineText,
   headingIdSlugOpts,
   normalizeHeadingRefLabel,
+  headingRefKeyFromLabel,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
@@ -406,7 +407,17 @@ export function lintCarve(
   // resolve() may still turn them into implicit heading links; anything else
   // renders as its literal source text.
   for (const { ref, rawRef, node } of collectUnresolvedRefLinks(doc)) {
-    if (headingRefs.has(normalizeHeadingRefLabel(ref))) continue
+    // BOTH keys, in resolveHeadingIds' order: the label as written, then its
+    // rendered plain text (PART 9R R1). Checking only the first reported a
+    // reference that resolves - `[*bold* heading][]` under `# *bold* heading` -
+    // as unresolved, which is the failure mode this whole block exists to
+    // avoid. This mirror has to move with the resolver or it lies about it.
+    if (
+      headingRefs.has(normalizeHeadingRefLabel(ref)) ||
+      headingRefs.has(headingRefKeyFromLabel(ref))
+    ) {
+      continue
+    }
     out.push({
       ...locate(node, toUtf16),
       rule: 'unresolved-reference-link',
