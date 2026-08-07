@@ -185,6 +185,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A boundary line inside an open fence no longer ends the container**
+  (markup-carve/carve#983 corpus category 279, carve-js#884). A `+` continuation
+  marker attaches ONE block, and a fenced block ends at its closer - so a blank
+  line, a sibling list marker, a dedent, a quote line or the next definition
+  written between an opener and its closer is fence content and ends nothing.
+  Six `+` collectors consulted no fence state at all, so a code, `:::` or `%%%`
+  fence with a blank in its body was cut in two in every container that can hold
+  one: a list item, a block quote, a footnote body and a `dd`. The opener was
+  left an empty block, the tail escaped to document level, and a code fence's
+  closer came back as an empty inline code span. A seventh collector, a list
+  item's indented body, knew the code and comment fences but not the colon
+  depth, so `- x` / `  :::` / `  a` / `  - m` / `  b` / `  :::` split the div
+  around a nested list. The looseness scan had the same one-kind-of-three read
+  and is fixed with it: a blank inside a `:::` or `%%%` body no longer loosens
+  the item that holds it. An UNTERMINATED fence is unchanged and still ends at
+  the boundary.
+
 - **A label, node type or role that names a key on `Object.prototype` no longer
   reaches a table it was never in** (carve-js#886). `[^__proto__]` - twelve
   bytes, the default `carveToHtml` path, no options - threw an uncaught

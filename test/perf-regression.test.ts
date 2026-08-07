@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
-import { expectScansLinearly, perfIt } from './helpers/scaling.js'
+import { expectBuiltInputScansLinearly, expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 // Regression guards for two O(n^2) parser paths:
 //
@@ -152,5 +152,56 @@ describe('parser perf regression: deeply-indented list staircase', () => {
     // ~250ms locally at 177 KB; a quadratic-in-bytes regression is multiple
     // seconds. Absolute cap (not a ratio) per this file's noise-robust convention.
     expect(t).toBeLessThan(2000)
+  })
+})
+
+// E) A `+`-attached fence that can NEVER close: the container collectors look
+//    ahead for the closer of the block a `+` attaches (carve-js#884), and an
+//    opener with no closer ahead reads the whole remaining document. Repeating
+//    such an opener is quadratic unless the lookahead can refute in O(1) - which
+//    is what `closerIndex` does, the same negative index `%%%` already used.
+//
+//    THE WIDTHS MUST INCREASE. A repeated FIXED opener closes on its own
+//    successor (a comment and a colon closer match on exact length; a code
+//    closer matches at length OR LONGER), so every fixed-fragment spelling of
+//    this shape reads linear whatever the scan does, and pins nothing.
+//
+//    The item's LOOSENESS precompute answers the same question and took the
+//    sharper hit while it asked it per line - 4000 comment openers of increasing
+//    width went from 137ms to 15s - but it is not guarded here: it is a single
+//    stateful left-to-right pass, so it is linear by construction, and every
+//    spelling of "many unclosable openers in ONE item" also grows the input
+//    BYTES quadratically (each opener is one character wider), which makes the
+//    per-byte reading pin a pre-existing cost rather than this one.
+const unclosableShapes: Array<{ name: string; unit: string }> = [
+  // A TYPED colon opener is not closer-shaped, so a run of them never closes
+  // itself and the width can stay constant.
+  { name: 'colon fence', unit: '- x\n+\n::: note\na\n\n' },
+  // A code opener with an info string is likewise not closer-shaped.
+  { name: 'code fence', unit: '- x\n+\n```js\na\n\n' },
+]
+
+describe('parser perf regression: a `+`-attached fence that never closes', () => {
+  for (const { name, unit } of unclosableShapes) {
+    perfIt(`an unclosable ${name} per continuation marker scales near-linearly`, () => {
+      carveToHtml(unit.repeat(200))
+      expectScansLinearly((input) => void carveToHtml(input), unit, {
+        label: `unclosable ${name}`,
+        smallRepeats: 500,
+      })
+    })
+  }
+
+  perfIt('an unclosable comment fence per continuation marker scales near-linearly', () => {
+    // A comment closer takes an insignificant TAIL, so `%%% x` closes a `%%%`
+    // and no constant-width run of openers is unclosable. The widths have to
+    // increase, which grows the input bytes faster than the unit count - the
+    // reason this one is built rather than repeated.
+    expectBuiltInputScansLinearly(
+      (input) => void carveToHtml(input),
+      (repeats) =>
+        Array.from({ length: repeats }, (_, i) => `- x\n+\n${'%'.repeat(3 + i)}\na\n`).join('\n'),
+      { label: 'unclosable comment fence', smallRepeats: 400 },
+    )
   })
 })
