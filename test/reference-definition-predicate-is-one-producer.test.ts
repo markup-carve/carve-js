@@ -46,6 +46,30 @@ describe('a definition with a trailing attribute block is a definition at every 
     )
   })
 
+  it('treats a trailing run of spaces and tabs as the line ending, not as junk', () => {
+    // Codex review read the prepass as classifying on a TRIMMED line and so
+    // popping the list for a line the anchored production would then refuse -
+    // desynchronizing the prepass from the block parser. The premise is that
+    // `[a]: /u ` is not collected. It is: the line's ending run is `whitespace`,
+    // a space or a tab (carve#890), and the anchor ends `[ \t]*$` precisely so
+    // that an editor stripping or adding trailing space cannot change what a
+    // document means. So the pop is correct and prepass and parser agree.
+    //
+    // Measured against the unanchored pattern before dismissing it: the review's
+    // own repro renders byte-identically on both sides of this change.
+    expect(carveToHtml('[a]: /u \n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
+    expect(carveToHtml('[a]: /u\t\n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
+    expect(carveToHtml('[a]: /u \t \n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
+    expect(carveToHtml('- text\n[a]: /u \n\n[a][]\n')).toBe(
+      '<ul>\n  <li>text</li>\n</ul>\n<p><a href="/u">a</a></p>',
+    )
+    // The review's repro itself, pinned so the claim cannot be re-litigated
+    // from the same starting point.
+    expect(carveToHtml('- text\n[a]: /u \n  [b]: /v\n\n[b][]\n')).toBe(
+      '<ul>\n  <li>text</li>\n</ul>\n<p>[b]: /v</p>\n<p>[b][]</p>',
+    )
+  })
+
   // `isInvisibleLine`: a definition renders nothing, so a blank line on either
   // side of one still separates two paragraphs and the item is LOOSE. Under the
   // bare `.test` the line counted as visible content, the blank stopped
