@@ -315,6 +315,50 @@ const IMPLEMENTED = new Set([
   'a-real-div-in-a-container-and-the-flush-left-line-after-it',
 ])
 
+/**
+ * Documents this engine has DELIBERATELY moved PAST the pinned corpus on.
+ *
+ * The spec repo declares the mirror of this window in
+ * `resources/engine-pin-drift.txt`: a corpus that is ahead of an engine is a
+ * normal state, and what is not normal is not knowing which window you are in.
+ * This is the other direction - an ENGINE ahead of a pinned corpus, which
+ * happens whenever a rule lands here between two `bump-carve-pin` runs.
+ *
+ * Each entry FAILS IN BOTH DIRECTIONS, which is the whole point:
+ *
+ *  - the output must equal the value the CURRENT spec states, so a regression
+ *    in the engine is caught exactly as the corpus would have caught it;
+ *  - and it must still DIFFER from the pinned golden, so an entry that has gone
+ *    stale - the pin moved and the fixture was rewritten - fails and has to be
+ *    deleted in the same commit that moves the pin.
+ */
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '252-a-tab-separates-two-attributes-and-pads-a-block-as-a-space-does',
+    {
+      reason:
+        "PART 4's inline attribute interior is space-only (carve#906, carve-js#836); the pinned corpus still asserts the tab forms",
+      html: '<p><strong>x</strong>{.a\t.b}</p>\n<p><strong>y</strong>{\t.c}</p>\n<p><strong>z</strong>{.d\t}</p>',
+    },
+  ],
+  [
+    '252-a-tab-separates-two-attributes-and-pads-a-block-as-a-space-does-2',
+    {
+      reason:
+        "PART 4's inline attribute interior is space-only (carve#906, carve-js#836); the pinned corpus still asserts the tab forms",
+      html: '<p><strong>x</strong>{k=a\t.b}</p>\n<p><strong k="a\tb">y</strong></p>',
+    },
+  ],
+  [
+    '252-a-tab-separates-two-attributes-and-pads-a-block-as-a-space-does-3',
+    {
+      reason:
+        "PART 4's inline attribute interior is space-only (carve#906, carve-js#836); the pinned corpus still asserts the blessed empty block with a tab",
+      html: '<p>[x]{\t}</p>',
+    },
+  ],
+])
+
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
@@ -364,6 +408,21 @@ describe('spec corpus', () => {
     const source = readFileSync(crvPath, 'utf8')
     const expected = readFileSync(htmlPath, 'utf8')
     const allowlisted = IMPLEMENTED.has(name.replace(/^\d+-/, '')) || IMPLEMENTED.has(baseSlug(name))
+    const ahead = AHEAD_OF_PIN.get(name)
+
+    if (ahead) {
+      it(`${name} (ahead of the pinned corpus)`, () => {
+        const actual = carveToHtml(source).trim()
+        expect(actual, ahead.reason).toBe(ahead.html)
+        // The staleness half: when the pin moves past this rule the fixture is
+        // rewritten to exactly this value, and the entry must be deleted.
+        expect(
+          expected.trim(),
+          `${name} now matches: delete its AHEAD_OF_PIN entry`,
+        ).not.toBe(ahead.html)
+      })
+      continue
+    }
 
     if (allowlisted) {
       it(`${name}`, () => {

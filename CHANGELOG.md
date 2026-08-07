@@ -43,6 +43,34 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **BREAKING: an INLINE attribute block's interior is space-only - a tab no
+  longer pads or separates it** (markup-carve/carve#906). PART 4 spells every
+  whitespace slot of the inline block `space`, and all five of them sit AFTER
+  the first non-whitespace character of their line, where PART 7 already says a
+  tab is not syntax. A tab at any of them makes the block unrecognized and its
+  braces show:
+
+  ```
+  *x*{.a	.b}
+  ```
+
+  ```html
+  <p><strong>x</strong>{.a	.b}</p>
+  ```
+
+  The five are separate positions, not one separator rule: the run after `{`,
+  the run between two attributes, the run before `}`, the boundary after an
+  UNQUOTED value, and the blessed empty block `{ }`. Fourteen surfaces carry
+  the block - an emphasis tail, a span tail, a code-span tail, a link, an
+  image, both reference forms, an autolink, a footnote reference, a
+  marker-abutting list item block, a table cell, a table row, and a link or
+  image definition's trailing block - and all fourteen narrow together.
+
+  The block-attribute LINE does NOT narrow, and that is the ruling rather than
+  an omission: it is the one attribute block with a `continuation`, so the
+  whitespace after its newline IS a leading indentation run. A tab inside a
+  QUOTED value is content and does not move either.
+
 - **An autolink body admits non-ASCII and excludes format and control
   characters** (markup-carve/carve#844, measured in markup-carve/carve#860).
   PART 3's `url_char` is `unicode_url_char - format_char - control_char`, and
