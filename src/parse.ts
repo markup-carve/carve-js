@@ -1150,10 +1150,17 @@ class Lexer {
   nested = false
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
-  // lookahead): the smallest line index from which NO bare fence-closer
-  // line exists onward. Once proven, every later fence opener (pos only
-  // advances) short-circuits, keeping "many unclosed fences" input linear.
-  noFenceCloserFrom = Infinity
+  // lookahead), the same entry the container-local scans keep: per fence
+  // CHARACTER, where a scan started and the longest bare run of that character
+  // it saw. Once proven, every later opener (pos only advances) whose marker is
+  // longer than that run short-circuits, keeping "many unclosed fences" input
+  // linear.
+  //
+  // This was one index, char- and length-agnostic, so a single `~~~` or a
+  // single short ``` ``` ``` anywhere ahead pinned it at Infinity forever and
+  // the lookahead stayed quadratic: 500 unterminated ` ````js ` openers over
+  // one ``` ``` ``` took 25ms and 4000 took 347ms.
+  fenceCloserMemo: QuotedFenceCloserMemo = new Map()
 
   // width -> LAST line index carrying a comment fence of that width, built once
   // by commentBlockHasCloser. A closer must match the opener width exactly, so
@@ -2900,8 +2907,26 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
   return false
 }
 
-/** Per-quote negative cache for `quotedFenceHasCloser`, keyed by fence character. */
-type QuotedFenceCloserMemo = Map<string, number>
+/**
+ * Negative cache for the container-local fence closer scans, keyed by fence
+ * CHARACTER.
+ *
+ * `from` is where the recorded scan started and `maxRun` is the longest BARE
+ * run of that character it saw. A later opener scans a SUFFIX of that range, so
+ * its own longest run can only be shorter - which makes the entry sound for
+ * every opener starting at or after `from` whose marker is LONGER than
+ * `maxRun`, since no run ahead can close it.
+ *
+ * Keying on the character alone was not enough: a single short `` ``` `` after
+ * a thousand unterminated `` ````js `` openers set "saw one" on every scan and
+ * the bound never advanced, so the lookahead stayed quadratic - 500 openers
+ * took 41ms and 4000 took 1104ms. Raised by codex review.
+ */
+interface FenceCloserMemoEntry {
+  from: number
+  maxRun: number
+}
+type QuotedFenceCloserMemo = Map<string, FenceCloserMemoEntry>
 
 /**
  * Whether a code or raw fence opened with `marker` closes LATER IN THIS QUOTE.
@@ -2933,6 +2958,72 @@ type QuotedFenceCloserMemo = Map<string, number>
  * `fenceHasCloser` today, byte-for-byte as it is on main, and that is left
  * alone here rather than folded into a parser fix.
  */
+/**
+ * Whether a code or raw fence opened inside a LIST ITEM closes later in that
+ * item's content stream (PART 9 §10's CLOSER LOOKAHEAD, markup-carve/carve#950).
+ *
+ * The item's stream is the lines at or past its CONTENT COLUMN, dedented - the
+ * same view `parseListItem` collects - so the scan re-bases each candidate the
+ * way the collector would before testing it.
+ *
+ * IT DOES NOT STOP AT A BELOW-COLUMN LINE, and that is deliberate rather than
+ * sloppy. Corpus 276-7 puts the closer AFTER such a line, and the answer it
+ * pins is that the fence was OPEN when the below-column line arrived: the
+ * collector's guard is on the open fence, and only after the item is truncated
+ * does §10 I4 decide what the leftover fence means. Stopping the scan there
+ * would report the fence unterminated and fold the very line that ends the
+ * item.
+ *
+ * A blank line is skipped for the same reason it is inside any fence: a blank
+ * is body, not a terminator.
+ *
+ * THE NEGATIVE CACHE IS LOAD-BEARING, and it is `fenceHasCloser`'s, keyed per
+ * fence CHARACTER as `quotedFenceHasCloser` keys it. This runs per fence-shaped
+ * line while the item's paragraph is open, so an item of N unterminated openers
+ * was scanned N times: 500 lines took 26ms and 4000 took 449ms, a 3.7x for a 2x
+ * input. Every line matching some marker's `closeRe` also matches the bare
+ * `RE_FENCE_CLOSER`, so finding none of that character from here on proves no
+ * marker of it closes, and the bound only moves forward because a later opener
+ * scans a suffix.
+ */
+function itemFenceHasCloser(
+  lexer: Lexer,
+  marker: string,
+  fromIndex: number,
+  contentCol: number,
+  memo: QuotedFenceCloserMemo,
+): boolean {
+  const char = marker[0]!
+  const start = fromIndex + 1
+  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
+  const closeRe = fenceCloseRe(marker)
+  let maxRun = 0
+  for (let i = start; i < lexer.lines.length; i++) {
+    const line = lexer.lines[i]!
+    if (isBlankLine(line)) continue
+    if (indentColumns(line, contentCol) < contentCol) continue
+    const dedented = sliceColumns(line, contentCol, true)
+    if (closeRe.test(dedented)) return true
+    const closer = RE_FENCE_CLOSER.exec(dedented)
+    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
+  }
+  memo.set(char, { from: start, maxRun })
+
+  return false
+}
+
+/** Whether the memo already proves no closer for `len` of `char` from `start`. */
+function fenceCloserMemoRefutes(
+  memo: QuotedFenceCloserMemo,
+  char: string,
+  len: number,
+  start: number,
+): boolean {
+  const cached = memo.get(char)
+
+  return cached !== undefined && start >= cached.from && len > cached.maxRun
+}
+
 function quotedFenceHasCloser(
   lexer: Lexer,
   marker: string,
@@ -2941,18 +3032,18 @@ function quotedFenceHasCloser(
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
-  if (start >= (memo.get(char) ?? Infinity)) return false
+  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
-  let sawSameChar = false
+  let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
     const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
     if (!quoted) break
     const content = quoted[1] ?? ''
     if (closeRe.test(content)) return true
     const closer = RE_FENCE_CLOSER.exec(content)
-    if (closer && closer[1]![0] === char) sawSameChar = true
+    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  if (!sawSameChar) memo.set(char, start)
+  memo.set(char, { from: start, maxRun })
 
   return false
 }
@@ -4635,7 +4726,11 @@ function isBlockAttributeLine(content: string): boolean {
   return parseBlockAttributeRun(content) !== null
 }
 
-function trackItemLazyState(content: string, state: ItemLazyState): void {
+function trackItemLazyState(
+  content: string,
+  state: ItemLazyState,
+  hasFenceCloser: (marker: string) => boolean = () => true,
+): void {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
   // that continue the same paragraph is what keeps a heading, a table or a code
@@ -4682,22 +4777,32 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
     state.lazyFoldable = true
     return
   }
-  // A code fence or raw fence opens a verbatim block with no open paragraph.
+  // A code or raw fence opens a verbatim block, which holds no open paragraph -
+  // but only when it really opens. Section 10's CLOSER LOOKAHEAD applies here
+  // exactly as it does in the quote's tracker: with a paragraph already open
+  // and no matching closer ahead, the fence is an inline verbatim run that is
+  // PART of that paragraph, so the paragraph stays open. With none open it
+  // dispatches unconditionally and an unterminated one runs to the end of the
+  // item.
+  //
+  // The default callback answers "yes" so a caller that cannot look ahead - the
+  // synthetic blank at a `+` marker, and the attached block's own lines - keeps
+  // the old unconditional behavior.
   const fence = RE_FENCE.exec(content)
-  if (fence) {
-    const marker = fence[2]!
+  const raw = fence ? null : RE_RAW_FENCE.exec(content)
+  const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
+  if (fenceMarker !== null && (!state.lazyFoldable || hasFenceCloser(fenceMarker))) {
     state.inFence = true
-    state.fenceClose = fenceCloseRe(marker)
+    state.fenceClose = fenceCloseRe(fenceMarker)
     state.lazyFoldable = false
     state.inDefList = false
     return
   }
-  const raw = RE_RAW_FENCE.exec(content)
-  if (raw) {
-    const marker = raw[1]!
-    state.inFence = true
-    state.fenceClose = fenceCloseRe(marker)
-    state.lazyFoldable = false
+  if (fenceMarker !== null) {
+    // An unterminated fence mid-paragraph: inline verbatim, and the paragraph
+    // it sits in stays open. Fall through to the bottom rather than returning,
+    // which is where ordinary paragraph text lands.
+    state.lazyFoldable = true
     state.inDefList = false
     return
   }
@@ -4985,6 +5090,19 @@ function parseList(lexer: Lexer): List {
         !isBlankLine(content) && !isEmptyQuoteLine(content) && !isBlockAttributeLine(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
+    // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
+    // The lead line never went through `trackItemLazyState`, so `- ``` ` left
+    // the tracker believing the item held an open paragraph, and every line
+    // below the content column folded into the code text - body and closer
+    // both. Nothing precedes the lead, so no closer lookahead applies: the
+    // fence opens unconditionally, exactly as it does at the top of a quote.
+    const itemFenceMemo: QuotedFenceCloserMemo = new Map()
+    const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
+    if (leadFence) {
+      lazyState.inFence = true
+      lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!)
+      lazyState.lazyFoldable = false
+    }
     // The lead line may itself be the malformed fence (`- :::note`), and then
     // the paragraph it opens is already absorbing: the `:::` below it is text,
     // not a closer for a block nothing opened (PART 9 §12, carve#891).
@@ -5101,7 +5219,10 @@ function parseList(lexer: Lexer): List {
         const dedented = sliceColumns(l, contentCol, true)
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        trackItemLazyState(dedented, lazyState)
+        const fenceLineIndex = lexer.pos
+        trackItemLazyState(dedented, lazyState, (marker) =>
+          itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol, itemFenceMemo),
+        )
         lexer.consume()
       } else if (
         pendingBlanks === 0 &&
@@ -5119,7 +5240,7 @@ function parseList(lexer: Lexer): List {
         // part of the paragraph the fence never interrupted. Without this, giving
         // the opener its info string (see trackItemLazyState) latched the tracker
         // inside a comment that never closes, and the item ended there.
-        (((lazyState.lazyFoldable || lazyState.inFence || lazyState.inComment) &&
+        (((lazyState.lazyFoldable || lazyState.inComment) &&
           !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
@@ -5829,18 +5950,21 @@ function splitTableRow(line: string): string[] {
  * negative cache (noFenceCloserFrom) keeps "many unclosed fences" input linear.
  */
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
+  const char = marker[0]!
   const start = lexer.pos + 1
-  if (start >= lexer.noFenceCloserFrom) return false // memo: no closer ahead
+  if (fenceCloserMemoRefutes(lexer.fenceCloserMemo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
-  let sawAnyCloser = false
+  let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
     const l = lexer.lines[i]!
     if (closeRe.test(l)) return true
-    if (RE_FENCE_CLOSER.test(l)) sawAnyCloser = true
+    const closer = RE_FENCE_CLOSER.exec(l)
+    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  // No closer for this marker ahead. If there is NO bare fence-closer line at
-  // all from here on, cache it (pos only advances) so later openers are O(1).
-  if (!sawAnyCloser) lexer.noFenceCloserFrom = start
+  // No closer for this marker ahead. Record how long the longest same-character
+  // run from here was, so a later opener (pos only advances, so it scans a
+  // suffix whose runs can only be shorter) is O(1) whenever it is longer.
+  lexer.fenceCloserMemo.set(char, { from: start, maxRun })
   return false
 }
 

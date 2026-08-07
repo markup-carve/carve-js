@@ -43,6 +43,28 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A fence opened on a list marker line no longer swallows a below-column body
+  and its closer** (markup-carve/carve#950). PART 9 §24's STEP algorithm needed
+  no new rule: S1 stops the prefix walk at the ITEM, so S2's fenced-body branch
+  never fires, and S4's lazy branch continues an open PARAGRAPH - which a
+  verbatim body is not. The item holds an EMPTY code block and the residue
+  re-parses at document level, which is the answer the BLOCK QUOTE spelling
+  already gave.
+
+  ```
+  - ```
+  x
+  ```
+  ```
+
+  The guard is on the OPEN FENCE rather than on "did the marker line open one":
+  once the body has collected a line at the item's content column, a reader
+  tracking the item's paragraph state sees a paragraph open again and folds.
+
+  §10's CLOSER LOOKAHEAD applies here as it does in a block quote, so an
+  unterminated fence mid-item is still an inline verbatim run that is part of
+  the item's paragraph, and a below-column line still folds into it.
+
 - **A collapsed reference whose label carries markup now reaches a
   heading-derived definition** (markup-carve/carve#949). PART 9R R1 keys the
   heading index by each heading's RENDERED PLAIN TEXT, so `# *bold* heading` is
