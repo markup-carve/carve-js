@@ -1285,9 +1285,24 @@ function renderImage(node: Image): string {
   return `![${escapeImageAlt(node.alt)}](${escapeDestination(node.src)}${title})${renderAttrs(node.attrs)}`
 }
 
+/**
+ * THE CANONICAL OPENER SPELLS THE FORMAT OUT: `---yaml`, never a bare `---`
+ * (markup-carve/carve#977, PART 11 §6b; markup-carve/carve#961).
+ *
+ * The writer used to drop the token for `yaml` alone. That was a special case
+ * for ONE format in a writer that already spelled every other one out - `toml`,
+ * `json` and any custom word all came back as `---toml` / `---json` - so the
+ * ruling REMOVES a branch rather than adding one, and it is the spelling
+ * carve-rs already produced.
+ *
+ * The two forms parse identically: a bare opener takes
+ * `defaultFrontmatterFormat`, whose default is `yaml`. Writing the token is
+ * what makes the round trip say what the AST holds - a document parsed with
+ * `defaultFrontmatterFormat: 'toml'` and written back bare would have read as
+ * `yaml` on the next pass, under the option's default.
+ */
 function renderFrontmatter(frontmatter: { format: string; content: string }): string {
-  const open = frontmatter.format === 'yaml' ? '---' : `---${escapeFormat(frontmatter.format)}`
-  return `${open}\n${protectVerbatim(frontmatter.content)}\n---`
+  return `---${escapeFormat(frontmatter.format)}\n${protectVerbatim(frontmatter.content)}\n---`
 }
 
 function renderBlockComment(content: string): string {
