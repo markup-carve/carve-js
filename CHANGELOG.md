@@ -173,6 +173,39 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A plain line still continues the body lazily at every sub-column indent, since
   it carries no block opener at any indent.
 
+- **Derived display text clones the heading's inline nodes**
+  (markup-carve/carve#957). R4's WHAT IS CLONED IS THE HEADING'S INLINE NODES
+  binds every consumer that derives display text from a heading, not the
+  crossref alone. A node carries its SOURCE RUN and a string does not, so
+  flattening at the derivation site destroys the run before any renderer is
+  invoked, and no renderer change reaches the loss.
+
+  Three consumers were flattening a heading written `# *bold* heading`:
+
+  - a numbered cross-reference label published `Section 1 - bold heading` and
+    now keeps the emphasis;
+  - a table-of-contents entry, both the injected nav and the `::: toc` placement
+    directive, published `bold heading` and now carries the nodes;
+  - an index term's display published its term flattened and now carries the
+    nodes the author wrote.
+
+  Numbering, prefixing and joining remain the extension's own business: this
+  governs what the TITLE part is made of, not the label word, the number, or the
+  separator around them.
+
+  A derived label is the heading's AUTHORED content, so nothing a later stage
+  added appears in one: not a `section-number` span, not a footnote reference
+  (a pointer into the endnotes rather than display text), not an abbreviation's
+  expansion, and not an invisible `:index[term]` marker. A link or an autolink
+  inside a heading is still unwrapped rather than published as a nested anchor.
+
+- **A `::: toc` entry honors the caller's render options.** The label was
+  rendered with defaults, so `allowRawHtml: false` escaped a heading's raw
+  inline HTML and the entry built from the same nodes emitted it live. A
+  `symbols` map was ignored there for the same reason. The injected
+  `tableOfContents()` nav is built before the render begins and still cannot see
+  them (markup-carve/carve-js#871).
+
 - **A bottom-positioned table of contents is emitted at document level, after
   the last section** (markup-carve/carve-js#728). `tableOfContents({ position:
   'bottom' })` appended the `<nav>` to the document's block list, so the

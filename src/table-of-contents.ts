@@ -1,7 +1,8 @@
-import type { Admonition, Attrs, Heading, RawBlock } from './ast.js'
+import type { Admonition, Attrs, Heading, InlineNode, RawBlock, Text } from './ast.js'
 import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
-import { inlineText } from './heading-ids.js'
+import { deriveDisplayNodes } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
+import { renderInlinesInLinkContext } from './render-html.js'
 
 /** Options for the {@link tableOfContents} extension. */
 export interface TableOfContentsOptions {
@@ -26,7 +27,7 @@ export interface TableOfContentsOptions {
 
 interface TocEntry {
   level: number
-  text: string
+  nodes: InlineNode[]
   id: string
 }
 
@@ -44,11 +45,64 @@ function stripBidi(s: string): string {
   return s.replace(/[\u202A-\u202E\u2066-\u2069]/g, '')
 }
 
-// TOC entry text = the heading's visible text WITHOUT the presentational
-// `<span class="section-number">` that HeadingNumbers injects (the auto number
-// is chrome, not part of the derived nav text), trimmed of the surrounding
-// space. Matches carve-php / carve-rs.
-function tocHeadingText(children: Heading['children']): string {
+/**
+ * Every `text` node in a cloned inline run, in document order.
+ *
+ * The walk is GENERIC - any array or object value, `pos` aside - rather than a
+ * list of child field names. Three byte-identical `CHILD_FIELDS` lists already
+ * live in this package and none of them is exported; a fourth, spelled slightly
+ * differently for one helper, is how a run gets missed. Nothing but a `text`
+ * node is collected, so descending into `attrs` costs a few reads and returns
+ * nothing.
+ */
+function textNodes(nodes: InlineNode[]): Text[] {
+  const out: Text[] = []
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node['type'] === 'text' && typeof node['value'] === 'string') out.push(node as unknown as Text)
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'type' && key !== 'value') visit(node[key])
+    }
+  }
+  visit(nodes)
+  return out
+}
+
+/**
+ * The two string-level steps the flattened entry text used to get, applied to
+ * the cloned run instead: strip Trojan-Source bidi controls from every text
+ * node, then trim the run's outer edges.
+ *
+ * Both still have to happen - the strip is a security rule (PART 9 section 26,
+ * so a TOC link cannot visually spoof its target) and the trim is what keeps the
+ * entry from carrying the space `headingNumbers` left behind when its span was
+ * filtered out. Only WHERE they apply moved, from one string to the nodes that
+ * string was made of (markup-carve/carve#957).
+ */
+function stripBidiAndTrim(nodes: InlineNode[]): void {
+  for (const node of textNodes(nodes)) node.value = stripBidi(node.value)
+  // The trim reaches the RUN's own first and last node, and only when that node
+  // is a text node. Trimming the first and last TEXT node found anywhere ate a
+  // real space: `# :ok: h` clones as [symbol, text(" h")], whose first text node
+  // is the separator, so the entry came out `:ok:h`.
+  const first = nodes[0]
+  if (first?.type === 'text') first.value = first.value.trimStart()
+  const last = nodes[nodes.length - 1]
+  if (last?.type === 'text') last.value = last.value.trimEnd()
+}
+
+// DERIVED DISPLAY TEXT CLONES THE SAME NODES (PART 9R R4,
+// markup-carve/carve#957). A TOC label is display text derived from a heading,
+// so it carries cloned inline nodes instead of flattening to a string, preserving
+// source runs for renderers that need them. The presentational
+// `<span class="section-number">` that HeadingNumbers injects is render chrome,
+// not part of the derived nav text.
+function tocHeadingNodes(children: Heading['children']): InlineNode[] {
   const filtered = children.filter(
     (c) =>
       !(
@@ -56,7 +110,24 @@ function tocHeadingText(children: Heading['children']): string {
         (c as { attrs?: Attrs }).attrs?.classes?.includes('section-number')
       ),
   )
-  return stripBidi(inlineText(filtered)).trim()
+  // `true`: the entry renders inside its own `<a>`.
+  const nodes = deriveDisplayNodes(filtered, true)
+  stripBidiAndTrim(nodes)
+  return nodes
+}
+
+function renderInlineHtml(nodes: InlineNode[]): string {
+  // This beforeRender path assembles raw nav HTML before any block renderer
+  // exists, so there is no `ctx.renderInlines` seam; it calls the core's inline
+  // renderer directly (markup-carve/carve#957).
+  //
+  // IN THE LINK CONTEXT, because the run is about to be interpolated into the
+  // entry's own `<a>`. A synthetic one-paragraph document render was the first
+  // spelling and was wrong twice over: it renders OUTSIDE a link, so a resolved
+  // crossref in a heading published a nested anchor, and it renders a DOCUMENT,
+  // so an inline footnote in a heading dragged a whole endnotes section into the
+  // nav (both raised by codex review).
+  return renderInlinesInLinkContext(nodes)
 }
 
 // Build a nested list from a flat, document-order entry list. This is a
@@ -91,7 +162,7 @@ function buildList(entries: TocEntry[], listType: 'ul' | 'ol'): string {
         levelStack[depth - 1] = e.level
       }
     }
-    html += `<li><a href="#${escapeHtml(e.id)}">${escapeHtml(e.text)}</a>`
+    html += `<li><a href="#${escapeHtml(e.id)}">${renderInlineHtml(e.nodes)}</a>`
     hasOpenItem = true
   }
   html += '</li>\n'
@@ -141,7 +212,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
         const h = node as Heading
         const id = h.attrs?.id
         if (!id || h.level < minLevel || h.level > maxLevel) continue
-        entries.push({ level: h.level, text: tocHeadingText(h.children), id })
+        entries.push({ level: h.level, nodes: tocHeadingNodes(h.children), id })
       }
       if (entries.length === 0) return doc
 
@@ -230,7 +301,7 @@ function collectPlacementHeadings(node: unknown, out: TocEntry[]): void {
   if (typed.type === 'heading') {
     const h = node as Heading
     const id = h.attrs?.id
-    if (id !== undefined) out.push({ level: h.level, text: tocHeadingText(h.children), id })
+    if (id !== undefined) out.push({ level: h.level, nodes: tocHeadingNodes(h.children), id })
     return
   }
   for (const key of Object.keys(node as Record<string, unknown>)) {

@@ -380,13 +380,16 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   // previous tracker keeps the outer document's abbreviation budget intact.
   const prevBudget = abbrBudget
   const prevDocIds = docIds
+  const prevOptions = activeRenderOptions
   abbrBudget = new AbbrBudget(ast.srcByteLength)
   docIds = collectDocumentIds(ast)
+  activeRenderOptions = opts
   try {
     return renderDocumentBody(ast, opts)
   } finally {
     abbrBudget = prevBudget
     docIds = prevDocIds
+    activeRenderOptions = prevOptions
   }
 }
 
@@ -1392,6 +1395,44 @@ function outsideLink<T>(fn: () => T): T {
 function renderInlines(nodes: InlineNode[], opts: RenderOptions): string {
   return nodes.map((n) => renderInline(n, opts)).join('')
 }
+
+/**
+ * Render an inline run on its own, AS IF it sat inside an anchor.
+ *
+ * For a consumer that derives display text from a heading and lands it inside a
+ * link of its own - a table-of-contents entry (PART 9R R4,
+ * markup-carve/carve#957). Those clone the heading's inline NODES, so they need
+ * the core's inline renderer rather than a flatten, and they need it in the LINK
+ * context: a resolved `heading_ref` renders its display text instead of an
+ * anchor there, exactly as it does inside an authored link.
+ *
+ * Rendering the run through a synthetic one-paragraph document is what this
+ * replaces, and it was wrong twice: the flag defaulted to false, so a crossref
+ * in a heading published a nested anchor; and a document render emits
+ * DOCUMENT-level output, so an inline footnote in a heading dragged a whole
+ * endnotes section into the nav.
+ */
+export function renderInlinesInLinkContext(nodes: InlineNode[], opts?: RenderOptions): string {
+  return withinLink(() => renderInlines(nodes, opts ?? activeRenderOptions))
+}
+
+/**
+ * The options the render currently in progress was called with, or `{}` outside
+ * one.
+ *
+ * Module-scoped for the same reason `insideLink` is: rendering is synchronous
+ * and single-threaded. It exists because a caller can reach the inline renderer
+ * from a BLOCK renderer without being handed the options - the extension render
+ * context does not carry them - and rendering a label with defaults is not a
+ * cosmetic difference. `allowRawHtml: false` escaped a heading's raw inline HTML
+ * and a table-of-contents entry built from the same nodes emitted it live
+ * (raised by codex review).
+ *
+ * A transform that runs BEFORE the render still sees `{}`, which is correct:
+ * there is no active render to inherit from. markup-carve/carve-js#871 tracks
+ * giving `beforeRender` the options directly.
+ */
+let activeRenderOptions: RenderOptions = {}
 
 function renderInline(node: InlineNode, opts: RenderOptions): string {
   if (inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderHtml', MAX_RENDER_DEPTH)

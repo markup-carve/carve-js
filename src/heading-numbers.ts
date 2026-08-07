@@ -1,6 +1,6 @@
-import type { BlockNode, CrossRef, Document, Heading, Span, Text } from './ast.js'
+import type { BlockNode, CrossRef, Document, Heading, InlineNode, Span, Text } from './ast.js'
 import type { CarveExtension } from './extension.js'
-import { inlineText } from './heading-ids.js'
+import { deepCloneInlines, deriveDisplayNodes } from './heading-ids.js'
 
 /** Options for the {@link headingNumbers} extension (#198). */
 export interface HeadingNumbersOptions {
@@ -40,7 +40,7 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
       // level (## -> ####) does not emit empty `0` segments.
       const levels: number[] = []
       const numbers: number[] = []
-      const byId = new Map<string, { number: string; title: string }>()
+      const byId = new Map<string, { number: string; title: InlineNode[] }>()
       const seenIds = new Set<string>() // every heading id, for first-id-wins
 
       walkHeadings(doc.children, false, (h, inBlockquote) => {
@@ -67,7 +67,23 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
         }
         const number = numbers.join('.')
 
-        const title = inlineText(h.children) // capture BEFORE injecting the span
+        // DERIVED DISPLAY TEXT CLONES THE SAME NODES (PART 9R R4,
+        // markup-carve/carve#957). The TITLE part of a numbered label is display
+        // text derived from a heading, so it is the heading's inline NODES, not
+        // a rendered string. A node carries its SOURCE RUN and a string does
+        // not, so flattening here destroys the run before any renderer is
+        // invoked - smart typography's SOURCE mode cannot recover it on ANY
+        // target, and no renderer change reaches the loss. This published
+        // `Section 1 - bold heading` for a `# *bold* heading`, with the emphasis
+        // gone.
+        //
+        // THE LABEL IS TAKEN BEFORE ANY RENDER-STAGE INJECTION, which the
+        // capture point already honored and the clone has to keep: the span
+        // below is a render-stage addition and is not part of the label.
+        //
+        // A deep clone, because the label and the heading are then two trees: a
+        // renderer that rewrote one in place would otherwise rewrite the other.
+        const title = deepCloneInlines(h.children)
         if (id !== undefined && !taken) byId.set(id, { number, title })
         const span: Span = {
           type: 'span',
@@ -87,14 +103,29 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
           if (!ref.href?.startsWith('#')) return
           const entry = byId.get(ref.href.slice(1))
           if (!entry) return // crossref to an unnumbered heading: leave the title
-          const text =
+          // NUMBERING, PREFIXING AND JOINING REMAIN THE EXTENSION'S OWN
+          // BUSINESS (R4). R4 governs what the TITLE part is made of, not the
+          // label word, not the number, and not the separator around them - so
+          // those stay text nodes and only the title arrives as nodes.
+          const prefix =
             crossref === 'number'
               ? `${label} ${entry.number}`
-              : `${label} ${entry.number} - ${entry.title}`
+              : `${label} ${entry.number} - `
           // The DISPLAY text, not the authored `target`: what the reference
           // renders as is a rendering decision, and `target` records what the
           // author wrote.
-          ref.resolvedText = [{ type: 'text', value: text } as Text]
+          //
+          // Unwrapped for the anchor it renders inside: a heading may hold a
+          // link, and the core resolver already unwraps one it clones into a
+          // crossref. This transform runs AFTER that pass, so a label it builds
+          // has to answer the same way rather than publish a nested anchor.
+          ref.resolvedText =
+            crossref === 'number'
+              ? [{ type: 'text', value: prefix } as Text]
+              : [
+                  { type: 'text', value: prefix } as Text,
+                  ...deriveDisplayNodes(entry.title, true),
+                ]
         })
 
       return doc
