@@ -108,6 +108,29 @@ describe('a definition body is such a container', () => {
     )
   })
 
+  it('the closer LOOKAHEAD decides a fence on a line the tracker sees', () => {
+    // The marker line is seeded by hand and opens its fence unconditionally, so
+    // it cannot exercise the lookahead - a mutant that answered "yes, there is a
+    // closer" for every fence passed every row above. The lookahead only speaks
+    // where a paragraph is ALREADY open and the fence sits at the body column.
+    //
+    // No matching closer ahead: the run is inline verbatim and PART of the open
+    // paragraph, so the fold survives and `tail` stays in the `dd`.
+    expect(carveToHtml(':: t\n:  para\n   ```\ntail\n')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>para\n<code>\ntail</code></dd>\n</dl>',
+    )
+    // The list spelling of the same document, which is where the rule comes from.
+    expect(carveToHtml('- para\n  ```\ntail\n')).toBe(
+      '<ul>\n  <li>para\n<code>\ntail</code></li>\n</ul>',
+    )
+    // CONTROL with a closer ahead: the fence really opens, the paragraph ends,
+    // and `tail` leaves the `dd`. Without this row the one above passes on a
+    // reader that never opens a fence at all.
+    expect(carveToHtml(':: t\n:  para\n   ```\n   x\n   ```\ntail\n')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>para</p>\n    <pre><code>x\n</code></pre>\n  </dd>\n</dl>\n<p>tail</p>',
+    )
+  })
+
   it('answers every S4 shape the same way a list item does', () => {
     const pairs: Array<[string, string]> = [
       ['- ```\nbody\n```\n', ':: t\n:  ```\nbody\n```\n'],
