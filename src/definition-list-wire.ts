@@ -110,6 +110,15 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
   return out
 }
 
+/** A wire position, when the payload carries a usable one. */
+function readPos(value: unknown): Position | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const pos = value as Position
+  if (typeof pos.startLine !== 'number' || typeof pos.endLine !== 'number') return undefined
+
+  return pos
+}
+
 /**
  * The flat wire sequence back to runtime entries.
  *
@@ -118,33 +127,66 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
  * starts the next entry. A description with no term before it - which the parser
  * cannot produce but a hand-built payload can - opens an entry with no terms
  * rather than being dropped.
+ *
+ * A description's `pos` is READ BACK, not just dropped, and that is what makes
+ * §6 a round trip for an EMPTIED description. `entriesToWire` derives a
+ * description's position from its children and falls back to
+ * `definitionSpans` - so a description whose only content hoisted to the root
+ * (§7: a link reference, footnote or abbreviation definition) has no children
+ * to derive from and NOTHING BUT that fallback. Discarding it here meant this
+ * engine's own decoder could not reproduce what its own encoder had just
+ * written: the `pos` added for markup-carve/carve-js#813 survived one direction
+ * only, and the trip came back short a field on corpus 227.
+ *
+ * `definitionLines` comes back the same way and for a second reason. It is what
+ * `renderCarve` uses to write a hoisted definition back onto the `:  ` line the
+ * author wrote it on (markup-carve/carve#805), and what `renderHtml` anchors a
+ * `<dd>` to. Without it, formatting an INGESTED tree emitted the bare `:` that
+ * fix exists to prevent, while formatting the parsed tree did not - the same
+ * document, two answers, decided by whether it had been through JSON.
+ *
+ * A description that HAS children is unaffected either way: `entriesToWire`
+ * prefers the derived span, and `renderHtml` already fell back to the first
+ * child's line, which is the value restored here.
  */
 export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
   const items: DefinitionItem[] = []
   let current: DefinitionItem | undefined
 
+  const open = (): DefinitionItem => {
+    const item: DefinitionItem = {
+      terms: [],
+      definitions: [],
+      definitionLines: [],
+      definitionSpans: [],
+    }
+    items.push(item)
+
+    return item
+  }
+
   for (const node of nodes) {
     if (typeof node !== 'object' || node === null) continue
-    const entry = node as { type?: unknown; children?: unknown }
+    const entry = node as { type?: unknown; children?: unknown; pos?: unknown }
     if (!Array.isArray(entry.children)) continue
 
     if (entry.type === 'definition_term') {
       // A term after a description starts a new entry; consecutive terms share
       // one, which is what `:: a` / `:: b` on adjacent lines means.
-      if (current === undefined || current.definitions.length > 0) {
-        current = { terms: [], definitions: [] }
-        items.push(current)
-      }
+      if (current === undefined || current.definitions.length > 0) current = open()
       current.terms.push(entry.children as InlineNode[])
       continue
     }
 
     if (entry.type === 'definition_description') {
-      if (current === undefined) {
-        current = { terms: [], definitions: [] }
-        items.push(current)
-      }
+      if (current === undefined) current = open()
       current.definitions.push(entry.children as BlockNode[])
+      // Parallel to `definitions`, so a payload where only some descriptions
+      // carry a position keeps the rest of them lined up. Pushed unconditionally
+      // for that reason - a skipped `undefined` would shift every later index.
+      const pos = readPos(entry.pos)
+      current.definitionSpans!.push(pos)
+      current.definitionLines!.push(pos?.startLine)
     }
   }
 
