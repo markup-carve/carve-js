@@ -156,6 +156,20 @@ describe('a fence opened on a list marker line', () => {
     expect(new Set(rows.map((r) => r.item)).size).toBe(2)
   })
 
+  perfIt('stays linear when a SHORTER same-character closer follows', () => {
+    // Raised by codex review. A closer cache keyed on the fence CHARACTER alone
+    // records "saw one" for a `` ``` `` that cannot close a `` ```` `` opener,
+    // so its bound never advances and every opener rescans the suffix: 500
+    // openers took 41ms and 4000 took 1104ms. The entry carries the LONGEST
+    // same-character run instead, which refutes any longer marker in O(1).
+    expectScansLinearly((input) => void carveToHtml(input), '  ````js\n', {
+      prefix: '- a\n',
+      suffix: '  ```\n',
+      label: 'item openers over one shorter closer',
+      smallRepeats: 2000,
+    })
+  })
+
   perfIt('scans an item of unterminated fence openers in linear time', () => {
     // The closer lookahead runs per fence-shaped line while the item's
     // paragraph is open, so without its negative cache an item of N

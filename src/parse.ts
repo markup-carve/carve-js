@@ -1150,10 +1150,17 @@ class Lexer {
   nested = false
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
-  // lookahead): the smallest line index from which NO bare fence-closer
-  // line exists onward. Once proven, every later fence opener (pos only
-  // advances) short-circuits, keeping "many unclosed fences" input linear.
-  noFenceCloserFrom = Infinity
+  // lookahead), the same entry the container-local scans keep: per fence
+  // CHARACTER, where a scan started and the longest bare run of that character
+  // it saw. Once proven, every later opener (pos only advances) whose marker is
+  // longer than that run short-circuits, keeping "many unclosed fences" input
+  // linear.
+  //
+  // This was one index, char- and length-agnostic, so a single `~~~` or a
+  // single short ``` ``` ``` anywhere ahead pinned it at Infinity forever and
+  // the lookahead stayed quadratic: 500 unterminated ` ````js ` openers over
+  // one ``` ``` ``` took 25ms and 4000 took 347ms.
+  fenceCloserMemo: QuotedFenceCloserMemo = new Map()
 
   // width -> LAST line index carrying a comment fence of that width, built once
   // by commentBlockHasCloser. A closer must match the opener width exactly, so
@@ -2900,8 +2907,26 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
   return false
 }
 
-/** Per-quote negative cache for `quotedFenceHasCloser`, keyed by fence character. */
-type QuotedFenceCloserMemo = Map<string, number>
+/**
+ * Negative cache for the container-local fence closer scans, keyed by fence
+ * CHARACTER.
+ *
+ * `from` is where the recorded scan started and `maxRun` is the longest BARE
+ * run of that character it saw. A later opener scans a SUFFIX of that range, so
+ * its own longest run can only be shorter - which makes the entry sound for
+ * every opener starting at or after `from` whose marker is LONGER than
+ * `maxRun`, since no run ahead can close it.
+ *
+ * Keying on the character alone was not enough: a single short `` ``` `` after
+ * a thousand unterminated `` ````js `` openers set "saw one" on every scan and
+ * the bound never advanced, so the lookahead stayed quadratic - 500 openers
+ * took 41ms and 4000 took 1104ms. Raised by codex review.
+ */
+interface FenceCloserMemoEntry {
+  from: number
+  maxRun: number
+}
+type QuotedFenceCloserMemo = Map<string, FenceCloserMemoEntry>
 
 /**
  * Whether a code or raw fence opened with `marker` closes LATER IN THIS QUOTE.
@@ -2970,9 +2995,9 @@ function itemFenceHasCloser(
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
-  if (start >= (memo.get(char) ?? Infinity)) return false
+  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
-  let sawSameChar = false
+  let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
     const line = lexer.lines[i]!
     if (isBlankLine(line)) continue
@@ -2980,11 +3005,23 @@ function itemFenceHasCloser(
     const dedented = sliceColumns(line, contentCol, true)
     if (closeRe.test(dedented)) return true
     const closer = RE_FENCE_CLOSER.exec(dedented)
-    if (closer && closer[1]![0] === char) sawSameChar = true
+    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  if (!sawSameChar) memo.set(char, start)
+  memo.set(char, { from: start, maxRun })
 
   return false
+}
+
+/** Whether the memo already proves no closer for `len` of `char` from `start`. */
+function fenceCloserMemoRefutes(
+  memo: QuotedFenceCloserMemo,
+  char: string,
+  len: number,
+  start: number,
+): boolean {
+  const cached = memo.get(char)
+
+  return cached !== undefined && start >= cached.from && len > cached.maxRun
 }
 
 function quotedFenceHasCloser(
@@ -2995,18 +3032,18 @@ function quotedFenceHasCloser(
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
-  if (start >= (memo.get(char) ?? Infinity)) return false
+  if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
-  let sawSameChar = false
+  let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
     const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
     if (!quoted) break
     const content = quoted[1] ?? ''
     if (closeRe.test(content)) return true
     const closer = RE_FENCE_CLOSER.exec(content)
-    if (closer && closer[1]![0] === char) sawSameChar = true
+    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  if (!sawSameChar) memo.set(char, start)
+  memo.set(char, { from: start, maxRun })
 
   return false
 }
@@ -5913,18 +5950,21 @@ function splitTableRow(line: string): string[] {
  * negative cache (noFenceCloserFrom) keeps "many unclosed fences" input linear.
  */
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
+  const char = marker[0]!
   const start = lexer.pos + 1
-  if (start >= lexer.noFenceCloserFrom) return false // memo: no closer ahead
+  if (fenceCloserMemoRefutes(lexer.fenceCloserMemo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
-  let sawAnyCloser = false
+  let maxRun = 0
   for (let i = start; i < lexer.lines.length; i++) {
     const l = lexer.lines[i]!
     if (closeRe.test(l)) return true
-    if (RE_FENCE_CLOSER.test(l)) sawAnyCloser = true
+    const closer = RE_FENCE_CLOSER.exec(l)
+    if (closer && closer[1]![0] === char) maxRun = Math.max(maxRun, closer[1]!.length)
   }
-  // No closer for this marker ahead. If there is NO bare fence-closer line at
-  // all from here on, cache it (pos only advances) so later openers are O(1).
-  if (!sawAnyCloser) lexer.noFenceCloserFrom = start
+  // No closer for this marker ahead. Record how long the longest same-character
+  // run from here was, so a later opener (pos only advances, so it scans a
+  // suffix whose runs can only be shorter) is O(1) whenever it is longer.
+  lexer.fenceCloserMemo.set(char, { from: start, maxRun })
   return false
 }
 
