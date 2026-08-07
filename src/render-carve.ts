@@ -65,8 +65,14 @@ export interface CarveRenderOptions {}
 // the padding off a rendered SUBTREE, where a leading or trailing newline is
 // the writer's own layout and not anything the author wrote.
 //
-// Kept in step with `isTrimmable` in src/trim-non-nbsp.ts, which answers the
-// same question for the other non-HTML targets.
+// NO LONGER in step with `isTrimmable` in src/trim-non-nbsp.ts, which answers
+// the same question for the markdown, plain-text and ANSI targets and still
+// takes the whole Unicode class. That is deliberate and is the reason this is
+// spelled out rather than shared: those three targets are LOSSY by design and
+// carry no round-trip invariant, and their output is pinned byte-for-byte
+// against carve-php and carve-rs, so narrowing them here would break parity
+// for a rule no ruling has extended to them. The Carve writer is the only one
+// of the four that has to reproduce its input.
 function isWsNonNbsp(ch: string): boolean {
   return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
 }
