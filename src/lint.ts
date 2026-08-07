@@ -32,6 +32,7 @@ import {
   headingIdSlugOpts,
   normalizeHeadingRefLabel,
   headingRefKeyFromLabel,
+  isCollapsedRef,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
@@ -159,8 +160,8 @@ function collectCrossrefs(doc: Document): Array<{ target: string; node: Position
 
 function collectUnresolvedRefLinks(
   doc: Document,
-): Array<{ ref: string; rawRef: string; node: Positioned }> {
-  const found: Array<{ ref: string; rawRef: string; node: Positioned }> = []
+): Array<{ ref: string; rawRef: string; collapsed: boolean; node: Positioned }> {
+  const found: Array<{ ref: string; rawRef: string; collapsed: boolean; node: Positioned }> = []
   walkDocument(doc, (node) => {
     // UNRESOLVED means no destination. PART 12 §3a keeps `ref` and `rawRef` on
     // a RESOLVED reference too, so a ref alone no longer answers this
@@ -170,6 +171,13 @@ function collectUnresolvedRefLinks(
     found.push({
       ref: node.ref,
       rawRef: typeof node.rawRef === 'string' ? node.rawRef : `[${node.ref}]`,
+      // The SPELLING, read off the same field the resolver reads it off, so the
+      // mirror below cannot disagree with resolveHeadingIds about which
+      // references the heading index is even offered to.
+      collapsed: isCollapsedRef(
+        node.ref,
+        typeof node.rawRef === 'string' ? node.rawRef : undefined,
+      ),
       node: node as Positioned,
     })
   })
@@ -414,15 +422,20 @@ export function lintCarve(
   // Reference links that survived parse() have no explicit link definition.
   // resolve() may still turn them into implicit heading links; anything else
   // renders as its literal source text.
-  for (const { ref, rawRef, node } of collectUnresolvedRefLinks(doc)) {
+  for (const { ref, rawRef, collapsed, node } of collectUnresolvedRefLinks(doc)) {
     // BOTH keys, in resolveHeadingIds' order: the label as written, then its
     // rendered plain text (PART 9R R1). Checking only the first reported a
     // reference that resolves - `[*bold* heading][]` under `# *bold* heading` -
     // as unresolved, which is the failure mode this whole block exists to
     // avoid. This mirror has to move with the resolver or it lies about it.
+    //
+    // And only for the COLLAPSED spelling, for the same reason: R1 offers the
+    // index to `[text][]` alone (markup-carve/carve#742), so an explicit
+    // `[text][Some Heading]` IS unresolved and this rule has to say so.
     if (
-      headingRefs.has(normalizeHeadingRefLabel(ref)) ||
-      headingRefs.has(headingRefKeyFromLabel(ref))
+      collapsed &&
+      (headingRefs.has(normalizeHeadingRefLabel(ref)) ||
+        headingRefs.has(headingRefKeyFromLabel(ref)))
     ) {
       continue
     }

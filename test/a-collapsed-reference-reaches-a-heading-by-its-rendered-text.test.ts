@@ -149,17 +149,18 @@ describe('a collapsed reference reaches a heading by its rendered text', () => {
     )
   })
 
-  it('a FULL reference resolves by the same key', () => {
-    // R1 says THE LABEL enters as its rendered plain text; nothing in the
-    // clause restricts that to the collapsed spelling, and the same key
-    // function serves both. (`[link](/u)` and `[span]{.c}` are unreachable as
-    // full-reference labels for an unrelated reason - the label production
-    // stops at the first `]` - so they are excluded here rather than expected
-    // to resolve.)
+  it('a FULL reference does NOT reach the index at any spelling', () => {
+    // THE EXPLICIT FORM DOES NOT REACH THE INDEX (PART 9R R1,
+    // markup-carve/carve#742). This row used to expect the opposite, on the
+    // reading that R1's key function serves both spellings. R1 now scopes the
+    // fallback to the collapsed `[text][]` and to nothing else, and the
+    // asymmetry it already stated is the reason: an explicit label is an
+    // identifier the author wrote twice and can keep identical, so an
+    // identifier that names nothing names nothing and is not retried as prose.
+    // (`[link](/u)` and `[span]{.c}` are unreachable as full-reference labels
+    // for an unrelated reason - the label production stops at the first `]`.)
     const bracketFree = MARKUPS.filter((m) => !m.includes('['))
-    const unresolved = bracketFree.filter(
-      (m) => href('# ' + m + '\n\n[see][' + m + ']\n') === null,
-    )
-    expect(unresolved).toEqual([])
+    const resolved = bracketFree.filter((m) => href('# ' + m + '\n\n[see][' + m + ']\n') !== null)
+    expect(resolved).toEqual([])
   })
 })

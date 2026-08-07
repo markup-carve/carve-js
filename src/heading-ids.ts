@@ -83,6 +83,37 @@ export function headingRefKeyFromLabel(label: string): string {
 }
 
 /**
+ * Whether a reference link was written in the COLLAPSED `[text][]` spelling.
+ *
+ * PART 9R R1: the heading-index fallback is scoped to the collapsed form and to
+ * nothing else, so an explicit `[text][label]` that no linkDefs entry matches is
+ * unresolved and renders as its literal source at ANY spelling, folded or exact
+ * (markup-carve/carve#742). The asymmetry is the one R1 already states: a
+ * collapsed label is the author quoting prose from elsewhere in the document,
+ * which is why its matching is loose; an explicit label is an identifier the
+ * author wrote twice and can keep identical, which is why its matching is exact.
+ * An identifier that names nothing names nothing; it is not retried as prose.
+ *
+ * The test reads `rawRef` rather than a flag set at parse time, because it has
+ * to hold for a tree that arrived through INGEST too: `ref` and `rawRef` are the
+ * two fields PART 12 §3a puts on the wire for a reference, and the collapsed
+ * spelling is recoverable from them and from nothing else. `ref` alone cannot
+ * tell the two apart - a collapsed `[a][]` and an explicit `[a][a]` both carry
+ * `ref: "a"`.
+ *
+ * A label holds no `]` (the reference tail is `[` up to the first `]`), so
+ * `[<ref>][]` is a prefix of the source exactly when the label was empty and the
+ * collapsed form reused the text as the label.
+ *
+ * A node with no `rawRef` is treated as NOT collapsed. It is degenerate either
+ * way - the renderers need `rawRef` to write an unresolved reference back out as
+ * literal source - and refusing the fallback is the side this clause narrows to.
+ */
+export function isCollapsedRef(ref: string, rawRef: string | undefined): boolean {
+  return rawRef !== undefined && rawRef.startsWith(`[${ref}][]`)
+}
+
+/**
  * Apply the baked Unicode->ASCII map (Latin / IPA / combining marks /
  * Cyrillic / Latin-Extended-Additional / punctuation / super- and
  * sub-script / currency / letterlike, byte-identical with djot-php's
@@ -459,9 +490,16 @@ export function resolveHeadingIds(
         // carries markup: a label with none produces the same string twice, and
         // one that does must still lose to a heading whose text literally
         // contains the markup characters.
-        const id =
-          headingRefs.get(normalizeHeadingRefLabel(n.ref)) ??
-          headingRefs.get(headingRefKeyFromLabel(n.ref))
+        //
+        // ONLY the collapsed spelling reaches the index (PART 9R R1,
+        // markup-carve/carve#742). The gate is on the SPELLING, not on
+        // "unresolved": an explicit `[text][label]` naming a real linkDefs entry
+        // still resolves - it resolved in applyLinkDefs, before this pass ever
+        // saw it - and a collapsed one still reaches the heading index.
+        const id = isCollapsedRef(n.ref, n.rawRef)
+          ? headingRefs.get(normalizeHeadingRefLabel(n.ref)) ??
+            headingRefs.get(headingRefKeyFromLabel(n.ref))
+          : undefined
         if (id) {
           // PART 12 §3a - see the note in parse.ts: the authored `ref` and
           // `rawRef` survive beside the resolved destination.
