@@ -2872,6 +2872,63 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
   return false
 }
 
+/** Per-quote negative cache for `quotedFenceHasCloser`, keyed by fence character. */
+type QuotedFenceCloserMemo = Map<string, number>
+
+/**
+ * Whether a code or raw fence opened with `marker` closes LATER IN THIS QUOTE.
+ *
+ * The §10 CLOSER LOOKAHEAD `startsInterruptingBlock` applies through
+ * `fenceHasCloser`, restated over the quote's own lines for the same two
+ * reasons `quotedCommentHasCloser` gives: the tracker runs while the quote is
+ * still being collected, and it has to agree with a sub-lexer that only ever
+ * sees this quote's lines. So the scan strips ONE `>` marker per line and STOPS
+ * at the first unquoted line.
+ *
+ * The closer is matched by `fenceCloseRe`, i.e. a run of the SAME character at
+ * least as long — the code fence's rule, not the comment fence's exact-length
+ * one.
+ *
+ * THE NEGATIVE CACHE IS LOAD-BEARING, and it is `fenceHasCloser`'s. This runs
+ * per fence-shaped line while a quoted paragraph is open, so a quote of N
+ * unterminated openers was scanned N times without it: 500 lines took 27ms and
+ * 4000 took 397ms, a 3.8x for a 2x input. Every line matching some marker's
+ * `closeRe` also matches the bare `RE_FENCE_CLOSER`, so seeing none in the
+ * quoted prefix proves no marker of that character closes from here on - and
+ * the bound only moves forward, since a later opener scans a suffix of what
+ * this one did.
+ *
+ * The bound is per fence CHARACTER, which is where this differs from
+ * `fenceHasCloser`: a single `~~~` closer would otherwise keep the cache from
+ * ever advancing for a quote full of unterminated backtick openers. Raised by
+ * codex review on this function; the same shape is quadratic through
+ * `fenceHasCloser` today, byte-for-byte as it is on main, and that is left
+ * alone here rather than folded into a parser fix.
+ */
+function quotedFenceHasCloser(
+  lexer: Lexer,
+  marker: string,
+  fromIndex: number,
+  memo: QuotedFenceCloserMemo,
+): boolean {
+  const char = marker[0]!
+  const start = fromIndex + 1
+  if (start >= (memo.get(char) ?? Infinity)) return false
+  const closeRe = fenceCloseRe(marker)
+  let sawSameChar = false
+  for (let i = start; i < lexer.lines.length; i++) {
+    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
+    if (!quoted) break
+    const content = quoted[1] ?? ''
+    if (closeRe.test(content)) return true
+    const closer = RE_FENCE_CLOSER.exec(content)
+    if (closer && closer[1]![0] === char) sawSameChar = true
+  }
+  if (!sawSameChar) memo.set(char, start)
+
+  return false
+}
+
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
 // SAME length (more `%` nest). Not rendered.
 function parseCommentBlock(lexer: Lexer): Comment {
@@ -3777,6 +3834,19 @@ interface BlockQuoteLazyState {
   fenceClose: RegExp | null
   inComment: boolean
   commentLen: number
+  /**
+   * Widths of the colon fences open in this quote, innermost last, so a bare
+   * `:::` run reads as the innermost container's closer only on an EXACT width
+   * match — `collectColonFenceBody`'s rule. A plain counter closed a `::::`
+   * container on a `:::` run, which that container reads as a nested opener,
+   * and the quote then ended on a line the top level folds in.
+   */
+  colonWidths: number[]
+  /**
+   * Whether the open paragraph has absorbed a MALFORMED colon fence, so a
+   * following bare run is absorbed as text too (§12).
+   */
+  absorbingFence: boolean
   paragraphOpen: boolean
 }
 
@@ -3785,16 +3855,38 @@ interface BlockQuoteLazyState {
  * non-`>` lazy line only extends an OPEN paragraph (the djot/CommonMark rule).
  * Inside an open code fence/comment, or after a structural line that leaves no open
  * paragraph (a just-opened div, a closed fence), such a line must terminate the
- * quote rather than be swallowed into the fence/div. Carve has no
- * paragraph-interrupting block mode, so a fence/comment/div opener starts a block
- * only when no paragraph is already open — a fence-looking line mid-paragraph is
- * plain paragraph text.
+ * quote rather than be swallowed into the fence/div.
+ *
+ * PART 1 S4's NO OPEN PARAGRAPH, NO LAZY LINE is written about the OPEN STACK,
+ * not about which container kind is on it (markup-carve/carve#920): a container
+ * a quoted line has just opened is EMPTY and holds no paragraph, and a CLOSED
+ * one holds none either. This tracker answered that only when the opener stood
+ * where no paragraph was already open, on the reading that "Carve has no
+ * paragraph-interrupting block mode". Measured against this engine's own block
+ * parser, that reading is false: a `:::` opener, a fence with a closer ahead and
+ * a comment fence with a closer ahead all DO interrupt an open quoted paragraph
+ * (`startsInterruptingBlock`). Each kind therefore carries its own condition
+ * here rather than sharing one gate:
+ *
+ *  - a colon fence opens UNCONDITIONALLY ("colon-fence containers open
+ *    immediately and auto-close at EOF"), and its closer is tracked at all;
+ *  - a code/raw fence interrupts an open paragraph only with a matching closer
+ *    ahead IN THIS QUOTE, and dispatches unconditionally when none is open — an
+ *    unterminated one mid-paragraph is inline verbatim, so the paragraph stays;
+ *  - a comment fence needs its closer either way, which is what
+ *    `hasCommentCloser` has done since carve-js#832.
  */
 function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
+  hasFenceCloser: (marker: string) => boolean,
 ): void {
+  // Absorption belongs to ONE open paragraph, so it ends wherever that
+  // paragraph does: cleared here and re-armed only in the two branches that
+  // continue the same paragraph, exactly as `trackItemLazyState` does it.
+  const wasAbsorbing = state.absorbingFence
+  state.absorbingFence = false
   if (state.inComment) {
     // EXACT length, per PART 9 §28: "The CLOSER matches on EXACT delimiter
     // length (§2), so a longer opener nests shorter fences and a too-short line
@@ -3843,61 +3935,100 @@ function trackBlockQuoteLazyState(
     state.paragraphOpen = false
     return
   }
-  // The remaining structural openers (fence/comment/div) only start a block
-  // when NO paragraph is already open: Carve has no paragraph-interrupting
-  // block mode, so a fence/comment-looking line WHILE a quoted paragraph is
-  // open is plain paragraph text (e.g. a mid-paragraph ``` is an inline
-  // verbatim run, not a code block).
-  if (!state.paragraphOpen) {
-    const fence = RE_FENCE.exec(content)
-    if (fence) {
-      const marker = fence[2]!
-      state.inFence = true
-      state.fenceClose = fenceCloseRe(marker)
-      state.paragraphOpen = false
-      return
-    }
-    const raw = RE_RAW_FENCE.exec(content)
-    if (raw) {
-      const marker = raw[1]!
-      state.inFence = true
-      state.fenceClose = fenceCloseRe(marker)
-      state.paragraphOpen = false
-      return
-    }
-    // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 section 28). Every
-    // opener was treated as opening here, so `> %%%` with no closer put the
-    // tracker inside a comment, `paragraphOpen` went false, and a lazy line
-    // that should have continued the quote's paragraph ended the quote
-    // instead. The block parser has always looked ahead; this is the same
-    // lookahead over the quote's own lines.
+  // The colon-fence arm below is `trackItemLazyState`'s, restated for the quote:
+  // one construct answering S4 two ways depending on the container kind is the
+  // defect markup-carve/carve#920 names, so the two trackers keep the same
+  // model - open containers, a bare run reading as the innermost one's CLOSER,
+  // and the §12 absorption rule for a malformed opener.
+  //
+  // A bare run at the innermost container's EXACT width is that container's
+  // closer, and a CLOSED container holds no open paragraph. Nothing tracked the
+  // closer at all here, so `> q` / `> ::: note` / `> body` / `> :::` / `tail`
+  // left the tracker believing the quote's paragraph was still open and kept
+  // `tail` inside it.
+  const bareFenceRun = /^(:{3,})[ \t]*$/.exec(content)
+  const bareFence = bareFenceRun !== null
+  if (bareFence && bareFenceRun![1]!.length === state.colonWidths[state.colonWidths.length - 1]) {
+    state.colonWidths.pop()
+    state.paragraphOpen = false
+    return
+  }
+  if (
+    RE_DIV_OPEN.test(content) ||
+    (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
+    RE_LINE_BLOCK_OPEN.test(content) ||
+    RE_HARDBREAKS_OPEN.test(content)
+  ) {
+    // ...unless the paragraph above already absorbed a MALFORMED fence and this
+    // line is a bare run, in which case §12 takes it as text too and the
+    // paragraph stays open. Corpus 260 pins that shape inside a quote.
     //
-    // With no closer the line FALLS THROUGH to the bottom of this function
-    // rather than returning, so it lands on `paragraphOpen = true` - which is
-    // where a `%%` line comment already landed, and a degraded opener IS a
-    // comment line.
-    const commentRun = commentFenceRun(content)
-    if (commentRun !== undefined && hasCommentCloser(commentRun)) {
-      state.inComment = true
-      state.commentLen = commentRun
-      state.paragraphOpen = false
+    // Reaching here with a bare run already proves it is NOT the innermost
+    // container's closer - that branch returned above - so absorption applies
+    // inside a container as readily as at the quote's own level.
+    if (wasAbsorbing && bareFence) {
+      state.absorbingFence = true
+      state.paragraphOpen = true
       return
     }
-    if (
-      RE_DIV_OPEN.test(content) ||
-      RE_ADMONITION_OPEN.test(content) ||
-      RE_LINE_BLOCK_OPEN.test(content) ||
-      RE_HARDBREAKS_OPEN.test(content)
-    ) {
-      // Div / admonition / line-block opener (`:::`, `::: type`, or `::: |`)
-      // is structural; it opens no paragraph itself.
-      state.paragraphOpen = false
-      return
-    }
+    // A colon-fence OPENER is structural and needs no closer ahead ("colon-fence
+    // containers open immediately and auto-close at EOF"), so it interrupts an
+    // open quoted paragraph and leaves an EMPTY container holding none either.
+    state.colonWidths.push(colonFenceOpenerLen(content) ?? 3)
+    state.paragraphOpen = false
+    return
+  }
+  // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
+  // (`:::note` fails §12's opener test - a type word needs a space), and from
+  // here the paragraph absorbs the next bare fence-shaped line as well.
+  if (/^:{3,}/.test(content)) {
+    state.absorbingFence = true
+    state.paragraphOpen = true
+    return
+  }
+  // A code or raw fence interrupts an OPEN paragraph only when a matching
+  // closer follows in this quote (§10 CLOSER LOOKAHEAD, as
+  // `startsInterruptingBlock` applies it); with no paragraph open it dispatches
+  // unconditionally and an unterminated one runs to the end of the quote. A
+  // mid-paragraph fence with no closer is inline verbatim, so it falls through
+  // and the paragraph stays open.
+  const fence = RE_FENCE.exec(content)
+  const raw = fence ? null : RE_RAW_FENCE.exec(content)
+  const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
+  if (fenceMarker !== null && (!state.paragraphOpen || hasFenceCloser(fenceMarker))) {
+    state.inFence = true
+    state.fenceClose = fenceCloseRe(fenceMarker)
+    state.paragraphOpen = false
+    return
+  }
+  // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 section 28). Every
+  // opener was treated as opening here, so `> %%%` with no closer put the
+  // tracker inside a comment, `paragraphOpen` went false, and a lazy line
+  // that should have continued the quote's paragraph ended the quote
+  // instead. The block parser has always looked ahead; this is the same
+  // lookahead over the quote's own lines.
+  //
+  // With no closer the line FALLS THROUGH to the bottom of this function
+  // rather than returning, so it lands on `paragraphOpen = true` - which is
+  // where a `%%` line comment already landed, and a degraded opener IS a
+  // comment line.
+  const commentRun = commentFenceRun(content)
+  if (commentRun !== undefined && hasCommentCloser(commentRun)) {
+    state.inComment = true
+    state.commentLen = commentRun
+    state.paragraphOpen = false
+    return
   }
   // Everything else (plain prose, a folded list-marker line, div body text, or
   // a fence/comment-looking line while a paragraph is open) leaves an open
   // paragraph that a following list marker or plain text folds into.
+  //
+  // And it CONTINUES the paragraph, so absorption survives it: `:::note` /
+  // `body` / `:::` is one paragraph at the top level, and dropping the flag on
+  // the prose line in between made the bare run open a real div here instead
+  // (corpus 260). Absorption ends where the paragraph does, and every branch
+  // that ends one returns above this point.
+  state.absorbingFence = wasAbsorbing
   state.paragraphOpen = true
 }
 
@@ -3910,8 +4041,11 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     fenceClose: null,
     inComment: false,
     commentLen: 0,
+    colonWidths: [],
+    absorbingFence: false,
     paragraphOpen: false,
   }
+  const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     const m = RE_BLOCKQUOTE.exec(ln)
@@ -3921,8 +4055,11 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       const content = m[1] ?? ''
       inner.push(content)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
-      trackBlockQuoteLazyState(content, state, (fence) =>
-        quotedCommentHasCloser(lexer, fence, lineIndex),
+      trackBlockQuoteLazyState(
+        content,
+        state,
+        (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
       )
       continue
     }
@@ -3996,8 +4133,11 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     lexer.consume()
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    trackBlockQuoteLazyState(ln, state, (fence) =>
-      quotedCommentHasCloser(lexer, fence, lineIndex),
+    trackBlockQuoteLazyState(
+      ln,
+      state,
+      (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+      (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
     )
   }
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
