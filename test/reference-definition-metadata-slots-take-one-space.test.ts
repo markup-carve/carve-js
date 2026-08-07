@@ -71,6 +71,28 @@ describe("a reference definition's attribute slot takes exactly one space", () =
     })
   }
 
+  for (const [name, sep] of [
+    ['a no-break space then the space', '\u00a0 '],
+    ['a thin space then the space', '\u2009 '],
+    ['a space, a no-break space, then the space', ' \u00a0 '],
+  ] as const) {
+    it(`still attaches the block on ${name}`, () => {
+      // Codex review read the guard as too narrow here and asked for
+      // `\\p{White_Space}` instead of space-and-tab, on the ground that a
+      // destination ENDS at Unicode whitespace, so this is a two-character
+      // separator. Measured against the executable spec before complying, and
+      // it is not: the oracle spells this slot `/[ \\t]*$/` on the text before
+      // the brace and requires that run to equal one space, so a no-break space
+      // sitting outside the run does not lengthen it. Widening here would have
+      // made this engine the only one to reject these three.
+      //
+      // The character is not lost either - it stays in the tail the definition
+      // ignores, exactly as the run before the DESTINATION is skipped by
+      // `\\p{White_Space}*` on the same line.
+      expect(carveToHtml(doc(`[a]: /u${sep}{.c}`))).toContain('class="c"')
+    })
+  }
+
   it('still glues the braces to the destination on NO space at all', () => {
     // The zero-space case is a different outcome from the two-space one, and
     // deliberately so: whitespace is what ENDS a destination, so with none the
