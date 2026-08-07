@@ -5,8 +5,7 @@ import {
   citations,
   fromAstJson,
   parse,
-  toAstJson,
-} from '../src/index.js'
+  toAstJson, AstJsonSchemaError } from '../src/index.js'
 
 /**
  * A node whose `type` the schema does not name is refused AT DECODE, and a
@@ -237,25 +236,37 @@ describe('a record the schema gives no `type`', () => {
  * The rows markup-carve/carve#881 leaves UNRULED. They are not this clause's
  * business and this change must not decide them by accident.
  */
-describe('the unruled wrong-type rows', () => {
-  it('leaves a root `children` that is not an array degrading to an empty document', () => {
-    // §12(a) is about a root field being PRESENT. A non-array `children` is the
-    // wrong-TYPE class, which is parked; requiring a `type` on the CONTAINER
-    // rather than on its elements would have refused it here.
+describe('the wrong-type rows, RULED by carve#881', () => {
+  // These asserted the opposite and said so: "the unruled wrong-type rows",
+  // parked pending a decision. §12(d) is that decision - an ingest validates
+  // the WHOLE payload against the schema at decode, types and required fields
+  // together. Both rows are invalid under the schema and were only ever
+  // accepted because nothing consulted it.
+  it('refuses a root `children` that is not an array', () => {
+    // §12's own objection, arriving through a door the clause did not cover:
+    // "a reader that supplies a default has turned a truncated document into an
+    // empty one". That is exactly what reading `{}` as an empty document did.
     expect(() =>
       fromAstJson({ type: 'document', srcByteLength: 0, children: {} } as never),
-    ).not.toThrow()
+    ).toThrow(AstJsonSchemaError)
   })
 
-  it('leaves a `null` or a string child alone', () => {
-    // Also the wrong-type class. A `null` in a node position is not an object,
-    // so it is not a node missing a `type` - it is a value of the wrong type,
-    // and which of those an ingest refuses is the open question on that ticket.
-    //
-    // A CONTROL: no mutation of the type check breaks it, because the walk
-    // returns on a non-object before reaching the check at all. It records the
-    // boundary rather than proving anything about the fix.
-    expect(() => fromAstJson(doc(null))).not.toThrow()
-    expect(() => fromAstJson(doc('nope'))).not.toThrow()
+  it('refuses a `null` or a string child', () => {
+    // Both used to reach the RENDERER and fail there with a bare TypeError -
+    // untyped, which §9(b) forbids.
+    expect(() => fromAstJson(doc(null))).toThrow(AstJsonSchemaError)
+    expect(() => fromAstJson(doc('nope'))).toThrow(AstJsonSchemaError)
+  })
+
+  it('CONTROL: still accepts the valid document these are built from', () => {
+    // Without this, sixteen rejections of a never-valid document would read
+    // exactly like a clause being enforced.
+    expect(() =>
+      fromAstJson({
+        type: 'document',
+        srcByteLength: 1,
+        children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x' }] }],
+      } as never),
+    ).not.toThrow()
   })
 })
