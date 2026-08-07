@@ -70,6 +70,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An emptied definition description keeps its position through the engine's
+  own ingest** (markup-carve/carve-js#857). A `<dd>` whose only content hoisted
+  to the document root has no children, so its position lives only in the extent
+  the parser recorded - and `fromAstJson` threw that away while `toAstJson` wrote
+  it. The PART 12 §6 round trip was not identity on this engine's own output.
+
+  Formatting was affected as well as serializing: `carve fmt` writes a hoisted
+  definition back onto its `:  ` line by looking the line up, so an INGESTED tree
+  emitted a bare `:`, which re-parses into the term above it. The same document
+  formatted two ways depending on whether it had been through JSON.
+
+- **A trailing space no longer costs a line-block stanza all of its positions**
+  (markup-carve/carve-js#857). The alignment test that decides whether a `::: |`
+  stanza can be placed ran after the trailing-whitespace drop had shortened the
+  line, so a single trailing space read as "the offsets no longer line up" and
+  every inline in the stanza came back unplaced - including ones on lines the
+  space was not on. A tab still unanchors the stanza, which is PART 12 §4's
+  actual case.
+
 - **A fence opened on a list marker line no longer swallows a below-column body
   and its closer** (markup-carve/carve#950). PART 9 §24's STEP algorithm needed
   no new rule: S1 stops the prefix walk at the ITEM, so S2's fenced-body branch
