@@ -43,6 +43,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The abbreviation and footnote definition separator is a run of ASCII spaces**
+  (markup-carve/carve#892). Both productions now spell the marker-to-content slot
+  `space+`, which is a correction rather than a widening - they said `space`
+  while every reader consumed a run. What changes is where the run STOPS: the
+  first character that is not an ASCII space ends the separator and begins the
+  content, and both patterns had been consuming a Unicode run past the mandatory
+  space. So `*[HTML]: <NBSP>Hyper` puts the character in the title and
+  `[^f]: <NBSP>note` starts the note body with it, where both were swallowed
+  before. A tab immediately after the marker is still not a separator, so
+  `*[HTML]:<TAB>x` stays a paragraph. `carve lint`'s own footnote-definition
+  pattern accepted a tab there and no longer does, so it stops reporting a
+  duplicate definition for a line the parser reads as a paragraph.
+
 - **A reference definition is anchored at end of line**
   (markup-carve/carve#911). `reference_definition` ends in `newline` and always
   did, but the pattern ended in a tail that swallowed anything, so `[a]: /u zzz`
