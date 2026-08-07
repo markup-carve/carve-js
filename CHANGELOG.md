@@ -43,6 +43,30 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A CLOSED or EMPTY container inside a block quote no longer swallows the
+  flush-left line below it** (markup-carve/carve#920). PART 1 S4's NO OPEN
+  PARAGRAPH, NO LAZY LINE is written about the OPEN STACK, not about which
+  container kind is on it, and the LIST ITEM spelling of the shape already
+  answered it correctly. Inside a quote it did not: a container a quoted line
+  had just opened swallowed the line, and a CLOSED one kept it inside the quote.
+
+  ```
+  > quote
+  > ::: note
+  > body
+  > :::
+  tail
+  ```
+
+  `tail` is now a top-level paragraph rather than a third child of the quote.
+  Twelve shapes moved, not the two the report named - the quote's lazy-state
+  tracker never modelled a colon fence's CLOSER at all, so the no-paragraph-above
+  spelling was wrong too, and code, raw and comment fences answered the same way
+  once closed. An OPEN container that holds a paragraph still takes the line, an
+  UNTERMINATED fence mid-paragraph is still inline verbatim and still takes it,
+  and an absorbed `:::note` still holds the paragraph open across the prose
+  below it.
+
 - **BREAKING for a producer of malformed trees: `fromAstJson` validates the whole
   payload against the AST schema** (markup-carve/carve#881). PART 12 §12(d) makes
   an ingest check types and required fields together at decode, refused with the
