@@ -639,8 +639,9 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     // another paragraph's `children` is a block where the schema names
     // `inlineNode`, and it decoded cleanly and then threw
     // `renderHtml: unknown inline paragraph` - the same untyped renderer crash
-    // this clause exists to stop. `NODE_POSITION_TYPES` omits the `records`
-    // positions, so the plain records the schema gives no `type` are untouched.
+    // this clause exists to stop. A `records` position has no entry in
+    // `NODE_POSITION_TYPES` - the schema gives those no `type`, so no member set
+    // exists - and the plain records they hold are therefore untouched.
     if (NODE_FIELDS.includes(key)) {
       const admitted = typeof type === 'string' ? NODE_POSITION_TYPES[`${type}.${key}`] : undefined
       const at = path === '' ? key : `${path}.${key}`

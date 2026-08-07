@@ -237,9 +237,13 @@ export function wireFieldsSource(schema) {
    * `oneOf` of concrete node refs, which is how `figure.target` names the five
    * blocks a caption can carry; and a direct `$ref` to one concrete node.
    *
-   * Positions whose kind is `"records"` are absent on purpose: those hold plain
-   * records the schema gives no `type` at all, and requiring one would refuse a
-   * tree this engine's own parser produced.
+   * A `"records"` position cannot appear here and needs no guard against it,
+   * which was worth measuring rather than assuming: a plain record is one the
+   * schema gives no `type`, so `membersOf` finds no members and returns null,
+   * and the position is skipped for that reason. An explicit
+   * `kind === "records"` skip was written here first and REMOVED - the generated
+   * artifact was byte-identical with and without it, which makes it a check that
+   * cannot fail (markup-carve/carve#755), and this file has one rule per fact.
    */
   const membersOf = (schemaNode) => {
     if (schemaNode === null || typeof schemaNode !== "object") return null;
@@ -266,7 +270,6 @@ export function wireFieldsSource(schema) {
     if (typeof owner !== "string") continue;
     for (const [name, property] of Object.entries(def.properties)) {
       if (!holdsNode(property)) continue;
-      if (positionKind.get(`${owner}.${name}`) === "records") continue;
       const members = membersOf(property);
       if (members === null) continue;
       positionTypes.set(`${owner}.${name}`, [...new Set(members)].sort());
