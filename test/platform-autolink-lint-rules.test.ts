@@ -74,6 +74,31 @@ describe('platform-autolink lint rules', () => {
     })
   })
 
+  it('reports UTF-16 offsets, so an astral character does not shift the span', () => {
+    // Raised by codex review. `LintWarning` documents UTF-16 offsets into the
+    // source the caller passed, and this scan already counts in that unit -
+    // passing it through the codepoint map the tree-derived findings use
+    // shifted every span after an astral character by one per character.
+    const doc = '\u{1F600} @minutely here.\n'
+    const [w] = lintCarve(doc, { platforms: ['github'] })
+    expect(doc.slice(w!.start, w!.end)).toBe('@minutely')
+    // CONTROL: the same document with no astral character is unaffected.
+    const plain = 'x @minutely here.\n'
+    const [p] = lintCarve(plain, { platforms: ['github'] })
+    expect(plain.slice(p!.start, p!.end)).toBe('@minutely')
+  })
+
+  it('ignores an unknown platform name that exists on Object.prototype', () => {
+    // Raised by codex review. `'toString' in PLATFORM_RULES` is true, so an
+    // untyped caller threading a config value through crashed on the lookup.
+    for (const name of ['toString', 'constructor', 'hasOwnProperty']) {
+      expect({
+        name,
+        rules: platformRules(lintCarve('Use @minutely.\n', { platforms: [name as 'github'] })),
+      }).toEqual({ name, rules: [] })
+    }
+  })
+
   it('flags a token inside an INLINE CODE SPAN', () => {
     // Not reliably safe: some host surfaces still linkify inside them, which is
     // the case that makes the rule worth having at all.

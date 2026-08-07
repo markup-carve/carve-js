@@ -459,7 +459,7 @@ export function lintCarve(
     // some host surfaces linkify inside them.
     const skip = new Set(verbatimLines)
     for (const ln of collectCommentLines(doc)) skip.add(ln)
-    collectPlatformAutolinks(source, opts.platforms, skip, out, toUtf16)
+    collectPlatformAutolinks(source, opts.platforms, skip, out)
   }
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
@@ -1035,9 +1035,14 @@ function collectPlatformAutolinks(
   platforms: readonly LintPlatform[],
   skipLines: Set<number>,
   out: LintWarning[],
-  toUtf16: (offset: number) => number,
 ): void {
-  const active = platforms.filter((p, i) => platforms.indexOf(p) === i && p in PLATFORM_RULES)
+  // An OWN-property test, not `in`. `'toString' in PLATFORM_RULES` is true, so
+  // an untyped caller threading a config value through crashed on the lookup
+  // instead of being ignored the way the type comment promises. Raised by codex
+  // review.
+  const active = platforms.filter(
+    (p, i) => platforms.indexOf(p) === i && Object.hasOwn(PLATFORM_RULES, p),
+  )
   if (active.length === 0) return
   const lines = source.split('\n')
   const lineStart: number[] = []
@@ -1064,6 +1069,11 @@ function collectPlatformAutolinks(
         re.lastIndex = 0
         let m: RegExpExecArray | null
         while ((m = re.exec(text))) {
+          // ALREADY UTF-16. `source.split` and `m.index` count the string the
+          // caller passed, which is the unit LintWarning documents, so these do
+          // NOT go through the codepoint map the tree-derived findings use -
+          // mapping them again shifted every span after an astral character.
+          // Raised by codex review.
           const start = lineStart[i]! + m.index
           out.push({
             line: lineNo,
@@ -1078,8 +1088,8 @@ function collectPlatformAutolinks(
               '" becomes a link that notifies or references something unrelated; ' +
               fix +
               '.',
-            start: toUtf16(start),
-            end: toUtf16(start + m[0].length),
+            start,
+            end: start + m[0].length,
           })
         }
       }
