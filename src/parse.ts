@@ -2872,6 +2872,12 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
   return false
 }
 
+/** Per-quote negative cache for `quotedFenceHasCloser`. */
+interface QuotedFenceCloserMemo {
+  /** No bare fence-closer line is quoted at or after this index. */
+  noCloserFrom: number
+}
+
 /**
  * Whether a code or raw fence opened with `marker` closes LATER IN THIS QUOTE.
  *
@@ -2885,14 +2891,34 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
  * The closer is matched by `fenceCloseRe`, i.e. a run of the SAME character at
  * least as long — the code fence's rule, not the comment fence's exact-length
  * one.
+ *
+ * THE NEGATIVE CACHE IS LOAD-BEARING, and it is `fenceHasCloser`'s. This runs
+ * per fence-shaped line while a quoted paragraph is open, so a quote of N
+ * unterminated openers was scanned N times without it: 500 lines took 27ms and
+ * 4000 took 397ms, a 3.8x for a 2x input. Every line matching some marker's
+ * `closeRe` also matches the bare `RE_FENCE_CLOSER`, so seeing none in the
+ * quoted prefix proves no marker closes from here on - and the bound only
+ * moves forward, since a later opener scans a suffix of what this one did.
+ * Raised by codex review.
  */
-function quotedFenceHasCloser(lexer: Lexer, marker: string, fromIndex: number): boolean {
+function quotedFenceHasCloser(
+  lexer: Lexer,
+  marker: string,
+  fromIndex: number,
+  memo: QuotedFenceCloserMemo,
+): boolean {
+  const start = fromIndex + 1
+  if (start >= memo.noCloserFrom) return false
   const closeRe = fenceCloseRe(marker)
-  for (let i = fromIndex + 1; i < lexer.lines.length; i++) {
+  let sawAnyCloser = false
+  for (let i = start; i < lexer.lines.length; i++) {
     const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
-    if (!quoted) return false
-    if (closeRe.test(quoted[1] ?? '')) return true
+    if (!quoted) break
+    const content = quoted[1] ?? ''
+    if (closeRe.test(content)) return true
+    if (RE_FENCE_CLOSER.test(content)) sawAnyCloser = true
   }
+  if (!sawAnyCloser) memo.noCloserFrom = start
 
   return false
 }
@@ -4013,6 +4039,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     absorbingFence: false,
     paragraphOpen: false,
   }
+  const fenceCloserMemo: QuotedFenceCloserMemo = { noCloserFrom: Infinity }
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     const m = RE_BLOCKQUOTE.exec(ln)
@@ -4026,7 +4053,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
         content,
         state,
         (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex),
+        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
       )
       continue
     }
@@ -4104,7 +4131,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       ln,
       state,
       (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-      (marker) => quotedFenceHasCloser(lexer, marker, lineIndex),
+      (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
     )
   }
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)

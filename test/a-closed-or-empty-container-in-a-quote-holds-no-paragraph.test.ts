@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
+import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 const html = (s: string) => carveToHtml(s)
 
@@ -197,6 +198,18 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     expect(html('> quote\n> ```\ntail\n```\n')).toBe(
       '<blockquote>\n  <p>quote</p>\n  <pre><code>tail\n</code></pre>\n</blockquote>',
     )
+  })
+
+  perfIt('scans a quote of unterminated fence openers in linear time', () => {
+    // The closer lookahead runs per fence-shaped line while a quoted paragraph
+    // is open, so without its negative cache a quote of N unterminated openers
+    // is scanned N times. Raised by codex review; measured at 27ms for 500
+    // lines and 397ms for 4000 before the cache went in.
+    expectScansLinearly((input) => void carveToHtml(input), '> ```=html\n', {
+      prefix: '> a\n',
+      label: 'quoted unterminated fence openers',
+      smallRepeats: 2000,
+    })
   })
 
   // ---- the parity this ticket is about ----
