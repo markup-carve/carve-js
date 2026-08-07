@@ -181,15 +181,15 @@ describe('an autolink body', () => {
     }
   })
 
-  it('leaves the zero-width rows exactly where markup-carve/carve#860 found them', () => {
-    // CONTROLS, and the reason the class is not spelled `\p{White_Space}` alone.
-    // U+FEFF is out and U+200B / U+180E are in - an incoherence this engine has
-    // carried since the body was `\s`. All three belong to one question (may a
-    // `url_char` be non-ASCII at all?), so they move together when it is ruled
-    // and not before.
+  it('takes the zero-width rows out TOGETHER, now that markup-carve/carve#844 has ruled', () => {
+    // This block used to pin the incoherence rather than the rule: U+FEFF was
+    // out and U+200B / U+180E were in, and the comment said the three would
+    // move together once the question they share was ruled. It was, as
+    // `unicode_url_char - format_char - control_char`, and all three are
+    // General_Category Cf.
     expect(links('﻿')).toBe(false)
-    expect(links('​')).toBe(true)
-    expect(links('᠎')).toBe(true)
+    expect(links('​')).toBe(false)
+    expect(links('᠎')).toBe(false)
   })
 
   it('is spelled once, so the bare-URL extension answers the same', () => {
