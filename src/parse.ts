@@ -1133,6 +1133,9 @@ class Lexer {
   // Replaces a per-opener scan to end of input, which was superlinear when many
   // openers carry distinct widths.
   commentFenceLastIndex: Map<number, number> | undefined = undefined
+  // The same index, built from lines read THROUGH their blockquote markers,
+  // so `> %%%` counts as a fence of width 3. See `quotedCommentHasCloser`.
+  quotedCommentFenceLastIndex: Map<number, number> | undefined = undefined
 
   constructor(
     source: string | readonly string[],
@@ -2835,6 +2838,46 @@ function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
   return last !== undefined && last > lexer.pos
 }
 
+/**
+ * Whether a comment fence of width `fence` closes after `fromIndex`, reading
+ * each line THROUGH any blockquote markers it carries.
+ *
+ * `commentBlockHasCloser` above answers the same question for the block
+ * parser, and cannot answer it here: its index is built from the RAW lines, so
+ * `> %%%` matches no fence at all. Hence a second index rather than a second
+ * spelling of the scan - the two ask about different views of the document.
+ *
+ * PART 9 section 28 is why either exists: a `%%%` opener with NO MATCHING
+ * CLOSER AHEAD does NOT open a block, it degrades to a `comment_line`, so
+ * every FOLLOWING BLOCK still renders. `parseCommentBlock` honours that. The
+ * blockquote lazy-state tracker did not, because it runs while the quote's
+ * lines are being COLLECTED and had nothing to scan - so an unterminated
+ * fence inside a quote opened a block, ate the quote's paragraph, and a lazy
+ * line that should have folded into it became a sibling instead
+ * (carve-js#832).
+ *
+ * The scan is deliberately as loose as the block parser's: it looks to the end
+ * of the document rather than to the end of the quote, so the two agree about
+ * a closer that sits outside the container. Bounding it to the quote would be
+ * a different rule, and one the clause does not state.
+ */
+function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
+  let lastByWidth = lexer.quotedCommentFenceLastIndex
+  if (lastByWidth === undefined) {
+    lastByWidth = new Map<number, number>()
+    for (let i = 0; i < lexer.lines.length; i++) {
+      let line = lexer.lines[i]!
+      for (let m = RE_BLOCKQUOTE.exec(line); m; m = RE_BLOCKQUOTE.exec(line)) line = m[1] ?? ''
+      const c = RE_COMMENT_BLOCK_ANY.exec(line)
+      if (c) lastByWidth.set(c[1]!.length, i)
+    }
+    lexer.quotedCommentFenceLastIndex = lastByWidth
+  }
+  const last = lastByWidth.get(fence)
+
+  return last !== undefined && last > fromIndex
+}
+
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
 // SAME length (more `%` nest). Not rendered.
 function parseCommentBlock(lexer: Lexer): Comment {
@@ -3726,7 +3769,11 @@ interface BlockQuoteLazyState {
  * only when no paragraph is already open — a fence-looking line mid-paragraph is
  * plain paragraph text.
  */
-function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): void {
+function trackBlockQuoteLazyState(
+  content: string,
+  state: BlockQuoteLazyState,
+  hasCommentCloser: (fence: number) => boolean,
+): void {
   if (state.inComment) {
     // EXACT length, per PART 9 §28: "The CLOSER matches on EXACT delimiter
     // length (§2), so a longer opener nests shorter fences and a too-short line
@@ -3797,8 +3844,19 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
       state.paragraphOpen = false
       return
     }
+    // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 section 28). Every
+    // opener was treated as opening here, so `> %%%` with no closer put the
+    // tracker inside a comment, `paragraphOpen` went false, and a lazy line
+    // that should have continued the quote's paragraph ended the quote
+    // instead. The block parser has always looked ahead; this is the same
+    // lookahead over the quote's own lines.
+    //
+    // With no closer the line FALLS THROUGH to the bottom of this function
+    // rather than returning, so it lands on `paragraphOpen = true` - which is
+    // where a `%%` line comment already landed, and a degraded opener IS a
+    // comment line.
     const commentRun = commentFenceRun(content)
-    if (commentRun !== undefined) {
+    if (commentRun !== undefined && hasCommentCloser(commentRun)) {
       state.inComment = true
       state.commentLen = commentRun
       state.paragraphOpen = false
@@ -3842,7 +3900,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       const content = m[1] ?? ''
       inner.push(content)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
-      trackBlockQuoteLazyState(content, state)
+      trackBlockQuoteLazyState(content, state, (fence) =>
+        quotedCommentHasCloser(lexer, fence, lineIndex),
+      )
       continue
     }
     // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
@@ -3915,7 +3975,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     lexer.consume()
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    trackBlockQuoteLazyState(ln, state)
+    trackBlockQuoteLazyState(ln, state, (fence) =>
+      quotedCommentHasCloser(lexer, fence, lineIndex),
+    )
   }
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)

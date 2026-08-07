@@ -147,25 +147,46 @@ describe('shapes the spellings cannot disagree about', () => {
   })
 })
 
-describe('an UNTERMINATED fence is a separate, pre-existing gap', () => {
-  it('all three spellings now agree, and all three are still wrong', () => {
+describe('an UNTERMINATED fence does not open a block, in a quote either', () => {
+  it('all three spellings agree, and all three are right now', () => {
     // §28: "A `%%%` opener with NO MATCHING CLOSER AHEAD does NOT open a block.
     // The line degrades to a `comment_line`". So `secret` is an open paragraph
-    // in the quote and `lazy` should fold into it, giving
-    // `<blockquote><p>secret lazy</p></blockquote>`.
+    // in the quote and `lazy` folds into it.
     //
-    // The tracker runs while the quote's lines are being COLLECTED, so it cannot
-    // look ahead for the closer the way `commentBlockHasCloser` does, and it
-    // treats every opener as opening. That was already true of the BARE spelling
-    // before this change - it is not a regression, and it is not this issue.
-    //
-    // Pinned as AGREEMENT, which is what this change is responsible for: the
-    // three spellings were giving two different wrong answers, and now give one.
+    // This assertion was pinned as WRONG when #816 made the three spellings
+    // agree: the tracker runs while the quote's lines are being COLLECTED and
+    // had nothing to scan, so it treated every opener as opening. It has the
+    // same lookahead the block parser has always had now (carve-js#832).
     const bare = html('> %%%\n> secret\nlazy\n')
 
     expect(html('> %%% TODO\n> secret\nlazy\n')).toBe(bare)
     expect(html('>  %%%\n> secret\nlazy\n')).toBe(bare)
-    expect(bare).toBe('<blockquote> <p>secret</p> </blockquote> <p>lazy</p>')
+    expect(bare).toBe('<blockquote> <p>secret lazy</p> </blockquote>')
+  })
+
+  it('CONTROL: a TERMINATED fence still opens one', () => {
+    // The boundary the lookahead must not move. With a closer ahead the fence
+    // really does open a block, the comment renders nothing, and the quote is
+    // left holding no open paragraph - so the lazy line ends it.
+    expect(html('> %%%\n> secret\n> %%%\nlazy\n')).toBe(
+      '<blockquote> </blockquote> <p>lazy</p>',
+    )
+  })
+
+  it('CONTROL: the closer must match the width exactly', () => {
+    // A `%%%%` line does not close a `%%%` opener (§28 matches on EXACT
+    // length), so this document has no closer for either width and both
+    // degrade - which is the un-opened answer, not the opened one.
+    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).not.toBe(
+      html('> %%%\n> secret\n> %%%\nlazy\n'),
+    )
+    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).toContain('secret')
+  })
+
+  it('CONTROL: a nested wider fence still closes its own opener', () => {
+    // The other direction, so the width test is not just rejecting everything:
+    // `%%%%` opens and `%%%%` closes, with a `%%%` inside it nested and hidden.
+    expect(html('> %%%%\n> %%%\n> secret\n> %%%%\nlazy\n')).not.toContain('secret')
   })
 
   it('CONTROL: at top level the degradation is correct', () => {
