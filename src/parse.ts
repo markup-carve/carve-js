@@ -2835,6 +2835,43 @@ function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
   return last !== undefined && last > lexer.pos
 }
 
+/**
+ * Whether a comment fence of width `fence` closes LATER IN THIS QUOTE.
+ *
+ * PART 9 section 28: a `%%%` opener with NO MATCHING CLOSER AHEAD does NOT open
+ * a block, it degrades to a `comment_line`, so every FOLLOWING BLOCK still
+ * renders. `parseCommentBlock` honours that because `commentBlockHasCloser`
+ * scans ahead first. The blockquote lazy-state tracker did not, because it runs
+ * while the quote's lines are being COLLECTED - so an unterminated fence inside
+ * a quote opened a block, took the quote's paragraph with it, and a lazy line
+ * that should have folded into that paragraph became a sibling (carve-js#832).
+ *
+ * THE SCAN IS BOUNDED TO THE QUOTE, and both bounds are load-bearing, because
+ * this has to agree with what the sub-lexer will do - and the sub-lexer only
+ * ever sees this quote's own lines.
+ *
+ * ONE marker is stripped, not every one. Stripping the whole run made
+ * `> > %%%` - a fence one level DEEPER - count as a closer for a fence opened
+ * at this level, where the sub-lexer reads it as a nested block quote. Raised by
+ * codex review on the change that introduced it.
+ *
+ * And the scan STOPS at the first unquoted line rather than running to the end
+ * of the document, which made a `%%%` sitting after the quote entirely count as
+ * its closer. A non-quoted line cannot be part of the quote here in any case:
+ * a lazy continuation is collected only while a paragraph is open, and inside a
+ * comment none is.
+ */
+function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
+  for (let i = fromIndex + 1; i < lexer.lines.length; i++) {
+    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
+    if (!quoted) return false
+    const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
+    if (run && run[1]!.length === fence) return true
+  }
+
+  return false
+}
+
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the
 // SAME length (more `%` nest). Not rendered.
 function parseCommentBlock(lexer: Lexer): Comment {
@@ -3726,7 +3763,11 @@ interface BlockQuoteLazyState {
  * only when no paragraph is already open — a fence-looking line mid-paragraph is
  * plain paragraph text.
  */
-function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): void {
+function trackBlockQuoteLazyState(
+  content: string,
+  state: BlockQuoteLazyState,
+  hasCommentCloser: (fence: number) => boolean,
+): void {
   if (state.inComment) {
     // EXACT length, per PART 9 §28: "The CLOSER matches on EXACT delimiter
     // length (§2), so a longer opener nests shorter fences and a too-short line
@@ -3797,8 +3838,19 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
       state.paragraphOpen = false
       return
     }
+    // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 section 28). Every
+    // opener was treated as opening here, so `> %%%` with no closer put the
+    // tracker inside a comment, `paragraphOpen` went false, and a lazy line
+    // that should have continued the quote's paragraph ended the quote
+    // instead. The block parser has always looked ahead; this is the same
+    // lookahead over the quote's own lines.
+    //
+    // With no closer the line FALLS THROUGH to the bottom of this function
+    // rather than returning, so it lands on `paragraphOpen = true` - which is
+    // where a `%%` line comment already landed, and a degraded opener IS a
+    // comment line.
     const commentRun = commentFenceRun(content)
-    if (commentRun !== undefined) {
+    if (commentRun !== undefined && hasCommentCloser(commentRun)) {
       state.inComment = true
       state.commentLen = commentRun
       state.paragraphOpen = false
@@ -3842,7 +3894,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       const content = m[1] ?? ''
       inner.push(content)
       innerLineNumbers.push(lexer.lineNumber(lineIndex))
-      trackBlockQuoteLazyState(content, state)
+      trackBlockQuoteLazyState(content, state, (fence) =>
+        quotedCommentHasCloser(lexer, fence, lineIndex),
+      )
       continue
     }
     // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
@@ -3915,7 +3969,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     lexer.consume()
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    trackBlockQuoteLazyState(ln, state)
+    trackBlockQuoteLazyState(ln, state, (fence) =>
+      quotedCommentHasCloser(lexer, fence, lineIndex),
+    )
   }
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)
