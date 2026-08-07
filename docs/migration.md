@@ -139,6 +139,49 @@ carve lint doc.crv …   # report; exit 1 if any finding (CI / pre-commit)
 carve lint < doc.crv   # read stdin
 ```
 
+### Platform rules (opt-in, default OFF)
+
+Two further rules answer a different question: not "is this document right in
+Carve" but "does a HOST mangle it after publication". No render-time construct
+prevents a host from re-linkifying published output, so a bare `#123` becomes a
+link to an unrelated issue and a bare at-word becomes a mention that notifies
+an uninvolved person. The source is the only place the author's intent still
+exists.
+
+They are **off by default** and enabled per platform, because unlike every rule
+above they are target-specific - an over-eager rule people disable wholesale
+would be worse than none.
+
+```ts
+lintCarve(src)                            // never emits a platform rule
+lintCarve(src, { platforms: ['github'] }) // opts in
+```
+
+```sh
+carve lint --platform github doc.crv   # repeatable; an unknown name is an error
+```
+
+| Rule | Catches |
+| ---- | ------- |
+| `platform-mention-token` | an at-prefixed word (`@minutely`, `@param`, `@property`, `@types/node`) outside a fenced block; the host turns it into a mention that notifies whoever owns that handle |
+| `platform-issue-reference` | a hash-number (`#1`, `#123`) outside a fenced block; the host turns it into a link to an unrelated issue, and posts a backlink there |
+
+Two ids rather than one, because the two token shapes have different
+false-positive profiles and an author will want to silence one without the
+other.
+
+They look in prose **and in inline code spans** - those are not reliably safe,
+since some host surfaces (a pull-request list, a commit log view) still linkify
+inside them. They do not look in fenced code blocks, which are reliably safe,
+nor in raw blocks or comments, nor in text that is never published: frontmatter,
+link and abbreviation definitions, an unreferenced footnote definition, and an
+inline link's destination. A token inside a URL is part of that URL, so nothing
+in a bare URL's path, query or fragment is flagged either. A captioned
+listing's **caption** and a *referenced* footnote's body are published, so both
+are checked. The suggested fix in each message is to move the
+example into a fenced block, strip the sigil and rephrase, or rewrite an
+enumerated reference as "item 1" / "point 1".
+
 ## Portability
 
 Linting answers "is this document right in Carve". A different question comes

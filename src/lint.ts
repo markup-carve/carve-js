@@ -274,6 +274,14 @@ export function lintCarve(
     lowercaseHeadingIds?: boolean
     /** Deprecated compatibility option; blockquote marker spacing is now core syntax. */
     portable?: boolean
+    /**
+     * Hosts to additionally check for bare tokens they re-linkify in published
+     * output (markup-carve/carve#297). EMPTY BY DEFAULT, and that is the ruled
+     * behavior: every other rule here reports a silent failure in Carve, while
+     * these are target-specific, so `lintCarve(source)` never emits one for any
+     * input.
+     */
+    platforms?: readonly LintPlatform[]
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
@@ -445,6 +453,20 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
+  if (opts.platforms?.length) {
+    // Fenced code blocks and raw blocks are reliably safe; comments are never
+    // published at all. Inline code spans are NOT in this set, deliberately -
+    // some host surfaces linkify inside them.
+    const skip = new Set(verbatimLines)
+    for (const ln of collectCommentLines(doc)) skip.add(ln)
+    for (const ln of collectUnpublishedLines(source, doc, referencedFootnotes)) skip.add(ln)
+    // ...but a captioned listing's CAPTION is published. `collectVerbatimLines`
+    // marks the whole wrapping figure verbatim, because a captioned code block
+    // carries no position of its own, and the caption rides along inside that
+    // range. Raised by codex review.
+    for (const ln of collectListingCaptionLines(doc)) skip.delete(ln)
+    collectPlatformAutolinks(source, opts.platforms, skip, out)
+  }
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
 }
@@ -938,4 +960,317 @@ export function formatLintWarnings(
   return warnings
     .map((w) => `${file}:${w.line}:${w.column} ${w.rule} — ${w.message}`)
     .join('\n')
+}
+
+// ============================================================================
+// Platform-autolink rules (opt-in, platform-scoped, DEFAULT OFF)
+// ============================================================================
+
+/**
+ * Hosts whose rendering of published Carve output re-linkifies bare tokens.
+ *
+ * A union rather than a single flag, so a second host can be added with its own
+ * token table later - the shape markup-carve/carve#297 ruled: "off by default,
+ * enabled per platform". An unknown name is ignored rather than rejected: a
+ * caller naming a host this build does not know about gets no rules from it,
+ * which is the same outcome as not asking.
+ */
+export type LintPlatform = 'github'
+
+/**
+ * The two platform-autolink rules (markup-carve/carve#297,
+ * markup-carve/carve-js#848).
+ *
+ * THE SOURCE IS THE ONLY PLACE THE AUTHOR'S INTENT STILL EXISTS. No
+ * render-time construct prevents a host from re-linkifying published output,
+ * so a bare hash-number becomes a link to an unrelated issue and a bare at-word
+ * becomes a mention that notifies an uninvolved person.
+ *
+ * TWO IDS RATHER THAN ONE, because the two token shapes have different
+ * false-positive profiles and an author will want to silence one without the
+ * other - and a rule people disable wholesale is the failure the ruling names.
+ *
+ * DEFAULT OFF, and that is the ruled behavior rather than a convenience: every
+ * other rule in this file reports a silent failure IN CARVE, while these two
+ * are target-specific. An over-eager rule people turn off entirely would be
+ * worse than none.
+ *
+ * WHERE THEY LOOK: prose and INLINE CODE SPANS, which are not reliably safe -
+ * some host surfaces (a pull-request list, a commit log view) still linkify
+ * inside them. Not fenced code blocks, which are reliably safe, and not raw
+ * blocks or comments.
+ */
+const PLATFORM_RULES: Record<LintPlatform, { mention: RegExp; issue: RegExp }> = {
+  github: {
+    // An at-prefixed word. NOT preceded by a word character, a dot or a dash,
+    // so an email address (`user@example.com`) is not one - the same boundary
+    // Carve's own mention production uses (PART 9R §7). The name runs over
+    // letters, digits, `_`, `-` and INTERIOR dots, so a scope prefix
+    // (`@types/node`) flags its scope and `@release-1.0` flags whole.
+    mention: /(?<![\w@.\-/])@([A-Za-z0-9_][\w-]*(?:\.[A-Za-z0-9_][\w-]*)*)/g,
+    // A hash-number. NOT preceded by a word character, another `#`, or a `/`,
+    // so a heading marker (`## 2`), an id-shaped `#a1` and a URL FRAGMENT
+    // (`https://e.com/#99`) are out; the run is DIGITS ONLY, so `#release-1.0`
+    // is a tag rather than an issue reference. A fragment is part of a URL the
+    // host linkifies AS a URL, not a separate issue reference - raised by
+    // codex review, and the `/` in the mention class above is the same case.
+    issue: /(?<![\w#/])#(\d+)(?![\w-])/g,
+  },
+}
+
+const PLATFORM_LABEL: Record<LintPlatform, string> = { github: 'GitHub' }
+
+/**
+ * The platform names this build knows, for a caller with no type checker.
+ *
+ * Derived from the rule table rather than written twice, so a host added there
+ * is accepted by the CLI in the same commit - a list kept by hand is how
+ * "documented but not emittable" starts.
+ */
+export const KNOWN_LINT_PLATFORMS = Object.keys(PLATFORM_RULES) as readonly LintPlatform[]
+
+/**
+ * Collect the platform-autolink findings for the requested hosts.
+ *
+ * Scanned over SOURCE LINES rather than over the tree, because the tokens are
+ * not nodes: a docblock tag inside a code span is part of that span's text, and
+ * a host linkifies the published characters whatever node produced them. The
+ * exclusion is therefore also by line - the verbatim and comment ranges the
+ * document already reports - which is exactly the "fenced code blocks, raw
+ * blocks and comments" carve-out, and leaves inline code spans in.
+ */
+function collectPlatformAutolinks(
+  source: string,
+  platforms: readonly LintPlatform[],
+  skipLines: Set<number>,
+  out: LintWarning[],
+): void {
+  // An OWN-property test, not `in`. `'toString' in PLATFORM_RULES` is true, so
+  // an untyped caller threading a config value through crashed on the lookup
+  // instead of being ignored the way the type comment promises. Raised by codex
+  // review.
+  const active = platforms.filter(
+    (p, i) => platforms.indexOf(p) === i && Object.hasOwn(PLATFORM_RULES, p),
+  )
+  if (active.length === 0) return
+  const lines = source.split('\n')
+  const lineStart: number[] = []
+  for (let off = 0, i = 0; i < lines.length; i++) {
+    lineStart.push(off)
+    off += lines[i]!.length + 1
+  }
+  const FIX_MENTION =
+    'move the example into a fenced code block, or strip the sigil and rephrase'
+  const FIX_ISSUE =
+    'move the example into a fenced code block, or rewrite it as "item 1" / "point 1"'
+  for (const platform of active) {
+    const host = PLATFORM_LABEL[platform]
+    const { mention, issue } = PLATFORM_RULES[platform]
+    const checks: readonly (readonly [RegExp, string, string, string])[] = [
+      [mention, 'platform-mention-token', 'an at-prefixed word', FIX_MENTION],
+      [issue, 'platform-issue-reference', 'a hash-number', FIX_ISSUE],
+    ]
+    for (let i = 0; i < lines.length; i++) {
+      const lineNo = i + 1
+      if (skipLines.has(lineNo)) continue
+      const text = maskInlineDestinations(lines[i]!)
+      for (const [re, rule, what, fix] of checks) {
+        re.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = re.exec(text))) {
+          // ALREADY UTF-16. `source.split` and `m.index` count the string the
+          // caller passed, which is the unit LintWarning documents, so these do
+          // NOT go through the codepoint map the tree-derived findings use -
+          // mapping them again shifted every span after an astral character.
+          // Raised by codex review.
+          const start = lineStart[i]! + m.index
+          out.push({
+            line: lineNo,
+            column: m.index + 1,
+            rule,
+            message:
+              host +
+              ' re-linkifies ' +
+              what +
+              ' in published output, so "' +
+              m[0] +
+              '" becomes a link that notifies or references something unrelated; ' +
+              fix +
+              '.',
+            start,
+            end: start + m[0].length,
+          })
+        }
+      }
+    }
+  }
+}
+
+/** Whether `ch` occurs unescaped in `line` before `end`. */
+function hasUnescapedBefore(line: string, ch: string, end: number): boolean {
+  for (let i = 0; i < end; i++) {
+    if (line[i] === '\\') {
+      i++
+      continue
+    }
+    if (line[i] === ch) return true
+  }
+
+  return false
+}
+
+/**
+ * The caption lines of a figure wrapping a code or raw block.
+ *
+ * Read off the CAPTION'S OWN INLINE SPANS, not guessed from the figure range.
+ * A captioned listing reports only the figure's range, so `collectVerbatimLines`
+ * marks the caption verbatim along with the body - but the caption's inline
+ * nodes each carry a position, and their union is exactly the published text.
+ *
+ * Guessing it as "the figure's first or last line carrying the caret" was close
+ * enough for a one-line caption and wrong for a CONTINUED one, whose second
+ * line has no marker and stayed skipped. Raised by codex review. Deriving it
+ * from the spans also leaves a caret line in the fence BODY protected without
+ * having to reason about which lines the delimiters occupy.
+ */
+function collectListingCaptionLines(doc: Document): Set<number> {
+  const captions = new Set<number>()
+  walkDocument(doc, (node) => {
+    if (node.type !== 'figure') return
+    const target = (node.target as { type?: string } | undefined)?.type
+    if (target !== 'code_block' && target !== 'raw_block') return
+    const caption = (node as { caption?: unknown }).caption
+    if (!Array.isArray(caption)) return
+    for (const part of caption as Positioned[]) {
+      const pos = part.pos
+      if (!pos) continue
+      const end = pos.endLine ?? pos.startLine
+      for (let ln = pos.startLine; ln <= end; ln++) captions.add(ln)
+    }
+  })
+  return captions
+}
+
+/**
+ * Blank out an inline link's or image's DESTINATION before matching.
+ *
+ * A destination renders as an `href`/`src`, never as visible text, so a host
+ * cannot re-linkify it: `[x](#123)` is an internal link, not an issue
+ * reference. Masking keeps the LINE LENGTH, so every offset and column the scan
+ * reports still indexes the real source.
+ *
+ * Only the `](...)` shape is masked, which is the destination and nothing else
+ * - a parenthesis in PROSE is untouched, so `(#123)` in a sentence still flags.
+ *
+ * WALKED, NOT MATCHED, because a destination may hold BALANCED parentheses:
+ * `[x](a(b)#123)` has the whole `a(b)#123` as its href, and a `[^)]*` pattern
+ * stopped at the first `)` and scanned the rest of the real destination as
+ * prose. A backslash escapes the next character, so it cannot close the run
+ * either. An UNBALANCED run is not a destination, so it is left alone. Raised
+ * by codex review, twice.
+ */
+function maskInlineDestinations(line: string): string {
+  // A BARE URL is linkified AS A URL, so a token in its query or path is part
+  // of it and not a separate mention or issue reference. Masked first, and
+  // length-preserving like the destination walk below, so a token after the URL
+  // still indexes the real source. Raised by codex review.
+  line = line.replace(/\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, (m) => ' '.repeat(m.length))
+  let out: string[] | null = null
+  for (let i = 0; i + 1 < line.length; i++) {
+    if (line[i] !== ']' || line[i + 1] !== '(') continue
+    // A LABEL HAS TO OPEN SOMEWHERE. A bare `](#123)` in prose is visible text,
+    // not a destination, and masking it lost the finding. An escaped `\]` does
+    // not close a label either. Raised by codex review.
+    if (line[i - 1] === '\\' || !hasUnescapedBefore(line, '[', i)) continue
+    let depth = 1
+    let j = i + 2
+    for (; j < line.length; j++) {
+      const c = line[j]!
+      if (c === '\\') {
+        j++
+        continue
+      }
+      if (c === '(') depth++
+      else if (c === ')' && --depth === 0) break
+    }
+    if (depth !== 0 || j >= line.length) continue
+    out ??= [...line]
+    for (let k = i + 2; k < j; k++) out[k] = ' '
+    i = j
+  }
+
+  return out ? out.join('') : line
+}
+
+/**
+ * Line numbers whose content never reaches published text.
+ *
+ * FRONTMATTER is metadata: the renderer omits it from the body, so an at-word
+ * in an `author:` field is not something a host can linkify. A LINK REFERENCE
+ * DEFINITION renders as the empty string; only the links that resolve it are
+ * published, and their visible text is their label, not the destination.
+ *
+ * Both were spurious `--platform` failures on valid documents, which is the
+ * failure mode the ruling warns about most: a rule people turn off wholesale.
+ * Raised by codex review.
+ */
+function collectUnpublishedLines(
+  source: string,
+  doc: Document,
+  referencedFootnotes: Set<string>,
+): Set<number> {
+  const lines = new Set<number>()
+  const addRange = (pos: Positioned['pos']): void => {
+    if (!pos) return
+    const end = pos.endLine ?? pos.startLine
+    for (let ln = pos.startLine; ln <= end; ln++) lines.add(ln)
+  }
+  walkDocument(doc, (node) => {
+    // A link reference definition and an ABBREVIATION definition both render as
+    // the empty string. An abbreviation's expansion reaches the page only as a
+    // `title` attribute, which a host does not linkify either.
+    if (node.type === 'link_reference_definition' || node.type === 'abbreviation_def') {
+      addRange((node as Positioned).pos)
+    }
+  })
+  // A footnote definition's body IS published - in the endnotes - so a
+  // REFERENCED one stays scanned. An UNREFERENCED one is dropped from the
+  // output entirely, and `unused-footnote-definition` already reports it, so a
+  // platform warning there is a second finding about text nobody sees.
+  //
+  // Located by the same source-line pattern the footnote checks use, because a
+  // definition lives in `doc.footnoteDefs` rather than in `children` and so
+  // carries no node to walk. That covers the definition's OWN line; a
+  // continuation line of an unreferenced body is still scanned.
+  const defs = doc.footnoteDefs ?? {}
+  source.split('\n').forEach((line, i) => {
+    const m = FOOTNOTE_DEF.exec(line)
+    if (!m) return
+    const label = m[1]!.trim()
+    if (label in defs && !referencedFootnotes.has(label)) lines.add(i + 1)
+  })
+  // Frontmatter carries no node in `children`, but it DOES report a span - so
+  // the span is used rather than re-derived from the source. Re-deriving it
+  // meant matching the opener by hand, and a TYPED opener (`--- yaml`) did not
+  // match, leaving every typed block scanned. Raised by codex review.
+  const fmPos = doc.frontmatter?.pos
+  if (fmPos) {
+    const end = fmPos.endLine ?? fmPos.startLine
+    for (let ln = fmPos.startLine; ln <= end; ln++) lines.add(ln)
+  }
+
+  return lines
+}
+
+/** Line numbers covered by a comment node, which a host never sees. */
+function collectCommentLines(doc: Document): Set<number> {
+  const comments = new Set<number>()
+  walkDocument(doc, (node) => {
+    if (node.type !== 'comment') return
+    const pos = (node as Positioned).pos
+    if (!pos) return
+    const end = (pos as { endLine?: number }).endLine ?? pos.startLine
+    for (let ln = pos.startLine; ln <= end; ln++) comments.add(ln)
+  })
+  return comments
 }
