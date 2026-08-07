@@ -79,7 +79,36 @@ export function normalizeHeadingRefLabel(label: string): string {
  * both directions.
  */
 export function headingRefKeyFromLabel(label: string): string {
-  return normalizeHeadingRefLabel(inlineText(parseRefLabelInlines(label)))
+  return normalizeHeadingRefLabel(derivedRefLabel(label))
+}
+
+/**
+ * The DERIVED label of a collapsed reference: the label's own inline content
+ * rendered to plain text (PART 12 §3a, markup-carve/carve#962).
+ *
+ * §3a defines `ref` as "the label the reference resolves by", with the authored
+ * spelling kept in `rawRef`. Where the heading index answers on the stripped key
+ * - `[`code()` heading][]` reaching `# `code()` heading` - the label it resolved
+ * by is `code() heading`, so that is what `ref` publishes. carve-js published
+ * the authored spelling in BOTH fields, which left §3a's two fields carrying one
+ * string and made `ref` unusable as the resolution key it is defined to be.
+ *
+ * DERIVED, NOT NORMALIZED. The four normalizations in
+ * {@link normalizeHeadingRefLabel} (trim, whitespace collapse, NFC, case fold)
+ * belong to MATCHING, not to the label: `[Getting Started][]` under
+ * `# getting started` has always published `Getting Started`, and folding the
+ * published value would rewrite every plain label to make one markup-bearing one
+ * right. Rendering the label's inlines is the whole derivation, which is also
+ * why a label with no markup, no escape and no smart-punctuation trigger derives
+ * to itself byte for byte.
+ *
+ * Escapes and smart punctuation ride along for free and correctly:
+ * `[\*bold\* heading][]` derives `*bold* heading`, and `[a -- b][]` derives the
+ * en-dash spelling, because those are equally "what the label renders as", which
+ * is the only string the heading index ever compared.
+ */
+export function derivedRefLabel(label: string): string {
+  return inlineText(parseRefLabelInlines(label))
 }
 
 /**
@@ -691,14 +720,30 @@ export function resolveHeadingIds(
         // "unresolved": an explicit `[text][label]` naming a real linkDefs entry
         // still resolves - it resolved in applyLinkDefs, before this pass ever
         // saw it - and a collapsed one still reaches the heading index.
-        const id = isCollapsedRef(n.ref, n.rawRef)
-          ? headingRefs.get(normalizeHeadingRefLabel(n.ref)) ??
-            headingRefs.get(headingRefKeyFromLabel(n.ref))
-          : undefined
-        if (id) {
-          // PART 12 §3a - see the note in parse.ts: the authored `ref` and
-          // `rawRef` survive beside the resolved destination.
-          n.href = `#${id}`
+        //
+        // WHICH KEY ANSWERED IS RECORDED, not just that one did. PART 12 §3a
+        // defines `ref` as the label the reference RESOLVES BY, so when the
+        // second key is the one the index answered on, `ref` publishes that
+        // derived label and `rawRef` keeps the authored spelling
+        // (markup-carve/carve#962). Taking the first key's answer leaves `ref`
+        // authored, which is what §3a already gave `rawRef` - two fields, one
+        // string, and no field naming the key a consumer would have to
+        // recompute.
+        if (isCollapsedRef(n.ref, n.rawRef)) {
+          const asWritten = headingRefs.get(normalizeHeadingRefLabel(n.ref))
+          if (asWritten !== undefined) {
+            // PART 12 §3a - see the note in parse.ts: the authored `ref` and
+            // `rawRef` survive beside the resolved destination. The label as
+            // written IS the key here, so there is nothing to derive.
+            n.href = `#${asWritten}`
+          } else {
+            const derived = derivedRefLabel(n.ref)
+            const id = headingRefs.get(normalizeHeadingRefLabel(derived))
+            if (id !== undefined) {
+              n.href = `#${id}`
+              n.ref = derived
+            }
+          }
         }
         // An UNRESOLVED reference stays a `link` carrying `ref` and `rawRef`
         // (PART 12 §3a). It used to become a text node here, which lost the

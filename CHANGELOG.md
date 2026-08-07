@@ -119,6 +119,31 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A collapsed reference that reaches a heading by the heading's rendered text
+  now publishes that derived label in `ref`** (markup-carve/carve#962). PART 12
+  §3a defines `ref` as the label the reference RESOLVES BY, with the authored
+  spelling kept in `rawRef`; carve-js published the authored spelling in both,
+  so the one field defined as the resolution key named a string the reference
+  did not resolve by.
+
+  ```
+  # `code()` heading
+
+  [`code()` heading][]
+  ```
+
+  The link node now carries `ref: "code() heading"` beside
+  ``rawRef: "[`code()` heading][]"``, where it previously repeated the authored
+  spelling in `ref`.
+
+  Scoped to the references whose authored spelling is not what reached the
+  heading. A `[label]: url` definition keys on the label AS WRITTEN and does not
+  derive, an unresolved reference resolves by nothing and does not derive, and a
+  full `[text][label]` does not reach the heading index at all
+  (markup-carve/carve#742). A label with no markup derives to itself, so no
+  plain reference changes. Rendered HTML, the canonical source and `lint` are
+  unchanged.
+
 - **An unquoted `key=value` in a definition's trailing attribute block no longer
   swallows the closing brace.** `[a]: /u {k=v}` published `k="v}"`: the block was
   validated on its interior and parsed from the braced text, and an unquoted
