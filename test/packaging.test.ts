@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -151,6 +152,7 @@ describe('package metadata', () => {
     dependencies?: Record<string, string>
     peerDependencies?: Record<string, string>
     peerDependenciesMeta?: Record<string, { optional?: boolean }>
+    scripts?: Record<string, string>
   }
 
   it('exports the prettier plugin under a stable specifier', () => {
@@ -173,6 +175,25 @@ describe('package metadata', () => {
   it('still exposes the binary both integrations invoke', () => {
     expect(pkg.bin.carve).toBeTypeOf('string')
     expect(root).toBeTypeOf('string')
+  })
+
+  it('builds dist rather than tracking it', () => {
+    // A reviewer reading this checkout sees `main` and `exports` pointing into
+    // `dist/`, finds a `dist/` on disk holding an older build, and concludes a
+    // source-only change never reaches a consumer. It is a reasonable reading
+    // and it is wrong: `dist/` is gitignored and UNTRACKED, and `prepare` -
+    // which npm runs on install and before publish - rebuilds it from `src/`.
+    // The stale copy on disk is a leftover of the last local build, not
+    // anything this repository ships.
+    //
+    // Pinned because the finding is easy to reach and expensive to re-refute:
+    // committing `dist/` on the strength of it would put a generated tree in
+    // review diffs forever and let it drift from `src/` for real.
+    const tracked = execFileSync('git', ['ls-files', 'dist'], { cwd: root, encoding: 'utf8' })
+
+    expect(tracked).toBe('')
+    expect(read('.gitignore')).toMatch(/^dist\/$/m)
+    expect(pkg.scripts?.prepare).toBe('npm run build')
   })
 
   it('installs nothing at runtime', () => {
