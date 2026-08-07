@@ -274,6 +274,14 @@ export function lintCarve(
     lowercaseHeadingIds?: boolean
     /** Deprecated compatibility option; blockquote marker spacing is now core syntax. */
     portable?: boolean
+    /**
+     * Hosts to additionally check for bare tokens they re-linkify in published
+     * output (markup-carve/carve#297). EMPTY BY DEFAULT, and that is the ruled
+     * behavior: every other rule here reports a silent failure in Carve, while
+     * these are target-specific, so `lintCarve(source)` never emits one for any
+     * input.
+     */
+    platforms?: readonly LintPlatform[]
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
@@ -445,6 +453,14 @@ export function lintCarve(
   const verbatimLines = collectVerbatimLines(doc)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
+  if (opts.platforms?.length) {
+    // Fenced code blocks and raw blocks are reliably safe; comments are never
+    // published at all. Inline code spans are NOT in this set, deliberately -
+    // some host surfaces linkify inside them.
+    const skip = new Set(verbatimLines)
+    for (const ln of collectCommentLines(doc)) skip.add(ln)
+    collectPlatformAutolinks(source, opts.platforms, skip, out, toUtf16)
+  }
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
   return out
 }
@@ -938,4 +954,148 @@ export function formatLintWarnings(
   return warnings
     .map((w) => `${file}:${w.line}:${w.column} ${w.rule} — ${w.message}`)
     .join('\n')
+}
+
+// ============================================================================
+// Platform-autolink rules (opt-in, platform-scoped, DEFAULT OFF)
+// ============================================================================
+
+/**
+ * Hosts whose rendering of published Carve output re-linkifies bare tokens.
+ *
+ * A union rather than a single flag, so a second host can be added with its own
+ * token table later - the shape markup-carve/carve#297 ruled: "off by default,
+ * enabled per platform". An unknown name is ignored rather than rejected: a
+ * caller naming a host this build does not know about gets no rules from it,
+ * which is the same outcome as not asking.
+ */
+export type LintPlatform = 'github'
+
+/**
+ * The two platform-autolink rules (markup-carve/carve#297,
+ * markup-carve/carve-js#848).
+ *
+ * THE SOURCE IS THE ONLY PLACE THE AUTHOR'S INTENT STILL EXISTS. No
+ * render-time construct prevents a host from re-linkifying published output,
+ * so a bare hash-number becomes a link to an unrelated issue and a bare at-word
+ * becomes a mention that notifies an uninvolved person.
+ *
+ * TWO IDS RATHER THAN ONE, because the two token shapes have different
+ * false-positive profiles and an author will want to silence one without the
+ * other - and a rule people disable wholesale is the failure the ruling names.
+ *
+ * DEFAULT OFF, and that is the ruled behavior rather than a convenience: every
+ * other rule in this file reports a silent failure IN CARVE, while these two
+ * are target-specific. An over-eager rule people turn off entirely would be
+ * worse than none.
+ *
+ * WHERE THEY LOOK: prose and INLINE CODE SPANS, which are not reliably safe -
+ * some host surfaces (a pull-request list, a commit log view) still linkify
+ * inside them. Not fenced code blocks, which are reliably safe, and not raw
+ * blocks or comments.
+ */
+const PLATFORM_RULES: Record<LintPlatform, { mention: RegExp; issue: RegExp }> = {
+  github: {
+    // An at-prefixed word. NOT preceded by a word character, a dot or a dash,
+    // so an email address (`user@example.com`) is not one - the same boundary
+    // Carve's own mention production uses (PART 9R §7). The name runs over
+    // letters, digits, `_`, `-` and INTERIOR dots, so a scope prefix
+    // (`@types/node`) flags its scope and `@release-1.0` flags whole.
+    mention: /(?<![\w@.-])@([A-Za-z0-9_][\w-]*(?:\.[A-Za-z0-9_][\w-]*)*)/g,
+    // A hash-number. NOT preceded by a word character or another `#`, so a
+    // heading marker (`## 2`) and an id-shaped `#a1` are out; the run is
+    // DIGITS ONLY, so `#release-1.0` is a tag rather than an issue reference.
+    issue: /(?<![\w#])#(\d+)(?![\w-])/g,
+  },
+}
+
+const PLATFORM_LABEL: Record<LintPlatform, string> = { github: 'GitHub' }
+
+/**
+ * The platform names this build knows, for a caller with no type checker.
+ *
+ * Derived from the rule table rather than written twice, so a host added there
+ * is accepted by the CLI in the same commit - a list kept by hand is how
+ * "documented but not emittable" starts.
+ */
+export const KNOWN_LINT_PLATFORMS = Object.keys(PLATFORM_RULES) as readonly LintPlatform[]
+
+/**
+ * Collect the platform-autolink findings for the requested hosts.
+ *
+ * Scanned over SOURCE LINES rather than over the tree, because the tokens are
+ * not nodes: a docblock tag inside a code span is part of that span's text, and
+ * a host linkifies the published characters whatever node produced them. The
+ * exclusion is therefore also by line - the verbatim and comment ranges the
+ * document already reports - which is exactly the "fenced code blocks, raw
+ * blocks and comments" carve-out, and leaves inline code spans in.
+ */
+function collectPlatformAutolinks(
+  source: string,
+  platforms: readonly LintPlatform[],
+  skipLines: Set<number>,
+  out: LintWarning[],
+  toUtf16: (offset: number) => number,
+): void {
+  const active = platforms.filter((p, i) => platforms.indexOf(p) === i && p in PLATFORM_RULES)
+  if (active.length === 0) return
+  const lines = source.split('\n')
+  const lineStart: number[] = []
+  for (let off = 0, i = 0; i < lines.length; i++) {
+    lineStart.push(off)
+    off += lines[i]!.length + 1
+  }
+  const FIX_MENTION =
+    'move the example into a fenced code block, or strip the sigil and rephrase'
+  const FIX_ISSUE =
+    'move the example into a fenced code block, or rewrite it as "item 1" / "point 1"'
+  for (const platform of active) {
+    const host = PLATFORM_LABEL[platform]
+    const { mention, issue } = PLATFORM_RULES[platform]
+    const checks: readonly (readonly [RegExp, string, string, string])[] = [
+      [mention, 'platform-mention-token', 'an at-prefixed word', FIX_MENTION],
+      [issue, 'platform-issue-reference', 'a hash-number', FIX_ISSUE],
+    ]
+    for (let i = 0; i < lines.length; i++) {
+      const lineNo = i + 1
+      if (skipLines.has(lineNo)) continue
+      const text = lines[i]!
+      for (const [re, rule, what, fix] of checks) {
+        re.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = re.exec(text))) {
+          const start = lineStart[i]! + m.index
+          out.push({
+            line: lineNo,
+            column: m.index + 1,
+            rule,
+            message:
+              host +
+              ' re-linkifies ' +
+              what +
+              ' in published output, so "' +
+              m[0] +
+              '" becomes a link that notifies or references something unrelated; ' +
+              fix +
+              '.',
+            start: toUtf16(start),
+            end: toUtf16(start + m[0].length),
+          })
+        }
+      }
+    }
+  }
+}
+
+/** Line numbers covered by a comment node, which a host never sees. */
+function collectCommentLines(doc: Document): Set<number> {
+  const comments = new Set<number>()
+  walkDocument(doc, (node) => {
+    if (node.type !== 'comment') return
+    const pos = (node as Positioned).pos
+    if (!pos) return
+    const end = (pos as { endLine?: number }).endLine ?? pos.startLine
+    for (let ln = pos.startLine; ln <= end; ln++) comments.add(ln)
+  })
+  return comments
 }

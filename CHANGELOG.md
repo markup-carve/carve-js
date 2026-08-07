@@ -9,6 +9,33 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`carve lint` gains two platform-autolink rules: opt-in, platform-scoped,
+  DEFAULT OFF** (markup-carve/carve#297). The source is the only place the
+  author's intent still exists - no render-time construct prevents a host from
+  re-linkifying published output, so a bare hash-number becomes a link to an
+  unrelated issue and a bare at-sign word becomes a mention that notifies an
+  uninvolved person.
+
+  ```ts
+  lintCarve(src)                            // never emits a platform rule
+  lintCarve(src, { platforms: ['github'] }) // opts in
+  ```
+
+  ```sh
+  carve lint --platform github doc.crv   # repeatable; an unknown name is an error
+  ```
+
+  Two ids, `platform-mention-token` and `platform-issue-reference`, because the
+  two token shapes have different false-positive profiles and an author will
+  want to silence one without the other. They look in prose AND in inline code
+  spans, which are not reliably safe on every host surface; they do not look in
+  fenced code blocks, raw blocks or comments. Each message suggests fencing the
+  example, stripping the sigil, or rewording an enumerated reference.
+
+  Off by default is the ruled behavior rather than a convenience: every other
+  lint rule reports a silent failure in Carve, while these are target-specific,
+  and an over-eager rule people disable wholesale would be worse than none.
+
 - **`carve portability` - does this document mean the same thing in Djot?**
   (carve-js#546). A first attempt answered this with a lint rule that *reasoned*
   about it: flag a block opener directly under a paragraph line, since Carve

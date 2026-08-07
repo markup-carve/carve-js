@@ -111,6 +111,8 @@ export {
   lintCarve,
   formatLintWarnings,
   type LintWarning,
+  type LintPlatform,
+  KNOWN_LINT_PLATFORMS,
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'

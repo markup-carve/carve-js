@@ -22,6 +22,8 @@ import {
   djotMigrationWarnings,
   formatMigrationWarnings,
   lintCarve,
+  type LintPlatform,
+  KNOWN_LINT_PLATFORMS,
   formatLintWarnings,
   carveToHtml,
   carveToMarkdown,
@@ -161,6 +163,8 @@ exits 1 if anything is reported, 0 if clean.
 
   lint options:
         --from-djot  Also flag valid Carve whose meaning differs from Djot
+        --platform NAME  Also flag bare tokens NAME re-linkifies in published
+                     output (repeatable; off by default). Known: github
                      (\`_x_\` underline vs emphasis, \`~x~\` strike vs subscript,
                      \`{=x=}\` highlight) — noise for hand-written Carve, useful
                      when checking a document migrated from Djot.
@@ -724,6 +728,7 @@ function reportLint(
   io: CliIO,
   fromDjot: boolean,
   portable: boolean,
+  platforms: readonly LintPlatform[],
 ): number {
   // Default lint targets hand-written Carve, so it reports only constructs
   // that mis-render in Carve (`carve-breakage`). Djot-semantic shifts such as
@@ -732,7 +737,7 @@ function reportLint(
   const migration = djotMigrationWarnings(source).filter(
     (w) => fromDjot || w.category === 'carve-breakage',
   )
-  const semantic = lintCarve(source, { portable })
+  const semantic = lintCarve(source, { portable, platforms })
   if (migration.length) io.write(formatMigrationWarnings(migration, file) + '\n')
   if (semantic.length) io.write(formatLintWarnings(semantic, file) + '\n')
   return migration.length + semantic.length
@@ -913,6 +918,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   let positionals: string[]
   let fromDjot: boolean
   let portable: boolean
+  let platforms: LintPlatform[]
   try {
     const parsed = parseArgs({
       args,
@@ -920,6 +926,9 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
         help: { type: 'boolean', short: 'h' },
         'from-djot': { type: 'boolean' },
         portable: { type: 'boolean' },
+        // Repeatable, so a document can be checked against two hosts at once
+        // and a second host's table can be added without a new flag.
+        platform: { type: 'string', multiple: true },
       },
       allowPositionals: true,
     })
@@ -930,6 +939,18 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     positionals = parsed.positionals
     fromDjot = parsed.values['from-djot'] ?? false
     portable = parsed.values.portable ?? false
+    // An unknown name is REFUSED here rather than silently ignored: on the API
+    // an unknown host is a typed mistake the compiler catches, but a CLI flag
+    // has no such reader, and a misspelt `--platform gihub` that reports
+    // nothing looks exactly like a clean document.
+    platforms = (parsed.values.platform ?? []).map((name) => {
+      if (!KNOWN_LINT_PLATFORMS.includes(name as LintPlatform)) {
+        throw new Error(
+          `unknown --platform ${name} (known: ${KNOWN_LINT_PLATFORMS.join(', ')})`,
+        )
+      }
+      return name as LintPlatform
+    })
   } catch (e) {
     io.writeErr(`carve lint: ${(e as Error).message}\n`)
     return 2
@@ -937,7 +958,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
 
   if (positionals.length === 0) {
     const src = await io.readStdin()
-    return reportLint(src, '<stdin>', io, fromDjot, portable) > 0 ? 1 : 0
+    return reportLint(src, '<stdin>', io, fromDjot, portable, platforms) > 0 ? 1 : 0
   }
 
   let total = 0
@@ -951,7 +972,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
       hadError = true
       continue
     }
-    total += reportLint(src, file, io, fromDjot, portable)
+    total += reportLint(src, file, io, fromDjot, portable, platforms)
   }
   if (hadError) return 2
   return total > 0 ? 1 : 0
