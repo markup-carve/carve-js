@@ -4859,6 +4859,31 @@ interface ItemLazyState {
 }
 
 /**
+ * A tracker for a `+`-attached flush-left block, where nothing is open yet.
+ *
+ * The two `+` paths attach a block written at column 0, so they start from the
+ * same state the top level does. They consult only `inFence`: what they need is
+ * "is this line code text", which is the question corpus category 278 answers
+ * for the indented body (markup-carve/carve#975). The rest of the fields exist
+ * so `trackItemLazyState` stays the ONE producer of that answer rather than
+ * each loop growing its own fence counter - the duplication that let the
+ * indented loop and these two disagree about the same line in the first place.
+ */
+function freshItemLazyState(): ItemLazyState {
+  return {
+    inFence: false,
+    fenceClose: null,
+    inComment: false,
+    commentLen: 0,
+    lazyFoldableBeforeComment: false,
+    absorbingFence: false,
+    divDepth: 0,
+    lazyFoldable: false,
+    inDefList: false,
+  }
+}
+
+/**
  * Track verbatim/paragraph state across a list item's collected inner lines so a
  * dedented non-blank line only lazily continues an OPEN paragraph (the
  * djot/CommonMark family-D rule, matching carve-php). Each line is passed in its
@@ -5193,12 +5218,18 @@ function parseList(lexer: Lexer): List {
       const attached: string[] = []
       const attachedLineNumbers: number[] = []
       let attachedStartLineIndex = lexer.pos
+      // The attached block is a block: a marker line inside a fence it opened
+      // is that fence's code text, not a sibling marker (see the indented
+      // loop's note on carve#975). Without this the opener came out an EMPTY
+      // code block and the closer an inline code span, which is the same
+      // damage category 278 pins one level in.
+      const attachedState = freshItemLazyState()
       while (!lexer.eof()) {
         const a = lexer.peek()!
         if (isBlankLine(a)) break
         const ind = indentColumns(a, baseIndent + 1)
         if (ind < baseIndent) break
-        if (ind === baseIndent) {
+        if (ind === baseIndent && !attachedState.inFence) {
           const am = matchListMarker(a, isTask, isOrdered)
           const sibling =
             am &&
@@ -5219,6 +5250,7 @@ function parseList(lexer: Lexer): List {
         }
         if (attached.length === 0) attachedStartLineIndex = lexer.pos
         attached.push(sliceColumns(a, baseIndent))
+        trackItemLazyState(attached[attached.length - 1]!, attachedState)
         attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
         lexer.consume()
       }
@@ -5319,7 +5351,12 @@ function parseList(lexer: Lexer): List {
           if (isBlankLine(a)) break
           const ind = indentColumns(a, baseIndent + 1)
           if (ind < baseIndent) break
-          if (ind === baseIndent) {
+          // A marker line inside a fence THIS attached block opened is code
+          // text, exactly as it is in the indented body (carve#975). The
+          // tracker is already maintained across these lines below; it was
+          // simply never consulted here, so the marker severed the fence from
+          // its opener.
+          if (ind === baseIndent && !lazyState.inFence) {
             const am = matchListMarker(a, isTask, isOrdered)
             const sibling =
               am &&
@@ -5368,14 +5405,33 @@ function parseList(lexer: Lexer): List {
         pendingBlankLineNumbers = []
         // A sub-list marker (ordered, unordered, or task) at or past the content
         // column starts the item's block stream.
+        //
+        // INSIDE AN OPEN FENCE THE LINE IS CODE TEXT AND NOTHING ELSE
+        // (markup-carve/carve#975, category 278). Section 24's S1 and S2 place
+        // a line by the COLUMN it reaches; neither reads its first character,
+        // so `- x` at the content column is the same continuation that plain
+        // `x` is - which corpus 276-...-3 already pins, and which differs from
+        // 278's first row by two characters. This test ran unconditionally, so
+        // the marker split the fence body away from its opener: the opener was
+        // left an EMPTY code block, the marker line became a nested list, and
+        // the closer came out as an inline code span.
+        //
+        // `lazyState` here describes the lines ALREADY collected, because
+        // `trackItemLazyState` runs at the bottom of this branch - so it
+        // answers exactly "was a fence open when this line began". An
+        // unterminated fence is inline verbatim rather than a block (the
+        // closer-lookahead rule), and `inFence` is only set for one that
+        // really opens, so a marker under an unterminated opener still nests.
         const isMarker =
-          RE_ORDERED.test(l) ||
-          RE_UNORDERED.test(l) ||
-          RE_TASK.test(l) ||
-          // An abutting-attr bullet (`-{.x} item`) is a marker too. It no longer
-          // reaches here via §10 interruption (bullets do not interrupt), so the
-          // sub-list nesting path must recognize it directly to keep nesting.
-          extractItemAttr(l) !== null
+          !lazyState.inFence &&
+          (RE_ORDERED.test(l) ||
+            RE_UNORDERED.test(l) ||
+            RE_TASK.test(l) ||
+            // An abutting-attr bullet (`-{.x} item`) is a marker too. It no
+            // longer reaches here via §10 interruption (bullets do not
+            // interrupt), so the sub-list nesting path must recognize it
+            // directly to keep nesting.
+            extractItemAttr(l) !== null)
         if (firstBlockIdx === -1 && isMarker) {
           firstBlockIdx = nested.length
         }
