@@ -149,6 +149,30 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   empty block quote, and a block-attribute line. A body that does hold an open
   paragraph still takes the lazy line.
 
+- **Below a definition body's column the body ends, at every sub-column indent**
+  (markup-carve/carve#932). `definition_indent` states the floor as column
+  arithmetic; the clause names what happens on the other side of it. Three
+  bands: BELOW the body's content column the body ENDS and the line is
+  classified in the surviving context, AT the column the line is the body's own
+  block content, PAST it the line is lazy text.
+
+  ```
+  :: t
+  :  body
+   > q
+  ```
+
+  The quote used to fold into the `dd` as lazy text at one and two spaces while
+  the same document at column 0 ended the body, which gave a sub-column indent a
+  meaning of its own and made indentation depth mean two different things one
+  column apart. The body now ends at every sub-column indent. Where the line then
+  lands is the surviving context's business: at column 0 the quote opens, and at
+  one or two the top level's strict column-0 rule for an indented block opener
+  makes it text.
+
+  A plain line still continues the body lazily at every sub-column indent, since
+  it carries no block opener at any indent.
+
 - **A bottom-positioned table of contents is emitted at document level, after
   the last section** (markup-carve/carve-js#728). `tableOfContents({ position:
   'bottom' })` appended the `<nav>` to the document's block list, so the
