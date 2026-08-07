@@ -193,7 +193,12 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // plain text and the terminal do not get to drop content the author
       // wrote, and dropping it made the output depend on whether a reference
       // exists elsewhere in the document (carve#589).
-      return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
+      // The definition line goes through `escapeMdHtml` for the same reason the
+      // `<abbr>` built from it does: an expansion is author content, and this
+      // target's contract is that embedded HTML cannot become live markup
+      // downstream. Writing the occurrence escaped and the definition raw made
+      // one output disagree with itself (markup-carve/carve-js#894).
+      return `*[${escapeMdHtml(stripControls(node.abbr))}]: ${escapeMdHtml(stripControls(node.expansion))}\n\n`
     case 'comment':
       return ''
     case 'link_reference_definition':
@@ -337,7 +342,9 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[^${stripControls(label)}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
+    // A label is author content, and it is reproduced verbatim in two places;
+    // both escape, so a reference still matches its definition (carve-js#894).
+    out += `[^${escapeMdHtml(stripControls(label))}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }
   return out
 }
@@ -398,10 +405,15 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return renderImage(node)
     case 'span':
       return renderInlines(node.children, ctx)
-    case 'math':
-      return node.display
-        ? `$$${stripControls(node.content)}$$`
-        : `$${stripControls(node.content)}$`
+    case 'math': {
+      // Escaped, exactly as the HTML target escapes the same content: a
+      // consumer decodes the entity back to the character before its math
+      // renderer sees it, so `a < b` still reaches KaTeX as `a < b` while
+      // `<script>` cannot become a tag (markup-carve/carve-js#894).
+      const math = escapeMdHtml(stripControls(node.content))
+
+      return node.display ? `$$${math}$$` : `$${math}$`
+    }
     case 'raw_inline':
       return node.format === 'html' ? escapeMdHtml(stripControls(node.content)) : ''
     case 'literal_inline':
@@ -434,15 +446,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Markdown has no abbreviation syntax; emit an HTML `<abbr>` so the title
       // survives (markdown allows inline HTML), matching carve-php. Dropping it
       // to plain text would lose the expansion.
-      const text = stripControls(node.abbr).replace(/[&<>]/g, (c) =>
-        c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;',
-      )
+      const text = escapeMdHtml(stripControls(node.abbr))
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to the plain key text only (no <abbr>, no title).
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return text
-      const title = stripControls(node.expansion).replace(/[&<>"]/g, (c) =>
-        c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
-      )
+      // The attribute context needs the quote too; the other three characters
+      // come from the one helper.
+      const title = escapeMdHtml(stripControls(node.expansion)).replace(/"/g, '&quot;')
       return `<abbr title="${title}">${text}</abbr>`
     }
     case 'footnote_ref':
@@ -457,8 +467,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // PART 11 section 8 M1 escapes UNCONDITIONALLY. Emitting them bare handed
       // the re-parser markup the document never had. carve-php already did this
       // (carve#352, corpus 132/133/157/161).
-      if (!ctx.definedFootnotes.has(id)) return `\\[^${id}\\]`
-      return `[^${id}]`
+      // Escaped like the definition above, so the pair still matches. The
+      // UNRESOLVED branch escaped its BRACKETS, because they are Markdown
+      // metacharacters, and skipped the HTML - the escape decision was being
+      // made for one and not the other (carve-js#894).
+      if (!ctx.definedFootnotes.has(id)) return `\\[^${escapeMdHtml(id)}\\]`
+      return `[^${escapeMdHtml(id)}]`
     }
     case 'soft_break':
       return '\n'
@@ -486,7 +500,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // ANSI targets were fixed in carve-js#429.
       return escapeText(node.text)
     case 'heading_ref': {
-      if (!node.href) return `</#${stripControls(node.target)}>`
+      // UNRESOLVED: the authored marker, kept readable rather than escaped into
+      // noise - a reader can still act on `</#nope>`. The TARGET inside it is
+      // author content and can hold a `<`, and `</#a<script>` is a complete
+      // opening tag once this Markdown is rendered, so the target takes the
+      // HTML pass while the writer's own delimiters stay literal (carve-js#894).
+      if (!node.href) return `</#${escapeMdHtml(stripControls(node.target))}>`
       // IN THE LINK CONTEXT, always: the display text either lands inside this
       // crossref's own Markdown link below, or inside an enclosing one. Either
       // way a link cloned in from the target heading may not nest, and the
