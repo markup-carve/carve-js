@@ -43,6 +43,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A definition body continuation indented past its column is lazy text**
+  (markup-carve/carve#918). The body's column is the one `:  ` establishes;
+  `definition_indent` reaches that column and does not measure how far past it a
+  line went. A line indented further therefore continues the body's open
+  paragraph and carries inline content, so a stray four-space indent no longer
+  silently opens a block quote. This engine stripped the whole indentation run,
+  so a line one column past arrived byte-identical to one written at the column -
+  which means it was not only the block quote: a heading, thematic break, table
+  row, div fence, comment fence, code fence and definition term were all nesting
+  there too. At the body's own column a block still opens, flush left the body
+  still ends, and a blank line followed by an indented block still nests, which
+  is how a `dd` holds more than one block.
+
 - **An unterminated comment fence inside a block quote no longer opens a block**
   (carve-js#832). PART 9 §28 says a `%%%` opener with no matching closer ahead
   does not open a block - it degrades to a line comment, so every following block

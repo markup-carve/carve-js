@@ -54,11 +54,26 @@ describe("a definition body's continuation is measured in columns", () => {
     // fails it ENDS the body here - an indented opener is not an interrupter,
     // so it folds as lazy text instead. Folding structurally (a real
     // `blockquote`) versus folding as text is the difference the branch makes.
-    it('folds a block opener a tab in, the column four spaces reach', () => {
-      expect(carveToHtml(':: t\n:  body\n\t> q\n')).toContain('<blockquote>')
+    it('folds a block opener a tab in as TEXT, the column four spaces reach', () => {
+      // A tab reaches column 4, which is PAST the body's column of 3 - and
+      // carve#918 rules that a continuation indented past the body's column is
+      // LAZY TEXT, not a nested block. This asserted a real `blockquote`, from
+      // when the whole indentation run was stripped and column 4 arrived flush
+      // at column 0, byte-identical to column 3.
+      //
+      // What this assertion is FOR is unchanged and is what it still tests: a
+      // tab and the four spaces it reaches give the same answer, so the branch
+      // reads columns rather than characters.
+      const tabbed = carveToHtml(':: t\n:  body\n\t> q\n')
+
+      expect(tabbed).not.toContain('<blockquote>')
+      expect(tabbed).toBe(carveToHtml(':: t\n:  body\n    > q\n'))
     })
 
-    it('still folds one at three spaces', () => {
+    it('still folds one at three spaces STRUCTURALLY, which is the body column', () => {
+      // The column the body establishes, where a nested block really does open.
+      // Losing this would make the rule "an indented opener is never a block",
+      // which is a different rule and the wrong one.
       expect(carveToHtml(':: t\n:  body\n   > q\n')).toContain('<blockquote>')
     })
 
