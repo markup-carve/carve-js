@@ -191,7 +191,7 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
     // The MARKER AS WRITTEN (PART 10 §10a): `[n]: …` is a link reference
     // definition, so emitting one where the author wrote a footnote definition
     // turns it into a different construct on the way back.
-    out += `[^${stripControls(label)}]: ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
+    out += `[^${stripControls(label)}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }
   return out
 }
@@ -215,6 +215,35 @@ function renderInlines(nodes: InlineNode[], ctx: PlainContext): string {
     return nodes.map((node) => renderInline(node, ctx)).join('')
   } finally {
     ctx.inlineDepth--
+  }
+}
+
+/**
+ * Is the renderer inside a link's text right now?
+ *
+ * Module-scoped rather than threaded through every signature: rendering is
+ * synchronous and single-threaded. A footnote body renders outside any anchor,
+ * so the flag is cleared for it.
+ */
+let insideLink = false
+
+function withinLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = true
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
+function outsideLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = false
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
   }
 }
 
@@ -247,7 +276,11 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
       if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
-      return renderInlines(node.children, ctx)
+      // Links never nest at the render seam (PART 12 §3a,
+      // markup-carve/carve#817). The node stays in the tree as written, but
+      // only the outermost link context applies while its label renders.
+      if (insideLink) return renderInlines(node.children, ctx)
+      return withinLink(() => renderInlines(node.children, ctx))
     case 'image':
       return renderImageText(node)
     case 'math':
@@ -262,6 +295,10 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'autolink':
       // Raw autolink content: a URI autolink keeps its scheme, an email shows
       // the address; fall back to stripping an auto-added `mailto:`.
+      if (insideLink) {
+        const display = node.href.startsWith('mailto:') ? node.href.slice(7) : (node.text ?? node.href)
+        return stripControls(display)
+      }
       return stripControls(
         node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
       )
@@ -275,7 +312,10 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return stripControls(node.abbr)
     case 'footnote_ref':
     case 'inline_footnote': {
-      if (node.inline) return `(${renderInlines(node.inline, ctx)})`
+      if (node.inline) {
+        const inline = node.inline
+        return `(${outsideLink(() => renderInlines(inline, ctx))})`
+      }
       const id = stripControls(node.id ?? '')
       // An UNRESOLVED reference stays literal, exactly as the HTML target
       // renders it: the construct did not form, so `[^a]` is ordinary text and

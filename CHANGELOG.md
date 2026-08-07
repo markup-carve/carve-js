@@ -149,62 +149,33 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   empty block quote, and a block-attribute line. A body that does hold an open
   paragraph still takes the lazy line.
 
-- **Below a definition body's column the body ends, at every sub-column indent**
-  (markup-carve/carve#932). `definition_indent` states the floor as column
-  arithmetic; the clause names what happens on the other side of it. Three
-  bands: BELOW the body's content column the body ENDS and the line is
-  classified in the surviving context, AT the column the line is the body's own
-  block content, PAST it the line is lazy text.
+- **A nested link and an autolink stay nodes in the published AST**
+  (markup-carve/carve#817). "Links never nest" is a RENDERING rule: an anchor may
+  not contain another anchor, and that binds the renderer, not the encoder. A
+  link or an autolink inside a link's label is now serialized as the node the
+  author wrote, and every renderer unwraps it at the render seam.
+
+  `[[x](y)](z)` published a link to `z` whose only child was the text `x`, so
+  `y` was gone from the tree entirely:
 
   ```
-  :: t
-  :  body
-   > q
+  fmt(parsed document)  -> [[x](y)](z)
+  fmt(same via the AST) -> [x](z)
   ```
 
-  The quote used to fold into the `dd` as lazy text at one and two spaces while
-  the same document at column 0 ended the body, which gave a sub-column indent a
-  meaning of its own and made indentation depth mean two different things one
-  column apart. The body now ends at every sub-column indent. Where the line then
-  lands is the surviving context's business: at column 0 the quote opens, and at
-  one or two the top level's strict column-0 rule for an indented block opener
-  makes it text.
+  Two spellings of one source, which is the section 6 round trip failing. An
+  autolink flattened the same way returned as a bare URL, and that is a different
+  document: a bare URL stays literal where an autolink is a link.
 
-  A plain line still continues the body lazily at every sub-column indent, since
-  it carries no block opener at any indent.
+  A `heading_ref` inside a link was already exempt for exactly this reason, and
+  an image and a code span in a label were never flattened, so this extends an
+  existing exemption rather than adding a rule about what a label may contain.
+  Nothing on the wire marks the inner link as unclickable; a consumer infers it
+  from context.
 
-- **Derived display text clones the heading's inline nodes**
-  (markup-carve/carve#957). R4's WHAT IS CLONED IS THE HEADING'S INLINE NODES
-  binds every consumer that derives display text from a heading, not the
-  crossref alone. A node carries its SOURCE RUN and a string does not, so
-  flattening at the derivation site destroys the run before any renderer is
-  invoked, and no renderer change reaches the loss.
-
-  Three consumers were flattening a heading written `# *bold* heading`:
-
-  - a numbered cross-reference label published `Section 1 - bold heading` and
-    now keeps the emphasis;
-  - a table-of-contents entry, both the injected nav and the `::: toc` placement
-    directive, published `bold heading` and now carries the nodes;
-  - an index term's display published its term flattened and now carries the
-    nodes the author wrote.
-
-  Numbering, prefixing and joining remain the extension's own business: this
-  governs what the TITLE part is made of, not the label word, the number, or the
-  separator around them.
-
-  A derived label is the heading's AUTHORED content, so nothing a later stage
-  added appears in one: not a `section-number` span, not a footnote reference
-  (a pointer into the endnotes rather than display text), not an abbreviation's
-  expansion, and not an invisible `:index[term]` marker. A link or an autolink
-  inside a heading is still unwrapped rather than published as a nested anchor.
-
-- **A `::: toc` entry honors the caller's render options.** The label was
-  rendered with defaults, so `allowRawHtml: false` escaped a heading's raw
-  inline HTML and the entry built from the same nodes emitted it live. A
-  `symbols` map was ignored there for the same reason. The injected
-  `tableOfContents()` nav is built before the render begins and still cannot see
-  them (markup-carve/carve-js#871).
+  RENDERED OUTPUT DOES NOT MOVE. Every target still unwraps, so there is no HTML,
+  Markdown, plain or ANSI consequence. What moves is what a consumer of the TREE
+  receives.
 
 - **A bottom-positioned table of contents is emitted at document level, after
   the last section** (markup-carve/carve-js#728). `tableOfContents({ position:

@@ -337,7 +337,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    out += `[^${stripControls(label)}]: ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
+    out += `[^${stripControls(label)}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }
   return out
 }
@@ -389,6 +389,10 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
       if (node.ref !== undefined && !node.href) return escapeText(node.rawRef ?? '')
+      // Links never nest at the render seam (PART 12 §3a,
+      // markup-carve/carve#817). The node stays in the tree as written, but
+      // only the outermost destination reaches rendered Markdown.
+      if (insideLink) return renderInlines(node.children, ctx)
       return renderLink(node, ctx)
     case 'image':
       return renderImage(node)
@@ -411,6 +415,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // Visible text is the raw autolink content (an email autolink shows the
       // address, not the `mailto:` href); fall back to href for older nodes.
       const label = stripControls(node.text ?? node.href)
+      // Same render-seam rule as nested links above. Strip an auto-added
+      // `mailto:` so the label matches what the author saw
+      // (markup-carve/carve#817).
+      if (insideLink) {
+        const display = node.href.startsWith('mailto:') ? node.href.slice(7) : label
+        return escapeText(stripControls(display))
+      }
       return `[${label}](${markdownDestination(node.href)})`
     }
     case 'mention':
@@ -436,7 +447,10 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     }
     case 'footnote_ref':
     case 'inline_footnote': {
-      if (node.inline) return `^[${renderInlines(node.inline, ctx)}]`
+      if (node.inline) {
+        const inline = node.inline
+        return `^[${outsideLink(() => renderInlines(inline, ctx))}]`
+      }
       const id = stripControls(node.id ?? '')
       // An UNRESOLVED reference did not form a footnote, so what is emitted is
       // ordinary text -- and its brackets are Markdown metacharacters, which
@@ -473,7 +487,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return escapeText(node.text)
     case 'heading_ref': {
       if (!node.href) return `</#${stripControls(node.target)}>`
-      const crossrefText = renderInlines(node.resolvedText ?? [], ctx)
+      // IN THE LINK CONTEXT, always: the display text either lands inside this
+      // crossref's own Markdown link below, or inside an enclosing one. Either
+      // way a link cloned in from the target heading may not nest, and the
+      // resolver no longer unwraps the clone before the renderer sees it
+      // (PART 12 §3a, markup-carve/carve#817).
+      const crossrefText = withinLink(() => renderInlines(node.resolvedText ?? [], ctx))
       // Inside a link's text, and for a target this format cannot anchor: the
       // display text alone. Markdown can carry `{#id}` on a heading and
       // nothing else, so a crossref to a figure or a table renders as the
@@ -512,6 +531,16 @@ let insideLink = false
 function withinLink<T>(fn: () => T): T {
   const previous = insideLink
   insideLink = true
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
+function outsideLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = false
   try {
     return fn()
   } finally {
