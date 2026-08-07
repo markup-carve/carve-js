@@ -43,6 +43,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Trailing whitespace is dropped on every content line, not only a block's
+  last** (markup-carve/carve#926). A space or tab run at the end of a content
+  line does not reach the output and is not content, so `abc<SP>` followed by
+  `def` and `abc` followed by `def` are the same document - the run before a
+  SOFT BREAK was kept until now. It applies in every block, not only a
+  paragraph: a heading, a list item, a block quote line, a definition term and
+  description, a footnote body line, a table caption and a line block. Only
+  U+0020 and U+0009 drop; every other invisible character is content and
+  survives, which fixes two places that disagreed - a trailing FORM FEED was
+  dropped from a heading and a caption, and a definition TERM dropped a trailing
+  no-break space, byte-order mark, ideographic space or any Unicode space.
+  Verbatim content is untouched: a code block, a code span and the run before a
+  backslash hard break all keep it, and a line block's two-or-more-column gap is
+  already non-breaking-space content before this rule is reached.
+
 - **The abbreviation and footnote definition separator is a run of ASCII spaces**
   (markup-carve/carve#892). Both productions now spell the marker-to-content slot
   `space+`, which is a correction rather than a widening - they said `space`
