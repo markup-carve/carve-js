@@ -303,6 +303,7 @@ const IMPLEMENTED = new Set([
   'code-fence-metadata-slots-must-be-a-space-too',
   'a-tab-continues-a-list-item-just-as-two-spaces-do',
   'an-absorbed-colon-fence-leaves-a-block-quote-s-paragraph-open',
+  'a-blank-line-holds-spaces-and-tabs-and-nothing-else',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug

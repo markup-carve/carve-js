@@ -64,7 +64,26 @@ describe('renderCarve targeted canonicalization', () => {
   })
 
   it('strips trailing whitespace while preserving nbsp', () => {
-    expect(carveToCarve('a  \n\u00a0  \n')).toBe('a\n\u00a0\n')
+    // The second line is content (an NBSP), so the FIRST line is not
+    // block-final and its two trailing spaces are kept: the parser keeps them
+    // before a soft break, so dropping them here rendered a different document.
+    //
+    // This asserted `a` for the first line until the blank-line test below it
+    // was narrowed. It reached that answer only because the native `.trim()`
+    // counts NBSP as whitespace, so the NBSP-only line read as blank and the
+    // line above it read as block-final - two characters wrong at once, in
+    // opposite directions, cancelling into an answer that broke the invariant
+    // the next assertion now states outright (carve#890, carve#844).
+    expect(carveToCarve('a  \n\u00a0  \n')).toBe('a  \n\u00a0\n')
+  })
+
+  it('keeps to_html(fmt(x)) == to_html(x) over a trailing run before an invisible line', () => {
+    // The invariant the assertion above used to break. Kept separate from it so
+    // a future narrowing of the written form has to answer this question too
+    // rather than just moving the literal.
+    for (const src of ['a  \n\u00a0  \n', 'a  \n\u200b\n', 'a\t\n\ufeff\n']) {
+      expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
+    }
   })
 
   it('keeps soft breaks in a plain div that carries a line-block class', () => {

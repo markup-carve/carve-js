@@ -49,15 +49,26 @@ export interface CarveRenderOptions {}
  * these two patterns (carve-js#638). A scan from the end is linear in the
  * run it removes.
  */
-// `\s` minus NBSP and minus U+FEFF. JavaScript counts U+FEFF as whitespace
-// where no other engine here does, and every engine renders it as ordinary
-// content - so trimming it broke `to_html(fmt(x)) == to_html(x)` (PART 11 §1,
-// carve#844). Kept in step with `isTrimmable` in src/trim-non-nbsp.ts, which
-// answers the same question for the other non-HTML targets.
-const WS_NON_NBSP_RE = /[^\S\u00a0\ufeff]/
-
+// SPACE, TAB, and the two line terminators - and NOTHING ELSE.
+//
+// It was `\s` minus NBSP and minus U+FEFF, and each of those two exceptions was
+// added the same way: a character that every engine renders as ordinary content
+// was being trimmed out of the written form, so `to_html(fmt(x)) == to_html(x)`
+// went false for a document containing it (carve#844 for U+FEFF). The list was
+// one character long, then two, and the general rule was already written down -
+// `whitespace` in this language is SPACE or TAB (PART 1, carve#890), and
+// U+000B, U+000C, U+0085 and every Unicode space are CONTENT. Enumerating the
+// exceptions to `\s` was chasing the complement of that rule one character at a
+// time; three more were waiting in the corpus that carve#924 added.
+//
+// The two LINE TERMINATORS stay trimmable because this trim is also what strips
+// the padding off a rendered SUBTREE, where a leading or trailing newline is
+// the writer's own layout and not anything the author wrote.
+//
+// Kept in step with `isTrimmable` in src/trim-non-nbsp.ts, which answers the
+// same question for the other non-HTML targets.
 function isWsNonNbsp(ch: string): boolean {
-  return WS_NON_NBSP_RE.test(ch)
+  return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
 }
 
 function trimEndNonNbsp(text: string): string {
@@ -1441,6 +1452,25 @@ function alignMarker(align: TableCell['align']): string {
  * one case that changes form - `a\ \ b` is written back as `a  b` - because the
  * two are the same document here: both parse to the same pair of sentinels.
  */
+/**
+ * A BLANK LINE HOLDS SPACES AND TABS AND NOTHING ELSE (PART 1, carve#890,
+ * corpus `a-blank-line-holds-spaces-and-tabs-and-nothing-else` from carve#924).
+ *
+ * `normalize` asked this question twice and spelled it two different ways: the
+ * "emit the line empty" test was already this character class, while the "does
+ * the next line end the block" test was a native `.trim() === ''`, i.e. the
+ * full Unicode `\s`. So a line holding one U+1680 or one U+2000 counted as
+ * blank for the second question and not for the first, and the line ABOVE it
+ * was trimmed as block-final. On a run of such lines each one trimmed the one
+ * before it away, and `a` + nine invisible lines + `b` came back as two
+ * paragraphs - `to_html(fmt(x)) == to_html(x)` false, with no character in the
+ * document that the parser calls whitespace.
+ *
+ * The parser answers the same question with `RE_BLANK_LINE` in src/parse.ts,
+ * which is this pattern. Keep them in step.
+ */
+const RE_WRITER_BLANK = /^[ \t]*$/
+
 function lineBlockLayoutWhitespace(body: string): string {
   return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => sentinels[0].repeat(run.length))
 }
@@ -1460,7 +1490,7 @@ function normalize(text: string): string {
     // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
     // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
     // three spaces inside a code block are out of reach and stay intact.
-    if (line.length > 0 && line.replace(/[ \t]+/g, '') === '') return ''
+    if (line.length > 0 && RE_WRITER_BLANK.test(line)) return ''
     // Otherwise strip a line's trailing whitespace only where it CANNOT be
     // content. At the end of a block the parser drops it too, so the writer
     // must; before a SOFT BREAK the parser keeps it, and stripping it there
@@ -1470,7 +1500,7 @@ function normalize(text: string): string {
     // not, and no corpus case covered an ASCII trailing space before a soft
     // break, so nothing caught it.
     const next = lines[i + 1]
-    const endsBlock = next === undefined || next.trim() === ''
+    const endsBlock = next === undefined || RE_WRITER_BLANK.test(next)
     return endsBlock ? trimEndNonNbsp(line) : line
   })
   const cleaned = trimNonNbspKeepingGuard(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
@@ -1737,10 +1767,28 @@ function guardThematicBreakLines(body: string): string {
     .join('\n')
 }
 
+/*
+ * The two control characters a PARSE can never put in a text node.
+ *
+ * U+0000 is replaced with U+FFFD on the way in and U+000D is a line ending, so
+ * neither can reach the writer from a parse - only from an ingested tree - and
+ * writing either one back would not round-trip anyway, because the next parse
+ * would transform it again.
+ *
+ * Every OTHER C0 and C1 control is ordinary content that the HTML renderer
+ * emits unchanged, and this used to strip the whole of
+ * `[\u0000-\u0008\u000b-\u001f\u007f-\u009f]`. That silently deleted 61 of the
+ * 63 characters in that range from the written form, so `to_html(fmt(x)) ==
+ * to_html(x)` was false for every document that contained one (PART 11 section
+ * 1). The corpus carve#924 added names three of them - U+000B, U+000C and
+ * U+0085 - and those were the ones with a fixture, not the extent of it.
+ */
+const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
+
 function escapeText(text: string): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
   const out = text
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+    .replace(UNWRITABLE_CONTROLS, '')
     .replace(escapes, '\\$&')
   if (escapeMode === 'minimal') return out
   // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
