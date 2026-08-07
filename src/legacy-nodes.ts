@@ -1,4 +1,5 @@
 import type { Document, InlineNode } from './ast.js'
+import { ownValue, setOwn } from './own-property.js'
 
 /**
  * Rewrite node types this engine no longer emits but may still be handed.
@@ -80,7 +81,11 @@ export function adoptBlockFootnoteDefs(ast: Document): Document {
     if (label === undefined || !Array.isArray(def.children)) return false
     // An existing entry wins: the map is this engine's own representation, so a
     // tree carrying both is one it produced and then had nodes added to.
-    if (defs[label] === undefined) defs[label] = def.children
+    // OWN-PROPERTY READ AND WRITE: `defs['toString']` answers from
+    // `Object.prototype`, so a definition labelled after a prototype key looked
+    // like the existing entry that wins here and was dropped, and plain
+    // assignment to `__proto__` would not have stored it (carve-js#886).
+    if (ownValue(defs, label) === undefined) setOwn(defs, label, def.children)
 
     return false
   })

@@ -42,6 +42,7 @@ import {
   WIRE_REQUIRED,
   WIRE_VALUE_KINDS,
 } from './wire-fields.js'
+import { ownValue, setOwn } from './own-property.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -298,7 +299,7 @@ export function toAstJson(doc: Document): AstJsonDocument {
       label,
       children: definitionListsToWire(body),
     }
-    const pos = doc.footnoteDefPos?.[label]
+    const pos = ownValue(doc.footnoteDefPos, label)
     if (pos !== undefined) node.pos = pos
     children.push(node)
   }
@@ -598,9 +599,9 @@ function refuseSchemaViolations(node: unknown, path: string): void {
   if (node === null || typeof node !== 'object') return
   const record = node as Record<string, unknown>
   const type = record.type
-  const required = typeof type === 'string' ? WIRE_REQUIRED[type] : undefined
+  const required = typeof type === 'string' ? ownValue(WIRE_REQUIRED, type) : undefined
   if (required !== undefined) {
-    const aliases = LEGACY_ALIASES[type as string] ?? []
+    const aliases = ownValue(LEGACY_ALIASES, type as string) ?? []
     for (const field of required) {
       // A LEGACY alias satisfies the requirement it stands in for: the decoder
       // demonstrably reads those trees, and §9(a) forbids refusing a document
@@ -609,7 +610,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       if (aliases.some((alias) => alias in record)) continue
       throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
     }
-    const kinds = WIRE_VALUE_KINDS[type as string] ?? {}
+    const kinds = ownValue(WIRE_VALUE_KINDS, type as string) ?? {}
     for (const [field, kind] of Object.entries(kinds)) {
       if (!(field in record)) continue
       if (record[field] === undefined) continue
@@ -726,9 +727,9 @@ function refuseUnknownFields(node: unknown, path: string): void {
   // A node kind the schema does not name at all is NOT this error's business:
   // the decoder turns an unusable kind away on its own terms, and reporting a
   // field on a type nobody names would send the caller after the wrong thing.
-  const known = typeof type === 'string' ? WIRE_FIELDS[type] : undefined
+  const known = typeof type === 'string' ? ownValue(WIRE_FIELDS, type) : undefined
   if (known !== undefined) {
-    const allowed = new Set([...known, ...(LEGACY_ALIASES[type as string] ?? [])])
+    const allowed = new Set([...known, ...(ownValue(LEGACY_ALIASES, type as string) ?? [])])
     for (const key of Object.keys(record)) {
       if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
     }
@@ -840,7 +841,7 @@ function refuseUnknownNodeTypes(
     if (type !== undefined || typeRequired || !legacyShaped) {
       throw new AstJsonNodeTypeError(type, path)
     }
-  } else if (WIRE_FIELDS[type] === undefined) {
+  } else if (ownValue(WIRE_FIELDS, type) === undefined) {
     throw new AstJsonUnknownNodeTypeError(type, path)
   }
   // Only node-bearing fields, never every key: `attrs.keyValues` is a
@@ -1037,9 +1038,16 @@ export function fromAstJson(json: AstJsonDocument): Document {
       // without checking, so the failure would surface as a crash inside the
       // renderer for a document the decoder had already accepted.
       if (typeof label === 'string' && Array.isArray(node.children)) {
-        if (footnoteDefs[label] === undefined) {
-          footnoteDefs[label] = definitionListsFromWire(node.children)
-          if (node.pos !== undefined) footnoteDefPos[label] = node.pos
+        // OWN-PROPERTY READ AND WRITE. `footnoteDefs['toString']` answers
+        // from `Object.prototype` on a plain object, so a definition labelled
+        // after any prototype key read as already present and was dropped with
+        // no error - the silent repair strict ingest exists to stop - while
+        // `footnoteDefs['__proto__'] = body` would not have stored it anyway,
+        // because plain assignment there runs the prototype setter
+        // (markup-carve/carve-js#886).
+        if (ownValue(footnoteDefs, label) === undefined) {
+          setOwn(footnoteDefs, label, definitionListsFromWire(node.children))
+          if (node.pos !== undefined) setOwn(footnoteDefPos, label, node.pos)
         }
         continue
       }
@@ -1159,7 +1167,7 @@ function clearUnbackedFootnoteNumbers(
     if (cur === null || typeof cur !== 'object') continue
     const node = cur as { type?: string; id?: string; number?: number }
     if (node.type === 'footnote_ref' && node.number !== undefined) {
-      if (node.id === undefined || defs[node.id] === undefined) delete node.number
+      if (node.id === undefined || ownValue(defs, node.id) === undefined) delete node.number
     }
     for (const value of Object.values(cur)) {
       if (value !== null && typeof value === 'object') stack.push(value)

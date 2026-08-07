@@ -19,6 +19,7 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
+import { ownValue } from './own-property.js'
 
 export interface CarveRenderOptions {}
 
@@ -689,7 +690,7 @@ function definitionInGap(
   // is tracked by label - the same split the description write-back has.
   for (const [line, label] of footnoteDefsByLine) {
     if (line > from && line < to && !footnotesWrittenInPlace.has(label)) {
-      const blocks = documentFootnoteDefs?.[label]
+      const blocks = ownValue(documentFootnoteDefs, label)
       if (blocks === undefined) continue
       const written = renderOneFootnoteDef(label, blocks, ctx)
       footnotesWrittenInPlace.add(label)
@@ -844,7 +845,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           return
         }
         const label = line === undefined ? undefined : footnoteDefsByLine.get(line)
-        const blocks = label === undefined ? undefined : documentFootnoteDefs?.[label]
+        const blocks = label === undefined ? undefined : ownValue(documentFootnoteDefs, label)
         if (label !== undefined && blocks !== undefined) {
           const written = renderOneFootnoteDef(label, blocks, ctx)
           footnotesWrittenInPlace.add(label)
@@ -1080,7 +1081,7 @@ function renderDocumentBody(ast: Document, ctx: CarveContext): string {
     // Unless a definition list already wrote it where the author put it.
     if (footnotesWrittenInPlace.has(label)) continue
     definitions.push({
-      at: ast.footnoteDefPos?.[label]?.startOffset,
+      at: ownValue(ast.footnoteDefPos, label)?.startOffset,
       text: renderOneFootnoteDef(label, blocks, ctx),
     })
   }
