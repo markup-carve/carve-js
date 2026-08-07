@@ -84,8 +84,11 @@ describe('caption whitespace mirrors the heading delimiter', () => {
   })
 
   it('`^ ` with content only on a later line is not a caption', () => {
+    // The `^ ` line's trailing space is dropped, like any content line's
+    // (PART 2; carve#926). What this test is FOR - that the line is not a
+    // caption, so it folds into the paragraph - is unchanged.
     expect(h('![a](/u)\n^ \nmore')).toBe(
-      '<p><img src="/u" alt="a">\n^ \nmore</p>',
+      '<p><img src="/u" alt="a">\n^\nmore</p>',
     )
   })
 

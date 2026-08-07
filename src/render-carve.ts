@@ -1481,6 +1481,28 @@ function lineBlockLayoutWhitespace(body: string): string {
   return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => sentinels[0].repeat(run.length))
 }
 
+/**
+ * A written document never BEGINS with U+FEFF.
+ *
+ * A single leading byte-order mark is stripped before the first line is read -
+ * by this parser, by carve-php, by carve-rs and by the executable spec, all of
+ * them deliberately (carve#872), so that a BOM'd file's first heading is a
+ * heading. That strip is right, and it is also the one place where a character
+ * that is otherwise ORDINARY CONTENT cannot be written back as itself: a
+ * paragraph whose text is a bare U+FEFF was emitted as a bare U+FEFF, and the
+ * next parse ate it, leaving an empty document. `to_html(fmt(x)) == to_html(x)`
+ * went false (PART 11 section 1) for a document the HTML renderer renders
+ * perfectly well.
+ *
+ * A single leading SPACE is the guard, because it is exactly what the source
+ * that produced this tree had: the shape is `<SP>U+FEFF<SP>` in carve#926's
+ * corpus, and leading whitespace on a paragraph line is discarded, so the space
+ * costs nothing and the mark survives to be read as content.
+ */
+function guardLeadingBom(text: string): string {
+  return text.startsWith('\ufeff') ? ` ${text}` : text
+}
+
 function normalize(text: string): string {
   // The placeholder means the author wrote an ESCAPED SPACE, so the writer says
   // that again. Resolving it to a literal non-breaking space instead lost the
@@ -1510,7 +1532,8 @@ function normalize(text: string): string {
     return endsBlock ? trimEndNonNbsp(line) : line
   })
   const cleaned = trimNonNbspKeepingGuard(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
-  return `${restoreVerbatim(cleaned)}\n`
+
+  return `${guardLeadingBom(restoreVerbatim(cleaned))}\n`
 }
 
 /**
