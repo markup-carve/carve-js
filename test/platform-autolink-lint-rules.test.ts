@@ -136,6 +136,46 @@ describe('platform-autolink lint rules', () => {
     ])
   })
 
+  it('does not flag text that is never published', () => {
+    // Raised by codex review. Frontmatter is metadata the renderer omits from
+    // the body, and a link reference definition renders as the empty string -
+    // only the links resolving it are published, and their visible text is
+    // their label. Both were spurious failures on valid documents, which is the
+    // failure mode the ruling warns about most.
+    const doc = [
+      '---',
+      'author: @alice',
+      'issue: #12',
+      '---',
+      '',
+      '[ref]: /x "@alice wrote #7"',
+      '',
+      'body',
+      '',
+    ].join('\n')
+    expect(platformRules(lintCarve(doc, { platforms: ['github'] }))).toEqual([])
+    // CONTROL: the same tokens in the BODY do flag - and a line that only
+    // LOOKS like a definition (a trailing token makes it invalid, so it parses
+    // as a paragraph) is published prose and flags too.
+    expect(
+      platformRules(lintCarve('author: @alice, issue: #12\n', { platforms: ['github'] })),
+    ).toEqual(['platform-mention-token', 'platform-issue-reference'])
+    expect(
+      platformRules(lintCarve('[ref]: https://e.com/x #123\n', { platforms: ['github'] })),
+    ).toEqual(['platform-issue-reference'])
+  })
+
+  it('does not flag a URL fragment or an at-word inside a URL path', () => {
+    // A fragment is part of a URL the host linkifies AS a URL, not a separate
+    // issue reference, and the same goes for a path segment.
+    const doc = 'See [x](https://e.com/#99) and https://e.com/@team here.\n'
+    expect(platformRules(lintCarve(doc, { platforms: ['github'] }))).toEqual([])
+    // CONTROL: a hash-number after a SPACE is a reference again.
+    expect(platformRules(lintCarve('See https://e.com/ #99 here.\n', { platforms: ['github'] }))).toEqual(
+      ['platform-issue-reference'],
+    )
+  })
+
   it('does not flag an email address, a heading marker, or a non-numeric hash run', () => {
     const doc = 'Mail user@example.com about #release-1.0 and #a1.\n\n## 2 things\n'
     expect(platformRules(lintCarve(doc, { platforms: ['github'] }))).toEqual([])

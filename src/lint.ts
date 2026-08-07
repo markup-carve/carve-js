@@ -459,6 +459,7 @@ export function lintCarve(
     // some host surfaces linkify inside them.
     const skip = new Set(verbatimLines)
     for (const ln of collectCommentLines(doc)) skip.add(ln)
+    for (const ln of collectUnpublishedLines(source, doc)) skip.add(ln)
     collectPlatformAutolinks(source, opts.platforms, skip, out)
   }
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
@@ -1001,11 +1002,14 @@ const PLATFORM_RULES: Record<LintPlatform, { mention: RegExp; issue: RegExp }> =
     // Carve's own mention production uses (PART 9R §7). The name runs over
     // letters, digits, `_`, `-` and INTERIOR dots, so a scope prefix
     // (`@types/node`) flags its scope and `@release-1.0` flags whole.
-    mention: /(?<![\w@.-])@([A-Za-z0-9_][\w-]*(?:\.[A-Za-z0-9_][\w-]*)*)/g,
-    // A hash-number. NOT preceded by a word character or another `#`, so a
-    // heading marker (`## 2`) and an id-shaped `#a1` are out; the run is
-    // DIGITS ONLY, so `#release-1.0` is a tag rather than an issue reference.
-    issue: /(?<![\w#])#(\d+)(?![\w-])/g,
+    mention: /(?<![\w@.\-/])@([A-Za-z0-9_][\w-]*(?:\.[A-Za-z0-9_][\w-]*)*)/g,
+    // A hash-number. NOT preceded by a word character, another `#`, or a `/`,
+    // so a heading marker (`## 2`), an id-shaped `#a1` and a URL FRAGMENT
+    // (`https://e.com/#99`) are out; the run is DIGITS ONLY, so `#release-1.0`
+    // is a tag rather than an issue reference. A fragment is part of a URL the
+    // host linkifies AS a URL, not a separate issue reference - raised by
+    // codex review, and the `/` in the mention class above is the same case.
+    issue: /(?<![\w#/])#(\d+)(?![\w-])/g,
   },
 }
 
@@ -1095,6 +1099,48 @@ function collectPlatformAutolinks(
       }
     }
   }
+}
+
+/**
+ * Line numbers whose content never reaches published text.
+ *
+ * FRONTMATTER is metadata: the renderer omits it from the body, so an at-word
+ * in an `author:` field is not something a host can linkify. A LINK REFERENCE
+ * DEFINITION renders as the empty string; only the links that resolve it are
+ * published, and their visible text is their label, not the destination.
+ *
+ * Both were spurious `--platform` failures on valid documents, which is the
+ * failure mode the ruling warns about most: a rule people turn off wholesale.
+ * Raised by codex review.
+ */
+function collectUnpublishedLines(source: string, doc: Document): Set<number> {
+  const lines = new Set<number>()
+  walkDocument(doc, (node) => {
+    if (node.type !== 'link_reference_definition') return
+    const pos = (node as Positioned).pos
+    if (!pos) return
+    const end = (pos as { endLine?: number }).endLine ?? pos.startLine
+    for (let ln = pos.startLine; ln <= end; ln++) lines.add(ln)
+  })
+  // Frontmatter carries no node of its own, so it is read off the source: the
+  // opening delimiter is the document's first line, and the block runs to the
+  // matching one.
+  if (doc.frontmatter !== undefined) {
+    const src = source.split('\n')
+    if (src[0] !== undefined && /^(-{3,}|\+{3,})[ \t]*$/.test(src[0])) {
+      const closer = new RegExp('^' + src[0].trim() + '[ \t]*$')
+      for (let i = 1; i < src.length; i++) {
+        lines.add(i)
+        if (closer.test(src[i]!)) {
+          lines.add(i + 1)
+          break
+        }
+      }
+      lines.add(1)
+    }
+  }
+
+  return lines
 }
 
 /** Line numbers covered by a comment node, which a host never sees. */
