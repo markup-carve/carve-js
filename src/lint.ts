@@ -1141,10 +1141,36 @@ function collectListingCaptionLines(source: string, doc: Document): Set<number> 
  *
  * Only the `](...)` shape is masked, which is the destination and nothing else
  * - a parenthesis in PROSE is untouched, so `(#123)` in a sentence still flags.
- * Raised by codex review.
+ *
+ * WALKED, NOT MATCHED, because a destination may hold BALANCED parentheses:
+ * `[x](a(b)#123)` has the whole `a(b)#123` as its href, and a `[^)]*` pattern
+ * stopped at the first `)` and scanned the rest of the real destination as
+ * prose. A backslash escapes the next character, so it cannot close the run
+ * either. An UNBALANCED run is not a destination, so it is left alone. Raised
+ * by codex review, twice.
  */
 function maskInlineDestinations(line: string): string {
-  return line.replace(/\]\([^)\n]*\)/g, (m) => '](' + ' '.repeat(m.length - 3) + ')')
+  let out: string[] | null = null
+  for (let i = 0; i + 1 < line.length; i++) {
+    if (line[i] !== ']' || line[i + 1] !== '(') continue
+    let depth = 1
+    let j = i + 2
+    for (; j < line.length; j++) {
+      const c = line[j]!
+      if (c === '\\') {
+        j++
+        continue
+      }
+      if (c === '(') depth++
+      else if (c === ')' && --depth === 0) break
+    }
+    if (depth !== 0 || j >= line.length) continue
+    out ??= [...line]
+    for (let k = i + 2; k < j; k++) out[k] = ' '
+    i = j
+  }
+
+  return out ? out.join('') : line
 }
 
 /**

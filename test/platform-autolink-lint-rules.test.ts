@@ -200,6 +200,16 @@ describe('platform-autolink lint rules', () => {
     // visible text, so a host cannot re-linkify it.
     expect(platformRules(lintCarve('See [x](#123) here.\n', { platforms: ['github'] }))).toEqual([])
     expect(platformRules(lintCarve('See [y](@foo) here.\n', { platforms: ['github'] }))).toEqual([])
+    // A destination may hold BALANCED parentheses - the whole run is the href -
+    // so the mask is walked rather than matched to the first `)`.
+    expect(platformRules(lintCarve('See [x](a(b)#123) here.\n', { platforms: ['github'] }))).toEqual([])
+    expect(
+      platformRules(lintCarve('See [x](a\\(b\\)#123) here.\n', { platforms: ['github'] })),
+    ).toEqual([])
+    // CONTROL: an UNBALANCED run is not a destination, so it stays prose.
+    expect(platformRules(lintCarve('See [x](a(b #123 here.\n', { platforms: ['github'] }))).toEqual([
+      'platform-issue-reference',
+    ])
     // CONTROL: a parenthesis in PROSE is untouched, so this still flags.
     const doc = 'See (#123) here.\n'
     const [w] = lintCarve(doc, { platforms: ['github'] })
