@@ -43,6 +43,26 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An autolink body admits non-ASCII and excludes format and control
+  characters** (markup-carve/carve#844, measured in markup-carve/carve#860).
+  PART 3's `url_char` is `unicode_url_char - format_char - control_char`, and
+  this engine had the first half but neither subtraction: an invisible
+  character inside `<https://…>` or inside a bare URL was carried into the
+  `href`, so the host on the page and the host in the link came apart. A
+  General_Category Cf or Cc character now ends the body.
+
+  Ninety codepoints move, on both surfaces - the core angle autolink and the
+  bare-URL extension - where the report named five. The C1 block is the half
+  worth stating: U+0080-U+009F are non-ASCII and non-whitespace, so a rule
+  written as "non-ASCII and not a format character" keeps all thirty-two of
+  them.
+
+  `link_destination` is a DIFFERENT production and does not move: a format
+  character in an inline destination or a reference definition is still an
+  ordinary destination character. `scheme` stays ASCII, the nine ASCII
+  exclusions stay excluded, and an IDN host, an accented host, a non-ASCII path
+  and a non-ASCII non-letter all still autolink.
+
 - **A CLOSED or EMPTY container inside a block quote no longer swallows the
   flush-left line below it** (markup-carve/carve#920). PART 1 S4's NO OPEN
   PARAGRAPH, NO LAZY LINE is written about the OPEN STACK, not about which

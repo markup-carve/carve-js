@@ -672,14 +672,35 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
 const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
 
 // The AUTOLINK body's share of the same rule, as a character-class FRAGMENT to
-// be negated by its users. `url_char` has no zero-width clause of its own, so
-// the two halves are named separately: the White_Space property, which is what
-// ends any URL run, and U+FEFF, which stays out only because
-// markup-carve/carve#860 has not yet said whether a non-ASCII character may be
-// a `url_char` at all (see RE_AUTOLINK). Both spellings of the body -- the core
-// angle autolink here and the bare-URL matcher in `autolink.ts` -- share it, so
-// the parser and the extension cannot answer the question differently.
-export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\uFEFF'
+// be negated by its users. markup-carve/carve#844 settled `url_char` as
+// `unicode_url_char - format_char - control_char`, so the fragment names three
+// PROPERTIES: White_Space, which is what ends any URL run, General_Category Cf,
+// and General_Category Cc.
+//
+// EACH OF THE THREE IS LOAD-BEARING, and none subsumes another:
+//
+//  - Cf is what keeps a host from carrying an invisible character and linking
+//    somewhere other than what the page shows. It is a spoofing surface rather
+//    than an authoring convenience, and it covers U+FEFF, which used to be
+//    named here as a literal because carve#860 had not yet ruled.
+//  - Cc is the term the executable spec's own class test caught missing.
+//    `unicode_url_char` means "non-whitespace, non-ASCII", and the C1 block
+//    U+0080-U+009F satisfies exactly that: those are Cc, are not Cf, and only
+//    U+0085 is White_Space. A rule written as "non-ASCII and not Cf" therefore
+//    admits fourteen invisible control characters while excluding every C0 one.
+//    Cc also carries the C0 block and U+007F, which is where U+0001 goes out.
+//  - White_Space still carries U+0085 (Cc too, so doubly out), U+00A0 and
+//    U+3000, which are neither Cf nor Cc.
+//
+// `link_destination` is a DIFFERENT production and does NOT narrow: a format
+// character in an inline destination or a reference definition is an ordinary
+// destination character (see RE_DESTINATION_WHITESPACE, which keeps
+// White_Space alone). `scheme` does not move either and stays ASCII.
+//
+// Both spellings of the body -- the core angle autolink here and the bare-URL
+// matcher in `autolink.ts` -- share this fragment, so the parser and the
+// extension cannot answer the question differently.
+export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\p{Cf}\\p{Cc}'
 
 // The SAME production, and therefore the same test. `RE_LINK_DEF` matched the
 // destination with `(\S+)`, skipped the separator run with a class built on
@@ -6198,12 +6219,9 @@ const RE_SYMBOL = /^:([a-zA-Z0-9+-][\w+-]*):/
 // under the strict one -- so the row is fixable without waiting on
 // markup-carve/carve#860.
 //
-// U+FEFF STAYS EXCLUDED, which is where `\s` happened to leave it. That row is
-// NOT this ticket's: `url_char` enumerates ASCII, and whether it admits
-// non-ASCII at all is exactly what markup-carve/carve#860 is deciding -- the
-// same question that owns U+200B and U+180E, which this engine admits today.
-// The three should end up alike; naming U+FEFF here keeps today's answer for
-// all three until that ruling lands rather than picking a side in passing.
+// U+FEFF, U+200B and U+180E now go out TOGETHER, through General_Category Cf,
+// which is what markup-carve/carve#844 ruled and markup-carve/carve#860
+// measured. They were always the same question; only U+FEFF was answered.
 const RE_AUTOLINK = new RegExp(
   '^<([a-zA-Z][a-zA-Z0-9+.\\-]*:[^>' +
     AUTOLINK_BODY_EXCLUDED +
