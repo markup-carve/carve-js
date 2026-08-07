@@ -217,6 +217,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   target reproduces the authored `</#slug>` and never expanded, so it is
   unchanged.
 
+- **The Markdown writer probes the destination it will actually emit**
+  (carve-js#893). It normalizes a destination on the way out - it drops control
+  characters, and its consumer decodes character references - but it probed the
+  authored form, so the writer itself manufactured live URLs the denylist had
+  already dismissed. A destination holding U+007F or any C1 control came out as
+  `[t](javascript:alert1)`; `&#106;`, `&#x6A;`, `&colon;` and `&#58;` came out
+  verbatim and decoded to a live scheme one hop downstream. **Behavior change:**
+  a destination whose scheme is denied once control characters are stripped is
+  now blanked (the ANSI target of this engine, and carve-php, already did this),
+  and an ampersand that opens a character reference is emitted as `&amp;`, so a
+  consumer decodes it back to the authored bytes instead of into a scheme. An
+  ampersand that opens nothing, such as the `&` in a query string, is untouched.
+
 - **A boundary line inside an open fence no longer ends the container**
   (markup-carve/carve#983 corpus category 279, carve-js#884). A `+` continuation
   marker attaches ONE block, and a fenced block ends at its closer - so a blank
