@@ -305,7 +305,7 @@ const RE_ITEM_ATTR =
 function extractItemAttr(line: string): { stripped: string; attrs: Attrs | undefined } | null {
   const m = RE_ITEM_ATTR.exec(line)
   if (!m) return null
-  if (!isValidAttrPayload(m[3]!)) return null
+  if (!isValidInlineAttrPayload(m[3]!)) return null
   const attrs = parseAttrs(m[3]!)
   // The blessed empty block (`-{} text`) exists to STRIP the braces, not to
   // record anything: it declares no id, class or key. Recording an empty attrs
@@ -649,6 +649,13 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
       if (pad !== ' ' || before === undefined || before === ' ' || before === '\t') {
         return [line, null]
       }
+      // And the INTERIOR is space-only too (markup-carve/carve#906): this is an
+      // `inline_attributes` block, whose every whitespace slot the grammar
+      // spells `space`. Rejecting HERE rather than at `parseAttrs` keeps the
+      // braces on the line, so the definition is simply not recognized and the
+      // line falls through to a paragraph - dropping them at the parse step
+      // would delete the block from the output instead of showing it.
+      if (inlineAttrPayloadHasTab(end.slice(open))) return [line, null]
 
       return [end.slice(0, open - 1), end.slice(open)]
     }
@@ -4204,7 +4211,7 @@ function isBlockImageLine(line: string): boolean {
   // image -- it falls back to a paragraph (inline image + literal braces).
   return (
     m !== null &&
-    (m[5] === undefined || (isValidAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
+    (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
 }
 
@@ -5419,7 +5426,7 @@ function parseCellMarkers(src: string): {
     // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
     // attribute block, so the `{` stays ordinary content.
     const m = RE_INLINE_ATTR.exec(src)
-    if (m && isValidAttrPayload(m[1]!)) {
+    if (m && isValidInlineAttrPayload(m[1]!)) {
       const attrs = parseAttrs(m[1]!)
       if (!isEmptyAttrs(attrs)) {
         return { header: false, attrs, content: trimCellPadding(src.slice(m[0].length)) }
@@ -5514,7 +5521,7 @@ function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } {
   if (lastPipe < 0 || stripped[lastPipe + 1] !== '{') return { body: line }
   const after = stripped.slice(lastPipe + 1)
   const m = RE_INLINE_ATTR.exec(after)
-  if (m && m[0].length === after.length && isValidAttrPayload(m[1]!)) {
+  if (m && m[0].length === after.length && isValidInlineAttrPayload(m[1]!)) {
     const attrs = parseAttrs(m[1]!)
     if (!isEmptyAttrs(attrs)) return { attrs, body: stripped.slice(0, lastPipe + 1) }
   }
@@ -7051,7 +7058,7 @@ function scanInlineInner(
           if (ml[4]) {
             // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
             // empty-attr `{…}` is literal too -- neither is consumed.
-            if (!isValidAttrPayload(ml[4])) {
+            if (!isValidInlineAttrPayload(ml[4])) {
               len -= ml[4].length + 2
             } else {
               const a = parseAttrs(ml[4])
@@ -7075,7 +7082,7 @@ function scanInlineInner(
           let len = close + 1 + mref[0].length
           let attrs: Attrs | undefined
           if (mref[2]) {
-            if (!isValidAttrPayload(mref[2])) {
+            if (!isValidInlineAttrPayload(mref[2])) {
               len -= mref[2].length + 2
             } else {
               const a = parseAttrs(mref[2])
@@ -7154,7 +7161,7 @@ function scanInlineInner(
           if (ml[4]) {
             // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
             // empty-attr `{…}` is literal too -- neither is consumed.
-            if (!isValidAttrPayload(ml[4])) {
+            if (!isValidInlineAttrPayload(ml[4])) {
               len -= ml[4].length + 2
             } else {
               const a = parseAttrs(ml[4])
@@ -7176,7 +7183,7 @@ function scanInlineInner(
           if (mref[2]) {
             // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
             // empty-attr `{…}` is literal too -- neither is consumed.
-            if (!isValidAttrPayload(mref[2])) {
+            if (!isValidInlineAttrPayload(mref[2])) {
               len -= mref[2].length + 2
             } else {
               const a = parseAttrs(mref[2])
@@ -7225,7 +7232,7 @@ function scanInlineInner(
           rbraceSuf && rbraceSuf[i + close + 1] && !spanAttrProvablyInvalid(text, i + close + 1)
             ? RE_SPAN_TAIL.exec(rest.slice(close + 1))
             : null
-        if (ms && isValidAttrPayload(ms[1]!)) {
+        if (ms && isValidInlineAttrPayload(ms[1]!)) {
           flush()
           out.push({
             type: 'span',
@@ -7293,7 +7300,7 @@ function scanInlineInner(
         // A digit-first / invalid payload (`{#1a}`) is literal (§14), not an
         // attribute block -- leave it for normal text processing.
         const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
-        if (am && isValidAttrPayload(am[1]!)) {
+        if (am && isValidInlineAttrPayload(am[1]!)) {
           const attrs = parseAttrs(am[1]!)
           if (!isEmptyAttrs(attrs)) {
             // A real attribute block: consume it (so it is not
@@ -7370,7 +7377,7 @@ function scanInlineInner(
       // A digit-first / otherwise invalid payload (`{#1a}`, `{2=v}`) makes the
       // whole block literal (§14), same strict rule as block/span attrs — so
       // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
-      if (attr && out.length && isValidAttrPayload(attr[1]!)) {
+      if (attr && out.length && isValidInlineAttrPayload(attr[1]!)) {
         const prev = out[out.length - 1]!
         const parsed = parseAttrs(attr[1]!)
         // A `{...}` that yields no real attribute is literal text (PART 9
@@ -7954,6 +7961,47 @@ function isValidAttrPayload(inner: string): boolean {
     '',
   )
   return stripped === ''
+}
+
+/**
+ * The same question for an INLINE attribute block, which additionally requires
+ * every whitespace slot of its interior to be a SPACE (markup-carve/carve#906,
+ * markup-carve/carve-js#836).
+ *
+ * Five slots narrow, and they are five separate positions rather than one
+ * separator rule - the run after `{`, the run between two attributes, the run
+ * before `}`, the boundary after an UNQUOTED value, and the blessed empty
+ * block `{ }`. All five sit AFTER the first non-whitespace character of their
+ * line, which is where PART 7 already says a tab is not syntax. A tab at any
+ * of them makes the block unrecognized and its braces show.
+ *
+ * The BLOCK-ATTRIBUTE LINE does NOT narrow, and that distinction is the ruling
+ * rather than an omission: it is the one attribute block with a `continuation`,
+ * so the whitespace after its newline IS a leading indentation run, where a tab
+ * belongs. `isValidAttrPayload` above is therefore left alone and this wrapper
+ * is used everywhere except that one call site.
+ *
+ * Inside a QUOTED value a tab is CONTENT and does not narrow anything, so the
+ * quoted runs come out before the test. Testing the raw payload would reject
+ * `{k="a<TAB>b"}`, which is a valid block whose value contains a tab.
+ */
+function isValidInlineAttrPayload(inner: string): boolean {
+  return isValidAttrPayload(inner) && !inlineAttrPayloadHasTab(inner)
+}
+
+/**
+ * Whether an attribute payload puts a TAB where the inline block's grammar
+ * spells `space`. Split out from the predicate above because the DEFINITION's
+ * trailing attribute block reaches this rule through
+ * `splitTrailingAttrBlock` instead, and has no validity gate of its own to
+ * hang it on.
+ *
+ * The quoted runs come out first: inside a quoted value a tab is CONTENT.
+ * Leading/trailing braces do not matter here, so a caller may pass the payload
+ * with or without them.
+ */
+function inlineAttrPayloadHasTab(inner: string): boolean {
+  return inner.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '').includes('\t')
 }
 
 /** True when an attribute block parsed to no id, classes, or key=values. */
