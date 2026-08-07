@@ -173,9 +173,10 @@ other.
 They look in prose **and in inline code spans** - those are not reliably safe,
 since some host surfaces (a pull-request list, a commit log view) still linkify
 inside them. They do not look in fenced code blocks, which are reliably safe,
-nor in raw blocks or comments, nor in text that is never published: frontmatter
-and link reference definitions. A token inside a URL is part of that URL, so a
-fragment and a path segment are not flagged either. The suggested fix in each message is to move the
+nor in raw blocks or comments, nor in text that is never published: frontmatter,
+link reference definitions, and an inline link's destination. A token inside a
+URL is part of that URL, so a fragment and a path segment are not flagged
+either. A captioned listing's **caption** is published, so it is checked. The suggested fix in each message is to move the
 example into a fenced block, strip the sigil and rephrase, or rewrite an
 enumerated reference as "item 1" / "point 1".
 

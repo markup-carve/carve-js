@@ -176,6 +176,50 @@ describe('platform-autolink lint rules', () => {
     )
   })
 
+  it('flags a captioned listing\'s CAPTION, which is published', () => {
+    // Raised by codex review. A captioned code block carries no position of its
+    // own, so the whole wrapping figure is reported verbatim and the caption
+    // rides along inside that range - a false negative on published text.
+    const both = ['platform-mention-token', 'platform-issue-reference']
+    expect(platformRules(lintCarve('```\nq\n```\n^ Listing @alice #1\n', { platforms: ['github'] }))).toEqual(both)
+    expect(platformRules(lintCarve('^ Listing @alice #1\n```\nq\n```\n', { platforms: ['github'] }))).toEqual(both)
+    // CONTROLS: a caret line inside the fence BODY is verbatim content, and an
+    // uncaptioned listing is skipped whole.
+    expect(platformRules(lintCarve('```\n^ @alice #1\n```\n', { platforms: ['github'] }))).toEqual([])
+    expect(platformRules(lintCarve('```\n@alice #1\n```\n', { platforms: ['github'] }))).toEqual([])
+  })
+
+  it('does not flag a token in an inline link DESTINATION', () => {
+    // Raised by codex review. A destination renders as an href, never as
+    // visible text, so a host cannot re-linkify it.
+    expect(platformRules(lintCarve('See [x](#123) here.\n', { platforms: ['github'] }))).toEqual([])
+    expect(platformRules(lintCarve('See [y](@foo) here.\n', { platforms: ['github'] }))).toEqual([])
+    // CONTROL: a parenthesis in PROSE is untouched, so this still flags - and
+    // its column still indexes the real source, since the mask keeps the line
+    // length.
+    const doc = 'See (#123) here.\n'
+    const [w] = lintCarve(doc, { platforms: ['github'] })
+    expect(doc.slice(w!.start, w!.end)).toBe('#123')
+  })
+
+  it('skips TYPED frontmatter, not only the bare delimiter form', () => {
+    // Raised by codex review: the opener may carry a type word. The skip uses
+    // the span the parser REPORTS rather than re-deriving it, so it is exactly
+    // what the document has - a hand-matched opener missed the typed form.
+    for (const open of ['---', '--- yaml']) {
+      const doc = open + '\nauthor: @alice\nissue: #1\n---\n\nbody\n'
+      expect({ open, rules: platformRules(lintCarve(doc, { platforms: ['github'] })) }).toEqual({
+        open,
+        rules: [],
+      })
+    }
+    // CONTROL: a run that is NOT frontmatter (no closer, so the parser reports
+    // none) is ordinary published text and still flags.
+    expect(
+      platformRules(lintCarve('---\nauthor: @alice\n\nbody\n', { platforms: ['github'] })),
+    ).toEqual(['platform-mention-token'])
+  })
+
   it('does not flag an email address, a heading marker, or a non-numeric hash run', () => {
     const doc = 'Mail user@example.com about #release-1.0 and #a1.\n\n## 2 things\n'
     expect(platformRules(lintCarve(doc, { platforms: ['github'] }))).toEqual([])

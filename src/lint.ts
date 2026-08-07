@@ -459,7 +459,12 @@ export function lintCarve(
     // some host surfaces linkify inside them.
     const skip = new Set(verbatimLines)
     for (const ln of collectCommentLines(doc)) skip.add(ln)
-    for (const ln of collectUnpublishedLines(source, doc)) skip.add(ln)
+    for (const ln of collectUnpublishedLines(doc)) skip.add(ln)
+    // ...but a captioned listing's CAPTION is published. `collectVerbatimLines`
+    // marks the whole wrapping figure verbatim, because a captioned code block
+    // carries no position of its own, and the caption rides along inside that
+    // range. Raised by codex review.
+    for (const ln of collectListingCaptionLines(source, doc)) skip.delete(ln)
     collectPlatformAutolinks(source, opts.platforms, skip, out)
   }
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
@@ -1068,7 +1073,7 @@ function collectPlatformAutolinks(
     for (let i = 0; i < lines.length; i++) {
       const lineNo = i + 1
       if (skipLines.has(lineNo)) continue
-      const text = lines[i]!
+      const text = maskInlineDestinations(lines[i]!)
       for (const [re, rule, what, fix] of checks) {
         re.lastIndex = 0
         let m: RegExpExecArray | null
@@ -1102,6 +1107,47 @@ function collectPlatformAutolinks(
 }
 
 /**
+ * The caption lines of a figure wrapping a code or raw block.
+ *
+ * Only the figure's FIRST or LAST line qualifies, and only when it carries the
+ * caption marker. A `^ ` line inside the fence BODY is verbatim content and
+ * can be neither, because those two are the fence's own delimiters - so the
+ * body stays protected.
+ */
+function collectListingCaptionLines(source: string, doc: Document): Set<number> {
+  const captions = new Set<number>()
+  const lines = source.split('\n')
+  const isCaption = (ln: number): boolean => /^[ \t]*\^[ \t]/.test(lines[ln - 1] ?? '')
+  walkDocument(doc, (node) => {
+    if (node.type !== 'figure') return
+    const target = (node.target as { type?: string } | undefined)?.type
+    if (target !== 'code_block' && target !== 'raw_block') return
+    const pos = (node as Positioned).pos
+    if (!pos) return
+    const end = (pos as { endLine?: number }).endLine ?? pos.startLine
+    if (isCaption(pos.startLine)) captions.add(pos.startLine)
+    if (end !== pos.startLine && isCaption(end)) captions.add(end)
+  })
+  return captions
+}
+
+/**
+ * Blank out an inline link's or image's DESTINATION before matching.
+ *
+ * A destination renders as an `href`/`src`, never as visible text, so a host
+ * cannot re-linkify it: `[x](#123)` is an internal link, not an issue
+ * reference. Masking keeps the LINE LENGTH, so every offset and column the scan
+ * reports still indexes the real source.
+ *
+ * Only the `](...)` shape is masked, which is the destination and nothing else
+ * - a parenthesis in PROSE is untouched, so `(#123)` in a sentence still flags.
+ * Raised by codex review.
+ */
+function maskInlineDestinations(line: string): string {
+  return line.replace(/\]\([^)\n]*\)/g, (m) => '](' + ' '.repeat(m.length - 3) + ')')
+}
+
+/**
  * Line numbers whose content never reaches published text.
  *
  * FRONTMATTER is metadata: the renderer omits it from the body, so an at-word
@@ -1113,7 +1159,7 @@ function collectPlatformAutolinks(
  * failure mode the ruling warns about most: a rule people turn off wholesale.
  * Raised by codex review.
  */
-function collectUnpublishedLines(source: string, doc: Document): Set<number> {
+function collectUnpublishedLines(doc: Document): Set<number> {
   const lines = new Set<number>()
   walkDocument(doc, (node) => {
     if (node.type !== 'link_reference_definition') return
@@ -1122,22 +1168,14 @@ function collectUnpublishedLines(source: string, doc: Document): Set<number> {
     const end = (pos as { endLine?: number }).endLine ?? pos.startLine
     for (let ln = pos.startLine; ln <= end; ln++) lines.add(ln)
   })
-  // Frontmatter carries no node of its own, so it is read off the source: the
-  // opening delimiter is the document's first line, and the block runs to the
-  // matching one.
-  if (doc.frontmatter !== undefined) {
-    const src = source.split('\n')
-    if (src[0] !== undefined && /^(-{3,}|\+{3,})[ \t]*$/.test(src[0])) {
-      const closer = new RegExp('^' + src[0].trim() + '[ \t]*$')
-      for (let i = 1; i < src.length; i++) {
-        lines.add(i)
-        if (closer.test(src[i]!)) {
-          lines.add(i + 1)
-          break
-        }
-      }
-      lines.add(1)
-    }
+  // Frontmatter carries no node in `children`, but it DOES report a span - so
+  // the span is used rather than re-derived from the source. Re-deriving it
+  // meant matching the opener by hand, and a TYPED opener (`--- yaml`) did not
+  // match, leaving every typed block scanned. Raised by codex review.
+  const fmPos = doc.frontmatter?.pos
+  if (fmPos) {
+    const end = fmPos.endLine ?? fmPos.startLine
+    for (let ln = fmPos.startLine; ln <= end; ln++) lines.add(ln)
   }
 
   return lines
