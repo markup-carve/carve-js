@@ -64,10 +64,24 @@ describe('definition marker separator is a literal space, not a tab (#288)', () 
       )
     })
 
-    it('a space-then-tab separator forms a definition with the body trimmed', () => {
+    it('a space-then-tab separator forms a definition, and the tab is CONTENT', () => {
+      // The body was trimmed here until carve#892. The separator is `space+`, a
+      // run of ASCII spaces, so the tab ENDS it and BEGINS the expansion - and
+      // an `abbreviation_expansion` is a raw string, so the character survives
+      // into the title.
       expect(html('*[HTML]: \tHyper\n\nThe HTML')).toBe(
-        '<p>The <abbr title="Hyper">HTML</abbr></p>',
+        '<p>The <abbr title="\tHyper">HTML</abbr></p>',
       )
+    })
+
+    it('answers the same separator differently for a FOOTNOTE, downstream of it', () => {
+      // Same rule, same run, different answer - and not an exception to it. A
+      // footnote's content is parsed as BLOCKS, so a leading tab is that body's
+      // own indentation run (PART 9 section 24 C1) and is consumed there. The
+      // pair is worth asserting together: it is the shape that makes "the
+      // separator differs between the two markers" a tempting and wrong reading.
+      expect(html('x[^f]\n\n[^f]: \tnote')).toContain('<p>note<a href="#fnref1"')
+      expect(html('x[^f]\n\n[^f]: \u00a0note')).toContain('<p>&nbsp;note<a href="#fnref1"')
     })
   })
 })

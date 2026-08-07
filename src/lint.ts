@@ -452,8 +452,17 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // fence is column-exact, so an indented delimiter the parser did not fold into
 // a verbatim region is a silent degradation.
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
-/** A footnote definition line. Mirrors parse.ts. */
-const FOOTNOTE_DEF = /^\[\^([^\]]+)\]:\s+(.+)$/
+/**
+ * A footnote definition line. Mirrors parse.ts.
+ *
+ * It did not. `\s+` accepts a TAB as the separator, and the parser has always
+ * required a literal space there - `[^f]:<TAB>note` is a paragraph, not a
+ * definition - so this mirror was wider than what it claimed to mirror before
+ * carve#892 was written. The separator is `\"]:\", space+`: one mandatory ASCII
+ * space, then a run of them, and the first character that is not one begins
+ * the content.
+ */
+const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
 
 /**
  * The set of 1-based source line numbers that fall inside a verbatim region

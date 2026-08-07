@@ -38,9 +38,16 @@ describe('an abbreviation expansion', () => {
     expect(carveToHtml('*[HTML]:   Hyper\n\nHTML\n')).toContain('title="Hyper"')
   })
 
-  it('still skips a whitespace character that `\\s` does not hold', () => {
-    // U+0085 IS White_Space and is NOT in JavaScript's `\s`, so it is the
-    // other direction of the same swap.
-    expect(carveToHtml('*[HTML]: \u0085Hyper\n\nHTML\n')).toContain('title="Hyper"')
+  it('keeps a whitespace character that is not an ASCII space', () => {
+    // U+0085 IS White_Space and is NOT in JavaScript's `\s`, and this file was
+    // written when the separator consumed a Unicode run, so the character was
+    // skipped from one side of that swap or the other depending on which class
+    // the code used. carve#892 removes the question: the separator is a run of
+    // ASCII SPACES, so the first character that is not one begins the content,
+    // whatever properties it has. The zero-width assertions above stop being a
+    // special case and become instances of this.
+    expect(carveToHtml('*[HTML]: \u0085Hyper\n\nHTML\n')).toContain('title="\u0085Hyper"')
+    expect(carveToHtml('*[HTML]: \u00a0Hyper\n\nHTML\n')).toContain('title="\u00a0Hyper"')
+    expect(carveToHtml('*[HTML]: \u3000Hyper\n\nHTML\n')).toContain('title="\u3000Hyper"')
   })
 })
