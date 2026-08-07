@@ -723,6 +723,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The `Link` type no longer declares `fromCrossref`.** Nothing has set or read
+  it since a crossref became its own `heading_ref` node carrying `resolvedText`
+  (markup-carve/carve-js#608), which left the declaration as the only mention of
+  the name in the whole repository. No runtime behavior changes: no node ever
+  carried the property, so no output, no AST JSON payload and no consumer that
+  reads values is affected. A TypeScript consumer that still names
+  `link.fromCrossref` will now see a type error, and the answer is that the
+  property was never populated - read the `heading_ref` node instead. The sibling
+  defect in the Rust engine, where the same name was live on the wire and refused
+  by that engine's own ingest, is markup-carve/carve-rs#776.
+
 - **BREAKING: a renderer REFUSES at the render ceiling instead of truncating**
   (§25, markup-carve/carve#548). `renderHtml`, `renderMarkdown`, `renderCarve`,
   `renderPlainText` and `renderAnsi` now throw `RenderDepthError` - exported
