@@ -95,6 +95,32 @@ describe('a fence opened on a list marker line', () => {
     )
   })
 
+  it('opens UNCONDITIONALLY where no paragraph is open, as it does in a quote', () => {
+    // The other half of §10's lookahead: it conditions a fence on a closer only
+    // when a paragraph is already OPEN. After a thematic break or a closed
+    // fence there is none, so the next fence opens whether or not it closes -
+    // and the below-column line ends the item. Both shapes DIVERGED from the
+    // quote before this change: the item folded `tail` into the code text.
+    expect(carveToHtml('- a\n  ---\n  ```\n  x\ntail\n')).toBe(
+      '<ul>\n  <li>a\n    <hr>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>',
+    )
+    expect(carveToHtml('- a\n  ```\n  b\n  ```\n  ~~~\n  x\ntail\n')).toBe(
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>',
+    )
+  })
+
+  it('CONTROL the line directly under an unterminated mid-item fence still folds', () => {
+    // With no line collected in between, so an implementation that closed the
+    // paragraph at the opener and reopened it on the next ordinary line cannot
+    // pass by accident. The quote answers identically.
+    expect(carveToHtml('- q\n  ```\ntail\n')).toBe(
+      '<ul>\n  <li>q\n<code>\ntail</code></li>\n</ul>',
+    )
+    expect(carveToHtml('> q\n> ```\ntail\n')).toBe(
+      '<blockquote><p>q\n<code>\ntail</code></p></blockquote>',
+    )
+  })
+
   it('answers the same in a list item as in a block quote, across every fence shape', () => {
     // The parity the ticket is about: S4 is written about the OPEN STACK, not
     // about which container kind is on it.
