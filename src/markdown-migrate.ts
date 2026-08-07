@@ -1186,8 +1186,16 @@ function escapePlainCarveInlineSyntax(line: string): string {
  * thematic break followed by ordinary lines. Left at `[ \t]` this would have
  * migrated body content AS frontmatter for a document the parser does not read
  * as having any.
+ *
+ * It moved again for the CARDINALITY half (carve#912): the slot is `[space]`,
+ * exactly one, so ` *` here would have migrated `---<SP><SP>yaml` as
+ * frontmatter for a document the parser now reads as a paragraph - the same
+ * leak the tab paragraph above describes, one narrowing later. Nothing failed
+ * when the parser moved: this pair is a SECOND SPELLING of the production, and
+ * the mirror test that guards it carried a space case and a tab case and no
+ * run case at all.
  */
-const RE_MD_FRONTMATTER_OPEN = /^--- *(\w*)\s*$/
+const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)\s*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
 
 function htmlBlockAt(lines: readonly string[], start: number): { lines: string[]; end: number } | null {

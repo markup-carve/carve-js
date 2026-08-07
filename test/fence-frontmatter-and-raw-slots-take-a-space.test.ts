@@ -76,8 +76,36 @@ describe("the code fence's slot before the info string takes a space", () => {
     })
   }
 
-  it('still opens on a run of two spaces (cardinality is a separate question)', () => {
-    expect(carveToHtml(`${F}  js\nx\n${F}\n`)).toContain('class="language-js"')
+  // CARDINALITY, settled by carve#912. This asserted the opposite - that a run
+  // of two spaces still opened the fence - on the stated ground that `space`
+  // versus `space+` was a separate question from the terminal. It was, and it
+  // has now been answered: the production spells a bare `space`, so the slot is
+  // one character and the second one reaches `language_info`, which has no
+  // space in its class. The opener matches no shape and the INVALID-FENCE
+  // FALLBACK applies.
+  it('does not open a code block on a run of two spaces', () => {
+    const html = carveToHtml(`${F}  js\nx\n${F}\n`)
+
+    expect(html).not.toContain('class="language-js"')
+    expect(html).not.toContain('<pre>')
+    // The fallback, named: an inline verbatim span in a paragraph, with the
+    // author's text still visible rather than dropped.
+    expect(html).toContain('<code>')
+    expect(html).toContain('js')
+  })
+
+  // The CONTROL the narrowing must not move: one space still opens the fence.
+  // Six documents rejected and a control that moved with them would be a rule
+  // that rejects everything.
+  it('still opens on exactly one space', () => {
+    expect(carveToHtml(`${F} js\nx\n${F}\n`)).toContain('class="language-js"')
+  })
+
+  // The two metadata slots INSIDE `code_fence_info` are spelled `space+` and
+  // keep their run - cardinality is per-production, not global.
+  it('keeps a run at the header and label slots, which are spelled space+', () => {
+    expect(carveToHtml(`${F}js  "T"\nx\n${F}\n`)).toContain('title="T"')
+    expect(carveToHtml(`${F}js  [L]\nx\n${F}\n`)).toContain('class="language-js"')
   })
 })
 
@@ -144,8 +172,18 @@ describe("the frontmatter opener's format slot takes a space", () => {
     })
   }
 
-  it('still opens frontmatter across a run of two spaces', () => {
-    expect(wasFrontmatter(carveToHtml(`---  yaml\n${body}`))).toBe(true)
+  // CARDINALITY, settled by carve#912; this asserted the opposite.
+  it('does not open frontmatter on a run of two spaces', () => {
+    const html = carveToHtml(`---  yaml\n${body}`)
+
+    expect(wasFrontmatter(html)).toBe(false)
+    // Not swallowed: the metadata stays visible as ordinary content, which is
+    // the failure mode PART 7 names for a slot that does not match.
+    expect(html).toContain('a: 1')
+  })
+
+  it('still opens frontmatter on exactly one space', () => {
+    expect(wasFrontmatter(carveToHtml(`--- yaml\n${body}`))).toBe(true)
   })
 })
 
@@ -166,8 +204,23 @@ describe("the raw block's format slot takes a space", () => {
     })
   }
 
-  it('still opens a raw block across a run of two spaces', () => {
-    expect(carveToHtml(`${F}  =html\n${body}`).trim()).toBe('<b>x</b>')
+  // CARDINALITY, settled by carve#912; this asserted the opposite.
+  //
+  // `raw_block` is not one of the four productions the ruling names - it is
+  // `code_fence_open`'s slot again, and this engine spells that slot TWICE
+  // (RE_FENCE and RE_RAW_FENCE) where the executable spec spells it once and
+  // reads the `=` off the parsed info string. Narrowing only the spelling the
+  // ticket named would have left this one opening a raw block against an
+  // oracle that reads the line as a paragraph.
+  it('does not open a raw block on a run of two spaces', () => {
+    const html = carveToHtml(`${F}  =html\n${body}`)
+
+    expect(html.trim()).not.toBe('<b>x</b>')
+    expect(html).toContain('&lt;b&gt;')
+  })
+
+  it('still opens a raw block on exactly one space', () => {
+    expect(carveToHtml(`${F} =html\n${body}`).trim()).toBe('<b>x</b>')
   })
 })
 
@@ -184,6 +237,18 @@ describe('markdownToCarve mirrors the parser on the frontmatter format slot', ()
     const carve = markdownToCarve(`--- yaml\n${body}`)
     expect(carve).toContain('a: 1\n---')
     expect(carveToHtml(carve).trim()).toBe('<p>x</p>')
+  })
+
+  it('sends a two-space opener through the body converter too', () => {
+    // The case the mirror was missing. `RE_MD_FRONTMATTER_OPEN` is a SECOND
+    // spelling of `frontmatter_open`, and narrowing the parser's spelling left
+    // this one accepting a run with nothing failing - the migrator would have
+    // handed `---<SP><SP>yaml` through as opaque metadata for a document the
+    // parser reads as a paragraph.
+    const carve = markdownToCarve(`---  yaml\n${body}`)
+
+    expect(carve).toContain('## a: 1')
+    expect(carve).not.toContain('a: 1\n---')
   })
 
   it('sends a tab-separated opener through the body converter instead', () => {
