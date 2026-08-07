@@ -43,6 +43,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An unterminated comment fence inside a block quote no longer opens a block**
+  (carve-js#832). PART 9 §28 says a `%%%` opener with no matching closer ahead
+  does not open a block - it degrades to a line comment, so every following block
+  still renders. The block parser has always looked ahead; the block quote's
+  lazy-state tracker could not, because it runs while the quote's lines are being
+  collected. So an unterminated fence in a quote swallowed the quote's paragraph
+  and a lazy line that should have continued it became a sibling paragraph
+  instead. A terminated fence still opens a block, and the closer still has to
+  match the opener's width exactly.
+
 - **Trailing whitespace is dropped on every content line, not only a block's
   last** (markup-carve/carve#926). A space or tab run at the end of a content
   line does not reach the output and is not content, so `abc<SP>` followed by
