@@ -35,6 +35,7 @@ import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
+import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
@@ -588,7 +589,7 @@ function renderFootnoteSectionInner(
     const number = idx + 1
     const body = entry.inline
       ? [`${indent(3)}<p>${renderInlines(entry.inline, opts)}</p>`]
-      : (defs[entry.label!] ?? []).map((b) => renderBlock(b, opts, 3))
+      : (ownValue(defs, entry.label!) ?? []).map((b) => renderBlock(b, opts, 3))
     // A note referenced once gets a plain `↩`; a note referenced N>1 times gets
     // one numbered backlink per reference (`↩<sup>k</sup>`, space-separated) so
     // each return arrow is distinct (matches carve-php + pandoc).
@@ -899,12 +900,12 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
   if (node.type !== 'heading' && opts.extensions?.length) {
     const ctx = blockCtx(opts, level)
     for (const e of opts.extensions) {
-      const staticFn = isStatic ? e.staticBlockRenderers?.[node.type] : undefined
+      const staticFn = isStatic ? ownValue(e.staticBlockRenderers, node.type) : undefined
       if (staticFn) {
         const out = staticFn(node, ctx)
         if (out !== undefined) return opts.sourceLine ? withSourceLine(out, node.pos?.startLine) : out
       }
-      const fn = e.blockRenderers?.[node.type]
+      const fn = ownValue(e.blockRenderers, node.type)
       if (fn) {
         const out = fn(node, ctx)
         if (out !== undefined) return opts.sourceLine ? withSourceLine(out, node.pos?.startLine) : out
@@ -1539,19 +1540,19 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       if (opts.extensions?.length) {
         const ctx = inlineCtx(opts)
         for (const e of opts.extensions) {
-          const staticFn = isStatic ? e.staticInlineRenderers?.[node.type] : undefined
+          const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
           if (staticFn) {
             const out = staticFn(node, ctx)
             if (out !== undefined) { body = out; break }
           }
-          const fn = e.inlineRenderers?.[node.type]
+          const fn = ownValue(e.inlineRenderers, node.type)
           if (fn) {
             const out = fn(node, ctx)
             if (out !== undefined) { body = out; break }
           }
         }
       }
-      if (body === undefined) body = opts.symbols?.[node.name] ?? escapeHtml(`:${node.name}:`)
+      if (body === undefined) body = ownValue(opts.symbols, node.name) ?? escapeHtml(`:${node.name}:`)
       return node.attrs ? `<span${renderAttrs(node.attrs)}>${body}</span>` : body
     }
     case 'autolink': {
@@ -1604,12 +1605,12 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       if (opts.extensions?.length) {
         const ctx = inlineCtx(opts)
         for (const e of opts.extensions) {
-          const staticFn = isStatic ? e.staticInlineRenderers?.[node.type] : undefined
+          const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
           if (staticFn) {
             const out = staticFn(node, ctx)
             if (out !== undefined) return out
           }
-          const fn = e.renderers?.[node.name]
+          const fn = ownValue(e.renderers, node.name)
           if (fn) {
             const out = fn(node, ctx)
             if (out !== undefined) return out
@@ -1678,12 +1679,12 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       if (opts.extensions?.length) {
         const ctx = inlineCtx(opts)
         for (const e of opts.extensions) {
-          const staticFn = isStatic ? e.staticInlineRenderers?.[node.type] : undefined
+          const staticFn = isStatic ? ownValue(e.staticInlineRenderers, node.type) : undefined
           if (staticFn) {
             const out = staticFn(node, ctx)
             if (out !== undefined) return out
           }
-          const fn = e.inlineRenderers?.[node.type]
+          const fn = ownValue(e.inlineRenderers, node.type)
           if (fn) {
             const out = fn(node, ctx)
             if (out !== undefined) return out

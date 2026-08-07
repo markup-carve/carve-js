@@ -166,6 +166,45 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A label, node type or role that names a key on `Object.prototype` no longer
+  reaches a table it was never in** (carve-js#886). `[^__proto__]` - twelve
+  bytes, the default `carveToHtml` path, no options - threw an uncaught
+  `TypeError` on all four targets, and so did `[^constructor]`, `[^toString]`,
+  `[^valueOf]`, `[^hasOwnProperty]` and every other inherited key. A caller
+  without a try/catch returned a 500 or dropped the worker.
+
+  The footnote definition map is a plain object indexed by the label the
+  document supplies, so `defs['__proto__']` answered `Object.prototype`: truthy,
+  so the "is there a definition" guard passed, and not iterable, so the walk
+  over the supposed body threw.
+
+  The same read appears wherever a table is keyed by author text, so the fix is
+  the class rather than the one construct. Also corrected:
+
+  - `carve lint` dropped its `unresolved-footnote` diagnostic for such a label -
+    `[^nosuch]` reported it, `[^toString]` reported nothing.
+  - An AST-JSON payload whose node `type` named a prototype key threw a bare
+    `TypeError` instead of `AstJsonUnknownNodeTypeError`, and skipped the
+    closed-field check on the way there.
+  - An AST-JSON footnote definition labelled after a prototype key was judged a
+    duplicate and silently discarded, so a legal tree lost a definition with no
+    error.
+  - With any extension carrying a `renderers` record loaded, `:__proto__[x]`,
+    `:valueOf[x]` and `:hasOwnProperty[x]` threw, while `:constructor[x]`
+    rendered `[object Object]` and `:toString[x]` rendered `[object Undefined]`.
+  - Under the `symbols` option, `:constructor:` emitted
+    `function Object() { [native code] }` **raw**, because symbol bodies are
+    trusted-raw by design.
+  - The SVG sanitizer expanded `&constructor;` to a function's source text
+    inside the string its URL and reference checks read. A reference-valued
+    attribute is checked per `;`-separated segment, and the fabricated text
+    carries no `;`, so it welded the segments together and an external URL rode
+    through: `fill="red&constructor;https://evil.example/y"` was kept where
+    `fill="red;https://evil.example/y"` was blanked.
+
+  A definition, symbol or role the author or the caller genuinely wrote under
+  one of these names still resolves; only the inherited hit is gone.
+
 - **An ordinary bullet list parses in linear time again** (carve-js#885). A flat
   16,000-item list - 64 KB, no unusual syntax - took roughly 18 seconds where
   0.1.2 took 82 milliseconds, and doubling the input quadrupled the time. It was

@@ -15,6 +15,7 @@
  */
 
 import type { AnyNode, Attrs, Document } from './ast.js'
+import { ownValue } from './own-property.js'
 
 /** Action taken on a disallowed node. */
 export type DisallowedAction = 'strip' | 'to_text' | 'error'
@@ -139,7 +140,7 @@ const SUPERTYPE: Record<string, string> = {
 
 /** The type itself, plus its supertype when it has one. */
 function withSupertype(type: string): string[] {
-  const parent = SUPERTYPE[type]
+  const parent = ownValue(SUPERTYPE, type)
   return parent === undefined ? [type] : [type, parent]
 }
 

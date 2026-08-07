@@ -25,6 +25,7 @@
 
 import type { BlockNode, Document, FootnoteRef, InlineFootnote, InlineNode } from './ast.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { ownValue } from './own-property.js'
 
 /** A footnote instance in document order; index + 1 = its assigned number. */
 export interface FootnoteOrderEntry {
@@ -143,7 +144,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       return
     }
     // Reference footnote (`[^label]`): numbered at first resolved reference.
-    if (!n.id || !defs[n.id]) {
+    if (!n.id || ownValue(defs, n.id) === undefined) {
       // DELETE rather than skip. Re-running this pass is a no-op only while
       // `defs` is unchanged; the profile filter can take a definition away
       // AFTER the document was numbered, and a skip would leave the number of
@@ -154,7 +155,7 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
     let idx = labelIndexes.get(n.id)
     if (idx === undefined) {
       const entry: FootnoteOrderEntry = { label: n.id }
-      const sourceLine = defs[n.id]?.[0]?.pos?.startLine
+      const sourceLine = ownValue(defs, n.id)?.[0]?.pos?.startLine
       if (sourceLine !== undefined) entry.sourceLine = sourceLine
       order.push(entry)
       idx = order.length - 1
@@ -171,7 +172,8 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
   for (let k = 0; k < order.length; k++) {
     const label = order[k]!.label
     if (label === undefined) continue
-    for (const b of defs[label] ?? []) walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
+    for (const b of ownValue(defs, label) ?? [])
+      walkBlockInlines(b, (xs) => visitInlineTree(xs, onNode))
   }
   return { order, refs }
 }

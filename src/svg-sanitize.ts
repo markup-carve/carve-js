@@ -14,6 +14,8 @@
  * is safe to inline into the DOM or to encode into a `data:image/svg+xml` URI.
  */
 
+import { ownValue } from './own-property.js'
+
 /** Options gate the small set of constructs that are safe only in some
  *  contexts. All default OFF. */
 export interface SanitizeSvgOptions {
@@ -127,7 +129,7 @@ function decodeEntities(value: string): string {
       const cp = body[1]?.toLowerCase() === 'x' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10)
       return Number.isFinite(cp) && cp >= 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m
     }
-    const named = NAMED_REFS[body.toLowerCase()]
+    const named = ownValue(NAMED_REFS, body.toLowerCase())
     return named ?? m
   })
 }

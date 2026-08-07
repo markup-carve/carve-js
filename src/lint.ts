@@ -37,6 +37,7 @@ import {
 } from './heading-ids.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
+import { hasOwnKey } from './own-property.js'
 import type { BlockNode, Document, Heading } from './ast.js'
 
 export interface LintWarning {
@@ -451,7 +452,7 @@ export function lintCarve(
   const referencedFootnotes = new Set<string>()
   for (const { id, node } of footnoteRefs) {
     referencedFootnotes.add(id)
-    if (footnoteDefs[id]) continue
+    if (hasOwnKey(footnoteDefs, id)) continue
     out.push({
       ...locate(node, toUtf16),
       rule: 'unresolved-footnote',
@@ -1260,7 +1261,7 @@ function collectUnpublishedLines(
     const m = FOOTNOTE_DEF.exec(line)
     if (!m) return
     const label = m[1]!.trim()
-    if (label in defs && !referencedFootnotes.has(label)) lines.add(i + 1)
+    if (hasOwnKey(defs, label) && !referencedFootnotes.has(label)) lines.add(i + 1)
   })
   // Frontmatter carries no node in `children`, but it DOES report a span - so
   // the span is used rather than re-derived from the source. Re-deriving it
