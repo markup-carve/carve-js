@@ -651,25 +651,69 @@ function markdownFragmentDestination(id: string): string {
   return `<#${id.replace(/[\\<>]/g, (ch) => `\\${ch}`)}>`
 }
 
+/**
+ * Encode a destination for the Markdown output, refusing a denied scheme.
+ *
+ * The order is the whole point. This writer NORMALIZES the destination before
+ * it emits it - it drops control characters, and its consumer decodes character
+ * references - so the probe has to run on the normalized form. Probing the
+ * authored form and normalizing afterwards means the writer itself
+ * manufactures the live URL out of one the probe had already dismissed
+ * (markup-carve/carve-js#893).
+ */
 function markdownDestination(url: string): string {
-  return stripControls(
-    sanitizeMdUrl(url).replace(/[ ()<>]/g, (ch) => {
-      switch (ch) {
-        case ' ':
-          return '%20'
-        case '(':
-          return '%28'
-        case ')':
-          return '%29'
-        case '<':
-          return '%3C'
-        case '>':
-          return '%3E'
-        default:
-          return ch
-      }
-    }),
-  )
+  // 1. Strip first, probe second. The strip drops all of `\p{Cc}`, the probe
+  //    skips only up to U+001F plus whitespace, so `java<DEL>script:` and the
+  //    C1 range walked straight through and came out clean on the far side.
+  //    The ANSI target of this same engine already strips before it probes
+  //    (`render-ansi.ts`), and carve-php strips inside its probe.
+  const encoded = sanitizeMdUrl(stripControls(url)).replace(/[ ()<>]/g, (ch) => {
+    switch (ch) {
+      case ' ':
+        return '%20'
+      case '(':
+        return '%28'
+      case ')':
+        return '%29'
+      case '<':
+        return '%3C'
+      case '>':
+        return '%3E'
+      default:
+        return ch
+    }
+  })
+
+  // 2. Neutralize character references, so the bytes the consumer resolves are
+  //    the bytes probed in step 1.
+  return neutralizeCharRefs(encoded)
+}
+
+/**
+ * Escape every ampersand that OPENS an HTML character reference.
+ *
+ * A CommonMark consumer decodes character references inside a link
+ * destination, so `&#106;avascript:alert1` reaches the browser as
+ * `javascript:alert1` - a scheme the probe never saw, because the probe reads
+ * the authored bytes. `&#x6A;` and `javascript&colon;alert1` are the same trick
+ * (the second hides the colon, so there is no scheme to find at all).
+ *
+ * Escaping the ampersand rather than percent-encoding it is what keeps this
+ * honest: percent-encoding `&` would corrupt every legitimate query string,
+ * while `&amp;` decodes back to `&` in the consumer, so the URL it resolves is
+ * byte-for-byte the one probed here. It also stops the consumer from silently
+ * rewriting an authored `&#106;` into `j`. An ampersand that opens nothing
+ * (`?a=1&b=2`) is left exactly as authored.
+ *
+ * The three forms a consumer decodes are `&#DIGITS;`, `&#xHEXDIGITS;` and
+ * `&NAME;`. An unknown NAME counts too - a consumer leaves it alone either way,
+ * so escaping it changes nothing a reader sees, and guessing which names are
+ * known would be a second denylist to keep in step with three engines.
+ */
+const CHAR_REF_OPENER_RE = /&(?=#[0-9]{1,8};|#[xX][0-9a-fA-F]{1,8};|[a-zA-Z][a-zA-Z0-9]{0,31};)/g
+
+function neutralizeCharRefs(url: string): string {
+  return url.replace(CHAR_REF_OPENER_RE, '&amp;')
 }
 
 function fragmentId(href: string): string | undefined {
