@@ -34,6 +34,28 @@ describe('an invalid attribute block is not attributes', () => {
     }
   })
 
+  it('a PARTLY valid block is prose, which emptiness alone cannot say', () => {
+    // The row that separates the two halves of the gate. `{.c !!!}` parses to a
+    // non-empty Attrs (class `c`), so an emptiness test alone accepts it and the
+    // line defines with `!!!` silently dropped - the exact failure this clause
+    // removes, one character further along. Only the VALIDITY test sees the
+    // leftover.
+    expect(carveToHtml('[a]: /u {.c !!!}\n\n[a][]\n')).toBe(
+      '<p>[a]: /u {.c !!!}</p>\n<p>[a][]</p>',
+    )
+    // A digit-first name is the same case: `#1a` is not an identifier, so the
+    // block is invalid, but `parseAttrs` still finds the bareword `a` in it.
+    expect(carveToHtml('[a]: /u {#1a}\n\n[a][]\n')).toContain('<p>[a][]</p>')
+    expect(carveToHtml('[a]: /u {#1a}\n')).not.toContain('<a ')
+    // And a digit-first KEY, which reaches the same place by a third route.
+    expect(carveToHtml('[a]: /u {.c 2=v}\n\n[a][]\n')).toBe(
+      '<p>[a]: /u {.c 2=v}</p>\n<p>[a][]</p>',
+    )
+    // Inline, one construct away, all three already read as text (§14).
+    expect(carveToHtml('x {.c !!!}\n')).toBe('<p>x {.c !!!}</p>')
+    expect(carveToHtml('x {.c 2=v}\n')).toBe('<p>x {.c 2=v}</p>')
+  })
+
   it('an empty block is prose too', () => {
     // `{}` is the same case: valid syntax naming no attribute, which the inline
     // scanner also refuses to consume.
