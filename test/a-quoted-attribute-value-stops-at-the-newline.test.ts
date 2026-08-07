@@ -58,6 +58,19 @@ describe('a quoted attribute value stops at the newline', () => {
     )
   })
 
+  it('tests EVERY quoted run, not only the first', () => {
+    // A payload whose FIRST value is well-formed and whose SECOND spans lines.
+    // A check that answers on the first run it finds accepts this.
+    expect(carveToHtml('*x*{k="a" j="b\nc"}\n')).toBe(
+      '<p><strong>x</strong>{k=\u201ca\u201d j=\u201cb\nc\u201d}</p>',
+    )
+    expect(carveToHtml('{k="a" j="b\nc"}\n\nparagraph\n')).toBe(
+      '<p>{k=\u201ca\u201d j=\u201cb\nc\u201d}</p>\n<p>paragraph</p>',
+    )
+    // CONTROL: the same two values on one line still attach.
+    expect(carveToHtml('*x*{k="a" j="b c"}\n')).toBe('<p><strong k="a" j="b c">x</strong></p>')
+  })
+
   it('CONTROL a block attribute may still span lines through its CONTINUATION', () => {
     // `continuation` sits BETWEEN two tokens, never inside one, so this is
     // still a single block. A fix that keyed on "the payload contains a
