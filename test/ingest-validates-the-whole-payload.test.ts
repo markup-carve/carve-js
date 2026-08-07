@@ -127,6 +127,67 @@ describe('an ingest validates the whole payload against the schema', () => {
   })
 })
 
+describe('a node position is checked for WHICH node, not only that it is one', () => {
+  // Both raised by codex review on the change that added the validator, and
+  // both real: checking the container alone leaves the schema half-consulted,
+  // and each of these decoded cleanly and then threw an UNTYPED error from
+  // inside the renderer - the exact failure §12(d) exists to stop.
+  it('refuses a BLOCK node where the schema names an inline one', () => {
+    // Threw `renderHtml: unknown inline paragraph`.
+    expect(() =>
+      fromAstJson({
+        type: 'document',
+        srcByteLength: 1,
+        children: [{ type: 'paragraph', children: [{ type: 'paragraph', children: [] }] }],
+      } as never),
+    ).toThrow(AstJsonSchemaError)
+  })
+
+  it('refuses an INLINE node where the schema names a block one', () => {
+    expect(() =>
+      fromAstJson({
+        type: 'document',
+        srcByteLength: 1,
+        children: [{ type: 'text', value: 'x' }],
+      } as never),
+    ).toThrow(AstJsonSchemaError)
+  })
+
+  it('refuses a scalar in a oneOf node slot', () => {
+    // `figure.target` is spelled `oneOf` of five concrete node refs, a shape the
+    // first version of the generator skipped entirely. Threw
+    // `TypeError: Cannot read properties of undefined`.
+    //
+    // Measured with `caption` PRESENT: without it the payload is refused for a
+    // missing required field instead, which looks like this rule working and is
+    // not - the first probe of this finding made exactly that mistake.
+    expect(() =>
+      fromAstJson({
+        type: 'document',
+        srcByteLength: 1,
+        children: [{ type: 'figure', target: 'x', caption: [] }],
+      } as never),
+    ).toThrow(AstJsonSchemaError)
+  })
+
+  it('CONTROL: accepts each node type the position DOES admit', () => {
+    // Otherwise the rule could be "refuse every node position".
+    for (const target of [
+      { type: 'image', src: '/a.png', alt: '' },
+      { type: 'paragraph', children: [] },
+      { type: 'block_quote', children: [] },
+    ]) {
+      expect(() =>
+        fromAstJson({
+          type: 'document',
+          srcByteLength: 1,
+          children: [{ type: 'figure', target, caption: [] }],
+        } as never),
+      ).not.toThrow()
+    }
+  })
+})
+
 describe('what §12(d) deliberately does not annex', () => {
   it('accepts a srcByteLength that is present and WRONG', () => {
     // (a) is about the field's PRESENCE and (d) about its type and sign, not

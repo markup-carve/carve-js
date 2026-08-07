@@ -36,6 +36,7 @@ import {
 import {
   NODE_FIELDS,
   NODE_POSITION_KIND,
+  NODE_POSITION_TYPES,
   WIRE_FIELDS,
   WIRE_HELPER_FIELDS,
   WIRE_REQUIRED,
@@ -632,17 +633,51 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
     // node - `children: [null]` and `children: ["x"]` both reached the renderer
     // and failed there with an untyped TypeError.
-    if (NODE_FIELDS.includes(key) && Array.isArray(value)) {
-      value.forEach((item, index) => {
-        if (item === null || typeof item !== 'object' || Array.isArray(item)) {
-          throw new AstJsonSchemaError(
-            `${describe(item)} sits where a node belongs`,
-            `${path === '' ? '' : path}.${key}[${index}]`,
-          )
-        }
-      })
+    //
+    // AND WHICH nodes, not merely that they are objects. Checking only the
+    // container leaves the schema half-consulted: a `paragraph` sitting in
+    // another paragraph's `children` is a block where the schema names
+    // `inlineNode`, and it decoded cleanly and then threw
+    // `renderHtml: unknown inline paragraph` - the same untyped renderer crash
+    // this clause exists to stop. `NODE_POSITION_TYPES` omits the `records`
+    // positions, so the plain records the schema gives no `type` are untouched.
+    if (NODE_FIELDS.includes(key)) {
+      const admitted = typeof type === 'string' ? NODE_POSITION_TYPES[`${type}.${key}`] : undefined
+      const at = path === '' ? key : `${path}.${key}`
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => refuseNodeAt(item, admitted, `${at}[${index}]`))
+      } else if (admitted !== undefined && NODE_POSITION_KIND[`${type as string}.${key}`] === 'node') {
+        refuseNodeAt(value, admitted, at)
+      }
     }
     refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
+  }
+}
+
+/**
+ * One node position: the value must be a node, and one the schema admits there.
+ *
+ * `admitted` is undefined where the schema does not pin the member set - a
+ * legacy position, or one whose kind is `records`. The object test still runs,
+ * because a scalar is not a node anywhere.
+ */
+function refuseNodeAt(value: unknown, admitted: readonly string[] | undefined, path: string): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AstJsonSchemaError(`${describe(value)} sits where a node belongs`, path)
+  }
+  if (admitted === undefined) return
+  const type = (value as Record<string, unknown>).type
+  // A non-string `type` is section 12(c)'s error and carries its own; saying it
+  // again here would be two producers of one rule.
+  if (typeof type !== 'string') return
+  // A LEGACY record carries no `type` at all, so it is already past the test
+  // above; `LEGACY_TYPELESS_POSITIONS` is what excuses it, and it is keyed by
+  // POSITION rather than by path, so nothing more is needed here.
+  if (!admitted.includes(type)) {
+    throw new AstJsonSchemaError(
+      `a "${type}" node sits where the schema admits only ${admitted.join(', ')}`,
+      path,
+    )
   }
 }
 

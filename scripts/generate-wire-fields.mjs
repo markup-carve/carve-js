@@ -220,6 +220,59 @@ export function wireFieldsSource(schema) {
   }
   for (const name of ["attrs", "pos"]) collect(name, defs[name]);
 
+  /*
+   * WHICH NODE TYPES EACH POSITION ADMITS, spelled `<owning type>.<field>`
+   * (PART 12 section 12(d)).
+   *
+   * `NODE_POSITION_KIND` above says a position holds NODES; this says WHICH.
+   * Checking only the container leaves the schema half-consulted: a `paragraph`
+   * sitting in another paragraph's `children` is a block where the schema names
+   * `inlineNode`, and it was accepted at decode and then threw
+   * `renderHtml: unknown inline paragraph` - an untyped renderer crash for a
+   * document the decoder had passed, which section 9(b) forbids. Raised by codex
+   * review on the change that added the validator.
+   *
+   * Three spellings reach a node, and all three are read here: a `$ref` to the
+   * `blockNode` / `inlineNode` union, whose members are its `type` enum; a
+   * `oneOf` of concrete node refs, which is how `figure.target` names the five
+   * blocks a caption can carry; and a direct `$ref` to one concrete node.
+   *
+   * Positions whose kind is `"records"` are absent on purpose: those hold plain
+   * records the schema gives no `type` at all, and requiring one would refuse a
+   * tree this engine's own parser produced.
+   */
+  const membersOf = (schemaNode) => {
+    if (schemaNode === null || typeof schemaNode !== "object") return null;
+    if (typeof schemaNode.$ref === "string") {
+      const target = defs[schemaNode.$ref.replace("#/$defs/", "")];
+      if (!target) return null;
+      const asEnum = target.properties?.type?.enum;
+      if (Array.isArray(asEnum)) return asEnum;
+      const asConst = target.properties?.type?.const;
+      return typeof asConst === "string" ? [asConst] : null;
+    }
+    for (const key of ["oneOf", "anyOf"]) {
+      if (!Array.isArray(schemaNode[key])) continue;
+      const all = schemaNode[key].map(membersOf);
+      if (all.some((m) => m === null)) return null;
+      return all.flat();
+    }
+    if (schemaNode.type === "array") return membersOf(schemaNode.items);
+    return null;
+  };
+  const positionTypes = new Map();
+  for (const def of Object.values(defs)) {
+    const owner = def?.properties?.type?.const;
+    if (typeof owner !== "string") continue;
+    for (const [name, property] of Object.entries(def.properties)) {
+      if (!holdsNode(property)) continue;
+      if (positionKind.get(`${owner}.${name}`) === "records") continue;
+      const members = membersOf(property);
+      if (members === null) continue;
+      positionTypes.set(`${owner}.${name}`, [...new Set(members)].sort());
+    }
+  }
+
   const entry = ([name, fields]) =>
     `  ${JSON.stringify(name)}: [${fields.map((f) => JSON.stringify(f)).join(", ")}],`;
   const header = [
@@ -335,7 +388,28 @@ export function wireFieldsSource(schema) {
           .join(", ")} },`,
     )
     .join("\n");
-  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n}\n`;
+  const typesDoc = [
+    "}",
+    "",
+    "/**",
+    " * Which node TYPES each position admits, keyed `<owning type>.<field>`.",
+    " *",
+    " * `NODE_POSITION_KIND` says a position holds nodes; this says which. Without",
+    " * it the schema is half-consulted: a `paragraph` in another paragraph's",
+    " * `children` is a block where the schema names `inlineNode`, and it decoded",
+    " * cleanly and then threw an untyped error from inside the renderer.",
+    " *",
+    " * Positions whose kind is `records` are absent on purpose - those hold plain",
+    " * records with no `type`, and requiring one would refuse a tree this engine's",
+    " * own parser produced (section 9(a)).",
+    " */",
+    "export const NODE_POSITION_TYPES: Readonly<Record<string, readonly string[]>> = {",
+  ].join("\n");
+  const typesList = [...positionTypes.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(entry)
+    .join("\n");
+  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n${typesDoc}\n${typesList}\n}\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
