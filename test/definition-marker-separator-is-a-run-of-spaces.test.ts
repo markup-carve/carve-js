@@ -29,6 +29,14 @@ describe('the separator is a run of ASCII spaces and nothing else', () => {
     ['a form feed', ''],
     ['a vertical tab', ''],
     ['a tab', '\t'],
+    // The two the CONTENT CLASS turns on. JavaScript's `.` excludes U+2028 and
+    // U+2029, and while the separator consumed a Unicode run the question never
+    // arose - the run ate them before the capture was reached. Narrowing the run
+    // is what exposed it, so these two are the shapes that fail if the content
+    // is captured with a dot. Raised by codex review on the change that
+    // introduced it.
+    ['a line separator', '\u2028'],
+    ['a paragraph separator', '\u2029'],
   ] as const) {
     it(`an abbreviation expansion begins at ${name}`, () => {
       expect(carveToHtml(`*[HTML]: ${ch}Hyper\n\nHTML\n`)).toContain(`title="${ch}Hyper"`)
@@ -53,6 +61,12 @@ describe('the separator is a run of ASCII spaces and nothing else', () => {
 describe('the two markers answer a trailing tab differently, downstream of the rule', () => {
   it('keeps it in an abbreviation title, which is a raw string', () => {
     expect(carveToHtml('*[HTML]: \tHyper\n\nHTML\n')).toContain('title="\tHyper"')
+  })
+
+  it('defines a footnote whose body begins with a line separator', () => {
+    // The footnote half of the same content-class question.
+    expect(carveToHtml('x[^f]\n\n[^f]: \u2028note\n')).toContain('doc-endnotes')
+    expect(carveToHtml('x[^f]\n\n[^f]: \u2029note\n')).toContain('doc-endnotes')
   })
 
   it('drops it from a footnote body, whose content is parsed as blocks', () => {

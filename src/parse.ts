@@ -560,7 +560,15 @@ const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 //
 // The literal space after `]:` stays literal and mandatory, which is what
 // makes a tab-first line a paragraph.
-const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(.+)$/u
+//
+// THE CONTENT CLASS IS `[^]`, NOT `.`. JavaScript's `.` excludes U+2028 and
+// U+2029, and those two are the only characters this rule's own table calls
+// CONTENT that a dot cannot match. While the separator consumed a Unicode run
+// the question never arose - the run ate them before the capture was reached -
+// so narrowing the run is exactly what exposed it, and `*[HTML]: <U+2028>Hyper`
+// became a paragraph instead of an abbreviation whose title starts with the
+// character. Raised by codex review on the change that introduced it.
+const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +([^]+)$/u
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
@@ -807,7 +815,9 @@ function isLinkDefLine(line: string): boolean {
 // self-consistent engine because it checked whether the footnote DEFINED
 // rather than what its body contained. All three define. Check the rendered
 // content, not the construct.
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
+//
+// The content class is `[^]` for the reason RE_ABBR_DEF above gives.
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
 
 // A footnote body's own column: the indent §16 requires of a continuation line.
 // The body is dedented by exactly this much, never by the first continuation
