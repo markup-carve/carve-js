@@ -831,11 +831,58 @@ const FOOTNOTE_BODY_COLUMN = 2
 // whitespace only ([ \t\n\r\f]) -- a non-breaking space (U+00A0) is content
 // here, as it is everywhere else in the parser, so `^  ` IS a caption.
 const RE_CAPTION = /^\^ +(.*[^ \t\n\r\f].*)$/
-// §756 (NORMATIVE): trailing whitespace on a block's final line is stripped
-// before rendering. ASCII whitespace only ([ \t\f\r]) so a trailing NBSP (which
-// is content everywhere else) survives; the trailing `\n` is excluded so a
-// multi-line block only loses its FINAL line's trailing run.
-const RE_TRAILING_WS = /[ \t\f\r]+$/
+// NO TRAILING WHITESPACE (PART 2, NORMATIVE; carve#926). A `whitespace` run at
+// the END OF A CONTENT LINE is DROPPED. It does not reach the output and it is
+// not content.
+//
+// TWO THINGS WERE NARROWER HERE. The class was `[ \t\f\r]`, and `whitespace` in
+// this language is a SPACE OR A TAB and nothing else (PART 1, carve#890) - so a
+// trailing form feed was dropped from a heading and a caption while every other
+// invisible character survived, for no reason the grammar states. U+000C and
+// U+000B are CONTENT, exactly as U+00A0 and U+FEFF already were here.
+//
+// And the rule held only on a BLOCK'S FINAL LINE. It holds on every content
+// line - see `dropTrailingWhitespace` below. PART 12 §7 asserted the opposite,
+// twice, claiming a space before a SOFT BREAK renders `<p>a \nb</p>` and
+// arguing from that claim that stripping breaks `to_html(fmt(x)) ==
+// to_html(x)`. It has been corrected: the executable spec does not render it
+// that way, and the PARSER is the half that moves.
+const RE_TRAILING_WS = /[ \t]+$/
+
+/**
+ * `text` with EVERY line's trailing space-and-tab run removed.
+ *
+ * The multi-line form of `RE_TRAILING_WS`, for the blocks that accumulate
+ * their lines before rendering: a paragraph and a definition term. Their
+ * continuation lines end in a SOFT BREAK, and the run before one was kept.
+ *
+ * It is safe inside an inline construct that crosses a line, because the only
+ * thing a line break can be inside a paragraph IS a soft break - verbatim
+ * content (a code block, a raw block, a code span's own line) never reaches
+ * here as raw source, and a hard break is a BACKSLASH, so the run before one
+ * is not trailing.
+ */
+function dropTrailingWhitespace(text: string): string {
+  return text.replace(/[ \t]+(?=\n|$)/g, (run, offset: number, whole: string) => {
+    // AN ESCAPED SPACE IS CONTENT, NOT TRAILING WHITESPACE. `\ ` is this
+    // language's non-breaking-space escape, so the space it names is a
+    // character the author wrote and the run STOPS at it.
+    //
+    // Missing this does not lose a character, it changes the block: dropping
+    // the space leaves a bare backslash at the end of the line, and a bare
+    // backslash at the end of a line is a HARD BREAK. So `a\ ` + newline + `b`
+    // rendered a line break where the author wrote a no-break space. Raised by
+    // codex review on the change that widened this rule to every line, and it
+    // was already true at the block-FINAL position that rule reached before.
+    //
+    // Only the FIRST character of the run can be the escaped one; everything
+    // after it is ordinary trailing whitespace and still goes.
+    let slashes = 0
+    for (let i = offset - 1; i >= 0 && whole[i] === '\\'; i--) slashes++
+
+    return slashes % 2 === 1 && run.startsWith(' ') ? ' ' : ''
+  })
+}
 const RE_TABLE_ROW = /^\|/
 // A complete standard table row opens AND closes with `|` (grammar
 // standard_row). A stray leading `|` with no closing `|` (`| a`) is ordinary
@@ -2665,8 +2712,8 @@ function parseHeading(lexer: Lexer): Heading {
   // any other closed block. Lazy continuation therefore means one thing across
   // the language: it continues an open PARAGRAPH, and a heading is not one.
   let text = line.replace(/^#{1,6} +/, '')
-  // §756 (NORMATIVE): strip trailing whitespace (ASCII only, so a trailing
-  // NBSP stays content), matching a paragraph and carve-rs/-php.
+  // NO TRAILING WHITESPACE (PART 2; carve#926). A heading is one line by
+  // construction, so the single-line form is the whole rule here.
   text = text.replace(RE_TRAILING_WS, '')
 
   const node: Heading = { type: 'heading', level, children: [] }
@@ -3315,7 +3362,14 @@ function expandLineBlockWhitespace(line: string): string {
     column += width
     out += !seenContent || width >= 2 ? '\ue000'.repeat(width) : ' '
   }
-  return out
+
+  // NO TRAILING WHITESPACE (PART 2; carve#926), and it reaches this line last.
+  // The MEDIAL GAPS rule above has already converted a trailing run of TWO OR
+  // MORE columns into NBSP CONTENT, which this must not touch - the sentinel is
+  // not a space any more. What is left is a ONE-COLUMN trailing run, still an
+  // ordinary collapsible space, and that is the run the rule drops. So
+  // `abc<SP><SP>` keeps two non-breaking spaces and `def<SP>` keeps none.
+  return out.replace(/ +$/, '')
 }
 
 // `::: \` hard-break block. Unlike the line block, the body is parsed as
@@ -3569,7 +3623,13 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // carve-php publish `<dt>t</dt>` (carve#510, found by the fuzzer).
       // Trimming the END only: interior runs are the author's, and the start is
       // where the term's own offsets are anchored.
-      termText = termText.replace(/[^\S\n]+$/, '')
+      // NO TRAILING WHITESPACE (PART 2; carve#926). This was `[^\S\n]+$` - the
+      // whole Unicode class minus the newline - so a term dropped a trailing
+      // NBSP, byte-order mark, ideographic space, vertical tab and every
+      // Unicode space, all of which are CONTENT and survive at every other
+      // content line in this file. It also reached only the LAST line, where a
+      // term folds a following plain line into itself just as a paragraph does.
+      termText = dropTrailingWhitespace(termText)
       const termStart = lexer.lines[termLineIndex]!.indexOf(t[1]!)
       // A continuation line folds in whole, indent included, and the scanner
       // strips that indent when it builds the text node - so a single base
@@ -5704,9 +5764,10 @@ function readCaptionText(
     })
     lexer.consume()
   }
-  // §756 (NORMATIVE): trailing whitespace on the block's final line is stripped
-  // before rendering. ASCII whitespace only -- a trailing NBSP is content.
-  return text.replace(RE_TRAILING_WS, '')
+  // NO TRAILING WHITESPACE (PART 2; carve#926). Every line, not only the last:
+  // the run before a SOFT BREAK is dropped too, so `abc<SP>` + newline + `def`
+  // and `abc` + newline + `def` are the same document.
+  return dropTrailingWhitespace(text)
 }
 
 function endsHeadingOrQuote(lexer: Lexer): boolean {
@@ -5775,11 +5836,15 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
   // line's trailing spaces/tabs, with nothing after them). CommonMark / djot /
   // carve-php all drop a paragraph's final spaces before inline parsing, so
   // `abc ` is `<p>abc</p>` and a bare `# ` (not a heading) is `<p>#</p>`.
-  // The `$` anchor (no `m` flag) matches only the very end of the joined text,
-  // so interior trailing whitespace before a soft break (`a  \nb`, which carve
-  // keeps verbatim since two trailing spaces are NOT a hard break here) is left
-  // intact, and a backslash hard break is never affected.
-  const text = lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n').replace(/[ \t]+$/, '')
+  //
+  // EVERY LINE, not only the last (PART 2 NO TRAILING WHITESPACE; carve#926).
+  // This was anchored with a bare `$` and no `m` flag, so it reached the very
+  // end of the joined text and nothing else - interior trailing whitespace
+  // before a SOFT BREAK survived, deliberately, because PART 12 SS7 said it
+  // must. That clause asserted the opposite of this one, twice, and has been
+  // corrected. A backslash hard break is still never affected: the backslash is
+  // the last character on its line, so the run before it is not trailing.
+  const text = dropTrailingWhitespace(lines.map((ln) => ln.replace(/^[ \t]+/, '')).join('\n'))
   // Each line contributes its OWN leading whitespace on top of whatever prefix
   // the container stripped, so a continuation line needs its own origin rather
   // than a single base offset plus a local one (#444).

@@ -64,17 +64,21 @@ describe('renderCarve targeted canonicalization', () => {
   })
 
   it('strips trailing whitespace while preserving nbsp', () => {
-    // The second line is content (an NBSP), so the FIRST line is not
-    // block-final and its two trailing spaces are kept: the parser keeps them
-    // before a soft break, so dropping them here rendered a different document.
+    // Three moves, and it is back where it started - worth recording, because
+    // the middle one looks like a regression from here.
     //
-    // This asserted `a` for the first line until the blank-line test below it
-    // was narrowed. It reached that answer only because the native `.trim()`
-    // counts NBSP as whitespace, so the NBSP-only line read as blank and the
-    // line above it read as block-final - two characters wrong at once, in
-    // opposite directions, cancelling into an answer that broke the invariant
-    // the next assertion now states outright (carve#890, carve#844).
-    expect(carveToCarve('a  \n\u00a0  \n')).toBe('a  \n\u00a0\n')
+    // It asserted `a` originally, and reached that answer for the WRONG reason:
+    // the native `.trim()` counts NBSP as whitespace, so the NBSP-only line read
+    // as blank, the line above it read as block-final, and its run was dropped
+    // as a block-final run. Narrowing the blank-line test to space-and-tab
+    // (carve#890) removed that accident, and the honest answer was then `a  `,
+    // because the PARSER kept a run before a soft break and writing `a` would
+    // have rendered a different document.
+    //
+    // carve#926 moves the parser: the run is dropped on EVERY content line, so
+    // it is not in the tree for the writer to write, and `a` is right again -
+    // now for the reason the assertion's name gives.
+    expect(carveToCarve('a  \n\u00a0  \n')).toBe('a\n\u00a0\n')
   })
 
   it('keeps an invisible character that ends a block', () => {

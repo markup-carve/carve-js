@@ -197,7 +197,10 @@ describe('content-less marker is not a list', () => {
   })
 
   it('treats `- ` (trailing space only) the same as bare `-`', () => {
-    expect(h('- \nnot a list')).toBe(h('-\nnot a list').replace('-\n', '- \n'))
+    // The two are now the same BYTE FOR BYTE, where this used to have to
+    // re-insert the trailing space to compare them: the marker line's trailing
+    // run is dropped like any other content line's (PART 2; carve#926).
+    expect(h('- \nnot a list')).toBe(h('-\nnot a list'))
     expect(h('- \nx')).not.toContain('<ul>')
   })
 

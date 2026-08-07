@@ -35,14 +35,24 @@ describe('paragraph trailing whitespace', () => {
     expect(h('abc')).toBe('<p>abc</p>')
   })
 
-  it('keeps interior trailing spaces before a soft break (not a hard break in Carve)', () => {
-    // Two trailing spaces mid-paragraph are NOT a hard break; the spaces and
-    // the soft break are preserved verbatim. Matches carve-php.
-    expect(h('a  \nb')).toBe('<p>a  \nb</p>')
+  it('drops interior trailing spaces before a soft break too', () => {
+    // Two trailing spaces mid-paragraph are still NOT a hard break - a hard
+    // break in Carve is a backslash - and they are no longer preserved either.
+    // NO TRAILING WHITESPACE (PART 2; carve#926) holds on EVERY content line.
+    //
+    // This asserted the opposite, from PART 12 section 7, which said twice and
+    // at length that the run before a soft break survives, gave `<p>a \nb</p>`
+    // as the rendering, and argued from that claim that a formatter stripping it
+    // corrupts the document. The executable spec never rendered it that way, and
+    // the clause has been corrected.
+    expect(h('a  \nb')).toBe('<p>a\nb</p>')
   })
 
-  it('strips only the FINAL trailing whitespace, keeping the interior run', () => {
-    expect(h('a  \nb  ')).toBe('<p>a  \nb</p>')
+  it('makes a document with the run and one without it the same document', () => {
+    // The property behind the rule, which the two literals above only sample.
+    expect(h('abc \ndef')).toBe(h('abc\ndef'))
+    expect(h('abc\t\ndef\t')).toBe(h('abc\ndef'))
+    expect(h('a  \nb  ')).toBe('<p>a\nb</p>')
   })
 
   it('preserves a backslash hard break', () => {
