@@ -7256,9 +7256,21 @@ function scanInlineInner(
           name: m[1]!,
           content: scanInline(m[2]!, shiftSource(source, text, i + m[0].indexOf('[') + 1), inFootnote),
         }
-        if (m[3]) ext.attrs = parseAttrs(m[3])
-        out.push(withPos(ext, source, text, i, i + m[0].length))
-        i += m[0].length
+        // THE ONLY INLINE ATTRIBUTE SURFACE WITH NO VALIDITY GATE, until now: a
+        // trailing block here went straight to `parseAttrs`, so `{#1a}` became
+        // `a=""` where §14 makes it literal on every sibling surface, a tab
+        // separated two attributes after markup-carve/carve#906 narrowed the
+        // rest, and a quoted value carried a line break past
+        // markup-carve/carve#888. An invalid payload is not consumed - the
+        // extension parses without attributes and the braces stay literal
+        // text, exactly as the link and image tails already do.
+        let consumed = m[0].length
+        if (m[3] !== undefined) {
+          if (isValidInlineAttrPayload(m[3])) ext.attrs = parseAttrs(m[3])
+          else consumed -= m[3].length + 2
+        }
+        out.push(withPos(ext, source, text, i, i + consumed))
+        i += consumed
         continue
       }
       // Symbol shortcode `:name:` (after extension, which needs `[`).
@@ -7945,6 +7957,30 @@ function applyLinkDefs(
  * block-attribute line or literal text (PART 9 §15).
  */
 function isValidAttrPayload(inner: string): boolean {
+  // A QUOTED VALUE STOPS AT THE NEWLINE, in BOTH of its alternatives
+  // (markup-carve/carve#888). The value ends at the closing quote on the same
+  // line; a line break inside the quotes is not content, it ends the
+  // production, and the whole attribute block is unrecognized.
+  //
+  // The rule is on the PAYLOAD rather than on the matchers because the matchers
+  // are eight regex literals that share one subpattern, and it applies to BOTH
+  // surfaces:
+  //
+  //  - an INLINE attribute block cannot span lines at all
+  //    (markup-carve/carve#897), and since markup-carve/carve#906 its padding
+  //    takes `space` and its separator `space+`, neither of which admits a
+  //    break. The quoted value was the last way through.
+  //  - `block_attributes` reads the SAME `quoted_value`, so a break inside a
+  //    quoted value ends that block too. A block attribute may still span
+  //    lines: `continuation` is where a newline is admitted, and it sits
+  //    BETWEEN two tokens, never inside one.
+  //
+  // Testing the QUOTED RUNS rather than the payload is what keeps those apart -
+  // `\s+` below is the separator and still carries the newline a continuation
+  // needs. This engine kept the break in the value and rendered it into the
+  // attribute; carve-php and carve-rs collapsed it to a space, which no
+  // production in either normative file describes.
+  if (quotedRunSpansLines(inner)) return false
   // The quoted value alternatives are escape-aware (and single-quoted as
   // well as double-quoted) so the same payloads parseAttrs accepts validate
   // as block attributes — otherwise `"a\"b"` strips only to `"a\"` and the
@@ -8002,6 +8038,18 @@ function isValidInlineAttrPayload(inner: string): boolean {
  */
 function inlineAttrPayloadHasTab(inner: string): boolean {
   return inner.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '').includes('\t')
+}
+
+/** Whether any quoted run in an attribute payload carries a line break. */
+function quotedRunSpansLines(inner: string): boolean {
+  // `\\.` cannot consume a newline (no `s` flag), so a run that reaches the
+  // next line does it through the unescaped-character class and is matched
+  // here whole.
+  for (const m of inner.matchAll(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g)) {
+    if (m[0]!.includes('\n')) return true
+  }
+
+  return false
 }
 
 /** True when an attribute block parsed to no id, classes, or key=values. */
