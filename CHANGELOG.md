@@ -68,6 +68,32 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `carve` still installs nothing at runtime: the engine is injected into
   `checkPortability`, and only the CLI imports it, lazily.
 
+### Changed
+
+- **An explicit `[text][label]` no longer reaches the heading index**
+  (markup-carve/carve#742). PART 9R R1 scopes the implicit-heading fallback to
+  the COLLAPSED `[text][]` spelling and to nothing else, so an explicit label
+  that matches no `[label]: url` definition is unresolved and renders as its
+  literal source text, at every spelling - folded or exact.
+
+  ```
+  # Getting Started
+
+  [text][Getting Started]
+  ```
+
+  renders the paragraph `[text][Getting Started]` where it used to render an
+  anchor to `#Getting-Started`. The collapsed form is unaffected, and an
+  explicit label naming a real definition resolves exactly as before.
+
+  The asymmetry is R1's own: a collapsed label is the author quoting prose from
+  elsewhere in the document, which is why its matching is loose; an explicit
+  label is an identifier the author wrote twice and can keep identical. An
+  identifier that names nothing names nothing.
+
+  `carve lint` now reports the shape as `unresolved-reference-link`, which it
+  stayed silent on before.
+
 ### Fixed
 
 - **A bottom-positioned table of contents is emitted at document level, after
