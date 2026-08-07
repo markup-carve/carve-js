@@ -206,6 +206,12 @@ describe('platform-autolink lint rules', () => {
     expect(
       platformRules(lintCarve('See [x](a\\(b\\)#123) here.\n', { platforms: ['github'] })),
     ).toEqual([])
+    // An ESCAPED closing paren does not end the destination either: the href
+    // here is `a)b#123`, and a walk that ignored the escape would stop at it
+    // and scan the rest.
+    expect(
+      platformRules(lintCarve('See [x](a\\)#123) here.\n', { platforms: ['github'] })),
+    ).toEqual([])
     // CONTROL: an UNBALANCED run is not a destination, so it stays prose.
     expect(platformRules(lintCarve('See [x](a(b #123 here.\n', { platforms: ['github'] }))).toEqual([
       'platform-issue-reference',
