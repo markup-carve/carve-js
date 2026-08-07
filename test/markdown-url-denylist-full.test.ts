@@ -23,13 +23,27 @@ describe('the Markdown target applies the full URL denylist', () => {
     ['vbscript:msgbox(1)'],
     ['data:text/html,<script>x</script>'],
     ['file:///etc/passwd'],
-    ['ms-msdt:/id PCWDiagnostic'],
+    ['ms-msdt:/id'],
     ['search-ms:query=x'],
     ['shell:startup'],
     ['vscode://x'],
     ['jar:http://x!/'],
   ])('blanks %s', (url) => {
     expect(destinationOf(linkTo(url))).toBe('')
+  })
+
+  it('is not a definition at all when the destination holds a space', () => {
+    // `ms-msdt:/id PCWDiagnostic` was one of the denylist fixtures until
+    // carve#911 anchored `reference_definition` at end of line. The space
+    // makes `PCWDiagnostic` trailing junk, so the line is a paragraph and
+    // there is no link to blank - a STRONGER outcome than blanking, and one
+    // worth asserting rather than dropping, so the coverage this fixture
+    // stood for is not quietly lost. The scheme itself is still on the list
+    // above, without the space.
+    const src = linkTo('ms-msdt:/id PCWDiagnostic')
+
+    expect(carveToHtml(src)).not.toContain('<a ')
+    expect(destinationOf(src)).toBe('<none>')
   })
 
   it('blanks a scheme hidden behind Unicode whitespace', () => {

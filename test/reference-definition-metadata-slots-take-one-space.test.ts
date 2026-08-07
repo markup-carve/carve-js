@@ -76,7 +76,7 @@ describe("a reference definition's attribute slot takes exactly one space", () =
     ['a thin space then the space', '\u2009 '],
     ['a space, a no-break space, then the space', ' \u00a0 '],
   ] as const) {
-    it(`still attaches the block on ${name}`, () => {
+    it(`is not a definition at all on ${name}`, () => {
       // Codex review read the guard as too narrow here and asked for
       // `\\p{White_Space}` instead of space-and-tab, on the ground that a
       // destination ENDS at Unicode whitespace, so this is a two-character
@@ -89,7 +89,21 @@ describe("a reference definition's attribute slot takes exactly one space", () =
       // The character is not lost either - it stays in the tail the definition
       // ignores, exactly as the run before the DESTINATION is skipped by
       // `\\p{White_Space}*` on the same line.
-      expect(carveToHtml(doc(`[a]: /u${sep}{.c}`))).toContain('class="c"')
+      // These asserted the block ATTACHED, and that was right when the
+      // production still ended in a swallowing tail: the separator slot is a
+      // question about the trailing run of space and tab, so a no-break space
+      // outside that run did not lengthen it, and the executable spec agreed.
+      // carve#911 anchored `reference_definition` at end of line, and the
+      // no-break space is now CONTENT sitting after the destination - trailing
+      // junk, so the whole line is a paragraph. The oracle names this exact
+      // shape: `[a]: /u<NBSP>` is not a definition.
+      //
+      // The separator guard itself is unchanged and is still what the two-space
+      // and tab cases above test.
+      const html = carveToHtml(doc(`[a]: /u${sep}{.c}`))
+
+      expect(html).not.toContain('class="c"')
+      expect(html).not.toContain('<a ')
     })
   }
 

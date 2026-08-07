@@ -703,8 +703,50 @@ export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\uFEFF'
 // The slot BEFORE the destination is untouched and stays a Unicode run: the
 // grammar calls that one leading whitespace, not a padding slot (the long
 // note above).
+//
+// AND THE PRODUCTION IS ANCHORED AT END OF LINE (carve#911).
+// `reference_definition` has always ended in `newline`, so what follows the
+// destination and the optional title makes the production FAIL and the line is
+// then an ordinary paragraph. This pattern ended `.*$`, which swallowed
+// anything - so `[a]: /u zzz` registered a definition with a tail nothing in
+// the grammar authorized, as it did in carve-php, carve-rs and the executable
+// spec.
+//
+// It matters beyond tidiness, and the reason is what makes this the FIRST fix
+// on this line rather than one of several: PART 7 promises that a slot which
+// fails to match falls back to prose rather than silently dropping metadata,
+// and here there was no prose to fall back TO. The swallowing tail ate
+// whatever a failed slot rejected, so the clause's promised failure mode was
+// unreachable at this line and every narrowing dropped metadata instead of
+// failing visibly. With the anchor in place the tab and mixed-run forms at
+// BOTH slots become paragraphs, which is why carve#907 left them unpinned
+// until now.
+//
+// The ending run is `whitespace` - a space or a tab, the same terminal
+// `blank_line = {whitespace}` takes (carve#890) - so `[a]: /u<SP><TAB><SP>` is
+// still a definition.
 const RE_LINK_DEF =
-  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
+  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?[ \t]*$/u
+
+/**
+ * Whether `line` is a reference definition - the WHOLE production, trailing
+ * attribute block included.
+ *
+ * `RE_LINK_DEF` cannot answer this on its own any more. The trailing attribute
+ * block is taken off the line BEFORE the pattern runs (carve#604), so with the
+ * pattern anchored at end of line a bare `RE_LINK_DEF.test(line)` says no to
+ * `[a]: /u {.c}` - a definition by every reading, and one the corpus pins as
+ * interrupting the paragraph above it.
+ *
+ * Nine predicates around this file asked that question with a bare `.test`,
+ * every one of them meaning the whole production, and they were correct only
+ * because the unanchored pattern happened to swallow the braces along with
+ * everything else. One producer, so the anchor cannot come apart from the
+ * split again.
+ */
+function isLinkDefLine(line: string): boolean {
+  return RE_LINK_DEF.test(splitTrailingAttrBlock(line)[0])
+}
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 //
@@ -1925,7 +1967,7 @@ function collectLinkDefs(lexer: Lexer) {
         // qualify: all four implementations fold `- x` / `*[A]: b` as item text,
         // because PART 12 §7 recognizes one only as a direct child of the
         // document.
-        (wasPrevBlank || startsBlock || RE_LINK_DEF.test(rawTrimmed))
+        (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
       ) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
@@ -2450,7 +2492,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // literal paragraph text -- and, since RE_LINK_DEF also matches `[^fn]: …`, an
   // indented footnote def (missed by the flush-anchored RE_FOOTNOTE_DEF above)
   // must not be swallowed here either. Require the def flush at column 0.
-  if (leadingWhitespace(line) === 0 && RE_LINK_DEF.test(line)) {
+  if (leadingWhitespace(line) === 0 && isLinkDefLine(line)) {
     lexer.consume()
     return null
   }
@@ -3613,7 +3655,7 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
   if (
     RE_DEFLIST_TERM.test(content) ||
     RE_FOOTNOTE_DEF.test(content) ||
-    RE_LINK_DEF.test(content)
+    isLinkDefLine(content)
   ) {
     state.paragraphOpen = false
     return
@@ -4031,7 +4073,7 @@ function isInvisibleLine(line: string): boolean {
   // `RE_COMMENT_LINE` matches a `%%%` opener too, so exclude the block form
   // explicitly - skipping it lands the scan on the block's BODY.
   if (RE_COMMENT_BLOCK.test(l)) return false
-  if (RE_COMMENT_LINE.test(l) || RE_LINK_DEF.test(l) || RE_FOOTNOTE_DEF.test(l)) return true
+  if (RE_COMMENT_LINE.test(l) || isLinkDefLine(l) || RE_FOOTNOTE_DEF.test(l)) return true
 
   // A bare attribute line renders nothing either, but unlike the others it is
   // COLUMN-STRICT (§15): it opens only AT its container's content column, and
@@ -4051,7 +4093,7 @@ function lineOpensBlock(line: string): boolean {
     RE_COMMENT_BLOCK.test(line) ||
     // No RE_ABBR_DEF: these lines are item content, never document level.
     RE_FOOTNOTE_DEF.test(line) ||
-    RE_LINK_DEF.test(line) ||
+    isLinkDefLine(line) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
@@ -4106,7 +4148,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     // footnote case to break. A definition opens only AT its container's
     // content column - the same strict rule `parseBlockInner` applies
     // (carve-js#597).
-    (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || RE_LINK_DEF.test(line))) ||
+    (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     // A caption line (`^ …`) ends the item's lazy continuation rather than
@@ -5510,7 +5552,7 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       // anchor does that work for every other pattern here; RE_LINK_DEF is
       // whitespace-tolerant on purpose (other passes need it to see a quoted or
       // nested def) and so needs the test written out (carve-js#597).
-      return i === 0 && (RE_LINK_DEF.test(ln) || RE_FOOTNOTE_DEF.test(ln))
+      return i === 0 && (isLinkDefLine(ln) || RE_FOOTNOTE_DEF.test(ln))
     case '%':
       // line or block comment (invisible)
       return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)

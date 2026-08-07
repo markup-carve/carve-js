@@ -43,6 +43,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A reference definition is anchored at end of line**
+  (markup-carve/carve#911). `reference_definition` ends in `newline` and always
+  did, but the pattern ended in a tail that swallowed anything, so `[a]: /u zzz`
+  registered a definition with trailing junk nothing in the grammar authorized -
+  as it did in carve-php, carve-rs and the executable spec. Such a line is an
+  ordinary paragraph now. This also makes PART 7's promised failure mode
+  reachable at this line for the first time: the clause says a slot that fails to
+  match falls back to prose rather than silently dropping metadata, and the tail
+  had been eating whatever a failed slot rejected. The tab form and both mixed
+  runs at the title and attribute slots are therefore paragraphs too. A trailing
+  run of spaces or tabs is still fine - that is the line ending, not content.
+
 - **A padding slot spelled `space` takes exactly one space**
   (markup-carve/carve#912). Four productions spell their padding slot with a bare
   `space` - the link and image title, the code fence's slot before its info

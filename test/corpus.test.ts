@@ -308,6 +308,7 @@ const IMPLEMENTED = new Set([
   'a-code-fence-opener-takes-exactly-one-space',
   'a-frontmatter-opener-takes-exactly-one-space',
   'a-reference-definition-s-metadata-slots-take-exactly-one-space',
+  'a-reference-definition-is-anchored-at-end-of-line',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
