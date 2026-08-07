@@ -3549,9 +3549,36 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // answer depend on how the author spelled a run rather than where it
       // landed (markup-carve/carve-js#812).
       if (!isBlankLine(ln) && indentColumns(ln, 3) >= 3) {
-        // Strip the structural indentation but keep a content U+00A0.
+        // A CONTINUATION INDENTED PAST THE BODY'S COLUMN IS LAZY TEXT
+        // (markup-carve/carve#918). `definition_indent` REACHES the body's
+        // column and does not measure how far past it a line went, because
+        // there is nothing past that column for indentation to mean. So a line
+        // indented further continues the body's OPEN PARAGRAPH, and a paragraph
+        // continuation carries inline content.
+        //
+        // This stripped the WHOLE leading run, which delivered a line at column
+        // 4 flush at column 0 - byte-identical to one written at column 3 - so
+        // the two columns could not give different answers and a stray
+        // four-space indent silently opened a block quote. Slicing exactly the
+        // body's three columns and KEEPING the residual is what separates them,
+        // and it is the same call the list already makes for every line kind
+        // (`sliceColumns(l, contentCol, true)`). The residual column then meets
+        // the STRICT COLUMN-0 rule for indented top-level block openers, which
+        // is what turns the line into text - so the answer is derived from a
+        // rule already in the language rather than from a new special case
+        // here.
+        //
+        // Why not "extra indentation nests", from the signoff: that reading
+        // makes indentation depth mean two different things one line apart,
+        // since lazy continuation already governs the line above and folds it
+        // into the same paragraph. A legitimately nested construct needs the
+        // blank-line-then-indented-block form (FORM A above), which is how a
+        // `dd` already holds more than one block.
+        //
+        // A content U+00A0 is still kept: `sliceColumns` counts only spaces and
+        // tabs as columns, so a no-break space stops the scan as content.
         const lineIndex = lexer.pos
-        bodyLines.push(ln.replace(/^[^\S\u00a0]+/, ''))
+        bodyLines.push(sliceColumns(ln, 3, true))
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         lexer.consume()
         continue
