@@ -228,8 +228,13 @@ describe('renderCarve targeted canonicalization', () => {
 
     it('keeps blank lines and trailing spaces in frontmatter and block comments', () => {
       const src = '---\ntitle: X\n\n\n\nnote: kept\n---\n\n%%%\nc   \n\n\n\nd\n%%%\n\nbody\n'
+      // The CONTENT is what this asserts. The OPENER is canonicalized to
+      // `---yaml` (markup-carve/carve#977, PART 11 §6b), which is the one byte
+      // difference from the source here.
+      const canonical = src.replace('---\n', '---yaml\n')
       const f1 = carveToCarve(src)
-      expect(f1).toBe(src)
+      expect(f1).toBe(canonical)
+      expect(carveToCarve(f1)).toBe(f1)
       expect(carveToHtml(f1)).toBe(carveToHtml(src))
     })
 

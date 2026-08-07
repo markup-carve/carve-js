@@ -117,6 +117,26 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A document relying on a definition line with an unparseable attribute block
   resolves one fewer reference. Recorded and accepted in the clause.
 
+### Changed
+
+- **`carve fmt` writes a frontmatter opener with its format token: `---yaml`,
+  not a bare `---`** (markup-carve/carve#977, PART 11 §6b; the ruling on
+  markup-carve/carve#961). This REMOVES a special case rather than adding one:
+  the writer already spelled every other format out - `---toml`, `---json`, any
+  custom word - and dropped the token for `yaml` alone. carve-rs already wrote
+  `---yaml`.
+
+  ```
+  ---            ->   ---yaml
+  title: T            title: T
+  ---                 ---
+  ```
+
+  The reader is unchanged: `---`, `--- yaml` and `---yaml` all still open
+  frontmatter, and the closer stays bare. What moves is what the round trip
+  says - a document parsed with `defaultFrontmatterFormat: 'toml'` and written
+  back bare came back as `yaml` on the next pass, under the option's default.
+
 ### Fixed
 
 - **A COMMENT fence's body in a list item no longer leaks onto the page, and
