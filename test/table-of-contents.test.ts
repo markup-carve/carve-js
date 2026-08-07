@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { Profile, carveToHtml, tableOfContents } from '../src/index.js'
+import {
+  Profile,
+  carveToAstJson,
+  carveToHtml,
+  fromAstJson,
+  renderHtml,
+  tableOfContents,
+  toAstJson,
+} from '../src/index.js'
 
 // The TOC HTML is a byte-faithful match of carve-php's TableOfContentsExtension:
 // one tag per line, column 0. See src/table-of-contents.ts buildList().
@@ -233,6 +241,51 @@ describe('a bottom TOC stays at document level under a profile', () => {
     // `full` denies nothing, so the node is never replaced and the mark is
     // never remapped. Green whether or not the remap exists.
     expect(carveToHtml(src, { extensions: bottom, profile: Profile.full() })).toBe(
+      carveToHtml(src, { extensions: bottom }),
+    )
+  })
+})
+
+/*
+ * The mark does NOT cross the wire, and that is a stated limitation rather than
+ * an oversight.
+ *
+ * `Document.trailerBlocks` is runtime-only, like `footnoteDefPos`, so a caller
+ * that serializes a tree an extension has already transformed and renders the
+ * result gets the nav back inside the last section. Carrying it would mean new
+ * PART 12 vocabulary - the spec's to name and all three engines' to implement -
+ * and the ruling on markup-carve/carve-js#728 authorized the placement, not an
+ * addition to the format.
+ *
+ * Written as two assertions rather than one so the boundary is visible: §6 is
+ * UNAFFECTED, because a field that was never serialized cannot make a round trip
+ * lossy. When the spec does name a trailer, this block is what to delete.
+ */
+describe('the trailer mark is runtime-only', () => {
+  const src = '# A\n'
+  const bottom = [tableOfContents({ position: 'bottom' })]
+
+  it('leaves the §6 round trip an identity', () => {
+    const wire = carveToAstJson(src, { extensions: bottom })
+
+    expect(JSON.stringify(toAstJson(fromAstJson(JSON.parse(JSON.stringify(wire)))))).toBe(
+      JSON.stringify(wire),
+    )
+  })
+
+  it('but a render THROUGH the wire loses the placement', () => {
+    // The render-after-ingest family, not a serializer defect. Asserted as the
+    // whole fragment so the day this stops being true is a failure here rather
+    // than a silent improvement nobody notices.
+    const wire = carveToAstJson(src, { extensions: bottom })
+
+    expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(wire))))).toBe(
+      '<section id="A">\n' +
+        '  <h1>A</h1>\n' +
+        '  <nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
+        '</section>',
+    )
+    expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(wire))))).not.toBe(
       carveToHtml(src, { extensions: bottom }),
     )
   })

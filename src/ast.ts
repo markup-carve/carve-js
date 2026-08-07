@@ -110,6 +110,18 @@ export interface Document extends BaseNode {
    * Runtime only, and not serialized: `toAstJson` builds the root from `type`,
    * `children` and `srcByteLength` alone (PART 12 §7). The same arrangement
    * `footnoteDefPos` above uses.
+   *
+   * So the PLACEMENT does not cross the wire. Serializing a tree an extension
+   * has already transformed and rendering the result puts the nav back inside
+   * the last section, because the wire carries the appended `raw_block` and no
+   * mark. §6 is unaffected - the round trip is still identity, since the field
+   * was never serialized in either direction - and this is the render-after-
+   * ingest family rather than a serializer defect.
+   *
+   * Deliberately not fixed here: carrying it would mean new PART 12 vocabulary,
+   * which is the spec's to name and all three engines' to implement, and the
+   * ruling on markup-carve/carve-js#728 authorized the placement rather than an
+   * addition to the format.
    */
   trailerBlocks?: BlockNode[]
   /**
