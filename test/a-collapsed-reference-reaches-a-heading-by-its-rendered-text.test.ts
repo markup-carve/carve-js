@@ -90,6 +90,20 @@ describe('a collapsed reference reaches a heading by its rendered text', () => {
     expect(/<a href="([^"]*)"/.exec(out)?.[1]).toBe('#bold-heading')
   })
 
+  it("applies R1's four normalizations to the stripped plain text", () => {
+    // The strip produces a string that still has to be trimmed, whitespace-
+    // collapsed, NFC'd and case-folded. A retry that skipped them passes every
+    // case above, because those labels need no normalizing.
+    // Case and a collapsed run:
+    expect(href('# *bold*  heading\n\n[*BOLD*   heading][]\n')).toBe('#bold-heading')
+    // NFC: the heading writes the composed form, the label the decomposed one.
+    // The id keeps the accent (§25 NFC, case-preserving), so the composed
+    // form is what the reference must reach.
+    expect(href('# *caf\u00e9* heading\n\n[*cafe\u0301* heading][]\n')).toBe('#caf\u00e9-heading')
+    // CONTROL: a label that differs by more than normalization still misses.
+    expect(href('# *bold* heading\n\n[*bolder* heading][]\n')).toBe(null)
+  })
+
   it('CONTROL a heading inside a blockquote is still not indexed', () => {
     expect(href('> # *b* h\n\n[*b* h][]\n')).toBe(null)
   })
