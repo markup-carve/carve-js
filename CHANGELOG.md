@@ -43,6 +43,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **BREAKING for a producer of malformed trees: `fromAstJson` validates the whole
+  payload against the AST schema** (markup-carve/carve#881). PART 12 §12(d) makes
+  an ingest check types and required fields together at decode, refused with the
+  same typed error §12(a)-(c) already use. This engine accepted five invalid
+  shapes outright - a root `srcByteLength` of the wrong type or negative, a root
+  `children` that was a string or `null`, an `attrs` that was not an object, a
+  `pos` missing `endOffset` - and five more reached the RENDERER and failed there
+  with a bare `TypeError`, which §9(b) forbids. All of them now throw the new
+  exported `AstJsonSchemaError` at decode. `children: null` in particular was
+  read as an empty document, which is §12's own objection: a reader that supplies
+  a default has turned a truncated document into an empty one. A `srcByteLength`
+  that is present but simply wrong stays accepted, and every tree this engine's
+  own parser produces still round-trips.
+
 - **A definition body continuation indented past its column is lazy text**
   (markup-carve/carve#918). The body's column is the one `:  ` establishes;
   `definition_indent` reaches that column and does not measure how far past it a
