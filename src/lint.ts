@@ -464,7 +464,7 @@ export function lintCarve(
     // marks the whole wrapping figure verbatim, because a captioned code block
     // carries no position of its own, and the caption rides along inside that
     // range. Raised by codex review.
-    for (const ln of collectListingCaptionLines(source, doc)) skip.delete(ln)
+    for (const ln of collectListingCaptionLines(doc)) skip.delete(ln)
     collectPlatformAutolinks(source, opts.platforms, skip, out)
   }
   out.sort((a, b) => a.start - b.start || a.line - b.line || a.column - b.column)
@@ -1106,27 +1106,47 @@ function collectPlatformAutolinks(
   }
 }
 
+/** Whether `ch` occurs unescaped in `line` before `end`. */
+function hasUnescapedBefore(line: string, ch: string, end: number): boolean {
+  for (let i = 0; i < end; i++) {
+    if (line[i] === '\\') {
+      i++
+      continue
+    }
+    if (line[i] === ch) return true
+  }
+
+  return false
+}
+
 /**
  * The caption lines of a figure wrapping a code or raw block.
  *
- * Only the figure's FIRST or LAST line qualifies, and only when it carries the
- * caption marker. A `^ ` line inside the fence BODY is verbatim content and
- * can be neither, because those two are the fence's own delimiters - so the
- * body stays protected.
+ * Read off the CAPTION'S OWN INLINE SPANS, not guessed from the figure range.
+ * A captioned listing reports only the figure's range, so `collectVerbatimLines`
+ * marks the caption verbatim along with the body - but the caption's inline
+ * nodes each carry a position, and their union is exactly the published text.
+ *
+ * Guessing it as "the figure's first or last line carrying the caret" was close
+ * enough for a one-line caption and wrong for a CONTINUED one, whose second
+ * line has no marker and stayed skipped. Raised by codex review. Deriving it
+ * from the spans also leaves a caret line in the fence BODY protected without
+ * having to reason about which lines the delimiters occupy.
  */
-function collectListingCaptionLines(source: string, doc: Document): Set<number> {
+function collectListingCaptionLines(doc: Document): Set<number> {
   const captions = new Set<number>()
-  const lines = source.split('\n')
-  const isCaption = (ln: number): boolean => /^[ \t]*\^[ \t]/.test(lines[ln - 1] ?? '')
   walkDocument(doc, (node) => {
     if (node.type !== 'figure') return
     const target = (node.target as { type?: string } | undefined)?.type
     if (target !== 'code_block' && target !== 'raw_block') return
-    const pos = (node as Positioned).pos
-    if (!pos) return
-    const end = (pos as { endLine?: number }).endLine ?? pos.startLine
-    if (isCaption(pos.startLine)) captions.add(pos.startLine)
-    if (end !== pos.startLine && isCaption(end)) captions.add(end)
+    const caption = (node as { caption?: unknown }).caption
+    if (!Array.isArray(caption)) return
+    for (const part of caption as Positioned[]) {
+      const pos = part.pos
+      if (!pos) continue
+      const end = pos.endLine ?? pos.startLine
+      for (let ln = pos.startLine; ln <= end; ln++) captions.add(ln)
+    }
   })
   return captions
 }
@@ -1153,6 +1173,10 @@ function maskInlineDestinations(line: string): string {
   let out: string[] | null = null
   for (let i = 0; i + 1 < line.length; i++) {
     if (line[i] !== ']' || line[i + 1] !== '(') continue
+    // A LABEL HAS TO OPEN SOMEWHERE. A bare `](#123)` in prose is visible text,
+    // not a destination, and masking it lost the finding. An escaped `\]` does
+    // not close a label either. Raised by codex review.
+    if (line[i - 1] === '\\' || !hasUnescapedBefore(line, '[', i)) continue
     let depth = 1
     let j = i + 2
     for (; j < line.length; j++) {

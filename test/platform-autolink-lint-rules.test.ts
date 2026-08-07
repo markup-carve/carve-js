@@ -187,9 +187,14 @@ describe('platform-autolink lint rules', () => {
     // uncaptioned listing is skipped whole.
     expect(platformRules(lintCarve('```\n^ @alice #1\n```\n', { platforms: ['github'] }))).toEqual([])
     expect(platformRules(lintCarve('```\n@alice #1\n```\n', { platforms: ['github'] }))).toEqual([])
-    // And the same BODY line inside a CAPTIONED listing stays verbatim: only
-    // the figure's first or last line is reclaimed, so a rule that reclaimed
-    // every caption-shaped line in the range would flag the body too.
+    // A CONTINUED caption is published on every one of its lines, and the
+    // continuation carries no marker - reclaiming by marker missed it.
+    expect(
+      platformRules(lintCarve('```\nq\n```\n^ Caption\ncontinued @alice #1\n', { platforms: ['github'] })),
+    ).toEqual(both)
+    // And the same BODY line inside a CAPTIONED listing stays verbatim, because
+    // the reclaim is the caption's OWN spans rather than a guess at which lines
+    // of the figure carry it.
     const bodyCaret = '```\n^ @alice #1\n```\n^ Caption @bob #2\n'
     const found = lintCarve(bodyCaret, { platforms: ['github'] })
     expect(found.map((f) => bodyCaret.slice(f.start, f.end))).toEqual(['@bob', '#2'])
@@ -212,6 +217,14 @@ describe('platform-autolink lint rules', () => {
     expect(
       platformRules(lintCarve('See [x](a\\)#123) here.\n', { platforms: ['github'] })),
     ).toEqual([])
+    // A LABEL HAS TO OPEN SOMEWHERE: a bare `](#123)` in prose is visible text,
+    // and so is an escaped `\](#123)`.
+    expect(platformRules(lintCarve('See ](#123) here.\n', { platforms: ['github'] }))).toEqual([
+      'platform-issue-reference',
+    ])
+    expect(
+      platformRules(lintCarve('See \\](#123) here.\n', { platforms: ['github'] })),
+    ).toEqual(['platform-issue-reference'])
     // CONTROL: an UNBALANCED run is not a destination, so it stays prose.
     expect(platformRules(lintCarve('See [x](a(b #123 here.\n', { platforms: ['github'] }))).toEqual([
       'platform-issue-reference',
