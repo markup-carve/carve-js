@@ -27,27 +27,30 @@
 /**
  * Whether the code unit at `index` is whitespace this trim may remove.
  *
- * `[^\S ]` is `\s` MINUS NBSP - so this must agree with `\s` on every
- * character except U+00A0, including the Unicode spaces and U+FEFF that are
- * easy to forget. ASCII is answered arithmetically because that is the whole
- * input in practice; anything above it defers to the regex engine rather than
- * to a hand-written list that would be wrong for U+2028 or U+3000.
+ * CARVE'S WHITESPACE IS FOUR CHARACTERS: U+0020, U+0009, U+000A and U+000D
+ * (markup-carve/carve#977, PART 7: ONE WHITESPACE DEFINITION, IN EVERY
+ * CONSTRUCT). EVERY OTHER CHARACTER IS CONTENT, and the clause names the two
+ * an implementation is likeliest to admit by accident - VERTICAL TAB (U+000B)
+ * and FORM FEED (U+000C) - so their absence here cannot be read as an
+ * oversight.
+ *
+ * THIS USED TO BE `\s` MINUS TWO EXCEPTIONS. It removed U+0009 through U+000D
+ * as a range (so both characters above), and deferred every non-ASCII code
+ * point to the host language's `\s` (so U+1680, U+2000-U+200A, U+2028, U+3000
+ * and the rest). NBSP and U+FEFF were carved back out one at a time, each with
+ * its own bug behind it - which is the shape of a definition that belongs to
+ * the host language rather than to Carve. Naming the four characters directly
+ * makes both exceptions disappear: U+00A0 and U+FEFF are simply not among
+ * them, and neither is any other Unicode space.
+ *
+ * This trim runs on RENDERED text for the non-HTML targets, so what it removes
+ * is what those targets DROP from a document. It dropped a trailing vertical
+ * tab from a heading and a form feed from a paragraph, each of which the HTML
+ * target kept - the same document, two answers, from one class.
  */
 function isTrimmable(text: string, index: number): boolean {
   const code = text.charCodeAt(index)
-  if (code === 0x00a0) return false
-  // U+FEFF IS NOT WHITESPACE, whatever JavaScript thinks. `\s` includes it in
-  // this language and in no other engine here - Rust's `char::is_whitespace`
-  // and PCRE's `\s` both exclude it - and every engine keeps the character in
-  // the rendered HTML, where it is ordinary content. So trimming it made
-  // `to_html(fmt(x)) == to_html(x)` false (PART 11 §1): `hello<U+FEFF>` was
-  // written back as `hello` and rendered without a character the source
-  // renders with (carve#844). The second exception on this list, and for the
-  // same reason as NBSP - it is content the author wrote.
-  if (code === 0xfeff) return false
-  if (code === 0x20 || (code >= 0x09 && code <= 0x0d)) return true
-  if (code < 0x80) return false
-  return /\s/.test(text[index] as string)
+  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d
 }
 
 /**

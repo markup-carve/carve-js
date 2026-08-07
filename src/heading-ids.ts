@@ -1027,7 +1027,7 @@ export function resolveHeadingIds(
       const autoNodes = labelNodes.map((n) => ({ ...n })) as InlineNode[]
       const last = autoNodes[autoNodes.length - 1]
       if (last && last.type === 'text') {
-        last.value = last.value.replace(/\s+$/, '')
+        last.value = last.value.replace(RE_TRAILING_LABEL_WS, '')
       }
       autoNodes.push({ type: 'text', value: ` ${next}` } as Text)
       targets.set(id, autoNodes)
@@ -1095,11 +1095,34 @@ export function resolveHeadingIds(
   return doc
 }
 
-// "Content" is any non-ASCII-whitespace character ([ \t\n\r\f]); a non-breaking
-// space (U+00A0) counts as content, matching RE_CAPTION and the parser's NBSP
+// "Content" is any character that is not one of Carve's four whitespace
+// characters - U+0020, U+0009, U+000A, U+000D (markup-carve/carve#977, PART 7:
+// ONE WHITESPACE DEFINITION, IN EVERY CONSTRUCT). A non-breaking space
+// (U+00A0) counts as content, matching RE_CAPTION and the parser's NBSP
 // handling elsewhere. (String.trim() is Unicode-aware and would wrongly drop
 // NBSP, so test against this class instead.)
-const RE_HAS_CONTENT = /[^ \t\n\r\f]/
+//
+// THE FORM FEED CAME OUT OF THIS CLASS. It read `[^ \t\n\r\f]`, so U+000C was
+// not content here while it was content one line below the marker - the
+// per-construct derivation carve#977 names as the source of the divergence.
+// U+000B was never in it, which is the asymmetry that gives the game away:
+// nothing in the grammar distinguishes the two.
+const RE_HAS_CONTENT = /[^ \t\n\r]/
+
+/**
+ * The trailing whitespace run stripped from a numbered caption's LABEL.
+ *
+ * ONE producer, because the label is computed twice - once as the counter's
+ * KEY (`numberCaptionsIn`) and once as the auto-text a crossref renders
+ * (`numberBlocks`) - and the two must agree or a document numbers under one
+ * key and renders under another.
+ *
+ * It read `/\s+$/`, the host language's full Unicode class, so `^ Figure<FF> #`
+ * and `^ Figure #` shared a counter and the second figure came out "Figure 2"
+ * with no "Figure 1" beside it. Carve's whitespace is four characters and a
+ * form feed is not one of them (carve#977, PART 7).
+ */
+const RE_TRAILING_LABEL_WS = /[ \t\n\r]+$/
 
 // Whether a `[Image, soft-break, "^ …", …]` paragraph's caption carries any
 // content on its FIRST line: text after the `^ ` marker on the marker node, or
@@ -1293,7 +1316,7 @@ export function numberCaptionsIn(
     const idx = caption.findIndex((n) => n.type === 'caption_number')
     if (idx === -1) return
     const labelNodes = caption.slice(0, idx)
-    const label = inlineText(labelNodes).replace(/\s+$/, '')
+    const label = inlineText(labelNodes).replace(RE_TRAILING_LABEL_WS, '')
     const next = (counters.get(label) ?? 0) + 1
     counters.set(label, next)
     ;(caption[idx] as CaptionNumber).n = next

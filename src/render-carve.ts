@@ -1361,10 +1361,16 @@ function renderCode(content: string): string {
   // around backtick-adjacent content. All-space content must therefore NOT be
   // padded: it is emitted verbatim and read back unchanged. Padding it instead
   // grew the span by two spaces on every fmt pass.
+  //
+  // "ENTIRELY SPACES" IS MEASURED IN CARVE'S WHITESPACE, the four characters
+  // PART 7 names (markup-carve/carve#977), not the host language's `\s`. This
+  // read a native `.trim()`, so ` <VT> ` counted as all-space here while the
+  // parser - once it read the same four characters - strips its padding. The
+  // two halves of one reversible operation have to spell the test once.
   const needsPad =
     content.startsWith('`') ||
     content.endsWith('`') ||
-    (content.startsWith(' ') && content.endsWith(' ') && content.trim() !== '')
+    (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
   return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
@@ -1491,6 +1497,19 @@ function alignMarker(align: TableCell['align']): string {
  * which is this pattern. Keep them in step.
  */
 const RE_WRITER_BLANK = /^[ \t]*$/
+
+/**
+ * Whether `text` holds nothing but Carve whitespace - U+0020, U+0009, U+000A,
+ * U+000D and nothing else (markup-carve/carve#977, PART 7).
+ *
+ * Spelled once, because a native `.trim() === ''` answers a different question
+ * (the host language's `\s`, which holds U+000B, U+000C, U+00A0, U+FEFF and
+ * every Unicode space) and the difference is invisible until a document
+ * carries one of them.
+ */
+function isCarveBlank(text: string): boolean {
+  return /^[ \t\n\r]*$/.test(text)
+}
 
 function lineBlockLayoutWhitespace(body: string): string {
   return body.replace(/(?:^\ue000+)|\ue000{2,}/gm, (run) => sentinels[0].repeat(run.length))

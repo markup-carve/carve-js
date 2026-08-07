@@ -119,6 +119,33 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Whitespace means the same four characters in every construct: U+0020,
+  U+0009, U+000A and U+000D. A VERTICAL TAB (U+000B) and a FORM FEED (U+000C)
+  are CONTENT** (markup-carve/carve#977, PART 7; the ruling on
+  markup-carve/carve#963).
+
+  Nine sites read the host language's whitespace class instead - a native
+  `.trim()`, a regex `\s`, or `\s` with one character carved back out - and each
+  gave a different answer from the construct beside it:
+
+  - `# <FF>` and `^ <FF>` were not a heading and not a caption, though
+    `# <VT>` and `^ <VT>` were.
+  - `<VT>- a` was a LIST, the vertical tab read as indentation, and `carve fmt`
+    wrote the character away. Every Unicode space did the same.
+  - `^[<VT>]` was literal text where `^[<NBSP>]` was an inline footnote.
+  - `` ` <VT> ` `` kept its padding, because the all-space guard called the
+    content all-space; `` ` x ` `` strips it.
+  - `^ Figure<FF> #` and `^ Figure #` shared one counter, so the second figure
+    rendered "Figure 2" with no "Figure 1" beside it.
+  - `%%<VT>note` lost the character, and `carve fmt` wrote a space in its place.
+  - The Markdown, plain-text and ANSI targets dropped a trailing vertical tab or
+    form feed that the HTML target kept.
+
+  The carve-outs go with the class that needed them: NBSP and U+FEFF were
+  removed from `\s` one bug at a time, and naming the four characters directly
+  makes both unnecessary - along with U+1680, U+2000-U+200A and U+3000, which no
+  carve-out had reached.
+
 - **`carve fmt` writes a frontmatter opener with its format token: `---yaml`,
   not a bare `---`** (markup-carve/carve#977, PART 11 §6b; the ruling on
   markup-carve/carve#961). This REMOVES a special case rather than adding one:
