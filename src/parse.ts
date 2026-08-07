@@ -3803,11 +3803,13 @@ interface BlockQuoteLazyState {
   inComment: boolean
   commentLen: number
   /**
-   * How many colon-fence containers are open in this quote — the same counter
-   * `trackItemLazyState` keeps, so a bare `:::` run reads as the innermost
-   * container's closer rather than as another opener.
+   * Widths of the colon fences open in this quote, innermost last, so a bare
+   * `:::` run reads as the innermost container's closer only on an EXACT width
+   * match — `collectColonFenceBody`'s rule. A plain counter closed a `::::`
+   * container on a `:::` run, which that container reads as a nested opener,
+   * and the quote then ended on a line the top level folds in.
    */
-  divDepth: number
+  colonWidths: number[]
   /**
    * Whether the open paragraph has absorbed a MALFORMED colon fence, so a
    * following bare run is absorbed as text too (§12).
@@ -3904,16 +3906,18 @@ function trackBlockQuoteLazyState(
   // The colon-fence arm below is `trackItemLazyState`'s, restated for the quote:
   // one construct answering S4 two ways depending on the container kind is the
   // defect markup-carve/carve#920 names, so the two trackers keep the same
-  // model - a `divDepth` counter, a bare run reading as the innermost
-  // container's CLOSER, and the §12 absorption rule for a malformed opener.
+  // model - open containers, a bare run reading as the innermost one's CLOSER,
+  // and the §12 absorption rule for a malformed opener.
   //
-  // A bare run with a container open is that container's closer, and a CLOSED
-  // container holds no open paragraph. Nothing tracked the closer at all here,
-  // so `> q` / `> ::: note` / `> body` / `> :::` / `tail` left the tracker
-  // believing the quote's paragraph was still open and kept `tail` inside it.
-  const bareFence = /^:{3,}[ \t]*$/.test(content)
-  if (bareFence && state.divDepth > 0) {
-    state.divDepth--
+  // A bare run at the innermost container's EXACT width is that container's
+  // closer, and a CLOSED container holds no open paragraph. Nothing tracked the
+  // closer at all here, so `> q` / `> ::: note` / `> body` / `> :::` / `tail`
+  // left the tracker believing the quote's paragraph was still open and kept
+  // `tail` inside it.
+  const bareFenceRun = /^(:{3,})[ \t]*$/.exec(content)
+  const bareFence = bareFenceRun !== null
+  if (bareFence && bareFenceRun![1]!.length === state.colonWidths[state.colonWidths.length - 1]) {
+    state.colonWidths.pop()
     state.paragraphOpen = false
     return
   }
@@ -3926,6 +3930,10 @@ function trackBlockQuoteLazyState(
     // ...unless the paragraph above already absorbed a MALFORMED fence and this
     // line is a bare run, in which case §12 takes it as text too and the
     // paragraph stays open. Corpus 260 pins that shape inside a quote.
+    //
+    // Reaching here with a bare run already proves it is NOT the innermost
+    // container's closer - that branch returned above - so absorption applies
+    // inside a container as readily as at the quote's own level.
     if (wasAbsorbing && bareFence) {
       state.absorbingFence = true
       state.paragraphOpen = true
@@ -3934,17 +3942,15 @@ function trackBlockQuoteLazyState(
     // A colon-fence OPENER is structural and needs no closer ahead ("colon-fence
     // containers open immediately and auto-close at EOF"), so it interrupts an
     // open quoted paragraph and leaves an EMPTY container holding none either.
-    state.divDepth++
+    state.colonWidths.push(colonFenceOpenerLen(content) ?? 3)
     state.paragraphOpen = false
     return
   }
   // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
   // (`:::note` fails §12's opener test - a type word needs a space), and from
-  // here the paragraph absorbs the next bare fence-shaped line as well. Only at
-  // the quote's own level: inside an open container the line is body text and
-  // the closer below it is still a closer.
+  // here the paragraph absorbs the next bare fence-shaped line as well.
   if (/^:{3,}/.test(content)) {
-    state.absorbingFence = state.divDepth === 0
+    state.absorbingFence = true
     state.paragraphOpen = true
     return
   }
@@ -4003,7 +4009,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     fenceClose: null,
     inComment: false,
     commentLen: 0,
-    divDepth: 0,
+    colonWidths: [],
     absorbingFence: false,
     paragraphOpen: false,
   }

@@ -138,6 +138,33 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
+  it('closes a container only on an EXACT bare-run width, so a shorter run stays absorbable text', () => {
+    // `collectColonFenceBody` matches a closer on the EXACT opener width, so
+    // inside a `::::` container a bare `:::` is a NESTED OPENER, not the
+    // closer - and after a malformed `:::note` above it, §12 absorption takes
+    // it as text and the paragraph stays open. A plain open-container COUNT
+    // read it as the closer and ended the quote. The top level and the list
+    // item both fold here, and now so does the quote.
+    const source = (prefix: string) =>
+      [':::: outer', ':::note', 'x', ':::'].map(prefix ? (l) => prefix + l : (l) => l).join('\n') +
+      '\ntail\n'
+    expect(html(source(''))).toBe(
+      '<div class="outer">\n  <p>:::note\nx\n:::\ntail</p>\n</div>',
+    )
+    expect(html(source('> '))).toBe(
+      '<blockquote>\n  <div class="outer">\n    <p>:::note\nx\n:::\ntail</p>\n  </div>\n</blockquote>',
+    )
+  })
+
+  it('CONTROL a shorter bare run with no absorption above it still opens a nested container', () => {
+    // The control on the width rule: without the malformed fence there is
+    // nothing to absorb, so the shorter run opens an EMPTY nested container -
+    // which holds no paragraph, so the quote still ends.
+    expect(html('> :::: outer\n> x\n> :::\ntail\n')).toBe(
+      '<blockquote>\n  <div class="outer">\n    <p>x</p>\n    <div>\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
+    )
+  })
+
   it('does not count a fence closer that sits OUTSIDE the quote', () => {
     // `quotedFenceHasCloser` stops at the first unquoted line, for the reason
     // `quotedCommentHasCloser` gives: it has to agree with a sub-lexer that
