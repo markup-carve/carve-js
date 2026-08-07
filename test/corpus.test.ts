@@ -313,6 +313,18 @@ const IMPLEMENTED = new Set([
   'trailing-whitespace-on-a-content-line-is-dropped',
   'a-definition-body-continuation-indented-past-its-column-is-lazy-text',
   'a-real-div-in-a-container-and-the-flush-left-line-after-it',
+  // Added with the spec bump that carries carve#975. Seven of these eight are
+  // documents about rules this engine already implements, so they arrive here
+  // green; the eighth, `a-list-marker-at-the-content-column-inside-an-open-fence`,
+  // is the rule this bump implements.
+  'a-below-column-marker-after-a-comment-where-no-paragraph-is-open',
+  'a-collapsed-reference-reaches-a-heading-by-the-heading-s-rendered-text',
+  'a-fence-opened-on-a-list-marker-line-body-below-the-content-column',
+  'a-list-marker-at-the-content-column-inside-an-open-fence',
+  'a-quoted-attribute-value-stops-at-the-newline',
+  'an-autolink-body-admits-non-ascii-and-excludes-format-characters',
+  'the-flush-left-line-after-a-container-a-quoted-line-opened',
+  'the-inline-attribute-interior-is-space-only-the-attribute-line-is-not',
 ])
 
 /**
@@ -332,32 +344,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    '252-a-tab-separates-two-attributes-and-pads-a-block-as-a-space-does',
-    {
-      reason:
-        "PART 4's inline attribute interior is space-only (carve#906, carve-js#836); the pinned corpus still asserts the tab forms",
-      html: '<p><strong>x</strong>{.a\t.b}</p>\n<p><strong>y</strong>{\t.c}</p>\n<p><strong>z</strong>{.d\t}</p>',
-    },
-  ],
-  [
-    '252-a-tab-separates-two-attributes-and-pads-a-block-as-a-space-does-2',
-    {
-      reason:
-        "PART 4's inline attribute interior is space-only (carve#906, carve-js#836); the pinned corpus still asserts the tab forms",
-      html: '<p><strong>x</strong>{k=a\t.b}</p>\n<p><strong k="a\tb">y</strong></p>',
-    },
-  ],
-  [
-    '252-a-tab-separates-two-attributes-and-pads-a-block-as-a-space-does-3',
-    {
-      reason:
-        "PART 4's inline attribute interior is space-only (carve#906, carve-js#836); the pinned corpus still asserts the blessed empty block with a tab",
-      html: '<p>[x]{\t}</p>',
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
