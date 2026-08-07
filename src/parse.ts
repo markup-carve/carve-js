@@ -2476,12 +2476,17 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
  * startsInterruptingBlock can break an open paragraph on a trailing `{...}`
  * line (which then floats forward via parseBlocks).
  */
-function peekBlockAttributes(lexer: Lexer): boolean {
+function peekBlockAttributes(lexer: Lexer, firstLine?: string): boolean {
   // Strict column-0 rule: a block-attribute line opens ONLY at its container's
   // content column (column 0 in every parseBlocks context, since nested content
   // is dedented into a sub-lexer). A `{...}` indented ABOVE that column does not
   // attach -- it is literal paragraph text. So require the `{` flush, not `\s*{`.
-  if (!/^\{/.test(lexer.peek()!)) return false
+  //
+  // `firstLine` overrides only the line the flush test reads, for the one caller
+  // that classifies a line's CONTENT rather than the line at its indent
+  // (markup-carve/carve#932). The continuation lines are still the lexer's: a
+  // `{...}` block may span lines, and only its first one carries the residue.
+  if (!/^\{/.test(firstLine ?? lexer.peek()!)) return false
   let collected = ''
   let n = 0
   let closed = false
@@ -3924,12 +3929,41 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // Lazy continuation: a flush-left line (no blank before it) that does not
       // start an interrupting block folds into the open paragraph; a block
       // opener ends the definition.
+      //
+      // TWO RULES GATE IT, and they ask different questions.
+      //
       // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0 S4, markup-carve/carve#956).
-      // `startsInterruptingBlock` asks what THIS line is; `lazyFoldable` asks
-      // what the body currently ends in. Both have to hold: a verbatim body is
+      // `lazyFoldable` asks what the body currently ends in: a verbatim body is
       // not an open paragraph, so there is nothing for a below-column line to
       // continue and the containers close instead.
-      if (lazyState.lazyFoldable && !startsInterruptingBlock(lexer)) {
+      //
+      // BELOW THE BODY'S COLUMN THE BODY ENDS (markup-carve/carve#932). Every
+      // line that reaches here is below the body's content column - Form A above
+      // took the ones at or past it - so this branch IS the BELOW band, and the
+      // band does not measure how far below. Column 0 is not a special case of
+      // it, it is the ordinary case.
+      //
+      // So the classification reads the line's CONTENT, with its sub-column
+      // residue removed. `startsInterruptingBlock` is a battery of `^`-anchored
+      // patterns, so handing it the raw line asked "does this open a block AT ITS
+      // INDENT" - and answered no for one and two spaces where it answered yes
+      // for zero. `:: t` / `:  body` / ` > q` folded the quote in as lazy text at
+      // one and two spaces and ended the body at zero, which gives a sub-column
+      // indent a meaning of its own and makes indentation depth mean two
+      // different things one column apart.
+      //
+      // Ending the body is all that decides. WHERE the line then lands is the
+      // surviving context's business: at column 0 the quote opens, and at one or
+      // two the top level's STRICT COLUMN-0 rule for indented block openers makes
+      // it text. Both are the same classification, run in a context that has its
+      // own rule about indentation - which is why the two columns still render
+      // differently.
+      //
+      // Lazy continuation is unaffected by the second rule and is not its other
+      // side: a plain line carries no block opener at any indent, so it folds
+      // into the body's open paragraph whenever the first rule allows it.
+      const below = ln.replace(/^[ \t]+/, '')
+      if (lazyState.lazyFoldable && !startsInterruptingBlock(lexer, below)) {
         const lineIndex = lexer.pos
         bodyLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -6116,9 +6150,18 @@ function fenceHasCloser(lexer: Lexer, marker: string): boolean {
  * with the §10 carve-outs: a bare image does NOT interrupt; an ordered marker
  * interrupts only as `1.`/`1)`; a fence/`:::` interrupts only with a closer
  * ahead; a `|` line interrupts only when it is a valid table row.
+ *
+ * `content` overrides WHICH TEXT is classified while keeping the lexer for the
+ * lookaheads that need it (a fence's closer, `atDocumentLevel`). One caller
+ * needs it: a container's BELOW band, where the line's remaining indentation is
+ * a sub-column residue rather than part of what the line says
+ * (markup-carve/carve#932). Every `^`-anchored pattern here fails on an indented
+ * line, so passing the raw line there answers a different question - "does this
+ * line open a block AT ITS INDENT" - and that question is the top level's to
+ * answer, after the container has closed.
  */
-function startsInterruptingBlock(lexer: Lexer): boolean {
-  const ln = lexer.peek()
+function startsInterruptingBlock(lexer: Lexer, content?: string): boolean {
+  const ln = content ?? lexer.peek()
   if (ln === undefined) return false
   // Dispatch on the first non-whitespace character, so a line costs one or two
   // regex tests instead of the whole battery — this is the per-line cost on
@@ -6192,7 +6235,12 @@ function startsInterruptingBlock(lexer: Lexer): boolean {
       // A standalone block-attribute line (invisible): it floats forward to
       // the next block (or is dropped when none follows, §15), so it must
       // interrupt the paragraph rather than fold in as literal text.
-      return peekBlockAttributes(lexer)
+      //
+      // The override is threaded through: this is the one arm that re-reads the
+      // line from the lexer instead of testing `ln`, so without it a below-column
+      // `{.x}` stayed lazy text while every other opener kind left the container
+      // (raised by codex review on markup-carve/carve-js#864).
+      return peekBlockAttributes(lexer, content === undefined ? undefined : ln)
     default:
       // An ordered-list marker does NOT interrupt a paragraph (it needs a blank
       // line, matching Djot): allowing it would require the CommonMark `1.`-only
