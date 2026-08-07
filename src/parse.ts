@@ -209,15 +209,29 @@ function fenceCloseRe(marker: string): RegExp {
 // both spellings carry the same terminal -- otherwise ```js "T" [L] and
 // ``` "T" [L] would disagree about a tab for no reason a reader could state.
 //
-// Cardinality is deliberately unchanged (`space` vs `space+` is a separate
-// question from the terminal). The TRAILING run before end-of-line is not a
-// slot in `fenced_code_block` either, and carries `TRAILING_WS` above: it was
-// left at `\s` when the slots were narrowed, so ```` ```<BOM> ```` opened a
-// fence in this engine while carve-rs and carve-php both read the line as
-// prose. Opener and closer are one run seen from two ends (carve-js#805).
+// AND THE OPENER SLOT IS EXACTLY ONE SPACE (carve#912). `fenced_code_block =
+// code_fence_open, [space], [code_fence_info]` spells that slot with a bare
+// `space`, and this read ` *` - so ``` ```<SP><SP>php ``` opened a php fence
+// here, as it did in carve-php, carve-rs and the executable spec. The ruling
+// is that the production is right and the four lax artifacts narrow. With two
+// spaces the second one reaches `language_info`, whose class holds no space,
+// the opener matches no shape, and the INVALID-FENCE FALLBACK applies: an
+// inline verbatim span in a paragraph.
+//
+// `code_fence_info`'s OWN two metadata slots - the ones before the quoted
+// header and before the [label] - stay ` +`. Those are spelled `space+` in the
+// production, and carve#912 ruled only the four slots spelled with a bare
+// `space`. Cardinality is per-production, not global; the colon fence's
+// separator keeps its run for the same reason (carve#892).
+//
+// The TRAILING run before end-of-line is not a slot in `fenced_code_block`
+// either, and carries `TRAILING_WS` above: it was left at `\s` when the slots
+// were narrowed, so ```` ```<BOM> ```` opened a fence in this engine while
+// carve-rs and carve-php both read the line as prose. Opener and closer are
+// one run seen from two ends (carve-js#805).
 // Groups: 3 lang, 4|6 header (quoted, incl. quotes), 5|7|8 label (incl. brackets).
 const RE_FENCE = new RegExp(
-  '^()(`{3,}|~{3,}) *(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\]]*\\]))?' +
+  '^()(`{3,}|~{3,}) ?(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\]]*\\]))?' +
     '|("[^"]*")(?: +(\\[[^\\]]*\\]))?|(\\[[^\\]]*\\]))?' +
     TRAILING_WS,
 )
@@ -585,8 +599,24 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
       continue
     }
     if (c === '}' && open !== -1 && i === end.length - 1) {
-      if (open === 0 || !/\s/.test(end[open - 1]!)) return [line, null]
-      return [end.slice(0, open).replace(/\s+$/, ''), end.slice(open)]
+      // THE SLOT IS EXACTLY ONE SPACE (carve#912). `reference_definition` ends
+      // `[space, attributes], newline` - a bare `space` - and this accepted any
+      // run: it tested ONE character for `\s` and then stripped the whole run
+      // with `/\s+$/`. So `[a]: /u<SP><SP>{.c}` attached the block here, as it
+      // did in all three engines and in the executable spec.
+      //
+      // Both ends are checked, deliberately. Testing only the character before
+      // the brace accepts `<TAB><SP>{`, and testing only the one before that
+      // accepts `<SP><TAB>{`; a rule about a RUN written as a rule about one
+      // end has been shipped in this org in three languages on one day. The
+      // character before the space must exist and must not itself be padding.
+      const pad = end[open - 1]
+      const before = end[open - 2]
+      if (pad !== ' ' || before === undefined || before === ' ' || before === '\t') {
+        return [line, null]
+      }
+
+      return [end.slice(0, open - 1), end.slice(open)]
     }
   }
   return [line, null]
@@ -660,8 +690,21 @@ export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\uFEFF'
 //
 // The INDENT class at the front of the pattern is untouched: leading U+00A0 is
 // still content there, so ` <NBSP>[r]: /u` is still not a definition.
+//
+// THE TITLE SLOT IS EXACTLY ONE SPACE (carve#912). `reference_definition`
+// reaches the title through `link_title = space, ('\"', ...)`, one character,
+// and this read `\p{White_Space}+` - so `[a]: /u<SP><SP>\"T\"` took the title
+// here, as it did in all three engines and in the executable spec. Narrowing
+// the CARDINALITY also settles the terminal at this slot: the run was Unicode
+// whitespace, so a tab-first and both mixed runs satisfied it, and one literal
+// space admits none of them. That is the shape carve#907 deliberately left
+// unpinned at this slot, and it is pinned now.
+//
+// The slot BEFORE the destination is untouched and stays a Unicode run: the
+// grammar calls that one leading whitespace, not a padding slot (the long
+// note above).
 const RE_LINK_DEF =
-  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?:\p{White_Space}+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
+  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?.*$/u
 // Footnote definition `[^label]: body`. Tested before RE_LINK_DEF, which
 // would otherwise capture `^label` as a link reference label.
 //
@@ -743,7 +786,15 @@ const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "([^"]*)"| '([^']*)')?\)(?:\
 // were already excluded here, because this slot had been narrowed to `[ \t]`
 // rather than left as `\s`; that narrowing was right as far as it went and only
 // the tab had to go.
-const RE_FRONTMATTER_OPEN = new RegExp('^--- *(\\w*)' + TRAILING_WS)
+//
+// AND THE SLOT IS EXACTLY ONE SPACE (carve#912). `frontmatter_open = "---",
+// [space], [frontmatter_format]` spells one character and this read ` *`, so
+// `---<SP><SP>yaml` opened frontmatter here as it did in all three engines.
+// With ` ?` the second space reaches `frontmatter_format = (letter | digit)+`,
+// which cannot match it, so the line is not a typed opener - and it is not a
+// thematic break either, so it is ordinary paragraph text and the metadata
+// lines fold into it.
+const RE_FRONTMATTER_OPEN = new RegExp('^--- ?(\\w*)' + TRAILING_WS)
 // Frontmatter close fence: bare `---` only.
 const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
 // Raw passthrough block: ```=FORMAT … ``` (§4.15, djot raw-block syntax). The
@@ -758,7 +809,22 @@ const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
 // first non-whitespace character of the line (PART 7). `raw_block =
 // code_fence_open, [space], "=", format_name, newline`. It was `\s`, so a tab,
 // a form feed, a vertical tab and every Unicode space opened a raw block.
-const RE_RAW_FENCE = new RegExp('^(`{3,}|~{3,}) *=([a-zA-Z][\\w-]*)' + TRAILING_WS)
+//
+// AND THE SLOT IS EXACTLY ONE SPACE (carve#912), for the same reason and by
+// the same clause as the code fence's. `raw_block = code_fence_open, [space],
+// "=", format_name` is a bare `space`.
+//
+// This is the SECOND SPELLING of `code_fence_open`'s padding slot in this
+// file - `RE_FENCE` is the first - and the two have to be narrowed together.
+// The executable spec does not have the choice: it routes the raw block
+// through the SAME `parseFenceInfo` as an ordinary fence and reads the `=`
+// off the parsed `lang`, so narrowing that one slot narrowed both. Here they
+// are two patterns, so leaving this one at ` *` would have left
+// ``` ```<SP><SP>=html ``` opening a raw block against an oracle that reads
+// it as a paragraph - a divergence created by the fix for the other spelling.
+// The ticket named neither: it named the four PRODUCTIONS, and this engine
+// spells one of them twice.
+const RE_RAW_FENCE = new RegExp('^(`{3,}|~{3,}) ?=([a-zA-Z][\\w-]*)' + TRAILING_WS)
 // Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
 // by length); a `%%` line is a line comment. Neither is rendered. A line
 // comment may be indented: leading whitespace before `%%` does not matter, so an
