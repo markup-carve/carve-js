@@ -119,6 +119,53 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A list marker at a list item's content column, inside a fence that item
+  opened, is code text** (markup-carve/carve#975, markup-carve/carve-php#1007).
+  PART 9 §24's S1 and S2 place a line by the COLUMN it reaches and neither reads
+  its first character, so inside a fenced body `- x` is the same continuation
+  that a plain `x` is. carve-js tested for a marker with no fence guard, so the
+  marker line split the item's collected lines in two: the opener was left alone
+  as an EMPTY code block, the marker opened a nested list, and the closer trailed
+  it as an inline code span.
+
+  Input:
+
+  ```
+  - ```
+    - x
+    ```
+  ```
+
+  Output before:
+
+  ```html
+  <ul>
+    <li>
+      <pre><code>
+  </code></pre>
+      <ul>
+        <li>x
+  <code></code></li>
+      </ul>
+    </li>
+  </ul>
+  ```
+
+  Output now:
+
+  ```html
+  <ul>
+    <li>
+      <pre><code>- x
+  </code></pre>
+    </li>
+  </ul>
+  ```
+
+  The same fix covers the fence opened after a blank line inside the item, and
+  the flush-left block a `+` continuation marker attaches, where two further
+  collection loops severed a fence body the same way.
+
 - **A collapsed reference that reaches a heading by the heading's rendered text
   now publishes that derived label in `ref`** (markup-carve/carve#962). PART 12
   §3a defines `ref` as the label the reference RESOLVES BY, with the authored
