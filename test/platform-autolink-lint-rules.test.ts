@@ -225,6 +225,11 @@ describe('platform-autolink lint rules', () => {
     expect(
       platformRules(lintCarve('See \\](#123) here.\n', { platforms: ['github'] })),
     ).toEqual(['platform-issue-reference'])
+    // ...including when a real label opens EARLIER on the line, which is the
+    // only shape where the escape check does work the bracket check does not.
+    expect(
+      platformRules(lintCarve('See [x] and \\](#123) here.\n', { platforms: ['github'] })),
+    ).toEqual(['platform-issue-reference'])
     // CONTROL: an UNBALANCED run is not a destination, so it stays prose.
     expect(platformRules(lintCarve('See [x](a(b #123 here.\n', { platforms: ['github'] }))).toEqual([
       'platform-issue-reference',
