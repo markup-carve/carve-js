@@ -782,6 +782,29 @@ const RE_COMMENT_BLOCK = /^(%{3,})(.*)$/
 // strict form above still decides, so an indented fence does not close the item
 // it sits in.
 const RE_COMMENT_BLOCK_ANY = /^[ \t]*(%{3,})(.*)$/
+/**
+ * The `%` run length of a comment-fence delimiter line, or undefined.
+ *
+ * ONE PREDICATE, for the reason `fenceCloseRe` is one producer. PART 9 §28 is
+ * NORMATIVE and says a `%%%` line is DELIMITER PLUS INSIGNIFICANT TAIL: the
+ * leading run of 3+ `%` is the delimiter and ANY remaining text is IGNORED, so
+ * `%%% TODO` opens and `%%% end` closes. Both delimiters may also be INDENTED
+ * (grammar.ebnf `comment_block_open` / `comment_block_close`, PART 9 §24 C3).
+ *
+ * `parseCommentBlock` reads exactly this and always has. The two lazy-state
+ * TRACKERS did not: they spelled the same line `^(%{3,})\s*$`, which is a
+ * BARE run at column 0 - narrower than the production in two directions at
+ * once - so a fence with a tail and a fence with an indent were invisible to
+ * them while the parser consumed both (markup-carve/carve-js#816).
+ *
+ * The divergence runs the OPPOSITE way from the legacy-`\s` family swept in
+ * carve-js#815: everywhere else `\s` admitted too much, and here `\s*$` admitted
+ * less than the path beside it.
+ */
+const commentFenceRun = (line: string): number | undefined => {
+  const m = RE_COMMENT_BLOCK_ANY.exec(line)
+  return m ? m[1]!.length : undefined
+}
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
@@ -3482,8 +3505,13 @@ interface BlockQuoteLazyState {
  */
 function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): void {
   if (state.inComment) {
-    const c = /^(%{3,})\s*$/.exec(content)
-    if (c && c[1]!.length >= state.commentLen) state.inComment = false
+    // EXACT length, per PART 9 §28: "The CLOSER matches on EXACT delimiter
+    // length (§2), so a longer opener nests shorter fences and a too-short line
+    // is content, not a closer." This read `>=`, which is the CODE fence's rule
+    // (`fenceCloseRe`) and not this one - so a `%%%%` line inside a `%%%`
+    // comment closed it here and was body text to the parser.
+    const run = commentFenceRun(content)
+    if (run === state.commentLen) state.inComment = false
     state.paragraphOpen = false
     return
   }
@@ -3546,10 +3574,10 @@ function trackBlockQuoteLazyState(content: string, state: BlockQuoteLazyState): 
       state.paragraphOpen = false
       return
     }
-    const comment = /^(%{3,})\s*$/.exec(content)
-    if (comment) {
+    const commentRun = commentFenceRun(content)
+    if (commentRun !== undefined) {
       state.inComment = true
-      state.commentLen = comment[1]!.length
+      state.commentLen = commentRun
       state.paragraphOpen = false
       return
     }
@@ -4143,10 +4171,13 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   const wasAbsorbing = state.absorbingFence
   state.absorbingFence = false
   if (state.inComment) {
-    // A CLOSER is a bare run, so this test stays anchored - unlike the opener
-    // below, which may carry an info string.
-    const c = /^(%{3,})\s*$/.exec(content)
-    if (c && c[1]!.length >= state.commentLen) {
+    // A CLOSER IS NOT A BARE RUN. This said it was - "so this test stays
+    // anchored, unlike the opener below, which may carry an info string" - and
+    // PART 9 §28 gives the closer the same insignificant tail as the opener:
+    // `%%% end` closes one. It also matches on EXACT length, where this read
+    // `>=`.
+    const run = commentFenceRun(content)
+    if (run === state.commentLen) {
       state.inComment = false
       state.lazyFoldable = state.lazyFoldableBeforeComment
     } else {
@@ -4202,10 +4233,10 @@ function trackItemLazyState(content: string, state: ItemLazyState): void {
   // leaving the tracker permanently inside a comment: every later line read as
   // unfoldable, the item ended at the fence, and a following sibling marker
   // started a SECOND list (carve-js#659).
-  const comment = /^(%{3,})(.*)$/.exec(content)
-  if (comment) {
+  const commentRun = commentFenceRun(content)
+  if (commentRun !== undefined) {
     state.inComment = true
-    state.commentLen = comment[1]!.length
+    state.commentLen = commentRun
     state.lazyFoldableBeforeComment = state.lazyFoldable
     state.lazyFoldable = false
     state.inDefList = false
