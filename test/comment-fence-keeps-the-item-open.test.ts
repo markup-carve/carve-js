@@ -90,3 +90,56 @@ describe('a CODE fence still ends the fold', () => {
     expect(out).not.toBe('<ul><li><p>a</p><p>b</p></li><li><p>c</p></li></ul>')
   })
 })
+
+/**
+ * WHAT THE COMMENT MACHINE IS ACTUALLY FOR, and what every assertion above
+ * failed to reach (markup-carve/carve-js#831).
+ *
+ * Both branches of the comment handling in `trackItemLazyState` could be
+ * switched off outright - `if (commentRun !== undefined && false)` for the
+ * opener, the same for the closer - and all 1373 corpus documents rendered
+ * byte-identically and the whole 7309-test suite passed, this file included.
+ * Its seven assertions all begin with `- a`, an ordinary paragraph, so the
+ * item is FOLDABLE going into the comment. With the machine off the fence lines
+ * fall through to the default branch and read as paragraph text, which leaves
+ * the item foldable as well. Two different routes to the same answer, and the
+ * shapes above cannot tell them apart.
+ *
+ * The machine earns its place where the state before the comment is NOT the
+ * default: a construct that leaves NO OPEN PARAGRAPH. The comment renders
+ * nothing, so it must not change the item's fold state - it saves that state
+ * and restores it. Without the machine the fence lines re-open the fold, and a
+ * dedented line that should have ended the item is swallowed into it.
+ *
+ * This file already carried the second half of each of these - "a CODE fence
+ * still ends the fold" - without a comment after it. The pairing is the test.
+ */
+describe('a comment does not change a fold state that was already closed', () => {
+  const CLOSED_BY: Array<[string, string]> = [
+    ['a table', '  | x |\n'],
+    ['a thematic break', '  ---\n'],
+    ['a code fence', '  ```\n  z\n  ```\n'],
+  ]
+
+  for (const [what, block] of CLOSED_BY) {
+    it(`keeps the item closed after ${what}, with a comment in between`, () => {
+      // Without the comment machine this renders `lazy` INSIDE the item.
+      const out = squash(carveToHtml(`- a\n${block}  %%% c\n  %%%\nlazy\n`))
+
+      expect(out).toContain('<p>lazy</p>')
+      expect(out).not.toContain('lazy </li>')
+      // The CONTROL: the same document without the comment gives the same
+      // answer, which is the whole claim - a comment is invisible.
+      expect(out).toBe(squash(carveToHtml(`- a\n${block}lazy\n`)))
+    })
+
+    it(`still folds after ${what} when a PARAGRAPH re-opens it`, () => {
+      // The other side of the control, so this is not just asserting that
+      // everything ends the item: a real paragraph after the block does re-open
+      // the fold, and the comment must not prevent that either.
+      const out = squash(carveToHtml(`- a\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
+
+      expect(out).not.toContain('<p>lazy</p>')
+    })
+  }
+})
