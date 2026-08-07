@@ -119,6 +119,51 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A COMMENT fence's body in a list item no longer leaks onto the page, and
+  `carve fmt` no longer breaks its delimiter across a space** (carve-js#878).
+  PART 9 §28 makes a comment fence's body verbatim, and §24's S1/S2 place a line
+  by the COLUMN it reaches without reading its first character - the derivation
+  markup-carve/carve#975 pinned for the code fence, one construct over. The
+  marker test consulted the code-fence state and not the comment state, so a
+  marker line inside a comment split the item in two: the body rendered as a
+  NESTED LIST out of a construct that renders nothing.
+
+  Input:
+
+  ```
+  - %%%
+    - x
+    %%%
+  ```
+
+  Output before:
+
+  ```html
+  <ul>
+    <li>
+      <ul>
+        <li>x</li>
+      </ul>
+    </li>
+  </ul>
+  ```
+
+  Output after, which is what the same document with a plain-text body already
+  produced:
+
+  ```html
+  <ul>
+    <li></li>
+  </ul>
+  ```
+
+  The `fmt` corruption was the SAME defect, not a second one. Each severed
+  `%%%` became an unterminated comment fence, which §28 degrades to an inline
+  `%%` comment whose content is the leftover `%`; the writer re-spelled that
+  node faithfully as `%% %`, and the document stopped round-tripping. It now
+  writes the source back unchanged and idempotently. The `+` continuation
+  marker's two attach paths carried the same defect and are fixed with it.
+
 - **A list marker at a list item's content column, inside a fence that item
   opened, is code text** (markup-carve/carve#975, markup-carve/carve-php#1007).
   PART 9 §24's S1 and S2 place a line by the COLUMN it reaches and neither reads

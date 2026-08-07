@@ -5222,14 +5222,16 @@ function parseList(lexer: Lexer): List {
       // is that fence's code text, not a sibling marker (see the indented
       // loop's note on carve#975). Without this the opener came out an EMPTY
       // code block and the closer an inline code span, which is the same
-      // damage category 278 pins one level in.
+      // damage category 278 pins one level in. A COMMENT fence's body is
+      // verbatim for the same reason (PART 9 §28, carve-js#878), so
+      // `inComment` guards this test beside `inFence`.
       const attachedState = freshItemLazyState()
       while (!lexer.eof()) {
         const a = lexer.peek()!
         if (isBlankLine(a)) break
         const ind = indentColumns(a, baseIndent + 1)
         if (ind < baseIndent) break
-        if (ind === baseIndent && !attachedState.inFence) {
+        if (ind === baseIndent && !attachedState.inFence && !attachedState.inComment) {
           const am = matchListMarker(a, isTask, isOrdered)
           const sibling =
             am &&
@@ -5311,6 +5313,19 @@ function parseList(lexer: Lexer): List {
       lazyState.fenceClose = fenceCloseRe(RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!)
       lazyState.lazyFoldable = false
     }
+    // A COMMENT FENCE OPENED ON THE MARKER LINE IS AN OPEN COMMENT, for the
+    // reason carve#950 gives for the code fence one line up: the lead line
+    // never goes through `trackItemLazyState`, so `- %%%` left the tracker
+    // believing the item held an open paragraph and nothing below the marker
+    // line was comment body to it. PART 9 §28 makes that body VERBATIM, so the
+    // tracker has to know the comment is open before it reads the next line.
+    const leadComment = leadFence ? undefined : commentFenceRun(content)
+    if (leadComment !== undefined) {
+      lazyState.inComment = true
+      lazyState.commentLen = leadComment
+      lazyState.lazyFoldableBeforeComment = lazyState.lazyFoldable
+      lazyState.lazyFoldable = false
+    }
     // The lead line may itself be the malformed fence (`- :::note`), and then
     // the paragraph it opens is already absorbing: the `:::` below it is text,
     // not a closer for a block nothing opened (PART 9 §12, carve#891).
@@ -5355,8 +5370,9 @@ function parseList(lexer: Lexer): List {
           // text, exactly as it is in the indented body (carve#975). The
           // tracker is already maintained across these lines below; it was
           // simply never consulted here, so the marker severed the fence from
-          // its opener.
-          if (ind === baseIndent && !lazyState.inFence) {
+          // its opener. A COMMENT fence's body is verbatim on the same reading
+          // (PART 9 §28, carve-js#878), and severed identically.
+          if (ind === baseIndent && !lazyState.inFence && !lazyState.inComment) {
             const am = matchListMarker(a, isTask, isOrdered)
             const sibling =
               am &&
@@ -5422,8 +5438,17 @@ function parseList(lexer: Lexer): List {
         // unterminated fence is inline verbatim rather than a block (the
         // closer-lookahead rule), and `inFence` is only set for one that
         // really opens, so a marker under an unterminated opener still nests.
+        //
+        // A COMMENT FENCE'S BODY IS VERBATIM TOO (PART 9 §28, carve-js#878),
+        // and §24's S1/S2 read a line's COLUMN there as well - they never read
+        // its first character - so the derivation is the one carve#975 pinned
+        // for the code fence, one construct over. Without `inComment` the same
+        // split happened: the opener was left alone in the lead stream, the
+        // marker line opened a nested list in the block stream, and the body
+        // that §28 makes invisible rendered as a list on the page.
         const isMarker =
           !lazyState.inFence &&
+          !lazyState.inComment &&
           (RE_ORDERED.test(l) ||
             RE_UNORDERED.test(l) ||
             RE_TASK.test(l) ||
