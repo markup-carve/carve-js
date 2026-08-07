@@ -1476,6 +1476,15 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
       if (node.ref !== undefined && !node.href) return escapeHtml(node.rawRef ?? '')
+      // LINKS NEVER NEST, AT THE RENDER SEAM (PART 12 §3a,
+      // markup-carve/carve#817). An anchor may not contain another anchor, and
+      // that is a RENDERING rule: the node reaches the serialized tree as the
+      // author wrote it, and the unwrap happens here. Only the outermost
+      // destination applies, so the inner link contributes its display text.
+      //
+      // This used to run in the resolver, which flattened the tree itself and
+      // lost the inner destination from every consumer of the AST.
+      if (insideLink) return renderInlines(node.children, opts)
       const titleAttr = node.title !== undefined ? ` title="${escapeAttr(node.title)}"` : ''
       const href = escapeAttr(sanitizeUrl(node.href, opts))
       // The sanitized structural href wins; never re-emit an author-supplied
@@ -1550,6 +1559,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // fall back to stripping an auto-added `mailto:` for nodes without `text`.
       const display =
         node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href)
+      // Inside a link it is plain text, for the reason the `link` arm above
+      // gives. The `mailto:` scheme comes off here whatever `text` said, which
+      // is what the resolver's unwrap did and what the corpus pins: an author
+      // writing `<mailto:a@b.c>` in a label sees the address, not the scheme.
+      if (insideLink) {
+        return escapeHtml(node.href.startsWith('mailto:') ? node.href.slice(7) : display)
+      }
       // The structural href always wins; never re-emit an author-supplied
       // `href` from an attribute block (it would duplicate the attribute).
       const href = escapeAttr(sanitizeUrl(node.href, opts))
@@ -1640,7 +1656,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // `href`, so the rendering is unchanged - only the tree moved.
       if (node.href) {
         const crossrefHref = escapeAttr(sanitizeUrl(node.href, opts))
-        return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${renderInlines(node.resolvedText ?? [], opts)}</a>`
+        // The cloned display text renders INSIDE this anchor, so it renders in
+        // the link context: a heading holding a link would otherwise nest one
+        // here. The resolver used to unwrap the clone before the renderer saw
+        // it; with that pass gone (markup-carve/carve#817) the seam has to say
+        // so itself, exactly as the `link` arm does for an authored label.
+        const label = withinLink(() => renderInlines(node.resolvedText ?? [], opts))
+        return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
       }
       // Unresolved: literal source, the same as an unresolved reference link.
       return `&lt;/#${escapeHtml(node.target)}&gt;`

@@ -331,7 +331,7 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
     // The marker as written (PART 10 §10a): the caret is part of the construct.
-    out += `${style(`[^${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(renderBlocks(blocks, ctx))}\n`
+    out += `${style(`[^${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }
   return out
 }
@@ -342,6 +342,16 @@ let insideLink = false
 function withinLink<T>(fn: () => T): T {
   const previous = insideLink
   insideLink = true
+  try {
+    return fn()
+  } finally {
+    insideLink = previous
+  }
+}
+
+function outsideLink<T>(fn: () => T): T {
+  const previous = insideLink
+  insideLink = false
   try {
     return fn()
   } finally {
@@ -403,6 +413,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
       if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
+      // Links never nest at the render seam (PART 12 §3a,
+      // markup-carve/carve#817). The node stays in the tree as written, but
+      // only the outermost destination gets ANSI link styling.
+      if (insideLink) return renderInlines(node.children, ctx)
       const text = withinLink(() => renderInlines(node.children, ctx))
       // PART 9 §25 binds every target that emits a resolvable URL, and this
       // parenthetical IS the destination: a terminal autolinks it and hands the
@@ -443,6 +457,13 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'symbol':
       return `:${stripControls(node.name)}:`
     case 'autolink':
+      // Inside a link it is plain text, not a second styled link. Strip an
+      // auto-added `mailto:` so the displayed label stays unchanged
+      // (markup-carve/carve#817).
+      if (insideLink) {
+        const display = node.href.startsWith('mailto:') ? node.href.slice(7) : (node.text ?? node.href)
+        return stripControls(display)
+      }
       return style(
         stripControls(
           node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href),
@@ -464,7 +485,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     }
     case 'footnote_ref':
     case 'inline_footnote': {
-      if (node.inline) return `(${renderInlines(node.inline, ctx)})`
+      if (node.inline) {
+        const inline = node.inline
+        return `(${outsideLink(() => renderInlines(inline, ctx))})`
+      }
       const id = stripControls(node.id ?? '')
       // An UNRESOLVED reference stays literal and UNSTYLED, exactly as the HTML
       // target renders it: the construct did not form, so `[^a]` is ordinary
@@ -501,7 +525,16 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // Resolved: styled like the link this crossref always rendered as. The
       // href is a same-document `#id`, which the link arm above deliberately
       // does not print, so neither does this.
-      if (node.href) return style(renderInlines(node.resolvedText ?? [], ctx), UNDERLINE + FG_BLUE)
+      // Rendered IN the link context, because the styled run below is this
+      // crossref's own link: a link cloned in from the target heading may not
+      // nest inside it, and the resolver no longer unwraps the clone before the
+      // renderer sees it (PART 12 §3a, markup-carve/carve#817).
+      if (node.href) {
+        return style(
+          withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
+          UNDERLINE + FG_BLUE,
+        )
+      }
       return `</#${stripControls(node.target)}>`
     case 'caption_number':
       return node.n === undefined ? '#' : String(node.n)

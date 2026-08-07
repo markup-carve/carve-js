@@ -1013,26 +1013,33 @@ export function resolveHeadingIds(
   for (const block of doc.children) walkBlock(block, resolveCrossrefs)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
 
-  // Pass 3: enforce "links never nest" (CommonMark: a link may not contain
-  // another link). This runs AFTER reference and crossref resolution because
-  // both turn into Link nodes only here -- so a `</#id>` crossref or a
-  // resolved reference inside a link's text would otherwise survive as a
-  // nested anchor. A link found inside another link is unwrapped to its text
-  // (only the outermost destination applies); an autolink becomes plain text.
-  // A footnote body renders in the endnotes section, outside any anchor, so
-  // its links are not nested -- the walk re-enters it with insideLink = false.
-  const applyNoNesting = (xs: InlineNode[]): void => {
-    // In-place rewrite WITHOUT spread: `unwrapNestedAnchors` can return a very
-    // large array (e.g. a paragraph with ~65k inline nodes). Spreading it into
-    // `splice(0, len, ...arr)` overflows V8's call-stack argument limit and
-    // throws RangeError, crashing every public API (resolveHeadingIds runs
-    // unconditionally). Mutate length + push instead.
-    const next = unwrapNestedAnchors(xs, false)
-    xs.length = 0
-    for (const n of next) xs.push(n)
-  }
-  for (const block of doc.children) walkBlock(block, applyNoNesting)
-  for (const body of footnoteBodies) for (const b of body) walkBlock(b, applyNoNesting)
+  // Pass 3 USED TO BE HERE and is gone: "links never nest" is a RENDERING rule.
+  //
+  // A NESTED LINK AND AN AUTOLINK STAY NODES -- NORMATIVE (PART 12 §3a,
+  // markup-carve/carve#817). An anchor may not contain another anchor, and that
+  // binds the renderer, not the encoder. A link or an autolink inside a link's
+  // label is serialized as the node the author wrote, and every renderer unwraps
+  // it at the render seam.
+  //
+  // Flattening it here was strictly lossier than the case §3a opens with. An
+  // unresolved reference at least keeps enough to be written back; a nested
+  // link's destination did not survive at all. `[[x](y)](z)` published a link to
+  // `z` whose only child was the text `x`, so `y` was gone from the tree - `fmt`
+  // on the parsed document wrote `[[x](y)](z)` back and `fmt` on the same
+  // document taken through the AST wrote `[x](z)`, which is the §6 round trip
+  // failing. An autolink flattened the same way returned as a bare URL, and that
+  // is a DIFFERENT document: a bare URL stays literal where an autolink is a
+  // link.
+  //
+  // The precedent was already inside this rule. A `heading_ref` inside a link
+  // was exempt for exactly this reason - it reached the serialized tree and the
+  // renderers suppressed the nested anchor instead - and an image and a code
+  // span inside a label were never flattened at all. A link and an autolink are
+  // the same case.
+  //
+  // `unwrapNestedAnchors` stays, and stays exported: the renderers call it, and
+  // so does every consumer that derives runtime-only display text from a
+  // heading. What moved is WHERE it runs.
 
   // Promote paragraphs that are really block images / figures (see
   // promoteBlockImages). Runs at the end of resolve() so reference images are
