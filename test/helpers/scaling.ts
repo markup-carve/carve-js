@@ -93,12 +93,34 @@ export function expectScansLinearly(
 ): void {
   const prefix = options.prefix ?? ''
   const suffix = options.suffix ?? ''
-  const label = options.label ?? fragment
+
+  expectBuiltInputScansLinearly(
+    convert,
+    (repeats) => prefix + fragment.repeat(repeats) + suffix,
+    { label: options.label ?? fragment, smallRepeats: options.smallRepeats },
+  )
+}
+
+/**
+ * The same guard for a shape a repeated FRAGMENT cannot express.
+ *
+ * A quadratic path is often only reachable when each unit DIFFERS from the
+ * last - an unterminated fence closes on any later run of its own width, so a
+ * repeated one closes on its successor and reads linear no matter what the
+ * scan does. `build(repeats)` gets to vary the units; everything else about
+ * the measurement is `expectScansLinearly`'s and is shared with it.
+ */
+export function expectBuiltInputScansLinearly(
+  convert: (input: string) => void,
+  build: (repeats: number) => string,
+  options: { label?: string; smallRepeats?: number } = {},
+): void {
+  const label = options.label ?? 'input'
   const smallRepeats = options.smallRepeats ?? SMALL_REPEATS
   const largeRepeats = smallRepeats * (LARGE_REPEATS / SMALL_REPEATS)
 
-  const small = prefix + fragment.repeat(smallRepeats) + suffix
-  const large = prefix + fragment.repeat(largeRepeats) + suffix
+  const small = build(smallRepeats)
+  const large = build(largeRepeats)
 
   // Prime any module-level caches so round 1 does not measure setup. The small
   // sample is the same shape, so it warms what the large one would.

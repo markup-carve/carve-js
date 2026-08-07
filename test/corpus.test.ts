@@ -325,6 +325,12 @@ const IMPLEMENTED = new Set([
   'an-autolink-body-admits-non-ascii-and-excludes-format-characters',
   'the-flush-left-line-after-a-container-a-quoted-line-opened',
   'the-inline-attribute-interior-is-space-only-the-attribute-line-is-not',
+  // Added with the spec bump that carries carve#983 and carve#986: the rule
+  // this bump implements. Its seven rows are seven collectors asked the same
+  // question - a footnote body, a definition body, a block quote, a list item
+  // and the `+` that attaches a flush-left block to each of them - and five of
+  // them answered it wrong before, one per fence kind.
+  'a-boundary-line-inside-an-open-fence-does-not-end-the-container',
 ])
 
 /**

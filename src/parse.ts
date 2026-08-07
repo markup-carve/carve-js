@@ -1221,12 +1221,9 @@ class Lexer {
   // one ``` ``` ``` took 25ms and 4000 took 347ms.
   fenceCloserMemo: QuotedFenceCloserMemo = new Map()
 
-  // width -> LAST line index carrying a comment fence of that width, built once
-  // by commentBlockHasCloser. A closer must match the opener width exactly, so
-  // "is there a closer after i" is exactly "last index for this width > i".
-  // Replaces a per-opener scan to end of input, which was superlinear when many
-  // openers carry distinct widths.
-  commentFenceLastIndex: Map<number, number> | undefined = undefined
+  // Where a closer of each fence shape LAST occurs in these lines, built once
+  // by `closerIndex`. See `CloserIndex`.
+  fenceCloserIndex: CloserIndex | undefined = undefined
 
   // Document line number -> every index of THIS lexer's lines carrying it,
   // built once by attachDocumentOffsets when the first child asks for it.
@@ -2948,32 +2945,110 @@ function parseRawBlock(lexer: Lexer): RawBlock {
   return { type: 'raw_block', format, content: lines.join('\n') }
 }
 
+// A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run
+// is tolerated where the real closers anchor at column 0. See `CloserIndex`.
+const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
+const RE_ANY_FENCE_CLOSER = /^[ \t]*([`~]{3,})[ \t]*$/
+
+/**
+ * Where a closer of each fence shape LAST occurs in a lexer's lines.
+ *
+ * A "no closer ahead" answer is what makes the lookahead scans linear. Without
+ * it every unterminated opener re-reads the whole suffix, which is quadratic on
+ * a document of openers with DISTINCT widths - the shape that took ~1.9 MiB of
+ * comment openers from 8.5s to nothing when this map was first built for `%%%`.
+ *
+ * PERMISSIVE ON PURPOSE. A caller may read a DEDENTED view of these lines,
+ * where MORE lines are closer-shaped than in the raw text, so the patterns
+ * tolerate a leading run. The index is therefore a SUPERSET of what any view
+ * can match, and "no closer ahead" holds for every view. It only ever refutes;
+ * a positive answer sends the caller to the real scan.
+ *
+ * A comment and a colon closer match on EXACT length, so each is a width -> last
+ * index map. A CODE closer matches at length OR LONGER, so its entry is the
+ * ascending distinct runs paired with the suffix-maximum of their last indices:
+ * the answer for length L is the entry of the smallest recorded run >= L.
+ */
+interface CloserIndex {
+  comment: Map<number, number>
+  colon: Map<number, number>
+  code: Map<string, { runs: number[]; lastAtLeast: number[] }>
+}
+
+function buildCloserIndex(lines: string[]): CloserIndex {
+  const comment = new Map<number, number>()
+  const colon = new Map<number, number>()
+  const codeLast = new Map<string, Map<number, number>>()
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    const c = RE_COMMENT_BLOCK_ANY.exec(line)
+    if (c) comment.set(c[1]!.length, i)
+    const d = RE_ANY_COLON_CLOSER.exec(line)
+    if (d) colon.set(d[1]!.length, i)
+    const f = RE_ANY_FENCE_CLOSER.exec(line)
+    if (f) {
+      const run = f[1]!
+      let byRun = codeLast.get(run[0]!)
+      if (byRun === undefined) {
+        byRun = new Map<number, number>()
+        codeLast.set(run[0]!, byRun)
+      }
+      byRun.set(run.length, i)
+    }
+  }
+  const code = new Map<string, { runs: number[]; lastAtLeast: number[] }>()
+  for (const [char, byRun] of codeLast) {
+    const runs = [...byRun.keys()].sort((a, b) => a - b)
+    const lastAtLeast = new Array<number>(runs.length)
+    let best = -1
+    for (let i = runs.length - 1; i >= 0; i--) {
+      best = Math.max(best, byRun.get(runs[i]!)!)
+      lastAtLeast[i] = best
+    }
+    code.set(char, { runs, lastAtLeast })
+  }
+
+  return { comment, colon, code }
+}
+
+/** `buildCloserIndex` over a lexer's own lines, built at most once. */
+function closerIndex(lexer: Lexer): CloserIndex {
+  lexer.fenceCloserIndex ??= buildCloserIndex(lexer.lines)
+
+  return lexer.fenceCloserIndex
+}
+
+/** Whether a code/raw closer for `marker` may occur after line index `after`. */
+function codeCloserPossible(index: CloserIndex, marker: string, after: number): boolean {
+  const entry = index.code.get(marker[0]!)
+  if (entry === undefined) return false
+  let lo = 0
+  let hi = entry.runs.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (entry.runs[mid]! < marker.length) lo = mid + 1
+    else hi = mid
+  }
+
+  return lo < entry.runs.length && entry.lastAtLeast[lo]! > after
+}
+
+/** Whether a closer of EXACTLY `len` may occur after line index `after`. */
+function exactCloserPossible(last: Map<number, number>, len: number, after: number): boolean {
+  const at = last.get(len)
+
+  return at !== undefined && at > after
+}
+
 /**
  * From a `%%%` opener at peek(0), is there a matching closer ahead? A comment
  * closer matches on EXACT delimiter length (longer fences nest), so ANY later
  * line whose delimiter run has that length is a valid closer. Used to reject an
  * unclosed `%%%` as a block opener (PART 9 §28): without this an unclosed opener
  * swallows the rest of the document, silently dropping every following block.
- *
- * Answered from a width -> LAST line index map, built once per lexer in a single
- * pass. A per-opener scan to end of input is superlinear on a document full of
- * fence openers with DISTINCT widths (each one scans the whole document and no
- * width repeats): ~1.9 MiB of such input took 8.5s before this, growing ~7x per
- * 4x of input. Since any same-width line ahead IS a closer, comparing against
- * the last index of that width is exact, not an approximation.
  */
 function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
-  let lastByWidth = lexer.commentFenceLastIndex
-  if (lastByWidth === undefined) {
-    lastByWidth = new Map<number, number>()
-    for (let i = 0; i < lexer.lines.length; i++) {
-      const c = RE_COMMENT_BLOCK_ANY.exec(lexer.lines[i]!)
-      if (c) lastByWidth.set(c[1]!.length, i)
-    }
-    lexer.commentFenceLastIndex = lastByWidth
-  }
-  const last = lastByWidth.get(fence)
-  return last !== undefined && last > lexer.pos
+  return exactCloserPossible(closerIndex(lexer).comment, fence, lexer.pos)
 }
 
 /**
@@ -3218,21 +3293,17 @@ function parseFootnoteDef(lexer: Lexer): null {
     // Form B: a lone `+` attaches the FOLLOWING flush-left block to the note
     // with no indentation (the same continuation marker lists and block quotes
     // use); the attached block ends at a blank line, another `+`, or the next
-    // footnote definition.
+    // footnote definition - unless a fence this block opened is still open, in
+    // which case all three are body text (corpus category 279).
     if (/^\+[ \t]*$/.test(ln)) {
       const plusLineNumber = lexer.lineNumber(lexer.pos)
       lexer.consume()
       pendingBlanks = 0
       pendingBlankLineNumbers = []
-      const attached: string[] = []
-      const attachedLineNumbers: number[] = []
-      while (!lexer.eof()) {
-        const a = lexer.peek()!
-        if (isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a)) break
-        attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        lexer.consume()
-        attached.push(a)
-      }
+      const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
+        lexer,
+        (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),
+      )
       if (attached.length > 0) {
         bodyLines.push('')
         bodyLineNumbers.push(plusLineNumber)
@@ -3827,25 +3898,23 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
           : itemFenceHasCloser(lexer, marker, atLineIndex, DEFLIST_CONTENT_COL, defFenceMemo),
       )
     }
+    // The boundary set for a `+`-attached block in a definition body: a blank,
+    // a further `+`, or the next term / description marker. Whether a line in
+    // that set actually ENDS the block is `insideOpenFence`'s answer, layered
+    // on by `collectAttachedBlock`.
+    const isDefBodyBoundary = (a: string): boolean =>
+      isBlankLine(a) ||
+      /^\+[ \t]*$/.test(a) ||
+      RE_DEFLIST_TERM.test(a) ||
+      RE_DEFLIST_DEF.test(a)
     // First-block form (`:  +`, mirroring the list `- +`): when the sole
     // content is a lone `+`, the definition body is the FOLLOWING flush-left
     // block, with no indentation. `:  \+` keeps a literal `+` instead.
     if (/^\+[ \t]*$/.test(first)) {
-      while (!lexer.eof()) {
-        const a = lexer.peek()!
-        if (
-          isBlankLine(a) ||
-          /^\+[ \t]*$/.test(a) ||
-          RE_DEFLIST_TERM.test(a) ||
-          RE_DEFLIST_DEF.test(a)
-        )
-          break
-        const lineIndex = lexer.pos
-        lexer.consume()
-        bodyLines.push(a)
-        bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-        track(a)
-      }
+      const firstBlock = collectAttachedBlock(lexer, isDefBodyBoundary)
+      bodyLines.push(...firstBlock.lines)
+      bodyLineNumbers.push(...firstBlock.lineNumbers)
+      for (const a of firstBlock.lines) track(a)
     } else {
       bodyLines.push(first)
       bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
@@ -3881,22 +3950,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       if (/^\+[ \t]*$/.test(ln)) {
         const plusLineIndex = lexer.pos
         lexer.consume()
-        const attached: string[] = []
-        const attachedLineNumbers: number[] = []
-        while (!lexer.eof()) {
-          const a = lexer.peek()!
-          if (
-            isBlankLine(a) ||
-            /^\+[ \t]*$/.test(a) ||
-            RE_DEFLIST_TERM.test(a) ||
-            RE_DEFLIST_DEF.test(a)
-          )
-            break
-          const lineIndex = lexer.pos
-          lexer.consume()
-          attached.push(a)
-          attachedLineNumbers.push(lexer.lineNumber(lineIndex))
-        }
+        const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
+          lexer,
+          isDefBodyBoundary,
+        )
         if (attached.length > 0) {
           bodyLines.push('')
           bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
@@ -4427,17 +4484,13 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // parse as their own block instead of folding into the quoted paragraph.
     if (/^\+[ \t]*$/.test(ln)) {
       lexer.consume()
-      const attached: string[] = []
-      const attachedLineNumbers: number[] = []
-      while (!lexer.eof()) {
-        const next = lexer.peek()!
-        if (isBlankLine(next) || RE_BLOCKQUOTE.test(next) || /^\+[ \t]*$/.test(next)) {
-          break
-        }
-        attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        lexer.consume()
-        attached.push(next)
-      }
+      // A blank, a `>` line and a further `+` all end the attached block - but
+      // none of them reaches inside a fence it opened, since a fence body is
+      // opaque to every one of them (corpus category 279).
+      const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
+        lexer,
+        (next) => isBlankLine(next) || RE_BLOCKQUOTE.test(next) || /^\+[ \t]*$/.test(next),
+      )
       if (attached.length > 0) {
         // `inner` always holds the quote's first content line, so a leading
         // blank separates the attached block from it.
@@ -4919,28 +4972,202 @@ interface ItemLazyState {
 }
 
 /**
- * A tracker for a `+`-attached flush-left block, where nothing is open yet.
+ * A BOUNDARY LINE INSIDE AN OPEN FENCE DOES NOT END THE CONTAINER
+ * (markup-carve/carve#983, corpus category 279), for the INDENTED body of a
+ * list item, whose model is the running tracker rather than a block extent.
  *
- * The two `+` paths attach a block written at column 0, so they start from the
- * same state the top level does. They consult only `inFence`: what they need is
- * "is this line code text", which is the question corpus category 278 answers
- * for the indented body (markup-carve/carve#975). The rest of the fields exist
- * so `trackItemLazyState` stays the ONE producer of that answer rather than
- * each loop growing its own fence counter - the duplication that let the
- * indented loop and these two disagree about the same line in the first place.
+ * The three fence kinds - code/raw, colon (`:::`), comment (`%%%`) - all make
+ * their body opaque, so a line that would otherwise be read as structure is
+ * body text instead. Which lines those are is the container's question; whether
+ * a fence is open is NOT, and is answered here.
+ *
+ * Two of the three were spelled out at the one site that consulted any fence
+ * state at all, and the colon depth the tracker already keeps was not, so a
+ * `:::` body severed on a marker where a code fence's body did not.
  */
-function freshItemLazyState(): ItemLazyState {
-  return {
-    inFence: false,
-    fenceClose: null,
-    inComment: false,
-    commentLen: 0,
-    lazyFoldableBeforeComment: false,
-    absorbingFence: false,
-    divDepth: 0,
-    lazyFoldable: false,
-    inDefList: false,
+function insideOpenFence(state: ItemLazyState): boolean {
+  return state.inFence || state.inComment || state.divDepth > 0
+}
+
+/**
+ * A lookahead over the lines an attached block may hold, already in the form
+ * the block will be parsed in.
+ *
+ * `at(offset)` is relative to the lexer's current position; `base` is the line
+ * index that offset 0 sits at, so a refutation from `index` (which is keyed by
+ * line index) can be asked about an offset.
+ */
+interface AttachedScan {
+  at: (offset: number) => string | undefined
+  index: CloserIndex
+  base: number
+}
+
+/**
+ * The offset of the CLOSER of a code, raw or comment fence opened at `i`, or
+ * -1 when that line opens no such fence or the fence never closes.
+ *
+ * A code/raw fence and a comment fence are OPAQUE: everything between opener
+ * and closer is content, so a colon fence written inside one closes nothing
+ * and opens nothing (the reason `findColonCloser` skips these spans whole).
+ */
+function opaqueSpanEnd(scan: AttachedScan, i: number): number {
+  const line = scan.at(i)
+  if (line === undefined) return -1
+  const fence = RE_FENCE.exec(line)
+  const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
+  const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
+  if (marker !== null) {
+    // Refuted in O(log n) when nothing ahead can close this run, which is what
+    // keeps a run of unterminated openers from re-reading the same suffix once
+    // per opener.
+    if (!codeCloserPossible(scan.index, marker, scan.base + i)) return -1
+    const closeRe = fenceCloseRe(marker)
+    for (let j = i + 1; ; j++) {
+      const candidate = scan.at(j)
+      if (candidate === undefined) return -1
+      if (closeRe.test(candidate)) return j
+    }
   }
+  const run = commentFenceRun(line)
+  if (run === undefined) return -1
+  if (!exactCloserPossible(scan.index.comment, run, scan.base + i)) return -1
+  for (let j = i + 1; ; j++) {
+    const candidate = scan.at(j)
+    if (candidate === undefined) return -1
+    // EXACT length, per PART 9 §28: a longer opener nests shorter fences.
+    if (commentFenceRun(candidate) === run) return j
+  }
+}
+
+/** The `:` run length of a line that OPENS a colon-fence block, else null. */
+function colonBlockOpenerRun(line: string): number | null {
+  const m =
+    (RE_ADMONITION_CLOSE.test(line) ? null : RE_ADMONITION_OPEN.exec(line)) ??
+    RE_LINE_BLOCK_OPEN.exec(line) ??
+    RE_HARDBREAKS_OPEN.exec(line) ??
+    RE_DIV_OPEN.exec(line)
+
+  return m ? m[1]!.length : null
+}
+
+/**
+ * The offset of the closer of a colon fence of width `len` opened at `openIdx`,
+ * or -1 when it never closes. Colon fences close on an EXACT length match
+ * (carve#455), so the widths in flight are a stack rather than a depth count.
+ */
+function findColonCloser(scan: AttachedScan, openIdx: number, len: number): number {
+  // The OUTERMOST width has to reappear for the stack to empty, so nothing
+  // ahead carrying it refutes the whole scan before it starts.
+  if (!exactCloserPossible(scan.index.colon, len, scan.base + openIdx)) return -1
+  const stack = [len]
+  for (let j = openIdx + 1; ; j++) {
+    const line = scan.at(j)
+    if (line === undefined) return -1
+    // Skipped from the line AFTER its opener: an opener with no info string is
+    // closer-shaped itself and would otherwise end the span where it began.
+    const span = opaqueSpanEnd(scan, j)
+    if (span !== -1) {
+      j = span
+      continue
+    }
+    const close = RE_ADMONITION_CLOSE.exec(line)
+    if (close) {
+      const closeLen = close[1]!.length
+      if (closeLen === stack[stack.length - 1]) {
+        stack.pop()
+        if (stack.length === 0) return j
+      } else {
+        stack.push(closeLen)
+      }
+      continue
+    }
+    const open = colonBlockOpenerRun(line)
+    if (open !== null) stack.push(open)
+  }
+}
+
+/**
+ * The offset of the last line of the fenced block a `+` attaches, or -1 when
+ * the attached block does not open with a fence that closes.
+ *
+ * ONE HELPER, THREE FENCE KINDS. Code/raw, comment and colon all make their
+ * body opaque, and which lines could otherwise end the block is the CONTAINER's
+ * question, layered on by `collectAttachedBlock` as `isBoundary`.
+ */
+function fencedBlockEnd(scan: AttachedScan): number {
+  const opaque = opaqueSpanEnd(scan, 0)
+  if (opaque !== -1) return opaque
+  const first = scan.at(0)
+  if (first === undefined) return -1
+  const run = colonBlockOpenerRun(first)
+  if (run !== null) {
+    const close = findColonCloser(scan, 0, run)
+    if (close !== -1) return close
+  }
+
+  return -1
+}
+
+/**
+ * Collect the ONE flush-left block a `+` continuation marker attaches
+ * (PART 9 §17 L3/L4).
+ *
+ * A BOUNDARY LINE INSIDE AN OPEN FENCE DOES NOT END THE CONTAINER
+ * (markup-carve/carve#983, corpus category 279). L3 bounds the attachment "up
+ * to the next blank line, sibling marker, or a further `+`", and those bound
+ * THE BLOCK: a fenced block ends at its closer, which is what makes it one
+ * block, so a boundary line written between an opener and its closer is fence
+ * content and ends nothing. Reading the blank as reaching INSIDE the fence
+ * makes "fenced code" unattachable the moment its body holds one, which is the
+ * kind L3 goes out of its way to name.
+ *
+ * ONE SPELLING FOR EVERY CONTAINER. This ran as five separate loops - a list
+ * item's two `+` paths, a block quote's, a footnote body's and a definition
+ * body's two - and none consulted a fence at all, so every container severed,
+ * each on its own boundary set. `isBoundary` is the only per-container part;
+ * the fence rule is not.
+ *
+ * An UNTERMINATED fence is left where it was: with no closer there is no fenced
+ * block to run through, so the scan falls back to the boundary set. No clause
+ * names the unterminated case for an attached block and this does not invent
+ * one.
+ *
+ * `isBoundary` sees the RAW line, because a caller measuring indentation has to
+ * see what the author wrote; `transform` produces the line that is collected
+ * and that the fence scan reads, which is how the list paths hand over their
+ * content-column-dedented form.
+ */
+function collectAttachedBlock(
+  lexer: Lexer,
+  isBoundary: (line: string) => boolean,
+  transform?: (line: string) => string,
+): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
+  const fenced = fencedBlockEnd({
+    at: (offset) => {
+      const line = lexer.peek(offset)
+      return line === undefined ? undefined : transform ? transform(line) : line
+    },
+    index: closerIndex(lexer),
+    base: lexer.pos,
+  })
+  let take = 0
+  if (fenced !== -1) {
+    take = fenced + 1
+  } else {
+    while (lexer.peek(take) !== undefined && !isBoundary(lexer.peek(take)!)) take++
+  }
+  const startLineIndex = lexer.pos
+  const lines: string[] = []
+  const lineNumbers: number[] = []
+  for (let k = 0; k < take; k++) {
+    const raw = lexer.peek()!
+    lines.push(transform ? transform(raw) : raw)
+    lineNumbers.push(lexer.lineNumber(lexer.pos))
+    lexer.consume()
+  }
+
+  return { lines, lineNumbers, startLineIndex }
 }
 
 /**
@@ -5221,6 +5448,30 @@ function parseList(lexer: Lexer): List {
   const items: ListItem[] = []
   let loose = false
 
+  /**
+   * The boundary set for a `+`-attached block in a list item: a blank, a
+   * dedent below the marker column, and at the marker column a sibling marker,
+   * ANY list marker (§11) or a further `+`. Both `+` paths - the first-block
+   * `- +` and the mid-item one - carry the SAME set, so it is written once;
+   * whether a line in it ends the block is `insideOpenFence`'s answer, layered
+   * on by `collectAttachedBlock`.
+   */
+  const isItemAttachBoundary = (a: string): boolean => {
+    if (isBlankLine(a)) return true
+    const ind = indentColumns(a, baseIndent + 1)
+    if (ind < baseIndent) return true
+    if (ind !== baseIndent) return false
+    const am = matchListMarker(a, isTask, isOrdered)
+    const sibling =
+      am &&
+      (isOrdered
+        ? orderedContinues(a, orderedKind, orderedDelim)
+        : unorderedMarkerChar(a) === firstMarkerChar)
+    const anyMarker =
+      RE_ORDERED.test(a) || RE_UNORDERED.test(a) || RE_TASK.test(a) || extractItemAttr(a) !== null
+    return Boolean(sibling) || anyMarker || isContinuationMarker(a)
+  }
+
   while (!lexer.eof()) {
     const itemStartLineIndex = lexer.pos
     const line = lexer.peek()!
@@ -5275,47 +5526,16 @@ function parseList(lexer: Lexer): List {
     // (`- + text` keeps `+ text` as literal content). Lets an item start
     // directly with a table, code block, quote or div at column 0.
     if (isContinuationMarker(content)) {
-      const attached: string[] = []
-      const attachedLineNumbers: number[] = []
-      let attachedStartLineIndex = lexer.pos
-      // The attached block is a block: a marker line inside a fence it opened
-      // is that fence's code text, not a sibling marker (see the indented
-      // loop's note on carve#975). Without this the opener came out an EMPTY
-      // code block and the closer an inline code span, which is the same
-      // damage category 278 pins one level in. A COMMENT fence's body is
-      // verbatim for the same reason (PART 9 §28, carve-js#878), so
-      // `inComment` guards this test beside `inFence`.
-      const attachedState = freshItemLazyState()
-      while (!lexer.eof()) {
-        const a = lexer.peek()!
-        if (isBlankLine(a)) break
-        const ind = indentColumns(a, baseIndent + 1)
-        if (ind < baseIndent) break
-        if (ind === baseIndent && !attachedState.inFence && !attachedState.inComment) {
-          const am = matchListMarker(a, isTask, isOrdered)
-          const sibling =
-            am &&
-            (isOrdered
-              ? orderedContinues(a, orderedKind, orderedDelim)
-              : unorderedMarkerChar(a) === firstMarkerChar)
-          // A base-column line that is ANY list marker (a different
-          // kind/dialect, e.g. an ordered `1.` after this unordered first-block
-          // item, or an abutting-attribute bullet `-{.x}`) starts a SIBLING
-          // list (§11), not item content -- stop attaching so it parses as a
-          // separate top-level list (Bug C, first-block `- +` path).
-          const anyMarker =
-            RE_ORDERED.test(a) ||
-            RE_UNORDERED.test(a) ||
-            RE_TASK.test(a) ||
-            extractItemAttr(a) !== null
-          if (sibling || anyMarker || isContinuationMarker(a)) break
-        }
-        if (attached.length === 0) attachedStartLineIndex = lexer.pos
-        attached.push(sliceColumns(a, baseIndent))
-        trackItemLazyState(attached[attached.length - 1]!, attachedState)
-        attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        lexer.consume()
-      }
+      // The attached block is a block: a boundary line inside a fence it opened
+      // is that fence's body, not a boundary (see the indented loop's note on
+      // carve#975 and corpus category 279). Without this the opener came out an
+      // EMPTY code block and the closer an inline code span, which is the same
+      // damage category 278 pins one level in.
+      const {
+        lines: attached,
+        lineNumbers: attachedLineNumbers,
+        startLineIndex: attachedStartLineIndex,
+      } = collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
       const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
       const fbChildren = parseBlocks(sub, 0)
       const fbItem: ListItem = { type: 'list_item', children: fbChildren }
@@ -5421,41 +5641,25 @@ function parseList(lexer: Lexer): List {
         nested.push('')
         nestedLineNumbers.push(plusLineNumber)
         trackItemLazyState('', lazyState)
-        while (!lexer.eof()) {
-          const a = lexer.peek()!
-          if (isBlankLine(a)) break
-          const ind = indentColumns(a, baseIndent + 1)
-          if (ind < baseIndent) break
-          // A marker line inside a fence THIS attached block opened is code
-          // text, exactly as it is in the indented body (carve#975). The
-          // tracker is already maintained across these lines below; it was
-          // simply never consulted here, so the marker severed the fence from
-          // its opener. A COMMENT fence's body is verbatim on the same reading
-          // (PART 9 §28, carve-js#878), and severed identically.
-          if (ind === baseIndent && !lazyState.inFence && !lazyState.inComment) {
-            const am = matchListMarker(a, isTask, isOrdered)
-            const sibling =
-              am &&
-              (isOrdered
-                ? orderedContinues(a, orderedKind, orderedDelim)
-                : unorderedMarkerChar(a) === firstMarkerChar)
-            // A base-column line that is ANY list marker (even a different
-            // kind/dialect, e.g. an ordered `1.` after this unordered item, or
-            // an abutting-attribute bullet `-{.x}`) starts a SIBLING list
-            // (§11), not item content -- stop attaching so it parses as a
-            // separate top-level list (Bug C).
-            const anyMarker =
-              RE_ORDERED.test(a) ||
-              RE_UNORDERED.test(a) ||
-              RE_TASK.test(a) ||
-              extractItemAttr(a) !== null
-            if (sibling || anyMarker || isContinuationMarker(a)) break
-          }
-          const attached = sliceColumns(a, baseIndent)
-          nested.push(attached)
-          nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-          trackItemLazyState(attached, lazyState)
-          lexer.consume()
+        // A boundary line inside a fence THIS attached block opened is that
+        // fence's body, exactly as it is in the indented body (carve#975 for
+        // the marker, corpus category 279 for the blank, the dedent and the
+        // three fence kinds together). The old loop consulted the tracker for
+        // two of the kinds and for no boundary but the marker, so a blank
+        // severed a code fence from its opener and a colon fence severed on
+        // every boundary there is.
+        const { lines: attachedLines, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
+          lexer,
+          isItemAttachBoundary,
+          (a) => sliceColumns(a, baseIndent),
+        )
+        for (let k = 0; k < attachedLines.length; k++) {
+          nested.push(attachedLines[k]!)
+          nestedLineNumbers.push(attachedLineNumbers[k]!)
+          // The attached block's lines are the item's, so the item's own
+          // tracker sees them: what they leave open decides how a later
+          // dedented line folds.
+          trackItemLazyState(attachedLines[k]!, lazyState)
         }
         continue
       }
@@ -5506,9 +5710,14 @@ function parseList(lexer: Lexer): List {
         // split happened: the opener was left alone in the lead stream, the
         // marker line opened a nested list in the block stream, and the body
         // that §28 makes invisible rendered as a list on the page.
+        //
+        // A COLON FENCE'S BODY IS OPAQUE ON THE SAME READING (corpus category
+        // 279). Two of the three kinds were spelled out here and the third was
+        // not, so `- x` / `  :::` / `  a` / `  - m` / `  b` / `  :::` split the
+        // div in two around a nested list where §24's S1/S2 place `- m` in its
+        // body. `insideOpenFence` answers for all three at once.
         const isMarker =
-          !lazyState.inFence &&
-          !lazyState.inComment &&
+          !insideOpenFence(lazyState) &&
           (RE_ORDERED.test(l) ||
             RE_UNORDERED.test(l) ||
             RE_TASK.test(l) ||
@@ -5658,36 +5867,96 @@ function parseList(lexer: Lexer): List {
     // table) keeps the item tight, so an item can carry a sub-block without the
     // list going loose. Only the tight/loose RENDERING changes; block structure
     // is unchanged. (Canonical djot renders these loose; Carve deviates here.)
-    // A blank line INSIDE a fenced code block is verbatim content, not an
+    // A blank line INSIDE a fenced block is that block's content, not an
     // interior block separator, so it must not loosen the item (carve#326 case
     // C; matches carve-rs / carve-php). Precompute which lines fall inside a
     // CLOSED fence in a single pass, then skip those blanks in the scan below.
-    // Only a fence with a matching closer forms a code block; an UNCLOSED opener
-    // is inline verbatim inside a paragraph, so a following blank still loosens
+    // Only a fence with a matching closer forms a block; an UNCLOSED opener is
+    // inline verbatim inside a paragraph, so a following blank still loosens
     // (matches carve-rs). The opener may be the item's lead (a marker-line
     // fence, `- ``` `, which is not in `nested`), so the pass prepends `content`
     // and a `nested[k]` corresponds to `fenceLines[k + 1]`. Marking closed
     // ranges is O(n) total (ranges never overlap), keeping the scan linear.
+    //
+    // ALL THREE FENCE KINDS. This knew only the code fence, which is the same
+    // one-kind-of-three defect corpus category 279 pins for the collectors -
+    // and it surfaced the moment they were fixed: the blank inside a
+    // `+`-attached `::: note` or `%%%` body reaches `nested` now and loosened
+    // the item, where the identical code fence kept it tight.
+    //
+    // STILL ONE STATEFUL PASS, not one scan per line. Asking
+    // `fencedBlockEnd` at every index reads the same suffix again for every
+    // unterminated opener, which is quadratic: an item of N comment openers of
+    // strictly increasing width (none of which can close) went from 137ms to
+    // 15s at N=4000, a parser DoS on a 4000-line document. The stack below is
+    // `findColonCloser`'s nesting model run once, left to right, which is what
+    // keeps the whole pass linear (ranges never overlap).
     const fenceLines = [content, ...nested]
     const inFence: boolean[] = new Array(fenceLines.length).fill(false)
-    let fenceOpenIdx = -1
-    let fenceOpenCh = ''
-    let fenceOpenLen = 0
+    // AN OPENER WITH NO CLOSER AHEAD OPENS NOTHING, so it must not latch this
+    // pass either. Without the check an unterminated `%%%` swallowed every
+    // later line and a genuinely CLOSED code fence below it went unmarked, so a
+    // blank inside that code loosened the item - the divergence from what the
+    // block parser does with the same lines. Raised by codex review.
+    const closers = buildCloserIndex(fenceLines)
+    // Fences currently open, innermost last. A code/raw or comment fence makes
+    // its body OPAQUE, so while one is innermost only its own closer is read.
+    const open: Array<{ kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number }> = []
+    let openIdx = -1
     for (let k = 0; k < fenceLines.length; k++) {
-      if (fenceOpenIdx >= 0) {
-        const cl = RE_FENCE_CLOSER.exec(fenceLines[k]!)
-        if (cl && cl[1]![0] === fenceOpenCh && cl[1]!.length >= fenceOpenLen) {
-          for (let i = fenceOpenIdx; i <= k; i++) inFence[i] = true
-          fenceOpenIdx = -1
+      const line = fenceLines[k]!
+      const inner = open[open.length - 1]
+      if (inner !== undefined && inner.kind !== 'colon') {
+        const closed =
+          inner.kind === 'code' ? inner.close!.test(line) : commentFenceRun(line) === inner.len
+        if (!closed) continue
+        open.pop()
+        if (open.length === 0) {
+          for (let i = openIdx; i <= k; i++) inFence[i] = true
+          openIdx = -1
         }
-      } else {
-        const fo = RE_FENCE.exec(fenceLines[k]!)
-        if (fo) {
-          fenceOpenIdx = k
-          fenceOpenCh = fo[2]![0]!
-          fenceOpenLen = fo[2]!.length
+        continue
+      }
+      if (inner !== undefined) {
+        // Inside a colon fence a bare run of the INNERMOST width closes it and
+        // any other run opens one (carve#455's exact-length rule).
+        const close = RE_ADMONITION_CLOSE.exec(line)
+        if (close) {
+          const len = close[1]!.length
+          if (len === inner.len) {
+            open.pop()
+            if (open.length === 0) {
+              for (let i = openIdx; i <= k; i++) inFence[i] = true
+              openIdx = -1
+            }
+          } else {
+            open.push({ kind: 'colon', close: null, len })
+          }
+          continue
         }
       }
+      const fence = RE_FENCE.exec(line)
+      const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
+      const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
+      let opened: { kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number } | null =
+        null
+      if (marker !== null) {
+        if (codeCloserPossible(closers, marker, k))
+          opened = { kind: 'code', close: fenceCloseRe(marker), len: marker.length }
+      } else {
+        const run = commentFenceRun(line)
+        if (run !== undefined) {
+          if (exactCloserPossible(closers.comment, run, k))
+            opened = { kind: 'comment', close: null, len: run }
+        } else {
+          const colon = colonBlockOpenerRun(line)
+          if (colon !== null && exactCloserPossible(closers.colon, colon, k))
+            opened = { kind: 'colon', close: null, len: colon }
+        }
+      }
+      if (opened === null) continue
+      if (open.length === 0) openIdx = k
+      open.push(opened)
     }
     for (let k = 0; k < nested.length; k++) {
       if (inFence[k + 1]!) continue
