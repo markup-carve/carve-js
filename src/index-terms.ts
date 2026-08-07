@@ -5,7 +5,7 @@ import type {
   CarveExtension,
   ExtensionRenderContext,
 } from './extension.js'
-import { inlineText, slugify } from './heading-ids.js'
+import { deriveDisplayNodes, inlineText, slugify } from './heading-ids.js'
 
 /**
  * Index terms (#91, Tier-3). Invisible `:index[term]` markers are collected
@@ -16,7 +16,7 @@ import { inlineText, slugify } from './heading-ids.js'
 export function index(): CarveExtension {
   const occ = new WeakMap<Extension, number>() // marker node → 1-based occurrence
   const counts = new Map<string, number>() // slug → total occurrences
-  const display = new Map<string, string>() // slug → first occurrence's term text
+  const display = new Map<string, InlineNode[]>() // slug → first occurrence's term nodes
   const containers = new WeakSet<BlockNode>()
   // Per-render output budget (DoS guard): K `::: index` blocks each re-emit the
   // full sorted backlink list, so raw output grows K x N x ~52 bytes and can
@@ -45,7 +45,9 @@ export function index(): CarveExtension {
           const n = (counts.get(slug) ?? 0) + 1
           counts.set(slug, n)
           occ.set(ext, n)
-          if (!display.has(slug)) display.set(slug, inlineText(ext.content))
+          if (!display.has(slug)) // `false`: an index list item is not an anchor - only the backrefs after the
+            // display are - so an authored link in the term is kept.
+            display.set(slug, deriveDisplayNodes(ext.content, false))
         })
       // Deep walk for containers too: a `::: index` may be nested in a
       // blockquote / list / div, where the core renderer still dispatches.
@@ -93,7 +95,7 @@ function renderIndexList(
   node: Admonition,
   ctx: BlockExtensionRenderContext,
   counts: Map<string, number>,
-  display: Map<string, string>,
+  display: Map<string, InlineNode[]>,
   budget: AbbrBudget,
 ): string {
   const pad = ctx.indent(ctx.level)
@@ -105,7 +107,7 @@ function renderIndexList(
   // (graceful, no throw, no giant allocation). Re-emitted across K blocks, so
   // the cap bounds K x N amplification.
   for (const slug of slugs) {
-    const li = `${inner}<li>${ctx.escapeHtml(display.get(slug)!)} `
+    const li = `${inner}<li>${ctx.renderInlines(display.get(slug)!)} `
     if (!budget.charge(utf8ByteLength(li))) break
     const links: string[] = []
     let truncated = false

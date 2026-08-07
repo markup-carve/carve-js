@@ -109,6 +109,201 @@ export function headingRefKeyFromLabel(label: string): string {
  * way - the renderers need `rawRef` to write an unresolved reference back out as
  * literal source - and refusing the fallback is the side this clause narrows to.
  */
+/**
+ * A deep copy of an inline run, for a consumer that DERIVES display text from a
+ * heading (PART 9R R4, markup-carve/carve#915 and markup-carve/carve#957).
+ *
+ * The copy is what makes "clones the same inline NODES" safe to state: the label
+ * and the heading become two trees, so a renderer that rewrites one in place -
+ * the no-nesting unwrap does exactly that - does not rewrite the other. Named
+ * once so the three consumers cannot each pick a different depth of copy.
+ */
+export function deepCloneInlines(nodes: InlineNode[]): InlineNode[] {
+  return JSON.parse(JSON.stringify(nodes)) as InlineNode[]
+}
+
+/**
+ * "Links never nest": a link or an autolink inside another link is unwrapped to
+ * its display text, and an UNRESOLVED reference to its raw source.
+ *
+ * Module level and exported because it is not the resolver's alone. PART 9R R4
+ * has every consumer that DERIVES display text from a heading clone the
+ * heading's inline NODES (markup-carve/carve#915, markup-carve/carve#957), and a
+ * heading may hold a link - so a numbered cross-reference label, a
+ * table-of-contents entry and an index term's display each land those nodes
+ * somewhere an anchor may not nest. Each answering that with its own unwrap is
+ * how one rule acquires four readings; they all call this one.
+ *
+ * `insideLink` is the CALLER's context rather than a fact about `nodes`: a
+ * derived label rendered inside an `<a>` passes `true`.
+ */
+export function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): InlineNode[] {
+  const out: InlineNode[] = []
+  for (const n of nodes) {
+    switch (n.type) {
+      case 'link': {
+        // An UNRESOLVED reference is not a link the reader ever sees - it is
+        // literal source (PART 12 §3a), and it only reaches here as a node at
+        // all so the serialized tree can keep the reference. Unwrapping it to
+        // its children would print the LABEL where the author wrote the whole
+        // `[x][missing]`, so nested-inside-a-link it becomes its raw source
+        // instead (carve#486).
+        // UNRESOLVED means no destination: §3a keeps `ref` on a resolved
+        // reference too, and a RESOLVED one nested in a link unwraps to its
+        // display text like any other nested link (carve#596).
+        if (insideLink && n.ref !== undefined && !n.href) {
+          out.push({ type: 'text', value: n.rawRef ?? '' } as Text)
+          break
+        }
+        const children = unwrapNestedAnchors(n.children, true)
+        if (insideLink) {
+          // Non-spread push: `children` may be unbounded (a large link label),
+          // and `push(...children)` would overflow V8's call-stack argument
+          // limit (~65k) on adversarial input.
+          for (const c of children) out.push(c)
+        } else {
+          n.children = children
+          out.push(n)
+        }
+        break
+      }
+      case 'heading_ref':
+        // A resolved crossref renders as an anchor, so inside a link it
+        // would nest one - but it is NOT unwrapped here, because the node
+        // has to reach the serialized tree (PART 12 §3a). Dropping it would
+        // publish `[see H](/outer)` for `[see </#H>](/outer)`: the authored
+        // crossref gone from the wire, which is the flattening §3a exists to
+        // prevent. The renderers suppress the nested anchor instead.
+        //
+        // Its DISPLAY text is a clone of the target heading, which may itself
+        // contain a link - and that one renders inside this crossref's own
+        // anchor, so it nests whether or not the crossref is inside a link.
+        // The clone is runtime-only, so unwrapping it loses nothing from the
+        // wire.
+        if (n.resolvedText) n.resolvedText = unwrapNestedAnchors(n.resolvedText, true)
+        out.push(n)
+        break
+      case 'autolink':
+        if (insideLink) {
+          const value = n.href.startsWith('mailto:')
+            ? n.href.slice('mailto:'.length)
+            : n.href
+          out.push({ type: 'text', value } as Text)
+        } else {
+          out.push(n)
+        }
+        break
+      case 'inline_footnote':
+        if (n.inline) n.inline = unwrapNestedAnchors(n.inline, false)
+        out.push(n)
+        break
+      case 'emphasis':
+      case 'strong':
+      case 'underline':
+      case 'strike':
+      case 'superscript':
+      case 'subscript':
+      case 'highlight':
+      case 'span':
+      case 'insert':
+      case 'delete':
+        n.children = unwrapNestedAnchors(n.children, insideLink)
+        out.push(n)
+        break
+      case 'inline_extension':
+        n.content = unwrapNestedAnchors(n.content, insideLink)
+        out.push(n)
+        break
+      default:
+        out.push(n)
+        break
+    }
+  }
+  return out
+}
+
+/**
+ * The inline run a consumer DERIVES display text from a heading with (PART 9R
+ * R4, markup-carve/carve#915 and markup-carve/carve#957): a deep clone, its
+ * footnote apparatus removed, its nested anchors unwrapped for the link the
+ * label renders inside.
+ *
+ * One function because the clause binds every such consumer and names three -
+ * a numbered cross-reference label, an index term's display, a
+ * table-of-contents entry. Each answering the two follow-on questions on its own
+ * is how one rule acquires four readings.
+ *
+ * `insideLink` is the CALLER's context, as it is for `unwrapNestedAnchors`, and
+ * it is NOT a property of being derived: a cross-reference label and a
+ * table-of-contents entry render inside an `<a>` and pass `true`, while an index
+ * list item is not an anchor - only the backrefs after the display are - and
+ * passes `false`, keeping an authored link the author put in the term (raised by
+ * codex review).
+ *
+ * THE LABEL IS THE HEADING'S AUTHORED CONTENT, which is what
+ * `stripResolutionApparatus` below leaves behind. R4 names one such addition
+ * explicitly - a render-stage `section-number` span - and the argument is about
+ * the SIDE of the injection the label comes from, not about which transform did
+ * the injecting.
+ */
+export function deriveDisplayNodes(nodes: InlineNode[], insideLink: boolean): InlineNode[] {
+  return unwrapNestedAnchors(stripResolutionApparatus(deepCloneInlines(nodes)), insideLink)
+}
+
+/**
+ * Reduce a cloned run to what the AUTHOR wrote, undoing the two resolution
+ * results a heading can carry.
+ *
+ * A FOOTNOTE REFERENCE IS A POINTER, NOT DISPLAY TEXT. It points into the
+ * document's endnotes, and a derived label is not where that pointer lives:
+ * rendering one in a second place emits a SECOND anchor carrying the same `fn`
+ * id, inside an anchor of its own, and points a backlink at whichever came last.
+ * It contributes nothing to a heading's INDEX key either, which is the same rule
+ * read from the other side. So it is dropped, exactly as the flatten this
+ * replaces dropped it.
+ *
+ * AN INVISIBLE MARKER CONTRIBUTES NOTHING, for the reason PART 9 §8.1 gives:
+ * an `:index[term]` emits no visible text at all, so it is not display text
+ * anywhere it is derived.
+ *
+ * AN ABBREVIATION IS A RESOLUTION RESULT. The author wrote `HT`; PART 9R R3
+ * matched it against `abbrDefs` and split the text node into an `abbreviation`
+ * node carrying the expansion. Cloning THAT into a label publishes the full
+ * `<abbr title="...">` once per derived site, which is an output amplification
+ * the body renderer bounds with a budget this path has no access to - it runs in
+ * `beforeRender`, before the renderer's budget exists (raised by codex review).
+ * Taking the author's `abbr` back out is both the bounded answer and the correct
+ * one: an expansion the author did not write at that spot is an injection, and
+ * `inlineText` already reduced the node this way.
+ */
+function stripResolutionApparatus(nodes: InlineNode[]): InlineNode[] {
+  const out: InlineNode[] = []
+  for (const n of nodes) {
+    if (n.type === 'footnote_ref' || n.type === 'inline_footnote') continue
+    // AN `:index[term]` MARKER IS INVISIBLE (PART 9 §8.1). It emits no visible
+    // text, so its term feeds no heading slug and no derived text - `inlineText`
+    // above carries that carve-out in as many words, and the node form has to
+    // carry it too. Left in, a table-of-contents entry renders the term VISIBLY
+    // where the heading renders an empty anchor target (raised by codex review).
+    if (n.type === 'inline_extension' && n.name === 'index') continue
+    if (n.type === 'abbreviation') {
+      out.push({ type: 'text', value: n.abbr } as Text)
+      continue
+    }
+    const record = n as unknown as Record<string, unknown>
+    // Generic descent: three byte-identical `CHILD_FIELDS` lists already live in
+    // this package and none is exported, so a fourth spelling here is how a run
+    // gets missed. Only arrays of nodes are rewritten.
+    for (const key of Object.keys(record)) {
+      if (key === 'pos') continue
+      const value = record[key]
+      if (Array.isArray(value)) record[key] = stripResolutionApparatus(value as InlineNode[])
+    }
+    out.push(n)
+  }
+  return out
+}
+
 export function isCollapsedRef(ref: string, rawRef: string | undefined): boolean {
   return rawRef !== undefined && rawRef.startsWith(`[${ref}][]`)
 }
@@ -614,7 +809,7 @@ export function resolveHeadingIds(
    * (self-ref, mutual A<->B, or any ring) made a target transitively contain
    * itself; the shared clone cache then spliced a link's `children` array into
    * itself, producing an unbounded / cyclic object graph that overflowed the
-   * later `enforceNoNesting` walk (`RangeError: Maximum call stack size
+   * later `unwrapNestedAnchors` walk (`RangeError: Maximum call stack size
    * exceeded`) -- a crash-DoS reachable from every public API on tiny input.
    */
   /**
@@ -654,7 +849,7 @@ export function resolveHeadingIds(
             // target's resolution already wrote in. Repeated crossrefs share
             // the cached immutable tree.
             const source = pristineTargets.get(tgtId) ?? tgt
-            children = JSON.parse(JSON.stringify(source)) as InlineNode[]
+            children = deepCloneInlines(source)
             flattenNestedCrossrefs(children)
             // The clone came from the HEADING, so its spans point at the
             // heading's source, not at the `</#id>` this link was written as -
@@ -809,7 +1004,7 @@ export function resolveHeadingIds(
   // own (pre-resolution) inlines rather than from a copy that another target's
   // resolution has already rewritten with nested links.
   for (const [id, children] of targets)
-    pristineTargets.set(id, JSON.parse(JSON.stringify(children)) as InlineNode[])
+    pristineTargets.set(id, deepCloneInlines(children))
 
   // Finalize crossrefs WITHIN target (heading/caption) children so each
   // target's own `</#…>` becomes a one-level link in its rendered text.
@@ -826,97 +1021,13 @@ export function resolveHeadingIds(
   // (only the outermost destination applies); an autolink becomes plain text.
   // A footnote body renders in the endnotes section, outside any anchor, so
   // its links are not nested -- the walk re-enters it with insideLink = false.
-  const enforceNoNesting = (nodes: InlineNode[], insideLink: boolean): InlineNode[] => {
-    const out: InlineNode[] = []
-    for (const n of nodes) {
-      switch (n.type) {
-        case 'link': {
-          // An UNRESOLVED reference is not a link the reader ever sees - it is
-          // literal source (PART 12 §3a), and it only reaches here as a node at
-          // all so the serialized tree can keep the reference. Unwrapping it to
-          // its children would print the LABEL where the author wrote the whole
-          // `[x][missing]`, so nested-inside-a-link it becomes its raw source
-          // instead (carve#486).
-          // UNRESOLVED means no destination: §3a keeps `ref` on a resolved
-          // reference too, and a RESOLVED one nested in a link unwraps to its
-          // display text like any other nested link (carve#596).
-          if (insideLink && n.ref !== undefined && !n.href) {
-            out.push({ type: 'text', value: n.rawRef ?? '' } as Text)
-            break
-          }
-          const children = enforceNoNesting(n.children, true)
-          if (insideLink) {
-            // Non-spread push: `children` may be unbounded (a large link label),
-            // and `push(...children)` would overflow V8's call-stack argument
-            // limit (~65k) on adversarial input.
-            for (const c of children) out.push(c)
-          } else {
-            n.children = children
-            out.push(n)
-          }
-          break
-        }
-        case 'heading_ref':
-          // A resolved crossref renders as an anchor, so inside a link it
-          // would nest one - but it is NOT unwrapped here, because the node
-          // has to reach the serialized tree (PART 12 §3a). Dropping it would
-          // publish `[see H](/outer)` for `[see </#H>](/outer)`: the authored
-          // crossref gone from the wire, which is the flattening §3a exists to
-          // prevent. The renderers suppress the nested anchor instead.
-          //
-          // Its DISPLAY text is a clone of the target heading, which may itself
-          // contain a link - and that one renders inside this crossref's own
-          // anchor, so it nests whether or not the crossref is inside a link.
-          // The clone is runtime-only, so unwrapping it loses nothing from the
-          // wire.
-          if (n.resolvedText) n.resolvedText = enforceNoNesting(n.resolvedText, true)
-          out.push(n)
-          break
-        case 'autolink':
-          if (insideLink) {
-            const value = n.href.startsWith('mailto:')
-              ? n.href.slice('mailto:'.length)
-              : n.href
-            out.push({ type: 'text', value } as Text)
-          } else {
-            out.push(n)
-          }
-          break
-        case 'inline_footnote':
-          if (n.inline) n.inline = enforceNoNesting(n.inline, false)
-          out.push(n)
-          break
-        case 'emphasis':
-        case 'strong':
-        case 'underline':
-        case 'strike':
-        case 'superscript':
-        case 'subscript':
-        case 'highlight':
-        case 'span':
-        case 'insert':
-        case 'delete':
-          n.children = enforceNoNesting(n.children, insideLink)
-          out.push(n)
-          break
-        case 'inline_extension':
-          n.content = enforceNoNesting(n.content, insideLink)
-          out.push(n)
-          break
-        default:
-          out.push(n)
-          break
-      }
-    }
-    return out
-  }
   const applyNoNesting = (xs: InlineNode[]): void => {
-    // In-place rewrite WITHOUT spread: `enforceNoNesting` can return a very
+    // In-place rewrite WITHOUT spread: `unwrapNestedAnchors` can return a very
     // large array (e.g. a paragraph with ~65k inline nodes). Spreading it into
     // `splice(0, len, ...arr)` overflows V8's call-stack argument limit and
     // throws RangeError, crashing every public API (resolveHeadingIds runs
     // unconditionally). Mutate length + push instead.
-    const next = enforceNoNesting(xs, false)
+    const next = unwrapNestedAnchors(xs, false)
     xs.length = 0
     for (const n of next) xs.push(n)
   }
