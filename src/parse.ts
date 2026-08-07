@@ -611,6 +611,16 @@ export interface LinkDef {
  * The block must be preceded by whitespace and end the line, so `[a]: /u{.x}`
  * keeps the braces in the DESTINATION, matching the production's
  * `space, attributes`.
+ *
+ * EVERY rejection here hands the block BACK as content - `[line, null]`, the
+ * line untouched. That is the third outcome AN INVALID BLOCK IS NOT
+ * `attributes` asks for (markup-carve/carve#933), distinct both from "there was
+ * no block" and from "the block was empty". Where those two are the same value
+ * the failure has nowhere to be observed: the scan peels the braces off before
+ * anything validates them, so a rejected block was already consumed and
+ * DISCARDED, and the line went on to parse as a definition with the author's
+ * `{...}` gone from the page - the exact outcome PART 7 names as the one to
+ * avoid, and the reason the end-of-line anchor exists at all.
  */
 function splitTrailingAttrBlock(line: string): [string, string | null] {
   const end = line.replace(/\s+$/, '')
@@ -655,9 +665,40 @@ function splitTrailingAttrBlock(line: string): [string, string | null] {
       // braces on the line, so the definition is simply not recognized and the
       // line falls through to a paragraph - dropping them at the parse step
       // would delete the block from the output instead of showing it.
-      if (inlineAttrPayloadHasTab(end.slice(open))) return [line, null]
+      const inner = end.slice(open + 1, end.length - 1)
+      if (inlineAttrPayloadHasTab(inner)) return [line, null]
 
-      return [end.slice(0, open - 1), end.slice(open)]
+      // AN INVALID BLOCK IS NOT `attributes`, SO THE LINE IS NOT A DEFINITION
+      // (markup-carve/carve#933). `[space, attributes]` names the `attributes`
+      // production, and a balanced `{...}` that production does not accept is
+      // not an instance of it - it is leftover content, and the end-of-line
+      // anchor (carve#911) disposes of it like any other leftover: the line
+      // falls back to prose. So `[a]: /u {#}` is NOT a definition and renders as
+      // the paragraph `[a]: /u {#}`; the same holds for `{ }`, `{=}` and `{}`.
+      //
+      // The deciding argument is that the same characters already read this way
+      // one construct away: `x {#}` in a paragraph keeps the braces as text,
+      // because `attributes` rejects that block there too and inline content
+      // keeps what it cannot parse. Two readings of `{#}` one construct apart is
+      // what this removes.
+      //
+      // The gate is the INLINE one, and both halves of it. `isValidAttrPayload`
+      // rejects `{#}` and `{=}`, where no token matches; the emptiness test
+      // rejects `{ }` and `{}`, which are valid syntax naming no attribute. The
+      // inline scanner refuses to consume either kind for the same reason -
+      // there they stay literal text - so the two constructs now agree, which is
+      // the whole argument for the rule.
+      if (!isValidInlineAttrPayload(inner) || isEmptyAttrs(parseAttrs(inner))) {
+        return [line, null]
+      }
+
+      // The INTERIOR, which is what `parseAttrs` takes everywhere else - the
+      // inline scanner hands it the payload between the braces. This handed it
+      // the braced text, and the two disagreed about the same block: an unquoted
+      // value is a `\S+` run, so `{k=v}` VALIDATED as `k=v` and PARSED as
+      // `k=v}`, publishing `k="v}"`. One string for both readings is the same
+      // point the clause makes about `{#}`.
+      return [end.slice(0, open - 1), inner]
     }
   }
   return [line, null]

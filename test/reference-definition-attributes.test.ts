@@ -82,7 +82,16 @@ describe('trailing attributes on a link reference definition', () => {
     )
   })
 
-  it('leaves an invalid attribute block alone rather than breaking the definition', () => {
-    expect(carveToHtml('[x][r]\n\n[r]: /u {!!!}\n')).toBe('<p><a href="/u">x</a></p>')
+  it('an INVALID attribute block makes the line prose, not a definition', () => {
+    // AN INVALID BLOCK IS NOT `attributes`, SO THE LINE IS NOT A DEFINITION
+    // (markup-carve/carve#933). This row used to expect the definition to
+    // survive with the braces silently dropped from the page. `[space,
+    // attributes]` names the `attributes` production, and a balanced `{...}`
+    // that production does not accept is not an instance of it; it is leftover
+    // content, and the end-of-line anchor disposes of it like any other
+    // leftover.
+    expect(carveToHtml('[x][r]\n\n[r]: /u {!!!}\n')).toBe(
+      '<p>[x][r]</p>\n<p>[r]: /u {!!!}</p>',
+    )
   })
 })

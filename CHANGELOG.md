@@ -94,7 +94,37 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `carve lint` now reports the shape as `unresolved-reference-link`, which it
   stayed silent on before.
 
+- **An invalid attribute block on a reference definition makes the line prose**
+  (markup-carve/carve#933). `[space, attributes]` in `reference_definition`
+  names the `attributes` production, and a balanced `{...}` that production does
+  not accept is not an instance of it. It is leftover content, and the
+  end-of-line anchor disposes of it like any other leftover.
+
+  ```
+  [a]: /u {#}
+
+  [a][]
+  ```
+
+  now renders the paragraph `[a]: /u {#}` and leaves `[a][]` unresolved. Before,
+  the block was peeled off, discarded, and the line defined anyway, so the
+  author's braces vanished from the page. The same holds for `{ }`, `{=}` and
+  `{}`. The same characters already read this way one construct away: `x {#}` in
+  a paragraph keeps the braces as text.
+
+  A VALID block still defines and still transfers its attributes.
+
+  A document relying on a definition line with an unparseable attribute block
+  resolves one fewer reference. Recorded and accepted in the clause.
+
 ### Fixed
+
+- **An unquoted `key=value` in a definition's trailing attribute block no longer
+  swallows the closing brace.** `[a]: /u {k=v}` published `k="v}"`: the block was
+  validated on its interior and parsed from the braced text, and an unquoted
+  value is a non-whitespace run, so the two readings differed by one character.
+  Both now read the interior, which is the string `parseAttrs` takes everywhere
+  else.
 
 - **A bottom-positioned table of contents is emitted at document level, after
   the last section** (markup-carve/carve-js#728). `tableOfContents({ position:
