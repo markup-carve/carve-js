@@ -1228,6 +1228,19 @@ class Lexer {
   // openers carry distinct widths.
   commentFenceLastIndex: Map<number, number> | undefined = undefined
 
+  // Document line number -> every index of THIS lexer's lines carrying it,
+  // built once by attachDocumentOffsets when the first child asks for it.
+  //
+  // BUILT ONCE PER PARENT, NOT ONCE PER CHILD. The inversion is a function of
+  // this lexer alone - `lines` and `lineNumber` - and neither changes after the
+  // constructor runs, so every child of the same parent was rebuilding a map it
+  // could have shared. A list gets one sub-lexer per item, so an n-line
+  // document paid n x O(n): 16,000 flat bullets took 18 s where 0.1.2 took
+  // 82 ms, on the DEFAULT path (this is not behind the `positions` option).
+  //
+  // Undefined until asked for, so a document that never nests never allocates.
+  lineIndicesByNumber: Map<number, number[]> | undefined = undefined
+
   constructor(
     source: string | readonly string[],
     opts: ParseOptions = {},
@@ -1463,15 +1476,12 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   // the same number - and picking one of them blindly chose a blank where the
   // real content line was meant, which failed the suffix test and unplaced a
   // list nested inside the continuation (#462).
-  const parentIndicesOf = new Map<number, number[]>()
-  if (sub.sourceLineMap) {
-    for (let i = 0; i < parent.lines.length; i++) {
-      const number = parent.lineNumber(i)
-      const bucket = parentIndicesOf.get(number)
-      if (bucket) bucket.push(i)
-      else parentIndicesOf.set(number, [i])
-    }
-  }
+  //
+  // MEMOIZED ON THE PARENT, because that is all it reads: `parent.lines` and
+  // `parent.lineNumber`, both fixed once the Lexer constructor has run. Rebuilt
+  // per child it made an ordinary flat list quadratic (see the field's docblock
+  // and markup-carve/carve-js#885).
+  const parentIndicesOf = sub.sourceLineMap ? parentLineIndices(parent) : EMPTY_LINE_INDICES
 
   for (let i = 0; i < sub.lines.length; i++) {
     const mapped = sub.sourceLineMap?.[i]
@@ -1578,6 +1588,30 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
   sub.sourceOffsetMap = offsets
   sub.linePrefixWidths = widths
 }
+
+/**
+ * Every index of `lexer.lines` carrying each DOCUMENT line number, built once.
+ *
+ * Shared by all of a parent's children rather than rebuilt per child: see the
+ * `lineIndicesByNumber` field. The result is treated as read-only by its
+ * callers, which only ever `get` a bucket and `find` within it.
+ */
+function parentLineIndices(lexer: Lexer): Map<number, number[]> {
+  const cached = lexer.lineIndicesByNumber
+  if (cached !== undefined) return cached
+  const built = new Map<number, number[]>()
+  for (let i = 0; i < lexer.lines.length; i++) {
+    const number = lexer.lineNumber(i)
+    const bucket = built.get(number)
+    if (bucket) bucket.push(i)
+    else built.set(number, [i])
+  }
+  lexer.lineIndicesByNumber = built
+  return built
+}
+
+/** Stand-in for the map above when the sub-lexer has no line map to invert. */
+const EMPTY_LINE_INDICES: ReadonlyMap<number, number[]> = new Map()
 
 /** A dedented line's content, with any synthesized leading spaces removed. */
 function withoutSyntheticIndent(line: string): string {

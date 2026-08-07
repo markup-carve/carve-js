@@ -166,6 +166,31 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An ordinary bullet list parses in linear time again** (carve-js#885). A flat
+  16,000-item list - 64 KB, no unusual syntax - took roughly 18 seconds where
+  0.1.2 took 82 milliseconds, and doubling the input quadrupled the time. It was
+  reachable from a plain `carveToHtml(input)` with no options, so a service
+  rendering user-supplied Carve could be stalled by a single ordinary paste.
+
+  Anchoring a container's body to its document offsets inverts the parent's line
+  map. That inversion walks every line of the PARENT, and it was rebuilt for
+  every child, so a list paid one full parent walk per item. It reads only the
+  parent, and the parent's lines never change once it is built, so it is now
+  built once per parent and shared by its children.
+
+  Same input, same process, on a loaded machine, before and after:
+
+  | items | before | after |
+  |---|---|---|
+  | 2,000 | 188 ms | 64 ms |
+  | 4,000 | 625 ms | 68 ms |
+  | 8,000 | 3,638 ms | 100 ms |
+  | 16,000 | 18,281 ms | 136 ms |
+
+  The wall-clock figures describe a busy machine and are not a benchmark; the
+  scaling is the point. Per doubling the cost grew 3.3x, 5.8x and 5.0x before,
+  and 1.1x to 1.5x after.
+
 - **A COMMENT fence's body in a list item no longer leaks onto the page, and
   `carve fmt` no longer breaks its delimiter across a space** (carve-js#878).
   PART 9 §28 makes a comment fence's body verbatim, and §24's S1/S2 place a line
