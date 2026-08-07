@@ -61,6 +61,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
 import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
+import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 
 export interface ParseOptions {
   positions?: boolean
@@ -521,7 +522,14 @@ const RE_DIV_OPEN = /^(:{3,}) *(\[[^\]]*\])?[ \t]*$/
 // a tab does not satisfy the marker's separator at all (corpus
 // 176-a-marker-separator-is-a-space-never-a-tab). What changed is only what
 // may follow that space.
-const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=\S)(.+)$/
+// The content test is `[^ \t]`, not `\S`. A TERM WHOSE WHOLE CONTENT IS ONE
+// VERTICAL TAB IS A TERM: PART 7's ONE WHITESPACE DEFINITION, IN EVERY
+// CONSTRUCT makes U+000B and U+000C content, and spells out that a
+// MARKER REQUIRES CONTENT rule is SATISFIED by one. `\S` read `:: <VT>` as a
+// content-less marker and left the whole definition list as a paragraph, while
+// `:: <SOH>` - a C0 control the host class happens not to carry - made the
+// list. One class, two answers, decided by which control the author typed.
+const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
 // A CONTENT-LESS marker line: `::` or `:` followed by whitespace and nothing
 // else. It is not a marker - both patterns above require content - so it stays
 // paragraph text, and it CLOSES any open term or definition rather than folding
@@ -641,7 +649,11 @@ export interface LinkDef {
  * avoid, and the reason the end-of-line anchor exists at all.
  */
 function splitTrailingAttrBlock(line: string): [string, string | null] {
-  const end = line.replace(/\s+$/, '')
+  // `[ \t]+$`, not `\s+$`: this is a LINE's trailing padding, so PART 7's four
+  // characters and nothing else (a `\n` cannot occur in a line). With `\s` a
+  // trailing vertical tab was invisible to the anchor, so `[a]: /u {.c}<VT>`
+  // attached the block and `[a]: /u {.c}<SOH>` did not.
+  const end = line.replace(/[ \t]+$/, '')
   if (!end.endsWith('}')) return [line, null]
   let quote: string | null = null
   let open = -1
@@ -990,7 +1002,11 @@ const isTableRow = (line: string): boolean => {
 // continuation_row it ends with `|`; that trailing pipe distinguishes
 // it from a `+ ` list item (which never ends with `|`). Only consumed
 // inside parseTable, after a standard `|` row has opened the table.
-const RE_TABLE_CONT = /^\+.*\|\s*$/
+// The tail after the closing `|` is line padding, so `[ \t]*$` and not `\s*$`
+// (PART 7). With `\s` a continuation row whose line ended in a vertical tab was
+// still consumed into the cell above, where the same row ending in any other
+// control character became a paragraph between two tables.
+const RE_TABLE_CONT = /^\+.*\|[ \t]*$/
 // The trailing attribute block must be GLUED to the `)` (no intervening space)
 // to attach, per the inline glue rule; a space before `{…}` makes it literal
 // and the line falls back to a paragraph (inline image + literal braces),
@@ -1001,7 +1017,13 @@ const RE_TABLE_CONT = /^\+.*\|\s*$/
 // markup-carve/carve#912). Two producers for one production is how this class
 // of defect starts: with `\s+` still here, a tab-titled image was literal in a
 // paragraph and a captioned figure on a line of its own.
-const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "([^"]*)"| '([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+// The LINE TAIL takes PART 7's four characters (`[ \t]*$`); the DESTINATION
+// keeps `[^)\s]`. Those are different slots and the difference is normative:
+// PART 3 marks `unicode_url_char` WHITESPACE HERE IS UNICODE WHITESPACE, so a
+// destination ends at any White_Space character, while the padding after the
+// `)` is ordinary line padding and ends at nothing else. Narrowing the tail and
+// leaving the destination is therefore the whole of what PART 7 asks here.
+const RE_BARE_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)(?: "([^"]*)"| '([^']*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
 // Frontmatter open fence: `---` with an optional format token (`---toml`,
 // `---json`); bare `---` uses the default format. The space before the token is
 // optional (lenient input: both `---toml` and `--- toml` are accepted; the
@@ -2605,7 +2627,10 @@ function parseBlockAttributeRun(src: string): Attrs | null {
   const orderSeen = new Set<string>()
 
   while (i < src.length) {
-    while (i < src.length && /\s/.test(src[i]!)) i++
+    // The separator between two attribute BLOCKS on one line is `whitespace`
+    // (PART 7, the terminal `attr_separator` reads). `\s` let `{#a}<VT>{.b}`
+    // merge into one attribute line where `{#a}<SOH>{.b}` stayed a paragraph.
+    while (i < src.length && isCarveWhitespace(src[i])) i++
     if (i >= src.length) break
     if (src[i] !== '{') return null
 
@@ -3254,7 +3279,8 @@ function parseCommentBlock(lexer: Lexer): Comment {
     return line.slice(cut)
   }
   const lines: string[] = []
-  const openerTail = m[2]!.trim()
+  // PART 7's four characters: a tail of one vertical tab is a NON-EMPTY tail.
+  const openerTail = trimNonNbsp(m[2]!)
   if (openerTail !== '') lines.push(openerTail)
   while (!lexer.eof()) {
     const ln = lexer.peek()!
@@ -3277,7 +3303,9 @@ function parseCommentBlock(lexer: Lexer): Comment {
 function parseFootnoteDef(lexer: Lexer): null {
   const defLineIndex = lexer.pos
   const m = RE_FOOTNOTE_DEF.exec(lexer.consume())!
-  const label = m[1]!.trim()
+  // PART 7's four characters, not the host trim: a label is bounded by
+  // `whitespace`, so `[^ <VT>f]` keeps the vertical tab the native trim ate.
+  const label = trimNonNbsp(m[1]!)
   const bodyLines = [m[2]!]
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
   let pendingBlanks = 0
@@ -6959,7 +6987,12 @@ const RE_AUTOLINK = new RegExp(
     '<"\\\\`{}|^]+|[A-Za-z0-9._+\\-]+@[A-Za-z0-9._+\\-]+\\.[A-Za-z]+)>',
   'u',
 )
-const RE_CROSSREF = /^<\/#([^>\s]+)>/
+// `crossref_id` is one of the eleven productions that read the `whitespace`
+// TERMINAL (PART 7), so the id ends at PART 7's four characters -- unlike the
+// autolink body directly above, whose end is the White_Space PROPERTY because
+// `unicode_url_char` says so. Two neighbouring productions, two classes, and
+// the difference is written in the grammar rather than inherited from the host.
+const RE_CROSSREF = /^<\/#([^> \t\n\r]+)>/
 const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}/
 
 // Inline node types a trailing `{...}` must NOT attach to: their renderers emit
@@ -7203,9 +7236,13 @@ function suffixHasPair(s: string, a: string, b: string): Uint8Array {
 // a nested `{`/`[` (or any other invalid boundary char) ends the walk, each
 // character is visited by O(1) walks, keeping the total O(n). `brace` is the
 // index of the opening `{`.
-// Whitespace RE_SPAN_TAIL content may contain: any `\s` except `\n` (which its
-// class `[^}"'\n]` excludes). Matches isValidAttrPayload's `\s+` on those chars.
-const WS_NO_NL = /[^\S\n]/
+// Whitespace RE_SPAN_TAIL content may contain: PART 7's four characters except
+// `\n` (which its class `[^}"'\n]` excludes). Matches isValidAttrPayload's
+// separator run on those chars, and it has to: this is the FAST PATH for the
+// same production, so a wider class here declares a payload valid that the
+// regex then rejects. It was `[^\S\n]`, and the two disagreed on a vertical
+// tab, a form feed, NBSP and every Unicode space.
+const WS_NO_NL = /[ \t\r]/
 function isIdentStart(c: string): boolean {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '_'
 }
@@ -7249,7 +7286,7 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
         // a dangling `=` and is invalid — a bare value is `\S+` (>=1 non-space)
         // and a quoted value starts with `"`/`'`. Otherwise (quoted or bare value)
         // defer to the regex (a valid bare value is consumed whole -> linear).
-        if (v === undefined || v === '}' || /\s/.test(v)) {
+        if (v === undefined || v === '}' || isCarveWhitespace(v)) {
           return true
         }
         return false
@@ -7345,7 +7382,21 @@ const isQuoteOpenContext = (prev: string) =>
   prev === '' ||
   // `=` opens a quote so an attribute-like `key="value"` / `="x"` gets an
   // opening curly quote; `:` opens too (`:"q"` -> `:“q”`), matching carve-rs.
-  /[\s([{\-–—/=:]/.test(prev) ||
+  // PART 7's four characters PLUS the NO-BREAK SPACE, not `\s`.
+  //
+  // The four are the whitespace clause. The NBSP is a deliberate addition and
+  // not an inherited one: this test picks a GLYPH for a character that is
+  // already content, so what it asks is "does a space stand here", and a
+  // no-break space is a space to the reader. The branch below already says so
+  // for the ESCAPED spelling (`\ `, carried as U+E000), and a rule that
+  // answered the two spellings of one character differently would be the drift
+  // PART 7 exists to stop.
+  //
+  // What comes OUT is the rest of the host's `\s`: a VERTICAL TAB, a FORM FEED
+  // and U+FEFF are not spaces under any reading, and a quote after one now
+  // closes exactly as a quote after a letter does. `a<VT>"x"` and `a<SOH>"x"`
+  // used to curl differently, from one class.
+  /[ \t\n\r\u00a0([{\-–—/=:]/.test(prev) ||
   prev === '“' ||
   prev === '‘' ||
   // U+E000 is the internal non-breaking-space placeholder (escaped `\ ` /
@@ -7728,7 +7779,9 @@ function scanInlineInner(
         // Unclosed: verbatim to end of block, with the block's trailing
         // whitespace stripped (no surrounding single-space strip — that applies
         // only to a closed span).
-        const value = text.slice(i + openLen).replace(/\s+$/, '')
+        // PART 7's four characters (the run may cross a line, so `\n` and `\r`
+        // are in). `\s` ate a trailing vertical tab out of the span's content.
+        const value = text.slice(i + openLen).replace(/[ \t\n\r]+$/, '')
         out.push(withPos({ type: 'code', value }, source, text, i, text.length))
         i = text.length
         continue
@@ -7889,7 +7942,7 @@ function scanInlineInner(
         const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
         if (mfn) {
           flush()
-          out.push(withPos({ type: 'footnote_ref', id: mfn[1]!.trim() } as FootnoteRef, source, text, i, i + mfn[0].length))
+          out.push(withPos({ type: 'footnote_ref', id: trimNonNbsp(mfn[1]!) } as FootnoteRef, source, text, i, i + mfn[0].length))
           i += mfn[0].length
           continue
         }
@@ -7960,7 +8013,7 @@ function scanInlineInner(
       const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
       if (mfn) {
         flush()
-        out.push(withPos({ type: 'footnote_ref', id: mfn[1]!.trim() } as FootnoteRef, source, text, i, i + mfn[0].length))
+        out.push(withPos({ type: 'footnote_ref', id: trimNonNbsp(mfn[1]!) } as FootnoteRef, source, text, i, i + mfn[0].length))
         i += mfn[0].length
         continue
       }
@@ -8253,7 +8306,9 @@ function matchEmphasis(
     // (grammar boldItalic `~spaceOrEnd`). Empty (`/**/`) or space-initial
     // (`/* x*/`) content is not bold-italic and falls through to `/` emphasis,
     // matching carve-php parseBoldItalic.
-    if (start < text.length && !/\s/.test(text[start]!)) {
+    // `isCarveWhitespace`, not `\s`: PART 7 makes a vertical tab CONTENT, so
+    // `/*<VT>a*/` is bold-italic exactly as `/*<SOH>a*/` already was.
+    if (start < text.length && !isCarveWhitespace(text[start])) {
       let searchPos = start
       for (;;) {
         const close = findClose(text, searchPos, '*/')
@@ -8262,7 +8317,7 @@ function matchEmphasis(
         // The content must not end in whitespace (nor be empty). A trailing
         // space closer like `/*x */` is not bold-italic; skip this `*/` and
         // look for a later one before giving up (parity with carve-php).
-        if (inner === '' || /\s/.test(inner[inner.length - 1]!)) {
+        if (inner === '' || isCarveWhitespace(inner[inner.length - 1])) {
           searchPos = close + 1
           continue
         }
@@ -8737,10 +8792,20 @@ function isValidAttrPayload(inner: string): boolean {
   // digit. A digit-first name (`.123`, `#1`, `2=v`) makes the whole block an
   // invalid attribute block, so it stays literal (§14) -- stricter than djot.
   // The bareword (boolean-attribute) alternative comes after key=value so a
-  // `key=value` is consumed whole, and before `\s+`. It makes `{disabled}` and
-  // `{.c disabled}` valid blocks (boolean attrs) rather than literal text.
+  // `key=value` is consumed whole, and before the separator run. It makes
+  // `{disabled}` and `{.c disabled}` valid blocks (boolean attrs) rather than
+  // literal text.
+  //
+  // THE SEPARATOR AND THE UNQUOTED VALUE ARE PART 7's FOUR CHARACTERS, not
+  // `\s+` / `\S+`. An unquoted value runs to the next `whitespace`, so
+  // `{k=v<VT>w}` is ONE attribute whose value holds a vertical tab; under `\s`
+  // it split into `k="v"` and a boolean `w`, while `{k=v<SOH>w}` - the same
+  // shape with a different control character - stayed one attribute. Three
+  // producers spell this run (here, `parseAttrs`'s `re` below, and WS_NO_NL's
+  // fast path); they move together or the fast path accepts what the regex
+  // rejects.
   const stripped = inner.replace(
-    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+))|(?:[a-zA-Z_][\w-]*)|\s+/g,
+    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^ \t\n\r]+))|(?:[a-zA-Z_][\w-]*)|[ \t\n\r]+/g,
     '',
   )
   return stripped === ''
@@ -8835,7 +8900,7 @@ export function parseAttrs(src: string): Attrs {
   // The bareword alternative (m[7]) is LAST so `key=value` matches as a
   // key/value, not as a bareword `key` with a leftover `=value`. A bareword is
   // a value-less (boolean) attribute -> rendered `name=""` (djot-php form).
-  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\S+)))|(?:([a-zA-Z_][\w-]*))/g
+  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:([a-zA-Z_][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {

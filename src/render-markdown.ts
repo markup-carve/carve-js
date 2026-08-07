@@ -124,7 +124,10 @@ function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'heading': {
-      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[^\S\u00a0]*\n[^\S\u00a0]*/g, ' '))
+      // A folded heading's line join takes PART 7's four characters. The class
+      // was `\s` with one carve-out, so it swallowed a vertical tab beside the
+      // newline that the HTML target kept.
+      const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r]*\n[ \t\r]*/g, ' '))
       const id = node.attrs?.id
       const suffix = id && ctx.referencedHeadingIds.has(id) ? ` {#${id}}` : ''
       return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
@@ -606,7 +609,9 @@ function markdownFenceInfo(
 ): string {
   // Keep only the first whitespace-delimited token (the language word); drop it
   // if it still contains a backtick (would break the fence).
-  const rawToken = lang === undefined ? '' : (stripControls(lang).split(/\s/)[0] ?? '')
+  // The info token ends at PART 7's four characters, as it does in the
+  // canonical writer's escapeFenceToken.
+  const rawToken = lang === undefined ? '' : (stripControls(lang).split(/[ \t\n\r]/)[0] ?? '')
   const token = rawToken.includes('`') ? '' : rawToken
   // A grouping `[label]` rides along after the language and title. Dropping it
   // was silent data loss: an info string is free-form after the first word, so
@@ -733,7 +738,10 @@ function fragmentId(href: string): string | undefined {
  * Scanning the value works either way and does not care how the run was split.
  */
 function escapeUnresolvedCrossrefs(value: string): string {
-  const pattern = /<\/#[^>\s]+>/g
+  // The SAME production as the parser's RE_CROSSREF, so the same class: the id
+  // ends at PART 7's four characters. Two producers for one production is how
+  // this class of defect starts, so they are narrowed together.
+  const pattern = /<\/#[^> \t\n\r]+>/g
   let out = ''
   let last = 0
   for (const match of value.matchAll(pattern)) {
