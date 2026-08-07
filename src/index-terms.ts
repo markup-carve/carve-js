@@ -1,5 +1,5 @@
 import type { Admonition, Attrs, BlockNode, Document, Extension, InlineNode } from './ast.js'
-import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import type {
   BlockExtensionRenderContext,
   CarveExtension,
@@ -33,7 +33,7 @@ export function index(): CarveExtension {
       // nodes) are unreachable, so only the per-slug tallies need resetting.
       counts.clear()
       display.clear()
-      budget = new AbbrBudget(doc.srcByteLength)
+      budget = budgetForDocument(doc)
       // Assign each `:index[…]` marker in the body a per-slug occurrence index
       // in document order. Only `doc.children` (body) is indexed: markers in
       // deferred content (footnote definitions, which the core renderer may

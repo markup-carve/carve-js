@@ -31,7 +31,7 @@ import type {
   ExtensionRenderContext,
   StaticRenderers,
 } from './extension.js'
-import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
@@ -382,7 +382,7 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   const prevBudget = abbrBudget
   const prevDocIds = docIds
   const prevOptions = activeRenderOptions
-  abbrBudget = new AbbrBudget(ast.srcByteLength)
+  abbrBudget = budgetForDocument(ast)
   docIds = collectDocumentIds(ast)
   activeRenderOptions = opts
   try {
@@ -1373,6 +1373,23 @@ function renderImage(img: Image, opts: RenderOptions): string {
  */
 let insideLink = false
 
+/**
+ * Charge a rendered cross-reference label against the per-render expansion
+ * budget, degrading an over-budget label to the authored target.
+ *
+ * A crossref republishes the target heading's whole display text while the
+ * reference costs only the slug, so K references to one long heading amplify
+ * output K x heading_len. That is the abbreviation expansion's shape, so it
+ * takes the abbreviation expansion's budget rather than a second one, and it
+ * degrades the way that one does: to the text the author actually typed
+ * (markup-carve/carve-js#892).
+ */
+function chargeCrossrefLabel(label: string, target: string): string {
+  if (abbrBudget?.charge(utf8ByteLength(label)) ?? true) return label
+
+  return escapeHtml(target)
+}
+
 function withinLink<T>(fn: () => T): T {
   const previous = insideLink
   insideLink = true
@@ -1651,7 +1668,8 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // is still in the tree because PART 12 §3a keeps it there - so the
       // suppression is here, at the point of rendering, rather than by
       // dropping the node during resolution.
-      if (node.href && insideLink) return renderInlines(node.resolvedText ?? [], opts)
+      if (node.href && insideLink)
+        return chargeCrossrefLabel(renderInlines(node.resolvedText ?? [], opts), node.target)
       // Resolved: the anchor this crossref always rendered as. The node keeps
       // the authored `target` (PART 12 §3a) and carries the destination in
       // `href`, so the rendering is unchanged - only the tree moved.
@@ -1662,7 +1680,10 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
         // here. The resolver used to unwrap the clone before the renderer saw
         // it; with that pass gone (markup-carve/carve#817) the seam has to say
         // so itself, exactly as the `link` arm does for an authored label.
-        const label = withinLink(() => renderInlines(node.resolvedText ?? [], opts))
+        const label = chargeCrossrefLabel(
+          withinLink(() => renderInlines(node.resolvedText ?? [], opts)),
+          node.target,
+        )
         return `<a href="${crossrefHref}"${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
       }
       // Unresolved: literal source, the same as an unresolved reference link.

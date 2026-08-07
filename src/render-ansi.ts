@@ -1,7 +1,7 @@
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
-import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
@@ -52,7 +52,7 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
     ordered: [],
     blockDepth: 0,
     inlineDepth: 0,
-    abbrBudget: new AbbrBudget(ast.srcByteLength),
+    abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
   const out = renderBlocks(ast.children, ctx)
@@ -76,6 +76,15 @@ interface AnsiContext {
    * path never populates because it does no numbering.
    */
   definedFootnotes: Set<string>
+}
+
+/**
+ * Charge a rendered cross-reference label against the per-render expansion
+ * budget, degrading an over-budget label to the authored target. Same rule and
+ * same budget as the abbreviation expansion below; see abbr-budget.ts.
+ */
+function chargeCrossrefLabel(label: string, target: string, ctx: AnsiContext): string {
+  return ctx.abbrBudget.charge(utf8ByteLength(label)) ? label : stripControls(target)
 }
 
 function style(text: string, codes: string): string {
@@ -521,7 +530,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'heading_ref':
       // Already inside a link's text: no second styling run, matching the HTML
       // target's suppression of the nested anchor.
-      if (node.href && insideLink) return renderInlines(node.resolvedText ?? [], ctx)
+      // Same expansion budget the abbreviation arm spends, degrading to the
+      // authored target (markup-carve/carve-js#892). See abbr-budget.ts.
+      if (node.href && insideLink)
+        return chargeCrossrefLabel(renderInlines(node.resolvedText ?? [], ctx), node.target, ctx)
       // Resolved: styled like the link this crossref always rendered as. The
       // href is a same-document `#id`, which the link arm above deliberately
       // does not print, so neither does this.
@@ -531,7 +543,11 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // renderer sees it (PART 12 §3a, markup-carve/carve#817).
       if (node.href) {
         return style(
-          withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
+          chargeCrossrefLabel(
+            withinLink(() => renderInlines(node.resolvedText ?? [], ctx)),
+            node.target,
+            ctx,
+          ),
           UNDERLINE + FG_BLUE,
         )
       }

@@ -51,6 +51,30 @@ export function abbrBudget(srcByteLength: number | undefined): number {
 }
 
 /**
+ * The budget for one render of `ast`.
+ *
+ * A cross-reference label charges this budget too, and it charges the RENDERED
+ * label rather than the raw display text - the opposite of the abbreviation
+ * charge one comment up. Deliberate, and for the same reason that one is
+ * deliberate: the abbreviation charges raw so that three ENGINES degrade at the
+ * same occurrence, and a crossref label charges what it emits so that the bound
+ * is on the bytes that actually exist. The three engines still agree, because
+ * for one target they render the same label to the same bytes; what differs is
+ * that an escape-heavy label costs more in HTML than in plain text, which is
+ * true of the output as well (raised by codex review).
+ *
+ * Every renderer and extension sizes its budget through this one call, so the
+ * document's length is read in exactly ONE place. That matters because the
+ * number is not always measured: on the AST-ingest path `srcByteLength` arrives
+ * inside the payload, where a hostile tree can inflate it to widen the guard
+ * meant to bound it. Whatever ends up bounding that claim binds every consumer
+ * at once from here, instead of having to find five spellings of the same read.
+ */
+export function budgetForDocument(ast: { srcByteLength?: number }): AbbrBudget {
+  return new AbbrBudget(ast.srcByteLength)
+}
+
+/**
  * Mutable per-render tracker. `charge(expansion)` returns true if emitting
  * `expansion` stays within budget (and accounts for it); false once the budget
  * is exhausted, signalling the renderer to degrade to plain key text.

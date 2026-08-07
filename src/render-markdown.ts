@@ -13,7 +13,7 @@ import type {
   Text,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
-import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
@@ -85,7 +85,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
-    abbrBudget: new AbbrBudget(ast.srcByteLength),
+    abbrBudget: budgetForDocument(ast),
     smartTypography: opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph',
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
   }
@@ -492,7 +492,12 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // way a link cloned in from the target heading may not nest, and the
       // resolver no longer unwraps the clone before the renderer sees it
       // (PART 12 §3a, markup-carve/carve#817).
-      const crossrefText = withinLink(() => renderInlines(node.resolvedText ?? [], ctx))
+      // Same expansion budget the abbreviation arm spends, degrading to the
+      // authored target (markup-carve/carve-js#892). See abbr-budget.ts.
+      const rendered = withinLink(() => renderInlines(node.resolvedText ?? [], ctx))
+      const crossrefText = ctx.abbrBudget.charge(utf8ByteLength(rendered))
+        ? rendered
+        : escapeText(node.target)
       // Inside a link's text, and for a target this format cannot anchor: the
       // display text alone. Markdown can carry `{#id}` on a heading and
       // nothing else, so a crossref to a figure or a table renders as the

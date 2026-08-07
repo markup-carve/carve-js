@@ -1,5 +1,5 @@
 import type { Admonition, Attrs, Heading, InlineNode, RawBlock, Text } from './ast.js'
-import { AbbrBudget, utf8ByteLength } from './abbr-budget.js'
+import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { deriveDisplayNodes } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 import { renderInlinesInLinkContext } from './render-html.js'
@@ -372,7 +372,7 @@ export function tocPlacement(): CarveExtension {
     name: 'toc',
     beforeRender(doc) {
       entries = []
-      budget = new AbbrBudget(doc.srcByteLength)
+      budget = budgetForDocument(doc)
       // Walk the whole body in document order so headings nested in containers
       // (`::: note`, blockquotes, lists, divs) are included - they render with
       // id anchors, so they belong in the TOC. Footnote definitions live in

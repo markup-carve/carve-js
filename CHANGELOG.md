@@ -185,6 +185,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A cross-reference label is a budgeted expansion** (carve-js#892). `</#slug>`
+  republishes the target heading's whole display text while the reference costs
+  only the slug, so a short slug on a long heading amplified output by
+  (heading length) x (reference count): 20 KB of input produced 16.7 MB of HTML,
+  40 KB produced 66.7 MB, and the ratio kept growing with the input until a
+  160 KB paste exhausted the heap. The label now charges the same per-render
+  expansion budget an abbreviation charges, on the HTML, Markdown, plain-text
+  and ANSI targets alike. **Behavior change:** once that budget is spent, a
+  cross-reference renders labelled with its authored target
+  (`<a href="#A">A</a>`) instead of the target's full display text, the way an
+  over-budget abbreviation renders as its plain key. The budget's floor and
+  factor are unchanged, so ordinary documents are byte-identical. The Carve
+  target reproduces the authored `</#slug>` and never expanded, so it is
+  unchanged.
+
 - **A boundary line inside an open fence no longer ends the container**
   (markup-carve/carve#983 corpus category 279, carve-js#884). A `+` continuation
   marker attaches ONE block, and a fenced block ends at its closer - so a blank
