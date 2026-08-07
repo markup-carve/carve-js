@@ -156,6 +156,31 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
+  it('takes a bare run at the container width as the CLOSER even while absorption is armed', () => {
+    // The closer branch has to be tested BEFORE the absorb branch, or a run
+    // that closes the container is absorbed as text instead and the quote runs
+    // on. Both branches leave no open paragraph on their own, so this is the
+    // one shape that tells them apart. The top level answers the same way.
+    expect(html('> ::: note\n> :::x\n> :::\ntail\n')).toBe(
+      '<blockquote>\n  <aside class="admonition note">\n    <p>:::x</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
+    )
+    expect(html('::: note\n:::x\n:::\ntail\n')).toBe(
+      '<aside class="admonition note">\n  <p>:::x</p>\n</aside>\n<p>tail</p>',
+    )
+  })
+
+  it('does not close a container on a LONGER bare run, which stays absorbable text', () => {
+    // `>=` is the CODE fence's closer rule, not the colon fence's, and it
+    // passes every shape above. A `::::` inside a `:::` container is not its
+    // closer, so §12 absorption takes it and the paragraph stays open.
+    expect(html('> ::: note\n> :::x\n> ::::\ntail\n')).toBe(
+      '<blockquote>\n  <aside class="admonition note">\n    <p>:::x\n::::\ntail</p>\n  </aside>\n</blockquote>',
+    )
+    expect(html('::: note\n:::x\n::::\ntail\n')).toBe(
+      '<aside class="admonition note">\n  <p>:::x\n::::\ntail</p>\n</aside>',
+    )
+  })
+
   it('CONTROL a shorter bare run with no absorption above it still opens a nested container', () => {
     // The control on the width rule: without the malformed fence there is
     // nothing to absorb, so the shorter run opens an EMPTY nested container -
