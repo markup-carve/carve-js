@@ -95,11 +95,41 @@ describe('the shared trim', () => {
     expect(trimEndNonNbsp(`x${NBSP} ${NBSP}`)).toBe(`x${NBSP} ${NBSP}`)
   })
 
-  it('trims every other whitespace character, including the exotic ones', () => {
-    // `\s` minus NBSP, so the replacement has to agree with
-    // `\s` on characters a hand-written ASCII list would miss.
-    for (const ws of [' ', '\t', '\n', '\r', '\v', '\f', ' ', ' ', '　']) {
+  it('trims Carve whitespace: the four characters, and only those', () => {
+    // ONE WHITESPACE DEFINITION, IN EVERY CONSTRUCT (markup-carve/carve#977,
+    // PART 7). Carve's whitespace is U+0020, U+0009, U+000A and U+000D. This
+    // list used to be "the host language's class minus NBSP", so it also
+    // carried U+000B, U+000C and the Unicode spaces - which is exactly the
+    // reach that clause forbids.
+    for (const ws of [' ', '\t', '\n', '\r']) {
       expect(trimNonNbsp(`${ws}x${ws}`)).toBe('x')
+    }
+  })
+
+  it('keeps a vertical tab and a form feed, which are CONTENT', () => {
+    // Both are NAMED in the clause, so their absence from the list above
+    // cannot be read as an oversight. Written as escapes on purpose: a literal
+    // U+000B does not survive every file write, and a test that lost it would
+    // assert nothing while looking like it asserted everything.
+    const VT = '\u000B'
+    const FF = '\u000C'
+    expect(VT.charCodeAt(0)).toBe(0x0b)
+    expect(FF.charCodeAt(0)).toBe(0x0c)
+
+    expect(trimNonNbsp(`${VT}x${VT}`)).toBe(`${VT}x${VT}`)
+    expect(trimNonNbsp(`${FF}x${FF}`)).toBe(`${FF}x${FF}`)
+    expect(trimNonNbsp(`  ${FF}x${FF}  `)).toBe(`${FF}x${FF}`)
+    expect(trimStartNonNbsp(`  ${VT}x`)).toBe(`${VT}x`)
+    expect(trimEndNonNbsp(`x${VT}  `)).toBe(`x${VT}`)
+  })
+
+  it('keeps the Unicode spaces, which are content too', () => {
+    // The clause marks its two WIDER notions explicitly - a destination's
+    // `unicode_url_char` (PART 3) and PART 9 section 25's scheme probe - and a
+    // construct carrying no such mark takes the four. A renderer trim carries
+    // none.
+    for (const ws of ['\u1680', '\u2000', '\u2009', '\u3000']) {
+      expect(trimNonNbsp(`${ws}x${ws}`)).toBe(`${ws}x${ws}`)
     }
   })
 
@@ -110,11 +140,12 @@ describe('the shared trim', () => {
     // renders U+FEFF as ordinary content, so trimming it here made
     // `to_html(fmt(x)) == to_html(x)` false (PART 11 §1, carve#844).
     //
-    // The list above is `\s`-agreement, and this is where the two part
-    // company: JavaScript's `\s` includes U+FEFF, Rust's `char::is_whitespace`
-    // and PCRE's `\s` do not. Deferring to the regex engine above ASCII is
-    // still right for U+2028 and U+3000; it is wrong for this one character,
-    // so that is answered before the deferral.
+    // It is no longer an EXCEPTION, which is the point: since carve#977 the
+    // trim names Carve's four whitespace characters directly, and U+FEFF is
+    // not among them - nor is any other character JavaScript's `\s` adds. The
+    // engines never agreed about this one anyway (Rust's `char::is_whitespace`
+    // and PCRE's `\s` exclude it), and the disagreement disappears with the
+    // class that caused it.
     const BOM = '\ufeff'
 
     expect(trimNonNbsp(`${BOM}x${BOM}`)).toBe(`${BOM}x${BOM}`)

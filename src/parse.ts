@@ -118,7 +118,7 @@ let activeMatcherCtx: MatcherContext | null = null
 // ` +` delimiter, so the content group starts at the first non-space; a NBSP
 // (U+00A0) counts as content, as everywhere else in the parser.
 const RE_HEADING =
-  /^(#{1,6}) +((?=[ \t\f]*[^ \t\n\r\f]).+?)(?:\s+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?\s*$/
+  /^(#{1,6}) +((?=[ \t]*[^ \t\n\r]).+?)(?:[ \t]+\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?[ \t]*$/
 // Thematic break: a COL-0 line of 3+ CONTIGUOUS identical `-`, `*`, or `_`
 // (`---`, `***`, `___`, `----`), followed only by optional trailing
 // whitespace and end of line (grammar §262 thematic_break). No leading
@@ -241,7 +241,7 @@ const RE_FENCE = new RegExp(
 // item only with non-empty content: a content-less marker (`-`, `- `, `-   ` --
 // bare or trailing whitespace only) is NOT a list, it is paragraph text.
 // The leading indentation is matched ATOMICALLY, via the `(?=(...))\1` idiom.
-// A plain `([^\S\u00a0]*)` is greedy and BACKTRACKS: on a line the pattern does
+// A plain `([ \t]*)` is greedy and BACKTRACKS: on a line the pattern does
 // not match, the engine gives back one whitespace character at a time and retries
 // the marker at every position, so the test costs O(indent) attempts rather than
 // one. Deeply indented lines are exactly where these run most - a nested list
@@ -254,21 +254,28 @@ const RE_FENCE = new RegExp(
 // let the rest of the pattern match. Backtracking into it could only ever fail.
 // The capture numbering is unchanged too - the lookahead's group takes slot 1 and
 // holds the same indent the old group did.
-// U+FEFF IS NOT INDENTATION. These classes are `\s` minus NBSP, and
-// JavaScript's `\s` uniquely contains U+FEFF - Rust's `char::is_whitespace`
-// and PCRE's `\s` do not - so a mark before a marker was skipped here as
-// indentation while carve-php and carve-rs kept the line literal (#790).
+// INDENTATION IS `whitespace`: A SPACE OR A TAB (markup-carve/carve#977, PART
+// 7 -- ONE WHITESPACE DEFINITION, IN EVERY CONSTRUCT; the `indent` production
+// is named there among the eleven that read it). The content slot after the
+// marker is the same definition read the other way round: MARKER REQUIRES
+// CONTENT (PART 2) is satisfied by ANY character that is not one of the four,
+// U+000B and U+000C included.
 //
-// PART 9 states that zero-width characters are NOT whitespace and ARE ordinary
-// characters, and the corpus pins the one exception: a mark at the START of a
-// document is not content. Everywhere else it is, and content before a marker
-// means the marker opens nothing. This engine also rendered the same mark into
-// a paragraph's text, so it was content in one position and absent in another.
+// THESE CLASSES USED TO BE THE HOST LANGUAGE'S, MINUS ONE EXCEPTION AT A TIME.
+// They read `[^\S\u00a0\ufeff]` - JavaScript's `\s` with NBSP and U+FEFF
+// carved back out, each carve-out added by its own bug (#790: a U+FEFF before a
+// marker was skipped here as indentation while carve-php and carve-rs kept the
+// line literal). What the exceptions could not reach was everything else `\s`
+// holds: a VERTICAL TAB before a bullet was indentation, so `<VT>- a` was a
+// list and `carve fmt` wrote the character away, and every Unicode space did
+// the same. Naming the two indentation characters directly retires both
+// exceptions and the class that needed them.
 //
 // Scoped to marker RECOGNITION on purpose. `RE_BLANK_LINE` below decides what a
 // BLANK LINE is, which moves document structure rather than what a line opens;
-// it is narrower still, because the grammar names that class outright.
-const RE_UNORDERED = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +([\S\u00a0].*)$/
+// it spells the same two characters, which is now the point rather than a
+// coincidence.
+const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +([^ \t].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
@@ -281,10 +288,10 @@ const RE_UNORDERED = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +([\S\u00a0].*)$/
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 const RE_ORDERED =
-  /^(?=([^\S\u00a0\ufeff]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([\S\u00a0].*)$/
+  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([^ \t].*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +\[([ xX\-_>?])\] +([\S\u00a0].*)$/
+const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +([^ \t].*)$/
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
@@ -296,7 +303,7 @@ const RE_TASK = /^(?=([^\S\u00a0\ufeff]*))\1[-*] +\[([ xX\-_>?])\] +([\S\u00a0].
 // space rather than competing with it. A block with nothing after it is not a
 // marker in any form (`.{#x}text`, `1.{#x}text`, `-{#x}text` are all text).
 const RE_ITEM_ATTR =
-  /^([^\S\u00a0\ufeff]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[\S\u00a0].*)$/
+  /^([ \t]*)((?:[-*])|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}( +[^ \t].*)$/
 // Strip a valid abutting `{...}` from a marker line so the bare marker regexes
 // match, returning the stripped line plus the parsed attributes. Returns null
 // when there is no abutting brace or the brace is not a valid attribute payload
@@ -316,14 +323,25 @@ function extractItemAttr(line: string): { stripped: string; attrs: Attrs | undef
   return { stripped: m[1]! + m[2]! + m[4]!, attrs: isEmptyAttrs(attrs) ? undefined : attrs }
 }
 
-const TRIM_STRUCTURAL_RE = /^[^\S\u00a0]+|[^\S\u00a0]+$/g
+/**
+ * ONE WHITESPACE DEFINITION, IN EVERY CONSTRUCT (markup-carve/carve#977, PART
+ * 7). Carve's whitespace is four characters - U+0020, U+0009, U+000A and
+ * U+000D - and EVERY OTHER CHARACTER IS CONTENT, with U+000B and U+000C named
+ * there as the two an implementation is likeliest to admit by accident.
+ *
+ * This was `[ \t]`, the host language's `\s` minus U+00A0. A class with
+ * one exception carved out of it is still the host language's class: a vertical
+ * tab, a form feed, an OGHAM SPACE MARK and every Unicode space were whitespace
+ * to the emptiness tests that call this and content everywhere else in the
+ * parser. An inline footnote `^[<VT>]` came out literal text where
+ * `^[<NBSP>]` came out a footnote, on the same reading of the same rule.
+ *
+ * The NBSP exception is gone because it is no longer an exception: U+00A0 is
+ * simply not one of the four, so nothing has to remember it.
+ */
+const TRIM_STRUCTURAL_RE = /^[ \t\n\r]+|[ \t\n\r]+$/g
 
 function trimStructural(text: string): string {
-  // Fast path: a line with no literal U+00A0 trims identically to native
-  // String.trim() (which would also strip U+00A0, but there is none here), so
-  // the hot per-line blank/HR checks stay at native speed; only a line that
-  // actually carries a non-breaking space pays for the regex.
-  if (!text.includes(' ')) return text.trim()
   return text.replace(TRIM_STRUCTURAL_RE, '')
 }
 
@@ -829,7 +847,7 @@ export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\p{Cf}\\p{Cc}'
 // `blank_line = {whitespace}` takes (carve#890) - so `[a]: /u<SP><TAB><SP>` is
 // still a definition.
 const RE_LINK_DEF =
-  /^[^\S\u00a0\ufeff]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?[ \t]*$/u
+  /^[ \t]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?[ \t]*$/u
 
 /**
  * Whether `line` is a reference definition - the WHOLE production, trailing
@@ -899,7 +917,7 @@ const FOOTNOTE_BODY_COLUMN = 2
 // as `# ` / `#\t…` is not a heading. "Content" is tested against ASCII
 // whitespace only ([ \t\n\r\f]) -- a non-breaking space (U+00A0) is content
 // here, as it is everywhere else in the parser, so `^  ` IS a caption.
-const RE_CAPTION = /^\^ +(.*[^ \t\n\r\f].*)$/
+const RE_CAPTION = /^\^ +(.*[^ \t\n\r].*)$/
 // NO TRAILING WHITESPACE (PART 2, NORMATIVE; carve#926). A `whitespace` run at
 // the END OF A CONTENT LINE is DROPPED. It does not reach the output and it is
 // not content.
@@ -1563,7 +1581,7 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
 
 /** A dedented line's content, with any synthesized leading spaces removed. */
 function withoutSyntheticIndent(line: string): string {
-  return line.replace(/^[^\S\u00a0]+/, '')
+  return line.replace(/^[ \t]+/, '')
 }
 
 /**
@@ -1949,8 +1967,8 @@ export function normalizeRefLabel(label: string): string {
 //
 // `::` is the TERM marker and a `:::` fence opener is a fence; both need
 // whitespace after a SINGLE colon and neither has it, so neither matches.
-const RE_DESCRIPTION_PREFIX = /^[^\S\u00a0\ufeff]*:[^\S\u00a0]+/
-const RE_AFTER_TERM = /^[^\S\u00a0\ufeff]*(?:::(?!:)|:)[^\S\u00a0]/
+const RE_DESCRIPTION_PREFIX = /^[ \t]*:[ \t]+/
+const RE_AFTER_TERM = /^[ \t]*(?:::(?!:)|:)[ \t]/
 
 function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): string {
   let line = raw
@@ -1958,20 +1976,23 @@ function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): strin
   do {
     prev = line
     line = line
-      .replace(/^[^\S\u00a0\ufeff]*>(?: |$)/, '') // blockquote (NBSP and U+FEFF are content)
-      .replace(/^[^\S\u00a0\ufeff]*(?:[-*]|\d+[.)])[^\S\u00a0]+(?:\[[ xX\-_>?]\][^\S\u00a0]+)?/, '') // list/task (NBSP and U+FEFF are content)
+      .replace(/^[ \t]*>(?: |$)/, '') // blockquote (NBSP and U+FEFF are content)
+      .replace(/^[ \t]*(?:[-*]|\d+[.)])[ \t]+(?:\[[ xX\-_>?]\][ \t]+)?/, '') // list/task (NBSP and U+FEFF are content)
     if (afterTerm) line = line.replace(RE_DESCRIPTION_PREFIX, '')
   } while (line !== prev)
   return line
 }
 
 function stripContainerPrefixes(raw: string, afterTerm = false): string {
-  // Residual indentation, keeping a content NBSP - and a content U+FEFF, for
-  // the same reason. This is the view the definition collector matches
-  // against, so a mark eaten here resolved a reference on a line the renderer
-  // prints verbatim: the definition line rendered literally AND registered
-  // (#790).
-  return stripContainerPrefixesKeepIndent(raw, afterTerm).replace(/^[^\S\u00a0\ufeff]+/, '')
+  // Residual INDENTATION, which is `whitespace` - a space or a tab and nothing
+  // else (markup-carve/carve#977, PART 7). This is the view the definition
+  // collector matches against, so a character eaten here resolved a reference
+  // on a line the renderer prints verbatim: the definition line rendered
+  // literally AND registered (#790). NBSP and U+FEFF were carved out of the
+  // host language's class one at a time for that bug; naming the two
+  // indentation characters directly makes both carve-outs unnecessary, and
+  // takes U+000B, U+000C and every Unicode space out with them.
+  return stripContainerPrefixesKeepIndent(raw, afterTerm).replace(/^[ \t]+/, '')
 }
 
 /**
@@ -2647,7 +2668,12 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   }
   if (RE_COMMENT_LINE.test(line)) {
     const l = lexer.consume()
-    return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^\s/, '') }
+    // ONE separator character, and it is `whitespace` - a space or a tab
+    // (markup-carve/carve#977, PART 7). This read `/^\s/`, the host language's
+    // class, so a `%%<VT>note` line had its vertical tab eaten as the
+    // separator and `carve fmt` wrote a SPACE back in its place: a character
+    // the clause calls content, replaced by one the author did not write.
+    return { type: 'comment', block: false, content: l.replace(/^[ \t]*%%/, '').replace(/^[ \t]/, '') }
   }
   if (RE_LINE_BLOCK_OPEN.test(line)) return parseLineBlock(lexer)
   if (RE_HARDBREAKS_OPEN.test(line)) return parseHardBreaksBlock(lexer)
@@ -4910,7 +4936,7 @@ function isEmptyQuoteLine(content: string): boolean {
     sawQuote = true
     rest = m[1] ?? ''
   }
-  return sawQuote && rest.trim() === ''
+  return sawQuote && trimStructural(rest) === ''
 }
 
 /**
@@ -6756,7 +6782,12 @@ const RE_SPAN_TAIL = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*)\}/
 // opener), so `carve fmt` could not round-trip it. Shared by the code-span,
 // math and inline-literal scanners so the three cannot drift apart.
 function stripVerbatimPadding(content: string): string {
-  if (content.trim() === '') return content
+  // ALL-SPACE IS MEASURED IN CARVE'S WHITESPACE, not the host language's
+  // (carve#977, PART 7). A native `.trim()` called ` <VT> ` all-space, so the
+  // padding stayed on and `` ` <VT> ` `` rendered `<code> <VT> </code>` where
+  // `` ` x ` `` renders `<code>x</code>` - a vertical tab deciding, in the one
+  // test that separates padding from content, that a space is not padding.
+  if (trimStructural(content) === '') return content
   return content.replace(/^ (.*) $/, '$1')
 }
 
