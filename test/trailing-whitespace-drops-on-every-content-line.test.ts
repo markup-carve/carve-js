@@ -88,6 +88,27 @@ describe('verbatim content is not a content line', () => {
     expect(carveToHtml('`x ` and !`y `\n')).toBe('<p><code>x </code> and y </p>')
   })
 
+  it('keeps an ESCAPED space at a line end, which is content and not a run', () => {
+    // The escape `\\ ` is this language's non-breaking space, so the space it
+    // names is a character the author wrote and the run stops at it.
+    //
+    // Missing this does not lose a character, it changes the BLOCK: dropping the
+    // space leaves a bare backslash at the end of the line, and a bare backslash
+    // at the end of a line is a HARD BREAK. So the author's no-break space came
+    // out as a line break. Raised by codex review on the change that widened
+    // this rule to every line - and it was already true at the block-FINAL
+    // position the narrower rule reached, so this was a live defect before it.
+    expect(carveToHtml('a\\ \nb\n')).toBe('<p>a&nbsp;\nb</p>')
+    expect(carveToHtml('a\\ \n')).toBe('<p>a&nbsp;</p>')
+    expect(carveToHtml('a\\ \\ \nb\n')).toBe('<p>a&nbsp;&nbsp;\nb</p>')
+    // Only the FIRST character of the run can be the escaped one; the rest is
+    // ordinary trailing whitespace and still goes.
+    expect(carveToHtml('a\\   \nb\n')).toBe(carveToHtml('a\\ \nb\n'))
+    // An EVEN run of backslashes is a literal backslash, so the space after it
+    // is not escaped and does go.
+    expect(carveToHtml('a\\\\ \nb\n')).toBe(carveToHtml('a\\\\\nb\n'))
+  })
+
   it('keeps the run before a backslash hard break, which is not trailing', () => {
     // The backslash is the last character on the line, so the space before it
     // is interior. Carve has no two-trailing-space hard break, which is exactly

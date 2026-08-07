@@ -863,7 +863,25 @@ const RE_TRAILING_WS = /[ \t]+$/
  * is not trailing.
  */
 function dropTrailingWhitespace(text: string): string {
-  return text.replace(/[ \t]+(?=\n)|[ \t]+$/g, '')
+  return text.replace(/[ \t]+(?=\n|$)/g, (run, offset: number, whole: string) => {
+    // AN ESCAPED SPACE IS CONTENT, NOT TRAILING WHITESPACE. `\ ` is this
+    // language's non-breaking-space escape, so the space it names is a
+    // character the author wrote and the run STOPS at it.
+    //
+    // Missing this does not lose a character, it changes the block: dropping
+    // the space leaves a bare backslash at the end of the line, and a bare
+    // backslash at the end of a line is a HARD BREAK. So `a\ ` + newline + `b`
+    // rendered a line break where the author wrote a no-break space. Raised by
+    // codex review on the change that widened this rule to every line, and it
+    // was already true at the block-FINAL position that rule reached before.
+    //
+    // Only the FIRST character of the run can be the escaped one; everything
+    // after it is ordinary trailing whitespace and still goes.
+    let slashes = 0
+    for (let i = offset - 1; i >= 0 && whole[i] === '\\'; i--) slashes++
+
+    return slashes % 2 === 1 && run.startsWith(' ') ? ' ' : ''
+  })
 }
 const RE_TABLE_ROW = /^\|/
 // A complete standard table row opens AND closes with `|` (grammar

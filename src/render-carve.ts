@@ -1503,6 +1503,28 @@ function guardLeadingBom(text: string): string {
   return text.startsWith('\ufeff') ? ` ${text}` : text
 }
 
+/**
+ * `line` without its trailing space-and-tab run, keeping an ESCAPED space.
+ *
+ * `normalize` has already rewritten the escaped-space sentinel back to `\ `, so
+ * a line can end in a backslash-space pair that IS content. Dropping that space
+ * would leave a bare backslash at the end of the line, and a bare backslash at
+ * the end of a line is a HARD BREAK - the writer would turn the author's
+ * no-break space into a line break. `dropTrailingWhitespace` in src/parse.ts
+ * answers the same question for the parser; both count the backslash run,
+ * because an EVEN number of them is a literal backslash and the space after it
+ * is ordinary trailing whitespace.
+ */
+function dropTrailingWs(line: string): string {
+  const run = /[ \t]+$/.exec(line)
+  if (run === null) return line
+  let slashes = 0
+  for (let i = run.index - 1; i >= 0 && line[i] === '\\'; i--) slashes++
+  const keep = slashes % 2 === 1 && run[0].startsWith(' ') ? 1 : 0
+
+  return line.slice(0, run.index + keep)
+}
+
 function normalize(text: string): string {
   // The placeholder means the author wrote an ESCAPED SPACE, so the writer says
   // that again. Resolving it to a literal non-breaking space instead lost the
@@ -1514,22 +1536,22 @@ function normalize(text: string): string {
   // routed through the verbatim scheme before this runs, so what is left here
   // is an escaped space and nothing else.
   const lines = trimNonNbspKeepingGuard(text.replace(/\ue000/g, '\\ ')).split('\n')
-  const swept = lines.map((line, i) => {
+  const swept = lines.map((line) => {
     // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
     // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so
     // three spaces inside a code block are out of reach and stay intact.
     if (line.length > 0 && RE_WRITER_BLANK.test(line)) return ''
-    // Otherwise strip a line's trailing whitespace only where it CANNOT be
-    // content. At the end of a block the parser drops it too, so the writer
-    // must; before a SOFT BREAK the parser keeps it, and stripping it there
-    // changes the rendered output - `a \nb` renders `<p>a \nb</p>`, so the
-    // stripped form broke carveToHtml(fmt(x)) == carveToHtml(x). carve-rs and
-    // carve-php already restricted this (carve#359, carve#375); this engine did
-    // not, and no corpus case covered an ASCII trailing space before a soft
-    // break, so nothing caught it.
-    const next = lines[i + 1]
-    const endsBlock = next === undefined || RE_WRITER_BLANK.test(next)
-    return endsBlock ? trimEndNonNbsp(line) : line
+    // Strip a line's trailing whitespace, on EVERY line (PART 2 NO TRAILING
+    // WHITESPACE; carve#926).
+    //
+    // This used to fire only where the line ENDED A BLOCK, because before a
+    // SOFT BREAK the parser kept the run, so stripping it there changed the
+    // rendered output and broke carveToHtml(fmt(x)) == carveToHtml(x). The
+    // parser is the half that moved: it drops the run at both positions now, so
+    // the restriction inverts - keeping the run is what breaks the invariant,
+    // for a hand-built tree that carries one. carve-rs#359 and carve#375 added
+    // the restriction for the old parser and it goes with it.
+    return dropTrailingWs(line)
   })
   const cleaned = trimNonNbspKeepingGuard(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
 
