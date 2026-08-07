@@ -534,7 +534,41 @@ const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 //
 // The literal space after `]:` stays literal: the separator MUST start with
 // one, which is what makes a tab-first line a paragraph.
-const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: \p{White_Space}*(.+)$/u
+//
+// THE SEPARATOR IS A RUN OF ASCII SPACES, AND THE NEXT CHARACTER IS CONTENT
+// (carve#892). `abbreviation_definition` now spells the slot `space+`, which
+// is a CORRECTION rather than a widening: the production said `space` while
+// all four readers consumed a run, so the grammar forbade a shape nothing
+// rejected.
+//
+// The half that moves here is the OTHER one. This read `\p{White_Space}*`
+// after the mandatory space, so the run swallowed a no-break space, a tab and
+// every Unicode space - and the first character that is not an ASCII space
+// ENDS the separator and BEGINS the content. `*[HTML]: <NBSP>Hyper` expands to
+// a title that starts with the character; carve-php already kept it and this
+// engine and carve-rs consumed it.
+//
+// An `abbreviation_expansion` is a RAW STRING, so a tab after the run survives
+// into the title too. The footnote form answers that one differently, and not
+// because its separator differs - see RE_FOOTNOTE_DEF below.
+//
+// CARDINALITY HERE IS THE OPPOSITE CALL FROM carve#912's, deliberately. A
+// MARKER SEPARATOR takes a run; a PADDING SLOT takes exactly one. They are
+// different positions, not a contradiction: the token after this slot is the
+// definition's content, where the slot after a fence run is padding before
+// metadata the fence has already decided it will carry.
+//
+// The literal space after `]:` stays literal and mandatory, which is what
+// makes a tab-first line a paragraph.
+//
+// THE CONTENT CLASS IS `[^]`, NOT `.`. JavaScript's `.` excludes U+2028 and
+// U+2029, and those two are the only characters this rule's own table calls
+// CONTENT that a dot cannot match. While the separator consumed a Unicode run
+// the question never arose - the run ate them before the capture was reached -
+// so narrowing the run is exactly what exposed it, and `*[HTML]: <U+2028>Hyper`
+// became a paragraph instead of an abbreviation whose title starts with the
+// character. Raised by codex review on the change that introduced it.
+const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +([^]+)$/u
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
@@ -762,7 +796,28 @@ function isLinkDefLine(line: string): boolean {
 // and carve-php emit nothing, which looked like §10a compliance and was its
 // opposite. (carve#589, carve-js#631; `[^ ]: x`, whose label is a space, is a
 // footnote and is unaffected.)
-const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: \s*(.+)$/
+//
+// THE SEPARATOR IS A RUN OF ASCII SPACES, AND THE NEXT CHARACTER IS CONTENT
+// (carve#892), exactly as for RE_ABBR_DEF above. This read `\s*`, so the run
+// swallowed a no-break space and every Unicode space; carve-php and carve-rs
+// both kept it and this engine consumed it.
+//
+// A TAB AFTER THE RUN is content here as well, and yet it does NOT appear in
+// the body - which is not an exception to the rule but a consequence of what
+// happens downstream of it. A footnote's `inline_content` is parsed as BLOCKS,
+// so a leading tab is that body's own indentation run (PART 9 section 24 C1)
+// and is consumed there. An abbreviation expansion is a raw string and has no
+// such stage, which is why the two markers give different answers for the same
+// separator.
+//
+// The trap this ticket recorded, and the reason the answer is stated in terms
+// of the BODY: the first measurement of it read carve-rs as the
+// self-consistent engine because it checked whether the footnote DEFINED
+// rather than what its body contained. All three define. Check the rendered
+// content, not the construct.
+//
+// The content class is `[^]` for the reason RE_ABBR_DEF above gives.
+const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
 
 // A footnote body's own column: the indent §16 requires of a continuation line.
 // The body is dedented by exactly this much, never by the first continuation
