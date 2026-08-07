@@ -70,6 +70,37 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A bottom-positioned table of contents is emitted at document level, after
+  the last section** (markup-carve/carve-js#728). `tableOfContents({ position:
+  'bottom' })` appended the `<nav>` to the document's block list, so the
+  `<section>` a heading opens took it in - one option produced four placements,
+  decided by what the document happened to end with: inside the last section,
+  inside the INNERMOST of two nested sections, inside the section of a heading
+  several paragraphs back, or at document level when there were no headings at
+  all. `position: 'top'` never had the problem, for the accidental reason that
+  nothing has opened a section yet when it is inserted.
+
+  A `<section>` is a rendering artifact, not a container the author wrote, so
+  "the bottom of the document" is not captured by one. The nav is now the last
+  thing in the output, after the endnotes section too, which is byte-identical
+  to carve-php.
+
+  ```ts
+  carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })
+  ```
+
+  ```html
+  <section id="A">
+    <h1>A</h1>
+  </section>
+  <nav class="toc"> … </nav>
+  ```
+
+  The in-document `::: toc` directive is unchanged: it still renders where the
+  author wrote it, which all three engines already agreed on. Markdown, plain
+  text and ANSI output is unchanged - none of them emits sections, so there was
+  nothing for the nav to escape from.
+
 - **An emptied definition description keeps its position through the engine's
   own ingest** (markup-carve/carve-js#857). A `<dd>` whose only content hoisted
   to the document root has no children, so its position lives only in the extent

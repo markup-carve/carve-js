@@ -89,6 +89,42 @@ export interface Document extends BaseNode {
   footnoteDefPos?: Record<string, Position>
   children: BlockNode[]
   /**
+   * Blocks that belong to the DOCUMENT, wherever `children` happens to hold
+   * them - emitted by the HTML renderer after every `<section>` has closed.
+   *
+   * Holds REFERENCES to nodes that are also in `children`, so a renderer that
+   * does not know about this field still emits them exactly where they sit.
+   * Only the HTML renderer honors it, because it is the only one that wraps
+   * content in `<section>` at all (PART 9 §13); markdown, plain text and ANSI
+   * have no container for a trailer to escape from.
+   *
+   * The case it exists for is a bottom-positioned table of contents. Appending
+   * a block to `children` puts it inside whatever section the last heading
+   * opened, so ONE option produced four placements - inside the last section,
+   * inside the INNERMOST of two nested sections, inside the section of a
+   * heading several paragraphs back, or at document level when the document
+   * had no headings at all (markup-carve/carve-js#728). A `<section>` is a
+   * rendering artifact, not a container the author wrote, so "the bottom of
+   * the document" must not be captured by one.
+   *
+   * Runtime only, and not serialized: `toAstJson` builds the root from `type`,
+   * `children` and `srcByteLength` alone (PART 12 §7). The same arrangement
+   * `footnoteDefPos` above uses.
+   *
+   * So the PLACEMENT does not cross the wire. Serializing a tree an extension
+   * has already transformed and rendering the result puts the nav back inside
+   * the last section, because the wire carries the appended `raw_block` and no
+   * mark. §6 is unaffected - the round trip is still identity, since the field
+   * was never serialized in either direction - and this is the render-after-
+   * ingest family rather than a serializer defect.
+   *
+   * Deliberately not fixed here: carrying it would mean new PART 12 vocabulary,
+   * which is the spec's to name and all three engines' to implement, and the
+   * ruling on markup-carve/carve-js#728 authorized the placement rather than an
+   * addition to the format.
+   */
+  trailerBlocks?: BlockNode[]
+  /**
    * Footnote definitions collected during parsing, keyed by raw label
    * (`[^label]: …`). The renderer numbers them by reference order and
    * emits the endnotes section; an unreferenced definition is dropped.

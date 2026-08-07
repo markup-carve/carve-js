@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToHtml, tableOfContents } from '../src/index.js'
+import {
+  Profile,
+  carveToAstJson,
+  carveToHtml,
+  fromAstJson,
+  renderHtml,
+  tableOfContents,
+  toAstJson,
+} from '../src/index.js'
 
 // The TOC HTML is a byte-faithful match of carve-php's TableOfContentsExtension:
 // one tag per line, column 0. See src/table-of-contents.ts buildList().
@@ -20,19 +28,73 @@ describe('tableOfContents extension', () => {
     expect(html).toContain('<h1>Intro</h1>')
   })
 
-  it('inserts after the content when position is bottom', () => {
-    const html = carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })
-    // The TOC's own lines are still column 0 (the parity contract above); what
-    // is indented is where the block STARTS, the same as any other block gets
-    // (carve-js#727). Here that is inside the heading's `<section>`, because
-    // this engine appends a bottom TOC to the document's block list and the
-    // section wrapper takes it in - carve-php emits it after `</section>`
-    // instead, which is a placement difference this assertion used to hide
-    // (carve-js#728).
-    expect(html).toContain(
-      '<h1>A</h1>\n  <nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>',
+  it('inserts after the last section when position is bottom', () => {
+    // THE WHOLE DOCUMENT, not a substring. The assertion here used to be
+    // `'<h1>A</h1>\n<nav class="toc">'`, which matched whether the nav sat
+    // inside the heading's `<section>` or after it - so a test written to pin
+    // cross-impl parity could not see the one thing it differed on
+    // (markup-carve/carve-js#728). A fragment that spans the `</section>` is
+    // what makes the placement falsifiable.
+    //
+    // Byte-identical to carve-php's TableOfContentsExtension for this input.
+    expect(carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })).toBe(
+      '<section id="A">\n' +
+        '  <h1>A</h1>\n' +
+        '</section>\n' +
+        '<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>',
     )
-    expect(html.indexOf('<nav')).toBeGreaterThan(html.indexOf('<h1>A</h1>'))
+  })
+
+  it('escapes the INNERMOST section when headings nest', () => {
+    // The fourth placement the ticket's re-measurement found: appended to the
+    // block list, the nav landed two levels deep, so the option's output was
+    // not merely wrong but unpredictable from reading the document.
+    expect(
+      carveToHtml('# A\n\n## B\n', { extensions: [tableOfContents({ position: 'bottom' })] }),
+    ).toBe(
+      '<section id="A">\n' +
+        '  <h1>A</h1>\n' +
+        '  <section id="B">\n' +
+        '    <h2>B</h2>\n' +
+        '  </section>\n' +
+        '</section>\n' +
+        '<nav class="toc">\n<ul>\n<li><a href="#A">A</a>\n<ul>\n' +
+        '<li><a href="#B">B</a></li>\n</ul>\n</li>\n</ul>\n</nav>',
+    )
+  })
+
+  it('sits after the endnotes, which are a section too', () => {
+    // "After the last section" includes `<section role="doc-endnotes">`.
+    // carve-php arrives at the same place from the other end: its TOC is a
+    // render listener appending to the FINISHED html string, so the nav is the
+    // last thing in the output whatever the document contains.
+    const html = carveToHtml('# A\n\nbody[^f]\n\n[^f]: note\n', {
+      extensions: [tableOfContents({ position: 'bottom' })],
+    })
+
+    expect(html.indexOf('<nav class="toc">')).toBeGreaterThan(html.indexOf('role="doc-endnotes"'))
+    expect(html.endsWith('</ul>\n</nav>')).toBe(true)
+  })
+
+  it('CONTROL: position top is unchanged, and never had the problem', () => {
+    // Nothing has opened a section yet when a top TOC is inserted, which is the
+    // accidental reason it was already at document level. No mutation of the
+    // trailer path can move this row.
+    expect(carveToHtml('# A', { extensions: [tableOfContents({ position: 'top' })] })).toBe(
+      '<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
+        '<section id="A">\n' +
+        '  <h1>A</h1>\n' +
+        '</section>',
+    )
+  })
+
+  it('CONTROL: a document with no headings puts the nav nowhere new', () => {
+    // No headings means no entries and no nav at all - the placement question
+    // does not arise. Here so the "four placements" table is closed rather than
+    // left with an untested row.
+    expect(carveToHtml('body\n', { extensions: [tableOfContents({ position: 'bottom' })] })).toBe(
+      '<p>body</p>',
+    )
   })
 
   it('honors minLevel and maxLevel', () => {
@@ -128,5 +190,103 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml('# One', { extensions: [tableOfContents()] })
     expect(html.startsWith('<nav class="toc">')).toBe(true)
     expect(html).not.toContain('<details')
+  })
+})
+
+/*
+ * The trailer mark has to survive the PROFILE, which runs between the extension
+ * that sets it and the render that reads it.
+ *
+ * The mark is object IDENTITY - `Document.trailerBlocks` holds references to
+ * nodes in `children` - and a profile that denies raw HTML REPLACES the node
+ * with a paragraph of escaped text. A new object, so the mark pointed at a node
+ * no longer in the tree and the nav went straight back inside the last section:
+ * markup-carve/carve-js#728 all over again, reachable only under a profile and
+ * invisible to every test that renders without one.
+ */
+describe('a bottom TOC stays at document level under a profile', () => {
+  const src = '# A\n'
+  const bottom = [tableOfContents({ position: 'bottom' })]
+
+  it('places the DEGRADED text after the section, not inside it', () => {
+    // `article` denies `raw_block`, so what is emitted is the escaped source of
+    // the nav rather than the nav. Where it sits is still this ticket's
+    // question, and the answer must not depend on whether raw HTML was allowed.
+    expect(carveToHtml(src, { extensions: bottom, profile: Profile.article() })).toBe(
+      '<section id="A">\n' +
+        '  <h1>A</h1>\n' +
+        '</section>\n' +
+        '<p>&lt;nav class="toc"&gt;<br>\n' +
+        '&lt;ul&gt;<br>\n' +
+        '&lt;li&gt;&lt;a href="#A"&gt;A&lt;/a&gt;&lt;/li&gt;<br>\n' +
+        '&lt;/ul&gt;<br>\n' +
+        '&lt;/nav&gt;</p>',
+    )
+  })
+
+  it('emits nothing extra when the profile STRIPS the node instead', () => {
+    // The other action on the same denial. A stripped trailer must leave no
+    // trace: a mark pointing at a node that is no longer a child of the document
+    // is stale, and rendering it anyway would resurrect content the profile
+    // removed - the one outcome worse than misplacing it.
+    expect(
+      carveToHtml(src, {
+        extensions: bottom,
+        profile: Profile.article().onDisallowed(Profile.ACTION_STRIP),
+      }),
+    ).toBe('<section id="A">\n  <h1>A</h1>\n</section>')
+  })
+
+  it('CONTROL: a profile that allows raw HTML is the unprofiled answer', () => {
+    // `full` denies nothing, so the node is never replaced and the mark is
+    // never remapped. Green whether or not the remap exists.
+    expect(carveToHtml(src, { extensions: bottom, profile: Profile.full() })).toBe(
+      carveToHtml(src, { extensions: bottom }),
+    )
+  })
+})
+
+/*
+ * The mark does NOT cross the wire, and that is a stated limitation rather than
+ * an oversight.
+ *
+ * `Document.trailerBlocks` is runtime-only, like `footnoteDefPos`, so a caller
+ * that serializes a tree an extension has already transformed and renders the
+ * result gets the nav back inside the last section. Carrying it would mean new
+ * PART 12 vocabulary - the spec's to name and all three engines' to implement -
+ * and the ruling on markup-carve/carve-js#728 authorized the placement, not an
+ * addition to the format.
+ *
+ * Written as two assertions rather than one so the boundary is visible: §6 is
+ * UNAFFECTED, because a field that was never serialized cannot make a round trip
+ * lossy. When the spec does name a trailer, this block is what to delete.
+ */
+describe('the trailer mark is runtime-only', () => {
+  const src = '# A\n'
+  const bottom = [tableOfContents({ position: 'bottom' })]
+
+  it('leaves the §6 round trip an identity', () => {
+    const wire = carveToAstJson(src, { extensions: bottom })
+
+    expect(JSON.stringify(toAstJson(fromAstJson(JSON.parse(JSON.stringify(wire)))))).toBe(
+      JSON.stringify(wire),
+    )
+  })
+
+  it('but a render THROUGH the wire loses the placement', () => {
+    // The render-after-ingest family, not a serializer defect. Asserted as the
+    // whole fragment so the day this stops being true is a failure here rather
+    // than a silent improvement nobody notices.
+    const wire = carveToAstJson(src, { extensions: bottom })
+
+    expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(wire))))).toBe(
+      '<section id="A">\n' +
+        '  <h1>A</h1>\n' +
+        '  <nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
+        '</section>',
+    )
+    expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(wire))))).not.toBe(
+      carveToHtml(src, { extensions: bottom }),
+    )
   })
 })
