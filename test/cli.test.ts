@@ -531,13 +531,16 @@ describe('carve CLI — --json / --from-json (PART 12 exchange format)', () => {
 })
 
 describe('carve CLI — --from-json is hostile-input tolerant', () => {
-  it('does not throw when children is not an array', async () => {
-    // §12(a) is about a field being PRESENT; the VALUE of `children` is not
-    // ruled, so a non-array one still degrades to an empty document rather than
-    // turning malformed input into a stack trace at the CLI.
+  it('reports a non-array children as a refusal, not a stack trace', async () => {
+    // The VALUE of `children` is ruled now (§12(d), carve#881), so this is a
+    // refusal rather than an empty document. What this test is FOR is unchanged
+    // and is what it still asserts: malformed input reaches the user as a
+    // documented failure and never as a stack trace.
     const t = makeIO({ stdin: '{"type":"document","srcByteLength":0,"children":{}}' })
-    expect(await run(['--from-json', '--html'], t.io)).toBe(0)
-    expect(t.out.trim()).toBe('')
+
+    expect(await run(['--from-json', '--html'], t.io)).toBe(2)
+    expect(t.err).toContain('is not a Carve AST')
+    expect(t.err).not.toContain('    at ')
   })
 
   it('reports a root missing a §7 field instead of raising through the CLI', async () => {
@@ -564,10 +567,12 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
     expect(t.err).toContain('zzNotInTheSchema')
   })
 
-  it('drops a footnote definition whose body is not a list of blocks', async () => {
+  it('refuses a footnote definition whose body is not a list of blocks', async () => {
     // Adopting it would put a string where every renderer iterates a body, so
     // the crash would surface inside the renderer for a document the decoder
-    // had already accepted.
+    // had already accepted. It was DROPPED for that reason; §12(d) refuses it
+    // at decode instead, which is the same crash avoided one step earlier and
+    // with a typed error the caller can act on.
     const t = makeIO({
       stdin: JSON.stringify({
         type: 'document',
@@ -578,7 +583,10 @@ describe('carve CLI — --from-json is hostile-input tolerant', () => {
         ],
       }),
     })
-    expect(await run(['--from-json', '--html'], t.io)).toBe(0)
+
+    expect(await run(['--from-json', '--html'], t.io)).toBe(2)
+    expect(t.err).toContain('is not a Carve AST')
+    expect(t.err).not.toContain('    at ')
   })
 
   it('applies the profile maxLength to the encoded payload', async () => {

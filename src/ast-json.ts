@@ -38,6 +38,8 @@ import {
   NODE_POSITION_KIND,
   WIRE_FIELDS,
   WIRE_HELPER_FIELDS,
+  WIRE_REQUIRED,
+  WIRE_VALUE_KINDS,
 } from './wire-fields.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
@@ -504,6 +506,179 @@ const LEGACY_ALIASES: Readonly<Record<string, readonly string[]>> = {
   footnote: ['id'],
 }
 
+/**
+ * PART 12 §12(d): the payload did not validate against `resources/ast-schema.json`.
+ *
+ * TYPED, like §12(a), (b) and (c)'s errors, and that is half the clause's point.
+ * Before it, six of these sixteen shapes reached the RENDERER and failed there
+ * with a bare `TypeError: nodes is not iterable` - a stack trace from inside a
+ * renderer for a document the decoder had already accepted, which §9(b) forbids
+ * outright.
+ */
+export class AstJsonSchemaError extends Error {
+  constructor(
+    readonly detail: string,
+    readonly path: string,
+  ) {
+    super(`AST payload does not match the schema at ${path === '' ? '$' : path}: ${detail}`)
+    this.name = 'AstJsonSchemaError'
+  }
+}
+
+/**
+ * Whether `value` matches the shape the schema gives it.
+ *
+ * The kinds are the subset of JSON Schema `resources/ast-schema.json` actually
+ * uses (see `WIRE_VALUE_KINDS`), so this answers §12(d) without re-implementing
+ * a validator - and without a hand-written table, which would be the schema
+ * expressed a second time.
+ */
+function matchesKind(value: unknown, kind: string): boolean {
+  if (kind.startsWith('enum:')) {
+    return typeof value === 'string' && kind.slice(5).split('\u0000').includes(value)
+  }
+  switch (kind) {
+    case 'string':
+      return typeof value === 'string'
+    case 'boolean':
+      return typeof value === 'boolean'
+    case 'integer':
+      return Number.isInteger(value)
+    case 'integer>=0':
+      return Number.isInteger(value) && (value as number) >= 0
+    case 'integer>=1':
+      return Number.isInteger(value) && (value as number) >= 1
+    case 'object':
+      return value !== null && typeof value === 'object' && !Array.isArray(value)
+    case 'string[]':
+      return Array.isArray(value) && value.every((v) => typeof v === 'string')
+    case 'array':
+      return Array.isArray(value)
+    case 'node':
+      return value !== null && typeof value === 'object' && !Array.isArray(value)
+    default:
+      return true
+  }
+}
+
+/**
+ * PART 12 §12(d), over the whole payload (markup-carve/carve#881).
+ *
+ * An ingest validates the WHOLE payload against `resources/ast-schema.json` -
+ * types and REQUIRED fields together - at DECODE, refused with the same typed
+ * error §12(a), (b) and (c) already require.
+ *
+ * NOT a fourth list of leniency points. The schema is the list; it already
+ * described every row that diverged across the three engines, and those rows
+ * were only ever divergent because nothing consulted it. Two of them are worth
+ * naming, because they are what a producer actually does: `children: null` read
+ * as an empty document is §12's own objection arriving through a door the clause
+ * did not cover - "a reader that supplies a default has turned a truncated
+ * document into an empty one" - and `attrs: {"class": "x"}` is the mistake a
+ * producer will make, since `class` is what the rendered HTML calls the thing.
+ *
+ * WHAT THIS DOES NOT ANNEX. A `srcByteLength` that is PRESENT but wrong stays
+ * accepted: it is derivable and nothing in the tree depends on it. §12(a) is
+ * about the field's presence and (d) about its type and sign, not about the
+ * number being right. Nor does this restate §12(c)'s `type` rule, which carries
+ * its own error - two producers of one rule is the hazard, not the gap.
+ *
+ * The cost, stated rather than discovered later: this rejects trees two engines
+ * accept today, and every future schema addition becomes a potential rejection
+ * for a producer that has not caught up. That last one is the point rather than
+ * a side effect - it is what makes the schema the contract instead of a
+ * description of it.
+ */
+function refuseSchemaViolations(node: unknown, path: string): void {
+  if (Array.isArray(node)) {
+    node.forEach((item, index) => refuseSchemaViolations(item, `${path}[${index}]`))
+    return
+  }
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  const type = record.type
+  const required = typeof type === 'string' ? WIRE_REQUIRED[type] : undefined
+  if (required !== undefined) {
+    const aliases = LEGACY_ALIASES[type as string] ?? []
+    for (const field of required) {
+      // A LEGACY alias satisfies the requirement it stands in for: the decoder
+      // demonstrably reads those trees, and §9(a) forbids refusing a document
+      // this engine itself published.
+      if (field in record) continue
+      if (aliases.some((alias) => alias in record)) continue
+      throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
+    }
+    const kinds = WIRE_VALUE_KINDS[type as string] ?? {}
+    for (const [field, kind] of Object.entries(kinds)) {
+      if (!(field in record)) continue
+      if (record[field] === undefined) continue
+      if (!matchesKind(record[field], kind)) {
+        throw new AstJsonSchemaError(
+          `"${field}" is ${describe(record[field])} where the schema gives ${kind}`,
+          path,
+        )
+      }
+    }
+    // The two typeless objects that hang off a node. Every node kind can carry
+    // them, which makes them the easiest place for a wrong shape to ride in -
+    // and `pos` missing `endOffset` was accepted by two of the three engines.
+    for (const helper of ['attrs', 'pos'] as const) {
+      const value = record[helper]
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) continue
+      refuseHelperShape(value as Record<string, unknown>, helper, `${path}.${helper}`)
+    }
+  }
+  for (const [key, value] of Object.entries(record)) {
+    // A NODE POSITION holds nodes, so an element that is not an object is not a
+    // node - `children: [null]` and `children: ["x"]` both reached the renderer
+    // and failed there with an untyped TypeError.
+    if (NODE_FIELDS.includes(key) && Array.isArray(value)) {
+      value.forEach((item, index) => {
+        if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+          throw new AstJsonSchemaError(
+            `${describe(item)} sits where a node belongs`,
+            `${path === '' ? '' : path}.${key}[${index}]`,
+          )
+        }
+      })
+    }
+    refuseSchemaViolations(value, path === '' ? key : `${path}.${key}`)
+  }
+}
+
+/** The required fields and value shapes of `attrs` or `pos`. */
+function refuseHelperShape(
+  value: Record<string, unknown>,
+  helper: 'attrs' | 'pos',
+  path: string,
+): void {
+  for (const field of WIRE_REQUIRED[helper] ?? []) {
+    if (!(field in value)) {
+      throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
+    }
+  }
+  const kinds = WIRE_VALUE_KINDS[helper] ?? {}
+  for (const [field, kind] of Object.entries(kinds)) {
+    if (!(field in value) || value[field] === undefined) continue
+    if (!matchesKind(value[field], kind)) {
+      throw new AstJsonSchemaError(
+        `"${field}" is ${describe(value[field])} where the schema gives ${kind}`,
+        path,
+      )
+    }
+  }
+}
+
+/** A short, non-leaking description of a value, for an error message. */
+function describe(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return 'an array'
+  if (typeof value === 'object') return 'an object'
+  if (typeof value === 'string') return 'a string'
+
+  return `a ${typeof value}`
+}
+
 function refuseUnknownFields(node: unknown, path: string): void {
   if (Array.isArray(node)) {
     node.forEach((item, index) => refuseUnknownFields(item, `${path}[${index}]`))
@@ -789,16 +964,22 @@ export function fromAstJson(json: AstJsonDocument): Document {
   // by the cheap check rather than by a full walk of itself (PART 12 §9).
   refuseUnknownNodeTypes(json, '', true)
   refuseUnknownFields(json, '')
+  // PART 12 §12(d), AFTER the two narrower refusals so a payload with an
+  // unknown type or an unnamed property is still reported as that, which is
+  // the more specific answer and the one those clauses name.
+  refuseSchemaViolations(json, '')
 
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
   let frontmatter: Document['frontmatter']
 
-  // A root whose `children` is not an array is not iterable, and this is the
-  // entry point for a file someone was handed. An empty document is the honest
-  // reading of "no children I can walk"; throwing here would turn malformed
-  // input into a stack trace at the CLI.
+  // The guard stays, and it can no longer fire: §12(d) refuses a root whose
+  // `children` is not an array before the walk reaches here (carve#881). It
+  // used to read an empty document out of one, which is §12's own objection -
+  // "a reader that supplies a default has turned a truncated document into an
+  // empty one" - arriving through a door the clause did not cover. Left as the
+  // type narrowing it also is, rather than deleted for a line count.
   for (const child of Array.isArray(json.children) ? json.children : []) {
     if (child?.type === 'frontmatter' && frontmatter === undefined) {
       const node = child as FrontmatterNode

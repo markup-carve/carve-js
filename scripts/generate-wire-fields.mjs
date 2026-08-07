@@ -151,6 +151,75 @@ export function wireFieldsSource(schema) {
     }
   }
 
+  /*
+   * WHAT THE SCHEMA REQUIRES, and WHAT SHAPE it gives each value (PART 12
+   * section 12(d), markup-carve/carve#881).
+   *
+   * (d) is one clause rather than a row per field, and that is deliberate:
+   * ruling them one at a time is what produced the state it replaces. The
+   * schema is the list, it already describes every row that diverged, and those
+   * rows were only ever divergent because nothing consulted it. So this is
+   * derived from the schema for the same reason WIRE_FIELDS is - a hand-written
+   * table would be the schema expressed a second time, and would be silently
+   * wrong the day a field is added.
+   *
+   * The KINDS are the subset of JSON Schema this walk can answer without
+   * re-implementing a validator, which is every shape the schema actually uses:
+   * a scalar with an optional minimum, an enum, an array of strings, an array
+   * of nodes or records, and a single node. Anything else is left alone rather
+   * than guessed at.
+   *
+   * `srcByteLength` is where the two halves of (a) and (d) meet: (a) is about
+   * the field being PRESENT, (d) about its TYPE and SIGN. A value that is
+   * present and merely WRONG - a number that does not match the source - stays
+   * accepted, because it is derivable and nothing in the tree depends on it.
+   */
+  const valueKind = (property) => {
+    if (property === null || typeof property !== "object") return undefined;
+    if (Array.isArray(property.enum)) {
+      return `enum:${property.enum.map(String).join("\u0000")}`;
+    }
+    if (property.type === "string") return "string";
+    if (property.type === "boolean") return "boolean";
+    if (property.type === "integer") {
+      if (property.minimum === 0) return "integer>=0";
+      if (property.minimum === 1) return "integer>=1";
+      return "integer";
+    }
+    if (property.type === "object") return "object";
+    if (property.type === "array") {
+      const items = property.items;
+      if (items?.type === "string") return "string[]";
+      return "array";
+    }
+    if (typeof property.$ref === "string") {
+      const target = property.$ref.replace("#/$defs/", "");
+      if (target === "attrs" || target === "pos") return "object";
+      return "node";
+    }
+    return undefined;
+  };
+  const required = new Map();
+  const kinds = new Map();
+  const collect = (name, def) => {
+    if (!def || typeof def !== "object" || !def.properties) return;
+    required.set(name, [...(def.required ?? [])].sort());
+    const perProperty = {};
+    for (const [property, shape] of Object.entries(def.properties)) {
+      // `type` is settled by section 12(c) and its own error, so it is not
+      // restated here - two producers of one rule is the hazard, not the gap.
+      if (property === "type") continue;
+      const kind = valueKind(shape);
+      if (kind !== undefined) perProperty[property] = kind;
+    }
+    kinds.set(name, perProperty);
+  };
+  for (const def of Object.values(defs)) {
+    const type = def?.properties?.type?.const;
+    if (typeof type === "string") collect(type, def);
+  }
+  for (const name of ["attrs", "pos"]) collect(name, defs[name]);
+
   const entry = ([name, fields]) =>
     `  ${JSON.stringify(name)}: [${fields.map((f) => JSON.stringify(f)).join(", ")}],`;
   const header = [
@@ -221,7 +290,52 @@ export function wireFieldsSource(schema) {
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([name, kind]) => `  ${JSON.stringify(name)}: ${JSON.stringify(kind)},`)
     .join("\n");
-  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n}\n`;
+  const schemaDoc = [
+    "}",
+    "",
+    "/**",
+    " * What the schema REQUIRES of each type, and of the two typeless objects that",
+    " * hang off a node (PART 12 section 12(d)).",
+    " *",
+    " * (d) validates the WHOLE payload against the schema at DECODE - types and",
+    " * required fields together - refused with the same typed error (a), (b) and",
+    " * (c) already require. Not a fourth list of leniency points: the schema is the",
+    " * list, and the rows that diverged across engines were only ever divergent",
+    " * because nothing consulted it.",
+    " */",
+    "export const WIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {",
+  ].join("\n");
+  const requiredList = [...required.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(entry)
+    .join("\n");
+  const kindsDoc = [
+    "}",
+    "",
+    "/**",
+    " * The VALUE SHAPE the schema gives each property, keyed by owning type.",
+    " *",
+    " * The kinds are the subset of JSON Schema the schema actually uses, so the",
+    " * walk answers (d) without re-implementing a validator: `string`, `boolean`,",
+    " * `integer` with an optional minimum, `enum:` with NUL-separated members,",
+    " * `string[]`, `array`, `object`, and `node` for a single nested node.",
+    " *",
+    " * `type` is absent on purpose - section 12(c) settles it and carries its own",
+    " * error, and two producers of one rule is the hazard rather than the gap.",
+    " */",
+    "export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {",
+  ].join("\n");
+  const kindsList = [...kinds.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(
+      ([name, perProperty]) =>
+        `  ${JSON.stringify(name)}: { ${Object.entries(perProperty)
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`)
+          .join(", ")} },`,
+    )
+    .join("\n");
+  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n}\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

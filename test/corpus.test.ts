@@ -312,6 +312,7 @@ const IMPLEMENTED = new Set([
   'a-definition-marker-s-separator-is-a-space-and-it-is-a-run',
   'trailing-whitespace-on-a-content-line-is-dropped',
   'a-definition-body-continuation-indented-past-its-column-is-lazy-text',
+  'a-real-div-in-a-container-and-the-flush-left-line-after-it',
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug

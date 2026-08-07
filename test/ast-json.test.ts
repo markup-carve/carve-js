@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from '../src/parse.js'
 import { toAstJson, fromAstJson } from '../src/ast-json.js'
-import { carveToAstJson, carveToHtml, renderHtml } from '../src/index.js'
+import { carveToAstJson, carveToHtml, renderHtml, AstJsonSchemaError } from '../src/index.js'
 import { renderCarve } from '../src/render-carve.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
@@ -116,20 +116,34 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['a'])
   })
 
-  it('drops a footnote definition it cannot use rather than passing it on', () => {
-    // A definition with no label, or a body that is not a list of blocks, cannot
-    // become an entry - and `footnote` is a type no renderer has a case for,
-    // since a definition renders where its reference appears and never in place.
-    // Keeping it would trade a decode-time refusal for a renderer crash.
+  it('refuses a footnote definition the schema does not describe', () => {
+    // This asserted that an unusable definition was DROPPED. §12(d) refuses it
+    // at decode instead (carve#881): the schema requires `label` and gives
+    // `children` an array, so neither shape below is a `footnote` at all.
+    // Dropping was the better of the two answers available before the clause -
+    // it avoided a renderer crash - and refusing is what the clause asks for.
+    for (const child of [
+      { type: 'footnote', children: [] },
+      { type: 'footnote', label: 'b', children: 'bad' },
+    ]) {
+      expect(() =>
+        fromAstJson({ type: 'document', srcByteLength: 0, children: [child] } as never),
+      ).toThrow(AstJsonSchemaError)
+    }
+
+    // A definition the schema DOES describe still decodes, and still drops out
+    // of `children` into `footnoteDefs` - which is what the rest of this
+    // assertion was for.
     const doc = fromAstJson({
       type: 'document',
       srcByteLength: 0,
-      children: [
-        { type: 'footnote', children: [] } as never,
-        { type: 'footnote', label: 'b', children: 'bad' } as never,
-      ],
+      children: [{ type: 'footnote', label: 'b', children: [] } as never],
     })
-    expect(doc.footnoteDefs).toBeUndefined()
+    // It is a real definition now, so it goes to `footnoteDefs` rather than
+    // being dropped - and it leaves `children` either way, which is the part
+    // this assertion was always about: a `footnote` is a definition, and a
+    // definition renders where its REFERENCE appears, never in place.
+    expect(doc.footnoteDefs).toEqual({ b: [] })
     expect(doc.children).toHaveLength(0)
   })
 
