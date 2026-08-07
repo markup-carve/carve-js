@@ -123,6 +123,30 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     )
   })
 
+  it('counts the open containers, so a malformed fence INSIDE one does not arm absorption', () => {
+    // The bare run below a CLOSED container is that container's sibling, not
+    // absorbed text, and only a divDepth counter tells the two apart: with the
+    // closer branch gone the run reads as another OPENER, the depth never
+    // returns to 0, and the malformed `:::note` two lines down stops arming
+    // absorption. The TOP LEVEL is the arbiter here and gives this same answer.
+    const quoted = '> ::: note\n> body\n> :::\n> :::note\n> x\n> :::\ntail\n'
+    expect(html(quoted)).toBe(
+      '<blockquote>\n  <aside class="admonition note">\n    <p>body</p>\n  </aside>\n  <p>:::note\nx\n:::\ntail</p>\n</blockquote>',
+    )
+    expect(html('::: note\nbody\n:::\n:::note\nx\n:::\ntail\n')).toBe(
+      '<aside class="admonition note">\n  <p>body</p>\n</aside>\n<p>:::note\nx\n:::\ntail</p>',
+    )
+  })
+
+  it('does not count a fence closer that sits OUTSIDE the quote', () => {
+    // `quotedFenceHasCloser` stops at the first unquoted line, for the reason
+    // `quotedCommentHasCloser` gives: it has to agree with a sub-lexer that
+    // only ever sees this quote's own lines.
+    expect(html('> quote\n> ```\ntail\n```\n')).toBe(
+      '<blockquote>\n  <p>quote</p>\n  <pre><code>tail\n</code></pre>\n</blockquote>',
+    )
+  })
+
   // ---- the parity this ticket is about ----
 
   it('answers S4 the same way in a quote as in a list item, across every colon-fence shape', () => {
