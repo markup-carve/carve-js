@@ -43,6 +43,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`carve fmt` keeps every character the renderer keeps** (markup-carve/carve#890,
+  markup-carve/carve#924). `whitespace` in this language is a space or a tab, and
+  the writer answered that question three different ways, each of them with a
+  Unicode set. A blank-line test spelled `.trim() === ''` made a line holding one
+  U+1680 count as blank, so the line above it was trimmed as block-final - on a
+  run of such lines each one erased the one before it, and a paragraph came back
+  split in two. The trim itself was Unicode whitespace minus NBSP minus U+FEFF,
+  two exceptions each added after a document stopped round-tripping. And
+  `escapeText` deleted every C0 and C1 control except tab, newline and return:
+  61 of those 63 characters broke `toHtml(fmt(x)) === toHtml(x)`, since the HTML
+  renderer emits all of them and the writer emitted none. Only U+0000 and U+000D
+  are still dropped, because a parse replaces the first and normalizes the
+  second, so neither can round-trip in any spelling.
+
 - **A nested container no longer re-scans its own body once per level**
   (markup-carve/carve#752). Parsing a container handed its body to a nested
   parse as a joined string, which the nested lexer split straight back apart -
