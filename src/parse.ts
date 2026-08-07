@@ -2872,11 +2872,8 @@ function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number):
   return false
 }
 
-/** Per-quote negative cache for `quotedFenceHasCloser`. */
-interface QuotedFenceCloserMemo {
-  /** No bare fence-closer line is quoted at or after this index. */
-  noCloserFrom: number
-}
+/** Per-quote negative cache for `quotedFenceHasCloser`, keyed by fence character. */
+type QuotedFenceCloserMemo = Map<string, number>
 
 /**
  * Whether a code or raw fence opened with `marker` closes LATER IN THIS QUOTE.
@@ -2897,9 +2894,16 @@ interface QuotedFenceCloserMemo {
  * unterminated openers was scanned N times without it: 500 lines took 27ms and
  * 4000 took 397ms, a 3.8x for a 2x input. Every line matching some marker's
  * `closeRe` also matches the bare `RE_FENCE_CLOSER`, so seeing none in the
- * quoted prefix proves no marker closes from here on - and the bound only
- * moves forward, since a later opener scans a suffix of what this one did.
- * Raised by codex review.
+ * quoted prefix proves no marker of that character closes from here on - and
+ * the bound only moves forward, since a later opener scans a suffix of what
+ * this one did.
+ *
+ * The bound is per fence CHARACTER, which is where this differs from
+ * `fenceHasCloser`: a single `~~~` closer would otherwise keep the cache from
+ * ever advancing for a quote full of unterminated backtick openers. Raised by
+ * codex review on this function; the same shape is quadratic through
+ * `fenceHasCloser` today, byte-for-byte as it is on main, and that is left
+ * alone here rather than folded into a parser fix.
  */
 function quotedFenceHasCloser(
   lexer: Lexer,
@@ -2907,18 +2911,20 @@ function quotedFenceHasCloser(
   fromIndex: number,
   memo: QuotedFenceCloserMemo,
 ): boolean {
+  const char = marker[0]!
   const start = fromIndex + 1
-  if (start >= memo.noCloserFrom) return false
+  if (start >= (memo.get(char) ?? Infinity)) return false
   const closeRe = fenceCloseRe(marker)
-  let sawAnyCloser = false
+  let sawSameChar = false
   for (let i = start; i < lexer.lines.length; i++) {
     const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
     if (!quoted) break
     const content = quoted[1] ?? ''
     if (closeRe.test(content)) return true
-    if (RE_FENCE_CLOSER.test(content)) sawAnyCloser = true
+    const closer = RE_FENCE_CLOSER.exec(content)
+    if (closer && closer[1]![0] === char) sawSameChar = true
   }
-  if (!sawAnyCloser) memo.noCloserFrom = start
+  if (!sawSameChar) memo.set(char, start)
 
   return false
 }
@@ -4039,7 +4045,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     absorbingFence: false,
     paragraphOpen: false,
   }
-  const fenceCloserMemo: QuotedFenceCloserMemo = { noCloserFrom: Infinity }
+  const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
   while (!lexer.eof()) {
     const ln = lexer.peek()!
     const m = RE_BLOCKQUOTE.exec(ln)
