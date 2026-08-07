@@ -187,6 +187,12 @@ describe('platform-autolink lint rules', () => {
     // uncaptioned listing is skipped whole.
     expect(platformRules(lintCarve('```\n^ @alice #1\n```\n', { platforms: ['github'] }))).toEqual([])
     expect(platformRules(lintCarve('```\n@alice #1\n```\n', { platforms: ['github'] }))).toEqual([])
+    // And the same BODY line inside a CAPTIONED listing stays verbatim: only
+    // the figure's first or last line is reclaimed, so a rule that reclaimed
+    // every caption-shaped line in the range would flag the body too.
+    const bodyCaret = '```\n^ @alice #1\n```\n^ Caption @bob #2\n'
+    const found = lintCarve(bodyCaret, { platforms: ['github'] })
+    expect(found.map((f) => bodyCaret.slice(f.start, f.end))).toEqual(['@bob', '#2'])
   })
 
   it('does not flag a token in an inline link DESTINATION', () => {
@@ -194,12 +200,19 @@ describe('platform-autolink lint rules', () => {
     // visible text, so a host cannot re-linkify it.
     expect(platformRules(lintCarve('See [x](#123) here.\n', { platforms: ['github'] }))).toEqual([])
     expect(platformRules(lintCarve('See [y](@foo) here.\n', { platforms: ['github'] }))).toEqual([])
-    // CONTROL: a parenthesis in PROSE is untouched, so this still flags - and
-    // its column still indexes the real source, since the mask keeps the line
-    // length.
+    // CONTROL: a parenthesis in PROSE is untouched, so this still flags.
     const doc = 'See (#123) here.\n'
     const [w] = lintCarve(doc, { platforms: ['github'] })
     expect(doc.slice(w!.start, w!.end)).toBe('#123')
+    // THE MASK KEEPS THE LINE LENGTH, so a token AFTER a masked destination
+    // still indexes the real source. Deleting the destination instead shifts
+    // every following offset on that line and passes every case above.
+    const after = 'See [x](https://e.com/page) and #123 here.\n'
+    const [a] = lintCarve(after, { platforms: ['github'] })
+    expect({ text: after.slice(a!.start, a!.end), column: a!.column }).toEqual({
+      text: '#123',
+      column: after.indexOf('#123') + 1,
+    })
   })
 
   it('skips TYPED frontmatter, not only the bare delimiter form', () => {
