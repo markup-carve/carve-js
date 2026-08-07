@@ -165,6 +165,33 @@ describe('platform-autolink lint rules', () => {
     ).toEqual(['platform-issue-reference'])
   })
 
+  it('does not flag a definition whose line is never rendered', () => {
+    // An abbreviation definition renders as the empty string (its expansion
+    // reaches the page only as a title attribute), and an UNREFERENCED footnote
+    // definition is dropped entirely - and already has its own rule.
+    expect(platformRules(lintCarve('*[API]: @internal #1\n\nAPI body\n', { platforms: ['github'] }))).toEqual([])
+    expect(platformRules(lintCarve('[^n]: @alice #1\n\nbody\n', { platforms: ['github'] }))).toEqual([])
+    // CONTROL: a REFERENCED footnote body is published in the endnotes, so it
+    // is scanned.
+    expect(platformRules(lintCarve('see[^n]\n\n[^n]: @alice #1\n', { platforms: ['github'] }))).toEqual([
+      'platform-mention-token',
+      'platform-issue-reference',
+    ])
+  })
+
+  it('does not flag a token inside a BARE URL', () => {
+    // A host linkifies the URL as a URL, so a token in its query or path is
+    // part of it rather than a separate mention or issue reference.
+    expect(platformRules(lintCarve('See https://e.com/?q=@team here.\n', { platforms: ['github'] }))).toEqual([])
+    expect(platformRules(lintCarve('See https://e.com/?issue=#123 here.\n', { platforms: ['github'] }))).toEqual([])
+    // CONTROL: a token AFTER the URL still flags, at its real offset - the mask
+    // keeps the line length.
+    const doc = 'See https://e.com/ and #123 here.\n'
+    const [w] = lintCarve(doc, { platforms: ['github'] })
+    expect(doc.slice(w!.start, w!.end)).toBe('#123')
+    expect(w!.column).toBe(doc.indexOf('#123') + 1)
+  })
+
   it('does not flag a URL fragment or an at-word inside a URL path', () => {
     // A fragment is part of a URL the host linkifies AS a URL, not a separate
     // issue reference, and the same goes for a path segment.

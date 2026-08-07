@@ -459,7 +459,7 @@ export function lintCarve(
     // some host surfaces linkify inside them.
     const skip = new Set(verbatimLines)
     for (const ln of collectCommentLines(doc)) skip.add(ln)
-    for (const ln of collectUnpublishedLines(doc)) skip.add(ln)
+    for (const ln of collectUnpublishedLines(source, doc, referencedFootnotes)) skip.add(ln)
     // ...but a captioned listing's CAPTION is published. `collectVerbatimLines`
     // marks the whole wrapping figure verbatim, because a captioned code block
     // carries no position of its own, and the caption rides along inside that
@@ -1170,6 +1170,11 @@ function collectListingCaptionLines(doc: Document): Set<number> {
  * by codex review, twice.
  */
 function maskInlineDestinations(line: string): string {
+  // A BARE URL is linkified AS A URL, so a token in its query or path is part
+  // of it and not a separate mention or issue reference. Masked first, and
+  // length-preserving like the destination walk below, so a token after the URL
+  // still indexes the real source. Raised by codex review.
+  line = line.replace(/\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+/g, (m) => ' '.repeat(m.length))
   let out: string[] | null = null
   for (let i = 0; i + 1 < line.length; i++) {
     if (line[i] !== ']' || line[i + 1] !== '(') continue
@@ -1209,14 +1214,40 @@ function maskInlineDestinations(line: string): string {
  * failure mode the ruling warns about most: a rule people turn off wholesale.
  * Raised by codex review.
  */
-function collectUnpublishedLines(doc: Document): Set<number> {
+function collectUnpublishedLines(
+  source: string,
+  doc: Document,
+  referencedFootnotes: Set<string>,
+): Set<number> {
   const lines = new Set<number>()
-  walkDocument(doc, (node) => {
-    if (node.type !== 'link_reference_definition') return
-    const pos = (node as Positioned).pos
+  const addRange = (pos: Positioned['pos']): void => {
     if (!pos) return
-    const end = (pos as { endLine?: number }).endLine ?? pos.startLine
+    const end = pos.endLine ?? pos.startLine
     for (let ln = pos.startLine; ln <= end; ln++) lines.add(ln)
+  }
+  walkDocument(doc, (node) => {
+    // A link reference definition and an ABBREVIATION definition both render as
+    // the empty string. An abbreviation's expansion reaches the page only as a
+    // `title` attribute, which a host does not linkify either.
+    if (node.type === 'link_reference_definition' || node.type === 'abbreviation_def') {
+      addRange((node as Positioned).pos)
+    }
+  })
+  // A footnote definition's body IS published - in the endnotes - so a
+  // REFERENCED one stays scanned. An UNREFERENCED one is dropped from the
+  // output entirely, and `unused-footnote-definition` already reports it, so a
+  // platform warning there is a second finding about text nobody sees.
+  //
+  // Located by the same source-line pattern the footnote checks use, because a
+  // definition lives in `doc.footnoteDefs` rather than in `children` and so
+  // carries no node to walk. That covers the definition's OWN line; a
+  // continuation line of an unreferenced body is still scanned.
+  const defs = doc.footnoteDefs ?? {}
+  source.split('\n').forEach((line, i) => {
+    const m = FOOTNOTE_DEF.exec(line)
+    if (!m) return
+    const label = m[1]!.trim()
+    if (label in defs && !referencedFootnotes.has(label)) lines.add(i + 1)
   })
   // Frontmatter carries no node in `children`, but it DOES report a span - so
   // the span is used rather than re-derived from the source. Re-deriving it
