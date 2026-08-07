@@ -154,8 +154,25 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
           `<summary>${escapeHtml(summary)}</summary>\n${list}</details>`
         : `<nav class="${escapeHtml(cssClass)}">\n${list}</nav>`
       const toc: RawBlock = { type: 'raw_block', format: 'html', content: html }
-      if (position === 'top') doc.children.unshift(toc)
-      else doc.children.push(toc)
+      if (position === 'top') {
+        doc.children.unshift(toc)
+        return doc
+      }
+      doc.children.push(toc)
+      // BOTTOM means the bottom of the DOCUMENT, not the bottom of whatever
+      // section the last heading opened. Appended to `children` alone, the
+      // `<section>` wrapper that a heading opens (PART 9 §13) took the nav in -
+      // so a document ending in a heading's section never got a document-level
+      // TOC, and with nested headings it landed in the INNERMOST section, two
+      // levels deep. One option, four placements, decided by what the document
+      // happened to end with (markup-carve/carve-js#728).
+      //
+      // `top` never had the problem for an accidental reason: nothing has
+      // opened a section yet when it is inserted.
+      //
+      // Marked rather than moved, so the renderers that do not emit sections
+      // still write it where it sits and their output does not change.
+      doc.trailerBlocks = [...(doc.trailerBlocks ?? []), toc]
       return doc
     },
   }

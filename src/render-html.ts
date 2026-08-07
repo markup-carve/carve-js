@@ -419,8 +419,24 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   // flushed at the marker instead of at document end (see the intercept below).
   let footnotesPlaced = false
 
+  // Document TRAILERS: blocks held in `children` that belong to the document
+  // rather than to the section a heading opened around them. Deferred here and
+  // emitted after `closeTo(1)` below, which is the only way out of a `<section>`
+  // - see `Document.trailerBlocks` for why one option produced four placements
+  // without it (markup-carve/carve-js#728).
+  //
+  // Identity, not shape: the marker is a reference to the very node in
+  // `children`, so an authored `raw_block` that happens to look like the one an
+  // extension inserted is never mistaken for it.
+  const trailers = new Set<BlockNode>(ast.trailerBlocks ?? [])
+  const deferred: BlockNode[] = []
+
   for (const node of ast.children) {
     if (node.type === 'abbreviation_def') continue
+    if (trailers.has(node)) {
+      deferred.push(node)
+      continue
+    }
     // `::: footnotes` flushes the endnotes section HERE instead of at document
     // end. Only the first marker in a document that actually has footnotes
     // places; any other `::: footnotes` (or one in a document with no notes)
@@ -477,6 +493,14 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   }
   closeTo(1) // close any sections still open at end of document
   if (footnotes.order.length && !footnotesPlaced) out.push(renderFootnoteSection(ast, footnotes, opts))
+  // AFTER the endnotes, which are themselves a `<section>` - so "after the last
+  // section" means after that one too. carve-php reaches the same place from
+  // the other end: its TOC extension is a render listener that appends to the
+  // finished HTML string, `$html . $separator . $tocHtml`.
+  for (const node of deferred) {
+    const rendered = renderBlock(node, opts, 0)
+    if (rendered !== '') out.push(rendered)
+  }
   return out.join('\n')
 }
 

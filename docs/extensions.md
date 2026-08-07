@@ -387,6 +387,23 @@ TOC at the document `top` (default) or `bottom`. Configurable `minLevel`,
 `maxLevel`, `listType` (`ul`/`ol`), `cssClass`, and `position`. The generated
 markup is raw HTML, so it is inert when raw HTML output is stripped.
 
+`position: 'bottom'` means the bottom of the DOCUMENT: the `<nav>` is emitted
+after every `<section>` a heading opened has closed, and after the endnotes
+section when the document has footnotes. It is the last thing in the output.
+
+```ts
+carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })
+// <section id="A">
+//   <h1>A</h1>
+// </section>
+// <nav class="toc"> … </nav>
+```
+
+The in-document `::: toc` directive (the `tocPlacement()` extension) is the
+other half of this and behaves the opposite way on purpose: it renders exactly
+where the author wrote it, inside whatever container that is. All three engines
+agree on that, and it is unaffected by the `position` option.
+
 Set `collapsible: true` to wrap the TOC in a `<details>`/`<summary>` disclosure
 (closed unless `open: true`), with the label from `summary` (default
 `'Table of Contents'`). When off (the default) the output is the unchanged

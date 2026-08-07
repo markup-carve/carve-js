@@ -221,12 +221,21 @@ class ProfileFilter {
   private violations: ProfileViolation[] = []
   /** Whether this run removed something that changes footnote numbering. */
   private footnotesChanged = false
+  /**
+   * What each replaced node became, so a mark held by IDENTITY survives.
+   *
+   * Read only by {@link remapTrailers}. Keyed on the node object, so it costs
+   * nothing on a document with no denied nodes and holds at most one entry per
+   * conversion on one that has them.
+   */
+  private replacements = new Map<NodeLike, NodeLike>()
 
   constructor(private readonly baseHost: string | null) {}
 
   filter(doc: Document, profile: Profile): ProfileFilterResult {
     this.violations = []
     this.footnotesChanged = false
+    this.replacements = new Map()
     // carve-php starts the document's direct children at depth 0 and checks
     // `depth > maxNesting`, incrementing depth on *every* descend (block and
     // inline alike, since getChildren() includes inline children).
@@ -260,6 +269,7 @@ class ProfileFilter {
     // is both past the ceiling AND lost a footnote is refused, which is the
     // right way round - the alternative is publishing numbers known to be stale.
     if (this.footnotesChanged) numberFootnotes(doc)
+    this.remapTrailers(doc)
     return { doc, violations: this.violations }
   }
 
@@ -445,8 +455,56 @@ class ProfileFilter {
   }
 
   private replaceAt(slot: ChildSlot, replacement: NodeLike): void {
-    this.noteFootnoteLoss(slot.list[slot.index])
+    const replaced = slot.list[slot.index]
+    this.noteFootnoteLoss(replaced)
+    // Recorded so a DOCUMENT TRAILER can be found again afterwards. The HTML
+    // renderer identifies a trailer by object identity (`Document.trailerBlocks`
+    // holds references to nodes in `children`), and this filter runs BETWEEN the
+    // extension that marks one and the render that reads the mark. A denied raw
+    // block converted to a paragraph is a NEW object, so without this the mark
+    // pointed at a node that was no longer in the tree and a bottom-positioned
+    // table of contents went back to rendering inside the last section - the
+    // same defect as markup-carve/carve-js#728, reachable only under a profile.
+    if (replaced !== undefined) this.replacements.set(replaced, replacement)
     slot.list[slot.index] = replacement
+  }
+
+  /**
+   * A trailer's node after filtering, or undefined when it did not survive.
+   *
+   * Follows the chain rather than reading one step: nothing produces a second
+   * replacement of the same slot today, and a lookup that assumed so would fail
+   * silently rather than loudly if something ever did. The visited set is what
+   * keeps a cycle from hanging the render.
+   */
+  private survivorOf(node: NodeLike): NodeLike | undefined {
+    let current: NodeLike | undefined = node
+    const seen = new Set<NodeLike>()
+    while (current !== undefined && this.replacements.has(current)) {
+      if (seen.has(current)) return undefined
+      seen.add(current)
+      current = this.replacements.get(current)
+    }
+
+    return current
+  }
+
+  /**
+   * Re-point the document's trailer marks at what survived the filter.
+   *
+   * A node that was STRIPPED needs no entry here: it is no longer in
+   * `children`, and the containment test drops it. That test is also what keeps
+   * a mark honest in general - a trailer is by definition a direct child of the
+   * document, so anything else in the list is stale.
+   */
+  private remapTrailers(doc: Document): void {
+    if (doc.trailerBlocks === undefined) return
+    const present = new Set<unknown>(doc.children)
+    const kept = doc.trailerBlocks
+      .map((node) => this.survivorOf(node as unknown as NodeLike))
+      .filter((node): node is NodeLike => node !== undefined && present.has(node))
+    if (kept.length === 0) delete doc.trailerBlocks
+    else doc.trailerBlocks = kept as unknown as BlockNode[]
   }
 
   /**
