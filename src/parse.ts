@@ -1133,9 +1133,6 @@ class Lexer {
   // Replaces a per-opener scan to end of input, which was superlinear when many
   // openers carry distinct widths.
   commentFenceLastIndex: Map<number, number> | undefined = undefined
-  // The same index, built from lines read THROUGH their blockquote markers,
-  // so `> %%%` counts as a fence of width 3. See `quotedCommentHasCloser`.
-  quotedCommentFenceLastIndex: Map<number, number> | undefined = undefined
 
   constructor(
     source: string | readonly string[],
@@ -2839,43 +2836,40 @@ function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
 }
 
 /**
- * Whether a comment fence of width `fence` closes after `fromIndex`, reading
- * each line THROUGH any blockquote markers it carries.
+ * Whether a comment fence of width `fence` closes LATER IN THIS QUOTE.
  *
- * `commentBlockHasCloser` above answers the same question for the block
- * parser, and cannot answer it here: its index is built from the RAW lines, so
- * `> %%%` matches no fence at all. Hence a second index rather than a second
- * spelling of the scan - the two ask about different views of the document.
+ * PART 9 section 28: a `%%%` opener with NO MATCHING CLOSER AHEAD does NOT open
+ * a block, it degrades to a `comment_line`, so every FOLLOWING BLOCK still
+ * renders. `parseCommentBlock` honours that because `commentBlockHasCloser`
+ * scans ahead first. The blockquote lazy-state tracker did not, because it runs
+ * while the quote's lines are being COLLECTED - so an unterminated fence inside
+ * a quote opened a block, took the quote's paragraph with it, and a lazy line
+ * that should have folded into that paragraph became a sibling (carve-js#832).
  *
- * PART 9 section 28 is why either exists: a `%%%` opener with NO MATCHING
- * CLOSER AHEAD does NOT open a block, it degrades to a `comment_line`, so
- * every FOLLOWING BLOCK still renders. `parseCommentBlock` honours that. The
- * blockquote lazy-state tracker did not, because it runs while the quote's
- * lines are being COLLECTED and had nothing to scan - so an unterminated
- * fence inside a quote opened a block, ate the quote's paragraph, and a lazy
- * line that should have folded into it became a sibling instead
- * (carve-js#832).
+ * THE SCAN IS BOUNDED TO THE QUOTE, and both bounds are load-bearing, because
+ * this has to agree with what the sub-lexer will do - and the sub-lexer only
+ * ever sees this quote's own lines.
  *
- * The scan is deliberately as loose as the block parser's: it looks to the end
- * of the document rather than to the end of the quote, so the two agree about
- * a closer that sits outside the container. Bounding it to the quote would be
- * a different rule, and one the clause does not state.
+ * ONE marker is stripped, not every one. Stripping the whole run made
+ * `> > %%%` - a fence one level DEEPER - count as a closer for a fence opened
+ * at this level, where the sub-lexer reads it as a nested block quote. Raised by
+ * codex review on the change that introduced it.
+ *
+ * And the scan STOPS at the first unquoted line rather than running to the end
+ * of the document, which made a `%%%` sitting after the quote entirely count as
+ * its closer. A non-quoted line cannot be part of the quote here in any case:
+ * a lazy continuation is collected only while a paragraph is open, and inside a
+ * comment none is.
  */
 function quotedCommentHasCloser(lexer: Lexer, fence: number, fromIndex: number): boolean {
-  let lastByWidth = lexer.quotedCommentFenceLastIndex
-  if (lastByWidth === undefined) {
-    lastByWidth = new Map<number, number>()
-    for (let i = 0; i < lexer.lines.length; i++) {
-      let line = lexer.lines[i]!
-      for (let m = RE_BLOCKQUOTE.exec(line); m; m = RE_BLOCKQUOTE.exec(line)) line = m[1] ?? ''
-      const c = RE_COMMENT_BLOCK_ANY.exec(line)
-      if (c) lastByWidth.set(c[1]!.length, i)
-    }
-    lexer.quotedCommentFenceLastIndex = lastByWidth
+  for (let i = fromIndex + 1; i < lexer.lines.length; i++) {
+    const quoted = RE_BLOCKQUOTE.exec(lexer.lines[i]!)
+    if (!quoted) return false
+    const run = RE_COMMENT_BLOCK_ANY.exec(quoted[1] ?? '')
+    if (run && run[1]!.length === fence) return true
   }
-  const last = lastByWidth.get(fence)
 
-  return last !== undefined && last > fromIndex
+  return false
 }
 
 // Block comment: a `%%%`+ opener, closed by a line whose delimiter run has the

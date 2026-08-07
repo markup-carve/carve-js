@@ -183,6 +183,26 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).toContain('secret')
   })
 
+  it('does not take a fence one level DEEPER as its closer', () => {
+    // The lookahead strips ONE quote marker, not the whole run. Stripping all of
+    // them made `> > %%%` close a fence opened at one `>`, where the sub-lexer
+    // reads that line as a nested block quote - so the tracker and the parse of
+    // the collected body disagreed. Raised by codex review.
+    expect(html('> %%%\n> secret\n> > %%%\nlazy\n')).toBe(
+      '<blockquote> <p>secret</p> <blockquote> <p>lazy</p> </blockquote> </blockquote>',
+    )
+  })
+
+  it('does not take a fence OUTSIDE the quote as its closer', () => {
+    // The other bound, found by widening the probe past the shape the review
+    // named: the scan stops at the first unquoted line instead of running to the
+    // end of the document, so a `%%%` after the quote is not its closer. A
+    // non-quoted line cannot belong to the quote here anyway - a lazy
+    // continuation is collected only while a paragraph is open, and inside a
+    // comment none is.
+    expect(html('> %%%\n> secret\nlazy\n\n%%%\n')).toContain('<p>secret lazy</p>')
+  })
+
   it('CONTROL: a nested wider fence still closes its own opener', () => {
     // The other direction, so the width test is not just rejecting everything:
     // `%%%%` opens and `%%%%` closes, with a `%%%` inside it nested and hidden.
