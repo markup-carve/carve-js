@@ -43,6 +43,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **BREAKING: a quoted attribute value stops at the newline, inline and on a
+  block-attribute line** (markup-carve/carve#888). `quoted_value` excludes a
+  newline in BOTH of its alternatives: the value ends at the closing quote on
+  the same line, and a break inside the quotes ends the production, so the whole
+  attribute block is unrecognized. This engine kept the break and rendered it
+  into the attribute; carve-php and carve-rs collapsed it to a space, which no
+  production in either normative file describes.
+
+  A block attribute may still span lines. `continuation` is where a newline is
+  admitted and it sits BETWEEN two tokens, never inside one, so `{.a` / `.b}`
+  is still a single block and a completed quoted value may still be followed by
+  one.
+
+  Eleven surfaces let the break through, where the report named two. The
+  INLINE EXTENSION (`:name[x]{…}`) was one of them because it had no attribute
+  validity check at all: its payload went straight to the parser, so it also
+  separated two attributes on a TAB after the rule above narrowed every
+  sibling, and turned `{#1a}` into a bogus `a=""` where §14 makes it literal
+  everywhere else. An invalid payload there is no longer consumed - the
+  extension parses without attributes and the braces stay literal text.
+
 - **BREAKING: an INLINE attribute block's interior is space-only - a tab no
   longer pads or separates it** (markup-carve/carve#906). PART 4 spells every
   whitespace slot of the inline block `space`, and all five of them sit AFTER
