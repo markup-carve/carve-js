@@ -200,23 +200,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **`fmt` no longer manufactures a frontmatter block that swallows the document**
-  (carve-js#899, carve-js#901). A frontmatter block is a `---` fence at byte 0
-  plus a bare `---` closer anywhere below it, and two writer decisions put one
-  there. PART 11 §6a normalizes `***` and `___` to `---`, so a break that opened
-  the document gained a closer from any later break: `***` / blank / `---`
-  formatted to `---` / blank / `---`, which reparsed as an empty frontmatter
-  block and rendered nothing where the input rendered two rules. Separately, a
-  hoisted link or footnote definition is written after the body, so whatever
-  stood second was promoted to byte 0 - and if that block was already `---`, the
-  whole document became frontmatter content and rendered empty. A promoted
-  paragraph whose first line is `---yaml`-shaped broke the same way.
-  **Behavior change:** when the emitted bytes would be read as opening
-  frontmatter the document did not have, `fmt` writes every thematic break as
-  `***` instead of `---`. That is a deviation from §6a, taken because §1's
-  `to_html(fmt(x)) == to_html(x)` is the stronger clause; a document that is not
-  misread keeps the canonical `---`, including a leading break with no later
-  break.
+- **An expansion budget is sized from what the payload cost, not from what it
+  claims** (carve-js#900). The abbreviation, table-of-contents, index and
+  cross-reference-label budgets are `max(1 MB, 8 * srcByteLength)`. On the parse
+  path that number is a measurement; on the AST-ingest path it arrives inside the
+  payload, so rewriting one field widened the guard meant to bound the document
+  that rewrote it. An ingested document is now bounded by the measured size of
+  its payload as well as by its claim, and the smaller wins. `srcByteLength` is
+  still read as written and re-encoded unchanged, because PART 12 §7 requires the
+  field to survive a round trip - what moved is what the budget trusts.
+  `fromAstJson` takes an optional second argument, the measured payload length in
+  bytes; when it is omitted the payload is measured by re-encoding, so a caller
+  that does not pass it is not left with the old behavior. **A legitimate
+  divergence, stated rather than papered over:** a source much larger than its
+  AST - mostly blank lines, past roughly 125 KB where the 1 MB floor stops
+  covering - renders with a smaller budget after a round trip than it did on the
+  parse path. That is not fixable; the bytes that would tell an honest large
+  source from a claim about one are exactly the bytes the AST does not carry.
+  carve-php and carve-rs accepted the same divergence.
 
 - **The Markdown target neutralizes embedded HTML in five more slots**
   (carve-js#894). The writer's stated invariant is that `<`, `>` and `&` in

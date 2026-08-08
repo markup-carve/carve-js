@@ -449,7 +449,11 @@ function renderFromJson(
   // is not a documented failure however typed the error is.
   let doc
   try {
-    doc = fromAstJson(json)
+    // The payload's MEASURED size is handed over, so the expansion budgets are
+    // bounded by what this input cost as well as by what it claims about itself.
+    // Exact here rather than re-encoded, because this is the one place in the
+    // package that still holds the bytes it read.
+    doc = fromAstJson(json, Buffer.byteLength(src, 'utf8'))
   } catch (e) {
     io.writeErr(`carve render: --from-json input is not a Carve AST (${(e as Error).message})\n`)
     return 2

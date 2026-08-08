@@ -43,6 +43,7 @@ import {
   WIRE_VALUE_KINDS,
 } from './wire-fields.js'
 import { ownValue, setOwn } from './own-property.js'
+import { recordIngestPayloadLength, utf8ByteLength } from './abbr-budget.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -969,7 +970,7 @@ function astJsonDepth(
   return { nodes: deepest, walk: deepestWalk }
 }
 
-export function fromAstJson(json: AstJsonDocument): Document {
+export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): Document {
   // A STRING is the mistake the name invites - `fromAstJson` reads as "from AST
   // JSON", carve-php spells the same entry point `decodeJson`, and carve-rs's
   // CLI flag is `--from-json`; all three of those take text. This one takes the
@@ -1092,7 +1093,32 @@ export function fromAstJson(json: AstJsonDocument): Document {
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
   renumberCaptionsIfPublished(doc)
 
+  // WHAT THE SENDER ACTUALLY HAD TO SEND, recorded so the expansion budgets are
+  // not sized from a number the payload supplies about itself. Exact when the
+  // caller measured the bytes it read - the CLI does, and it is the one entry
+  // point in this package that ever holds them - and re-encoded here otherwise,
+  // because a library caller hands over an object that has already lost its
+  // string. See `expansionBudgetLength`.
+  recordIngestPayloadLength(doc, payloadByteLength ?? measurePayload(json))
+
   return doc
+}
+
+/**
+ * The UTF-8 size of `json` re-encoded, or 0 when it cannot be measured.
+ *
+ * 0 is the CONSERVATIVE answer, not a failure to answer: the budget floor still
+ * applies underneath it, so a payload this cannot measure gets the floor rather
+ * than an unbounded budget. The realistic way to get here is a payload larger
+ * than V8's maximum string length, which is exactly the case that must not be
+ * handed a budget sized from its own claim.
+ */
+function measurePayload(json: AstJsonDocument): number {
+  try {
+    return utf8ByteLength(JSON.stringify(json))
+  } catch {
+    return 0
+  }
 }
 
 /**
