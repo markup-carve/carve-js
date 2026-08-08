@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { parse } from './parse.js'
+import { opensFrontmatter, parse } from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -239,7 +239,70 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
   return out
 }
 
+/**
+ * The spelling a `thematic_break` is written with.
+ *
+ * `---` IS THE CANONICAL BREAK, INCLUDING ON LINE 1. PART 11 section 6a says the
+ * writer emits three hyphens whatever the author wrote, and states no exception.
+ * One is taken below, because PART 11 section 1 is the stronger clause:
+ * `to_html(fmt(x)) == to_html(x)`.
+ */
+let thematicBreakMarker = '---'
+
+/**
+ * Render, and fall back to a break spelling that cannot be read as frontmatter
+ * when the finished bytes would be.
+ *
+ * THE WRITER MANUFACTURED FRONTMATTER. A frontmatter block is an opening fence
+ * at byte 0 plus a bare `---` CLOSER anywhere below it, so the collision is a
+ * property of the whole emitted document rather than of its first line. Two
+ * unrelated writer decisions reach it:
+ *
+ * - section 6a normalizes `***` and `___` to `---`, so a break that opens the
+ *   document gains a closer from any later break (markup-carve/carve-js#899).
+ *   `***` / blank / `---` formatted to `---` / blank / `---`, which reparses as
+ *   an EMPTY frontmatter block and renders nothing where the input rendered two
+ *   rules.
+ * - a hoisted link or footnote definition is written after the body, promoting
+ *   whatever stood second to byte 0 (markup-carve/carve-js#901). Nothing is
+ *   respelled there - the `---` was already in the source - so fixing the first
+ *   cause does not fix this one.
+ *
+ * And a THIRD shape neither ticket names falls out of the same check: a hoisted
+ * definition can promote a PARAGRAPH whose first line is `---yaml`-shaped, which
+ * no head-of-document respelling can repair, because the paragraph's text is not
+ * the writer's to change. That document is saved by respelling the CLOSER
+ * instead - which is why the fallback moves every break in the document rather
+ * than the one at the head.
+ *
+ * So the FINISHED bytes are handed to the PARSER'S own opener test, twice: once
+ * to ask whether the default spelling is misread, and once to confirm the
+ * fallback is not. A document that is still misread with `***` - a `---` closer
+ * that came from somewhere other than a break, such as the inside of a fenced
+ * block - keeps the canonical spelling rather than paying a respelling that buys
+ * nothing.
+ *
+ * A leading break with nothing below it to close a block keeps `---`, which is
+ * what corpus `132-thematic-break-requires-contiguous-markers-4` asks for and
+ * what carve-php and carve-rs write. It is a CONTROL here: no mutation of this
+ * fallback changes it.
+ */
 function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
+  const canonicalForm = renderOnePass(ast, mode)
+  // Frontmatter the AST really carries is written by `renderFrontmatter` and is
+  // not manufactured, so only a document without any is a candidate.
+  if (ast.frontmatter || !opensFrontmatter(canonicalForm)) return canonicalForm
+  const previousMarker = thematicBreakMarker
+  thematicBreakMarker = '***'
+  try {
+    const fallback = renderOnePass(ast, mode)
+    return opensFrontmatter(fallback) ? canonicalForm : fallback
+  } finally {
+    thematicBreakMarker = previousMarker
+  }
+}
+
+function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string {
   const previous = escapeMode
   escapeMode = mode
   // "Already written on a description line" is true of THIS PASS, not of the
@@ -494,7 +557,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'list':
       return withAttrs(renderList(node, ctx))
     case 'thematic_break':
-      return withAttrs('---')
+      return withAttrs(thematicBreakMarker)
     case 'table':
       return withAttrs(renderTable(node, ctx))
     case 'admonition': {
