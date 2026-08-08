@@ -49,6 +49,22 @@ describe('links never nest', () => {
     expect(h('# H\n\n[see </#H>](/outer)')).not.toContain('<a href="/outer">see <a')
   })
 
+  it('a configured mention inside a link uses its non-anchor span form', () => {
+    const out = carveToHtml('[hi @bob](/u)', { mentionUrl: '/users/{name}' }).trim()
+    expect(out).toBe(
+      '<p><a href="/u">hi <span class="mention"><strong>@bob</strong></span></a></p>',
+    )
+    expect(out.match(/<a\b/g)).toHaveLength(1)
+  })
+
+  it('a configured tag inside a link uses its non-anchor span form', () => {
+    const out = carveToHtml('[hi #topic](/u)', { tagUrl: '/tags/{name}' }).trim()
+    expect(out).toBe(
+      '<p><a href="/u">hi <span class="tag"><strong>#topic</strong></span></a></p>',
+    )
+    expect(out.match(/<a\b/g)).toHaveLength(1)
+  })
+
   it('a top-level autolink (not in a label) still links', () => {
     expect(h('plain https://x.com here', true)).toBe(
       '<p>plain <a href="https://x.com">https://x.com</a> here</p>',
