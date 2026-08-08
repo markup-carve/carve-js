@@ -784,6 +784,22 @@ function definitionInGap(
  */
 const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image', 'figure'])
 
+function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
+  if (left.type !== right.type) return false
+  if (left.type === 'list' && right.type === 'list') {
+    if (left.ordered !== right.ordered) return false
+    return left.ordered
+      ? (left.delim ?? '.') === (right.delim ?? '.') && left.olType === right.olType
+      : (left.bulletChar ?? '-') === (right.bulletChar ?? '-')
+  }
+  return new Set<BlockNode['type']>([
+    'block_quote',
+    'table',
+    'line_block',
+    'definition_list',
+  ]).has(left.type)
+}
+
 const MARKER_COLUMN = '\ue005'
 
 function atMarkerColumn(text: string): string {
@@ -822,6 +838,7 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
     let previousAtMarkerColumn = false
     item.children.forEach((b, i) => {
       const previous = item.children[i - 1]
+      const next = item.children[i + 1]
       // A definition written back BETWEEN the two blocks already ends the
       // paragraph above it, so the marker below is not needed - and emitting it
       // anyway changes the canonical form of corpus 228, whose whole point is
@@ -870,6 +887,7 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       // reader can round-trip, so it is not written.
       if (
         previousAtMarkerColumn ||
+        (next !== undefined && adjacentBlocksMerge(b, next)) ||
         (!separated && previous?.type === 'paragraph' && FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type))
       ) {
         parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
