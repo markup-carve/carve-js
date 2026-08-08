@@ -1605,7 +1605,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     }
     case 'mention': {
       const text = `@${escapeHtml(node.user)}`
-      if (!opts.mentionUrl)
+      if (insideLink || !opts.mentionUrl)
         return `<span${renderLeadingBaseClassAttrs(node.attrs, 'mention')}><strong>${text}</strong></span>`
       // Canonical placeholder is `{name}` (matching tags and carve-php);
       // `{user}` stays as a legacy alias.
@@ -1618,10 +1618,12 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     }
     case 'tag': {
       const text = `#${escapeHtml(node.name)}`
-      if (!opts.tagUrl)
+      if (insideLink || !opts.tagUrl)
         return `<span${renderLeadingBaseClassAttrs(node.attrs, 'tag')}><strong>${text}</strong></span>`
       const href = sanitizeUrl(
-        opts.tagUrl.replaceAll('{name}', encodeURIComponent(node.name)),
+        opts.tagUrl
+          .replaceAll('{name}', encodeURIComponent(node.name))
+          .replaceAll('{tag}', encodeURIComponent(node.name)),
         opts,
       )
       return `<a${renderSocialLinkAttrs(node.attrs, 'tag', href)}>${text}</a>`

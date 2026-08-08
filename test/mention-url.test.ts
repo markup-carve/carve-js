@@ -37,4 +37,10 @@ describe('mention/tag URL templates', () => {
       '<p><a class="tag" href="/t/news">#news</a></p>',
     )
   })
+
+  it('accepts {tag} as an explicit tag placeholder alias', () => {
+    expect(carveToHtml('#news', { tagUrl: '/t/{tag}' }).trim()).toBe(
+      '<p><a class="tag" href="/t/news">#news</a></p>',
+    )
+  })
 })
