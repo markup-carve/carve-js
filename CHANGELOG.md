@@ -256,6 +256,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Preserve each row's cell count when formatting a ragged table instead of
+  manufacturing empty cells to make the table rectangular.
+
 - Keep the thematic-break writer override out of band, so the legal `---`
   spelling can be forced without being mistaken for "no override".
 
