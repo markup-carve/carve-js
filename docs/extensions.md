@@ -387,6 +387,10 @@ TOC at the document `top` (default) or `bottom`. Configurable `minLevel`,
 `maxLevel`, `listType` (`ul`/`ol`), `cssClass`, and `position`. The generated
 markup is raw HTML, so it is inert when raw HTML output is stripped.
 
+Each entry renders with the options passed to the conversion, so it agrees with
+the heading it was derived from: a `symbols` map, `smartTypography` and
+`sanitizeUrls` reach the entry and the `<h*>` alike.
+
 `position: 'bottom'` means the bottom of the DOCUMENT: the `<nav>` is emitted
 after every `<section>` a heading opened has closed, and after the endnotes
 section when the document has footnotes. It is the last thing in the output.
@@ -433,6 +437,36 @@ Linkifies `https://`, `http://`, `mailto:`, and bare emails; a trailing
 sentence punctuation mark stays outside the link. Restrict with
 `autolink({ allowedSchemes: ['https'] })` (dropping `mailto` also disables bare
 email linking).
+
+## Transform hooks: afterParse and beforeRender
+
+Every extension's `afterParse(doc)` runs before any extension's
+`beforeRender(doc, opts)`; within a phase, registration order. Both take the
+resolved document and return it.
+
+`beforeRender` also receives the options the conversion was called with, so a
+hook that renders output of its own renders it the way the caller asked. A hook
+runs before the render starts, so there is nothing for it to inherit; without
+the parameter it rendered with defaults, and a `symbols` map or
+`allowRawHtml: false` reached the document but not the fragment a hook built
+from the same nodes.
+
+```ts
+import { carveToHtml, type CarveExtension } from '@markup-carve/carve'
+
+const ext: CarveExtension = {
+  name: 'peek',
+  beforeRender(doc, opts) {
+    opts?.symbols // the caller's map, or undefined
+    return doc
+  },
+}
+```
+
+The parameter is optional and additive: a hook declared as `beforeRender(doc)`
+is called exactly as before. What it receives is a READ-ONLY snapshot - frozen,
+and a different object from the one the renderer is handed - so a hook reads the
+caller's settings and cannot rewrite them. Read it, do not keep it.
 
 ## Adding syntax: parse-stage matchers
 

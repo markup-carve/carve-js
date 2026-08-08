@@ -2,7 +2,7 @@ import type { Admonition, Attrs, Heading, InlineNode, RawBlock, Text } from './a
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { deriveDisplayNodes } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
-import { renderInlinesInLinkContext } from './render-html.js'
+import { renderInlinesInLinkContext, type RenderOptions } from './render-html.js'
 
 /** Options for the {@link tableOfContents} extension. */
 export interface TableOfContentsOptions {
@@ -116,7 +116,7 @@ function tocHeadingNodes(children: Heading['children']): InlineNode[] {
   return nodes
 }
 
-function renderInlineHtml(nodes: InlineNode[]): string {
+function renderInlineHtml(nodes: InlineNode[], opts: Readonly<RenderOptions> | undefined): string {
   // This beforeRender path assembles raw nav HTML before any block renderer
   // exists, so there is no `ctx.renderInlines` seam; it calls the core's inline
   // renderer directly (markup-carve/carve#957).
@@ -127,7 +127,14 @@ function renderInlineHtml(nodes: InlineNode[]): string {
   // crossref in a heading published a nested anchor, and it renders a DOCUMENT,
   // so an inline footnote in a heading dragged a whole endnotes section into the
   // nav (both raised by codex review).
-  return renderInlinesInLinkContext(nodes)
+  //
+  // WITH THE CALLER'S OPTIONS. There is no active render to inherit from at
+  // `beforeRender` time, so this used to render with defaults: a `symbols` map
+  // reached the heading and not the entry cloned from the same nodes, and every
+  // other option that reaches inline rendering diverged the same way
+  // (carve-js#871). The `::: toc` directive never had the problem because it
+  // renders during the render, through `ctx`.
+  return renderInlinesInLinkContext(nodes, opts)
 }
 
 // Build a nested list from a flat, document-order entry list. This is a
@@ -136,7 +143,15 @@ function renderInlineHtml(nodes: InlineNode[]): string {
 // heading deeper than its predecessor's predecessor stays a sibling <li> in the
 // same nested <ul> (rather than opening a fresh <ul>). Returns the `<ul>…</ul>`
 // list including its trailing newline, matching the php source exactly.
-function buildList(entries: TocEntry[], listType: 'ul' | 'ol'): string {
+function buildList(
+  entries: TocEntry[],
+  listType: 'ul' | 'ol',
+  // The options the conversion was called with, or `undefined` when the caller
+  // is rendering INSIDE a render (the `::: toc` directive), where the inline
+  // renderer already knows them. Threaded rather than looked up, because the
+  // injected-nav caller runs before any render exists (carve-js#871).
+  opts: Readonly<RenderOptions> | undefined,
+): string {
   if (entries.length === 0) return ''
   let html = `<${listType}>\n`
   const levelStack: number[] = [entries[0]!.level]
@@ -162,7 +177,7 @@ function buildList(entries: TocEntry[], listType: 'ul' | 'ol'): string {
         levelStack[depth - 1] = e.level
       }
     }
-    html += `<li><a href="#${escapeHtml(e.id)}">${renderInlineHtml(e.nodes)}</a>`
+    html += `<li><a href="#${escapeHtml(e.id)}">${renderInlineHtml(e.nodes, opts)}</a>`
     hasOpenItem = true
   }
   html += '</li>\n'
@@ -205,7 +220,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
 
   return {
     name: 'table-of-contents',
-    beforeRender(doc) {
+    beforeRender(doc, opts) {
       const entries: TocEntry[] = []
       for (const node of doc.children) {
         if (node.type !== 'heading') continue
@@ -216,7 +231,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
       }
       if (entries.length === 0) return doc
 
-      const list = buildList(entries, listType)
+      const list = buildList(entries, listType, opts)
       // Collapsible: the heading list sits directly inside a <details>
       // disclosure so it can be toggled, closed by default unless `open`.
       // Byte-identical to carve-php's TableOfContentsExtension.
@@ -329,7 +344,7 @@ function renderToc(
   const picked = entries.filter((e) => e.level >= minLevel && e.level <= maxLevel)
   if (picked.length === 0) return wrap(emptyNav)
   // Newlined, column-0 nav matching carve-php byte-for-byte.
-  const nav = `<nav${attrs}>\n${buildList(picked, 'ul')}</nav>`
+  const nav = `<nav${attrs}>\n${buildList(picked, 'ul', undefined)}</nav>`
   // Bound cumulative nav bytes across all `::: toc` blocks in one render: K
   // blocks x N headings would otherwise amplify output ~K*N. Once the
   // per-render budget is exhausted, further blocks degrade to an empty nav.

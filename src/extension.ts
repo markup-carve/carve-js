@@ -1,4 +1,8 @@
 import type { Attrs, BlockNode, Document, Extension, InlineNode } from './ast.js'
+// Type-only, and deliberately circular: `render-html.ts` imports this module's
+// `CarveExtension`. `import type` is erased, so nothing of the cycle survives
+// into the emitted JavaScript.
+import type { RenderOptions } from './render-html.js'
 
 /**
  * Build-time renderers for client-script extensions, supplied for a
@@ -159,7 +163,26 @@ export interface CarveExtension {
   /** Parse-stage block matcher (tried before the paragraph fallback). */
   matchBlock?: BlockMatcher
   afterParse?(doc: Document): Document
-  beforeRender?(doc: Document): Document
+  /**
+   * Transform the resolved document just before it is rendered.
+   *
+   * `opts` is a READ-ONLY view of the options the conversion was called with
+   * (`carveToHtml`, `carveToMarkdown`, `carveToPlainText`, `carveToAnsi`,
+   * `carveToAstJson`), so a hook that renders something itself renders it the
+   * way the caller asked for. Without it a hook rendered with defaults, and a
+   * `symbols` map or `allowRawHtml: false` reached the heading but not the
+   * table-of-contents entry built from the same nodes
+   * (markup-carve/carve-js#871).
+   *
+   * It is a snapshot, frozen and disconnected from the object the renderer will
+   * read, so writing to it changes nothing: a hook may not talk the renderer out
+   * of the caller's own hardening. Read it, do not carry it - the renderer is
+   * handed the caller's options directly, not this copy.
+   *
+   * The parameter is optional in both directions: an existing hook that takes
+   * the document alone is unaffected, and `undefined` never reaches it.
+   */
+  beforeRender?(doc: Document, opts?: Readonly<RenderOptions>): Document
   /** Renderers keyed by the extension type name (the `name` in `:name[…]`). */
   renderers?: Record<string, ExtensionRenderer>
   /** Renderers keyed by core block node `type` (e.g. `admonition`). */

@@ -351,6 +351,7 @@ export function carveToHtml(
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
     }),
     exts,
+    opts,
   )
   doc = runProfile(doc, opts)
   return renderHtml(doc, opts)
@@ -364,11 +365,30 @@ export function carveToHtml(
  * matching carve-php, where a `beforeRender` extension (heading level shift,
  * default attributes, …) affects Markdown/PlainText/ANSI output too.
  */
-function applyTransforms(doc: Document, exts: CarveExtension[] | undefined): Document {
+function applyTransforms(
+  doc: Document,
+  exts: CarveExtension[] | undefined,
+  opts: Readonly<RenderOptions>,
+): Document {
   if (!exts) return doc
   let out = doc
   for (const ext of exts) if (ext.afterParse) out = ext.afterParse(out)
-  for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out)
+  // A frozen SHALLOW COPY, not the caller's object. A hook that renders
+  // something needs to read `symbols` / `allowRawHtml` / `sanitizeUrls`
+  // (carve-js#871), and it must not be able to write them: the renderer is
+  // handed the caller's options a few lines later, so handing the same object
+  // to arbitrary extension code would let a hook clear the very setting a guard
+  // downstream of it reads. carve-rs hit that exact shape from the other side -
+  // its length cap sat BEHIND the hooks, so a hook could empty the field the cap
+  // measured.
+  //
+  // Shallow is the honest bound: the nested `symbols`, `renderers` and
+  // `extensions` values are the caller's own objects and are shared by
+  // reference, because deep-freezing them would freeze objects this package does
+  // not own. Read-only is the contract, and the copy makes the flat options -
+  // where every guard lives - enforce it.
+  const view = Object.freeze({ ...opts })
+  for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out, view)
   return out
 }
 
@@ -397,6 +417,7 @@ export function carveToAstJson(
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
     }),
     exts,
+    opts,
   )
   doc = runProfile(doc, opts)
   return toAstJsonImpl(doc)
@@ -414,6 +435,7 @@ export function carveToMarkdown(
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
     }),
     opts.extensions,
+    opts,
   )
   doc = runProfile(doc, opts)
   return renderMarkdown(doc, opts)
@@ -462,6 +484,7 @@ export function carveToPlainText(
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
     }),
     opts.extensions,
+    opts,
   )
   doc = runProfile(doc, opts)
   return renderPlainText(doc, opts)
@@ -479,6 +502,7 @@ export function carveToAnsi(
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
     }),
     opts.extensions,
+    opts,
   )
   doc = runProfile(doc, opts)
   return renderAnsi(doc, opts)

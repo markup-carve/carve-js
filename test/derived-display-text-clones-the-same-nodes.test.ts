@@ -187,39 +187,83 @@ describe('derived display text clones the same nodes', () => {
     // [symbol, text(" h")], and trimming the first TEXT NODE found anywhere ate
     // the separator, so the entry came out `:ok:h`. The trim is about the run's
     // own edges.
+    //
+    // The separator is what this row is about, so it reads the same whether or
+    // not the symbol maps. It used to assert the AUTHORED `:ok: h` because the
+    // nav rendered with default options; with carve-js#871 landed the map
+    // reaches the entry, and the space between glyph and word is still there.
     expect(
       carveToHtml('{#h}\n# :ok: h', { symbols: { ok: 'OK' }, extensions: [tableOfContents()] }),
-    ).toContain('<li><a href="#h">:ok: h</a></li>')
+    ).toContain('<li><a href="#h">OK h</a></li>')
+    // With no map the shortcode stays literal, and the separator survives there
+    // too - the trim never depended on which of the two the entry shows.
+    expect(carveToHtml('{#h}\n# :ok: h', { extensions: [tableOfContents()] })).toContain(
+      '<li><a href="#h">:ok: h</a></li>',
+    )
   })
 
-  it('KNOWN LIMITATION the injected nav renders without the caller render options', () => {
-    // Also raised by codex review. `tableOfContents()` builds its nav in
-    // `beforeRender`, which this package's extension contract hands the document
-    // and nothing else, so the inline render there cannot see a `symbols` map or
-    // any other render option. The entry therefore shows the AUTHORED `:ok:`
-    // where the heading shows the mapped glyph.
-    //
-    // Pinned rather than left to be discovered, and NOT introduced here: before
-    // this clause the same document dropped the symbol from the entry entirely.
-    // Threading render options into `beforeRender` is a public-API change with
-    // its own ticket (markup-carve/carve-js#871); the day it lands, this row
-    // moves with it.
+  it('the injected nav renders with the caller render options', () => {
+    // Was a KNOWN LIMITATION row here, now the fix (carve-js#871). The nav is
+    // built in `beforeRender`, which used to be handed the document and nothing
+    // else, so the inline render there ran with DEFAULTS: the entry showed the
+    // authored `:ok:` where the heading showed the mapped glyph, from the very
+    // same nodes. The hook now takes the options the conversion was called with.
     const out = carveToHtml('{#h}\n# :ok: h', {
       symbols: { ok: 'OK' },
       extensions: [tableOfContents()],
     })
     expect(out).toContain('<h1>OK h</h1>')
-    expect(out.split('</nav>')[0]).toContain(':ok: h')
-    // CONTROL the `::: toc` placement directive renders DURING the render, so
-    // it picks the option up and agrees with the heading. That is the whole
-    // difference between the two paths, and it is why the limitation is scoped
-    // to the injected nav rather than to the module.
+    expect(out.split('</nav>')[0]).toContain('<li><a href="#h">OK h</a></li>')
+    // The `::: toc` placement directive renders DURING the render and so always
+    // picked the option up. The two paths now agree, which is the point: one
+    // module, one answer, whichever way the nav gets into the document.
     expect(
       carveToHtml('::: toc\n:::\n\n{#h}\n# :ok: h', {
         symbols: { ok: 'OK' },
         extensions: [tocPlacement()],
       }).split('</nav>')[0],
     ).toContain('<li><a href="#h">OK h</a></li>')
+  })
+
+  it('CONTROL the same document with default options is unchanged', () => {
+    // The row this fix must not move. With no `symbols` map there is nothing to
+    // map, so heading and entry both show what the author typed - and did before
+    // the fix too. Without it, "the entry equals the heading" is satisfiable by
+    // rendering BOTH with defaults, which is the bug wearing the fix's clothes.
+    const out = carveToHtml('{#h}\n# :ok: h', { extensions: [tableOfContents()] })
+    expect(out).toContain('<h1>:ok: h</h1>')
+    expect(out.split('</nav>')[0]).toContain('<li><a href="#h">:ok: h</a></li>')
+  })
+
+  it('the injected nav honors smartTypography, in both directions', () => {
+    // A second option, reaching the run by a different seam than the symbol map:
+    // `smartTypography` is read deep inside the text renderer rather than at a
+    // node type of its own. Same document, two settings, two navs.
+    const src = '{#h}\n# a -- b\n'
+    const nav = (o: Record<string, unknown>) =>
+      carveToHtml(src, { extensions: [tableOfContents()], ...o }).split('</nav>')[0]!
+    expect(nav({ smartTypography: 'source' })).toContain('<li><a href="#h">a -- b</a></li>')
+    // CONTROL: the default renders the glyph, in the nav as in the heading, and
+    // did before the fix.
+    expect(nav({})).toContain('<li><a href="#h">a – b</a></li>')
+    expect(carveToHtml(src, { extensions: [tableOfContents()], smartTypography: 'source' })).toContain(
+      '<h1>a -- b</h1>',
+    )
+  })
+
+  it('the injected nav honors sanitizeUrls, including when it is turned OFF', () => {
+    // The direction worth stating out loud. The nav used to run with defaults,
+    // so it sanitized whatever the caller said; a caller who deliberately turned
+    // sanitization off got a blanked `src` in the entry and the live one in the
+    // heading two lines below. Honoring the option means honoring it both ways,
+    // and it publishes nothing the heading was not already publishing.
+    const src = '{#h}\n# ![i](javascript:x)\n'
+    const nav = (o: Record<string, unknown>) =>
+      carveToHtml(src, { extensions: [tableOfContents()], ...o }).split('</nav>')[0]!
+    expect(nav({ sanitizeUrls: false })).toContain('<img src="javascript:x" alt="i">')
+    // CONTROL: the default still blanks it, in the nav as in the heading.
+    expect(nav({})).toContain('<img src="" alt="i">')
+    expect(carveToHtml(src, { extensions: [tableOfContents()] })).toContain('<img src="" alt="i">')
   })
 
   it('a placed TOC label honors allowRawHtml', () => {
