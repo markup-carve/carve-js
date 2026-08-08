@@ -243,6 +243,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is the only body measured to render identically on HTML, Markdown, plain text
   and ANSI alike. The link-reference and abbreviation definition writers were
   measured for the same shape and neither has it.
+- **`fmt` keeps the continuation marker on every block it attaches**
+  (carve-js#902). The writer converts a `+` attachment into indentation when the
+  attached block cannot fold into the paragraph above it, and two cases could.
+  A standalone image and a figure are written as a bare inline run on their own
+  line, so at the item's content column they read as lazy continuation: `- x` /
+  `+` / `![a](i.png)` / `^ cap` came back as one paragraph holding an inline
+  image and the literal text `^ cap`, with the `<figure>` and `<figcaption>`
+  gone. Separately, only the LAST line of a multi-block attachment was indented,
+  so a thematic break under a flush paragraph was absorbed into it and rendered
+  as an em dash instead of `<hr>`. **Behavior change:** an image or figure
+  attached after a paragraph keeps its `+`, and once one block of an attachment
+  is written at the marker column every later one is too. A `+`-attached fence,
+  quote, heading, table or thematic break after a paragraph is still converted
+  to indentation.
 
 - **The Markdown target neutralizes embedded HTML in five more slots**
   (carve-js#894). The writer's stated invariant is that `<`, `>` and `&` in

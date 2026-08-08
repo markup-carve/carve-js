@@ -776,6 +776,17 @@ function definitionInGap(
  * inside the item body where the prefix is not yet known - so they are tagged
  * here and the prefix loop honours the tag.
  */
+/**
+ * Block kinds whose canonical source is a bare inline run on its own line, so
+ * at a container's content column they continue an open paragraph instead of
+ * opening a block of their own.
+ *
+ * Derived by sweeping twenty block constructs rather than by reasoning about
+ * them: a `figure` is an image line plus a caption line and an `image` is the
+ * image line alone, which is why both read as paragraph text one column in.
+ */
+const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image', 'figure'])
+
 const MARKER_COLUMN = '\ue005'
 
 function atMarkerColumn(text: string): string {
@@ -806,6 +817,9 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
   ctx.blockDepth++
   try {
     const parts: string[] = []
+    // Whether the child just written sits at the item's MARKER column, which is
+    // column 0. Everything after it has to sit there too - see below.
+    let previousAtMarkerColumn = false
     item.children.forEach((b, i) => {
       const previous = item.children[i - 1]
       // A definition written back BETWEEN the two blocks already ends the
@@ -833,11 +847,37 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       // into the item is a different SPELLING of the same document and the
       // invariant already held - which is why the corpus, which pinned exactly
       // those kinds, never saw this.
-      if (!separated && previous?.type === 'paragraph' && b.type === 'paragraph') {
+      //
+      // WHICH BLOCKS FOLD. The claim that "only a paragraph reaches this" was
+      // measured across twenty block constructs and is wrong for two of them: a
+      // standalone `image` and a `figure` are both written as a bare inline run
+      // on its own line (`![a](i.png)`, plus a `^ cap` line), so at the item's
+      // content column they are lazy continuation exactly as a paragraph is.
+      // `- x` / `+` / `![a](i.png)` / `^ cap` came back as one paragraph holding
+      // an inline image and the literal text `^ cap`: the `<figure>` and its
+      // `<figcaption>` were gone (markup-carve/carve-js#902). Every other
+      // construct measured - fence, quote, heading, table, break, div, list,
+      // definition list, admonition, line block, math, raw block, comment -
+      // opens its own block at that column and is unaffected.
+      //
+      // AND ONCE ONE CHILD IS AT THE MARKER COLUMN, EVERY LATER ONE MUST BE.
+      // The marker column is column 0, so a following child written at the
+      // item's content column is INDENTED relative to the block above it and
+      // becomes that block's lazy continuation. `- x` / `+` / `---yaml` /
+      // `k: v` / `---` wrote the paragraph flush and the thematic break at two
+      // columns, and the break was absorbed into the paragraph and folded to an
+      // em dash. Mixed indentation inside one attached run is not a form any
+      // reader can round-trip, so it is not written.
+      if (
+        previousAtMarkerColumn ||
+        (!separated && previous?.type === 'paragraph' && FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type))
+      ) {
         parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
+        previousAtMarkerColumn = true
         return
       }
       parts.push(rendered)
+      previousAtMarkerColumn = false
     })
     return parts.join('\n')
   } finally {
