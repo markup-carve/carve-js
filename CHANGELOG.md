@@ -257,6 +257,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is written at the marker column every later one is too. A `+`-attached fence,
   quote, heading, table or thematic break after a paragraph is still converted
   to indentation.
+- **`fmt` does not write a header cell whose content reads back as alignment**
+  (carve-js#903). A prefixed table cell is written tight, so the first character
+  of the content sits exactly where the parser reads a glued `<`, `>` or `~` as
+  an alignment marker. `| ~x~ |` came back as `|=~x~|`, which re-read as center
+  alignment with the text `x~`: the strikethrough gone, and every cell in the
+  column centered by a marker nobody wrote. `| <https://e.example> |` lost its
+  anchor the same way through the left marker. **Behavior change:** a header
+  marker is followed by one space when the content opens with an alignment sigil.
+  The delimiter row is still rewritten as `|=`, and a cell that already carries
+  an alignment is unchanged. The body-cell and row-attribute writers were
+  measured and were already safe.
 
 - **The Markdown target neutralizes embedded HTML in five more slots**
   (carve-js#894). The writer's stated invariant is that `<`, `>` and `&` in
