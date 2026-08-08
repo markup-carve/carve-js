@@ -388,27 +388,30 @@ export class LinkPolicy {
    * can never recognize less, and no legitimate scheme carries one (a scheme is
    * a letter followed by letters, digits, `+`, `-` and `.`).
    *
-   * Known and deliberate limit: the internal/external classification below runs
-   * on the raw text, so a LEADING probe-class character - which `trim()` does
-   * not reach - still reads `<DEL>//host` as neither protocol-relative nor
-   * relative. That is a prefix classification rather than a scheme read, and
-   * normalizing it cannot be done without also deciding what an allowlist makes
-   * of the normalized text, so it is not settled here.
+   * Prefix classification follows the URL parser's alphabet: leading/trailing
+   * ASCII C0 controls and space are ignored, and `\\` is slash-equivalent for
+   * special URLs. JavaScript `trim()` is deliberately not used; it strips many
+   * Unicode spaces that a URL parser keeps as relative-path content.
    *
    * @param baseHost Current document's host (for external detection).
    */
   isUrlAllowed(url: string, baseHost: string | null = null): boolean {
-    url = url.trim()
+    url = url.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '')
     if (url === '') return true
+
+    // WHATWG special URLs treat a backslash as a slash. Normalize only the
+    // prefix classifier's view: the authored bytes still reach scheme and
+    // allowlist checks below unchanged.
+    const prefixUrl = url.replace(/\\/g, '/')
 
     // Fragment-only URLs are always internal.
     if (url.startsWith('#')) return this.allowInternal
 
     // Protocol-relative URLs are absolute external URLs, not internal paths.
-    if (url.startsWith('//')) return this.isProtocolRelativeUrlAllowed(url, baseHost)
+    if (prefixUrl.startsWith('//')) return this.isProtocolRelativeUrlAllowed(prefixUrl, baseHost)
 
     // Relative paths are internal.
-    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+    if (prefixUrl.startsWith('/') || prefixUrl.startsWith('./') || prefixUrl.startsWith('../')) {
       return this.allowInternal
     }
 
