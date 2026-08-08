@@ -289,8 +289,12 @@ let thematicBreakMarker = '---'
  */
 function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
   const canonicalForm = renderOnePass(ast, mode)
-  // Frontmatter the AST really carries is written by `renderFrontmatter` and is
-  // not manufactured, so only a document without any is a candidate.
+  // The `ast.frontmatter` arm is a COST GATE, not a correctness one, and saying
+  // so is the honest reading: a document that really carries frontmatter has it
+  // written by `renderFrontmatter`, whose closer is not a break, so the fallback
+  // pass would open frontmatter too and the canonical form would be returned
+  // anyway. Removing the arm changes no output, only the number of renders paid
+  // by every document with frontmatter. Verified by mutation.
   if (ast.frontmatter || !opensFrontmatter(canonicalForm)) return canonicalForm
   const previousMarker = thematicBreakMarker
   thematicBreakMarker = '***'

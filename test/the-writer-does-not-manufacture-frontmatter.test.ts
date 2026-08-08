@@ -96,6 +96,16 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     expect(carveToCarve(carveToCarve(once))).toBe(once)
   })
 
+  it('keeps the canonical `---` when the fallback would buy nothing', () => {
+    // The closer here is the `---` INSIDE a code fence, which frontmatter is
+    // consumed ahead of - so no break spelling repairs this document, and the
+    // writer does not pay a respelling that changes nothing. This row is what
+    // makes the second `opensFrontmatter` call load-bearing rather than
+    // decorative; it is a KNOWN residual of §1, not a case this fix claims.
+    const src = '[^a]: n\n\n---yaml\nk: v\n\n```\n---\n```\n\n***\n'
+    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n```\n---\n```\n\n---\n\n[^a]: n\n')
+  })
+
   it('a break inside a container is respelled with the rest', () => {
     // The fallback is document-wide, so a break that is not at the head moves
     // too. It has to still parse as a break wherever it lands.
