@@ -91,6 +91,11 @@ describe('a header cell is not written so its content reads as alignment', () =>
     ]) {
       expect(roundTrips(src), src).toBe(true)
     }
+    // BYTES, not just the rendering. A body cell is padded by the row writer,
+    // so a guard that fired on it would add a second space that changes nothing
+    // and reads as a defect - the round trip alone cannot see that.
+    expect(carveToCarve('| a |\n|---|\n| ~y~ |\n')).toBe('|=a|\n| ~y~ |\n')
+    expect(carveToCarve('|= a |{.r}\n| ~y~ |{.s}\n')).toBe('|=a|{.r}\n| ~y~ |{.s}\n')
   })
 
   it('is idempotent', () => {
