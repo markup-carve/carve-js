@@ -155,6 +155,49 @@ export type BlockMatcher = (
   ctx: MatcherContext,
 ) => BlockMatch | null
 
+/**
+ * The context handed to {@link CarveExtension.beforeRender}, carrying what a
+ * hook cannot otherwise know: there is no active render at `beforeRender` time,
+ * so a hook that produces output of its own has nothing to inherit from and
+ * would render with defaults (spec §2.2, markup-carve/carve#1007).
+ *
+ * READ-ONLY, and that is contract rather than convention. The guards run AFTER
+ * the hooks, so a hook handed the live options could clear the very field a
+ * guard measures - carve-rs met the same shape from the other side, where its
+ * `max_length` cap sat behind these hooks and a hook could empty the field the
+ * cap measured. {@link options} is therefore a frozen SHALLOW copy and is not
+ * the object the renderer is handed a few lines later. Shallow is the honest
+ * bound: the nested `symbols`, `renderers` and `extensions` values are the
+ * caller's own objects and are shared by reference, because deep-freezing them
+ * would freeze objects this package does not own. Read them, do not write them.
+ */
+export interface BeforeRenderContext {
+  /**
+   * The render options the conversion was called with (`carveToHtml`,
+   * `carveToMarkdown`, `carveToPlainText`, `carveToAnsi`, `carveToAstJson`),
+   * frozen and disconnected from the object the renderer will read.
+   */
+  readonly options: Readonly<RenderOptions>
+  /**
+   * The EFFECTIVE render mode for the target format. Always `"interactive"` for
+   * the Markdown, plain-text and ANSI targets whatever the caller passed, since
+   * static rendering is an HTML-only concern (spec §2.5) and those renderers
+   * reach the same end by flattening - so a caller reusing one options object
+   * across formats gets unchanged non-HTML output.
+   */
+  readonly mode: 'interactive' | 'static'
+  /** True when {@link mode} is `"static"`, i.e. the static HTML path. */
+  readonly isStatic: boolean
+  /**
+   * True when the final render target is HTML. An extension that emits HTML in
+   * this hook reads it to SKIP its transform on the Markdown, plain-text and
+   * ANSI targets and leave the source node for that renderer to emit as source.
+   * This is the accessor a bare options parameter had no answer for, and the
+   * reason the contract carries a context.
+   */
+  readonly targetIsHtml: boolean
+}
+
 /** A named extension unit contributing any subset of the lifecycle hooks. */
 export interface CarveExtension {
   name: string
@@ -166,23 +209,18 @@ export interface CarveExtension {
   /**
    * Transform the resolved document just before it is rendered.
    *
-   * `opts` is a READ-ONLY view of the options the conversion was called with
-   * (`carveToHtml`, `carveToMarkdown`, `carveToPlainText`, `carveToAnsi`,
-   * `carveToAstJson`), so a hook that renders something itself renders it the
-   * way the caller asked for. Without it a hook rendered with defaults, and a
-   * `symbols` map or `allowRawHtml: false` reached the heading but not the
-   * table-of-contents entry built from the same nodes
-   * (markup-carve/carve-js#871).
+   * `ctx` is the READ-ONLY context described by the spec's extension contract
+   * (§2.2). A hook runs before the render starts, so it has nothing to inherit
+   * from: with the document alone in hand a hook that renders something of its
+   * own renders it with DEFAULTS, and a `symbols` map or `allowRawHtml: false`
+   * reached the heading but not the table-of-contents entry built from the very
+   * same nodes (markup-carve/carve#1007, markup-carve/carve-js#871).
    *
-   * It is a snapshot, frozen and disconnected from the object the renderer will
-   * read, so writing to it changes nothing: a hook may not talk the renderer out
-   * of the caller's own hardening. Read it, do not carry it - the renderer is
-   * handed the caller's options directly, not this copy.
-   *
-   * The parameter is optional in both directions: an existing hook that takes
-   * the document alone is unaffected, and `undefined` never reaches it.
+   * A hook that ignores it may still declare `beforeRender(doc)` - a function
+   * of fewer parameters is assignable - and nothing in this package requires a
+   * hook to read the context.
    */
-  beforeRender?(doc: Document, opts?: Readonly<RenderOptions>): Document
+  beforeRender?(doc: Document, ctx: BeforeRenderContext): Document
   /** Renderers keyed by the extension type name (the `name` in `:name[…]`). */
   renderers?: Record<string, ExtensionRenderer>
   /** Renderers keyed by core block node `type` (e.g. `admonition`). */

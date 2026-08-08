@@ -118,8 +118,16 @@ describe('heading numbers: idempotency', () => {
   it('does not stack spans when beforeRender runs twice on one document', () => {
     const ext = headingNumbers()
     const doc = { type: 'document', children: [{ type: 'heading', level: 1, children: [{ type: 'text', value: 'A' }], attrs: { id: 'A' } }] } as never
-    ext.beforeRender!(doc)
-    ext.beforeRender!(doc)
+    // The hook takes a context now (carve#1007); this one ignores it, but the
+    // call still has to be the call the engine makes.
+    const ctx = {
+      options: {},
+      mode: 'interactive',
+      isStatic: false,
+      targetIsHtml: true,
+    } as never
+    ext.beforeRender!(doc, ctx)
+    ext.beforeRender!(doc, ctx)
     const spans = JSON.stringify(doc).match(/section-number/g) ?? []
     expect(spans.length).toBe(1)
   })

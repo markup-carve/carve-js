@@ -220,7 +220,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
 
   return {
     name: 'table-of-contents',
-    beforeRender(doc, opts) {
+    beforeRender(doc, ctx) {
       const entries: TocEntry[] = []
       for (const node of doc.children) {
         if (node.type !== 'heading') continue
@@ -231,7 +231,7 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
       }
       if (entries.length === 0) return doc
 
-      const list = buildList(entries, listType, opts)
+      const list = buildList(entries, listType, ctx.options)
       // Collapsible: the heading list sits directly inside a <details>
       // disclosure so it can be toggled, closed by default unless `open`.
       // Byte-identical to carve-php's TableOfContentsExtension.

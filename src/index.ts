@@ -20,7 +20,7 @@
  */
 
 import type { Document } from './ast.js'
-import type { CarveExtension } from './extension.js'
+import type { BeforeRenderContext, CarveExtension } from './extension.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
 import {
   resolveHeadingIds,
@@ -88,6 +88,7 @@ export type { PlainTextRenderOptions } from './render-plain.js'
 export type { AnsiRenderOptions } from './render-ansi.js'
 export type {
   CarveExtension,
+  BeforeRenderContext,
   ExtensionRenderer,
   ExtensionRenderContext,
   BlockExtensionRenderer,
@@ -352,6 +353,7 @@ export function carveToHtml(
     }),
     exts,
     opts,
+    true,
   )
   doc = runProfile(doc, opts)
   return renderHtml(doc, opts)
@@ -369,6 +371,11 @@ function applyTransforms(
   doc: Document,
   exts: CarveExtension[] | undefined,
   opts: Readonly<RenderOptions>,
+  // Whether the FINAL render target is HTML. Not derivable from the options -
+  // one options object is reused across `carveToHtml` and `carveToMarkdown` -
+  // so each entry point states it, and it is what lets a hook emitting HTML
+  // skip its transform on a non-HTML target (spec §2.2, carve#1007).
+  targetIsHtml: boolean,
 ): Document {
   if (!exts) return doc
   let out = doc
@@ -387,8 +394,21 @@ function applyTransforms(
   // reference, because deep-freezing them would freeze objects this package does
   // not own. Read-only is the contract, and the copy makes the flat options -
   // where every guard lives - enforce it.
-  const view = Object.freeze({ ...opts })
-  for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out, view)
+  const options = Object.freeze({ ...opts })
+  // The EFFECTIVE mode, which is the caller's only on the HTML path. Static
+  // rendering is an HTML-only concern (spec §2.5): the Markdown, plain-text and
+  // ANSI renderers reach the same end by flattening and never consult the mode,
+  // so reporting the caller's `mode: "static"` to a hook on those targets would
+  // invite it to degrade output that is not degraded, and one options object
+  // reused across formats would stop producing the same non-HTML bytes.
+  const mode = targetIsHtml ? (opts.mode ?? 'interactive') : 'interactive'
+  const ctx: BeforeRenderContext = Object.freeze({
+    options,
+    mode,
+    isStatic: mode === 'static',
+    targetIsHtml,
+  })
+  for (const ext of exts) if (ext.beforeRender) out = ext.beforeRender(out, ctx)
   return out
 }
 
@@ -418,6 +438,9 @@ export function carveToAstJson(
     }),
     exts,
     opts,
+    // The exchange shape is not HTML. A hook that emits HTML must leave the
+    // source node alone here, exactly as it does for Markdown/plain/ANSI.
+    false,
   )
   doc = runProfile(doc, opts)
   return toAstJsonImpl(doc)
@@ -436,6 +459,7 @@ export function carveToMarkdown(
     }),
     opts.extensions,
     opts,
+    false,
   )
   doc = runProfile(doc, opts)
   return renderMarkdown(doc, opts)
@@ -485,6 +509,7 @@ export function carveToPlainText(
     }),
     opts.extensions,
     opts,
+    false,
   )
   doc = runProfile(doc, opts)
   return renderPlainText(doc, opts)
@@ -503,6 +528,7 @@ export function carveToAnsi(
     }),
     opts.extensions,
     opts,
+    false,
   )
   doc = runProfile(doc, opts)
   return renderAnsi(doc, opts)

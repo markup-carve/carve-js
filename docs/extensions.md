@@ -441,32 +441,42 @@ email linking).
 ## Transform hooks: afterParse and beforeRender
 
 Every extension's `afterParse(doc)` runs before any extension's
-`beforeRender(doc, opts)`; within a phase, registration order. Both take the
+`beforeRender(doc, ctx)`; within a phase, registration order. Both take the
 resolved document and return it.
 
-`beforeRender` also receives the options the conversion was called with, so a
-hook that renders output of its own renders it the way the caller asked. A hook
-runs before the render starts, so there is nothing for it to inherit; without
-the parameter it rendered with defaults, and a `symbols` map or
+`beforeRender` also receives a `BeforeRenderContext`, because a hook runs before
+the render starts and so has nothing to inherit: without it a hook that renders
+output of its own rendered with defaults, and a `symbols` map or
 `allowRawHtml: false` reached the document but not the fragment a hook built
-from the same nodes.
+from the same nodes. The context carries four things:
+
+| field | what it is |
+| --- | --- |
+| `options` | the options the conversion was called with, frozen |
+| `mode` | the EFFECTIVE mode: `"interactive"` on every non-HTML target, whatever the caller passed |
+| `isStatic` | `mode === 'static'` |
+| `targetIsHtml` | whether the final target is HTML |
 
 ```ts
 import { carveToHtml, type CarveExtension } from '@markup-carve/carve'
 
 const ext: CarveExtension = {
   name: 'peek',
-  beforeRender(doc, opts) {
-    opts?.symbols // the caller's map, or undefined
+  beforeRender(doc, ctx) {
+    // Emit HTML only where HTML is the target; on the Markdown, plain-text,
+    // ANSI and AST-JSON paths leave the source node for that target.
+    if (!ctx.targetIsHtml) return doc
+    ctx.options.symbols // the caller's map, or undefined
     return doc
   },
 }
 ```
 
-The parameter is optional and additive: a hook declared as `beforeRender(doc)`
-is called exactly as before. What it receives is a READ-ONLY snapshot - frozen,
-and a different object from the one the renderer is handed - so a hook reads the
-caller's settings and cannot rewrite them. Read it, do not keep it.
+A hook that ignores the context may still declare `beforeRender(doc)`: a
+function of fewer parameters is assignable, and it is called exactly as before.
+The context is READ-ONLY - `options` is frozen, and is a different object from
+the one the renderer is handed - so a hook reads the caller's settings and
+cannot rewrite them. Read it, do not keep it.
 
 ## Adding syntax: parse-stage matchers
 

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToHtml, type CarveExtension, type Document } from '../src/index.js'
+import {
+  carveToAnsi,
+  carveToAstJson,
+  carveToHtml,
+  carveToMarkdown,
+  carveToPlainText,
+  type BeforeRenderContext,
+  type CarveExtension,
+  type Document,
+} from '../src/index.js'
 
 describe('extension transforms', () => {
   it('runs afterParse for every extension before any beforeRender', () => {
@@ -57,15 +66,16 @@ describe('extension transforms', () => {
   })
 
   it('hands beforeRender the options the conversion was called with', () => {
-    // carve-js#871. A hook that renders something of its own - the injected
-    // table-of-contents nav is the one in this package - had no way to render it
-    // the way the caller asked, because the hook took the document and nothing
-    // else. It now takes a read-only view of the options too.
+    // carve#1007 / carve-js#871. A hook that renders something of its own - the
+    // injected table-of-contents nav is the one in this package - had no way to
+    // render it the way the caller asked, because the hook took the document and
+    // nothing else. It now takes a read-only CONTEXT, whose `options` is that
+    // view.
     let seen: Record<string, unknown> | undefined
     const ext: CarveExtension = {
       name: 'peek',
-      beforeRender(doc, opts) {
-        seen = opts as Record<string, unknown>
+      beforeRender(doc, ctx) {
+        seen = ctx.options as Record<string, unknown>
         return doc
       },
     }
@@ -87,15 +97,15 @@ describe('extension transforms', () => {
     let sawTheOption: unknown
     const ext: CarveExtension = {
       name: 'tamper',
-      beforeRender(doc, opts) {
+      beforeRender(doc, ctx) {
         // Checked BEFORE the freeze assertion, because `Object.isFrozen` says
         // true of `undefined` too - without these two the row would pass against
         // an engine that hands the hook nothing at all.
-        sameObject = (opts as unknown) === (caller as unknown)
-        sawTheOption = opts?.allowRawHtml
-        frozen = Object.isFrozen(opts)
+        sameObject = (ctx.options as unknown) === (caller as unknown)
+        sawTheOption = ctx.options.allowRawHtml
+        frozen = Object.isFrozen(ctx.options) && Object.isFrozen(ctx)
         try {
-          ;(opts as { allowRawHtml?: boolean }).allowRawHtml = true
+          ;(ctx.options as { allowRawHtml?: boolean }).allowRawHtml = true
           threw = false
         } catch {
           threw = true
@@ -118,6 +128,72 @@ describe('extension transforms', () => {
     // CONTROL: with raw HTML allowed the same document passes it through, so the
     // row above is the option doing the work rather than an escape everywhere.
     expect(carveToHtml('`<b>x</b>`{=html}\n', { allowRawHtml: true })).toContain('<b>x</b>')
+  })
+
+  it('the effective mode is the caller mode on HTML and interactive on every other target', () => {
+    // Static rendering is an HTML-only concern (spec 2.5): the Markdown,
+    // plain-text and ANSI renderers reach the same end by flattening and never
+    // consult the mode. Reporting a caller's `mode: "static"` to a hook on those
+    // targets would invite it to degrade output that is not degraded, and one
+    // options object reused across formats would stop producing the same
+    // non-HTML bytes.
+    const seen: { target: string; mode: string; isStatic: boolean }[] = []
+    const ext: CarveExtension = {
+      name: 'peek-mode',
+      beforeRender(doc, ctx) {
+        seen.push({ target: ctx.targetIsHtml ? 'html' : 'other', mode: ctx.mode, isStatic: ctx.isStatic })
+        return doc
+      },
+    }
+    const opts = { extensions: [ext], mode: 'static' } as const
+    carveToHtml('hi', opts)
+    expect(seen.pop()).toEqual({ target: 'html', mode: 'static', isStatic: true })
+    carveToMarkdown('hi', opts)
+    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
+    carveToPlainText('hi', opts)
+    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
+    carveToAnsi('hi', opts)
+    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
+    carveToAstJson('hi', opts)
+    expect(seen.pop()).toEqual({ target: 'other', mode: 'interactive', isStatic: false })
+    // CONTROL: with no mode at all the HTML target reports the default, so the
+    // rows above are the caller's value arriving rather than a constant.
+    carveToHtml('hi', { extensions: [ext] })
+    expect(seen.pop()).toEqual({ target: 'html', mode: 'interactive', isStatic: false })
+  })
+
+  it('a hook emitting HTML reads targetIsHtml and leaves the source node for the other targets', () => {
+    // This is the accessor a bare options parameter had no answer for, and the
+    // reason the contract carries a context rather than the options alone
+    // (carve#1007). The transform below is the shape a client-script extension
+    // has: it replaces its fence with markup only the HTML target can use, and
+    // on Markdown/plain/ANSI it must leave the fence alone so that renderer
+    // emits the source the author wrote.
+    const ext: CarveExtension = {
+      name: 'myuml',
+      beforeRender(doc, ctx) {
+        if (!ctx.targetIsHtml) return doc
+        doc.children = doc.children.map((node) =>
+          node.type === 'code_block' && (node as { lang?: string }).lang === 'myuml'
+            ? { type: 'raw_block', format: 'html', content: '<div class="myuml">DIAGRAM</div>' }
+            : node,
+        ) as typeof doc.children
+        return doc
+      },
+    }
+    const src = '```myuml\nA -> B\n```\n'
+    const html = carveToHtml(src, { extensions: [ext] })
+    expect(html).toContain('<div class="myuml">DIAGRAM</div>')
+    expect(html).not.toContain('A -&gt; B')
+    // The non-HTML targets keep the source. Each asserts the ABSENCE of the
+    // HTML as well, because that is what a hook told the target was HTML would
+    // write into them.
+    const md = carveToMarkdown(src, { extensions: [ext] })
+    expect(md).toContain('A -> B')
+    expect(md).not.toContain('<div class="myuml">')
+    const plain = carveToPlainText(src, { extensions: [ext] })
+    expect(plain).toContain('A -> B')
+    expect(plain).not.toContain('<div class="myuml">')
   })
 
   it('CONTROL a beforeRender declared with one parameter still runs', () => {
