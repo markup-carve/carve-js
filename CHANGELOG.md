@@ -214,6 +214,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown and plain targets emit the non-whitespace C0 controls**
+  (carve-js#896, PART 9 §29 `C0 CONTROLS ON THE RENDER TARGETS`). After
+  markup-carve/carve#963 the whitespace of the language is exactly U+0020,
+  U+0009, U+000A and U+000D, and every other C0 control - U+0000..U+0008,
+  U+000B, U+000C, U+000E..U+001F - is ordinary content. These two writers
+  deleted the whole `\p{Cc}` block, so a document holding a vertical tab, a form
+  feed or an ESC kept it in HTML and lost it on the way to Markdown or plain
+  text. Four Markdown readers were measured and all four keep these characters,
+  so the strip made Carve the lossy party rather than protecting the boundary.
+  A Markdown link or image destination carries them too.
+
+  **The terminal target is unchanged and keeps its broad strip** (§29 T4): it is
+  the one consumer that acts on the character. U+000D stays stripped everywhere,
+  because carve#963 made it whitespace, and DEL (U+007F) and the C1 controls
+  stay refused on all three non-HTML targets (§29 T5) - the denied-scheme probe
+  on a Markdown destination still runs on the broadly stripped form, so
+  `java<DEL>script:` is blanked as before.
+
 - **An expansion budget is sized from what the payload cost, not from what it
   claims** (carve-js#900). The abbreviation, table-of-contents, index and
   cross-reference-label budgets are `max(1 MB, 8 * srcByteLength)`. On the parse

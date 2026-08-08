@@ -673,12 +673,27 @@ function markdownFragmentDestination(id: string): string {
  * (markup-carve/carve-js#893).
  */
 function markdownDestination(url: string): string {
-  // 1. Strip first, probe second. The strip drops all of `\p{Cc}`, the probe
-  //    skips only up to U+001F plus whitespace, so `java<DEL>script:` and the
-  //    C1 range walked straight through and came out clean on the far side.
+  // 1. Strip first, probe second, and strip BROADLY. The strip drops all of
+  //    `\p{Cc}`, the probe skips only up to U+001F plus whitespace, so
+  //    `java<DEL>script:` and the C1 range walked straight through and came out
+  //    clean on the far side. This is why the destination has its own strip and
+  //    does not share the emit path's: PART 9 section 29 narrowed that one to
+  //    let the non-whitespace C0 controls through as content, which is a
+  //    statement about TEXT and not about a URL heading for a scheme probe.
   //    The ANSI target of this same engine already strips before it probes
   //    (`render-ansi.ts`), and carve-php strips inside its probe.
-  const encoded = sanitizeMdUrl(stripControls(url)).replace(/[ ()<>]/g, (ch) => {
+  //
+  // 1b. PROBE the broad form, EMIT the narrow one. PART 9 section 29 makes the
+  //    non-whitespace C0 controls content on this target, and a destination is
+  //    content too - carve-php and carve-rs both emit `/u<SOH>v` where this
+  //    writer deleted the character. Emitting the authored bytes is safe
+  //    precisely because the probe ran on the stripped form: stripping only
+  //    REMOVES characters, so a denied scheme in the authored form is still
+  //    denied in the stripped one, and a consumer that ignores the controls
+  //    sees exactly the string that was already dismissed. Sharing one strip
+  //    between the two would have to pick a side, and either side is a defect.
+  const probed = sanitizeMdUrl(stripDestinationControls(url))
+  const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>]/g, (ch) => {
     switch (ch) {
       case ' ':
         return '%20'
@@ -786,12 +801,48 @@ function sanitizeMdUrl(url: string): string {
 }
 
 /**
- * Drop C0/C1 control characters (keeping tab and newline) from author content,
- * and the section 8a sentinels with them: author content that carried one would
- * otherwise reach normalize() and be read as an escape this renderer emitted.
- * Every path to the output passes through here.
+ * Drop what this target cannot carry, from author content on its way to the
+ * output.
+ *
+ * THE NON-WHITESPACE C0 CONTROLS ARE CONTENT AND ARE EMITTED. PART 9 \u00a729 T2
+ * rules that U+0000..U+0008, U+000B, U+000C and U+000E..U+001F are ordinary
+ * content on this target, because after markup-carve/carve#963 the whitespace
+ * of the language is exactly U+0020, U+0009, U+000A and U+000D. This renderer
+ * deleted the whole `\p{Cc}` block, which made Carve the lossy party: four
+ * Markdown readers were measured - the CommonMark reference implementation and
+ * markdown-it in default, commonmark and typographer modes - and all four KEEP
+ * these characters inline, on a lone line, in a code span, after a list marker
+ * and after an ATX hash. `-<VT>item` opens no list in any of them
+ * (markup-carve/carve-js#896).
+ *
+ * What is still dropped, and why each one is not that class:
+ *
+ * - U+000D is WHITESPACE after carve#963, so \u00a729 excludes it.
+ * - DEL (U+007F) and the C1 controls (U+0080..U+009F) sit outside \u00a729 by T5,
+ *   and CSI (U+009B) and OSC (U+009D) are single-character forms of the
+ *   sequences \u00a725 exists to stop.
+ * - the section 8a sentinels, which are this renderer's own: author content
+ *   carrying one would reach normalize() and be read as an escape this
+ *   renderer emitted.
+ *
+ * The ANSI target keeps the broad strip and MUST: it is the one consumer that
+ * acts on the character (\u00a729 T4).
  */
 function stripControls(s: string): string {
+  return s.replace(/[\u000d\u007f-\u009f\ue004-\ue006]/gu, '')
+}
+
+/**
+ * The BROAD strip, for a URL on its way through the denied-scheme probe.
+ *
+ * This is not the emit path and does not answer \u00a729. The probe skips only up to
+ * U+001F plus whitespace, so a destination has to reach it with DEL and the C1
+ * range already gone or `java<DEL>script:` walks through - which is the defect
+ * markup-carve/carve-js#893 fixed by strip-then-probe. Narrowing THIS call
+ * along with the emit path would have reopened it, so the two are separate
+ * functions rather than one with a flag.
+ */
+function stripDestinationControls(s: string): string {
   return s.replace(/\p{Cc}|[\ue004-\ue006]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
