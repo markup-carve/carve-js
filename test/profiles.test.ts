@@ -272,6 +272,120 @@ describe('LinkPolicy', () => {
   })
 })
 
+/*
+ * A scheme carrying a character a URL consumer discards (markup-carve/carve-js#917).
+ *
+ * EVERY assertion here is on the BYTES of the destination, never on how it
+ * renders. `java<DEL>script:` prints as `javascript:` in any terminal, which is
+ * how an earlier report of the sibling renderer defect concluded the character
+ * had been normalized away when it had not; a test written against the rendered
+ * string passes on the broken engine.
+ */
+const SOH = String.fromCharCode(0x01) // U+0001, inside PART 9 §29's class
+const DEL = String.fromCharCode(0x7f) // U+007F, outside it
+const CSI = String.fromCharCode(0x9b) // U+009B, outside it
+const NBSP = String.fromCharCode(0xa0) // U+00A0, whitespace, not a control
+
+/** The code points of `s`, so a failure names the byte instead of hiding it. */
+function points(s: string): string[] {
+  return [...s].map((c) => 'U+' + c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'))
+}
+
+describe('LinkPolicy: a scheme split by a character a consumer discards', () => {
+  const splits: Array<[string, string]> = [
+    ['U+0001 SOH', `java${SOH}script:alert(1)`],
+    ['U+007F DEL', `java${DEL}script:alert(1)`],
+    ['U+009B CSI', `java${CSI}script:alert(1)`],
+    ['U+00A0 NBSP', `java${NBSP}script:alert(1)`],
+  ]
+
+  it('carries the splitting byte, so these are not the plain spelling', () => {
+    // Guards every row below: if a layer ever normalized the character away,
+    // the rows would pass for a reason that has nothing to do with the policy.
+    expect(points(`java${SOH}script:`)).toContain('U+0001')
+    expect(points(`java${DEL}script:`)).toContain('U+007F')
+    expect(points(`java${CSI}script:`)).toContain('U+009B')
+    expect(points(`java${NBSP}script:`)).toContain('U+00A0')
+  })
+
+  it('CONTROL: the plain denied spelling is still refused', () => {
+    const lp = new LinkPolicy()
+    expect(lp.getDeniedSchemes()).toEqual(['javascript', 'vbscript', 'data', 'file'])
+    expect(lp.isUrlAllowed('javascript:alert(1)')).toBe(false)
+    expect(lp.isUrlAllowed(' javascript:alert(1)')).toBe(false)
+  })
+
+  it('CONTROL: a legitimate destination is still allowed', () => {
+    const lp = new LinkPolicy()
+    expect(lp.isUrlAllowed('https://example.com/a')).toBe(true)
+    expect(lp.isUrlAllowed('http://example.com/a')).toBe(true)
+    expect(lp.isUrlAllowed('mailto:a@example.com')).toBe(true)
+    expect(lp.isUrlAllowed('./a/b')).toBe(true)
+    expect(lp.isUrlAllowed('#sec')).toBe(true)
+    expect(lp.isUrlAllowed('//example.com/a')).toBe(true)
+    expect(lp.isUrlAllowed('notascheme')).toBe(true)
+  })
+
+  it.each(splits)('the denylist refuses a scheme split by %s', (_label, url) => {
+    const lp = new LinkPolicy()
+    expect(lp.isUrlAllowed(url)).toBe(false)
+  })
+
+  it('refuses every default-denied scheme in its split spelling', () => {
+    const lp = new LinkPolicy()
+    expect(lp.isUrlAllowed(`da${DEL}ta:text/html,x`)).toBe(false)
+    expect(lp.isUrlAllowed(`fi${DEL}le:///etc/passwd`)).toBe(false)
+    expect(lp.isUrlAllowed(`vb${DEL}script:x`)).toBe(false)
+  })
+
+  it('a split scheme no longer skips the domain denylist', () => {
+    // The scheme read gated the host checks: `htt<DEL>ps` was neither `http`
+    // nor `https`, so a denied domain was never consulted.
+    const lp = new LinkPolicy().setDeniedDomains(['evil.com'])
+    expect(lp.isUrlAllowed('https://evil.com/a')).toBe(false)
+    expect(lp.isUrlAllowed(`htt${DEL}ps://evil.com/a`)).toBe(false)
+    expect(lp.isUrlAllowed(`htt${SOH}ps://evil.com/a`)).toBe(false)
+    // CONTROL: an undenied host is still allowed, and its bytes are its own.
+    expect(lp.isUrlAllowed('https://good.com/a')).toBe(true)
+  })
+
+  it('a split scheme no longer skips the allowExternal check', () => {
+    const lp = new LinkPolicy().setAllowExternal(false)
+    expect(lp.isUrlAllowed('https://example.com/a')).toBe(false)
+    expect(lp.isUrlAllowed(`htt${DEL}ps://example.com/a`)).toBe(false)
+    expect(lp.isUrlAllowed(`htt${SOH}ps://example.com/a`)).toBe(false)
+  })
+
+  it('CONTROL: the allowlist form still fails closed, split or not', () => {
+    // This is the claim an earlier revision of the ticket got wrong and then
+    // retracted, so it is pinned rather than argued. An allowlist refuses a
+    // scheme it does not recognize, and a split scheme is one - which is why
+    // the ALLOW lookup deliberately still reads the raw text.
+    const lp = new LinkPolicy().setAllowedSchemes(['https'])
+    expect(lp.getAllowedSchemes()).toEqual(['https'])
+    expect(lp.isUrlAllowed('javascript:alert(1)')).toBe(false)
+    for (const [, url] of splits) expect(lp.isUrlAllowed(url)).toBe(false)
+    expect(lp.isUrlAllowed(`htt${DEL}ps://example.com/a`)).toBe(false)
+    expect(lp.isUrlAllowed(`htt${SOH}ps://example.com/a`)).toBe(false)
+    // CONTROL: the one scheme it names is still allowed.
+    expect(lp.isUrlAllowed('https://example.com/a')).toBe(true)
+  })
+
+  it('the link and the image path both refuse it', () => {
+    // Denying `https` isolates the profile from PART 9 §25: the renderer has no
+    // quarrel with that scheme, so anything blanked here came from the policy.
+    // The image spelling reaches the same isUrlAllowed, and this asserts that
+    // rather than assuming it.
+    const p = Profile.full().setLinkPolicy(new LinkPolicy().setDeniedSchemes(['https']))
+    expect(carveToHtml(`[x](htt${DEL}ps://x.com)`, { profile: p })).toBe('<p>x</p>')
+    expect(carveToHtml(`![alt](htt${DEL}ps://x.com)`, { profile: p })).toBe('<p>[img: alt]</p>')
+    // CONTROL: a scheme the policy does not deny survives both spellings.
+    expect(carveToHtml('[x](http://x.com)', { profile: p })).toBe(
+      '<p><a href="http://x.com">x</a></p>',
+    )
+  })
+})
+
 describe('Profile presets behave per spec', () => {
   it('full allows everything', () => {
     const p = Profile.full()

@@ -16,6 +16,7 @@
 
 import type { AnyNode, Attrs, Document } from './ast.js'
 import { ownValue } from './own-property.js'
+import { SCHEME_PROBE_STRIP_RE } from './render-html.js'
 
 /** Action taken on a disallowed node. */
 export type DisallowedAction = 'strip' | 'to_text' | 'error'
@@ -380,6 +381,20 @@ export class LinkPolicy {
   /**
    * Check whether a URL is permitted by this policy.
    *
+   * The scheme is read through `SCHEME_PROBE_STRIP_RE`, the renderer's own
+   * probe class, so this rule and PART 9 §25's answer the same way about a
+   * scheme split by a character a URL consumer discards. That is a NARROWING:
+   * stripping only removes characters, so the deny lists can recognize more and
+   * can never recognize less, and no legitimate scheme carries one (a scheme is
+   * a letter followed by letters, digits, `+`, `-` and `.`).
+   *
+   * Known and deliberate limit: the internal/external classification below runs
+   * on the raw text, so a LEADING probe-class character - which `trim()` does
+   * not reach - still reads `<DEL>//host` as neither protocol-relative nor
+   * relative. That is a prefix classification rather than a scheme read, and
+   * normalizing it cannot be done without also deciding what an allowlist makes
+   * of the normalized text, so it is not settled here.
+   *
    * @param baseHost Current document's host (for external detection).
    */
   isUrlAllowed(url: string, baseHost: string | null = null): boolean {
@@ -399,16 +414,36 @@ export class LinkPolicy {
 
     const colonPos = url.indexOf(':')
     if (colonPos !== -1) {
-      const scheme = url.slice(0, colonPos).toLowerCase()
+      const rawScheme = url.slice(0, colonPos).toLowerCase()
+      // What a URL consumer would read as the scheme: the probe class off,
+      // because a consumer may discard any of those characters before it
+      // decides what the scheme is. `trim()` only reaches the ends, so while
+      // this was the raw text `java<DEL>script:` and `java<U+0001>script:`
+      // walked past the denylist (markup-carve/carve-js#917).
+      const scheme = rawScheme.replace(SCHEME_PROBE_STRIP_RE, '')
 
       if (this.deniedSchemes.includes(scheme)) return false
-      if (this.allowedSchemes !== null && !this.allowedSchemes.includes(scheme)) return false
+      // The ALLOW lookup deliberately reads the RAW text, not the probe.
+      //
+      // The two lists ask opposite questions. Deny asks "could a consumer read
+      // this as a scheme I refuse", so it has to see through the split. Allow
+      // asks "is this exactly a scheme I permit", and a scheme carrying a
+      // control character is not one - an allowlist refuses what it does not
+      // recognize, which is why this form was never defeated. Reading the
+      // probe here would START allowing `htt<DEL>ps:` under
+      // `setAllowedSchemes(['https'])`, turning a fix into a widening.
+      if (this.allowedSchemes !== null && !this.allowedSchemes.includes(rawScheme)) return false
 
       // mailto: and tel: are considered internal for simplicity.
       if (scheme === 'mailto' || scheme === 'tel') return true
 
       if (scheme === 'http' || scheme === 'https') {
-        const host = parseHost(url)
+        // parseHost needs a scheme its own pattern accepts, or a split one
+        // returns null and skips the domain denylist and the allowExternal
+        // check with it. Only the scheme is repaired; the authority reaches
+        // parseHost with its original bytes, so no character outside the
+        // scheme changes which host is read.
+        const host = parseHost(scheme + url.slice(colonPos))
         if (host !== null) {
           if (this.isDomainDenied(host)) return false
           if (this.allowedDomains !== null && !this.isDomainAllowed(host)) return false
