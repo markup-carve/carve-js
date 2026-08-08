@@ -1703,25 +1703,26 @@ function guardLeadingBom(text: string): string {
 }
 
 /**
- * `line` without its trailing space-and-tab run, keeping an ESCAPED space.
+ * `line` without its trailing space-and-tab run.
  *
- * `normalize` has already rewritten the escaped-space sentinel back to `\ `, so
- * a line can end in a backslash-space pair that IS content. Dropping that space
- * would leave a bare backslash at the end of the line, and a bare backslash at
- * the end of a line is a HARD BREAK - the writer would turn the author's
- * no-break space into a line break. `dropTrailingWhitespace` in src/parse.ts
- * answers the same question for the parser; both count the backslash run,
- * because an EVEN number of them is a literal backslash and the space after it
- * is ordinary trailing whitespace.
+ * `dropTrailingWhitespace` in src/parse.ts answers the same question for the
+ * parser, and answers it unconditionally, so this does too
+ * (markup-carve/carve#1027).
+ *
+ * IT USED TO KEEP AN ESCAPED SPACE. `normalize` rewrites the escaped-space
+ * sentinel back to `\ `, and a line ending in that pair was left alone so the
+ * writer would not turn the author's no-break space into a line break. The
+ * parser has since stopped drawing that distinction: the strip runs first and a
+ * backslash left in the last column is a hard break, so keeping the space no
+ * longer preserves anything - it just spells the same hard break in two
+ * characters instead of one. The one tree that still needs the old behavior is
+ * handled where the sentinel is resolved, in `normalize`, because that is where
+ * the alternative spelling is still available.
  */
 function dropTrailingWs(line: string): string {
   const run = /[ \t]+$/.exec(line)
-  if (run === null) return line
-  let slashes = 0
-  for (let i = run.index - 1; i >= 0 && line[i] === '\\'; i--) slashes++
-  const keep = slashes % 2 === 1 && run[0].startsWith(' ') ? 1 : 0
 
-  return line.slice(0, run.index + keep)
+  return run === null ? line : line.slice(0, run.index)
 }
 
 function normalize(text: string): string {
@@ -1734,7 +1735,21 @@ function normalize(text: string): string {
   // A line block's indent is the other user of this sentinel and is already
   // routed through the verbatim scheme before this runs, so what is left here
   // is an escaped space and nothing else.
-  const lines = trimNonNbspKeepingGuard(text.replace(/\ue000/g, '\\ ')).split('\n')
+  //
+  // EXCEPT IN THE LAST COLUMN OF A LINE, where the escape has no spelling any
+  // more (markup-carve/carve#1027): the trailing run goes before the escape is
+  // read, so `\ ` there re-parses as a hard break and so does the `\` it
+  // reduces to. No parse can build such a node now, but `fromAstJson` can, and
+  // PART 11 section 1a holds for a tree however it arrived - so the character
+  // is written as itself. That is not the escape and the re-parsed text node
+  // carries U+00A0 rather than the sentinel, but it is the same rendered
+  // document and it survives another pass, which is what section 1 asks. A
+  // trailing whitespace run after the sentinel is part of the same last column,
+  // so it is looked past here rather than left for `dropTrailingWs` to remove
+  // once the substitution can no longer see it.
+  const lines = trimNonNbspKeepingGuard(
+    text.replace(/\ue000(?=[ \t]*(?:\n|$))/g, '\u00a0').replace(/\ue000/g, '\\ '),
+  ).split('\n')
   const swept = lines.map((line) => {
     // A line whose only content is ASCII space or tab is emitted EMPTY, wherever
     // it sits (PART 11 \u00a77). Verbatim content is still sentinel-encoded here, so

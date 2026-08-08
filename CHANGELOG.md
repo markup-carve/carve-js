@@ -9,6 +9,37 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **An escaped space in the last column of a line is a hard break**
+  (markup-carve/carve#1027). The trailing-whitespace strip runs BEFORE escape
+  resolution, so the space in `\ ` is gone by the time the escape is read and the
+  bare backslash left behind is a line break, not a no-break space:
+
+  ```
+  x \ 
+  y
+  ```
+
+  ```html
+  <p>x <br>
+  y</p>
+  ```
+
+  It used to render `<p>x &nbsp;\ny</p>`. Mid-line nothing changes - `10\ kg` is
+  still a no-break space - and an even run of backslashes is still a literal
+  backslash whose following space is ordinary trailing whitespace.
+
+  MARKER REQUIRES CONTENT in `resources/grammar.ebnf` decides it: "an editor
+  stripping the trailing space cannot change the meaning", stated for the bullet
+  marker and stated as general. With the old reading, `x \ ` was a no-break space
+  and `x \` - the same document once an editor saved it - was a line break.
+  carve-rs and carve-php were stable across that strip and this engine now
+  matches them node for node.
+
+  The cost is deliberate: the escape means a no-break space mid-line and a hard
+  break at the end of a line. An author who wants a no-break space in the last
+  column writes the character itself. The Carve writer does the same for an
+  ingested text node that ends in one, which no parse can build any more.
+
 - **The AST now publishes `thematic_break.marker` and the Carve writer
   reproduces it** (markup-carve/carve#976). Parsed `***` and `___` carry `*`
   and `_` respectively; the default `---` leaves the optional field absent.
