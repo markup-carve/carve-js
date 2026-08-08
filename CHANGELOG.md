@@ -40,6 +40,32 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   column writes the character itself. The Carve writer does the same for an
   ingested text node that ends in one, which no parse can build any more.
 
+- **A block-attribute line below a list item ends the item, and its attributes
+  reach the next block** (markup-carve/carve#1028). Documents shaped like
+
+  ```
+  - item
+  {.cls}
+  > quote
+  ```
+
+  rendered the quote with NO class and printed nothing for the attribute line:
+  it folded into the item, where it had no following block to float onto, and
+  §15 drops a dangling run. The author's attribute reached the page nowhere.
+  It now ends the item and attributes the quote.
+
+  PART 9 §10 I5 makes the three invisible constructs interrupt an open paragraph
+  - "a reference definition ..., a comment ..., and a block-attribute line
+  (`{…}` alone on a line, §15)" - and I6 applies the relation to every open
+  paragraph, an item's included. The two definition kinds already ended the fold
+  here; the attribute line did not. PART 2's LIST-ITEM ATTRIBUTES clause names
+  this engine's behavior and rejects it: "a trailing `{…}` line folded onto a
+  tight item, which carve-php attached to the `<li>` and carve-js dropped - is
+  REJECTED as the mechanism".
+
+  An INDENTED attribute line is unaffected: at the item's content column it is
+  the item's, and floats onto the item's own next block.
+
 - **The AST now publishes `thematic_break.marker` and the Carve writer
   reproduces it** (markup-carve/carve#976). Parsed `***` and `___` carry `*`
   and `_` respectively; the default `---` leaves the optional field absent.

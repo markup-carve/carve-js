@@ -4952,6 +4952,23 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     // folding in, matching carve-php / carve-rs (a caption is a heading/figure
     // terminator, not plain prose the item absorbs).
     RE_CAPTION.test(line) ||
+    // A BLOCK-ATTRIBUTE LINE ENDS THE FOLD (PART 9 §10 I5, markup-carve/carve#1028).
+    // I5 makes the invisible constructs interrupters - "a reference definition
+    // ..., a comment ..., and a block-attribute line (`{…}` alone on a line,
+    // §15)" - and I6 applies the relation to EVERY open paragraph, an item's
+    // included. Two arms above already carry the other two invisible kinds; this
+    // one was missing, so `- item` / `{.cls}` / `> quote` folded the attribute
+    // line INTO the item, where it had no following block to float onto and was
+    // dropped as dangling. The author's attribute reached neither the `<li>` nor
+    // the quote and rendered nowhere, which is the shape PART 2's LIST-ITEM
+    // ATTRIBUTES clause names and REJECTS by engine: "a trailing `{…}` line
+    // folded onto a tight item, which carve-php attached to the `<li>` and
+    // carve-js dropped".
+    //
+    // The lexer is positioned on this line, so the multi-line form (§15 A5) is
+    // recognized here exactly as `startsInterruptingBlock` recognizes it, rather
+    // than by a single-line spelling that would answer differently one column in.
+    peekBlockAttributes(lexer) ||
     RE_DEFLIST_TERM.test(line) ||
     RE_BLOCKQUOTE.test(line) ||
     RE_TASK.test(line) ||
