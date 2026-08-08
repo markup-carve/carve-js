@@ -1036,7 +1036,6 @@ function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
  */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
-  const columns = node.rows.reduce((max, row) => Math.max(max, row.cells.length), 0)
   const first = node.rows[0]
   const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
   const needsDelimiter =
@@ -1044,17 +1043,16 @@ function renderTable(node: Table, ctx: CarveContext): string {
 
   node.rows.forEach((row, rowIndex) => {
     const cells: RenderedCell[] = []
-    for (let i = 0; i < columns; i++) {
-      const cell = row.cells[i]
+    for (const cell of row.cells) {
       // In the delimiter form the promoted row is written as ordinary data
       // cells - the row after it is what makes them headers.
       const asHeader = !(needsDelimiter && rowIndex === 0)
-      cells.push(cell ? renderTableCell(cell, ctx, asHeader) : { text: '', tight: false })
+      cells.push(renderTableCell(cell, ctx, asHeader))
     }
     rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
   })
   if (needsDelimiter) {
-    rows.splice(1, 0, `|${Array.from({ length: columns }, () => '---').join('|')}|`)
+    rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
   }
   if (node.caption) rows.push(`^ ${renderInlines(node.caption, ctx)}`)
   return rows.join('\n')
