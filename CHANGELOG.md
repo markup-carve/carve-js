@@ -218,6 +218,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parse path. That is not fixable; the bytes that would tell an honest large
   source from a claim about one are exactly the bytes the AST does not carry.
   carve-php and carve-rs accepted the same divergence.
+- **`fmt` writes an empty footnote body as a line that still defines**
+  (carve-js#904). A footnote whose body holds only a block-attribute line
+  (`[^f]: {x}`) has that line consumed as attributes, leaving the body empty -
+  and the writer emitted `[^f]:`, which is not a definition. Both the definition
+  and its reference came back as literal text and the endnote section
+  disappeared. The grammar takes a definition's content as one-or-more, so an
+  empty body cannot be spelled directly; **behavior change:** it is now written
+  as `[^f]: {empty}`, an attribute line the reader consumes back to nothing. That
+  is the only body measured to render identically on HTML, Markdown, plain text
+  and ANSI alike. The link-reference and abbreviation definition writers were
+  measured for the same shape and neither has it.
 
 - **The Markdown target neutralizes embedded HTML in five more slots**
   (carve-js#894). The writer's stated invariant is that `<`, `>` and `&` in

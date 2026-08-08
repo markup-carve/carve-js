@@ -1071,9 +1071,43 @@ function renderFigure(node: Figure, ctx: CarveContext): string {
  * would be a rule with two implementations - the shape that has produced most of
  * this engine's cross-engine divergences.
  */
+/**
+ * The body written for a footnote whose body is empty.
+ *
+ * A block-attribute line, because that is the only body measured to render to
+ * nothing on HTML, Markdown, plain text and ANSI alike. The name inside is
+ * discarded by the parse - the block it would attach to does not exist - so it
+ * is chosen to be readable rather than to mean anything.
+ */
+const EMPTY_FOOTNOTE_BODY = '{empty}'
+
 function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
   const rawBody = renderBlocks(blocks, ctx)
   const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
+  // AN EMPTY BODY IS NOT SPELLABLE, so it is written as something the reader
+  // consumes back to nothing.
+  //
+  // `footnote_definition = "[^", footnote_label, "]:", space+, inline_content`
+  // and `inline_content` is one-or-more, so a definition ALWAYS has content:
+  // `[^f]:` and `[^f]: ` are both paragraphs, not definitions. An empty-bodied
+  // footnote is therefore a state the source language cannot express directly.
+  // It is still reachable, because a body holding only a block-attribute line
+  // (`[^f]: {x}`) has that line consumed as attributes, leaving nothing behind -
+  // and the writer then emitted `[^f]:`, which un-defined the note and turned
+  // both the definition and its reference into literal text
+  // (markup-carve/carve-js#904).
+  //
+  // So the body is written as the construct that PRODUCED the empty body. A
+  // block-attribute line with nothing under it is dropped, which is what the
+  // document already does with `{x}` at top level, and it is the only spelling
+  // measured to render identically on all four targets: a `%%` comment and a
+  // `%%%` block both leave an extra newline inside the `<li>`, so HTML moves.
+  // The attribute name is arbitrary because the parse discards it - the payload
+  // is not recorded anywhere in the tree - so it is spelled to say what it is
+  // rather than to carry anything.
+  if (body === '') {
+    return `[^${escapeFootnoteLabel(label)}]: ${EMPTY_FOOTNOTE_BODY}`
+  }
   const lines = body.split('\n')
   const defLines = [`[^${escapeFootnoteLabel(label)}]: ${lines.shift() ?? ''}`]
   // TWO spaces, the body's own column (PART 9 §16). Three is legal
