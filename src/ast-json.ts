@@ -66,8 +66,10 @@ export interface FootnoteDefNode {
    * carve-php both shipped `id` first - matching `footnote_ref.id` - and the
    * spec settled it the other way when the node moved into the tree (carve#418).
    *
-   * {@link fromAstJson} still ACCEPTS `id` on input, because trees written by
-   * the earlier spelling exist and a stored document cannot be recalled.
+   * {@link fromAstJson} REFUSES `id` on input, like any other field the schema
+   * does not name (markup-carve/carve#743, PART 12 §3 and §11). It used to accept
+   * it; carve-php did not, so the same payload decoded in two engines and failed
+   * in the third (markup-carve/carve-js#907).
    */
   label: string
   children: BlockNode[]
@@ -492,22 +494,23 @@ export class AstJsonUnknownFieldError extends Error {
   }
 }
 
-/**
- * A property this engine READS that the schema does not name.
+/*
+ * THERE IS NO FIELD-NAME ALIAS TABLE, and the absence is the decision.
  *
- * §11 refuses what an ingest cannot understand; this one it understands
- * exactly. `label` is the spec spelling for a footnote definition's label, and
- * `id` is what this engine and carve-php published before PART 12 §7 settled
- * it - trees written then are stored, and the decoder already maps the old
- * spelling onto the new field. Refusing them would not protect a caller from a
- * half-read tree, it would take away the only reader that reads them whole.
+ * `footnote.id` used to sit here: the spelling this engine and carve-php both
+ * published before PART 12 §7 settled the field as `label`. markup-carve/carve#743
+ * ruled ingest STRICT - an unexpected field rejects AT DECODE - and PART 12 §3
+ * makes field names spec surface, which is exactly what a second accepted
+ * spelling of one is not. carve-php refuses it; carve-js and carve-rs accepted
+ * it, so a payload decoded in two engines and failed in the third, which is the
+ * interchange break §3 exists against (markup-carve/carve-js#907).
  *
- * Deliberately ONE entry rather than an escape hatch: a legacy alias qualifies
- * only when the decoder demonstrably maps it onto a named field.
+ * A legacy SHAPE the decoder maps is a different thing and is still accepted -
+ * see `LEGACY_TYPELESS_POSITIONS` below, which takes a definition list's old
+ * grouping record. That is not a second spelling of a field NAME, and no engine
+ * has been measured disagreeing about it, so the clause this removal rests on
+ * does not reach it.
  */
-const LEGACY_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  footnote: ['id'],
-}
 
 /**
  * PART 12 §12(d): the payload did not validate against `resources/ast-schema.json`.
@@ -602,13 +605,8 @@ function refuseSchemaViolations(node: unknown, path: string): void {
   const type = record.type
   const required = typeof type === 'string' ? ownValue(WIRE_REQUIRED, type) : undefined
   if (required !== undefined) {
-    const aliases = ownValue(LEGACY_ALIASES, type as string) ?? []
     for (const field of required) {
-      // A LEGACY alias satisfies the requirement it stands in for: the decoder
-      // demonstrably reads those trees, and §9(a) forbids refusing a document
-      // this engine itself published.
       if (field in record) continue
-      if (aliases.some((alias) => alias in record)) continue
       throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
     }
     const kinds = ownValue(WIRE_VALUE_KINDS, type as string) ?? {}
@@ -717,6 +715,32 @@ function describe(value: unknown): string {
   return `a ${typeof value}`
 }
 
+/**
+ * The fields a LEGACY definition-list entry may carry.
+ *
+ * The runtime `DefinitionItem`'s own fields, because the legacy wire form IS
+ * that record: it was produced by stringifying `parse()` output before
+ * `toAstJson` existed, so the two position arrays travel with it.
+ */
+const LEGACY_DEFINITION_ENTRY_FIELDS: ReadonlySet<string> = new Set([
+  'terms',
+  'definitions',
+  'definitionLines',
+  'definitionSpans',
+])
+
+/**
+ * Is this the untyped legacy definition entry, rather than some other untyped
+ * object?
+ *
+ * The same test `isRuntimeEntry` uses and the same one
+ * `LEGACY_TYPELESS_POSITIONS` is conditional on - an array-valued `terms`. A
+ * looser test would close fields on records the exemption never opened.
+ */
+function isLegacyDefinitionEntry(record: Record<string, unknown>): boolean {
+  return record.type === undefined && Array.isArray(record['terms'])
+}
+
 function refuseUnknownFields(node: unknown, path: string): void {
   if (Array.isArray(node)) {
     node.forEach((item, index) => refuseUnknownFields(item, `${path}[${index}]`))
@@ -729,10 +753,32 @@ function refuseUnknownFields(node: unknown, path: string): void {
   // the decoder turns an unusable kind away on its own terms, and reporting a
   // field on a type nobody names would send the caller after the wrong thing.
   const known = typeof type === 'string' ? ownValue(WIRE_FIELDS, type) : undefined
-  if (known !== undefined) {
-    const allowed = new Set([...known, ...(ownValue(LEGACY_ALIASES, type as string) ?? [])])
+  // A LEGACY DEFINITION ENTRY IS CLOSED TOO.
+  //
+  // This check is keyed by `record.type`, and the legacy definition-list entry
+  // has none - the schema gives it none, which is why `LEGACY_TYPELESS_POSITIONS`
+  // exempts it from the node-type rule. It was thereby exempt from the FIELD
+  // rule as well, and nothing else reached it: an entry carrying `bogus: 'x'`
+  // decoded, and `definitionListsFromWire` copies the record through, so the
+  // property survived into the tree and would be re-published in a payload the
+  // schema rejects. That is the exact class §11 exists for and the exemption was
+  // never meant to cover it - the exemption is about the missing `type`, not
+  // about everything else on the record.
+  //
+  // Found by sweeping for other spellings while removing the `footnote.id`
+  // alias (markup-carve/carve-js#907), which is the same clause failing at a
+  // second site. The allowed set is the runtime `DefinitionItem`'s own fields,
+  // because that is precisely the record the old publisher stringified.
+  if (known === undefined && isLegacyDefinitionEntry(record)) {
     for (const key of Object.keys(record)) {
-      if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
+      if (!LEGACY_DEFINITION_ENTRY_FIELDS.has(key)) {
+        throw new AstJsonUnknownFieldError(key, path, 'definition_list.items')
+      }
+    }
+  }
+  if (known !== undefined) {
+    for (const key of Object.keys(record)) {
+      if (!known.includes(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
     }
     // The two objects that hang off a node without a `type` of their own. They
     // are closed in the schema too, and every node kind can carry them, which

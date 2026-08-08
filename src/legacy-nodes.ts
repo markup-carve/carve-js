@@ -62,12 +62,18 @@ export function adoptBlockFootnoteDefs(ast: Document): Document {
   const defs: Record<string, unknown> = { ...(ast.footnoteDefs ?? {}) }
   const children = ast.children.filter((child) => {
     if (!isDef(child)) return true
-    const def = child as unknown as { label?: string; id?: string; children?: unknown[] }
-    // `label` is the PART 12 §7 spelling; `id` is what this engine and carve-php
-    // published before it, and those trees are stored where they cannot be
-    // recalled. Accepting both on INPUT is the same concession the legacy
-    // `footnote` inline type gets above; only `label` is ever produced.
-    const label = def.label ?? def.id
+    const def = child as unknown as { label?: string; children?: unknown[] }
+    // `label` is the PART 12 §7 spelling, and it is the ONLY one read.
+    //
+    // `id` - the spelling this engine and carve-php published before §7 settled
+    // it - used to be accepted here as well as at decode. The decoder now
+    // refuses it (markup-carve/carve-js#907, markup-carve/carve#743), and this
+    // reader goes with it so the engine gives ONE answer about the field rather
+    // than refusing a payload it would have rendered had the caller decoded it
+    // themselves. A definition carrying only `id` has no label, so it is dropped
+    // by the check below like any other malformed definition, and its reference
+    // renders unresolved - which is what a missing definition already means.
+    const label = def.label
     // A definition BODY has to be a list of blocks. Adopting anything else puts
     // it where the renderers iterate a body without checking, so a corrupted
     // tree crashed inside the HTML renderer for a document that had already

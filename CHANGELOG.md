@@ -58,6 +58,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   markers, so the output looked complete; `renderHtml` had no ceiling and
   overflowed the host stack.
 
+- **`fromAstJson` refuses a footnote definition spelled `id`** (carve-js#907,
+  markup-carve/carve#743). `label` is the PART 12 §7 field; `id` is what this
+  engine and carve-php published before §7 settled it, and the decoder used to
+  accept both. carve-php refuses it, so the same payload decoded in two engines
+  and failed in the third - the interchange break §3's "field names are spec
+  surface" exists against. It is now refused like any other field the schema does
+  not name, and the pre-render normalizer stops reading it too, so the engine
+  gives one answer about the field. A stored tree carrying `id` must be rewritten
+  to `label`. Found in the same sweep and fixed with it: an untyped legacy
+  definition-list entry (`items: [{terms, definitions}]`) accepted ARBITRARY
+  unnamed properties, which then survived into the decoded tree; its fields are
+  now closed to the four the legacy record carries. The legacy entry itself still
+  decodes.
+
 - **`fromAstJson` refuses a malformed or foreign payload at decode**
   (markup-carve/carve#709, markup-carve/carve#881, PART 12 §9-§12). Three new
   exported errors: `AstJsonSchemaError` (the whole payload is validated against

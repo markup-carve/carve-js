@@ -14,7 +14,7 @@ describe('a tree carrying block footnote definitions', () => {
       type: 'document',
       children: [
         { type: 'paragraph', children: [{ type: 'text', value: 'a' }, { type: 'footnote_ref', id: 'r' }] },
-        { type: 'footnote', id: 'r', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'def' }] }] },
+        { type: 'footnote', label: 'r', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'def' }] }] },
       ],
       srcByteLength: 0,
     }) as unknown as Document
@@ -25,6 +25,22 @@ describe('a tree carrying block footnote definitions', () => {
 
   it('matches what this engine renders from equivalent source', () => {
     expect(renderHtml(phpShaped()).trim()).toBe(carveToHtml('a[^r]\n\n[^r]: def\n').trim())
+  })
+
+  it('reads `label`, and only `label`', () => {
+    // `id` was the spelling before PART 12 §7 settled it, and this reader took
+    // both. The decoder now refuses `id` (carve-js#907), and this reader goes
+    // with it so the engine gives ONE answer about the field rather than
+    // refusing a payload it would have rendered had the caller decoded it
+    // themselves. A definition with no label is dropped like any other
+    // malformed one and its reference renders unresolved, which is what a
+    // missing definition already means - it must not throw.
+    const idShaped = JSON.parse(JSON.stringify(phpShaped()))
+    idShaped.children[1].label = undefined
+    delete idShaped.children[1].label
+    idShaped.children[1].id = 'r'
+    expect(() => renderHtml(idShaped)).not.toThrow()
+    expect(renderHtml(idShaped)).not.toContain('doc-endnotes')
   })
 
   it('leaves a tree without block definitions alone', () => {
