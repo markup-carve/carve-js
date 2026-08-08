@@ -6164,6 +6164,23 @@ function parseList(lexer: Lexer): List {
  * prefix is an optional `=` (header) followed by an optional alignment
  * marker (`>` right, `<` left, `~` center).
  */
+/**
+ * The characters a table cell reads as an ALIGNMENT MARKER, glued to `|` or `|=`.
+ *
+ * Exported so the Carve writer can read the set off the parser instead of
+ * carrying a second copy of it. The writer must not emit a header marker
+ * immediately followed by one of these, because the next parse eats it as
+ * alignment and keeps the rest of the cell as text (markup-carve/carve-js#903).
+ * A guard built from a hand-listed set would be a second spelling of this rule,
+ * and this repository has repeatedly found one rule spelled N times where N was
+ * larger than anyone claimed.
+ */
+export const TABLE_ALIGNMENT_MARKERS: ReadonlyMap<string, 'left' | 'right' | 'center'> = new Map([
+  ['>', 'right'],
+  ['<', 'left'],
+  ['~', 'center'],
+])
+
 function parseCellMarkers(src: string): {
   header: boolean
   span?: 'rowspan' | 'colspan'
@@ -6209,18 +6226,8 @@ function parseCellMarkers(src: string): {
   // (spec: docs/case-study/syntax.md, "Disambiguation"). Exactly one is
   // recognized; a *repeated* character is the start of content, so for
   // `|=<<` the first `<` aligns and the second `<` is content.
-  let align: 'left' | 'right' | 'center' | undefined
-  const a = src[i]
-  if (a === '>') {
-    align = 'right'
-    i++
-  } else if (a === '<') {
-    align = 'left'
-    i++
-  } else if (a === '~') {
-    align = 'center'
-    i++
-  }
+  const align = TABLE_ALIGNMENT_MARKERS.get(src[i] ?? '')
+  if (align !== undefined) i++
 
   if (i > 0) {
     // A tight marker prefix was consumed; the rest is content.

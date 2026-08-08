@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { opensFrontmatter, parse } from './parse.js'
+import { opensFrontmatter, parse, TABLE_ALIGNMENT_MARKERS } from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -1091,8 +1091,30 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
       ? { text: spanMarker, tight: false }
       : { text: `${attrs} ${spanMarker}`, tight: true }
   }
-  const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${alignMarker(cell.align)}`
-  return { text: `${prefix}${renderInlines(cell.children, ctx)}`, tight: prefix !== '' }
+  const align = alignMarker(cell.align)
+  const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${align}`
+  const rendered = renderInlines(cell.children, ctx)
+  // A PREFIXED CELL IS TIGHT, so the first character of the content is the
+  // character the parser's alignment scan reads. That scan runs at the position
+  // right after `|` or `|=` and consumes exactly one `<`, `>` or `~`, so a
+  // header cell whose content opens with one lost it: `| ~x~ |` was written
+  // `|=~x~|`, which reads back as CENTER alignment with the text `x~` - the
+  // strikethrough gone, and every cell in the column centered by a marker the
+  // author never wrote. `| <https://e.example> |` lost its anchor the same way
+  // through the LEFT marker (markup-carve/carve-js#903).
+  //
+  // ONE SPACE is the whole fix, and it costs nothing: the scan only fires on a
+  // GLUED sigil, and the content is trimmed after the prefix is consumed, so
+  // `|= ~x~ |` is a header cell holding `~x~` again.
+  //
+  // The set comes from the parser rather than from a list here. Measured, `>`
+  // does not currently reach this: the escape pass writes it `\>` because it
+  // also opens a blockquote. That is a different rule's decision, and a guard
+  // that relied on it would break the day that rule narrowed - so all three
+  // sigils are guarded and only two of them were ever observed failing.
+  const separator =
+    prefix !== '' && align === '' && TABLE_ALIGNMENT_MARKERS.has(rendered[0] ?? '') ? ' ' : ''
+  return { text: `${prefix}${separator}${rendered}`, tight: prefix !== '' }
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {
