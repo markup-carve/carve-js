@@ -20,6 +20,7 @@ export { MAX_RENDER_DEPTH }
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
+import { thematicBreakSpelling } from './thematic-break-marker.js'
 
 export interface CarveRenderOptions {}
 
@@ -246,7 +247,7 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
  * manufactured frontmatter. PART 11 section 1 requires
  * `to_html(fmt(x)) == to_html(x)`.
  */
-let thematicBreakMarker = '---'
+let thematicBreakMarker: string | null = null
 
 /**
  * Render, and fall back to a break spelling that cannot be read as frontmatter
@@ -557,7 +558,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'list':
       return withAttrs(renderList(node, ctx))
     case 'thematic_break':
-      return withAttrs(thematicBreakMarker === '---' ? (node.marker ?? '-').repeat(3) : thematicBreakMarker)
+      return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
     case 'table':
       return withAttrs(renderTable(node, ctx))
     case 'admonition': {

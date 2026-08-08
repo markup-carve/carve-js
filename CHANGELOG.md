@@ -256,6 +256,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep the thematic-break writer override out of band, so the legal `---`
+  spelling can be forced without being mistaken for "no override".
+
 - **A profile's link policy reads the scheme through the characters a URL
   consumer discards** (carve-js#917). `LinkPolicy.isUrlAllowed` read the text
   before the first colon with no character filter, and `trim()` only reaches the
