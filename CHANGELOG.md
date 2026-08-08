@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-08
+
 ### Breaking
 
 - **An escaped space in the last column of a line is a hard break**
