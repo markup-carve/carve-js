@@ -88,14 +88,21 @@ describe('Markdown renderer is safe-by-default', () => {
 })
 
 describe('ANSI/plain renderers strip terminal escapes', () => {
-  it('removes ESC and other C0 controls (keeps tab/newline)', () => {
+  it('removes ESC and other C0 controls on the terminal target (keeps tab/newline)', () => {
     const ansi = carveToAnsi('hi \x1b[31mX\x1b[0m\x07 there')
     expect(ansi).not.toContain('\x1b[31m')
     expect(ansi).not.toContain('\x07')
     expect(ansi).toContain('there')
+  })
+
+  it('KEEPS them on the plain target, which is a text serialization', () => {
+    // PART 9 section 29 T3. The strip here was not a security measure on this
+    // target - plain text is not a terminal format, and nothing downstream acts
+    // on the byte - so it only made Carve the lossy party
+    // (markup-carve/carve-js#896).
     const plain = carveToPlainText('a\x1bb\x07c')
-    expect(plain).not.toContain('\x1b')
-    expect(plain).not.toContain('\x07')
+    expect(plain).toContain('\x1b')
+    expect(plain).toContain('\x07')
   })
 
   it('strips terminal controls from link hrefs', () => {
@@ -139,16 +146,19 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
       },
     }
 
-    const outputs = [
-      renderMarkdown(doc),
-      renderPlainText(doc),
-      stripAnsiStyles(renderAnsi(doc)),
-    ]
+    // The TERMINAL target strips, at every leaf. It is the one consumer that
+    // acts on the character (PART 9 section 29 T4).
+    const ansi = stripAnsiStyles(renderAnsi(doc))
+    expect(ansi).not.toContain('\x1b')
+    expect(ansi).not.toContain('\x07')
+    expect(ansi).not.toContain('\x1b]0;')
 
-    for (const out of outputs) {
-      expect(out).not.toContain('\x1b')
-      expect(out).not.toContain('\x07')
-      expect(out).not.toContain('\x1b]0;')
+    // Markdown and plain EMIT it, at every one of those same leaves (T2, T3).
+    // The leaf sweep is the point: a strip that survived on one node type would
+    // be a hole in the other direction now.
+    for (const out of [renderMarkdown(doc), renderPlainText(doc)]) {
+      expect(out).toContain('\x1b')
+      expect(out).toContain('\x07')
     }
   })
 
@@ -169,12 +179,17 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
       ],
     }
 
-    for (const out of [renderMarkdown(doc), renderPlainText(doc), stripAnsiStyles(renderAnsi(doc))]) {
-      expect(out).not.toContain('\x1b')
-      expect(out).not.toContain('\x07')
-      expect(out).toContain('@alice')
-      expect(out).toContain('#news')
-      expect(out).toContain(':rocket:')
+    const ansi = stripAnsiStyles(renderAnsi(doc))
+    expect(ansi).not.toContain('\x1b')
+    expect(ansi).not.toContain('\x07')
+    expect(ansi).toContain('@alice')
+    expect(ansi).toContain('#news')
+    expect(ansi).toContain(':rocket:')
+
+    for (const out of [renderMarkdown(doc), renderPlainText(doc)]) {
+      expect(out).toContain('@al\x1bice')
+      expect(out).toContain('#ne\x07ws')
+      expect(out).toContain(':ro\x1bcket:')
     }
   })
 

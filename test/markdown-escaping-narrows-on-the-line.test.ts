@@ -178,14 +178,33 @@ describe("the Markdown target's escaping narrows on the line", () => {
       // CONTROL - no mutation of this change breaks it, because this change
       // does not touch that code. It is here so a later narrowing that DOES
       // touch it fails.
-      const probes = [0x7f, 0x9b, 0x9d, 0x1b, 0x0b, 0x0c]
-      for (const cp of probes) {
+      //
+      // A LATER NARROWING DID touch it, and this is where the split belongs.
+      // PART 9 section 29 made the non-whitespace C0 controls content on the
+      // Markdown and plain targets (markup-carve/carve-js#896), so U+001B,
+      // U+000B and U+000C moved to the terminal-only list. DEL and the C1
+      // controls did NOT move - section 29 T5 keeps them outside, which is
+      // exactly the P1 regression this case was written to catch, so they stay
+      // asserted across all three targets.
+      const blockedEverywhere = [0x7f, 0x9b, 0x9d]
+      for (const cp of blockedEverywhere) {
         const ch = String.fromCodePoint(cp)
         const src = `a${ch}b\n`
         expect([...src].some((c) => c.codePointAt(0) === cp)).toBe(true)
         for (const render of [carveToMarkdown, carveToAnsi, carveToPlainText]) {
           const out = render(src)
           expect([...out].some((c) => c.codePointAt(0) === cp)).toBe(false)
+        }
+      }
+
+      const terminalOnly = [0x1b, 0x0b, 0x0c]
+      for (const cp of terminalOnly) {
+        const ch = String.fromCodePoint(cp)
+        const src = `a${ch}b\n`
+        expect([...carveToAnsi(src)].some((c) => c.codePointAt(0) === cp)).toBe(false)
+        for (const render of [carveToMarkdown, carveToPlainText]) {
+          const out = render(src)
+          expect([...out].some((c) => c.codePointAt(0) === cp)).toBe(true)
         }
       }
     })

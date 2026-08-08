@@ -402,8 +402,29 @@ function cleanEscapedText(node: Text): string {
   return stripControls(node.value)
 }
 
-/** Drop C0/C1 control characters (keeping tab and newline) from author content
- *  so attacker ESC / OSC sequences cannot inject into terminal output. */
+/**
+ * Drop what this target cannot carry, from author content on its way to the
+ * output.
+ *
+ * THE NON-WHITESPACE C0 CONTROLS ARE CONTENT AND ARE EMITTED. PART 9 section 29
+ * T3 rules that U+0000..U+0008, U+000B, U+000C and U+000E..U+001F are ordinary
+ * content on this target, because after markup-carve/carve#963 the whitespace
+ * of the language is exactly U+0020, U+0009, U+000A and U+000D. Plain text
+ * follows Markdown here rather than the terminal, because it is a TEXT
+ * SERIALIZATION and not a terminal format - section 29 records that half as a
+ * judgement rather than a measurement (markup-carve/carve-js#896).
+ *
+ * What is still dropped, and why each one is not that class:
+ *
+ * - U+000D is WHITESPACE after carve#963, so section 29 excludes it.
+ * - DEL (U+007F) and the C1 controls (U+0080..U+009F) sit outside section 29 by
+ *   T5, and CSI (U+009B) and OSC (U+009D) are single-character forms of the
+ *   sequences section 25 exists to stop.
+ *
+ * THE ANSI TARGET IS NOT THIS TARGET and keeps the broad strip - it is the one
+ * consumer that acts on the character (section 29 T4). Narrowing `render-ansi.ts`
+ * to match this is a security regression, not a consistency win.
+ */
 function stripControls(s: string): string {
-  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/[\u000d\u007f-\u009f]/gu, '')
 }
