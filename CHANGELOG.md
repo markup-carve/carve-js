@@ -9,6 +9,43 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **`beforeRender` takes a read-only context, and the injected TOC honors the
+  caller's options** (markup-carve/carve#1007, carve-js#871). The hook is called
+  as `beforeRender(doc, ctx)`, where `ctx` is the exported `BeforeRenderContext`:
+  `options` (a frozen snapshot of the options the conversion was called with),
+  `mode`, `isStatic` and `targetIsHtml`.
+
+  The hook runs before the render starts, so it had nothing to inherit and
+  rendered any output of its own with DEFAULTS. `tableOfContents()` builds its
+  `<nav>` there, so `# :ok: h` with `{ symbols: { ok: 'OK' } }` published
+  `<h1>OK h</h1>` and a TOC entry reading `:ok: h`, from the same nodes.
+  `smartTypography` and `sanitizeUrls` diverged the same way, the last of them in
+  the loosening direction: a caller who turned sanitization off got a blanked
+  `src` in the entry and the live one in the heading. The `::: toc` placement
+  directive renders during the render and always honored the options; the two
+  paths now agree.
+
+  `targetIsHtml` is why the contract carries a context rather than the options
+  alone: an extension that emits HTML in this hook reads it to skip its transform
+  on the Markdown, plain-text, ANSI and AST-JSON paths and leave the source node
+  for that target. `mode` is the EFFECTIVE mode, which is `"interactive"` on
+  every non-HTML target whatever the caller passed, because static rendering is
+  an HTML-only concern.
+
+  The context is read-only: `options` is frozen and is a different object from
+  the one the renderer is handed, so a hook reads the caller's settings and
+  cannot write them, and cannot talk a later guard out of its own input. Only the
+  flat options are protected - `symbols`, `renderers` and `extensions` are the
+  caller's own objects, shared by reference.
+
+  BREAKING against this unreleased line rather than against 0.1.2, and stated
+  here because release notes are generated from this file. A hook written for
+  0.1.2 takes `(doc)`, and a function of fewer parameters is assignable, so it
+  compiles and runs unchanged. What breaks is a hook written against the
+  `beforeRender(doc, opts)` shape that landed earlier in this same line
+  (carve-js#871): the second parameter is no longer the options, and such a hook
+  reads `ctx.options` instead.
+
 - **A heading ends at the newline** (markup-carve/carve#451,
   markup-carve/carve#434). Nothing folds into a heading, so `# Title` with prose
   beneath is a heading plus a paragraph, and its id derives from the heading line
@@ -151,27 +188,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     with no space after it, which Djot leaves as literal text. Advisory only.
 
 ### Changed
-
-- **`beforeRender` receives the render options, and the injected TOC honors
-  them** (carve-js#871). An extension's `beforeRender` hook is now called as
-  `beforeRender(doc, opts)`, where `opts` is a read-only snapshot of the options
-  the conversion was called with. The hook runs before the render starts, so it
-  had nothing to inherit and rendered any output of its own with DEFAULTS:
-  `tableOfContents()` builds its `<nav>` there, so `# :ok: h` with
-  `{ symbols: { ok: 'OK' } }` published `<h1>OK h</h1>` and a TOC entry reading
-  `:ok: h`, from the same nodes. `smartTypography` and `sanitizeUrls` diverged
-  the same way, the last of them in the loosening direction: a caller who turned
-  sanitization off got a blanked `src` in the entry and the live one in the
-  heading. The `::: toc` placement directive renders during the render and
-  always honored the options; the two paths now agree.
-
-  The parameter is optional and additive, so an existing `beforeRender(doc)`
-  needs no change and is called exactly as before. What arrives is frozen and is
-  a different object from the one the renderer is handed: a hook reads the
-  caller's settings and cannot write them, so it cannot talk a later guard out
-  of its own input. Only the flat options are protected - `symbols`,
-  `renderers` and `extensions` are the caller's own objects, shared by
-  reference.
 
 - **`carve fmt` writes a frontmatter opener with its format token** (PART 11 §6b,
   markup-carve/carve#977): `---yaml`, not a bare `---`. Every other format was
