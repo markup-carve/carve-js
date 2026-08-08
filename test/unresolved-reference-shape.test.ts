@@ -87,7 +87,9 @@ describe('the tree gains the reference; no output changes', () => {
   const src = 'see [a][] here'
 
   it('HTML', () => expect(carveToHtml(src)).toBe('<p>see [a][] here</p>'))
-  it('Markdown', () => expect(carveToMarkdown(src)).toBe('see \\[a\\]\\[\\] here\n'))
+  // Section 8a M1b: neither `[` is adjacent to another on the emitted line, so
+  // both are bare; `]` keeps M1 and stays escaped.
+  it('Markdown', () => expect(carveToMarkdown(src)).toBe('see [a\\][\\] here\n'))
   it('plain text', () => expect(carveToPlainText(src)).toBe('see [a][] here\n'))
   it('ANSI', () => expect(carveToAnsi(src)).toBe('see [a][] here\n'))
   it('Carve', () => expect(carveToCarve(src)).toBe('see [a][] here\n'))

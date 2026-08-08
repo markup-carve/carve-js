@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { carveToMarkdown } from '../src/index.js'
 
 /**
- * CommonMark does not honour an intraword underscore, so escaping one protects
- * nothing and only litters identifiers in output meant to be read and searched.
- * An asterisk is not symmetric here - `a*b*c` does emphasise - so `*` stays
- * escaped everywhere.
+ * PART 11 section 8a, M1b, for the underscore.
+ *
+ * An escape is kept IF AND ONLY IF the character is adjacent on the emitted
+ * line to an unescaped delimiter of the same character. `company_id` and
+ * `_leading` are not, so they are written as the author typed them; `a__b` is,
+ * because unescaping would merge the two into one run. The asterisk is exempt
+ * under M1a and stays escaped everywhere.
  */
 describe('markdown underscore escaping', () => {
   it.each(['company_id', 'a_b_c', 'snake_case_name', 'read_write_delete'])(
@@ -15,10 +18,21 @@ describe('markdown underscore escaping', () => {
     },
   )
 
+  it.each(['trailing_', '_leading', 'a _ b'])(
+    'leaves a lone underscore bare in %j under M1b',
+    (source) => {
+      // The old rule kept these ("it could open or close emphasis"). M1b is an
+      // if-and-only-if, not a floor: none of these underscores is ADJACENT to
+      // another, so none of them is holding a run boundary apart, and section
+      // 8a drops exactly those.
+      expect(carveToMarkdown(source).trim()).toBe(source)
+    },
+  )
+
   it.each([
-    ['trailing_', 'trailing\\_'],
-    ['_leading', '\\_leading'],
-  ])('still escapes %j where it could open or close emphasis', (source, expected) => {
+    ['a__b', 'a\\_\\_b'],
+    ['x___y', 'x\\_\\_\\_y'],
+  ])('keeps both escapes in %j, where unescaping would merge the runs', (source, expected) => {
     expect(carveToMarkdown(source).trim()).toBe(expected)
   })
 
@@ -65,10 +79,16 @@ describe('markdown underscore escaping', () => {
     })
   })
 
-  it('de-escapes an authored escape when it is intraword', () => {
-    // `a\_b` and `a_b` are two spellings of the same document, so they have to
-    // render the same - the escape the author wrote is still an escape.
-    expect(carveToMarkdown('a\\_b').trim()).toBe('a_b')
+  it('emits an AUTHORED escape as an escape, wherever it stands', () => {
+    // M2, and section 8a says why it is untouched by M1b: M1b governs a
+    // character that reached this writer inside a TEXT node, one the author did
+    // not mark. `a\_b` is an `escaped_text` node - the author said which
+    // reading they meant - so it comes back as an escape whatever the line
+    // around it says. It used to take the same sentinel as a bare underscore
+    // and lose its backslash to the intraword rule, which is M1b deciding a
+    // node M1 never governed.
+    expect(carveToMarkdown('a\\_b').trim()).toBe('a\\_b')
+    expect(carveToMarkdown('\\_lead').trim()).toBe('\\_lead')
   })
 
   it('keeps underline emphasis working', () => {
