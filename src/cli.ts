@@ -453,6 +453,14 @@ function renderFromJson(
     // bounded by what this input cost as well as by what it claims about itself.
     // Exact here rather than re-encoded, because this is the one place in the
     // package that still holds the bytes it read.
+    //
+    // Omitting it would not be UNSAFE - the re-encode `fromAstJson` falls back
+    // to is never larger than the bytes that arrived, so the bound it produces
+    // is the conservative one. It would be less accurate and would pay a second
+    // encode of the whole payload: a pretty-printed input re-encodes smaller
+    // than it was sent, and this is the caller that knows the difference. No
+    // mutation of this line changes an output, which is why it is stated here
+    // rather than asserted.
     doc = fromAstJson(json, Buffer.byteLength(src, 'utf8'))
   } catch (e) {
     io.writeErr(`carve render: --from-json input is not a Carve AST (${(e as Error).message})\n`)

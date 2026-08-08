@@ -4,6 +4,7 @@ import {
   ABBR_BUDGET_BASE,
   ABBR_BUDGET_FACTOR,
   abbrBudget,
+  budgetForDocument,
   expansionBudgetLength,
   utf8ByteLength,
 } from '../src/abbr-budget.js'
@@ -77,6 +78,58 @@ describe('an expansion budget is sized from what the payload cost, not what it c
     })
     const doc = fromAstJson(json as never)
     expect(expansionBudgetLength(doc)).toBeLessThan(1_000_000)
+    expect(abbrBudget(expansionBudgetLength(doc))).toBe(ABBR_BUDGET_BASE)
+  })
+
+  it('every budget CONSUMER is sized from the bound, not from the claim', () => {
+    // The seam between the bound and the five consumers is `budgetForDocument`,
+    // and asserting `expansionBudgetLength` alone leaves it untested: the
+    // consumers could still read `srcByteLength`. Charged directly, because no
+    // rendered output in this engine can show the difference - the wire carries
+    // every expansion, so emitted bytes stay proportional to payload bytes.
+    const { json, payloadBytes } = roundTrip('*[AB]: e\n\nAB\n', (j) => {
+      j['srcByteLength'] = 1_000_000_000
+    })
+    const doc = fromAstJson(json as never, payloadBytes)
+    // With the claim honored the budget would be 8e9 and this would fit.
+    expect(budgetForDocument(doc).charge(2_000_000)).toBe(false)
+    // The floor is still underneath it.
+    expect(budgetForDocument(doc).charge(ABBR_BUDGET_BASE)).toBe(true)
+  })
+
+  it('the measurement is the bytes that arrived, not the bytes re-encoded', () => {
+    // A pretty-printed payload costs more to send than its compact form. The
+    // caller that read it knows that; a re-encode here does not, and would size
+    // the budget from a smaller number than the input actually was.
+    const compact = JSON.stringify(toAstJson(parse('*[AB]: e\n\nAB\n')))
+    const pretty = JSON.stringify(JSON.parse(compact), null, 2)
+    expect(utf8ByteLength(pretty)).toBeGreaterThan(utf8ByteLength(compact))
+    const doc = fromAstJson(JSON.parse(pretty), utf8ByteLength(pretty))
+    // The claim is smaller than either, so raise it out of the way first.
+    const claimed = JSON.parse(pretty) as Record<string, unknown>
+    claimed['srcByteLength'] = 1_000_000_000
+    expect(expansionBudgetLength(fromAstJson(claimed as never, utf8ByteLength(pretty)))).toBe(
+      utf8ByteLength(pretty),
+    )
+    expect(doc.srcByteLength).toBe(utf8ByteLength('*[AB]: e\n\nAB\n'))
+  })
+
+  it('a payload that cannot be re-encoded measures 0, not everything', () => {
+    // The realistic trigger is a payload past the host's maximum string length,
+    // which is exactly the case that must not be handed a budget sized from its
+    // own claim. Forced here rather than allocated: the failure branch is
+    // otherwise unreachable, and an unreachable branch that reports the wrong
+    // direction is the shape this repository keeps finding.
+    const { json } = roundTrip('*[AB]: e\n\nAB\n', (j) => {
+      j['srcByteLength'] = 1_000_000_000
+    })
+    Object.setPrototypeOf(json, {
+      toJSON() {
+        throw new RangeError('Invalid string length')
+      },
+    })
+    const doc = fromAstJson(json as never)
+    expect(expansionBudgetLength(doc)).toBe(0)
     expect(abbrBudget(expansionBudgetLength(doc))).toBe(ABBR_BUDGET_BASE)
   })
 
