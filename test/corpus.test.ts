@@ -36,6 +36,7 @@ const IMPLEMENTED = new Set([
   'an-empty-footnote-body-is-written-with-the-empty-sentinel',
   'a-caption-attaches-across-one-blank-line',
   'a-container-a-lazy-line-folded-into-is-still-open',
+  'a-ragged-table-keeps-each-row-s-cell-count',
   'two-blank-lines-detach-a-caption',
   // Added with the spec bump that carries carve#802, #808 and #831: ten rules
   // the corpus stated and nothing pinned until then, plus the format-character
