@@ -1443,7 +1443,11 @@ function renderAttrs(attrs: Attrs | undefined): string {
 }
 
 function quoteAttrValue(value: string): string {
-  if (/^[^\s"'{}]+$/.test(value)) return value
+  // A value may stay UNQUOTED when it holds no `whitespace` and no delimiter --
+  // PART 7's four characters, not `\s`. With `\s` a value carrying a vertical
+  // tab was quoted defensively, so the writer's own output no longer round-
+  // tripped to the shorter spelling the parser accepts.
+  if (/^[^ \t\n\r"'{}]+$/.test(value)) return value
   return `"${value.replace(/[\\"]/g, '\\$&')}"`
 }
 
@@ -1732,7 +1736,9 @@ function trimNonNbsp(text: string): string {
  * guard space, so there is nothing here to preserve.
  */
 function trimNonNbspKeepingGuard(text: string): string {
-  if (/^[^\S\u00a0]+-{3,}[ \t]*(\n|$)/.test(text)) {
+  // The guard is INDENTATION, so PART 7's four characters. `[^\S\u00a0]` was
+  // `\s` with one carve-out, and it read a leading vertical tab as indentation.
+  if (/^[ \t]+-{3,}[ \t]*(\n|$)/.test(text)) {
     return trimEndNonNbsp(text)
   }
   return trimNonNbsp(text)
@@ -1979,7 +1985,10 @@ function escapeFormat(text: string): string {
 }
 
 function escapeFenceToken(text: string): string {
-  return text.split(/\s/)[0]!.replace(/`/g, '')
+  // The info token ends at `whitespace` (PART 7), not at `\s`: a language name
+  // carrying a vertical tab was truncated on the way out while the same name
+  // carrying any other control character survived.
+  return text.split(/[ \t\n\r]/)[0]!.replace(/`/g, '')
 }
 
 function escapeAttrKey(text: string): string {

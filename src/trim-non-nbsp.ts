@@ -54,6 +54,21 @@ function isTrimmable(text: string, index: number): boolean {
 }
 
 /**
+ * Whether `ch` is one of Carve's four whitespace characters.
+ *
+ * The predicate form of the definition above, for the sites that test a single
+ * character rather than trimming a run. Exported so those sites read the
+ * definition instead of restating it: a class restated per site is a class that
+ * drifts, which is the failure PART 7's clause was written for.
+ */
+export function isCarveWhitespace(ch: string | undefined): boolean {
+  if (ch === undefined) return false
+  const code = ch.charCodeAt(0)
+  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d
+}
+
+
+/**
  * `text` without leading or trailing whitespace, NBSP excepted.
  *
  * Returns `text` itself when there is nothing to trim, so the common case

@@ -280,6 +280,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the 63 C0/C1 controls used to be deleted by the writer while the HTML renderer
   emitted them. Only U+0000 and U+000D are still dropped.
 
+- **Whitespace is a space or a tab in fourteen further constructs**
+  (markup-carve/carve#977, markup-carve/carve#963, PART 7). The sweep above
+  narrowed the sites a reading of the source found; these were found by
+  MEASUREMENT, feeding every construct a VERTICAL TAB, a FORM FEED and an
+  ordinary control character and keeping the rows where the first two behaved
+  differently from the third. So: `:: <VT>` is a definition term (the list used
+  to stay a paragraph), `{k=v<VT>w}` is ONE attribute whose value holds the
+  character rather than two attributes, `{#a}<VT>{.b}` is no longer one
+  attribute line, `{#x}<VT>` is no longer an attribute line at all, a trailing
+  `{...}` is not reached across such a character on a reference definition, a
+  `+`-continuation row and a block image end at their own line's padding,
+  `/*<VT>a*/` is bold-italic, an unclosed code span keeps a trailing one, a
+  cross-reference id and a footnote label keep one, and the canonical writer
+  stops truncating a fence info token at one. A quote after a NO-BREAK SPACE
+  still opens, and a link destination still ends at UNICODE whitespace, because
+  PART 3 marks that slot as the wider one.
+
 - **Trailing whitespace is dropped on every content line, not only a block's
   last** (markup-carve/carve#926). The run before a SOFT BREAK was kept until
   now, so `abc<SP>` / `def` and `abc` / `def` are the same document. Applies to a
