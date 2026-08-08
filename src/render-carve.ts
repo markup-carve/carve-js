@@ -817,8 +817,11 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
   ctx.blockDepth++
   try {
     const parts: string[] = []
-    // Whether the child just written sits at the item's MARKER column, which is
-    // column 0. Everything after it has to sit there too - see below.
+    // Whether any child so far was written at the item's MARKER column, which
+    // is column 0. Everything after it has to sit there too - see below - so
+    // this only ever latches on. Clearing it again was a store that could not
+    // change an outcome: no mutation of it failed a test, which is the shape
+    // this repository keeps finding under a check that cannot fail.
     let previousAtMarkerColumn = false
     item.children.forEach((b, i) => {
       const previous = item.children[i - 1]
@@ -877,7 +880,6 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
         return
       }
       parts.push(rendered)
-      previousAtMarkerColumn = false
     })
     return parts.join('\n')
   } finally {
