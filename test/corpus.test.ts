@@ -33,6 +33,9 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-caption-attaches-across-one-blank-line',
+  'a-container-a-lazy-line-folded-into-is-still-open',
+  'two-blank-lines-detach-a-caption',
   // Added with the spec bump that carries carve#802, #808 and #831: ten rules
   // the corpus stated and nothing pinned until then, plus the format-character
   // boundary. This engine passes all of them as they land - they are documents
