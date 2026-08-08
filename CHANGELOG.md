@@ -200,6 +200,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`fmt` no longer manufactures a frontmatter block that swallows the document**
+  (carve-js#899, carve-js#901). A frontmatter block is a `---` fence at byte 0
+  plus a bare `---` closer anywhere below it, and two writer decisions put one
+  there. PART 11 §6a normalizes `***` and `___` to `---`, so a break that opened
+  the document gained a closer from any later break: `***` / blank / `---`
+  formatted to `---` / blank / `---`, which reparsed as an empty frontmatter
+  block and rendered nothing where the input rendered two rules. Separately, a
+  hoisted link or footnote definition is written after the body, so whatever
+  stood second was promoted to byte 0 - and if that block was already `---`, the
+  whole document became frontmatter content and rendered empty. A promoted
+  paragraph whose first line is `---yaml`-shaped broke the same way.
+  **Behavior change:** when the emitted bytes would be read as opening
+  frontmatter the document did not have, `fmt` writes every thematic break as
+  `***` instead of `---`. That is a deviation from §6a, taken because §1's
+  `to_html(fmt(x)) == to_html(x)` is the stronger clause; a document that is not
+  misread keeps the canonical `---`, including a leading break with no later
+  break.
+
 - **The Markdown target neutralizes embedded HTML in five more slots**
   (carve-js#894). The writer's stated invariant is that `<`, `>` and `&` in
   author content are escaped so Markdown re-rendered to HTML cannot execute, and

@@ -1767,6 +1767,29 @@ function toCodepointPositions(doc: Document, source: string): void {
   walk(doc)
 }
 
+/**
+ * True when `source` would be read as OPENING A FRONTMATTER BLOCK.
+ *
+ * The Carve writer needs this to decide the spelling of a thematic break from
+ * the bytes it is about to emit rather than from the source it was given, and
+ * "would this be read as frontmatter" is a question only the lexer can answer:
+ * the opener needs a CLOSER somewhere below it, so it is a property of the whole
+ * text, not of line 1. A first-line regex answers a different question and
+ * answers it wrongly in both directions (markup-carve/carve-js#899).
+ *
+ * The lexer's own `consumeFrontmatter` is run rather than reimplemented, so this
+ * cannot drift from the parse it is predicting - which is the whole point of
+ * asking the parser instead of pattern-matching.
+ */
+export function opensFrontmatter(source: string, opts: ParseOptions = {}): boolean {
+  // Frontmatter is document-leading, so nothing that does not start with the
+  // fence can open one. The gate keeps the line split off the common path.
+  if (!source.startsWith('---')) return false
+  const lexer = new Lexer(source, opts)
+  lexer.consumeFrontmatter()
+  return lexer.frontmatter !== undefined
+}
+
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
   // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
