@@ -63,7 +63,7 @@ export const WIRE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "table_row": ["attrs", "cells", "pos", "type"],
   "tag": ["attrs", "name", "pos", "type"],
   "text": ["attrs", "pos", "type", "value"],
-  "thematic_break": ["attrs", "pos", "type"],
+  "thematic_break": ["attrs", "marker", "pos", "type"],
   "underline": ["attrs", "children", "pos", "type"],
 }
 
@@ -296,7 +296,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "table_row": { "attrs": "object", "cells": "array", "pos": "object" },
   "tag": { "attrs": "object", "name": "string", "pos": "object" },
   "text": { "attrs": "object", "pos": "object", "value": "string" },
-  "thematic_break": { "attrs": "object", "pos": "object" },
+  "thematic_break": { "attrs": "object", "marker": "enum:-\u0000*\u0000_", "pos": "object" },
   "underline": { "attrs": "object", "children": "array", "pos": "object" },
 }
 

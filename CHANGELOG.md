@@ -9,6 +9,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Breaking
 
+- **The AST now publishes `thematic_break.marker` and the Carve writer
+  reproduces it** (markup-carve/carve#976). Parsed `***` and `___` carry `*`
+  and `_` respectively; the default `---` leaves the optional field absent.
+  AST ingest accepts the field and defaults an absent one to `---`.
+
 - **`beforeRender` takes a read-only context, and the injected TOC honors the
   caller's options** (markup-carve/carve#1007, carve-js#871). The hook is called
   as `beforeRender(doc, ctx)`, where `ctx` is the exported `BeforeRenderContext`:

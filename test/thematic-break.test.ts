@@ -1,9 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, fromAstJson, parse, renderCarve, toAstJson } from '../src/index.js'
 
 const html = (s: string) => carveToHtml(s)
 
 describe('thematic break', () => {
+  it('records and writes the authored marker', () => {
+    for (const marker of ['-', '*', '_'] as const) {
+      const source = marker.repeat(3)
+      const node = toAstJson(parse(source)).children[0]
+      expect(node).toMatchObject({ type: 'thematic_break' })
+      if (marker === '-') expect(node).not.toHaveProperty('marker')
+      else expect(node).toHaveProperty('marker', marker)
+      expect(renderCarve(parse(source))).toBe(`${source}\n`)
+    }
+  })
+
+  it('retains an ingested marker and defaults an absent one to hyphens', () => {
+    const tree = (marker?: '*' | '_') => ({
+      type: 'document' as const,
+      srcByteLength: 3,
+      children: [{ type: 'thematic_break' as const, ...(marker ? { marker } : {}) }],
+    })
+
+    expect(toAstJson(fromAstJson(tree('*'))).children[0]).toHaveProperty('marker', '*')
+    expect(renderCarve(fromAstJson(tree('_')))).toBe('___\n')
+    expect(renderCarve(fromAstJson(tree()))).toBe('---\n')
+  })
+
   it('is a col-0 run of 3+ contiguous identical -, *, or _', () => {
     for (const s of ['---', '***', '___', '----', '*****']) {
       expect(html(s)).toBe('<hr>')
