@@ -71,7 +71,67 @@ export function abbrBudget(srcByteLength: number | undefined): number {
  * at once from here, instead of having to find five spellings of the same read.
  */
 export function budgetForDocument(ast: { srcByteLength?: number }): AbbrBudget {
-  return new AbbrBudget(ast.srcByteLength)
+  return new AbbrBudget(expansionBudgetLength(ast))
+}
+
+/**
+ * What an ingested document's payload ACTUALLY cost, keyed by the decoded
+ * document.
+ *
+ * A WeakMap rather than a field on `Document`, deliberately. This is a fact
+ * about how the document ARRIVED, not about the document: putting it on the
+ * object would put one reader's measurement where the next reader reads it back
+ * as a claim, and it would also have to be excluded by hand from the wire
+ * whitelist, from the writer's tree comparison and from `diff`. Off the object,
+ * none of those has anything new to exclude.
+ *
+ * Set by `fromAstJson` and by nothing else. A document from `parse` is absent
+ * from the map, which is the right answer for it: the parser measured its own
+ * input, so the claim IS the measurement.
+ */
+const ingestPayloadLength = new WeakMap<object, number>()
+
+/** Record what the payload `doc` was decoded from actually cost, in bytes. */
+export function recordIngestPayloadLength(doc: object, bytes: number): void {
+  ingestPayloadLength.set(doc, bytes)
+}
+
+/**
+ * The length a per-render expansion budget may be sized from.
+ *
+ * The budgets - abbreviations, the table of contents, the index, a
+ * cross-reference label - are `max(BASE, FACTOR * this)`. A cap has to be
+ * enforced against something the attacker does not supply, and on the PARSE
+ * path `srcByteLength` is exactly that: the parser measured the input, so a
+ * bigger budget costs a bigger document.
+ *
+ * On the INGEST path that number arrives INSIDE the payload (PART 12 §7 makes
+ * it a field of the wire). Left alone it let the payload choose the size of the
+ * guard meant to bound it: rewriting one number from 62,009 to 1,000,000,000
+ * took a document from 1.01 MB of HTML to 200 MB, for nine extra bytes and no
+ * extra payload. So an ingested document is bounded by what its payload cost as
+ * well as by what it claims, and THE SMALLER WINS.
+ *
+ * The claim is still honored where it is smaller, because a document that says
+ * it came from a short source is not made suspect by its AST being verbose - and
+ * an encoded tree is larger than the source it came from, so on an honest round
+ * trip this does not bind.
+ *
+ * A LEGITIMATE DIVERGENCE, stated rather than papered over: a source much larger
+ * than its AST - mostly blank lines, past roughly 125 KB where the 1 MB floor
+ * stops covering - renders with a smaller budget after a round trip than it did
+ * on the parse path. That is not fixable. The bytes that would distinguish an
+ * honest large source from a claim about one are exactly the bytes the AST does
+ * not carry. carve-php and carve-rs accepted the same divergence.
+ *
+ * `srcByteLength` itself is untouched: it is read as written and re-encoded
+ * unchanged, because PART 12 §7 requires the field to survive a round trip. What
+ * moves is what the BUDGET trusts, not what the wire carries.
+ */
+export function expansionBudgetLength(ast: { srcByteLength?: number }): number {
+  const claimed = ast.srcByteLength ?? 0
+  const measured = ingestPayloadLength.get(ast as object)
+  return measured === undefined ? claimed : Math.min(claimed, measured)
 }
 
 /**
