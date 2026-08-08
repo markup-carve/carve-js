@@ -214,6 +214,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A denied URL scheme split by DEL or a C1 control is blanked** (carve-js#915,
+  PART 9 §25). `[x](java<DEL>script:alert(1))` reached the rendered `href` with
+  the raw U+007F byte intact, and the image spelling reached `src` the same way,
+  while the plain `javascript:alert(1)` was blanked correctly. The denylist was
+  never wrong; the class of characters stripped before the scheme was read was.
+  It stopped at U+001F, so DEL (U+007F) and the C1 block (U+0080..U+009F) - the
+  characters §29 T5 puts OUTSIDE what a target may emit - were invisible to the
+  probe. That class now spans every control character and every whitespace
+  character, on the HTML target and in the SVG sanitizer's second copy of the
+  same rule, where `<a href>`, `<image href>` and the reject-every-absolute-
+  scheme check on paint attributes had the same gap.
+
+  This is a **defense-in-depth fix, not a demonstrated execution**: whether such
+  a URL resolves depends on whether the consumer's URL parser discards the
+  character before it reads the scheme, and consumers differ. The probe class is
+  deliberately WIDER than the §29 emit class, because the two answer different
+  questions - what a target may write, versus what the probe must see through.
+  Stripping only removes characters, so the wider class can refuse more and can
+  never permit more; a destination that is allowed is still emitted with its
+  original bytes.
+
 - **The Markdown and plain targets emit the non-whitespace C0 controls**
   (carve-js#896, PART 9 §29 `C0 CONTROLS ON THE RENDER TARGETS`). After
   markup-carve/carve#963 the whitespace of the language is exactly U+0020,

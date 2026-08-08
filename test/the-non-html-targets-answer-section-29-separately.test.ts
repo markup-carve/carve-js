@@ -184,11 +184,21 @@ describe('the non-HTML targets answer section 29 separately', () => {
       )
       expect(blankDeniedDestination(split), `blank U+${cp.toString(16)}`).toBe('')
     }
-    for (const cp of [0x7f, 0x9b, 0x9d]) {
-      // And these the probe does NOT remove, which is exactly why the
-      // destination is stripped before it is probed at all.
+    for (const cp of OUTSIDE_SECTION_29) {
+      // THIS ROW USED TO ASSERT THE OPPOSITE, and the assertion was the defect
+      // written down: the probe did NOT remove DEL or the C1 controls, and the
+      // comment here explained that away as "which is exactly why the
+      // destination is stripped before it is probed at all". That reasoning
+      // held for the Markdown target, which does pre-strip, and for no other
+      // caller of the probe - the HTML target has no pre-strip and emitted
+      // `java<DEL>script:alert(1)` into an href with the raw byte intact
+      // (markup-carve/carve-js#915). The probe class now spans DEL and C1, so
+      // the pre-strip is belt-and-braces rather than the only thing holding.
       const split = `java${String.fromCodePoint(cp)}script:alert(1)`
-      expect(split.replace(SCHEME_PROBE_STRIP_RE, '')).not.toBe('javascript:alert(1)')
+      expect(split.replace(SCHEME_PROBE_STRIP_RE, ''), `probe U+${cp.toString(16)}`).toBe(
+        'javascript:alert(1)',
+      )
+      expect(blankDeniedDestination(split), `blank U+${cp.toString(16)}`).toBe('')
     }
   })
 

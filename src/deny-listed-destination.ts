@@ -26,10 +26,12 @@ import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
 /**
  * `url`, or `''` when its scheme is on the denylist.
  *
- * The probe strips the C0 controls and Unicode whitespace a reader ignores when
- * it decides what the scheme is, so an obfuscated `<U+202F>javascript:` cannot
- * slip past by being unrecognizable to this check while remaining recognizable
- * to the thing that resolves it.
+ * The probe strips every control character - the C0 block, DEL and the C1 block
+ * - and every Unicode whitespace character, because a reader may ignore any of
+ * them when it decides what the scheme is. So neither an obfuscated
+ * `<U+202F>javascript:` nor a `java<DEL>script:` split slips past by being
+ * unrecognizable to this check while remaining recognizable to the thing that
+ * resolves it.
  */
 export function blankDeniedDestination(url: string): string {
   const probe = url.replace(SCHEME_PROBE_STRIP_RE, '')
