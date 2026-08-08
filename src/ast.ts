@@ -228,6 +228,8 @@ export interface CodeBlock extends BaseNode {
 
 export interface ThematicBreak extends BaseNode {
   type: 'thematic_break'
+  /** The thematic-break character as authored. Absent defaults to `-`. */
+  marker?: '-' | '*' | '_'
 }
 
 export interface Table extends BaseNode {

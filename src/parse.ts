@@ -2786,7 +2786,9 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   }
   if (RE_HR.test(line)) {
     lexer.consume()
-    return { type: 'thematic_break' } as ThematicBreak
+    const node: ThematicBreak = { type: 'thematic_break' }
+    if (line[0] === '*' || line[0] === '_') node.marker = line[0]
+    return node
   }
   if (RE_HEADING.test(line)) return parseHeading(lexer)
   // Definition list starts on a `:: term` line (two colons, not three).

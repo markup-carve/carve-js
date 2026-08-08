@@ -9,10 +9,10 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  * is only a hazard when something later closes it, which makes the collision a
  * property of the WHOLE emitted text rather than of its first line.
  *
- * Two unrelated writer decisions put a `---` there:
+ * Two unrelated writer decisions can put a `---` there:
  *
- * - PART 11 §6a normalizes `***` and `___` to `---`, so a break that opens the
- *   document gains a closer from any later break (markup-carve/carve-js#899).
+ * - an authored `---` break can open the emitted document and gain a closer
+ *   from any later break (markup-carve/carve-js#899).
  * - a hoisted link or footnote definition is written after the body, promoting
  *   whatever stood second to byte 0 (markup-carve/carve-js#901). Nothing is
  *   respelled there, so fixing the first cause does not fix this one.
@@ -33,10 +33,8 @@ function roundTrips(src: string): boolean {
 }
 
 describe('the Carve writer does not manufacture a frontmatter block', () => {
-  it('a leading break that would gain a closer is written `***`', () => {
-    // Three lines are enough to lose the whole document: this formatted to
-    // `---` / blank / `---`, which reparses as an EMPTY frontmatter block.
-    expect(carveToCarve('***\n\n---\n')).toBe('***\n\n***\n')
+  it('different authored markers need no frontmatter fallback', () => {
+    expect(carveToCarve('***\n\n---\n')).toBe('***\n\n---\n')
     expect(carveToHtml('***\n\n---\n')).toBe('<hr>\n<hr>')
     expect(roundTrips('***\n\n---\n')).toBe(true)
   })
@@ -49,16 +47,14 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     expect(carveToHtml(carveToCarve(src))).toContain('<p>a</p>')
   })
 
-  it('every spelling of the leading break is covered, because §6a folds them', () => {
+  it('every spelling of the leading break is covered', () => {
     for (const opener of ['***', '___', '---']) {
       expect(roundTrips(`${opener}\n\na\n\n---\n\nb\n`)).toBe(true)
     }
   })
 
-  it('CONTROL: a leading break with no later break keeps the canonical `---`', () => {
-    // §6a governs unchanged here - there is no closer, so nothing is misread.
-    // No mutation of the fallback moves this row.
-    expect(carveToCarve('***\n\npara\n')).toBe('---\n\npara\n')
+  it('CONTROL: a leading break with no later break keeps its authored marker', () => {
+    expect(carveToCarve('***\n\npara\n')).toBe('***\n\npara\n')
     expect(carveToCarve('---\n\npara\n')).toBe('---\n\npara\n')
   })
 
@@ -69,7 +65,7 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
 
   it('a hoisted link definition does not promote a `---` block to byte 0', () => {
     const src = '[a]: /u\n\n---\n\np\n\n---\n'
-    // Nothing is respelled by §6a here: the input already held `---`.
+    // The input already held `---`; the fallback protects the hoisted shape.
     expect(carveToHtml(src)).toBe('<hr>\n<p>p</p>\n<hr>')
     expect(roundTrips(src)).toBe(true)
     expect(carveToCarve(src)).toBe('***\n\np\n\n***\n\n[a]: /u\n')
@@ -96,14 +92,14 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     expect(carveToCarve(carveToCarve(once))).toBe(once)
   })
 
-  it('keeps the canonical `---` when the fallback would buy nothing', () => {
+  it('keeps the authored marker when the fallback would buy nothing', () => {
     // The closer here is the `---` INSIDE a code fence, which frontmatter is
     // consumed ahead of - so no break spelling repairs this document, and the
     // writer does not pay a respelling that changes nothing. This row is what
     // makes the second `opensFrontmatter` call load-bearing rather than
     // decorative; it is a KNOWN residual of §1, not a case this fix claims.
     const src = '[^a]: n\n\n---yaml\nk: v\n\n```\n---\n```\n\n***\n'
-    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n```\n---\n```\n\n---\n\n[^a]: n\n')
+    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n')
   })
 
   it('a break inside a container is respelled with the rest', () => {

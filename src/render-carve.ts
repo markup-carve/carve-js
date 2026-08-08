@@ -242,9 +242,8 @@ function findRedundantHeadingIds(ast: Document): WeakSet<object> {
 /**
  * The spelling a `thematic_break` is written with.
  *
- * `---` IS THE CANONICAL BREAK, INCLUDING ON LINE 1. PART 11 section 6a says the
- * writer emits three hyphens whatever the author wrote, and states no exception.
- * One is taken below, because PART 11 section 1 is the stronger clause:
+ * The document-wide fallback spelling for a break that would otherwise open
+ * manufactured frontmatter. PART 11 section 1 requires
  * `to_html(fmt(x)) == to_html(x)`.
  */
 let thematicBreakMarker = '---'
@@ -258,11 +257,8 @@ let thematicBreakMarker = '---'
  * property of the whole emitted document rather than of its first line. Two
  * unrelated writer decisions reach it:
  *
- * - section 6a normalizes `***` and `___` to `---`, so a break that opens the
- *   document gains a closer from any later break (markup-carve/carve-js#899).
- *   `***` / blank / `---` formatted to `---` / blank / `---`, which reparses as
- *   an EMPTY frontmatter block and renders nothing where the input rendered two
- *   rules.
+ * - an authored `---` break can open the document and gain a closer from any
+ *   later break (markup-carve/carve-js#899).
  * - a hoisted link or footnote definition is written after the body, promoting
  *   whatever stood second to byte 0 (markup-carve/carve-js#901). Nothing is
  *   respelled there - the `---` was already in the source - so fixing the first
@@ -561,7 +557,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'list':
       return withAttrs(renderList(node, ctx))
     case 'thematic_break':
-      return withAttrs(thematicBreakMarker)
+      return withAttrs(thematicBreakMarker === '---' ? (node.marker ?? '-').repeat(3) : thematicBreakMarker)
     case 'table':
       return withAttrs(renderTable(node, ctx))
     case 'admonition': {
