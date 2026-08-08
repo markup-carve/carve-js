@@ -152,6 +152,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`beforeRender` receives the render options, and the injected TOC honors
+  them** (carve-js#871). An extension's `beforeRender` hook is now called as
+  `beforeRender(doc, opts)`, where `opts` is a read-only snapshot of the options
+  the conversion was called with. The hook runs before the render starts, so it
+  had nothing to inherit and rendered any output of its own with DEFAULTS:
+  `tableOfContents()` builds its `<nav>` there, so `# :ok: h` with
+  `{ symbols: { ok: 'OK' } }` published `<h1>OK h</h1>` and a TOC entry reading
+  `:ok: h`, from the same nodes. `smartTypography` and `sanitizeUrls` diverged
+  the same way, the last of them in the loosening direction: a caller who turned
+  sanitization off got a blanked `src` in the entry and the live one in the
+  heading. The `::: toc` placement directive renders during the render and
+  always honored the options; the two paths now agree.
+
+  The parameter is optional and additive, so an existing `beforeRender(doc)`
+  needs no change and is called exactly as before. What arrives is frozen and is
+  a different object from the one the renderer is handed: a hook reads the
+  caller's settings and cannot write them, so it cannot talk a later guard out
+  of its own input. Only the flat options are protected - `symbols`,
+  `renderers` and `extensions` are the caller's own objects, shared by
+  reference.
+
 - **`carve fmt` writes a frontmatter opener with its format token** (PART 11 §6b,
   markup-carve/carve#977): `---yaml`, not a bare `---`. Every other format was
   already spelled out. The reader is unchanged - `---`, `--- yaml` and `---yaml`

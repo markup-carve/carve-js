@@ -55,6 +55,85 @@ describe('extension transforms', () => {
     }
     expect(carveToHtml('hi', { extensions: [ext] }).trim()).toBe('<p>HI</p>')
   })
+
+  it('hands beforeRender the options the conversion was called with', () => {
+    // carve-js#871. A hook that renders something of its own - the injected
+    // table-of-contents nav is the one in this package - had no way to render it
+    // the way the caller asked, because the hook took the document and nothing
+    // else. It now takes a read-only view of the options too.
+    let seen: Record<string, unknown> | undefined
+    const ext: CarveExtension = {
+      name: 'peek',
+      beforeRender(doc, opts) {
+        seen = opts as Record<string, unknown>
+        return doc
+      },
+    }
+    carveToHtml('hi', { extensions: [ext], symbols: { ok: 'OK' }, allowRawHtml: false })
+    expect(seen).toBeDefined()
+    expect(seen!['symbols']).toEqual({ ok: 'OK' })
+    expect(seen!['allowRawHtml']).toBe(false)
+  })
+
+  it('the options handed to beforeRender are frozen and are not the caller object', () => {
+    // The hook reads the options; it does not get to change them. carve-rs found
+    // the shape from the other side: a guard sitting BEHIND the hooks can be
+    // talked out of its own input by a hook that clears the field it reads. Here
+    // the renderer is handed the CALLER's object a few lines later, so the hook
+    // is handed a frozen copy and the two are not the same object.
+    let frozen: boolean | undefined
+    let threw: boolean | undefined
+    let sameObject: boolean | undefined
+    let sawTheOption: unknown
+    const ext: CarveExtension = {
+      name: 'tamper',
+      beforeRender(doc, opts) {
+        // Checked BEFORE the freeze assertion, because `Object.isFrozen` says
+        // true of `undefined` too - without these two the row would pass against
+        // an engine that hands the hook nothing at all.
+        sameObject = (opts as unknown) === (caller as unknown)
+        sawTheOption = opts?.allowRawHtml
+        frozen = Object.isFrozen(opts)
+        try {
+          ;(opts as { allowRawHtml?: boolean }).allowRawHtml = true
+          threw = false
+        } catch {
+          threw = true
+        }
+        return doc
+      },
+    }
+    const caller: { extensions: CarveExtension[]; allowRawHtml: boolean } = {
+      extensions: [ext],
+      allowRawHtml: false,
+    }
+    const out = carveToHtml('`<b>x</b>`{=html}\n', caller)
+    expect(sawTheOption).toBe(false)
+    expect(sameObject).toBe(false)
+    expect(frozen).toBe(true)
+    expect(threw).toBe(true)
+    // The caller's own object is untouched, and the render still escaped.
+    expect(caller.allowRawHtml).toBe(false)
+    expect(out).toContain('&lt;b&gt;x&lt;/b&gt;')
+    // CONTROL: with raw HTML allowed the same document passes it through, so the
+    // row above is the option doing the work rather than an escape everywhere.
+    expect(carveToHtml('`<b>x</b>`{=html}\n', { allowRawHtml: true })).toContain('<b>x</b>')
+  })
+
+  it('CONTROL a beforeRender declared with one parameter still runs', () => {
+    // A control, and it passes against the pre-fix engine too - that is what it
+    // is for. The parameter is additive: every hook written against the old
+    // one-argument shape is called exactly as before, and nothing in this
+    // package requires a hook to declare it.
+    const ext: CarveExtension = {
+      name: 'one-arg',
+      beforeRender(doc: Document): Document {
+        doc.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'added' }] })
+        return doc
+      },
+    }
+    expect(carveToHtml('hi', { extensions: [ext] })).toContain('<p>added</p>')
+  })
 })
 
 describe('extension renderers', () => {
