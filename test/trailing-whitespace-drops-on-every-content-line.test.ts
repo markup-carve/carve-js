@@ -88,24 +88,24 @@ describe('verbatim content is not a content line', () => {
     expect(carveToHtml('`x ` and !`y `\n')).toBe('<p><code>x </code> and y </p>')
   })
 
-  it('keeps an ESCAPED space at a line end, which is content and not a run', () => {
-    // The escape `\\ ` is this language's non-breaking space, so the space it
-    // names is a character the author wrote and the run stops at it.
-    //
-    // Missing this does not lose a character, it changes the BLOCK: dropping the
-    // space leaves a bare backslash at the end of the line, and a bare backslash
-    // at the end of a line is a HARD BREAK. So the author's no-break space came
-    // out as a line break. Raised by codex review on the change that widened
-    // this rule to every line - and it was already true at the block-FINAL
-    // position the narrower rule reached, so this was a live defect before it.
-    expect(carveToHtml('a\\ \nb\n')).toBe('<p>a&nbsp;\nb</p>')
-    expect(carveToHtml('a\\ \n')).toBe('<p>a&nbsp;</p>')
-    expect(carveToHtml('a\\ \\ \nb\n')).toBe('<p>a&nbsp;&nbsp;\nb</p>')
-    // Only the FIRST character of the run can be the escaped one; the rest is
-    // ordinary trailing whitespace and still goes.
+  it('drops an ESCAPED space at a line end too, which leaves a hard break', () => {
+    // THE STRIP RUNS FIRST, BEFORE THE ESCAPE IS READ (markup-carve/carve#1027).
+    // This engine used to carve `\ ` out of the run, so `a\ ` was a no-break
+    // space and `a\` - the same document after an editor saved it - was a hard
+    // break. MARKER REQUIRES CONTENT in resources/grammar.ebnf forbids exactly
+    // that: "an editor stripping the trailing space cannot change the meaning",
+    // and it applies "wherever one appears". carve-rs and carve-php read it
+    // this way already; see
+    // test/an-escaped-space-in-the-last-column-is-a-hard-break.test.ts.
+    expect(carveToHtml('a\\ \nb\n')).toBe('<p>a<br>\nb</p>')
+    expect(carveToHtml('a\\ \n')).toBe('<p>a<br>\n</p>')
+    // Only the LAST column is affected: the escape before it is still an escape.
+    expect(carveToHtml('a\\ \\ \nb\n')).toBe('<p>a&nbsp;<br>\nb</p>')
+    // However long the run is, and whatever it is made of.
     expect(carveToHtml('a\\   \nb\n')).toBe(carveToHtml('a\\ \nb\n'))
+    expect(carveToHtml('a\\ \t\nb\n')).toBe(carveToHtml('a\\ \nb\n'))
     // An EVEN run of backslashes is a literal backslash, so the space after it
-    // is not escaped and does go.
+    // was never escaped and there is no break either.
     expect(carveToHtml('a\\\\ \nb\n')).toBe(carveToHtml('a\\\\\nb\n'))
   })
 

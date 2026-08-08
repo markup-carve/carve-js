@@ -960,27 +960,25 @@ const RE_TRAILING_WS = /[ \t]+$/
  * content (a code block, a raw block, a code span's own line) never reaches
  * here as raw source, and a hard break is a BACKSLASH, so the run before one
  * is not trailing.
+ *
+ * THE STRIP RUNS BEFORE ESCAPE RESOLUTION, INCLUDING FOR AN ESCAPED SPACE
+ * (markup-carve/carve#1027). This used to carve `\ ` out of the run, on the
+ * reasoning that the escape names a character the author wrote. The clause that
+ * decides it is MARKER REQUIRES CONTENT in resources/grammar.ebnf: "an editor
+ * stripping the trailing space cannot change the meaning", stated for the
+ * bullet marker and stated as general - "the rationale is a property of the
+ * separator space and applies wherever one appears". With the carve-out, `x \ `
+ * was a no-break space and `x \` - the SAME document once an editor saved it -
+ * was a hard break, which is the outcome the sentence exists to prevent.
+ * carve-rs and carve-php were stable across that strip; this engine was the
+ * odd one out, and the trailing run now goes whatever precedes it.
+ *
+ * The cost is that an escaped space means a no-break space mid-line and a hard
+ * break in the last column. That context-dependence is deliberate and is the
+ * same trade already made for the bullet marker and the definition-term marker.
  */
 function dropTrailingWhitespace(text: string): string {
-  return text.replace(/[ \t]+(?=\n|$)/g, (run, offset: number, whole: string) => {
-    // AN ESCAPED SPACE IS CONTENT, NOT TRAILING WHITESPACE. `\ ` is this
-    // language's non-breaking-space escape, so the space it names is a
-    // character the author wrote and the run STOPS at it.
-    //
-    // Missing this does not lose a character, it changes the block: dropping
-    // the space leaves a bare backslash at the end of the line, and a bare
-    // backslash at the end of a line is a HARD BREAK. So `a\ ` + newline + `b`
-    // rendered a line break where the author wrote a no-break space. Raised by
-    // codex review on the change that widened this rule to every line, and it
-    // was already true at the block-FINAL position that rule reached before.
-    //
-    // Only the FIRST character of the run can be the escaped one; everything
-    // after it is ordinary trailing whitespace and still goes.
-    let slashes = 0
-    for (let i = offset - 1; i >= 0 && whole[i] === '\\'; i--) slashes++
-
-    return slashes % 2 === 1 && run.startsWith(' ') ? ' ' : ''
-  })
+  return text.replace(/[ \t]+(?=\n|$)/g, '')
 }
 const RE_TABLE_ROW = /^\|/
 // A complete standard table row opens AND closes with `|` (grammar
