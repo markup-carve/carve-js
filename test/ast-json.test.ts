@@ -104,13 +104,33 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     expect(doc.children.every((c) => c.type !== 'frontmatter' && c.type !== 'footnote')).toBe(true)
   })
 
-  it('accepts a footnote definition spelled `id`, which older trees carry', () => {
+  it('REFUSES a footnote definition spelled `id`', () => {
+    // The spelling this engine and carve-php published before PART 12 §7 settled
+    // the field as `label`. carve#743 rules ingest strict and §3 makes field
+    // names spec surface, so a second accepted spelling of one is the
+    // interchange break the clause exists against: carve-php refused this
+    // payload while this engine took it (carve-js#907).
+    expect(() =>
+      fromAstJson({
+        type: 'document',
+        srcByteLength: 0,
+        children: [
+          { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
+          { type: 'footnote', id: 'a', children: [] } as never,
+        ],
+      }),
+    ).toThrow(/"id"/)
+  })
+
+  it('accepts the same definition spelled `label`', () => {
+    // The CONTROL on the row above: the refusal has to be about the spelling,
+    // not about the node.
     const doc = fromAstJson({
       type: 'document',
       srcByteLength: 0,
       children: [
         { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
-        { type: 'footnote', id: 'a', children: [] } as never,
+        { type: 'footnote', label: 'a', children: [] } as never,
       ],
     })
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['a'])

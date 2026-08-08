@@ -85,30 +85,67 @@ describe("an unknown wire property is refused on ingest", () => {
     expect(fromAstJson(toAstJson(doc))).toEqual(doc);
   });
 
-  it("still reads the legacy footnote id, which the decoder maps to a named field", () => {
-    // §11 refuses what an ingest cannot understand; this one it understands
-    // exactly. `id` is what this engine published before PART 12 §7 settled on
-    // `label`, and those trees are stored. Refusing them would not protect
-    // anyone from a half-read tree - it would take away the only reader that
-    // reads them whole.
-    const payload = {
+  it("refuses the legacy footnote id like any other unnamed field", () => {
+    // There is no field-name alias table any more. `id` is what this engine and
+    // carve-php published before PART 12 §7 settled on `label`; carve-php
+    // refused it and this engine took it, so the same payload decoded in two
+    // engines and failed in the third - the interchange break §3 exists against
+    // (carve-js#907, carve#743).
+    const withField = (field: string) => ({
       type: "document",
       srcByteLength: 0,
       children: [
         { type: "paragraph", children: [{ type: "text", value: "x" }] },
         {
           type: "footnote",
-          id: "a",
+          [field]: "a",
           children: [{ type: "paragraph", children: [] }],
         },
       ],
-    };
+    });
 
-    expect(() => fromAstJson(payload as never)).not.toThrow();
+    expect(() => fromAstJson(withField("id") as never)).toThrow(/"id"/);
+    // A BOGUS sibling on the same node is refused too, so the row above cannot
+    // pass because validation was switched off wholesale.
+    expect(() => fromAstJson(withField("bogus") as never)).toThrow(/"bogus"/);
+    // CONTROL: the canonical spelling still decodes.
+    expect(() => fromAstJson(withField("label") as never)).not.toThrow();
   });
 
-  it("does not let the alias in on a type that never had it", () => {
-    // The boundary: the carve-out is one entry, not an escape hatch.
+  it("refuses an unnamed field on the untyped legacy definition entry", () => {
+    // The same clause failing at a second site, found by sweeping for other
+    // spellings while removing the alias above. That entry has no `type` - the
+    // schema gives it none - so the type-keyed field check never reached it,
+    // and `bogus` decoded AND survived into the tree, where re-publishing it
+    // would produce a payload the schema rejects.
+    const entry = (extra: Record<string, unknown>) => ({
+      type: "document",
+      srcByteLength: 0,
+      children: [
+        {
+          type: "definition_list",
+          items: [
+            {
+              terms: [[{ type: "text", value: "T" }]],
+              definitions: [[{ type: "paragraph", children: [] }]],
+              ...extra,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(() => fromAstJson(entry({ bogus: "x" }) as never)).toThrow(/"bogus"/);
+    // CONTROL: the legacy entry itself still decodes, with the position arrays
+    // it legitimately carries - the exemption is about its missing `type`, and
+    // that is all this narrows.
+    expect(() => fromAstJson(entry({}) as never)).not.toThrow();
+    expect(() =>
+      fromAstJson(entry({ definitionLines: [1], definitionSpans: [null] }) as never),
+    ).not.toThrow();
+  });
+
+  it("does not let an unnamed field in on a type that never had one", () => {
     const payload = {
       type: "document",
       srcByteLength: 0,
