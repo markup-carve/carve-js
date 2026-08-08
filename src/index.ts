@@ -48,9 +48,11 @@ import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-a
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 import { coalesceTextRuns } from './coalesce-text-runs.js'
+import { toSourceLayout, type SourceLayout } from './source-layout.js'
 
 export * from './ast.js'
 export type { ParseOptions } from './parse.js'
+export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
   checkPortability,
@@ -281,6 +283,15 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
   }
   return doc
+}
+
+/** Parse once and return canonical AST JSON plus the opt-in source-layout sidecar. */
+export function parseWithSourceLayout(source: string, opts: ParseOptions = {}): {
+  ast: AstJsonDocument
+  layout: SourceLayout
+} {
+  const ast = toAstJsonImpl(parse(source, opts))
+  return { ast, layout: toSourceLayout(source, ast) }
 }
 
 /** Render a Carve AST to HTML matching the spec corpus. */
