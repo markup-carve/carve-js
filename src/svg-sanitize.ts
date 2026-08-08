@@ -92,7 +92,20 @@ const DANGEROUS_URL_SCHEMES = new Set([
   'ms-visio', 'ms-project', 'ms-publisher', 'ms-infopath', 'ms-spd', 'ms-search',
   'search-ms', 'ms-cxh', 'ms-cxh-full', 'shell', 'vscode', 'vscode-insiders', 'jar',
 ])
-const SCHEME_STRIP_RE = /[\x00-\x20\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/g
+/**
+ * Characters dropped before this file reads a scheme. The second spelling of
+ * the core renderer's `SCHEME_PROBE_STRIP_RE`, and it has to stay as wide:
+ * this is a PROBE class, not an emit class, so it names DEL (U+007F) and the
+ * C1 block (U+0080..U+009F) even though PART 9 section 29 T5 puts them outside
+ * the class a target may emit. While they were missing, `<a href>` and
+ * `<image href>` under `allowLinks` / `allowExternalImages` carried
+ * `java<DEL>script:alert(1)` through with the raw `7f` byte, and
+ * `refAttrUnsafe`'s reject-every-absolute-scheme rule matched nothing at all
+ * (markup-carve/carve-js#915). Stripping only removes characters, so a wider
+ * class can refuse more and can never permit more.
+ */
+const SCHEME_STRIP_RE =
+  /[\x00-\x20\u007f-\u009f\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/g
 
 function schemeIsSafe(url: string): boolean {
   const probe = url.replace(SCHEME_STRIP_RE, '')

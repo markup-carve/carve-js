@@ -835,12 +835,18 @@ function stripControls(s: string): string {
 /**
  * The BROAD strip, for a URL on its way through the denied-scheme probe.
  *
- * This is not the emit path and does not answer \u00a729. The probe skips only up to
- * U+001F plus whitespace, so a destination has to reach it with DEL and the C1
- * range already gone or `java<DEL>script:` walks through - which is the defect
- * markup-carve/carve-js#893 fixed by strip-then-probe. Narrowing THIS call
- * along with the emit path would have reopened it, so the two are separate
- * functions rather than one with a flag.
+ * This is not the emit path and does not answer \u00a729. It exists because the probe
+ * once skipped only up to U+001F plus whitespace, so a destination had to reach
+ * it with DEL and the C1 range already gone or `java<DEL>script:` walked through
+ * - the defect markup-carve/carve-js#893 fixed by strip-then-probe.
+ *
+ * The probe class itself now spans DEL and the C1 block
+ * (markup-carve/carve-js#915), so this call is no longer the only thing standing
+ * between a split scheme and the denylist. It stays anyway: it is one layer and
+ * the probe class is another, and this one also removes the sentinels the probe
+ * has no reason to know about. Narrowing THIS call along with the emit path
+ * would still be wrong, so the two remain separate functions rather than one
+ * with a flag.
  */
 function stripDestinationControls(s: string): string {
   return s.replace(/\p{Cc}|[\ue004-\ue006]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))

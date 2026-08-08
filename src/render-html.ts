@@ -232,19 +232,33 @@ export const DANGEROUS_URL_SCHEMES = [
  * `escapeAttr` by the caller.
  */
 /**
- * Characters dropped before scheme detection: C0 controls + ASCII space
- * plus ALL Unicode whitespace/separators that some contexts tolerate around a
- * scheme. The `\s` class (with the `u` flag) covers every Unicode space
- * separator - NBSP (U+00A0), NARROW NO-BREAK SPACE (U+202F), the U+2000..U+200A
- * spaces, MEDIUM MATHEMATICAL SPACE (U+205F), IDEOGRAPHIC SPACE (U+3000), OGHAM
- * SPACE MARK (U+1680), line/paragraph separators (U+2028 / U+2029), the BOM /
+ * Characters dropped before scheme detection: every control character plus
+ * every whitespace character. Written as explicit ranges rather than
+ * `[\p{Cc}\s]` - which it is exactly equal to - so the class is auditable in a
+ * diff and a future narrowing has to name what it drops.
+ *
+ * The `\s` class (with the `u` flag) covers every Unicode space separator -
+ * NBSP (U+00A0), NARROW NO-BREAK SPACE (U+202F), the U+2000..U+200A spaces,
+ * MEDIUM MATHEMATICAL SPACE (U+205F), IDEOGRAPHIC SPACE (U+3000), OGHAM SPACE
+ * MARK (U+1680), line/paragraph separators (U+2028 / U+2029), the BOM /
  * zero-width no-break space (U+FEFF), and ASCII whitespace - while the explicit
- * C0 ranges still strip the non-whitespace controls `\s` omits (U+0000..U+0008,
- * U+000E..U+001F). This is the most thorough strip: it defeats obfuscated
- * schemes like " javascript:" prefixed with a NARROW NO-BREAK SPACE (U+202F)
- * that the previous fixed list would have missed.
+ * ranges strip the non-whitespace controls `\s` omits: U+0000..U+0008,
+ * U+000E..U+001F, DEL (U+007F) and the C1 block (U+0080..U+009F).
+ *
+ * THIS IS A PROBE CLASS AND IT IS DELIBERATELY WIDER THAN PART 9 section 29's
+ * EMIT CLASS. Section 29 governs what a target may write; this governs what the
+ * scheme probe must see THROUGH, and the two answer different questions. DEL
+ * and the C1 block sit OUTSIDE section 29 by T5, and that is precisely why they
+ * have to be named here: while the class was the section 29 one,
+ * `java<DEL>script:alert(1)` reached an `href` with the raw `7f` byte intact
+ * while the plain spelling was blanked (markup-carve/carve-js#915).
+ *
+ * The membership test is "may a URL consumer discard this character before it
+ * reads the scheme", NOT "is this character a control". Stripping only ever
+ * REMOVES characters, so widening the class can deny more and can never allow
+ * more - which is what makes the wide class the safe default here.
  */
-export const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0008\u000e-\u001f\s]+/gu
+export const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\s]+/gu
 
 function sanitizeUrl(url: string, opts: RenderOptions): string {
   if (opts.sanitizeUrls === false) return url
