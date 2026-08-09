@@ -33,6 +33,8 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-caret-line-does-not-end-a-paragraph-it-cannot-caption',
+  'a-column-zero-definition-ends-an-open-list-item',
   'adjacent-block-openers-in-an-attached-run-stay-separate',
   'an-empty-footnote-body-is-written-with-the-empty-sentinel',
   'a-caption-attaches-across-one-blank-line',
