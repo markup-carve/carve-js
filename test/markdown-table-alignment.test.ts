@@ -40,4 +40,8 @@ describe('the Markdown delimiter row carries the column alignment', () => {
   it('emits plain delimiters when nothing is aligned', () => {
     expect(delimiterRow('|= A |= B |\n| 1 | 2 |\n')).toBe('| --- | --- |')
   })
+
+  it('sizes the delimiter from a narrow header rather than a wider body row', () => {
+    expect(carveToMarkdown('| h |\n|---|\n| |x |\n')).toBe('| h |\n| --- |\n|  | x |\n')
+  })
 })
