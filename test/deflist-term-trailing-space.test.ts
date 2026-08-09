@@ -2,10 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /*
- * Trailing whitespace on a block's last line is not content. Every other block
- * here drops it - a paragraph, a heading, a quoted paragraph - and the
- * definition TERM kept it, so `:: t ` published `<dt>t </dt>` where carve-rs and
- * carve-php publish `<dt>t</dt>`.
+ * Trailing whitespace on the marker line is dropped. A folded physical line is
+ * preserved verbatim by the term production, including its trailing run.
  *
  * Found by the differential fuzzer (carve#510), on `:: ` + a code span + a
  * trailing space: the space survived beside the `</code>`, which is where it is
@@ -33,9 +31,8 @@ describe('a definition term', () => {
     expect(carveToHtml(':: t\n:  d\n')).toContain('<dt>t</dt>')
   })
 
-  it('drops it on a folded continuation line as well', () => {
-    // A term folds a following plain line as a soft break; the trailing space
-    // then sits at the end of the SECOND line.
-    expect(carveToHtml(':: one\ntwo \n:  d\n')).toContain('<dt>one\ntwo</dt>')
+  it('preserves it on a folded continuation line', () => {
+    // A term folds a following physical line verbatim as a soft break.
+    expect(carveToHtml(':: one\ntwo \n:  d\n')).toContain('<dt>one\ntwo </dt>')
   })
 })

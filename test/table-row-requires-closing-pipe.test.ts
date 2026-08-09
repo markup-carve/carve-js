@@ -25,10 +25,8 @@ describe('a table row needs a closing pipe', () => {
     )
   })
 
-  it('an empty cell between pipes is still a table cell', () => {
-    expect(html('| |')).toBe(
-      '<table>\n  <tbody>\n    <tr><td></td></tr>\n  </tbody>\n</table>',
-    )
+  it('a whitespace-only single cell is literal text', () => {
+    expect(html('| |')).toBe('<p>| |</p>')
   })
 
   it('an incomplete row does not interrupt a paragraph or heading', () => {

@@ -276,7 +276,7 @@ const RE_FENCE = new RegExp(
 // BLANK LINE is, which moves document structure rather than what a line opens;
 // it spells the same two characters, which is now the point rather than a
 // coincidence.
-const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +([^ \t].*)$/
+const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +[ \t]*([^ \t].*)$/
 // Ordered marker: decimal, a single letter (alpha), or a roman-numeral
 // run, then `.` or `)`. The dialect is fixed by the FIRST item (see
 // olKindOf); letter/roman markers are ambiguous w.r.t. paragraphs (§10).
@@ -289,10 +289,10 @@ const RE_UNORDERED = /^(?=([ \t]*))\1[-*] +([^ \t].*)$/
 // shorthand) uses `.` only. Capture groups are unchanged, so every call site
 // keeps working: [1] indent, [2] value ('' when bare), [3] delimiter, [4] content.
 const RE_ORDERED =
-  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +([^ \t].*)$/
+  /^(?=([ \t]*))\1([0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))([.)]) +[ \t]*([^ \t].*)$/
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
-const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +([^ \t].*)$/
+const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*([^ \t].*)$/
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
@@ -594,7 +594,7 @@ const RE_DEFLIST_DEF = /^: {2,}(.+)$/
 // so narrowing the run is exactly what exposed it, and `*[HTML]: <U+2028>Hyper`
 // became a paragraph instead of an abbreviation whose title starts with the
 // character. Raised by codex review on the change that introduced it.
-const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +([^]+)$/u
+const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
 // Block-level reference-link definition: `[label]: url "title"` or
 // `[label]: url 'title'` (grammar.ebnf link_title allows both quote
 // styles). The destination is a bare token; an angle-bracketed `<url>`
@@ -994,7 +994,7 @@ const isTableRow = (line: string): boolean => {
   // A row needs a non-empty cell OR at least two cells: `|||` (two empty cells)
   // is a valid all-empty body row, but `||` (a single empty cell) is not a
   // table. Matches carve-php / carve-rs.
-  return cells.some((cell) => cell.length > 0) || cells.length >= 2
+  return cells.some((cell) => cell.trim().length > 0) || cells.length >= 2
 }
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
@@ -3731,47 +3731,39 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // everything after it - so a stanza containing one stays unanchored, which
     // is what PART 12 §4 asks for when a position cannot be produced.
     const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.aligned)
-    let breakIndex = 0
-    const inline = parseInline(
-      lines.map((l) => l.text).join('\n'),
-      lexer.abbrDefs,
-      lexer.linkDefs,
-      anchorable
-        ? inlineSource({
-            baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
-            startLine: lexer.lineNumber(lines[0]!.lineIndex),
-            startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
-            lineAnchors: lines.map((l) => ({
-              offset: lexer.lineOffset(l.lineIndex),
-              column: lexer.lineStartColumn(l.lineIndex),
-            })),
-          })
-        : inlineSource({ anchored: false }),
-    ).map((node) => {
-      if (node.type !== 'soft_break') return node
-      // Keep the break's span: it is the same source, just a different meaning
-      // inside a line block. Building a fresh object dropped it.
-      const hardBreak = { type: 'hard_break' } as InlineNode
-      // The stanza's text is `lines` joined by '\n' and holds no other newline,
-      // so the k-th break IS the newline ending lines[k] - which line geometry
-      // knows even when a tab left the INLINE offsets unanchored. Without this
-      // the break inherited the unanchored parse and came out unplaced (#549).
-      const line = lines[breakIndex++]
-      if (node.pos) {
-        hardBreak.pos = node.pos
-      } else if (lexer.hasDocumentOffsets && line) {
-        const end = lexer.lineOffset(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0)
-        const column = lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0)
+    const inline: InlineNode[] = []
+    lines.forEach((line, index) => {
+      inline.push(
+        ...parseInline(
+          line.text,
+          lexer.abbrDefs,
+          lexer.linkDefs,
+          anchorable
+            ? inlineSource({
+                baseOffset: lexer.lineOffset(line.lineIndex),
+                startLine: lexer.lineNumber(line.lineIndex),
+                startColumn: lexer.lineStartColumn(line.lineIndex),
+              })
+            : inlineSource({ anchored: false }),
+        ),
+      )
+      if (index + 1 < lines.length) {
+        const hardBreak = { type: 'hard_break' } as InlineNode
+        if (lexer.hasDocumentOffsets) {
+        const end = lexer.lineOffset(line.lineIndex) + line.text.length
+        const nextLineOffset = lexer.lineOffset(lines[index + 1]!.lineIndex)
+        const column = lexer.lineStartColumn(line.lineIndex) + line.text.length
         hardBreak.pos = {
           startLine: lexer.lineNumber(line.lineIndex),
           endLine: lexer.lineNumber(line.lineIndex),
           startColumn: column,
           endColumn: column + 1,
           startOffset: end,
-          endOffset: end + 1,
+          endOffset: nextLineOffset,
         }
+        }
+        inline.push(hardBreak)
       }
-      return hardBreak
     })
 
     const paragraph: Paragraph = { type: 'paragraph', children: inline }
@@ -4202,7 +4194,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // it with a soft break, instead of ending the list and stranding the
       // definition. A blank line, a new marker (`::` / `:  `), or a block
       // opener ends the term.
-      let termText = t[1]!
+      // The term's marker line drops its own trailing layout, but a folded
+      // continuation is appended verbatim. In particular, the separator on a
+      // content-less marker-shaped continuation (`* `, `. `) is content here.
+      let termText = t[1]!.replace(/[ \t]+$/, '')
       let continuationLines = 0
       while (!lexer.eof()) {
         const next = lexer.peek()!
@@ -4230,7 +4225,6 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // Unicode space, all of which are CONTENT and survive at every other
       // content line in this file. It also reached only the LAST line, where a
       // term folds a following plain line into itself just as a paragraph does.
-      termText = dropTrailingWhitespace(termText)
       const termStart = lexer.lines[termLineIndex]!.indexOf(t[1]!)
       // A continuation line folds in whole, indent included, and the scanner
       // strips that indent when it builds the text node - so a single base
@@ -5006,6 +5000,7 @@ function colonFenceShapeEndsLazyContinuation(line: string): boolean {
 }
 
 function isLiteralColonFenceLine(line: string): boolean {
+  line = line.replace(/^[ \t]+/, '')
   return (
     /^:{3,}/.test(line) &&
     !RE_ADMONITION_CLOSE.test(line) &&
@@ -5660,8 +5655,10 @@ function parseList(lexer: Lexer): List {
       // open nothing: a blank, an empty quote, or a block-attribute line (which
       // renders nothing and floats forward). `trackItemLazyState` applies the
       // same three to every later line; this is the lead-line copy of it.
-      lazyFoldable:
-        !isBlankLine(content) && !isEmptyQuoteLine(content) && !isBlockAttributeLine(content),
+      // An attribute written ON the marker line belongs to the item and floats
+      // to its next block; keep collecting that block. A standalone attribute
+      // line encountered later still ends lazy continuation (§10 I5).
+      lazyFoldable: !isBlankLine(content) && !isEmptyQuoteLine(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
     // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
@@ -7187,7 +7184,7 @@ function stripVerbatimPadding(content: string): string {
   // `` ` x ` `` renders `<code>x</code>` - a vertical tab deciding, in the one
   // test that separates padding from content, that a space is not padding.
   if (trimStructural(content) === '') return content
-  return content.replace(/^ (.*) $/, '$1')
+  return content.replace(/^ ([\s\S]*) $/, '$1')
 }
 
 // Resolve the verbatim (code) span opening at `i` (a backtick). The opener is
@@ -7872,9 +7869,14 @@ function scanInlineInner(
       if (text[tick] === '`') {
         const { end, closed, openLen } = verbatimSpanEnd(text, tick)
         const innerEnd = end - openLen
-        if (closed && text[end] !== '`' && innerEnd > tick + openLen && text[innerEnd - 1] !== '`') {
+        const hasContent = closed
+          ? innerEnd > tick + openLen && text[innerEnd - 1] !== '`'
+          : text.length > tick + openLen
+        if (hasContent && (!closed || text[end] !== '`')) {
           flush()
-          const content = stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
+          const content = closed
+            ? stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
+            : text.slice(tick + openLen).replace(/[ \t\n\r]+$/, '')
           const len = end - i
           out.push(withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
           i += len

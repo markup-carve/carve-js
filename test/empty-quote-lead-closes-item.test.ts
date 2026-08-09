@@ -37,12 +37,9 @@ describe('a list item whose only content is an empty quote', () => {
     }
   })
 
-  it('closes after a block-attribute lead too - it opens nothing either', () => {
-    // `{i}` renders nothing and floats forward (§15 A1/A2), so there is no
-    // paragraph for the column-0 line to continue. The attribute is left
-    // dangling with no following block INSIDE the item and dropped (A4).
-    expect(norm(carveToHtml('. {i}\n`\n'))).toBe('<ol><li></li></ol><p><code></code></p>')
-    expect(norm(carveToHtml('. {i}\nX\n'))).toBe('<ol><li></li></ol><p>X</p>')
+  it('keeps a marker-line block attribute in the item for its following block', () => {
+    expect(norm(carveToHtml('. {i}\n`\n'))).toBe('<ol><li><p i=""><code></code></p></li></ol>')
+    expect(norm(carveToHtml('. {i}\nX\n'))).toBe('<ol><li><p i="">X</p></li></ol>')
   })
 
   it('keeps a brace line that is NOT an attribute line inside the item', () => {
