@@ -268,8 +268,8 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
 
 function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
+  let headerColumns = 0
   const rows: string[] = []
-  let columns = 0
   // Per-column alignment for the Markdown delimiter row, which is the only place
   // Markdown can express it.
   //
@@ -285,10 +285,10 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
     const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
-    columns = Math.max(columns, cells.length)
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) {
       header = rendered
+      headerColumns = cells.length
       row.cells.forEach((cell, i) => {
         if (aligns[i] === undefined) aligns[i] = cell.align
       })
@@ -318,7 +318,10 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   let out = ''
   if (header !== undefined) {
     out += `${header}\n`
-    out += `| ${Array.from({ length: columns }, (_, i) => separator(i)).join(' | ')} |\n`
+    // The delimiter promotes the header row, so its width must match that row,
+    // not a wider body row. A wider delimiter makes common Markdown readers
+    // reject the entire table (carve#1042, PART 11 §10b).
+    out += `| ${Array.from({ length: headerColumns }, (_, i) => separator(i)).join(' | ')} |\n`
   }
   out += `${rows.join('\n')}\n\n`
   return out

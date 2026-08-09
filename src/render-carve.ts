@@ -100,6 +100,10 @@ interface CarveContext {
   lineBlockDepth: number
   /** Number of colon-fence containers enclosing the block currently rendering. */
   colonFenceDepth: number
+  /** Whether the previous sibling block can host a caption. */
+  afterCaptionHost: boolean
+  /** Caption state scoped to the paragraph currently being rendered. */
+  paragraphStartsAfterCaptionHost: boolean
 }
 
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
@@ -323,6 +327,8 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
       listDepth: 0,
       lineBlockDepth: 0,
       colonFenceDepth: 0,
+      afterCaptionHost: false,
+      paragraphStartsAfterCaptionHost: false,
     }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
@@ -459,14 +465,36 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
+  const previousHost = ctx.afterCaptionHost
+  const previousParagraphStart = ctx.paragraphStartsAfterCaptionHost
+  ctx.afterCaptionHost = false
   try {
-    return blocks
-      .map((b) => renderBlock(b, ctx))
-      .filter((s) => s.length > 0)
-      .join('\n\n')
+    const parts: string[] = []
+    for (const block of blocks) {
+      ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
+      const rendered = renderBlock(block, ctx)
+      ctx.afterCaptionHost = hostsCaption(block)
+      if (rendered.length > 0) parts.push(rendered)
+    }
+    return parts.join('\n\n')
   } finally {
+    ctx.afterCaptionHost = previousHost
+    ctx.paragraphStartsAfterCaptionHost = previousParagraphStart
     ctx.blockDepth--
   }
+}
+
+function hostsCaption(block: BlockNode): boolean {
+  if (
+    block.type === 'table' ||
+    block.type === 'code_block' ||
+    block.type === 'block_quote' ||
+    block.type === 'image'
+  )
+    return true
+  if (block.type !== 'paragraph' || block.children.length !== 1) return false
+  const child = block.children[0]
+  return child?.type === 'image' || (child?.type === 'math' && child.display)
 }
 
 /** A copy of `attrs` without its `id`, for an id the author did not write. */
@@ -531,7 +559,11 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(headingBody)
     }
     case 'paragraph':
-      return withAttrs(guardThematicBreakLines(renderInlines(node.children, ctx)))
+      return withAttrs(
+        guardThematicBreakLines(
+          renderInlines(node.children, ctx, attrs === '' && ctx.paragraphStartsAfterCaptionHost),
+        ),
+      )
     case 'code_block': {
       const fence = safeFence(node.content, 3)
       const info = codeFenceInfo(node.lang, node.header, node.label)
@@ -1289,19 +1321,50 @@ function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
   }
 }
 
-function renderInlines(nodes: InlineNode[], ctx: CarveContext): string {
+function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = false): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
-    return nodes
-      .map((node, idx) => renderInline(node, ctx, lastBoundary(nodes[idx - 1]), firstBoundary(nodes[idx + 1])))
-      .join('')
+    let out = ''
+    let firstLine = true
+    let lineNodeCount = 0
+    let lineHostsCaption = false
+    nodes.forEach((node, idx) => {
+      out += renderInline(
+        node,
+        ctx,
+        lastBoundary(nodes[idx - 1]),
+        firstBoundary(nodes[idx + 1]),
+        captionCanOpen,
+      )
+      if (node.type === 'soft_break') {
+        captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
+        firstLine = false
+        lineNodeCount = 0
+        lineHostsCaption = false
+        return
+      }
+      lineNodeCount++
+      lineHostsCaption = lineNodeCount === 1 && inlineHostsCaption(node)
+      captionCanOpen = false
+    })
+    return out
   } finally {
     ctx.inlineDepth--
   }
 }
 
-function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextChar = ''): string {
+function inlineHostsCaption(node: InlineNode): boolean {
+  return (node.type === 'image' && node.src !== '') || (node.type === 'math' && node.display)
+}
+
+function renderInline(
+  node: InlineNode,
+  ctx: CarveContext,
+  prevChar = '',
+  nextChar = '',
+  captionCanOpen = false,
+): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
   node = normalizeLegacyInline(node)
@@ -1309,7 +1372,7 @@ function renderInline(node: InlineNode, ctx: CarveContext, prevChar = '', nextCh
   const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
   switch (node.type) {
     case 'text':
-      return escapeText(cleanEscapedText(node))
+      return escapeText(cleanEscapedText(node), captionCanOpen)
     case 'escaped_text':
       // The author escaped this character; the writer says so again. No
       // minimal/conservative decision applies - the node IS the decision.
@@ -1950,11 +2013,10 @@ function cleanEscapedText(node: Text): string {
 // the writer as TEXT is one the author escaped and stays escaped. The
 // CANDIDATE set is every other character the grammar can read as an opener,
 // escaped only when the minimal form fails to round-trip.
-// The caret is a CANDIDATE, not unconditional. It opens nothing on its own,
-// and section 2's test is whether omitting the escape changes the RE-PARSED
-// AST: `}^p` re-parses identically bare, so nothing there needs escaping, and
-// writing it with two backslashes was over-escaping by two characters
-// (carve#581).
+// The caret is examined as a candidate, but escaped only when it can open an
+// inline construct or a caption in the exact block slot being rendered. That
+// keeps an unrelated orphan caret bare when another caret in the document is
+// load-bearing (carve#1028).
 //
 // It used to be unconditional because a text node whose LEADING caret came
 // from an escape is flagged (`escapedLeadingCaret`), so an image followed by a
@@ -2070,11 +2132,18 @@ function guardThematicBreakLines(body: string): string {
  */
 const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
-function escapeText(text: string): string {
+function escapeText(text: string, captionCanOpen = false): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
   const out = text
     .replace(UNWRITABLE_CONTROLS, '')
-    .replace(escapes, '\\$&')
+    .replace(escapes, (char, offset: number) => {
+      if (char !== '^') return `\\${char}`
+      const next = text[offset + 1] ?? ''
+      const opensCaption =
+        captionCanOpen && offset === 0 && (next === ' ' || next === '\t')
+      const opensInline = next === '[' || (text[offset - 1] ?? '') === '{' || next === '}'
+      return opensCaption || opensInline ? '\\^' : '^'
+    })
   if (escapeMode === 'minimal') return out
   // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
   // single character: `:::` needs only its first colon neutralized to stop
