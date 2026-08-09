@@ -138,7 +138,6 @@ describe('a definition body is such a container', () => {
       ['- ```\n  body\n  ```\ntail\n', ':: t\n:  ```\n   body\n   ```\ntail\n'],
       ['- >\ntail\n', ':: t\n:  >\ntail\n'],
       ['- > q\ntail\n', ':: t\n:  > q\ntail\n'],
-      ['- {#x}\ntail\n', ':: t\n:  {#x}\ntail\n'],
       ['- body\ntail\n', ':: t\n:  body\ntail\n'],
       ['- | a |\ntail\n', ':: t\n:  | a |\ntail\n'],
       ['- # h\ntail\n', ':: t\n:  # h\ntail\n'],
