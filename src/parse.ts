@@ -3750,7 +3750,12 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       if (index + 1 < lines.length) {
         const hardBreak = { type: 'hard_break' } as InlineNode
         if (lexer.hasDocumentOffsets) {
-        const end = lexer.lineOffset(line.lineIndex) + line.text.length
+        // The line-block text may have expanded tabs. Its display width is
+        // useful for the column below, but it is not a source byte length.
+        // Anchor the break at the end of the original line instead; otherwise
+        // two tabs can put startOffset past the following line's offset.
+        const end =
+          lexer.lineOffset(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0)
         const nextLineOffset = lexer.lineOffset(lines[index + 1]!.lineIndex)
         const column = lexer.lineStartColumn(line.lineIndex) + line.text.length
         hardBreak.pos = {

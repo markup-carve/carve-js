@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToAstJson, carveToHtml } from '../src/index.js'
 
 describe('differential audit regressions', () => {
   it('keeps an empty marker separator when it is term continuation content', () => {
@@ -42,5 +42,13 @@ describe('differential audit regressions', () => {
 
   it('absorbs a bare colon run after an indented malformed opener', () => {
     expect(carveToHtml(' :::e\n:::\n')).toBe('<p>:::e\n:::</p>')
+  })
+
+  it('anchors a line-block hard break to the source line when tabs expand', () => {
+    const ast = carveToAstJson('::: |\nwide\t\tgap\nnext\n:::\n')
+    const hardBreak = ast.children[0].children[0].children[1]
+    expect(hardBreak.type).toBe('hard_break')
+    expect(hardBreak.pos.startOffset).toBe(15)
+    expect(hardBreak.pos.endOffset).toBe(16)
   })
 })
