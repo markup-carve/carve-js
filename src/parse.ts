@@ -2710,6 +2710,18 @@ function parseBlockAttributeRun(src: string): Attrs | null {
       }
     }
     i++
+    // Padding after the final block belongs to the line ending and is legal.
+    // The same run before another `{...}` block is authored paragraph content,
+    // so do not consume it as a separator between blocks.
+    if (i < src.length && isCarveWhitespace(src[i])) {
+      let end = i
+      while (end < src.length && isCarveWhitespace(src[end])) end++
+      if (end === src.length) {
+        i = end
+        break
+      }
+      return null
+    }
   }
 
   if (count === 0) return null

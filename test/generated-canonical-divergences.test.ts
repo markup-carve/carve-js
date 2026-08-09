@@ -8,6 +8,10 @@ describe('generated canonical divergence regressions', () => {
     expect(carveToCarve(source)).toBe('::: note {.cls} \\  a) y\n{.cls} {.cls}\n')
   })
 
+  it('still accepts padding after one block-attribute block', () => {
+    expect(carveToCarve('{.cls} \n 10\\ kg\n')).toBe('{.cls}\n10\\ kg\n')
+  })
+
   it('a bare image lazily continues an open list-item paragraph', () => {
     const source = 'a) y\n[t][r]\n+-\n{,y,}\n:name:\n![a](/u)\n[t][r]\n'
 
