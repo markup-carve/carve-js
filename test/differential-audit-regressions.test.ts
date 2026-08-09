@@ -51,4 +51,13 @@ describe('differential audit regressions', () => {
     expect(hardBreak.pos.startOffset).toBe(15)
     expect(hardBreak.pos.endOffset).toBe(16)
   })
+
+  it('uses visible autolink text and image alt text in heading keys', () => {
+    const autolink = carveToHtml('# a <https://e.com> b\n\n[a <https://e.com> b][]\n')
+    expect(autolink).toContain('id="a-https-e-com-b"')
+    expect(autolink).toContain('href="#a-https-e-com-b"')
+    const image = carveToHtml('# a ![alt](/i.png) b\n\n[a ![alt](/i.png) b][]\n')
+    expect(image).toContain('id="a-alt-b"')
+    expect(image).toContain('href="#a-alt-b"')
+  })
 })
