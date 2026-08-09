@@ -15,4 +15,7 @@ describe('non-HTML tables keep a genuine trailing empty cell', () => {
   it('ansi: a genuine trailing empty cell keeps the box well-formed', () => {
     expect(strip(carveToAnsi('| x || \n|---|---|\n'))).toContain('│ x │  │')
   })
+  it('ansi: a short row gets a synthetic trailing display cell', () => {
+    expect(strip(carveToAnsi('| h |\n|---|\n| |x |\n'))).toContain('│ h │   │')
+  })
 })
