@@ -2632,6 +2632,10 @@ function tryCollectBlockAttributes(lexer: Lexer): Attrs | null {
 
 function parseBlockAttributeRun(src: string): Attrs | null {
   let i = 0
+  // The BELOW-column classifier passes a dedented first-line override while
+  // collection still carries the original residual indent. Strip that one
+  // leading run; separators between CLOSED brace blocks remain forbidden.
+  while (i < src.length && isCarveWhitespace(src[i])) i++
   let count = 0
   // The first block's parsed Attrs is returned as-is for a single-block run so
   // that common path stays byte-identical to the pre-optimization fold (which
@@ -2648,10 +2652,11 @@ function parseBlockAttributeRun(src: string): Attrs | null {
   const orderSeen = new Set<string>()
 
   while (i < src.length) {
-    // The separator between two attribute BLOCKS on one line is `whitespace`
-    // (PART 7, the terminal `attr_separator` reads). `\s` let `{#a}<VT>{.b}`
-    // merge into one attribute line where `{#a}<SOH>{.b}` stayed a paragraph.
-    while (i < src.length && isCarveWhitespace(src[i])) i++
+    // Multiple brace blocks are the adjacent extension pinned by corpus 114:
+    // `{.c}{#i}`. A space between two CLOSED blocks is paragraph content, not
+    // attr_separator (which separates attributes inside one `{...}` block).
+    // Accepting it here consumed `{.c} {.d}` as a dangling attribute line and
+    // made the minimal canonical form lose authored text (carve#1028).
     if (i >= src.length) break
     if (src[i] !== '{') return null
 
@@ -4975,8 +4980,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_UNORDERED.test(line) ||
     RE_ORDERED.test(line) ||
     extractItemAttr(line) !== null ||
-    isTableRow(line) ||
-    isBlockImageLine(line)
+    isTableRow(line)
   )
 }
 
