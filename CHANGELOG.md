@@ -313,6 +313,38 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown delimiter row is sized from the header row, not the table**
+  (markup-carve/carve#1042). PART 11 §10b says the delimiter "carries exactly one
+  cell for each cell in the HEADER ROW, not one for each column reached by a
+  wider body row", and the Markdown target sized it from the table width instead.
+  A ragged table therefore emitted a delimiter wider than the row it promotes:
+
+  ```
+  | h |
+  |---|
+  | |x |
+  ```
+
+  used to write
+
+  ```
+  | h |
+  | --- | --- |
+  |  | x |
+  ```
+
+  which neither python-markdown nor marked reads as a table - the whole document
+  published as a paragraph of pipes. It now writes
+
+  ```
+  | h |
+  | --- |
+  |  | x |
+  ```
+
+  and both readers render a table again. A header that is itself the widest row
+  is unchanged, and the header's column alignment still reaches the delimiter.
+
 - Keep adjacent mergeable block openers separate when formatting a tight
   `+`-attached run, instead of collapsing two quotes or tables into one block.
 
