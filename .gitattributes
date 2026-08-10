@@ -1,0 +1,21 @@
+* text=auto eol=lf
+
+*.gif binary
+*.ico binary
+*.jpeg binary
+*.jpg binary
+*.pdf binary
+*.png binary
+*.webp binary
+
+/.github export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.gitmodules export-ignore
+/docs export-ignore
+/examples export-ignore
+/package-lock.json export-ignore
+/published-drift.baseline export-ignore
+/scripts export-ignore
+/spec export-ignore
+/test export-ignore
