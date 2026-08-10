@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-10
+
 ### Breaking
 
 - **An escaped space in the last column of a line is a hard break**
@@ -1010,7 +1012,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--from-djot`. `MigrationWarning` gains a `category` field and
   `MigrationCategory` is exported.
 
-## [0.1.0] - YYYY-MM-DD
+## [0.1.0] - 2026-07-14
 
 Initial release of the **reference TypeScript implementation** of the
 [Carve](https://github.com/markup-carve/carve) markup language.
@@ -1095,5 +1097,8 @@ implementations are byte-matched against.
   zero-width Unicode control characters stripped from text and code content (§26)
 - Uniform nesting depth cap of 200
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.3...HEAD
+[0.1.3]: https://github.com/markup-carve/carve-js/compare/0.1.2...0.1.3
+[0.1.2]: https://github.com/markup-carve/carve-js/compare/0.1.1...0.1.2
+[0.1.1]: https://github.com/markup-carve/carve-js/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/markup-carve/carve-js/releases/tag/0.1.0
