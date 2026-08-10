@@ -40,6 +40,7 @@ export function smartTypographyIsSource(
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
   const ctx: PlainContext = {
     smartSource: smartTypographyIsSource(opts.smartTypography),
+    listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
     // This target expands a crossref label exactly as the other three do, so it
@@ -56,6 +57,7 @@ export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}
 
 interface PlainContext {
   smartSource: boolean
+  listDepth: number
   blockDepth: number
   inlineDepth: number
   /** Per-render derived-text expansion budget (DoS guard). */
@@ -137,13 +139,21 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
 }
 
 function renderList(node: List, ctx: PlainContext): string {
+  ctx.listDepth++
   let out = ''
   let counter = node.start ?? 1
+  const indent = '  '.repeat(ctx.listDepth - 1)
   for (const item of node.items) {
-    out += node.ordered ? `${counter}. ` : '- '
+    out += indent + (node.ordered ? `${counter}. ` : '- ')
     counter++
-    out += `${trimNonNbsp(renderBlocks(item.children, ctx))}\n`
+    let content = trimNonNbsp(renderBlocks(item.children, ctx))
+    if (node.tight) {
+      const nestedIndent = '  '.repeat(ctx.listDepth)
+      content = content.replace(new RegExp(`\\n\\n(?=${nestedIndent}(?:-|\\d+[.)]) )`, 'g'), '\n')
+    }
+    out += `${content}\n`
   }
+  ctx.listDepth--
   return `${out}\n`
 }
 
