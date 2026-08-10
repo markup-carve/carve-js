@@ -540,6 +540,12 @@ export function inlineText(nodes: InlineNode[]): string {
       case 'tag':
         out += n.name
         break
+      case 'autolink':
+        out += n.text
+        break
+      case 'image':
+        out += n.alt
+        break
       case 'soft_break':
       case 'hard_break':
         out += ' '
@@ -548,7 +554,7 @@ export function inlineText(nodes: InlineNode[]): string {
         // Contributes its assigned number (nothing while unresolved).
         out += n.n === undefined ? '' : String(n.n)
         break
-      // image, autolink, footnote, crossref, critic_comment: no slug text
+      // footnote, crossref, critic_comment: no slug text
       default:
         break
     }
