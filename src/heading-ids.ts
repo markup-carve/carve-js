@@ -535,10 +535,10 @@ export function inlineText(nodes: InlineNode[]): string {
         out += n.abbr
         break
       case 'mention':
-        out += n.user
+        out += `@${n.user}`
         break
       case 'tag':
-        out += n.name
+        out += `#${n.name}`
         break
       case 'autolink':
         out += n.text

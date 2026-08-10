@@ -117,10 +117,10 @@ describe('table rows and cells carry exact spans', () => {
     expect(second.pos.startColumn).toBe(8)
   })
 
-  it('spans a row from its first cell to its last', () => {
+  it('spans a row including its opening and closing pipes', () => {
     const row = table().rows[0]!
     const codepoints = [...src]
-    expect(codepoints.slice(row.pos.startOffset, row.pos.endOffset).join('')).toBe(' aaa | bbb ')
+    expect(codepoints.slice(row.pos.startOffset, row.pos.endOffset).join('')).toBe('| aaa | bbb |')
   })
 
   it('omits a merged CELL span but keeps the row', () => {

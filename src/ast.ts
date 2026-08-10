@@ -335,6 +335,8 @@ export interface LineBlock extends BaseNode {
 export interface DefinitionItem {
   terms: InlineNode[][]
   definitions: BlockNode[][]
+  /** Source extent of each `:: term`, including its marker. */
+  termSpans?: (Position | undefined)[]
   /**
    * 1-based source line of each definition's `:  ` marker line, parallel to
    * `definitions`. Only populated when parsing with positions; used to stamp

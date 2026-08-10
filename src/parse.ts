@@ -2901,6 +2901,24 @@ function attachBlockPos(
     startOffset: lexer.lineOffset(startLineIndex),
     endOffset: lexer.lineOffset(endLineIndex) + endLine.length,
   }
+  // A paragraph has no opening marker: its extent begins at its first owned
+  // inline, not at indentation or a surrounding container's content column.
+  if ((node as { type?: string }).type === 'paragraph') {
+    const children = (node as { children?: Array<{ pos?: Position }> }).children
+    const allPlaced = children?.every((child) => child.pos !== undefined) ?? false
+    const first = allPlaced ? children?.[0]?.pos : undefined
+    const last = allPlaced ? children?.[children.length - 1]?.pos : undefined
+    if (first) {
+      node.pos.startLine = first.startLine
+      if (first.startColumn !== undefined) node.pos.startColumn = first.startColumn
+      if (first.startOffset !== undefined) node.pos.startOffset = first.startOffset
+    }
+    if (last) {
+      node.pos.endLine = last.endLine
+      if (last.endColumn !== undefined) node.pos.endColumn = last.endColumn
+      if (last.endOffset !== undefined) node.pos.endOffset = last.endOffset
+    }
+  }
 }
 
 function parseHeading(lexer: Lexer): Heading {
@@ -3760,12 +3778,13 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         const sourceLineEnd = lineOffset + (lexer.lines[line.lineIndex]?.length ?? 0)
         const end = Math.min(lineOffset + line.text.length, sourceLineEnd)
         const nextLineOffset = lexer.lineOffset(lines[index + 1]!.lineIndex)
-        const column = lexer.lineStartColumn(line.lineIndex) + line.text.length
+        const column = lexer.lineStartColumn(line.lineIndex) +
+          (lexer.lines[line.lineIndex]?.length ?? 0)
         hardBreak.pos = {
           startLine: lexer.lineNumber(line.lineIndex),
-          endLine: lexer.lineNumber(line.lineIndex),
+          endLine: lexer.lineNumber(lines[index + 1]!.lineIndex),
           startColumn: column,
-          endColumn: column + 1,
+          endColumn: lexer.lineStartColumn(lines[index + 1]!.lineIndex),
           startOffset: end,
           endOffset: nextLineOffset,
         }
@@ -3785,6 +3804,21 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         endColumn: lexer.lineStartColumn(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
         startOffset: lexer.lineOffset(first.lineIndex),
         endOffset: lexer.lineOffset(last.lineIndex) + (lexer.lines[last.lineIndex]?.length ?? 0),
+      }
+      const placed = anchorable ? inline.filter((node) => node.pos !== undefined) : []
+      const firstPos = placed.find(
+        (node) => node.type !== 'soft_break' && node.type !== 'hard_break',
+      )?.pos
+      const lastPos = placed[placed.length - 1]?.pos
+      if (firstPos) {
+        paragraph.pos.startLine = firstPos.startLine
+        if (firstPos.startColumn !== undefined) paragraph.pos.startColumn = firstPos.startColumn
+        if (firstPos.startOffset !== undefined) paragraph.pos.startOffset = firstPos.startOffset
+      }
+      if (lastPos) {
+        paragraph.pos.endLine = lastPos.endLine
+        if (lastPos.endColumn !== undefined) paragraph.pos.endColumn = lastPos.endColumn
+        if (lastPos.endOffset !== undefined) paragraph.pos.endOffset = lastPos.endOffset
       }
     }
     return paragraph
@@ -4190,6 +4224,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
 
   while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
     const terms: InlineNode[][] = []
+    const termSpans: (Position | undefined)[] = []
     const definitions: BlockNode[][] = []
     const definitionLines: number[] = []
     const definitionSpans: (Position | undefined)[] = []
@@ -4261,6 +4296,11 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
           ...(termAnchors ? { lineAnchors: termAnchors } : {}),
         }),
       )
+      termSpans.push(
+        lexer.hasDocumentOffsets
+          ? lineRange(lexer, termLineIndex, termLineIndex + continuationLines)
+          : undefined,
+      )
     }
     while (!lexer.eof()) {
       // A blank line before a `:  ` definition is allowed: a definition may be
@@ -4292,7 +4332,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, lexer.pos - 1) : undefined,
       )
     }
-    items.push({ terms, definitions, definitionLines, definitionSpans })
+    items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
     // Allow a single blank line before the next entry's `:: term`.
     if (!lexer.eof() && isBlankLine(lexer.peek()!)) {
       let look = 1
@@ -6165,7 +6205,15 @@ function parseList(lexer: Lexer): List {
     }
 
     const item: ListItem = { type: 'list_item', children }
-    attachBlockPos(lexer, item, itemStartLineIndex, lexer.pos)
+    let itemEnd = lexer.pos
+    while (itemEnd > itemStartLineIndex + 1 && isBlankLine(lexer.lines[itemEnd - 1]!)) itemEnd--
+    attachBlockPos(lexer, item, itemStartLineIndex, itemEnd)
+    const lastOwned = [...children].reverse().find((child) => child.pos !== undefined)?.pos
+    if (item.pos && lastOwned) {
+      item.pos.endLine = lastOwned.endLine
+      if (lastOwned.endColumn !== undefined) item.pos.endColumn = lastOwned.endColumn
+      if (lastOwned.endOffset !== undefined) item.pos.endOffset = lastOwned.endOffset
+    }
     if (checked !== undefined) item.checked = checked
     if (itemAttrs) item.attrs = itemAttrs
     items.push(item)
@@ -6436,6 +6484,13 @@ function parseTable(lexer: Lexer): Table | Figure {
     rowStarts[rawRows.length - 1] = canPosition
       ? { line: lineNo, column: lineCol, offset: lineOffset }
       : undefined
+    rowEnds[rawRows.length - 1] = canPosition
+      ? {
+          line: lineNo,
+          column: lineCol + line.length,
+          offset: lineOffset + line.length,
+        }
+      : undefined
     lastRaw = raw
   }
   // GFM-style header separator: when the SECOND row is a delimiter row -- every
@@ -6467,6 +6522,8 @@ function parseTable(lexer: Lexer): Table | Figure {
     })
     rawRows.splice(1, 1)
     rowAttrsList.splice(1, 1)
+    rowStarts.splice(1, 1)
+    rowEnds.splice(1, 1)
     for (const c of rawRows[0]!) c.header = true
     // Column alignment lands on the HEADER cells only, matching what the native
     // `|=<` markers produce. Propagating it onto body cells too made the same
@@ -6503,7 +6560,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         return cell
       }),
     }
-    // A row spans its cells: from the first cell's start to the last cell's end.
+    // A row owns its complete source line, including its pipe delimiters.
     //
     // A `+` continuation breaks that, because the extended cell loses its own
     // span - its content sits in two column ranges on non-adjacent lines. The
@@ -6514,7 +6571,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     const spans = rc.map((c) => c.pos)
     const end = rowEnds[idx]
     if (end) {
-      const first = spans.find(Boolean) ?? rowStarts[idx]
+      const first = rowStarts[idx] ?? spans.find(Boolean)
       const startLine = 'startLine' in (first ?? {}) ? (first as Position).startLine : undefined
       const rowStart = first
         ? 'line' in first
@@ -7827,7 +7884,7 @@ function scanInlineInner(
       const end = nl === -1 ? text.length : nl
       const content = text.slice(i + 2, end).replace(/^[ \t]/, '')
       out.push(
-        withPos({ type: 'comment', block: false, content } as Comment, source, text, commentStart, end),
+        withPos({ type: 'comment', block: false, content } as Comment, source, text, i, end),
       )
       i = end
       continue
