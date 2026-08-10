@@ -5,6 +5,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
+import { stripBidiControls } from './bidi-controls.js'
 
 export interface PlainTextRenderOptions {
   /**
@@ -50,7 +51,7 @@ export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return normalize(`${out}${footnotes}`)
+  return stripBidiControls(normalize(`${out}${footnotes}`))
 }
 
 interface PlainContext {
