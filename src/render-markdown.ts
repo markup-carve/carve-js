@@ -17,6 +17,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
+import { stripBidiControls } from './bidi-controls.js'
 
 /**
  * Whether smart typography renders as its glyph or as the source run the author
@@ -91,7 +92,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return normalize(`${out}${footnotes}`)
+  return stripBidiControls(normalize(`${out}${footnotes}`))
 }
 
 interface MarkdownContext {

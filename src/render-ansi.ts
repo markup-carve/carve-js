@@ -7,6 +7,7 @@ import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
+import { stripBidiControls } from './bidi-controls.js'
 
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
@@ -57,7 +58,7 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return normalize(`${out}${footnotes}`)
+  return stripBidiControls(normalize(`${out}${footnotes}`))
 }
 
 interface AnsiContext {

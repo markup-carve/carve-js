@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { slugify } from '../src/heading-ids.js'
-import { parse, carveToHtml, renderHtml, type Document } from '../src/index.js'
+import {
+  parse,
+  carveToHtml,
+  carveToMarkdown,
+  carveToPlainText,
+  carveToAnsi,
+  renderCarve,
+  lintCarve,
+  renderHtml,
+  type Document,
+} from '../src/index.js'
 import { MAX_NESTING_DEPTH } from '../src/parse.js'
 
 /**
@@ -96,6 +106,29 @@ describe('Change 2: strip bidi controls from rendered text and code', () => {
     for (const ch of Object.values(BIDI)) {
       expect(carveToHtml(`x${ch}y`)).toBe('<p>xy</p>')
     }
+  })
+
+  it('strips every control from every presentation target but preserves canonical source', () => {
+    for (const ch of Object.values(BIDI)) {
+      const source = `x${ch}y`
+      for (const output of [
+        carveToHtml(source),
+        carveToMarkdown(source),
+        carveToPlainText(source),
+        carveToAnsi(source),
+      ]) {
+        expect(output).not.toContain(ch)
+      }
+      expect(renderCarve(parse(source))).toContain(ch)
+    }
+  })
+
+  it('reports preserved controls with UTF-16 offsets and codepoint columns', () => {
+    const source = `😀x${BIDI.RLO}y\r\na${BIDI.LRI}b`
+    expect(lintCarve(source).filter((w) => w.rule === 'bidi-control-in-source')).toMatchObject([
+      { line: 1, column: 3, start: 3, end: 4 },
+      { line: 2, column: 2, start: 8, end: 9 },
+    ])
   })
 
   it('does NOT strip the directional marks LRM / RLM (legitimate RTL)', () => {
