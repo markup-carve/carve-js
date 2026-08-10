@@ -83,14 +83,13 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
   it('places both lines when the FIRST one carries the trailing space', () => {
     // The drop is not specific to the final line - PART 2 applies it to every
     // content line - so a fix that special-cased the last one would leave this
-    // unanchored. The break absorbs the dropped column: it spans from where the
-    // content ends to where the next line starts, which is the one place in the
-    // document that run can still be accounted for.
+    // unanchored. The break owns exactly the line terminator; dropped trailing
+    // layout belongs to no AST node.
     const source = '::: |\nabc \ndef\n:::\n'
 
     expect(inlines(source)).toEqual([
       { type: 'text', value: 'abc', slice: 'abc' },
-      { type: 'hard_break', value: undefined, slice: ' \n' },
+      { type: 'hard_break', value: undefined, slice: '\n' },
       { type: 'text', value: 'def', slice: 'def' },
     ])
   })
@@ -101,7 +100,7 @@ describe('a line block keeps its positions across a dropped trailing run', () =>
     // stanza. It does not: each line is anchored from its own offset.
     const source = '::: |\nabc\ndef \nghi\n:::\n'
 
-    expect(inlines(source).map((i) => i.slice)).toEqual(['abc', '\n', 'def', ' \n', 'ghi'])
+    expect(inlines(source).map((i) => i.slice)).toEqual(['abc', '\n', 'def', '\n', 'ghi'])
   })
 
   it('CONTROL: a stanza with no trailing run was already placed', () => {

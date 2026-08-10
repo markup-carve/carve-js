@@ -72,9 +72,9 @@ function span(nodes: { pos?: Position }[]): Position | undefined {
 export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
   const out: DefinitionEntryNode[] = []
   for (const item of items) {
-    for (const term of item.terms ?? []) {
+    for (const [index, term] of (item.terms ?? []).entries()) {
       const node: DefinitionTermNode = { type: 'definition_term', children: term }
-      const pos = span(term)
+      const pos = item.termSpans?.[index] ?? span(term)
       if (pos !== undefined) node.pos = pos
       out.push(node)
     }
@@ -96,13 +96,16 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
       // that. docs/ast-json.md:116-117 narrows the exemption to "nodes that
       // *cannot* be placed, not nodes that have not been placed yet".
       //
-      // The derived span still wins when there is one, so the placed `<dd>`s
-      // this engine already publishes do not move. Whether a `<dd>`'s span
-      // should cover its `:  ` marker in the NON-empty case too is the extent
-      // convention, markup-carve/carve#913, tracked for all node types and all
-      // three engines in the spec's resources/ast-span-divergence.txt - not
-      // settled one node type at a time here.
-      const pos = span(definition) ?? item.definitionSpans?.[index]
+      // The recorded start owns the `:  ` marker. When children remain, their
+      // exact end excludes trailing layout the parser dropped.
+      const recorded = item.definitionSpans?.[index]
+      const derived = span(definition)
+      const pos = recorded ? { ...recorded } : derived
+      if (pos && recorded && derived) {
+        pos.endLine = derived.endLine
+        if (derived.endColumn !== undefined) pos.endColumn = derived.endColumn
+        if (derived.endOffset !== undefined) pos.endOffset = derived.endOffset
+      }
       if (pos !== undefined) node.pos = pos
       out.push(node)
     })
@@ -157,6 +160,7 @@ export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
     const item: DefinitionItem = {
       terms: [],
       definitions: [],
+      termSpans: [],
       definitionLines: [],
       definitionSpans: [],
     }
@@ -175,6 +179,7 @@ export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
       // one, which is what `:: a` / `:: b` on adjacent lines means.
       if (current === undefined || current.definitions.length > 0) current = open()
       current.terms.push(entry.children as InlineNode[])
+      current.termSpans!.push(readPos(entry.pos))
       continue
     }
 

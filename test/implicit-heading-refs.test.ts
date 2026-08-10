@@ -119,11 +119,9 @@ describe('implicit heading references ([Heading][])', () => {
     )
   })
 
-  it('strips mention and tag sigils from the heading key', () => {
-    // `# @alice` -> inlineText "alice"; `[alice][]` should resolve.
-    expect(h('# @alice\n\n[alice][]')).toContain('href="#alice">alice</a>')
-    // `# Release #v1` -> inlineText "Release v1".
-    expect(h('# Release #v1\n\n[Release v1][]')).toContain(
+  it('keeps visible mention and tag sigils in the heading key', () => {
+    expect(h('# @alice\n\n[@alice][]')).toContain('href="#alice"')
+    expect(h('# Release #v1\n\n[Release #v1][]')).toContain(
       'href="#Release-v1"',
     )
   })

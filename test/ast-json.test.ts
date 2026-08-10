@@ -229,13 +229,12 @@ describe('definition lists on the wire (PART 12)', () => {
 
   it('gives a term a position, which a plain object could not carry', () => {
     // §4's point: a term is content an editor navigates to and a language
-    // server renames. The span is DERIVED from the spans the parser recorded
-    // for its children, so it covers exactly the term.
+    // server renames. PART 12 §4 includes the term marker that opens it.
     const list = carveToAstJson(source).children[0] as {
       items: { type: string; pos?: { startLine: number; startColumn: number } }[]
     }
 
-    expect(list.items[0]?.pos).toMatchObject({ startLine: 1, startColumn: 4 })
+    expect(list.items[0]?.pos).toMatchObject({ startLine: 1, startColumn: 1 })
     expect(list.items[1]?.pos).toMatchObject({ startLine: 2 })
   })
 

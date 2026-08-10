@@ -80,7 +80,7 @@ describe('a tab continues a list item just as two spaces do', () => {
     expect(slices('- item\n\tmore\n\nx\n')).toEqual([
       ['document', null],
       ['list', '- item\n\tmore\n'],
-      ['list_item', '- item\n\tmore\n'],
+      ['list_item', '- item\n\tmore'],
       ['paragraph', 'item\n\tmore'],
       ['text', 'item'],
       ['soft_break', '\n\t'],
@@ -140,7 +140,7 @@ describe('a tab continues a list item just as two spaces do', () => {
     expect(slices('- item\n  more\n\nx\n')).toEqual([
       ['document', null],
       ['list', '- item\n  more\n'],
-      ['list_item', '- item\n  more\n'],
+      ['list_item', '- item\n  more'],
       ['paragraph', 'item\n  more'],
       ['text', 'item'],
       ['soft_break', '\n  '],

@@ -90,7 +90,7 @@ describe('a description emptied by hoisting keeps its place', () => {
     // to coexist inside one entry.
     const source = ':: term\n:  [r]: /u\n:  body\n\nsee [t][r]\n'
 
-    expect(slice(source)).toEqual([':  [r]: /u', 'body'])
+    expect(slice(source)).toEqual([':  [r]: /u', ':  body'])
   })
 
   it('covers every line the description consumed, not just its marker line', () => {
@@ -114,19 +114,17 @@ describe('a description emptied by hoisting keeps its place', () => {
   })
 
   it('CONTROL: a description whose content does not hoist is unchanged', () => {
-    // The span is derived from children here and covers the content alone. It
-    // must not start moving to the marker as a side effect - whether it SHOULD
-    // is markup-carve/carve#913's extent question, settled for every node type
-    // at once and not one at a time here.
-    expect(slice(':: term\n:  body\n\nx\n')).toEqual(['body'])
+    // The description begins at its own marker under PART 12 §4's canonical
+    // markup-inclusive extent rule.
+    expect(slice(':: term\n:  body\n\nx\n')).toEqual([':  body'])
   })
 
   it('CONTROL: an abbreviation definition does not empty a description', () => {
     // It is recognized at document level only, so inside a `<dd>` it stays
-    // ordinary content and the derived span still applies. No mutation of this
+    // ordinary content and the marker-inclusive span still applies. No mutation of this
     // change can move this row; it is here because the ticket's mechanism is
     // "PART 12 §7 hoisting" and this is the §7 construct that does not.
-    expect(slice(':: term\n:  *[HTML]: HyperText\n\nHTML\n')).toEqual(['*[HTML]: HyperText'])
+    expect(slice(':: term\n:  *[HTML]: HyperText\n\nHTML\n')).toEqual([':  *[HTML]: HyperText'])
   })
 })
 
