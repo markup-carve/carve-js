@@ -134,7 +134,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
     }
     case 'paragraph':
-      return `${renderInlines(node.children, ctx)}\n\n`
+      return `${protectParagraphListMarkers(renderInlines(node.children, ctx))}\n\n`
     case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
@@ -816,6 +816,40 @@ function escapeText(text: string): string {
   // section 8a decides those three on the EMITTED LINE, which only normalize()
   // can see. `*` and everything else keep M1 here and unconditionally.
   return text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+}
+
+/** Keep paragraph continuation lines from becoming lists in Markdown readers. */
+function protectParagraphListMarkers(text: string): string {
+  let codeFence = 0
+  const lines = text.split('\n')
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    let line = lines[lineIndex]!
+    if (codeFence === 0) {
+      line = line
+        .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
+        .replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t])/, '$1\\$2')
+      lines[lineIndex] = line
+    }
+
+    for (let i = 0; i < line.length; ) {
+      if (line[i] !== '`') {
+        i++
+        continue
+      }
+      let backslashes = 0
+      for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) backslashes++
+      let run = 1
+      while (line[i + run] === '`') run++
+      if (backslashes % 2 === 0) {
+        if (codeFence === 0) codeFence = run
+        else if (codeFence === run) codeFence = 0
+      }
+      i += run
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /**
