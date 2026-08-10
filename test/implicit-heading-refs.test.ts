@@ -85,13 +85,12 @@ describe('implicit heading references ([Heading][])', () => {
     )
   })
 
-  it('does not invent a ref for an image-only heading', () => {
-    // `# ![alt](src)` -> inlineText is "", heading id is "s";
-    // there is nothing to match `[alt][]` against.
-    expect(h('# ![Logo](logo.png)\n\n[Logo][]')).not.toContain(
-      '<a href="#logo"',
+  it('uses image alt text for an image-only heading reference', () => {
+    // The image's visible fallback text contributes to both the heading id and
+    // the implicit-reference key.
+    expect(h('# ![Logo](logo.png)\n\n[Logo][]')).toContain(
+      '<a href="#Logo">Logo</a>',
     )
-    expect(h('# ![Logo](logo.png)\n\n[Logo][]')).toContain('[Logo][]')
   })
 
   it('agrees with heading-id dedup when slugs collide', () => {
@@ -111,8 +110,8 @@ describe('implicit heading references ([Heading][])', () => {
     )
   })
 
-  it('reserves the `s` slot for empty-text headings', () => {
-    // `# ![Logo]()` -> id "s" (resolveHeadingIds empty fallback). A later
+  it('does not reserve the `s` slot for an image heading', () => {
+    // `# ![Logo]()` -> id "Logo" from its visible alt text. A later
     // `# Section` heading slugs to `Section` (no collision), and the
     // implicit ref `[Section][]` must resolve to it.
     expect(h('# ![Logo](logo.png)\n\n# Section\n\n[Section][]')).toContain(
@@ -142,10 +141,9 @@ describe('implicit heading references ([Heading][])', () => {
     expect(html).toContain('href="#user-example-com"')
   })
 
-  it('does not invent a ref for an autolink-only heading', () => {
-    // Same reason: inlineText ignores autolinks, heading id is "s".
-    expect(h('# <https://example.com>\n\n[https://example.com][]')).not.toContain(
-      '<a href="#https',
+  it('uses visible autolink text for an autolink-only heading reference', () => {
+    expect(h('# <https://example.com>\n\n[https://example.com][]')).toContain(
+      '<a href="#https-example-com">https://example.com</a>',
     )
   })
 
