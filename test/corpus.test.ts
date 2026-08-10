@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  */
 const IMPLEMENTED = new Set([
   'a-caret-line-does-not-end-a-paragraph-it-cannot-caption',
+  'heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key',
   'a-column-zero-definition-ends-an-open-list-item',
   'adjacent-block-openers-in-an-attached-run-stay-separate',
   'an-empty-footnote-body-is-written-with-the-empty-sentinel',
