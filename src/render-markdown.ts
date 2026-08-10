@@ -789,10 +789,27 @@ function escapeUnresolvedCrossrefs(value: string): string {
 
 function escapeText(text: string): string {
   text = stripControls(text)
-  // Neutralize embedded HTML (<>&) so Markdown re-rendered to HTML cannot
-  // execute it: carve's "HTML is text" guarantee holds for the Markdown target
-  // too. `&` first so the entities are not re-escaped.
-  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Neutralize embedded HTML so Markdown re-rendered to HTML cannot execute it:
+  // carve's "HTML is text" guarantee holds for the Markdown target too.
+  //
+  // ONLY `<` AND `>` DO THAT WORK. A bare `&` cannot open a tag: an entity in
+  // Markdown TEXT decodes to a CHARACTER, and a character in text content is
+  // escaped again by whatever writes the HTML. Measured against pandoc 3.5,
+  // commonmark.js and marked with raw HTML ALLOWED - the entity and bare forms
+  // came out byte-identical and inert, while a bare `<` was live in all three.
+  //
+  // Escaping every ampersand cost every document its spelling for nothing:
+  // `Aktionen & Reaktionen` came back as `Aktionen &amp; Reaktionen`, and on one
+  // real corpus 324 of 423 escaped characters were ampersands (carve#1071).
+  //
+  // NO EXCEPTION FOR A CHARACTER-REFERENCE OPENER, deliberately. Text authored
+  // as `&#65;` is emitted as itself and a consumer may decode it. Escaping it
+  // here would answer the question one node too early: whether an `&` opens a
+  // reference depends on the EMITTED LINE, and Carve parses `#65` as a tag, so
+  // this renderer sees `"a &"` and `"; b"` as separate text nodes. That is the
+  // mistake section 8a documents for `_`, `#` and `[`, which is why those three
+  // are emitted as sentinels and decided in normalize().
+  text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Escape Markdown metacharacters (none overlap with the HTML chars above).
   // `_`, `#` and `[` are emitted as SENTINELS rather than as backslashes:
   // section 8a decides those three on the EMITTED LINE, which only normalize()
