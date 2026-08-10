@@ -233,7 +233,6 @@ function renderList(node: List, ctx: MarkdownContext): string {
   // already reproduces it (carve#352, corpus 31).
   const delim = node.delim === ')' ? ')' : '.'
   for (const item of node.items) {
-    const indent = '  '.repeat(ctx.listDepth - 1)
     let prefix: string
     if (node.ordered) {
       prefix = `${counter}${delim} `
@@ -245,9 +244,22 @@ function renderList(node: List, ctx: MarkdownContext): string {
     }
     const content = trimNonNbsp(renderListItem(item, ctx))
     const lines = content.split('\n')
-    out += `${indent}${prefix}${lines.shift() ?? ''}\n`
+    // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
+    // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
+    // the same lines again by its marker width, so every level was indented
+    // twice: two levels landed at four spaces and three at ten. Ten spaces
+    // under a marker whose content column is six is four PAST it, which is
+    // where a reader opens an indented verbatim block - so a third level
+    // stopped being a list for every reader that is not Carve itself. Carve's
+    // own content-column model is lenient enough to read it back as a list,
+    // which is why this was invisible from inside the engine and only pandoc
+    // showed it (carve#1069, carve-php#1142).
+    out += `${prefix}${lines.shift() ?? ''}\n`
     const continuation = ' '.repeat(prefix.length)
-    for (const line of lines) out += `${indent}${continuation}${line}\n`
+    // A line with no content takes no pad: PART 11 section 7 emits such a line
+    // empty, and trailing whitespace is what editors and `git apply
+    // --whitespace=fix` rewrite behind the writer.
+    for (const line of lines) out += `${line === '' ? '' : continuation + line}\n`
   }
   ctx.listDepth--
   return out + (ctx.listDepth === 0 ? '\n' : '')
