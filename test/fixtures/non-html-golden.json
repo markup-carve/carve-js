@@ -67,7 +67,7 @@
     },
     "nested-list": {
         "carve": "- a\n  - a1\n  - a2\n- b\n",
-        "markdown": "- a\n  \n    - a1\n    - a2\n- b\n",
+        "markdown": "- a\n\n  - a1\n  - a2\n- b\n",
         "plain": "- a\n\n- a1\n- a2\n- b\n",
         "ansi": "\u001b[36m\u2022\u001b[0m a\n\n  \u001b[36m\u2022\u001b[0m a1\n  \u001b[36m\u2022\u001b[0m a2\n\u001b[36m\u2022\u001b[0m b\n"
     },
