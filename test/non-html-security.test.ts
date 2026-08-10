@@ -49,8 +49,18 @@ describe('Markdown renderer is safe-by-default', () => {
     expect(sup).not.toContain('<img')
   })
 
-  it('entity-escapes < > & in text', () => {
-    expect(md('a < b & c')).toBe('a &lt; b &amp; c')
+  it('entity-escapes < and > in text, and leaves & bare', () => {
+    expect(md('a < b & c')).toBe('a &lt; b & c')
+  })
+
+  it('a bare ampersand cannot reintroduce a tag', () => {
+    // The reason `&` stopped being escaped (carve#1071): an entity in Markdown
+    // TEXT decodes to a CHARACTER, and a character cannot open a tag. Text
+    // authored as `&lt;script&gt;` therefore comes back as the four characters
+    // a reader sees, never as live markup - which is what a bare `<` would be,
+    // and why `<` and `>` keep the entity form.
+    expect(md('a &lt;script&gt; b')).toBe('a &lt;script&gt; b')
+    expect(md('a <script>x</script> b')).toBe('a &lt;script&gt;x&lt;/script&gt; b')
   })
 
   it('escapes quotes and backslashes in link/image titles', () => {

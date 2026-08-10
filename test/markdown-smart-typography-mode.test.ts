@@ -29,8 +29,11 @@ describe('markdown smart typography mode', () => {
   })
 
   it('leaves escaping alone', () => {
-    // Escaping is a separate concern with its own rationale.
-    expect(carveToMarkdown('a & b', { smartTypography: 'source' }).trim()).toBe('a &amp; b')
+    // Escaping is a separate concern with its own rationale. `&` is emitted
+    // bare on this target (carve#1071); what this asserts is that the smart
+    // typography mode does not change that either way.
+    expect(carveToMarkdown('a & b', { smartTypography: 'source' }).trim()).toBe('a & b')
+    expect(carveToMarkdown('a < b', { smartTypography: 'source' }).trim()).toBe('a &lt; b')
   })
 
   it('leaves code spans alone', () => {
