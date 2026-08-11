@@ -1105,9 +1105,24 @@ function renderListItem(
     return `<p${renderAttrs(p.attrs)}${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}>${inner}</p>`
   }
 
+  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING. A comment (§4.13) and a
+  // raw block for another target both render '', and an invisible child was
+  // enough to push a single-paragraph item into the expanded form:
+  // `- %% c` then `  y` gave `<li>\n    y\n  </li>` where the oracle and
+  // carve-php give `<li>y</li>` (carve-js#990).
+  //
+  // "Renders nothing" is decided by rendering, not by a type list, because two
+  // unrelated node types reach it - a comment and a non-HTML raw block - and a
+  // third would be added silently otherwise. The result is cached so no child
+  // is rendered twice.
+  const prerendered = item.children.map((child) =>
+    child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
+  )
+  const visible = item.children.filter((_, i) => prerendered[i] !== '')
+
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
-  if (item.children.length === 1 && item.children[0]!.type === 'paragraph') {
-    return `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}${wrapPara(item.children[0] as Paragraph, true)}</li>`
+  if (visible.length === 1 && visible[0]!.type === 'paragraph') {
+    return `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}${wrapPara(visible[0] as Paragraph, true)}</li>`
   }
 
   // Mixed content (e.g. a lead paragraph followed by a nested list): the
@@ -1127,17 +1142,24 @@ function renderListItem(
   //
   // It is also what made corpus 228 fail here: the item is tight, and the second
   // paragraph was the one getting wrapped.
+  let seenVisible = 0
   item.children.forEach((child, i) => {
     if (child.type === 'paragraph') {
       const rendered = wrapPara(child as Paragraph, true)
-      if (i === 0) head += rendered
+      // The LEAD is the first child that renders something, not index 0: an
+      // invisible child ahead of it does not take the <li> line.
+      if (seenVisible === 0) head += rendered
       else body.push(`${indent(level + 1)}${rendered}`)
+      seenVisible++
     } else {
-      // Skip blocks that render to nothing (a comment, an abbreviation def, a
-      // non-HTML raw block): pushing `''` would leave stray blank lines inside
-      // the <li> (`<p>a</p>\n\n  </li>`). Matches carve-rs.
-      const rendered = renderBlock(child, opts, level + 1)
-      if (rendered !== '') body.push(rendered)
+      // Blocks that render to nothing are skipped: pushing `''` would leave
+      // stray blank lines inside the <li> (`<p>a</p>\n\n  </li>`). Matches
+      // carve-rs.
+      const rendered = prerendered[i]!
+      if (rendered !== '') {
+        body.push(rendered)
+        seenVisible++
+      }
     }
   })
   if (body.length === 0) return `${head}</li>`
