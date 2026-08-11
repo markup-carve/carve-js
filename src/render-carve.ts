@@ -470,11 +470,22 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   ctx.afterCaptionHost = false
   try {
     const parts: string[] = []
+    let previousRendered: BlockNode | undefined
     for (const block of blocks) {
       ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
       const rendered = renderBlock(block, ctx)
       ctx.afterCaptionHost = hostsCaption(block)
-      if (rendered.length > 0) parts.push(rendered)
+      if (rendered.length > 0) {
+        const separator = previousRendered !== undefined && adjacentBlocksMerge(previousRendered, block)
+          && previousRendered.type === 'list' && block.type === 'list'
+          ? `${sentinels[4]}\n`
+          : ''
+        parts.push(separator + rendered)
+      }
+      // Adjacency is in the AST, not merely in visible output. A comment or
+      // collected definition between two lists renders nothing but still means
+      // the lists are not sibling-adjacent and need no hard-boundary spelling.
+      previousRendered = block
     }
     return parts.join('\n\n')
   } finally {
@@ -854,9 +865,11 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
   if (left.type === 'list' && right.type === 'list') {
     if (left.ordered !== right.ordered) return false
-    return left.ordered
+    const sameMarker = left.ordered
       ? (left.delim ?? '.') === (right.delim ?? '.') && left.olType === right.olType
       : (left.bulletChar ?? '-') === (right.bulletChar ?? '-')
+    if (!sameMarker) return false
+    return (left.items[0]?.checked !== undefined) === (right.items[0]?.checked !== undefined)
   }
   return new Set<BlockNode['type']>([
     'block_quote',
@@ -1910,12 +1923,13 @@ function normalize(text: string): string {
  * writer runs. That is the other half of carve#678 and needs a decision about
  * what the parsed text of an nbsp is, not a change here.
  */
-const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004'] as const
-let sentinels: readonly [string, string, string, string] = [
+const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004', '\ue006'] as const
+let sentinels: readonly [string, string, string, string, string] = [
   '\ue001',
   '\ue002',
   '\ue003',
   '\ue004',
+  '\ue006',
 ]
 
 /**
@@ -1944,24 +1958,25 @@ function collectStrings(root: unknown): string {
   return parts.join('\u0000')
 }
 
-function pickSentinels(text: string): readonly [string, string, string, string] {
+function pickSentinels(text: string): readonly [string, string, string, string, string] {
   // The common case: none of the defaults occur, so keep them and skip the scan
   // of the private-use area entirely.
   if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
-    return ['\ue001', '\ue002', '\ue003', '\ue004']
+    return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue006']
   }
-  for (let base = 0xe005; base <= 0xf8fc; base += 4) {
-    const quad = [
+  for (let base = 0xe007; base <= 0xf8fb; base += 5) {
+    const group = [
       String.fromCharCode(base),
       String.fromCharCode(base + 1),
       String.fromCharCode(base + 2),
       String.fromCharCode(base + 3),
+      String.fromCharCode(base + 4),
     ] as const
-    if (!quad.some((c) => text.includes(c))) return quad
+    if (!group.some((c) => text.includes(c))) return group
   }
 
   // Unreachable for any real document; keep the old behaviour rather than throw.
-  return ['\ue001', '\ue002', '\ue003', '\ue004']
+  return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue006']
 }
 
 /**
@@ -2005,6 +2020,9 @@ function restoreVerbatim(text: string): string {
       .replace(new RegExp(sentinels[2], 'g'), '')
       // Back to the character itself - see protectVerbatim.
       .replace(new RegExp(sentinels[3], 'g'), '\ue000')
+      // A nonblank sentinel carries the second blank line through normalize's
+      // ordinary blank-run collapse; it is removed only after that pass.
+      .replace(new RegExp(sentinels[4], 'g'), '')
   )
 }
 

@@ -5641,6 +5641,7 @@ function parseList(lexer: Lexer): List {
     let bodyHasContentColumnLine = false
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
+    let hardListBoundary = false
     // Indices in `nested` that hold a `+`-injected blank separator. These keep
     // the attached block parsing standalone but never loosen the list (Bug B).
     const plusSeparators = new Set<number>()
@@ -5955,7 +5956,8 @@ function parseList(lexer: Lexer): List {
           ? orderedContinues(nextStripped, orderedKind, orderedDelim)
           : unorderedMarkerChar(nextStripped) === firstMarkerChar)
       ) {
-        loose = true
+        if (pendingBlanks >= 2) hardListBoundary = true
+        else loose = true
       }
     }
 
@@ -6195,6 +6197,7 @@ function parseList(lexer: Lexer): List {
     if (checked !== undefined) item.checked = checked
     if (itemAttrs) item.attrs = itemAttrs
     items.push(item)
+    if (hardListBoundary) break
   }
 
   const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }
