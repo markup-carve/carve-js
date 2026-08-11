@@ -113,4 +113,37 @@ describe('three-way structural merge', () => {
       )
     }
   })
+
+  it('preserves author attributes named like derived metadata', () => {
+    const result = merge(
+      '[Text]{pos=base srcByteLength=base}\n',
+      '[Text]{pos=ours srcByteLength=ours}\n',
+      '[Text]{pos=base srcByteLength=base}\n\nOther.\n',
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(JSON.stringify(result.ast)).toContain('"pos":"ours"')
+      expect(JSON.stringify(result.ast)).toContain('"srcByteLength":"ours"')
+    }
+  })
+
+  it('rejects malformed resolver answers', () => {
+    const base = carveToAstJson('# Base\n')
+    const ours = carveToAstJson('# Ours\n')
+    const theirs = carveToAstJson('# Theirs\n')
+    expect(() => mergeAst(base, ours, theirs, { resolve: () => null as never })).toThrow(TypeError)
+    expect(() => mergeAst(base, ours, theirs, { resolve: () => ({ value: undefined }) })).toThrow(
+      TypeError,
+    )
+  })
+
+  it('conflicts on different definitions added under the same identity', () => {
+    const result = merge(
+      'Body.\n',
+      'Body.\n\n[^same]: ours\n',
+      'Body.\n\n[^same]: theirs\n',
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.conflicts[0]?.reason).toBe('concurrent-sequence-edit')
+  })
 })

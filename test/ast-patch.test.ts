@@ -45,4 +45,19 @@ describe('AST patches', () => {
     applyAstPatch(ast, [{ op: 'add', path: '/__proto__', value: { polluted: true } }])
     expect(({} as { polluted?: unknown }).polluted).toBeUndefined()
   })
+
+  it('preserves author attributes named like derived metadata', () => {
+    const before = carveToAstJson('[Text]{pos=before srcByteLength=before}\n')
+    const after = carveToAstJson('[Text]{pos=after srcByteLength=after}\n')
+    const replayed = applyAstPatch(before, createAstPatch(before, after))
+    expect(JSON.stringify(replayed)).toContain('"pos":"after"')
+    expect(JSON.stringify(replayed)).toContain('"srcByteLength":"after"')
+  })
+
+  it('rejects a leading-zero array index', () => {
+    const ast = carveToAstJson('one\n')
+    expect(() => applyAstPatch(ast, [{ op: 'remove', path: '/children/00' }])).toThrow(
+      AstPatchError,
+    )
+  })
 })

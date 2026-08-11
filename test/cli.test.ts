@@ -685,6 +685,12 @@ describe('carve merge', () => {
     expect(result.conflicts.length).toBeGreaterThan(0)
   })
 
+  it('returns the same machine-readable envelope on success', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', '--json', 'base.crv', 'ours.crv', 'theirs.crv'], t.io)).toBe(0)
+    expect(JSON.parse(t.out)).toMatchObject({ ok: true, conflicts: [], ast: { type: 'document' } })
+  })
+
   it('requires base, ours and theirs', async () => {
     const t = makeIO({ files })
     expect(await run(['merge', 'base.crv', 'ours.crv'], t.io)).toBe(2)

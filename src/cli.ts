@@ -841,11 +841,17 @@ async function runMerge(args: string[], io: CliIO): Promise<number> {
     }
   }
 
-  const result = mergeAst(
-    carveToAstJson(sources[0]!),
-    carveToAstJson(sources[1]!),
-    carveToAstJson(sources[2]!),
-  )
+  let result: ReturnType<typeof mergeAst>
+  try {
+    result = mergeAst(
+      carveToAstJson(sources[0]!),
+      carveToAstJson(sources[1]!),
+      carveToAstJson(sources[2]!),
+    )
+  } catch (error) {
+    io.writeErr(`carve merge: ${(error as Error).message}\n`)
+    return 2
+  }
   if (!result.ok) {
     if (values.json) io.write(`${JSON.stringify(result, null, 2)}\n`)
     else {
@@ -858,10 +864,15 @@ async function runMerge(args: string[], io: CliIO): Promise<number> {
     return 1
   }
 
-  if (values.json) io.write(`${JSON.stringify(result.ast, null, 2)}\n`)
+  if (values.json) io.write(`${JSON.stringify(result, null, 2)}\n`)
   else {
-    const payloadLength = Buffer.byteLength(JSON.stringify(result.ast), 'utf8')
-    io.write(renderCarve(fromAstJson(result.ast, payloadLength)))
+    try {
+      const payloadLength = Buffer.byteLength(JSON.stringify(result.ast), 'utf8')
+      io.write(renderCarve(fromAstJson(result.ast, payloadLength)))
+    } catch (error) {
+      io.writeErr(`carve merge: ${(error as Error).message}\n`)
+      return 2
+    }
   }
   return 0
 }

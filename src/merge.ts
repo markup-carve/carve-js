@@ -1,9 +1,11 @@
 /** Conservative three-way merge over the normative PART 12 AST shape. */
 
 import type { AstJsonDocument } from './ast-json.js'
+import { fromAstJson } from './ast-json.js'
+import { NODE_POSITION_KIND } from './wire-fields.js'
 
 export interface MergeConflict {
-  /** JSON Pointer into the exchange tree. */
+  /** Base-relative JSON Pointer into the exchange tree (the root is the empty string). */
   path: string
   reason: 'both-changed' | 'delete-edit' | 'concurrent-sequence-edit'
   base: unknown
@@ -31,25 +33,30 @@ function pointer(path: string, key: string | number): string {
   return `${path}/${part}`
 }
 
-function semantic(value: Value): unknown {
+function childIsNode(type: unknown, field: string): boolean {
+  return typeof type === 'string' && Object.hasOwn(NODE_POSITION_KIND, `${type}.${field}`)
+}
+
+function semantic(value: Value, nodePosition = true): unknown {
   if (value === MISSING) return MISSING
-  if (Array.isArray(value)) return value.map(semantic)
+  if (Array.isArray(value)) return value.map((child) => semantic(child, nodePosition))
   if (typeof value !== 'object' || value === null) return value
+  const record = value as Record<string, unknown>
   const out = Object.create(null) as Record<string, unknown>
   for (const [key, child] of Object.entries(value)) {
-    if (key === 'pos' || key === 'srcByteLength') continue
-    out[key] = semantic(child)
+    if (nodePosition && (key === 'pos' || key === 'srcByteLength')) continue
+    out[key] = semantic(child, childIsNode(record.type, key))
   }
   return out
 }
 
-function equal(a: Value, b: Value): boolean {
+function equal(a: Value, b: Value, nodePosition = true): boolean {
   if (a === MISSING || b === MISSING) return a === b
-  return JSON.stringify(semantic(a)) === JSON.stringify(semantic(b))
+  return JSON.stringify(semantic(a, nodePosition)) === JSON.stringify(semantic(b, nodePosition))
 }
 
-function semanticKey(value: unknown): string {
-  return JSON.stringify(semantic(value))
+function semanticKey(value: unknown, nodePosition: boolean): string {
+  return JSON.stringify(semantic(value, nodePosition))
 }
 
 function conflictValue(value: Value): unknown {
@@ -66,7 +73,7 @@ function conflict(
   options: MergeOptions,
 ): Value {
   const item: MergeConflict = {
-    path: path || '/',
+    path,
     reason,
     base: conflictValue(base),
     ours: conflictValue(ours),
@@ -84,8 +91,14 @@ function conflict(
     conflicts.push(item)
     return MISSING
   }
-  if (typeof resolution === 'object') return resolution.value
-  return { base, ours, theirs }[resolution]
+  if (typeof resolution === 'object' && resolution !== null && Object.hasOwn(resolution, 'value')) {
+    if (resolution.value === undefined) throw new TypeError('merge resolution value cannot be undefined')
+    return resolution.value
+  }
+  if (resolution === 'base') return base
+  if (resolution === 'ours') return ours
+  if (resolution === 'theirs') return theirs
+  throw new TypeError('merge resolver must return base, ours, theirs, { value }, or undefined')
 }
 
 interface SideMatch {
@@ -123,7 +136,7 @@ function identityHint(value: unknown): string | undefined {
  * unique remaining node kind, then an LCS of kinds. The last two passes are
  * what recognize a moved node whose content was edited on that side.
  */
-function matchSide(base: unknown[], side: unknown[]): SideMatch {
+function matchSide(base: unknown[], side: unknown[], nodePosition: boolean): SideMatch {
   const baseToSide = new Map<number, number>()
   const sideToBase = new Map<number, number>()
   const take = (baseIndex: number, sideIndex: number): void => {
@@ -133,13 +146,13 @@ function matchSide(base: unknown[], side: unknown[]): SideMatch {
 
   const exact = new Map<string, number[]>()
   side.forEach((value, index) => {
-    const key = semanticKey(value)
+    const key = semanticKey(value, nodePosition)
     const queue = exact.get(key) ?? []
     queue.push(index)
     exact.set(key, queue)
   })
   for (let i = 0; i < base.length; i++) {
-    const queue = exact.get(semanticKey(base[i]))
+    const queue = exact.get(semanticKey(base[i], nodePosition))
     const j = queue?.shift()
     if (j !== undefined) take(i, j)
   }
@@ -147,6 +160,14 @@ function matchSide(base: unknown[], side: unknown[]): SideMatch {
   const remainingBase = (): number[] => base.map((_, i) => i).filter((i) => !baseToSide.has(i))
   const remainingSide = (): number[] => side.map((_, i) => i).filter((i) => !sideToBase.has(i))
   const sideHints = new Map<string, number[]>()
+  const baseHints = new Map<string, number[]>()
+  remainingBase().forEach((index) => {
+    const hint = identityHint(base[index])
+    if (hint === undefined) return
+    const indexes = baseHints.get(hint) ?? []
+    indexes.push(index)
+    baseHints.set(hint, indexes)
+  })
   remainingSide().forEach((index) => {
     const hint = identityHint(side[index])
     if (hint === undefined) return
@@ -158,7 +179,11 @@ function matchSide(base: unknown[], side: unknown[]): SideMatch {
     const hint = identityHint(base[baseIndex])
     if (hint === undefined) continue
     const sideIndexes = sideHints.get(hint)
-    if (sideIndexes?.length === 1 && !sideToBase.has(sideIndexes[0]!)) take(baseIndex, sideIndexes[0]!)
+    if (
+      baseHints.get(hint)?.length === 1 &&
+      sideIndexes?.length === 1 &&
+      !sideToBase.has(sideIndexes[0]!)
+    ) take(baseIndex, sideIndexes[0]!)
   }
   const kinds = new Set(remainingBase().map((i) => kind(base[i])))
   for (const valueKind of kinds) {
@@ -241,7 +266,6 @@ function additionAnchor(sideIndex: number, match: SideMatch, sideLength: number)
 function topoSort(
   tokens: Set<string>,
   edges: Map<string, Set<string>>,
-  priority: Map<string, number>,
 ): string[] | null {
   const incoming = new Map([...tokens].map((token) => [token, 0]))
   for (const tos of edges.values()) {
@@ -250,7 +274,7 @@ function topoSort(
   const ready = [...tokens].filter((token) => incoming.get(token) === 0)
   const out: string[] = []
   while (ready.length > 0) {
-    ready.sort((a, b) => (priority.get(a) ?? 0) - (priority.get(b) ?? 0) || a.localeCompare(b))
+    ready.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
     const token = ready.shift()!
     out.push(token)
     for (const to of edges.get(token) ?? []) {
@@ -269,9 +293,10 @@ function mergeSequence(
   path: string,
   conflicts: MergeConflict[],
   options: MergeOptions,
+  nodePosition: boolean,
 ): Value {
-  const om = matchSide(base, ours)
-  const tm = matchSide(base, theirs)
+  const om = matchSide(base, ours, nodePosition)
+  const tm = matchSide(base, theirs, nodePosition)
   const values = new Map<string, unknown>()
   const omitted = new Set<string>()
 
@@ -285,7 +310,7 @@ function mergeSequence(
     }
     if (oi === undefined || ti === undefined) {
       const present = oi === undefined ? theirs[ti!] : ours[oi]
-      if (equal(base[i], present)) {
+      if (equal(base[i], present, nodePosition)) {
         omitted.add(token)
         continue
       }
@@ -302,7 +327,7 @@ function mergeSequence(
       else values.set(token, resolved)
       continue
     }
-    const merged = mergeValue(base[i], ours[oi], theirs[ti], pointer(path, i), conflicts, options)
+    const merged = mergeValue(base[i], ours[oi], theirs[ti], pointer(path, i), conflicts, options, nodePosition)
     if (merged === MISSING) omitted.add(token)
     else values.set(token, merged)
   }
@@ -312,11 +337,21 @@ function mergeSequence(
   const usedTheirs = new Set<number>()
   for (const oi of om.additions) {
     const anchor = additionAnchor(oi, om, ours.length)
+    const identityCollision = tm.additions.find((ti) => {
+      const hint = identityHint(ours[oi])
+      return hint !== undefined &&
+        identityHint(theirs[ti]) === hint &&
+        additionAnchor(ti, tm, theirs.length) === anchor &&
+        !equal(ours[oi], theirs[ti], nodePosition)
+    })
+    if (identityCollision !== undefined) {
+      return conflict('concurrent-sequence-edit', path, base, ours, theirs, conflicts, options)
+    }
     const same = tm.additions.find(
       (ti) =>
         !usedTheirs.has(ti) &&
         additionAnchor(ti, tm, theirs.length) === anchor &&
-        equal(ours[oi], theirs[ti]),
+        equal(ours[oi], theirs[ti], nodePosition),
     )
     const token = `o${oi}`
     oursAdditionTokens.set(oi, token)
@@ -371,14 +406,7 @@ function mergeSequence(
     addEdges(theirsTokens, theirsMoved)
   }
 
-  const priority = new Map<string, number>()
-  const rank = (tokens: string[], weight: number): void => {
-    tokens.forEach((token, index) => priority.set(token, (priority.get(token) ?? 0) + index * weight))
-  }
-  rank(survivingBase, 1)
-  rank(oursTokens, 0.01)
-  rank(theirsTokens, 0.0001)
-  const order = topoSort(allTokens, edges, priority)
+  const order = topoSort(allTokens, edges)
   if (order === null) {
     return conflict('concurrent-sequence-edit', path, base, ours, theirs, conflicts, options)
   }
@@ -392,17 +420,18 @@ function mergeValue(
   path: string,
   conflicts: MergeConflict[],
   options: MergeOptions,
+  nodePosition = true,
 ): Value {
-  if (equal(ours, theirs)) return ours
-  if (equal(ours, base)) return theirs
-  if (equal(theirs, base)) return ours
+  if (equal(ours, theirs, nodePosition)) return ours
+  if (equal(ours, base, nodePosition)) return theirs
+  if (equal(theirs, base, nodePosition)) return ours
 
   if (ours === MISSING || theirs === MISSING) {
     return conflict('delete-edit', path, base, ours, theirs, conflicts, options)
   }
 
   if (Array.isArray(base) && Array.isArray(ours) && Array.isArray(theirs)) {
-    return mergeSequence(base, ours, theirs, path, conflicts, options)
+    return mergeSequence(base, ours, theirs, path, conflicts, options, nodePosition)
   }
 
   const objects = [base, ours, theirs].every(
@@ -414,7 +443,7 @@ function mergeValue(
     const t = theirs as Record<string, unknown>
     const out = Object.create(null) as Record<string, unknown>
     for (const key of new Set([...Object.keys(b), ...Object.keys(o), ...Object.keys(t)])) {
-      if (key === 'pos' || key === 'srcByteLength') continue
+      if (nodePosition && (key === 'pos' || key === 'srcByteLength')) continue
       const value = mergeValue(
         Object.hasOwn(b, key) ? b[key] : MISSING,
         Object.hasOwn(o, key) ? o[key] : MISSING,
@@ -422,6 +451,7 @@ function mergeValue(
         pointer(path, key),
         conflicts,
         options,
+        childIsNode(b.type ?? o.type ?? t.type, key),
       )
       if (value !== MISSING) out[key] = value
     }
@@ -449,7 +479,8 @@ export function mergeAst(
   const conflicts: MergeConflict[] = []
   const merged = mergeValue(base, ours, theirs, '', conflicts, options)
   if (conflicts.length > 0 || merged === MISSING) return { ok: false, ast: null, conflicts }
-  const ast = semantic(merged) as AstJsonDocument
+  const ast = semantic(merged, true) as AstJsonDocument
   ast.srcByteLength = 0
+  fromAstJson(ast, JSON.stringify(ast).length)
   return { ok: true, ast, conflicts: [] }
 }

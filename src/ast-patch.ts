@@ -1,6 +1,7 @@
 /** A small, serializable JSON-Patch subset for PART 12 exchange trees. */
 
 import type { AstJsonDocument } from './ast-json.js'
+import { NODE_POSITION_KIND } from './wire-fields.js'
 
 export type AstPatchOperation =
   | { op: 'add' | 'replace'; path: string; value: unknown }
@@ -26,23 +27,28 @@ function decode(path: string): string[] {
     .map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))
 }
 
-function clean(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(clean)
+function childIsNode(type: unknown, field: string): boolean {
+  return typeof type === 'string' && Object.hasOwn(NODE_POSITION_KIND, `${type}.${field}`)
+}
+
+function clean(value: unknown, nodePosition = true): unknown {
+  if (Array.isArray(value)) return value.map((child) => clean(child, nodePosition))
   if (typeof value !== 'object' || value === null) return value
+  const record = value as Record<string, unknown>
   const out = Object.create(null) as Record<string, unknown>
   for (const [key, child] of Object.entries(value)) {
-    if (key === 'pos' || key === 'srcByteLength') continue
-    out[key] = clean(child)
+    if (nodePosition && (key === 'pos' || key === 'srcByteLength')) continue
+    out[key] = clean(child, childIsNode(record.type, key))
   }
   return out
 }
 
-function equal(a: unknown, b: unknown): boolean {
-  return JSON.stringify(clean(a)) === JSON.stringify(clean(b))
+function equal(a: unknown, b: unknown, nodePosition: boolean): boolean {
+  return JSON.stringify(clean(a, nodePosition)) === JSON.stringify(clean(b, nodePosition))
 }
 
-function build(before: unknown, after: unknown, path: string, out: AstPatchOperation[]): void {
-  if (equal(before, after)) return
+function build(before: unknown, after: unknown, path: string, out: AstPatchOperation[], nodePosition = true): void {
+  if (equal(before, after, nodePosition)) return
   if (Array.isArray(before) && Array.isArray(after)) {
     if (before.length !== after.length) {
       // One sequence replacement is stable under serialization and avoids the
@@ -51,7 +57,7 @@ function build(before: unknown, after: unknown, path: string, out: AstPatchOpera
       out.push({ op: 'replace', path, value: clean(after) })
     } else {
       for (let index = 0; index < before.length; index++) {
-        build(before[index], after[index], pointer(path, String(index)), out)
+        build(before[index], after[index], pointer(path, String(index)), out, nodePosition)
       }
     }
     return
@@ -67,13 +73,15 @@ function build(before: unknown, after: unknown, path: string, out: AstPatchOpera
     const a = before as Record<string, unknown>
     const b = after as Record<string, unknown>
     const keys = new Set([...Object.keys(a), ...Object.keys(b)])
-    keys.delete('pos')
-    keys.delete('srcByteLength')
+    if (nodePosition) {
+      keys.delete('pos')
+      keys.delete('srcByteLength')
+    }
     for (const key of keys) {
       const childPath = pointer(path, key)
       if (!Object.hasOwn(b, key)) out.push({ op: 'remove', path: childPath })
       else if (!Object.hasOwn(a, key)) out.push({ op: 'add', path: childPath, value: clean(b[key]) })
-      else build(a[key], b[key], childPath, out)
+      else build(a[key], b[key], childPath, out, childIsNode(a.type ?? b.type, key))
     }
     return
   }
@@ -87,21 +95,31 @@ export function createAstPatch(before: AstJsonDocument, after: AstJsonDocument):
   return out
 }
 
-function parentAt(root: unknown, parts: string[]): { parent: unknown; key: string } {
+function parentAt(root: unknown, parts: string[]): { parent: unknown; key: string; nodePosition: boolean } {
   if (parts.length === 0) throw new AstPatchError('the document root cannot be removed')
   let parent = root
+  let nodePosition = true
   for (const part of parts.slice(0, -1)) {
     if (Array.isArray(parent)) {
       const index = Number(part)
-      if (!Number.isSafeInteger(index) || index < 0 || index >= parent.length) {
+      if (!/^(0|[1-9]\d*)$/.test(part) || !Number.isSafeInteger(index) || index >= parent.length) {
         throw new AstPatchError(`array index ${JSON.stringify(part)} is out of range`)
       }
       parent = parent[index]
     } else if (typeof parent === 'object' && parent !== null && Object.hasOwn(parent, part)) {
-      parent = (parent as Record<string, unknown>)[part]
+      const record = parent as Record<string, unknown>
+      nodePosition = childIsNode(record.type, part)
+      parent = record[part]
     } else throw new AstPatchError(`path component ${JSON.stringify(part)} does not exist`)
   }
-  return { parent, key: parts.at(-1)! }
+  const key = parts.at(-1)!
+  return {
+    parent,
+    key,
+    nodePosition: Array.isArray(parent)
+      ? nodePosition
+      : typeof parent === 'object' && parent !== null && childIsNode((parent as Record<string, unknown>).type, key),
+  }
 }
 
 /** Apply a serialized patch without mutating the input tree. */
@@ -117,23 +135,23 @@ export function applyAstPatch(
       root = clean(operation.value)
       continue
     }
-    const { parent, key } = parentAt(root, parts)
+    const { parent, key, nodePosition } = parentAt(root, parts)
     if (Array.isArray(parent)) {
       const index = Number(key)
       const max = operation.op === 'add' ? parent.length : parent.length - 1
-      if (!Number.isSafeInteger(index) || index < 0 || index > max) {
+      if (!/^(0|[1-9]\d*)$/.test(key) || !Number.isSafeInteger(index) || index > max) {
         throw new AstPatchError(`array index ${JSON.stringify(key)} is out of range`)
       }
-      if (operation.op === 'add') parent.splice(index, 0, clean(operation.value))
+      if (operation.op === 'add') parent.splice(index, 0, clean(operation.value, nodePosition))
       else if (operation.op === 'remove') parent.splice(index, 1)
-      else parent[index] = clean(operation.value)
+      else parent[index] = clean(operation.value, nodePosition)
     } else if (typeof parent === 'object' && parent !== null) {
       const record = parent as Record<string, unknown>
       if (operation.op !== 'add' && !Object.hasOwn(record, key)) {
         throw new AstPatchError(`path component ${JSON.stringify(key)} does not exist`)
       }
       if (operation.op === 'remove') delete record[key]
-      else record[key] = clean(operation.value)
+      else record[key] = clean(operation.value, nodePosition)
     } else throw new AstPatchError(`path parent for ${JSON.stringify(operation.path)} is not a container`)
   }
   if (
