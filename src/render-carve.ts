@@ -1284,7 +1284,11 @@ function colonFenceFor(ctx: CarveContext): string {
 function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
   ctx.colonFenceDepth++
   try {
-    return renderBlocks(children, ctx)
+    const body = renderBlocks(children, ctx)
+    // A host boundary closes the final list before the enclosing fence. Without
+    // this blank, the bare closer can be consumed by the last tight item under
+    // the 0.2 paragraph-extent rule and re-open as an empty sibling div.
+    return children.at(-1)?.type === 'list' ? `${body}\n` : body
   } finally {
     ctx.colonFenceDepth--
   }
