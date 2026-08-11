@@ -4941,7 +4941,13 @@ function isInvisibleLine(line: string): boolean {
   // `RE_COMMENT_LINE` matches a `%%%` opener too, so exclude the block form
   // explicitly - skipping it lands the scan on the block's BODY.
   if (RE_COMMENT_BLOCK.test(l)) return false
-  if (RE_COMMENT_LINE.test(l) || isLinkDefLine(l) || RE_FOOTNOTE_DEF.test(l)) return true
+  if (RE_COMMENT_LINE.test(l)) return true
+
+  // Reference and footnote definitions are column-strict: after the list
+  // parser has removed the item's content-column indent, only a definition at
+  // column zero is collected and therefore invisible. One column farther in,
+  // the same spelling is ordinary paragraph text and must loosen the item.
+  if (indentColumns(line, 1) === 0 && (isLinkDefLine(l) || RE_FOOTNOTE_DEF.test(l))) return true
 
   // A bare attribute line renders nothing either, but unlike the others it is
   // COLUMN-STRICT (§15): it opens only AT its container's content column, and
@@ -4960,8 +4966,10 @@ function lineOpensBlock(line: string): boolean {
     RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
     // No RE_ABBR_DEF: these lines are item content, never document level.
-    RE_FOOTNOTE_DEF.test(line) ||
-    isLinkDefLine(line) ||
+    // Definitions open only at their container's content column. This helper
+    // also receives residual-indented list-item lines during the looseness
+    // scan; their shape is literal paragraph text, not a block opener.
+    (indentColumns(line, 1) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||

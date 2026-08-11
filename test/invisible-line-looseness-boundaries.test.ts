@@ -45,6 +45,21 @@ describe('the invisible-line exemption stops at', () => {
     })
   })
 
+  describe('a definition-shaped line one column past its container', () => {
+    it.each(['[r]: /u', '[^f]: note'])(
+      '%s is literal second-paragraph text and loosens the item',
+      (line) => {
+        expect(carveToHtml(`1. item\n\n    ${line}\n`)).toBe(
+          `<ol>\n  <li><p>item</p>\n    <p>${line}</p>\n  </li>\n</ol>`,
+        )
+      },
+    )
+
+    it('a reference definition at the content column remains invisible', () => {
+      expect(carveToHtml('1. item\n\n   [r]: /u\n')).toBe('<ol>\n  <li>item</li>\n</ol>')
+    })
+  })
+
   it('an attribute line still does not fill the gap before a sibling', () => {
     expect(carveToHtml('- a\n\n  {.c}\n- b\n')).toBe(
       '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>',
