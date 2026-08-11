@@ -55,6 +55,19 @@ export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
+  applyAstPatch,
+  createAstPatch,
+  AstPatchError,
+  type AstPatchOperation,
+} from './ast-patch.js'
+export {
+  mergeAst,
+  type MergeConflict,
+  type MergeOptions,
+  type MergeResolution,
+  type MergeResult,
+} from './merge.js'
+export {
   checkPortability,
   normalizeHtml,
   type DjotEngine,

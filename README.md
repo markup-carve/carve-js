@@ -174,6 +174,8 @@ carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate
 carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
+carve diff a.crv b.crv     # semantic changes, ignoring source reflow
+carve merge base.crv ours.crv theirs.crv # merge independent edits
 carve portability file.crv # report where the document reads differently in Djot
 carve --help
 ```
@@ -217,6 +219,29 @@ the same - that is the point of recording it. What to do with the answer is the
 [versioning contract](https://markup-carve.github.io/carve/versioning): only
 `[behavior]` changelog entries between the stamped version and yours can require
 a document change.
+
+`carve diff` compares the normative PART 12 trees rather than source lines, so
+rewrapping and re-indenting are not changes while an edited destination,
+attribute, node, or node order is. `--json` returns stable paths and change
+kinds for applications.
+
+`carve merge` performs a conservative three-way merge over the same exchange
+tree. Give it the common base followed by the two revisions; independent edits
+are written as canonical Carve source. Ambiguous edits exit 1 and name their
+JSON Pointer paths instead of choosing a winner. `--json` emits either the
+merged AST or the complete conflict list. Concurrent insertion, deletion,
+reordering, and a move on one side plus an edit on the other are reconciled by
+node identity and order constraints; contradictory orders and delete-vs-edit
+remain conflicts. Duplicate siblings are occurrence-matched, with a bounded
+linear fallback for very large ambiguous lists.
+
+Programmatically, `mergeAst(base, ours, theirs, { resolve })` lets an application
+resolve selected conflicts as `base`, `ours`, `theirs`, or a supplied value.
+`createAstPatch(before, after)` and `applyAstPatch(ast, operations)` provide a
+serializable, position-independent patch format for storing or transporting the
+same semantic edits. Merged and patched trees omit positions and serialize to
+canonical source: the PART 12 AST does not contain the source-layout sidecar, so
+claiming whitespace-preserving merge from those three trees would be false.
 
 `carve lint` is a validator for problems that *parse* but render as the wrong
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading
