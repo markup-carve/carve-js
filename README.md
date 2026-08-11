@@ -229,10 +229,19 @@ kinds for applications.
 tree. Give it the common base followed by the two revisions; independent edits
 are written as canonical Carve source. Ambiguous edits exit 1 and name their
 JSON Pointer paths instead of choosing a winner. `--json` emits either the
-merged AST or the complete conflict list. The first version deliberately
-refuses concurrent insertion, deletion, or reordering of the same child list;
-move-aware sequence reconciliation is the next layer, and a false conflict is
-safer than attaching prose to the wrong node.
+merged AST or the complete conflict list. Concurrent insertion, deletion,
+reordering, and a move on one side plus an edit on the other are reconciled by
+node identity and order constraints; contradictory orders and delete-vs-edit
+remain conflicts. Duplicate siblings are occurrence-matched, with a bounded
+linear fallback for very large ambiguous lists.
+
+Programmatically, `mergeAst(base, ours, theirs, { resolve })` lets an application
+resolve selected conflicts as `base`, `ours`, `theirs`, or a supplied value.
+`createAstPatch(before, after)` and `applyAstPatch(ast, operations)` provide a
+serializable, position-independent patch format for storing or transporting the
+same semantic edits. Merged and patched trees omit positions and serialize to
+canonical source: the PART 12 AST does not contain the source-layout sidecar, so
+claiming whitespace-preserving merge from those three trees would be false.
 
 `carve lint` is a validator for problems that *parse* but render as the wrong
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading

@@ -46,12 +46,70 @@ describe('three-way structural merge', () => {
     }
   })
 
-  it('refuses ambiguous concurrent sequence edits', () => {
-    const result = merge('one\n', 'one\n\ntwo\n', 'zero\n\nother\n')
+  it('lets an application resolve conflicts without editing conflict markers', () => {
+    const base = carveToAstJson('# Base\n')
+    const ours = carveToAstJson('# Ours\n')
+    const theirs = carveToAstJson('# Theirs\n')
+    const result = mergeAst(base, ours, theirs, {
+      resolve: (conflict) => (conflict.path.endsWith('/value') ? 'ours' : 'theirs'),
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(JSON.stringify(result.ast)).toContain('Ours')
+  })
+
+  it('combines concurrent insertions in the same gap', () => {
+    const result = merge('one\n', 'one\n\ntwo\n', 'one\n\nthree\n')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const json = JSON.stringify(result.ast)
+      expect(json).toContain('two')
+      expect(json).toContain('three')
+    }
+  })
+
+  it('deduplicates the same concurrent insertion', () => {
+    const result = merge('one\n', 'one\n\ntwo\n', 'one\n\ntwo\n')
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(JSON.stringify(result.ast).match(/"two"/g)).toHaveLength(1)
+  })
+
+  it('merges an edit into a node moved by the other side', () => {
+    const result = merge('alpha\n\nbeta\n', 'beta\n\nalpha\n', 'alpha\n\nbeta edited\n')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const json = JSON.stringify(result.ast)
+      expect(json.indexOf('beta edited')).toBeLessThan(json.indexOf('alpha'))
+    }
+  })
+
+  it('reports incompatible concurrent orders', () => {
+    const result = merge(
+      'alpha\n\nbeta\n\ngamma\n',
+      'beta\n\nalpha\n\ngamma\n',
+      'alpha\n\ngamma\n\nbeta\n',
+    )
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.conflicts.map((conflict) => conflict.reason)).toContain(
         'concurrent-sequence-edit',
+      )
+    }
+  })
+
+  it('reports a deletion against an edit', () => {
+    const result = merge('alpha\n\nbeta\n', 'alpha\n', 'alpha\n\nbeta edited\n')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.conflicts.map((conflict) => conflict.reason)).toContain('delete-edit')
+    }
+  })
+
+  it('distinguishes deletion from a literal null in machine-readable conflicts', () => {
+    const result = merge('alpha\n\nbeta\n', 'alpha\n', 'alpha\n\nbeta edited\n')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.conflicts.find((item) => item.reason === 'delete-edit')?.deleted?.ours).toBe(
+        true,
       )
     }
   })
