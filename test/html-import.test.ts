@@ -29,5 +29,6 @@ describe('HTML import', () => {
 
   it('enforces resource limits with a typed error', () => {
     expect(() => htmlToAst('<p>x</p>', { maxNodes: 1 })).toThrow(HtmlImportLimitError)
+    expect(() => htmlToAst('<p onclick="x()">x</p>', { maxDiagnostics: 0 })).toThrow(HtmlImportLimitError)
   })
 })

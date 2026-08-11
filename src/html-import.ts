@@ -27,6 +27,7 @@ export type HtmlImportDiagnosticCode =
   | 'style-unmapped'
   | 'table-degraded'
   | 'raw-preserved'
+  | 'diagnostics-truncated'
 
 export interface HtmlImportDiagnostic {
   code: HtmlImportDiagnosticCode
@@ -55,7 +56,7 @@ export interface HtmlImportResult<T> {
 }
 
 export class HtmlImportLimitError extends Error {
-  constructor(public readonly limit: 'depth' | 'nodes') {
+  constructor(public readonly limit: 'depth' | 'nodes' | 'diagnostics') {
     super(`HTML import ${limit} limit exceeded`)
     this.name = 'HtmlImportLimitError'
   }
@@ -94,7 +95,7 @@ class Importer {
     this.adapter = options.adapter ?? 'generic'
     if (!ADAPTERS.has(this.adapter)) throw new TypeError(`Unknown HTML import adapter: ${this.adapter}`)
     this.maxDepth = options.maxDepth ?? 128
-    this.maxNodes = options.maxNodes ?? 100_000
+    this.maxNodes = options.maxNodes ?? 1_000_000
     this.maxDiagnostics = options.maxDiagnostics ?? 1_000
   }
 
@@ -110,7 +111,8 @@ class Importer {
   }
 
   private add(code: HtmlImportDiagnosticCode, message: string, severity: HtmlImportDiagnostic['severity'], path: string): void {
-    if (this.diagnostics.length < this.maxDiagnostics) this.diagnostics.push({ code, message, severity, path })
+    if (this.diagnostics.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
+    this.diagnostics.push({ code, message, severity, path })
   }
 
   private attrs(node: P5Node, path: string): Attrs | undefined {
