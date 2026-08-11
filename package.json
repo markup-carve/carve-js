@@ -72,5 +72,8 @@
     "@djot/djot": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "parse5": "^7.3.0"
   }
 }

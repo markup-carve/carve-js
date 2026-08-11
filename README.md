@@ -14,6 +14,19 @@ Implements **Carve spec 0.1** (see [Versioning & Changelog](https://markup-carve
 
 The spec, EBNF grammar, and example pairs live in the upstream [`markup-carve/carve`](https://github.com/markup-carve/carve) repo, pulled in here as a git submodule under [`spec/`](./spec). The corpus at `spec/tests/corpus/` is the contract this implementation honors.
 
+## Import HTML
+
+```ts
+import { htmlToCarve } from '@markup-carve/carve'
+
+const { value, report } = htmlToCarve(html, { mode: 'safe', adapter: 'generic' })
+```
+
+The importer uses an HTML5 DOM, builds a Carve AST, and delegates source output
+to the canonical writer. `report.diagnostics` records every lossy decision.
+Use `semantic` for trusted editor HTML and `roundtrip` only for Carve-produced
+HTML. The CLI equivalent is `carve migrate --from html --report report.json`.
+
 ## Install and develop
 
 ```sh

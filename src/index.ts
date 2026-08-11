@@ -51,6 +51,17 @@ import { coalesceTextRuns } from './coalesce-text-runs.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 
 export * from './ast.js'
+export {
+  htmlToAst,
+  htmlToCarve,
+  HtmlImportLimitError,
+  type HtmlImportAdapter,
+  type HtmlImportDiagnostic,
+  type HtmlImportDiagnosticCode,
+  type HtmlImportMode,
+  type HtmlImportOptions,
+  type HtmlImportResult,
+} from './html-import.js'
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'

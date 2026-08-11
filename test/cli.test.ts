@@ -59,6 +59,16 @@ describe('carve CLI — dispatch', () => {
   })
 })
 
+describe('carve migrate — HTML import', () => {
+  it('writes Carve plus a machine-readable loss report', async () => {
+    const t = makeIO({ stdin: '<p onclick="x()">Hello</p>' })
+    const code = await run(['migrate', '--from', 'html', '--report', 'report.json', '--check-loss'], t.io)
+    expect(code).toBe(1)
+    expect(t.out).toBe('Hello\n')
+    expect(JSON.parse(t.files['report.json']!)).toMatchObject({ mode: 'safe', diagnostics: [{ code: 'attribute-dropped' }] })
+  })
+})
+
 describe('carve fix — stdin mode', () => {
   it('fixes stdin and writes the result to stdout', async () => {
     const t = makeIO({ stdin: 'use _emphasis_ here' })
