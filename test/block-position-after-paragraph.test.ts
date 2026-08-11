@@ -1,15 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-/*
- * Markdown-like paragraph interruption (grammar PART 9 §10): visible block
- * starts interrupt an open paragraph without a blank line, at top level and
- * inside nested content. List markers (bullet, task, AND ordered) do NOT
- * interrupt -- they need a blank line, so without one they fold into the open
- * paragraph as lazy continuation; fenced code needs a closer to interrupt, but
- * div/admonition openers interrupt and auto-close at EOF.
- */
-describe('top-level paragraph interruption (§10)', () => {
+/* PART 9 §10: every block kind needs block position after an open paragraph. */
+describe('top-level block position after a paragraph (§10)', () => {
   it('a `* ` unordered marker folds into prose (no blank line)', () => {
     const html = carveToHtml("Die Frage ist x = 5\n* 3 + 17 wahr.\n")
     expect(html).toBe('<p>Die Frage ist x = 5\n* 3 + 17 wahr.</p>')
@@ -25,14 +18,14 @@ describe('top-level paragraph interruption (§10)', () => {
     expect(html).toBe('<p>Shopping:\n- milk and\nsome bread</p>')
   })
 
-  it('two blockquote lines after prose interrupt as a quote', () => {
+  it('a blank establishes block position for a quote', () => {
     const html = carveToHtml("They said:\n\n> one\n> two\n")
     expect(html).toBe(
       '<p>They said:</p>\n<blockquote><p>one\ntwo</p></blockquote>',
     )
   })
 
-  it('a heading after prose interrupts', () => {
+  it('a blank establishes block position for a heading', () => {
     const html = carveToHtml("Some text\n\n# Heading\n")
     expect(html).toBe(
       '<p>Some text</p>\n<section id="Heading">\n  <h1>Heading</h1>\n</section>',
@@ -44,29 +37,27 @@ describe('top-level paragraph interruption (§10)', () => {
     expect(html).toBe('<p>Steps\n1. first</p>')
   })
 
-  it('a captioned one-line quote after prose interrupts', () => {
+  it('a captioned quote starts in block position', () => {
     const html = carveToHtml("Intro\n\n> Stay hungry\n^ Steve Jobs\n")
     expect(html).toBe(
       '<p>Intro</p>\n<figure>\n  <blockquote><p>Stay hungry</p></blockquote>\n  <figcaption>Steve Jobs</figcaption>\n</figure>',
     )
   })
 
-  it('a captioned one-row table after prose interrupts', () => {
+  it('a captioned table starts in block position', () => {
     const html = carveToHtml("Intro\n\n|=A|\n^ caption\n")
     expect(html).toBe(
       '<p>Intro</p>\n<table>\n  <caption>caption</caption>\n  <thead><tr><th>A</th></tr></thead>\n</table>',
     )
   })
 
-  it('a closed generic div after prose interrupts', () => {
+  it('a generic div starts in block position', () => {
     expect(carveToHtml("text\n\n:::\ncontent\n:::\n")).toBe(
       '<p>text</p>\n<div>\n  <p>content</p>\n</div>',
     )
   })
 
-  it('a closed ::: | line block after prose interrupts', () => {
-    // The pipe opener shares the bare `:::` closer, so it interrupts a
-    // paragraph (with a closer ahead) just like a generic div does.
+  it('a ::: | line block starts in block position', () => {
     expect(carveToHtml("intro\n\n::: |\nverse\n:::\n")).toBe(
       '<p>intro</p>\n<div class="line-block">\n  <p>verse</p>\n</div>',
     )
@@ -96,10 +87,7 @@ describe('a blank line starts the block (§10)', () => {
   })
 })
 
-// Invisible constructs — reference definitions and comments — are not rendered
-// blocks, so unlike a visible block they still interrupt a paragraph with no
-// blank line, rather than being folded into it as literal text.
-describe('invisible constructs still interrupt (§10 carve-out)', () => {
+describe('non-rendering constructs also require block position', () => {
   it('a footnote definition right after prose resolves (no blank line)', () => {
     const html = carveToHtml("See[^n].\n\n[^n]: the note\n")
     expect(html).toContain('role="doc-noteref"')
@@ -128,10 +116,7 @@ describe('invisible constructs still interrupt (§10 carve-out)', () => {
   })
 })
 
-// Inside already-nested content, visible block starts also interrupt an open
-// paragraph. List markers still provide the sublist behavior expected from
-// indentation alone.
-describe('nested content: visible block starts interrupt paragraphs', () => {
+describe('nested content uses the same block-position rule', () => {
   it('single nested child still nests', () => {
     const html = carveToHtml("- parent\n  - child\n")
     expect(html).toContain('<ul>')
@@ -150,14 +135,14 @@ describe('nested content: visible block starts interrupt paragraphs', () => {
     expect(html).toContain('<li>child</li>')
   })
 
-  it('a heading after lead text in an item interrupts', () => {
+  it('a continuation marker establishes block position for a heading', () => {
     const html = carveToHtml("- text\n+\n# H\n")
     // A heading inside a list item carries its slug id on the <h*> (carve-php
     // parity); no <section> wrapper is emitted inside an item.
     expect(html).toBe('<ul>\n  <li>text\n    <h1 id="H">H</h1>\n  </li>\n</ul>')
   })
 
-  it('a closed generic div without a blank line interrupts', () => {
+  it('a continuation marker establishes block position for a div', () => {
     const html = carveToHtml("- item\n+\n:::\ncontent\n:::\n")
     expect(html).toBe(
       '<ul>\n  <li>item\n    <div>\n      <p>content</p>\n    </div>\n  </li>\n</ul>',
@@ -177,11 +162,9 @@ describe('nested content: visible block starts interrupt paragraphs', () => {
   })
 })
 
-describe('paragraph interruption carve-outs and nested coverage', () => {
-  it('an unterminated fence does not interrupt (stays in the paragraph)', () => {
-    // No matching closer ahead, so the fence does not interrupt (§10 closer
-    // lookahead); the unclosed run is then an inline verbatim span to end of
-    // block (the inline-verbatim rule), not a code block.
+describe('uniform paragraph extent and nested coverage', () => {
+  it('an unterminated fence shape stays in the paragraph', () => {
+    // The unclosed run is inline verbatim to the end of the paragraph.
     expect(carveToHtml("text\n`\nno closer`\n")).toBe(
       '<p>text\n<code>\nno closer</code></p>',
     )
@@ -193,7 +176,7 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     )
   })
 
-  it('no ordered-list marker interrupts a paragraph (needs a blank line)', () => {
+  it('every ordered-list marker needs block position', () => {
     expect(carveToHtml("p\n1. a\n")).toBe('<p>p\n1. a</p>')
     expect(carveToHtml("p\n2. a\n")).toBe('<p>p\n2. a</p>')
     expect(carveToHtml("p\n1985. a\n")).toBe('<p>p\n1985. a</p>')
@@ -203,7 +186,7 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     expect(carveToHtml("p\n![a](u)\n")).toBe('<p>p\n<img src="u" alt="a"></p>')
   })
 
-  it('heading, blockquote, and table interrupt at top level (a list folds)', () => {
+  it('heading, blockquote, and table start after a blank at top level', () => {
     expect(carveToHtml("p\n\n# H\n")).toBe(
       '<p>p</p>\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
@@ -215,7 +198,7 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     )
   })
 
-  it('heading, blockquote, and table interrupt inside a quote (a list folds)', () => {
+  it('heading, blockquote, and table start after a quoted blank', () => {
     expect(carveToHtml("> p\n>\n> # H\n")).toBe(
       '<blockquote>\n  <p>p</p>\n  <h1 id="H">H</h1>\n</blockquote>',
     )
