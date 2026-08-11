@@ -6007,8 +6007,10 @@ function parseList(lexer: Lexer): List {
         nested.push('')
         nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
       }
-      pendingBlanks = 0
-      pendingBlankLineNumbers = []
+      // `pendingBlanks` is NOT cleared. The loose-list test below reads it to
+      // decide whether a blank separated this item from its sibling, and a
+      // blank is both at once: the fence's content AND the separator that
+      // loosens the list. Clearing it made `- a\n  %%% x\n b\n\n- c\n` tight.
     }
 
     // Blank line(s) before the next sibling marker make the list loose.
