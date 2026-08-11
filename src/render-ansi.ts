@@ -7,6 +7,7 @@ import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
+import { stripBidiControls } from './bidi-controls.js'
 
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
@@ -57,7 +58,7 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return normalize(`${out}${footnotes}`)
+  return stripBidiControls(normalize(`${out}${footnotes}`))
 }
 
 interface AnsiContext {
@@ -603,8 +604,21 @@ function isWideCodePoint(cp: number): boolean {
 }
 
 function width(text: string): number {
+  // The §26 bidi controls are stripped from this target's output, but that
+  // happens once over the assembled string at the end of renderAnsi. Every
+  // width here is computed BEFORE that, so counting them measured characters
+  // that were about to be deleted: a heading `A<U+202E>B<U+200B>C` drew a
+  // five-cell rule under four cells, and carve-rs and carve-php drew four
+  // because they strip per text node (carve#1085).
+  //
+  // Measuring the stripped text fixes all three callers at once - the heading
+  // rule and both table-column computations - and is right independently of
+  // the ordering: an override is a zero-width formatting character, so it
+  // contributes nothing to display width whether or not it survives.
   let w = 0
-  for (const ch of stripAnsi(text)) w += isWideCodePoint(ch.codePointAt(0)!) ? 2 : 1
+  for (const ch of stripBidiControls(stripAnsi(text))) {
+    w += isWideCodePoint(ch.codePointAt(0)!) ? 2 : 1
+  }
   return w
 }
 

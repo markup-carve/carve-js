@@ -33,6 +33,7 @@ import type {
 } from './extension.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
+import { stripBidiControls } from './bidi-controls.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
@@ -1791,11 +1792,6 @@ const HTML_ESCAPE: Record<string, string> = {
  * overrides/isolates do. Zero-width characters are likewise left as-is in text
  * (they are only stripped from generated ids; see heading-ids.ts).
  */
-const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/g
-function stripBidiControls(s: string): string {
-  return s.replace(BIDI_CONTROL_RE, '')
-}
-
 function escapeHtml(s: string): string {
   // Strip the Trojan-Source bidi controls, then escape the structural HTML
   // metacharacters.

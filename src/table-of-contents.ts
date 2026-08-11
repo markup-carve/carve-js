@@ -3,6 +3,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { deriveDisplayNodes } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
 import { renderInlinesInLinkContext, type RenderOptions } from './render-html.js'
+import { stripBidiControls } from './bidi-controls.js'
 
 /** Options for the {@link tableOfContents} extension. */
 export interface TableOfContentsOptions {
@@ -42,7 +43,7 @@ function escapeHtml(s: string): string {
 /** Strip Trojan-Source bidi-override / isolate controls (§26), matching the
  *  core's heading-text handling so a TOC link can't visually spoof its target. */
 function stripBidi(s: string): string {
-  return s.replace(/[\u202A-\u202E\u2066-\u2069]/g, '')
+  return stripBidiControls(s)
 }
 
 /**

@@ -10,7 +10,8 @@ import type { BlockNode, Document, InlineNode } from '../src/ast.js'
  *   M1a THE ASTERISK KEEPS M1 UNCONDITIONALLY.
  *   M1b `_`, `#` AND `[` ARE ESCAPED IF AND ONLY IF the character is ADJACENT
  *       ON THE EMITTED LINE to an UNESCAPED DELIMITER OF THE SAME CHARACTER.
- *   M1c NOTHING ELSE NARROWS.
+ *   M1c A PARAGRAPH LINE MUST NOT BECOME A LIST.
+ *   M1d NOTHING ELSE NARROWS.
  *
  * M1b IS AN IF-AND-ONLY-IF, NOT A FLOOR. An escape it drops is dropped and an
  * escape it keeps is kept, because a permissive reading of it yields three
@@ -20,6 +21,34 @@ import type { BlockNode, Document, InlineNode } from '../src/ast.js'
 const md = (src: string) => carveToMarkdown(src).trim()
 
 describe("the Markdown target's escaping narrows on the line", () => {
+  describe('M1c: paragraph lines do not become lists', () => {
+    it('protects every foreign-reader list marker', () => {
+      expect(md('para\n- tail')).toBe('para\n\\- tail')
+      expect(md('para\n+ tail')).toBe('para\n\\+ tail')
+      expect(md('para\n1. tail')).toBe('para\n1\\. tail')
+      expect(md('para\n1) tail')).toBe('para\n1\\) tail')
+      expect(md('para\n* tail')).toBe('para\n\\* tail')
+    })
+
+    it('protects an indented marker but leaves a real list marker live', () => {
+      const doc: Document = {
+        type: 'document',
+        children: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'text', value: 'para\n   - tail' } as InlineNode],
+          } as BlockNode,
+        ],
+      }
+      expect(renderMarkdown(doc).trim()).toBe('para\n   \\- tail')
+      expect(md('- real')).toBe('- real')
+    })
+
+    it('does not rewrite a marker inside a multiline code span', () => {
+      expect(md('para ``code\n- literal``')).toBe('para `code\n- literal`')
+    })
+  })
+
   describe('M1b: not adjacent, so the escape protects nothing and is dropped', () => {
     it('writes an identifier as the author typed it', () => {
       expect(md('company_id')).toBe('company_id')

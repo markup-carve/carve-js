@@ -7,6 +7,29 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Markdown target leaves a bare ampersand alone.** Text was neutralized as
+  `&amp;`, `&lt;` and `&gt;`; only two thirds of that was doing anything. An
+  entity in Markdown TEXT decodes to a CHARACTER, and a character cannot open a
+  tag, so `&` carried no risk to leave bare - measured against pandoc 3.5,
+  commonmark.js and marked with raw HTML allowed. `<` and `>` keep the entity
+  form, which is what actually neutralizes embedded HTML. `Aktionen & Reaktionen`
+  now writes as itself. Text authored as `&#65;` is emitted as itself too and a
+  consumer may decode it; there is no character-reference exception.
+
+### Fixed
+
+- **A nested list is indented once on the Markdown target, not twice.**
+  `renderList` padded every emitted line by the list's own depth, and the
+  enclosing item padded the same lines again by the width of its marker, so each
+  level was indented twice: two levels came out at four spaces and three at ten.
+  Ten spaces under a marker whose content column is six is an indented verbatim
+  block, so a third level stopped being a list for every reader that is not
+  Carve itself. Nesting now comes from the parent's continuation pad alone -
+  `- a` / `  - b` / `    - c` - and a line with no content no longer takes that
+  pad, which removes the whitespace-only lines PART 11 §7 forbids.
+
 ## [0.1.3] - 2026-08-10
 
 ### Breaking

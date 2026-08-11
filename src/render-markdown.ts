@@ -17,6 +17,7 @@ import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
+import { stripBidiControls } from './bidi-controls.js'
 
 /**
  * Whether smart typography renders as its glyph or as the source run the author
@@ -91,7 +92,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return normalize(`${out}${footnotes}`)
+  return stripBidiControls(normalize(`${out}${footnotes}`))
 }
 
 interface MarkdownContext {
@@ -133,7 +134,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
     }
     case 'paragraph':
-      return `${renderInlines(node.children, ctx)}\n\n`
+      return `${protectParagraphListMarkers(renderInlines(node.children, ctx))}\n\n`
     case 'code_block': {
       const content = stripControls(node.content)
       const fence = safeFence(content, 3)
@@ -233,7 +234,6 @@ function renderList(node: List, ctx: MarkdownContext): string {
   // already reproduces it (carve#352, corpus 31).
   const delim = node.delim === ')' ? ')' : '.'
   for (const item of node.items) {
-    const indent = '  '.repeat(ctx.listDepth - 1)
     let prefix: string
     if (node.ordered) {
       prefix = `${counter}${delim} `
@@ -245,9 +245,22 @@ function renderList(node: List, ctx: MarkdownContext): string {
     }
     const content = trimNonNbsp(renderListItem(item, ctx))
     const lines = content.split('\n')
-    out += `${indent}${prefix}${lines.shift() ?? ''}\n`
+    // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
+    // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
+    // the same lines again by its marker width, so every level was indented
+    // twice: two levels landed at four spaces and three at ten. Ten spaces
+    // under a marker whose content column is six is four PAST it, which is
+    // where a reader opens an indented verbatim block - so a third level
+    // stopped being a list for every reader that is not Carve itself. Carve's
+    // own content-column model is lenient enough to read it back as a list,
+    // which is why this was invisible from inside the engine and only pandoc
+    // showed it (carve#1069, carve-php#1142).
+    out += `${prefix}${lines.shift() ?? ''}\n`
     const continuation = ' '.repeat(prefix.length)
-    for (const line of lines) out += `${indent}${continuation}${line}\n`
+    // A line with no content takes no pad: PART 11 section 7 emits such a line
+    // empty, and trailing whitespace is what editors and `git apply
+    // --whitespace=fix` rewrite behind the writer.
+    for (const line of lines) out += `${line === '' ? '' : continuation + line}\n`
   }
   ctx.listDepth--
   return out + (ctx.listDepth === 0 ? '\n' : '')
@@ -777,15 +790,66 @@ function escapeUnresolvedCrossrefs(value: string): string {
 
 function escapeText(text: string): string {
   text = stripControls(text)
-  // Neutralize embedded HTML (<>&) so Markdown re-rendered to HTML cannot
-  // execute it: carve's "HTML is text" guarantee holds for the Markdown target
-  // too. `&` first so the entities are not re-escaped.
-  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Neutralize embedded HTML so Markdown re-rendered to HTML cannot execute it:
+  // carve's "HTML is text" guarantee holds for the Markdown target too.
+  //
+  // ONLY `<` AND `>` DO THAT WORK. A bare `&` cannot open a tag: an entity in
+  // Markdown TEXT decodes to a CHARACTER, and a character in text content is
+  // escaped again by whatever writes the HTML. Measured against pandoc 3.5,
+  // commonmark.js and marked with raw HTML ALLOWED - the entity and bare forms
+  // came out byte-identical and inert, while a bare `<` was live in all three.
+  //
+  // Escaping every ampersand cost every document its spelling for nothing:
+  // `Aktionen & Reaktionen` came back as `Aktionen &amp; Reaktionen`, and on one
+  // real corpus 324 of 423 escaped characters were ampersands (carve#1071).
+  //
+  // NO EXCEPTION FOR A CHARACTER-REFERENCE OPENER, deliberately. Text authored
+  // as `&#65;` is emitted as itself and a consumer may decode it. Escaping it
+  // here would answer the question one node too early: whether an `&` opens a
+  // reference depends on the EMITTED LINE, and Carve parses `#65` as a tag, so
+  // this renderer sees `"a &"` and `"; b"` as separate text nodes. That is the
+  // mistake section 8a documents for `_`, `#` and `[`, which is why those three
+  // are emitted as sentinels and decided in normalize().
+  text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // Escape Markdown metacharacters (none overlap with the HTML chars above).
   // `_`, `#` and `[` are emitted as SENTINELS rather than as backslashes:
   // section 8a decides those three on the EMITTED LINE, which only normalize()
   // can see. `*` and everything else keep M1 here and unconditionally.
   return text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+}
+
+/** Keep paragraph continuation lines from becoming lists in Markdown readers. */
+function protectParagraphListMarkers(text: string): string {
+  let codeFence = 0
+  const lines = text.split('\n')
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    let line = lines[lineIndex]!
+    if (codeFence === 0) {
+      line = line
+        .replace(/^([ \t]{0,3})([-+])(?=[ \t])/, '$1\\$2')
+        .replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t])/, '$1\\$2')
+      lines[lineIndex] = line
+    }
+
+    for (let i = 0; i < line.length; ) {
+      if (line[i] !== '`') {
+        i++
+        continue
+      }
+      let backslashes = 0
+      for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) backslashes++
+      let run = 1
+      while (line[i + run] === '`') run++
+      if (backslashes % 2 === 0) {
+        if (codeFence === 0) codeFence = run
+        else if (codeFence === run) codeFence = 0
+      }
+      i += run
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /**

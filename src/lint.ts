@@ -38,6 +38,7 @@ import {
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey } from './own-property.js'
+import { isBidiControl } from './bidi-controls.js'
 import type { BlockNode, Document, Heading } from './ast.js'
 
 export interface LintWarning {
@@ -309,6 +310,39 @@ export function lintCarve(
   const foldId = (s: string): string =>
     Array.from(s, (c) => c.toLowerCase()).join('')
   const out: LintWarning[] = []
+
+  // Canonical Carve deliberately preserves these source characters for a
+  // lossless round trip. Presentation targets strip them, so make that quiet
+  // target difference visible to authors without making the writer lossy.
+  let line = 1
+  let column = 1
+  for (let i = 0; i < source.length; ) {
+    const codePoint = source.codePointAt(i)!
+    const width = codePoint > 0xffff ? 2 : 1
+    if (isBidiControl(codePoint)) {
+      out.push({
+        line,
+        column,
+        rule: 'bidi-control-in-source',
+        message:
+          `Bidi override/isolate control U+${codePoint.toString(16).toUpperCase().padStart(4, '0')} ` +
+          'is preserved by canonical Carve but stripped from presentation output; remove it unless intentional.',
+        start: i,
+        end: i + width,
+      })
+    }
+    if (codePoint === 0x0d) {
+      if (source.charCodeAt(i + width) === 0x0a) i++
+      line++
+      column = 1
+    } else if (codePoint === 0x0a) {
+      line++
+      column = 1
+    } else {
+      column++
+    }
+    i += width
+  }
 
   for (const container of unclosedContainers) {
     out.push({
