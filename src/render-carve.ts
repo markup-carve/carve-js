@@ -462,6 +462,34 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
   return out
 }
 
+/** Every non-blank line of `text`, prefixed with `columns` spaces. */
+function indentLines(text: string, columns: number): string {
+  const pad = ' '.repeat(columns)
+  return text
+    .split('\n')
+    .map((line) => (line === '' ? line : pad + line))
+    .join('\n')
+}
+
+/**
+ * Whether two adjacent sibling lists would read back as ONE list.
+ *
+ * The axes are §11 N1's: a list kind, and for each kind the marker character
+ * the author chose plus the plain-vs-task classification. When any of them
+ * differs the lists already separate on their own and the writer owes them
+ * nothing - which is what carve#286 established.
+ */
+function listsWouldMerge(a: List, b: List): boolean {
+  if (a.ordered !== b.ordered) return false
+  if (isTaskList(a) !== isTaskList(b)) return false
+  if (a.ordered) return (a.delim ?? '.') === (b.delim ?? '.') && a.olType === b.olType
+  return (a.bulletChar ?? '-') === (b.bulletChar ?? '-')
+}
+
+function isTaskList(list: List): boolean {
+  return list.items.some((item) => item.checked !== undefined)
+}
+
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
@@ -470,11 +498,34 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   ctx.afterCaptionHost = false
   try {
     const parts: string[] = []
+    // TWO ADJACENT SIBLING LISTS NEED SOMETHING BETWEEN THEM. Written at the
+    // same column with matching markers they merge on re-parse, so
+    // `parse(fmt(x)) == parse(x)` is false for a document the parser reads as
+    // two lists (carve#1088). carve#286 spent the marker axis - "emit the
+    // marker as authored" - which separates them only while the markers differ;
+    // when both are `1.` at column 0 there is nothing left to preserve.
+    //
+    // ONE SPACE, CUMULATIVE, RELATIVE TO THE LIST BEFORE IT. One space is the
+    // only offset safe for both kinds: a bullet's content column is 2, so two
+    // spaces already NEST the second list inside the first. And the step is per
+    // list rather than per run - writing every later list at +1 leaves the
+    // second and third at the same column, where they merge with each other.
+    let previousList: List | null = null
+    let listOffset = 0
     for (const block of blocks) {
       ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
       const rendered = renderBlock(block, ctx)
       ctx.afterCaptionHost = hostsCaption(block)
-      if (rendered.length > 0) parts.push(rendered)
+      if (block.type === 'list') {
+        listOffset = previousList !== null && listsWouldMerge(previousList, block) ? listOffset + 1 : 0
+        previousList = block
+      } else if (rendered.length > 0) {
+        previousList = null
+        listOffset = 0
+      }
+      if (rendered.length > 0) {
+        parts.push(listOffset > 0 ? indentLines(rendered, listOffset) : rendered)
+      }
     }
     return parts.join('\n\n')
   } finally {
