@@ -35,7 +35,7 @@ describe('a tight item', () => {
   it('renders a paragraph after a collected definition bare', () => {
     // Corpus 228. The definition renders nothing, so what remains is a tight
     // item holding two paragraphs.
-    expect(list('- a\n  [^f]: x\n  more\n\nsee[^f]\n')).toBe('<ul> <li>a more </li> </ul>')
+    expect(list("- a\n+\n[^f]: x\n+\nmore\n\nsee[^f]\n")).toBe('<ul> <li>a more </li> </ul>')
   })
 
   it('still renders a paragraph after a closed block bare', () => {

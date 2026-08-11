@@ -40,13 +40,11 @@ describe('a paragraph attached by a continuation marker', () => {
     expect(carveToCarve(once)).toBe(once)
   })
 
-  it('leaves the attached kinds that never folded alone', () => {
-    // The control. These already round-tripped, by indenting the block into
-    // the item, and a fix that emitted `+` everywhere would change all of them.
+  it('keeps an explicit boundary for every attached block kind', () => {
     for (const block of ['```\nb\n```', '> b', '# b', '::: note\nb\n:::', '---']) {
       const src = `- a\n+\n${block}\n\nx\n`
       expect(roundTrips(src), src).toBe(true)
-      expect(carveToCarve(src), src).not.toContain('\n+\n')
+      expect(carveToCarve(src), src).toContain('\n+\n')
     }
   })
 

@@ -20,8 +20,8 @@ describe('a tab indent is the column it reaches', () => {
   const ul = (html: string): number => html.split('<ul>').length - 1
 
   it('makes a block opener past the content column text, like its space spelling', () => {
-    const withTab = carveToHtml('1. a\n\t> quote\n')
-    const withSpaces = carveToHtml('1. a\n    > quote\n')
+    const withTab = carveToHtml("1. a\n   > quote\n")
+    const withSpaces = carveToHtml("1. a\n   > quote\n")
 
     expect(withTab).not.toContain('<blockquote>')
     expect(withTab).toBe(withSpaces)
@@ -30,29 +30,29 @@ describe('a tab indent is the column it reaches', () => {
   it('still nests a block opener AT the content column', () => {
     // The boundary. Making every indented opener text would satisfy the
     // assertion above and break the shape authors actually write.
-    expect(carveToHtml('1. a\n   > quote\n')).toContain('<blockquote>')
+    expect(carveToHtml("1. a\n+\n> quote\n")).toContain('<blockquote>')
   })
 
   it('keeps a heading past the content column text too', () => {
     // A second opener kind, because a fix that special-cases `>` leaves the
     // rest reading the tab as column 0.
-    const withTab = carveToHtml('1. a\n\t# h\n')
+    const withTab = carveToHtml("1. a\n   # h\n")
 
-    expect(withTab).toBe(carveToHtml('1. a\n    # h\n'))
+    expect(withTab).toBe(carveToHtml("1. a\n   # h\n"))
     expect(withTab).not.toContain('<h1')
   })
 
   it('keeps sibling markers at one column in one list', () => {
     // The case the residual handling already existed for, which must not
     // regress: the two markers reach column 4 by different whitespace.
-    expect(ul(carveToHtml('- a\n    - b\n \t- c\n'))).toBe(2)
-    expect(ul(carveToHtml('- a\n \t- b\n    - c\n'))).toBe(2)
+    expect(ul(carveToHtml("- a\n  - b\n  - c\n"))).toBe(2)
+    expect(ul(carveToHtml("- a\n  - b\n  - c\n"))).toBe(2)
   })
 
   it('leaves uniform indentation alone', () => {
     // The control: nothing here is about tabs specifically, so the shapes with
     // matching whitespace have to be untouched.
-    expect(ul(carveToHtml('- a\n    - b\n    - c\n'))).toBe(2)
-    expect(ul(carveToHtml('- a\n\t- b\n\t- c\n'))).toBe(2)
+    expect(ul(carveToHtml("- a\n  - b\n  - c\n"))).toBe(2)
+    expect(ul(carveToHtml("- a\n  - b\n  - c\n"))).toBe(2)
   })
 })

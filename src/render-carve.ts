@@ -999,7 +999,28 @@ function definitionInGap(
  * them: a `figure` is an image line plus a caption line and an `image` is the
  * image line alone, which is why both read as paragraph text one column in.
  */
-const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image', 'figure'])
+// Under the 0.2 paragraph rule every nonblank line folds while a paragraph is
+// open. Consequently every following sibling block needs an explicit
+// structural boundary in a tight item; `+` supplies it without making the item
+// loose.
+const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set<BlockNode['type']>([
+  'paragraph',
+  'heading',
+  'thematic_break',
+  'block_quote',
+  'definition_list',
+  'code_block',
+  'raw_block',
+  'admonition',
+  'div',
+  'table',
+  'line_block',
+  'comment',
+  'image',
+  'figure',
+  'abbreviation_def',
+  'link_reference_definition',
+])
 
 /** A written block-attributes line: `{` … `}` alone on its line (PART 2). */
 const A_BLOCK_ATTRIBUTES_LINE = /^\{.*\}$/
@@ -1054,14 +1075,10 @@ function atMarkerColumn(text: string): string {
 }
 
 function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
-  // A list item is a prefix/indent host: its fences start over at `:::`.
-  const outerFenceDepth = ctx.colonFenceDepth
-  ctx.colonFenceDepth = 0
-  try {
-    return renderListItemBody(item, ctx, tight)
-  } finally {
-    ctx.colonFenceDepth = outerFenceDepth
-  }
+  // Tight 0.2 items may attach a sibling block at the marker column with `+`.
+  // Such a fence is no longer protected by indentation from an enclosing
+  // colon fence, so retain the outer depth and give it a distinct width.
+  return renderListItemBody(item, ctx, tight)
 }
 
 function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
@@ -1122,7 +1139,11 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       if (previous !== undefined) {
         const written = definitionInGap(previous, b, ctx)
         if (written !== undefined && written.length > 0) {
-          parts.push(written)
+          // Definitions no longer interrupt the paragraph above. Attach the
+          // definition-led run explicitly at the marker column so it remains
+          // structural while the item stays tight.
+          parts.push(atMarkerColumn('+'), atMarkerColumn(written))
+          previousAtMarkerColumn = true
           separated = true
         }
       }
@@ -1228,7 +1249,8 @@ function romanMarker(n: number): string {
 
 function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
   const out: string[] = []
-  for (const item of items) {
+  for (const [itemIndex, item] of items.entries()) {
+    if (itemIndex > 0) out.push('')
     for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
     item.definitions.forEach((def, index) => {
       // An EMPTY description whose line carries a hoisted definition is one the
@@ -1287,7 +1309,11 @@ function colonFenceFor(ctx: CarveContext): string {
 function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
   ctx.colonFenceDepth++
   try {
-    return renderBlocks(children, ctx)
+    const body = renderBlocks(children, ctx)
+    // A host boundary closes the final list before the enclosing fence. Without
+    // this blank, the bare closer can be consumed by the last tight item under
+    // the 0.2 paragraph-extent rule and re-open as an empty sibling div.
+    return children.at(-1)?.type === 'list' ? `${body}\n` : body
   } finally {
     ctx.colonFenceDepth--
   }

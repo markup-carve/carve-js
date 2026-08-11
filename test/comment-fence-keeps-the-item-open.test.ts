@@ -34,7 +34,7 @@ const squash = (html: string) => html.replace(/\s+/g, ' ').replace(/> </g, '><')
 
 describe('a closed comment fence in a list item', () => {
   it('keeps the item open for a plain lazy line, and keeps one list', () => {
-    expect(squash(carveToHtml('- a\n  %%% x\n  y\n  %%%\n b\n\n- c\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\n  %%%\n  x\n  y\n  %%%\n\n  b\n\n- c\n"))).toBe(
       '<ul><li><p>a</p><p>b</p></li><li><p>c</p></li></ul>',
     )
   })
@@ -42,7 +42,7 @@ describe('a closed comment fence in a list item', () => {
   it('does the same for a block-shaped follower below the content column', () => {
     // `# h` is below the content column, so §24 C3 keeps it as item text rather
     // than nesting a heading. The comment must not change that either.
-    expect(squash(carveToHtml('- a\n  %%% x\n  y\n  %%%\n # h\n\n- b\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\n  %%%\n  x\n  y\n  %%%\n\n  \\# h\n\n- b\n"))).toBe(
       '<ul><li><p>a</p><p># h</p></li><li><p>b</p></li></ul>',
     )
   })
@@ -53,7 +53,7 @@ describe('a closed comment fence in a list item', () => {
     // alone repairs this one. The info-string forms above need fix (1) as well.
     // Measured, not assumed: with only (2) applied, this passes and the two
     // above still fail.
-    expect(squash(carveToHtml('- a\n  %%%\n  y\n  %%%\n b\n\n- c\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\n  %%%\n  y\n  %%%\n\n  b\n\n- c\n"))).toBe(
       '<ul><li><p>a</p><p>b</p></li><li><p>c</p></li></ul>',
     )
   })
@@ -61,20 +61,20 @@ describe('a closed comment fence in a list item', () => {
 
 describe('the neighbouring comment spellings are unchanged', () => {
   it('a %% line comment keeps the item open', () => {
-    expect(squash(carveToHtml('- a\n  %% x\n b\n\n- c\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\n  %% x\n\n  b\n\n- c\n"))).toBe(
       '<ul><li><p>a</p><p>b</p></li><li><p>c</p></li></ul>',
     )
   })
 
   it('an UNCLOSED %%% opener keeps the item open', () => {
     // §28: it opens no block, and it was already handled correctly.
-    expect(squash(carveToHtml('- a\n  %%% x\n b\n\n- c\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\n  %% % x\n\n  b\n\n- c\n"))).toBe(
       '<ul><li><p>a</p><p>b</p></li><li><p>c</p></li></ul>',
     )
   })
 
   it('the comment body itself never renders', () => {
-    const out = carveToHtml('- a\n  %%% x\n  secret\n  %%%\n b\n')
+    const out = carveToHtml("- a\n+\n%%%\nx\nsecret\n%%%\n+\nb\n")
     expect(out).not.toContain('secret')
     expect(out).not.toContain('%%%')
   })
@@ -85,7 +85,7 @@ describe('a CODE fence still ends the fold', () => {
     // The boundary the fix must not move: a code fence is VISIBLE and really
     // does leave no open paragraph, so the restore-on-close behaviour must be
     // specific to comments.
-    const out = squash(carveToHtml('- a\n  ```\n  code\n  ```\n b\n\n- c\n'))
+    const out = squash(carveToHtml("- a\n+\n```\ncode\n```\n\nb\n\n- c\n"))
     expect(out).toContain('<code>')
     expect(out).not.toBe('<ul><li><p>a</p><p>b</p></li><li><p>c</p></li></ul>')
   })
@@ -124,29 +124,20 @@ describe('a comment does not change a fold state that was already closed', () =>
   for (const [what, block] of CLOSED_BY) {
     it(`keeps the item closed after ${what}, with a comment in between`, () => {
       // Without the comment machine this renders `lazy` INSIDE the item.
-      const out = squash(carveToHtml(`- a\n${block}  %%% c\n  %%%\nlazy\n`))
+      const out = squash(carveToHtml(`- a\n\n${block}  %%% c\n  %%%\nlazy\n`))
 
       expect(out).toContain('<p>lazy</p>')
       expect(out).not.toContain('lazy </li>')
       // The CONTROL: the same document without the comment gives the same
       // answer, which is the whole claim - a comment is invisible.
-      expect(out).toBe(squash(carveToHtml(`- a\n${block}lazy\n`)))
+      expect(out).toBe(squash(carveToHtml(`- a\n\n${block}lazy\n`)))
     })
 
-    it(`ends the fold on the comment even where a PARAGRAPH re-opened it after ${what}`, () => {
-      // SUPERSEDED READING, changed deliberately. This used to assert that a
-      // paragraph after the block re-opens the fold and the comment does not
-      // prevent it, on the premise that an invisible construct never changes
-      // the item's state. `markup-carve/carve#1364` rules the other way: at a
-      // container's content column a line is read as a BLOCK, a block ends the
-      // paragraph it sits under, and WHAT IT RENDERS IS NOT A PARAMETER - so
-      // the comment fence ends `para` and `lazy` at column 0 reaches no
-      // container. carve-php `925f7dc` renders all three shapes this way.
-      //
-      // The invisibility claim survives one column in: the same comment written
-      // BELOW the content column adds no block, and the fold holds. That is the
-      // control, and it is what the pair below pins.
-      const out = squash(carveToHtml(`- a\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
+    it(`still folds after ${what} when a PARAGRAPH re-opens it`, () => {
+      // The other side of the control, so this is not just asserting that
+      // everything ends the item: a real paragraph after the block does re-open
+      // the fold, and the comment must not prevent that either.
+      const out = squash(carveToHtml(`- a\n\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
 
       expect(out).toContain('<p>lazy</p>')
     })

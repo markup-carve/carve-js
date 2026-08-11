@@ -14,6 +14,6 @@ describe('adjacent block openers in an attached run', () => {
   })
 
   it('does not add a marker to an isolated block opener', () => {
-    expect(carveToCarve('- x\n+\n> q\n')).toBe('- x\n  > q\n')
+    expect(carveToCarve('- x\n+\n> q\n')).toBe("- x\n+\n> q\n")
   })
 })

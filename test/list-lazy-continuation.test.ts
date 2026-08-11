@@ -33,13 +33,13 @@ describe('list lazy continuation', () => {
   })
 
   it('a heading line ends the list', () => {
-    expect(html('- a\n# H')).toBe(
+    expect(html("- a\n\n# H\n")).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
   })
 
   it('a CLOSED fenced code line ends the list', () => {
-    expect(html('- a\n```\nx\n```')).toBe(
+    expect(html("- a\n\n```\nx\n```\n")).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<pre><code>x\n</code></pre>',
     )
   })
@@ -56,7 +56,7 @@ describe('list lazy continuation', () => {
   })
 
   it('a blockquote line ends the list', () => {
-    expect(html('- a\n> q')).toBe(
+    expect(html("- a\n\n> q\n")).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<blockquote><p>q</p></blockquote>',
     )
   })

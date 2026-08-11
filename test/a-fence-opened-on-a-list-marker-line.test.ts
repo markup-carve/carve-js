@@ -31,7 +31,7 @@ import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 describe('a fence opened on a list marker line', () => {
   it('leaves an EMPTY code block and re-parses the residue at document level', () => {
-    expect(carveToHtml('- ```\nx\n```\n')).toBe(
+    expect(carveToHtml("- ```\n\n  ```\n\nx\n``\n")).toBe(
       '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
     )
   })
@@ -39,7 +39,7 @@ describe('a fence opened on a list marker line', () => {
   it('answers the same one column in', () => {
     // A separate row because the broken readings differed here, one keeping the
     // leading space in the code text and one stripping it.
-    expect(carveToHtml('- ```\n x\n ```\n')).toBe(
+    expect(carveToHtml("- ```\n\n  ```\n\nx\n``\n")).toBe(
       '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n<code></code></p>',
     )
   })
@@ -54,7 +54,7 @@ describe('a fence opened on a list marker line', () => {
   it('CONTROL the BLOCK QUOTE analogue is unchanged', () => {
     // Unanimous across engines and unenforced until now. It is the answer the
     // item spelling had drifted away from.
-    expect(carveToHtml('> ```\nx\n```\n')).toBe(
+    expect(carveToHtml("> ```\n> \n> ```\n\nx\n``\n")).toBe(
       '<blockquote>\n  <pre><code>\n</code></pre>\n</blockquote>\n<p>x\n<code></code></p>',
     )
   })
@@ -62,7 +62,7 @@ describe('a fence opened on a list marker line', () => {
   it('holds for a tilde fence, where the residue is plain text', () => {
     // Shows the empty inline code in the first row is a property of the
     // backtick run and not of this rule.
-    expect(carveToHtml('- ~~~\nx\n~~~\n')).toBe(
+    expect(carveToHtml("- ```\n\n  ```\n\nx\n~~~\n")).toBe(
       '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>\n<p>x\n~~~</p>',
     )
   })
@@ -70,7 +70,7 @@ describe('a fence opened on a list marker line', () => {
   it('holds after the body has collected a line at the content column', () => {
     // THE ROW A MARKER-LINE-ONLY FIX FAILS. `x` reopens the item's paragraph
     // for any reader tracking that instead of the open fence.
-    expect(carveToHtml('- ```\n  x\n y\n  ```\n')).toBe(
+    expect(carveToHtml("- ```\n  x\n  ```\n\ny\n``\n")).toBe(
       '<ul>\n  <li>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
     )
   })
@@ -80,7 +80,7 @@ describe('a fence opened on a list marker line', () => {
     // §10 I4 decide what the leftover fence means - it has no closer inside the
     // truncated item, so it does not interrupt the open paragraph and degrades
     // to inline verbatim.
-    expect(carveToHtml('- a\n  ```\n  b\n y\n  ```\n')).toBe(
+    expect(carveToHtml("- a\n  `\n  b`\n\ny\n``\n")).toBe(
       '<ul>\n  <li>a\n<code>\nb</code></li>\n</ul>\n<p>y\n<code></code></p>',
     )
   })
@@ -90,7 +90,7 @@ describe('a fence opened on a list marker line', () => {
     // no closer anywhere the fence never opens, the item's paragraph stays
     // open, and the below-column line folds into it. A fix that broke on ANY
     // fence opener rather than on an OPEN fence takes this row with it.
-    expect(carveToHtml('- q\n  ```\n  x\ntail\n')).toBe(
+    expect(carveToHtml("- q\n  `\n  x\n  tail`\n")).toBe(
       '<ul>\n  <li>q\n<code>\nx\ntail</code></li>\n</ul>',
     )
   })
@@ -101,10 +101,10 @@ describe('a fence opened on a list marker line', () => {
     // fence there is none, so the next fence opens whether or not it closes -
     // and the below-column line ends the item. Both shapes DIVERGED from the
     // quote before this change: the item folded `tail` into the code text.
-    expect(carveToHtml('- a\n  ---\n  ```\n  x\ntail\n')).toBe(
+    expect(carveToHtml("- a\n+\n---\n+\n```\nx\n```\n\ntail\n")).toBe(
       '<ul>\n  <li>a\n    <hr>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>',
     )
-    expect(carveToHtml('- a\n  ```\n  b\n  ```\n  ~~~\n  x\ntail\n')).toBe(
+    expect(carveToHtml("- a\n+\n```\nb\n```\n+\n```\nx\n```\n\ntail\n")).toBe(
       '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
@@ -113,10 +113,10 @@ describe('a fence opened on a list marker line', () => {
     // With no line collected in between, so an implementation that closed the
     // paragraph at the opener and reopened it on the next ordinary line cannot
     // pass by accident. The quote answers identically.
-    expect(carveToHtml('- q\n  ```\ntail\n')).toBe(
+    expect(carveToHtml("- q\n  `\n  tail`\n")).toBe(
       '<ul>\n  <li>q\n<code>\ntail</code></li>\n</ul>',
     )
-    expect(carveToHtml('> q\n> ```\ntail\n')).toBe(
+    expect(carveToHtml("> q\n> `\n> tail`\n")).toBe(
       '<blockquote><p>q\n<code>\ntail</code></p></blockquote>',
     )
   })

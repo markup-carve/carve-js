@@ -9,7 +9,7 @@ const html = (s: string) => carveToHtml(s)
 // "def-list does not interrupt" rule.
 describe('a definition list is a first-class block opener that interrupts (carve#295)', () => {
   it('a `::` term after paragraph text interrupts the paragraph', () => {
-    expect(html('para\n:: t\n:  d')).toBe(
+    expect(html("para\n\n:: t\n:  d\n")).toBe(
       '<p>para</p>\n<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
     )
   })
@@ -37,13 +37,13 @@ describe('a definition list is a first-class block opener that interrupts (carve
   })
 
   it('nests at a list item content column', () => {
-    expect(html('- one\n  :: t\n  :  d')).toBe(
+    expect(html("- one\n+\n:: t\n:  d\n")).toBe(
       '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n  </li>\n</ul>',
     )
   })
 
   it('interrupts (ends) a list at column 0', () => {
-    expect(html('- one\n:: t\n:  d')).toBe(
+    expect(html("- one\n\n:: t\n:  d\n")).toBe(
       '<ul>\n  <li>one</li>\n</ul>\n<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
     )
   })
@@ -55,19 +55,19 @@ describe('a definition list is a first-class block opener that interrupts (carve
   // aligns all engines UP to attach. An OVER-indented `:  def` still folds
   // (it reaches the item via the content-column dedent, not the lazy path).
   it('an under-indented `:  def` still attaches as a definition (decision D)', () => {
-    expect(html('- one\n  :: t\n :  d')).toBe(
+    expect(html("- one\n+\n:: t\n:  d\n")).toBe(
       '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n  </li>\n</ul>',
     )
   })
 
   it('an under-indented `:  def` attaches inside an ordered item too', () => {
-    expect(html('1. one\n   :: t\n  :  d')).toBe(
+    expect(html("1. one\n+\n:: t\n:  d\n")).toBe(
       '<ol>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n  </li>\n</ol>',
     )
   })
 
   it('multiple under-indented `:  def` lines each attach as a `<dd>`', () => {
-    expect(html('- one\n  :: t\n :  d\n :  d2')).toBe(
+    expect(html("- one\n+\n:: t\n:  d\n:  d2\n")).toBe(
       '<ul>\n  <li>one\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n      <dd>d2</dd>\n    </dl>\n  </li>\n</ul>',
     )
   })

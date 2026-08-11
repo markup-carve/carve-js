@@ -314,7 +314,7 @@ describe('markdownToCarve — prefixed multiline inline mapping', () => {
 
   it('normalizes tight Markdown blockquote markers to Carve spacing', () => {
     const carve = conv(['>quote', '>>nested'].join('\n'))
-    expect(carve).toBe(['> quote', '> > nested'].join('\n'))
+    expect(carve).toBe(['> quote', '>', '> > nested'].join('\n'))
     expect(carveToHtml(carve)).toBe(
       '<blockquote>\n  <p>quote</p>\n  <blockquote><p>nested</p></blockquote>\n</blockquote>',
     )
@@ -820,8 +820,8 @@ describe('markdownToCarve — block spacing', () => {
     expect(conv('  - one\n  - two')).toBe('  - one\n  - two')
   })
 
-  it('keeps an indented blockquote inside a list item (no dedent/blank)', () => {
-    expect(conv('- item\n  > quote')).toBe('- item\n  > quote')
+  it('keeps an indented blockquote inside a list item with an explicit boundary', () => {
+    expect(conv('- item\n  > quote')).toBe('- item\n\n  > quote')
   })
 
   it('does not turn a non-1 ordered continuation into a list', () => {

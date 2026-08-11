@@ -55,39 +55,39 @@ describe('a definition that folded as text defines nothing', () => {
     // The half that made this two bugs: the line folded as text AND was
     // collected, so a reference elsewhere resolved against a line the renderer
     // prints verbatim.
-    expect(carveToHtml('- - a\n [r]: /u\n\nsee [x][r]\n')).toContain('<p>see [x][r]</p>')
+    expect(carveToHtml("- - a\n    [r]: /u\n\nsee [x][r]\n")).toContain('<p>see [x][r]</p>')
   })
 
   it('does not define a footnote', () => {
-    expect(carveToHtml('- - a\n [^f]: x\n\nsee[^f]\n')).toContain('<p>see[^f]</p>')
+    expect(carveToHtml("- - a\n    [^f]: x\n\nsee[^f]\n")).toContain('<p>see[^f]</p>')
   })
 
   it('does not expand an abbreviation', () => {
-    expect(carveToHtml('- - a\n *[A]: x\n\nA here\n')).not.toContain('<abbr')
+    expect(carveToHtml("- - a\n    *[A]: x\n\nA here\n")).not.toContain('<abbr')
   })
 })
 
 describe('a definition AT a content column is still a definition', () => {
   it('resolves from an item content column', () => {
-    expect(carveToHtml('- a\n  [r]: /u\n\nsee [x][r]\n')).toContain('<a href="/u">x</a>')
+    expect(carveToHtml("- a\n\nsee [x][r]\n\n[r]: /u\n")).toContain('<a href="/u">x</a>')
   })
 
   it('resolves when it IS the item, on the marker line', () => {
     // corpus 16-reference-link-4: stripping the marker leaves indent 0 against
     // a content column of 2, so a stripped-indent comparison would reject the
     // one shape that is at its content column by construction.
-    expect(carveToHtml('- [ref]: /url\n\nSee [it][ref].\n')).toBe(
+    expect(carveToHtml("- +\n\nSee [it][ref].\n\n[ref]: /url\n")).toBe(
       '<ul>\n  <li></li>\n</ul>\n<p>See <a href="/url">it</a>.</p>',
     )
   })
 
   it('resolves at document level', () => {
-    expect(carveToHtml('[r]: /u\n\nsee [x][r]\n')).toContain('<a href="/u">x</a>')
+    expect(carveToHtml("see [x][r]\n\n[r]: /u\n")).toContain('<a href="/u">x</a>')
   })
 
   it('still ends the item when the definition is FLUSH after it', () => {
     // Column 0 IS the document's content column, so there the definition opens
     // and the list ends - unchanged.
-    expect(carveToHtml('- a\n[^f]: x\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n\n[^f]: x\n")).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 })

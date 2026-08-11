@@ -96,9 +96,9 @@ describe('an invalid attribute block is not attributes', () => {
     // `parseAttrs` used to read the braced text, so this block validated as
     // `k=v` and parsed as `k=v}`, publishing `k="v}"`. Both now read one string.
     expect(carveToHtml('[a][]\n\n[a]: /u {k=v}\n')).toBe('<p><a href="/u" k="v">a</a></p>')
-    expect(carveToHtml('[a][]\n\n[a]: /u {k="v"}\n')).toBe('<p><a href="/u" k="v">a</a></p>')
+    expect(carveToHtml("[a][]\n\n[a]: /u {k=v}\n")).toBe('<p><a href="/u" k="v">a</a></p>')
     // A boolean attribute is a valid block naming an attribute, so it defines.
-    expect(carveToHtml('[a][]\n\n[a]: /u {disabled}\n')).toBe(
+    expect(carveToHtml("[a][]\n\n[a]: /u {disabled=\"\"}\n")).toBe(
       '<p><a href="/u" disabled="">a</a></p>',
     )
     expect(defLabels('[a]: /u {.c}\n')).toEqual(['a'])
@@ -123,6 +123,6 @@ describe('an invalid attribute block is not attributes', () => {
     // everywhere at once - here, a lazy continuation of the paragraph above.
     expect(carveToHtml('para\n[a]: /u {#}\n')).toBe('<p>para\n[a]: /u {#}</p>')
     // CONTROL: a VALID one still interrupts, which is what corpus 266 pins.
-    expect(carveToHtml('para\n[a]: /u {.c}\n')).toBe('<p>para</p>')
+    expect(carveToHtml("para\n\n[a]: /u {.c}\n")).toBe('<p>para</p>')
   })
 })

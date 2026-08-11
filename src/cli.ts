@@ -19,6 +19,7 @@ import process from 'node:process'
 import { parseArgs } from 'node:util'
 import {
   applyMigrationFixes,
+  migrateCarve01To02,
   djotMigrationWarnings,
   formatMigrationWarnings,
   lintCarve,
@@ -136,6 +137,8 @@ constructs that otherwise silently mis-render under Carve (e.g. **bold**
     -w, --write    Rewrite the given files in place
         --check    Report files that would change; exit 1 if any (no writes)
         --stdout   Print the fixed output to stdout (single file or stdin)
+        --from-0.1 Preserve 0.1 block boundaries by inserting the blank lines
+                   required by Carve 0.2
 
   With no files, fix reads Carve source on stdin and writes the fixed result
   to stdout. Crossing collisions that cannot be auto-fixed are reported on
@@ -260,7 +263,7 @@ function plural(n: number): string {
 }
 
 async function runFix(args: string[], io: CliIO): Promise<number> {
-  let values: { write?: boolean; check?: boolean; stdout?: boolean; help?: boolean }
+  let values: { write?: boolean; check?: boolean; stdout?: boolean; 'from-0.1'?: boolean; help?: boolean }
   let positionals: string[]
   try {
     const parsed = parseArgs({
@@ -269,6 +272,7 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
         write: { type: 'boolean', short: 'w' },
         check: { type: 'boolean' },
         stdout: { type: 'boolean' },
+        'from-0.1': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -301,9 +305,10 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
     }
     const src = await io.readStdin()
     const res = applyMigrationFixes(src)
+    const output = values['from-0.1'] ? migrateCarve01To02(res.output) : res.output
     reportSkipped(res.skipped, '<stdin>', io)
-    if (values.check) return res.applied.length > 0 ? 1 : 0
-    io.write(res.output)
+    if (values.check) return output !== src ? 1 : 0
+    io.write(output)
     return 0
   }
 
@@ -332,18 +337,19 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
       continue
     }
     const res = applyMigrationFixes(src)
+    const output = values['from-0.1'] ? migrateCarve01To02(res.output) : res.output
     skippedTotal += res.skipped.length
     reportSkipped(res.skipped, file, io)
-    const applied = res.applied.length
+    const applied = res.applied.length + (output === res.output ? 0 : 1)
 
     if (mode === 'stdout') {
-      io.write(res.output)
+      io.write(output)
       continue
     }
     if (applied === 0) continue
     changed++
     if (mode === 'write') {
-      io.writeFile(file, res.output)
+      io.writeFile(file, output)
       io.writeErr(`fixed ${file} (${applied} change${plural(applied)})\n`)
     } else {
       io.writeErr(`would fix ${file} (${applied} change${plural(applied)})\n`)

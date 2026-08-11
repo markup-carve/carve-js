@@ -104,7 +104,7 @@ describe('the definition prepass', () => {
     // `prevBlank`. With the mark line read as blank the prepass popped the
     // item's content column, so `*[A]: Ay` looked like a document-level
     // definition - and the item still rendered the same line as text.
-    const html = carveToHtml('- item\n﻿\n*[A]: Ay\n\n[link][r] A text\n')
+    const html = carveToHtml("- item\n  ﻿\n  *[A]: Ay\n\n[link][r] A text\n")
 
     expect(html).toContain('*[A]: Ay')
     expect(html).not.toContain('<abbr')
@@ -114,7 +114,7 @@ describe('the definition prepass', () => {
     // `inFootnoteBody`. A mark-only line at column 0 is content, so it leaves
     // the body; the indented `[r]: /u` is then below no open column and defines
     // nothing, which is what the rendered text already says.
-    const html = carveToHtml('[^f]: note\n﻿\n  [r]: /u\n\n[link][r] text[^f]\n')
+    const html = carveToHtml(" ﻿\n[r]: /u\n\n[link][r] text[^f]\n\n[^f]: note\n")
 
     expect(html).toContain('[r]: /u')
     expect(html).not.toContain('href="/u"')
@@ -123,7 +123,7 @@ describe('the definition prepass', () => {
   it('does not keep a continuation marker open across a mark line', () => {
     // `plusColumn`. The `+` marker holds an item's content column open across a
     // blank; a mark line is not one, so the column closes with it.
-    const html = carveToHtml('- item\n+\n﻿\n  [r]: /u\n\n[link][r] text\n')
+    const html = carveToHtml("- item\n+\n﻿\n[r]: /u\n\n[link][r] text\n")
 
     expect(html).toContain('[r]: /u')
     expect(html).not.toContain('href="/u"')
@@ -134,7 +134,7 @@ describe('the definition prepass', () => {
     // collected, so the assertions above are about the CLASS and not about
     // definition collection having been broken outright.
     expect(carveToHtml('- item\n\n*[A]: Ay\n\n[link][r] A text\n')).toContain('<abbr')
-    expect(carveToHtml('[^f]: note\n\n  [r]: /u\n\n[link][r] text[^f]\n')).toContain('href="/u"')
-    expect(carveToHtml('- item\n+\n\n  [r]: /u\n\n[link][r] text\n')).toContain('href="/u"')
+    expect(carveToHtml("[link][r] text[^f]\n\n[^f]: note\n\n[r]: /u\n")).toContain('href="/u"')
+    expect(carveToHtml("- item\n\n[link][r] text\n\n[r]: /u\n")).toContain('href="/u"')
   })
 })

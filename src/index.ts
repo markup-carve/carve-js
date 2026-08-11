@@ -142,6 +142,7 @@ export {
   BBCODE_MAX_INPUT_LENGTH,
 } from './bbcode-migrate.js'
 export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
+export { migrateCarve01To02 } from './migrate-0-1-to-0-2.js'
 export {
   lintCarve,
   formatLintWarnings,

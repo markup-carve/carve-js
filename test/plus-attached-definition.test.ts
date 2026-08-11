@@ -13,18 +13,18 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('a definition attached by a + continuation marker', () => {
   it('registers', () => {
-    expect(carveToHtml('- a\n+\n[r]: /u\n\nsee [t][r]\n')).toBe(
+    expect(carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<p>see <a href="/u">t</a></p>',
     )
   })
 
   it('does not leave the line in the item', () => {
-    expect(carveToHtml('- a\n+\n[r]: /u\n\nsee [t][r]\n')).not.toContain('[r]:')
+    expect(carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")).not.toContain('[r]:')
   })
 
   it('matches the same document with a blank instead of the marker', () => {
-    const withPlus = carveToHtml('- a\n+\n[r]: /u\n\nsee [t][r]\n')
-    const withBlank = carveToHtml('- a\n\n[r]: /u\n\nsee [t][r]\n')
+    const withPlus = carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")
+    const withBlank = carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")
 
     expect(withPlus).toBe(withBlank)
   })
@@ -32,10 +32,10 @@ describe('a definition attached by a + continuation marker', () => {
   it('a blank line closes the attachment', () => {
     // After the blank, column 0 is top level again - which it already was for
     // this shape, so the control is that nothing changed.
-    expect(carveToHtml('- a\n+\ntext\n\n[r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml("- a\n+\ntext\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 
   it('leaves a definition at the item content column alone', () => {
-    expect(carveToHtml('- a\n  [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 })

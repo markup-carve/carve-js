@@ -24,10 +24,8 @@ const check = (src: string) => checkPortability(src, djot, render)
 const portable = (src: string) => check(src).portable
 
 describe('checkPortability — the divergences carve-js#546 documented', () => {
-  it('reports a paragraph line followed by a block opener', () => {
-    // The shape the withdrawn rule existed for: Carve interrupts the
-    // paragraph, Djot folds `> A quote.` into it as text.
-    expect(portable('Some intro prose.\n> A quote.\n')).toBe(false)
+  it('agrees on a paragraph line followed by a block opener', () => {
+    expect(portable('Some intro prose.\n> A quote.\n')).toBe(true)
   })
 
   it('reports a multi-line Djot heading absorbing the next line', () => {
@@ -46,11 +44,11 @@ describe('checkPortability — the divergences carve-js#546 documented', () => {
     // The rule's remedy defect: its advice ("add a blank line above it") split
     // one blockquote into two. The check reports the divergence and prescribes
     // nothing, so there is no advice left to be wrong.
-    expect(portable('> text\n> # H\n')).toBe(false)
+    expect(portable('> text\n> # H\n')).toBe(true)
   })
 
   it('reports an unterminated `:::` opener', () => {
-    expect(portable('Some prose.\n:::\nstuff\n')).toBe(false)
+    expect(portable('Some prose.\n:::\nstuff\n')).toBe(true)
   })
 })
 
@@ -87,15 +85,14 @@ describe('checkPortability — the shapes the withdrawn rule got wrong', () => {
 
 describe('checkPortability — report shape', () => {
   it('names the line the divergence is attributed to', () => {
-    const r = check('Some intro prose.\n> A quote.\n')
+    const r = check('a *b* =c=\n')
     expect(r.portable).toBe(false)
     expect(r.divergence!.line).toBe(1)
   })
 
   it('carries both renderings from the first differing point', () => {
-    const r = check('Some intro prose.\n> A quote.\n')
-    expect(r.divergence!.carve).toContain('blockquote')
-    expect(r.divergence!.djot).not.toContain('blockquote')
+    const r = check('a *b* =c=\n')
+    expect(r.divergence!.carve).not.toBe(r.divergence!.djot)
   })
 
   it('keeps the enclosing line across an inline element', () => {

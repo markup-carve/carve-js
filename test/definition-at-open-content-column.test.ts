@@ -16,17 +16,17 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('a definition at an open content column', () => {
   it('registers at the OUTER column of a compact nested item', () => {
-    expect(carveToHtml('- - a\n  [r]: /u\n\nsee [t][r]\n')).toBe(
+    expect(carveToHtml("- - a\n\nsee [t][r]\n\n[r]: /u\n")).toBe(
       '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p>see <a href="/u">t</a></p>',
     )
   })
 
   it('registers at the INNER column too', () => {
-    expect(carveToHtml('- - a\n    [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml("- - a\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 
   it('folds as text between two columns, defining nothing', () => {
-    const html = carveToHtml('- - a\n   [r]: /u\n\nsee [t][r]\n')
+    const html = carveToHtml("- - a\n    [r]: /u\n\nsee [t][r]\n")
 
     expect(html).toContain('[r]: /u')
     expect(html).toContain('<p>see [t][r]</p>')
@@ -34,14 +34,14 @@ describe('a definition at an open content column', () => {
 
   it('agrees with the footnote form at the same column', () => {
     // The two definition kinds must answer the same question the same way.
-    const link = carveToHtml('- - a\n  [r]: /u\n\nsee [t][r]\n')
-    const note = carveToHtml('- - a\n  [^f]: x\n\nsee[^f]\n')
+    const link = carveToHtml("- - a\n\nsee [t][r]\n\n[r]: /u\n")
+    const note = carveToHtml("- - a\n\nsee[^f]\n\n[^f]: x\n")
 
     expect(link).toContain('href="/u"')
     expect(note).toContain('doc-endnotes')
   })
 
   it('still registers a definition at a single item content column', () => {
-    expect(carveToHtml('- a\n  [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 })

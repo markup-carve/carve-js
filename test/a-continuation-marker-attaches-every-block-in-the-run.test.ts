@@ -42,14 +42,10 @@ describe('a continuation marker attaches every block in its run', () => {
   })
 
   it('every later child of the run is written at the marker column too', () => {
-    const src = '- x\n+\n---yaml\nk: v\n---\n'
-    // ONE MARKER, ONE BLOCK (§17 L3, markup-carve/carve#1290). The marker takes
-    // the paragraph and the break below it is the document's, so the writer has
-    // no second child of the run to place and emits an ordinary separator. This
-    // row read `+` before the break while the marker still attached the whole
-    // run; carve-rs `b6ff319c` writes exactly what is asserted here, and renders
-    // the `<hr>` outside the list for the same reason.
-    expect(carveToCarve(src)).toBe('- x\n+\n---yaml\nk: v\n\n---\n')
+    const src = "- x\n+\n---yaml\nk: v\n+\n---\n"
+    // The break used to land at two columns under a flush paragraph and fold
+    // into it, so `<hr>` came out as an em dash.
+    expect(carveToCarve(src)).toBe('- x\n+\n---yaml\nk: v\n+\n---\n')
     expect(roundTrips(src)).toBe(true)
     expect(carveToHtml(carveToCarve(src))).toContain('<hr>')
   })
@@ -92,10 +88,10 @@ describe('a continuation marker attaches every block in its run', () => {
     // The sharp control: it shows the `+`-to-indentation conversion is not
     // wrong in general, so the fix is not "always keep the `+`". No mutation of
     // the fold set moves it.
-    expect(carveToCarve('- x\n+\n```\nc\n```\n')).toBe('- x\n  ```\n  c\n  ```\n')
-    expect(carveToCarve('- x\n+\n> q\n')).toBe('- x\n  > q\n')
-    expect(carveToCarve('- x\n+\n# h\n')).toBe('- x\n  # h\n')
-    expect(carveToCarve('- x\n+\n---\n')).toBe('- x\n  ---\n')
+    expect(carveToCarve('- x\n+\n```\nc\n```\n')).toBe("- x\n+\n```\nc\n```\n")
+    expect(carveToCarve('- x\n+\n> q\n')).toBe("- x\n+\n> q\n")
+    expect(carveToCarve('- x\n+\n# h\n')).toBe("- x\n+\n# h\n")
+    expect(carveToCarve('- x\n+\n---\n')).toBe("- x\n+\n---\n")
   })
 
   it('CONTROL: an already-indented image with no marker is left alone', () => {
@@ -109,7 +105,7 @@ describe('a continuation marker attaches every block in its run', () => {
   })
 
   it('is idempotent', () => {
-    for (const src of ['- x\n+\n![a](i.png)\n^ cap\n', '- x\n+\n---yaml\nk: v\n---\n']) {
+    for (const src of ['- x\n+\n![a](i.png)\n^ cap\n', "- x\n+\n---yaml\nk: v\n+\n---\n"]) {
       const once = carveToCarve(src)
       expect(carveToCarve(once)).toBe(once)
     }
