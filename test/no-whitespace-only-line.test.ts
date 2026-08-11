@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { carveToCarve, carveToHtml } from '../src/index.js'
+import { expectedCorpusSize } from './helpers/corpus-population.js'
 
 /**
  * PART 11 §7: `fmt` never emits a line whose only content is ASCII space or
@@ -45,7 +46,7 @@ describe('the writer never emits a whitespace-only line', () => {
   const inputs = readdirSync(dir).filter((f) => f.endsWith('.crv'))
 
   it('holds across the whole corpus', () => {
-    expect(inputs.length).toBeGreaterThan(400)
+    expect(inputs.length).toBe(expectedCorpusSize(resolve(import.meta.dirname, '../spec')))
     const failures: string[] = []
     for (const slug of inputs) {
       const out = carveToCarve(readFileSync(resolve(dir, slug), 'utf8'))
