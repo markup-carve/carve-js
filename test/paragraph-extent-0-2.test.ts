@@ -51,4 +51,14 @@ describe('0.2 paragraph extent', () => {
     expect(migrated).toBe('intro\n\n# Heading\n\n> intro\n>\n> ---\n')
     expect(migrateCarve01To02(migrated)).toBe(migrated)
   })
+
+  it('does not alter frontmatter content', () => {
+    const source = '---\ntitle: X\n---\n\nbody\n'
+    expect(migrateCarve01To02(source)).toBe(source)
+  })
+
+  it('does not invent a boundary before a list marker', () => {
+    const source = 'intro\n- item\n'
+    expect(migrateCarve01To02(source)).toBe(source)
+  })
 })

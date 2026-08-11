@@ -10,6 +10,10 @@ export function migrateCarve01To02(source: string): string {
   const hadFinalEol = source.endsWith('\n')
   const lines = source.replace(/\r\n/g, '\n').split('\n')
   if (hadFinalEol) lines.pop()
+  const frontmatterEnd = (() => {
+    if (!/^---(?: ?[A-Za-z0-9]+)?[ \t]*$/.test(lines[0] ?? '')) return -1
+    return lines.findIndex((line, index) => index > 0 && /^---[ \t]*$/.test(line))
+  })()
   const out: string[] = []
   let opaque: { char: string; width: number; comment: boolean } | undefined
   let paragraphOpen = false
@@ -21,6 +25,10 @@ export function migrateCarve01To02(source: string): string {
 
   for (let index = 0; index < lines.length; index++) {
     const raw = lines[index]!
+    if (index <= frontmatterEnd) {
+      out.push(raw)
+      continue
+    }
     const quoted = /^((?:[ \t]*> ?)+)(.*)$/.exec(raw)
     const prefix = quoted?.[1] ?? ''
     const line = quoted?.[2] ?? raw.replace(/^[ \t]+/, '')
