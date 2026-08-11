@@ -1053,12 +1053,33 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
 function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const attrs = sourceLineAttr(opts, node.pos?.startLine, node.attrs) + renderAttrs(node.attrs)
-  if (node.children.length === 1 && node.children[0]!.type === 'paragraph') {
-    const para = node.children[0] as Paragraph
+  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING, exactly as it does for
+  // a list item. A comment (PART 9 section 4.13) and a raw block for another
+  // target both render '', and an invisible child was enough to push a
+  // single-paragraph quote into the expanded form: `> %% c` then `> y` gave
+  // `<blockquote>\n  <p>y</p>\n</blockquote>` where the oracle gives the
+  // compact one (markup-carve/carve#1106).
+  //
+  // Decided by rendering rather than by a type list, so a third node type that
+  // renders nothing cannot be added silently.
+  // Rendered ONCE and reused for the expanded form below. Calling `renderBlock`
+  // here and letting `renderBlocks` render the same children again doubles the
+  // work at every nesting level, which is exponential in depth: a 24-deep quote
+  // went from under a millisecond to 3.6 seconds, and a 32-deep one did not
+  // finish. The list-item renderer caches for the same reason.
+  const rendered = node.children.map((child) =>
+    child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
+  )
+  const visible = node.children.filter((_, i) => rendered[i] !== '')
+  if (visible.length === 1 && visible[0]!.type === 'paragraph') {
+    const para = visible[0] as Paragraph
     const inner = renderInlines(para.children, opts)
     return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
   }
-  const inner = renderBlocks(node.children, opts, level + 1)
+  const inner = node.children
+    .map((child, i) => rendered[i] ?? renderBlock(child, opts, level + 1))
+    .filter((piece) => piece !== '')
+    .join('\n')
   return `${pad}<blockquote${attrs}>\n${inner}\n${pad}</blockquote>`
 }
 
