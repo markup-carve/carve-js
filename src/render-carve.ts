@@ -515,34 +515,18 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   ctx.afterCaptionHost = false
   try {
     const parts: string[] = []
-    // TWO ADJACENT SIBLING LISTS NEED SOMETHING BETWEEN THEM. Written at the
-    // same column with matching markers they merge on re-parse, so
-    // `parse(fmt(x)) == parse(x)` is false for a document the parser reads as
-    // two lists (carve#1088). carve#286 spent the marker axis - "emit the
-    // marker as authored" - which separates them only while the markers differ;
-    // when both are `1.` at column 0 there is nothing left to preserve.
-    //
-    // ONE SPACE, CUMULATIVE, RELATIVE TO THE LIST BEFORE IT. One space is the
-    // only offset safe for both kinds: a bullet's content column is 2, so two
-    // spaces already NEST the second list inside the first. And the step is per
-    // list rather than per run - writing every later list at +1 leaves the
-    // second and third at the same column, where they merge with each other.
-    let previousList: List | null = null
-    let listOffset = 0
     let previousBlock: BlockNode | null = null
+    let previousRendered: BlockNode | undefined
     for (const block of blocks) {
       ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
       const rendered = renderBlock(block, ctx)
       ctx.afterCaptionHost = hostsCaption(block)
-      if (block.type === 'list') {
-        listOffset = previousList !== null && listsWouldMerge(previousList, block) ? listOffset + 1 : 0
-        previousList = block
-      } else if (rendered.length > 0) {
-        previousList = null
-        listOffset = 0
-      }
       if (rendered.length > 0) {
-        const text = listOffset > 0 ? indentLines(rendered, listOffset) : rendered
+        const separator = previousRendered !== undefined && adjacentBlocksMerge(previousRendered, block)
+          && previousRendered.type === 'list' && block.type === 'list'
+          ? `${sentinels[4]}\n`
+          : ''
+        const text = separator + rendered
         // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
         // lines are one paragraph in the source and N nodes in the tree since
         // PART 12 §18, so the default block separator would open a blank line
@@ -557,6 +541,10 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
         }
         previousBlock = block
       }
+      // Adjacency is in the AST, not merely in visible output. A comment or
+      // collected definition between two lists renders nothing but still means
+      // the lists are not sibling-adjacent and need no hard-boundary spelling.
+      previousRendered = block
     }
     return parts.join('\n\n')
   } finally {
@@ -1066,9 +1054,11 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
   if (left.type === 'list' && right.type === 'list') {
     if (left.ordered !== right.ordered) return false
-    return left.ordered
+    const sameMarker = left.ordered
       ? (left.delim ?? '.') === (right.delim ?? '.') && left.olType === right.olType
       : (left.bulletChar ?? '-') === (right.bulletChar ?? '-')
+    if (!sameMarker) return false
+    return (left.items[0]?.checked !== undefined) === (right.items[0]?.checked !== undefined)
   }
   return new Set<BlockNode['type']>([
     'block_quote',
@@ -2325,12 +2315,13 @@ function normalize(text: string): string {
  * writer runs. That is the other half of carve#678 and needs a decision about
  * what the parsed text of an nbsp is, not a change here.
  */
-const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004'] as const
-let sentinels: readonly [string, string, string, string] = [
+const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004', '\ue006'] as const
+let sentinels: readonly [string, string, string, string, string] = [
   '\ue001',
   '\ue002',
   '\ue003',
   '\ue004',
+  '\ue006',
 ]
 
 /**
@@ -2359,24 +2350,25 @@ function collectStrings(root: unknown): string {
   return parts.join('\u0000')
 }
 
-function pickSentinels(text: string): readonly [string, string, string, string] {
+function pickSentinels(text: string): readonly [string, string, string, string, string] {
   // The common case: none of the defaults occur, so keep them and skip the scan
   // of the private-use area entirely.
   if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
-    return ['\ue001', '\ue002', '\ue003', '\ue004']
+    return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue006']
   }
-  for (let base = 0xe005; base <= 0xf8fc; base += 4) {
-    const quad = [
+  for (let base = 0xe007; base <= 0xf8fb; base += 5) {
+    const group = [
       String.fromCharCode(base),
       String.fromCharCode(base + 1),
       String.fromCharCode(base + 2),
       String.fromCharCode(base + 3),
+      String.fromCharCode(base + 4),
     ] as const
-    if (!quad.some((c) => text.includes(c))) return quad
+    if (!group.some((c) => text.includes(c))) return group
   }
 
   // Unreachable for any real document; keep the old behaviour rather than throw.
-  return ['\ue001', '\ue002', '\ue003', '\ue004']
+  return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue006']
 }
 
 /**
@@ -2420,6 +2412,9 @@ function restoreVerbatim(text: string): string {
       .replace(new RegExp(sentinels[2], 'g'), '')
       // Back to the character itself - see protectVerbatim.
       .replace(new RegExp(sentinels[3], 'g'), '\ue000')
+      // A nonblank sentinel carries the second blank line through normalize's
+      // ordinary blank-run collapse; it is removed only after that pass.
+      .replace(new RegExp(sentinels[4], 'g'), '')
   )
 }
 
