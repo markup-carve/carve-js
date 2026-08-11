@@ -35,8 +35,15 @@ describe('a bare image followed by folding content stays in a paragraph', () => 
     )
   })
 
-  it('image + an interrupting heading keeps the image standalone', () => {
-    expect(h('![a](/u)\n# H')).toBe(
+  it.each(['# H', '> q', '| a |', '::: note', '```'])(
+    'image + %s stays in the open paragraph',
+    (line) => {
+      expect(h(`![a](/u)\n${line}`)).toContain('<p><img src="/u" alt="a">\n')
+    },
+  )
+
+  it('a blank before a heading keeps the image standalone', () => {
+    expect(h('![a](/u)\n\n# H')).toBe(
       '<img src="/u" alt="a">\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
   })

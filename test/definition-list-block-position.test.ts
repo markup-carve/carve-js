@@ -4,25 +4,23 @@ import { carveToHtml } from '../src/index.js'
 const html = (s: string) => carveToHtml(s)
 
 // A definition-list term `::` is a first-class block opener (carve#295): it
-// interrupts an open paragraph or heading like a heading/quote/fence does, and
-// at a list item's content column a def-list nests. This reverses the earlier
-// "def-list does not interrupt" rule.
-describe('a definition list is a first-class block opener that interrupts (carve#295)', () => {
-  it('a `::` term after paragraph text interrupts the paragraph', () => {
+// starts only in block position after a paragraph, and at a list item's content
+// column a def-list nests.
+describe('a definition list is a first-class block opener (carve#295)', () => {
+  it('a `::` term starts after a separating blank', () => {
     expect(html("para\n\n:: t\n:  d\n")).toBe(
       '<p>para</p>\n<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',
     )
   })
 
-  it('a `::` term after a heading line interrupts the heading', () => {
+  it('a `::` term follows a bounded heading without a blank', () => {
     expect(html('# H\n:: t\n:  d')).toBe(
       '<section id="H">\n  <h1>H</h1>\n  <dl>\n    <dt>t</dt>\n    <dd>d</dd>\n  </dl>\n</section>',
     )
   })
 
   it('an INDENTED `:: ` (below the content column) still folds as lazy text', () => {
-    // `RE_DEFLIST_TERM` is `^`-anchored, so an indented term does not interrupt,
-    // matching how heading/quote behave below the content column.
+    // `RE_DEFLIST_TERM` is column-anchored, so an indented term is text.
     expect(html('para\n :: t\n :  d')).toBe('<p>para\n:: t\n:  d</p>')
   })
 
