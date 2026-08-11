@@ -174,6 +174,8 @@ carve fmt --check src/     # exit non-zero if any file is not formatted (CI gate
 carve fmt --stamp file.crv # also append a provenance marker (spec version + engine)
 carve fix  file.crv        # auto-fix Djot/Markdown delimiter collisions
 carve lint file.crv        # validate: collisions + silent-failure problems
+carve diff a.crv b.crv     # semantic changes, ignoring source reflow
+carve merge base.crv ours.crv theirs.crv # merge independent edits
 carve portability file.crv # report where the document reads differently in Djot
 carve --help
 ```
@@ -217,6 +219,20 @@ the same - that is the point of recording it. What to do with the answer is the
 [versioning contract](https://markup-carve.github.io/carve/versioning): only
 `[behavior]` changelog entries between the stamped version and yours can require
 a document change.
+
+`carve diff` compares the normative PART 12 trees rather than source lines, so
+rewrapping and re-indenting are not changes while an edited destination,
+attribute, node, or node order is. `--json` returns stable paths and change
+kinds for applications.
+
+`carve merge` performs a conservative three-way merge over the same exchange
+tree. Give it the common base followed by the two revisions; independent edits
+are written as canonical Carve source. Ambiguous edits exit 1 and name their
+JSON Pointer paths instead of choosing a winner. `--json` emits either the
+merged AST or the complete conflict list. The first version deliberately
+refuses concurrent insertion, deletion, or reordering of the same child list;
+move-aware sequence reconciliation is the next layer, and a false conflict is
+safer than attaching prose to the wrong node.
 
 `carve lint` is a validator for problems that *parse* but render as the wrong
 thing (so nothing throws): broken `</#id>` cross-references, duplicate heading

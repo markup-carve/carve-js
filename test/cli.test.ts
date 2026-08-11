@@ -662,6 +662,36 @@ describe('carve diff', () => {
   })
 })
 
+describe('carve merge', () => {
+  const files = {
+    'base.crv': '# Old\n\nSee [docs](/a).\n',
+    'ours.crv': '# New\n\nSee [docs](/a).\n',
+    'theirs.crv': '# Old\n\nSee [docs](/b).\n',
+    'other.crv': '# Other\n\nSee [docs](/a).\n',
+  }
+
+  it('combines independent edits as Carve source', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', 'base.crv', 'ours.crv', 'theirs.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('New')
+    expect(t.out).toContain('/b')
+  })
+
+  it('returns machine-readable conflicts without choosing a winner', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', '--json', 'base.crv', 'ours.crv', 'other.crv'], t.io)).toBe(1)
+    const result = JSON.parse(t.out)
+    expect(result).toMatchObject({ ok: false, ast: null })
+    expect(result.conflicts.length).toBeGreaterThan(0)
+  })
+
+  it('requires base, ours and theirs', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', 'base.crv', 'ours.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('exactly three files')
+  })
+})
+
 describe('carve portability', () => {
   it('reports a portable document and exits 0', async () => {
     const t = makeIO({ files: { 'a.crv': 'Plain prose.\n\nMore prose.\n' } })

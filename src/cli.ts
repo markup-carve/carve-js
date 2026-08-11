@@ -33,6 +33,7 @@ import {
   carveToAstJson,
   diffAst,
   formatChanges,
+  mergeAst,
   fromAstJson,
   toAstJson,
   applyProfile,
@@ -74,6 +75,8 @@ Usage:
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
   carve diff [--json] a.crv b.crv  Report what changed in the DOCUMENT
+  carve merge [--json] base.crv ours.crv theirs.crv
+                                   Three-way merge independent AST edits
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
 
@@ -725,6 +728,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   if (sub === 'diff') return runDiff(rest, io)
+  if (sub === 'merge') return runMerge(rest, io)
   if (sub === 'portability') return runPortability(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
@@ -800,6 +804,66 @@ async function runDiff(args: string[], io: CliIO): Promise<number> {
   io.write(values.json ? `${JSON.stringify(changes, null, 2)}\n` : formatChanges(changes))
 
   return changes.length > 0 ? 1 : 0
+}
+
+/** `carve merge base ours theirs` - combine independent structural edits. */
+async function runMerge(args: string[], io: CliIO): Promise<number> {
+  let values: { json?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: { json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve merge: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+  if (positionals.length !== 3) {
+    io.writeErr('carve merge: takes exactly three files (base, ours, theirs)\n')
+    return 2
+  }
+
+  const sources: string[] = []
+  for (const file of positionals) {
+    try {
+      sources.push(io.readFile(file))
+    } catch {
+      io.writeErr(`carve merge: cannot read ${file}\n`)
+      return 2
+    }
+  }
+
+  const result = mergeAst(
+    carveToAstJson(sources[0]!),
+    carveToAstJson(sources[1]!),
+    carveToAstJson(sources[2]!),
+  )
+  if (!result.ok) {
+    if (values.json) io.write(`${JSON.stringify(result, null, 2)}\n`)
+    else {
+      for (const conflict of result.conflicts) {
+        io.writeErr(`conflict ${conflict.reason} at ${conflict.path}\n`)
+      }
+      const plural = result.conflicts.length === 1 ? '' : 's'
+      io.writeErr(`${result.conflicts.length} structural conflict${plural}\n`)
+    }
+    return 1
+  }
+
+  if (values.json) io.write(`${JSON.stringify(result.ast, null, 2)}\n`)
+  else {
+    const payloadLength = Buffer.byteLength(JSON.stringify(result.ast), 'utf8')
+    io.write(renderCarve(fromAstJson(result.ast, payloadLength)))
+  }
+  return 0
 }
 
 /**
