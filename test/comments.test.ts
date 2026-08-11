@@ -43,7 +43,7 @@ describe('trailing line comments', () => {
     expect(carveToHtml("before\n\n%% c\n\nafter\n").trim()).toBe('<p>before</p>\n<p>after</p>')
   })
 
-  it('an indented comment line interrupts an open paragraph', () => {
+  it('an indented comment block starts after a blank', () => {
     expect(carveToHtml("x\n\n%% c\n\ny\n").trim()).toBe('<p>x</p>\n<p>y</p>')
   })
 })
