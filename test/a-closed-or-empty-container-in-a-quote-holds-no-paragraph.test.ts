@@ -62,8 +62,11 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   })
 
   it('a CLOSED comment fence ends the quote', () => {
+    // The quote holds one VISIBLE child - the comment renders nothing - so it
+    // takes the compact form. What this row pins is that `tail` lands OUTSIDE
+    // the quote (carve-js#991 / markup-carve/carve#1106).
     expect(html('> quote\n> %%%\n> body\n> %%%\ntail\n')).toBe(
-      '<blockquote>\n  <p>quote</p>\n</blockquote>\n<p>tail</p>',
+      '<blockquote><p>quote</p></blockquote>\n<p>tail</p>',
     )
   })
 
