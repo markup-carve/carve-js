@@ -69,4 +69,11 @@ describe('nesting the writer has to indent is unchanged', () => {
     const src = '- [ ] a\n      - b\n'
     expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
   })
+
+  it('uses the bullet content column for an attached run after a task sublist', () => {
+    const source = '- [ ] a\n  - b\n\n    > q\n'
+    const canonical = '- [ ] a\n  - b\n  +\n  > q\n'
+    expect(carveToCarve(source)).toBe(canonical)
+    expect(carveToHtml(canonical)).toBe(carveToHtml(source))
+  })
 })

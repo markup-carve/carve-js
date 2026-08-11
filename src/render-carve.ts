@@ -910,17 +910,26 @@ function renderList(node: List, ctx: CarveContext): string {
       // inside a fenced block in a list item was the one place it did (corpus
       // 75-list-nesting-and-looseness-5). The content is unchanged either way,
       // since the reader strips the item's columns back off.
+      let inTaskNestedList = false
       for (const line of lines) {
+        const markerProbe = line.startsWith(MARKER_COLUMN)
+          ? line.slice(MARKER_COLUMN.length).trimStart()
+          : line.trimStart()
+        if (item.checked !== undefined && isRenderedListMarker(markerProbe)) {
+          inTaskNestedList = true
+        }
         if (line.startsWith(MARKER_COLUMN)) {
           // The continuation marker and the block it attaches sit at the ITEM's
           // marker column, not at its content column: §17 L3 puts the marker at
           // "the current container's MARKER COLUMN" and attaches the following
           // block "with no marker prefix or indentation". Indenting either into
           // the item is what made the attached paragraph fold (carve#861).
-          out += `${indent}${line.slice(MARKER_COLUMN.length)}\n`
+          const markerIndent = inTaskNestedList ? '  ' : ''
+          out += `${indent}${markerIndent}${line.slice(MARKER_COLUMN.length)}\n`
           continue
         }
-        out += line ? `${indent}${continuation}${line}\n` : '\n'
+        const lineIndent = inTaskNestedList ? '  ' : continuation
+        out += line ? `${indent}${lineIndent}${line}\n` : '\n'
       }
       if (!node.tight && idx < node.items.length - 1) out += '\n'
     })
@@ -928,6 +937,10 @@ function renderList(node: List, ctx: CarveContext): string {
   } finally {
     ctx.listDepth--
   }
+}
+
+function isRenderedListMarker(line: string): boolean {
+  return /^(?:[-*](?: \[[ xX]\])? |[A-Za-z0-9]+[.)] )/.test(line)
 }
 
 /**
@@ -1309,11 +1322,7 @@ function colonFenceFor(ctx: CarveContext): string {
 function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
   ctx.colonFenceDepth++
   try {
-    const body = renderBlocks(children, ctx)
-    // A host boundary closes the final list before the enclosing fence. Without
-    // this blank, the bare closer can be consumed by the last tight item under
-    // the 0.2 paragraph-extent rule and re-open as an empty sibling div.
-    return children.at(-1)?.type === 'list' ? `${body}\n` : body
+    return renderBlocks(children, ctx)
   } finally {
     ctx.colonFenceDepth--
   }
