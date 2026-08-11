@@ -43,8 +43,9 @@ function semantic(value: Value, nodePosition = true): unknown {
   if (typeof value !== 'object' || value === null) return value
   const record = value as Record<string, unknown>
   const out = Object.create(null) as Record<string, unknown>
-  for (const [key, child] of Object.entries(value)) {
+  for (const key of Object.keys(value).sort()) {
     if (nodePosition && (key === 'pos' || key === 'srcByteLength')) continue
+    const child = record[key]
     out[key] = semantic(child, childIsNode(record.type, key))
   }
   return out
@@ -267,6 +268,10 @@ function topoSort(
   tokens: Set<string>,
   edges: Map<string, Set<string>>,
 ): string[] | null {
+  const compareTokens = (a: string, b: string): number => {
+    const prefix = a.charCodeAt(0) - b.charCodeAt(0)
+    return prefix || Number(a.slice(1)) - Number(b.slice(1))
+  }
   const incoming = new Map([...tokens].map((token) => [token, 0]))
   for (const tos of edges.values()) {
     for (const to of tos) incoming.set(to, (incoming.get(to) ?? 0) + 1)
@@ -274,7 +279,7 @@ function topoSort(
   const ready = [...tokens].filter((token) => incoming.get(token) === 0)
   const out: string[] = []
   while (ready.length > 0) {
-    ready.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    ready.sort(compareTokens)
     const token = ready.shift()!
     out.push(token)
     for (const to of edges.get(token) ?? []) {
@@ -481,6 +486,7 @@ export function mergeAst(
   if (conflicts.length > 0 || merged === MISSING) return { ok: false, ast: null, conflicts }
   const ast = semantic(merged, true) as AstJsonDocument
   ast.srcByteLength = 0
-  fromAstJson(ast, JSON.stringify(ast).length)
+  const payload = JSON.stringify(ast)
+  fromAstJson(ast, new TextEncoder().encode(payload).byteLength)
   return { ok: true, ast, conflicts: [] }
 }

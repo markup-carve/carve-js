@@ -42,7 +42,9 @@ describe('AST patches', () => {
 
   it('does not permit a patch path to pollute Object.prototype', () => {
     const ast = carveToAstJson('one\n')
-    applyAstPatch(ast, [{ op: 'add', path: '/__proto__', value: { polluted: true } }])
+    expect(() =>
+      applyAstPatch(ast, [{ op: 'add', path: '/__proto__', value: { polluted: true } }]),
+    ).toThrow()
     expect(({} as { polluted?: unknown }).polluted).toBeUndefined()
   })
 
@@ -54,10 +56,25 @@ describe('AST patches', () => {
     expect(JSON.stringify(replayed)).toContain('"srcByteLength":"after"')
   })
 
+  it('preserves a metadata-named attribute when keyValues is newly added', () => {
+    const before = carveToAstJson('[Text]{.class}\n')
+    const after = carveToAstJson('[Text]{.class pos=after srcByteLength=after}\n')
+    const replayed = applyAstPatch(before, createAstPatch(before, after))
+    expect(JSON.stringify(replayed)).toContain('"pos":"after"')
+    expect(JSON.stringify(replayed)).toContain('"srcByteLength":"after"')
+  })
+
   it('rejects a leading-zero array index', () => {
     const ast = carveToAstJson('one\n')
     expect(() => applyAstPatch(ast, [{ op: 'remove', path: '/children/00' }])).toThrow(
       AstPatchError,
     )
+  })
+
+  it('rejects an invalid result tree', () => {
+    const ast = carveToAstJson('one\n')
+    expect(() =>
+      applyAstPatch(ast, [{ op: 'replace', path: '/children/0/type', value: 'unknown-node' }]),
+    ).toThrow()
   })
 })

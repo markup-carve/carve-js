@@ -1,6 +1,7 @@
 /** A small, serializable JSON-Patch subset for PART 12 exchange trees. */
 
 import type { AstJsonDocument } from './ast-json.js'
+import { fromAstJson, MAX_AST_JSON_DEPTH } from './ast-json.js'
 import { NODE_POSITION_KIND } from './wire-fields.js'
 
 export type AstPatchOperation =
@@ -36,11 +37,24 @@ function clean(value: unknown, nodePosition = true): unknown {
   if (typeof value !== 'object' || value === null) return value
   const record = value as Record<string, unknown>
   const out = Object.create(null) as Record<string, unknown>
-  for (const [key, child] of Object.entries(value)) {
+  for (const key of Object.keys(value).sort()) {
     if (nodePosition && (key === 'pos' || key === 'srcByteLength')) continue
+    const child = record[key]
     out[key] = clean(child, childIsNode(record.type, key))
   }
   return out
+}
+
+function assertBounded(value: unknown): void {
+  const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (current.depth > MAX_AST_JSON_DEPTH) {
+      throw new AstPatchError(`patch value exceeds the AST depth cap of ${MAX_AST_JSON_DEPTH}`)
+    }
+    if (typeof current.value !== 'object' || current.value === null) continue
+    for (const child of Object.values(current.value)) stack.push({ value: child, depth: current.depth + 1 })
+  }
 }
 
 function equal(a: unknown, b: unknown, nodePosition: boolean): boolean {
@@ -54,7 +68,7 @@ function build(before: unknown, after: unknown, path: string, out: AstPatchOpera
       // One sequence replacement is stable under serialization and avoids the
       // index-shift hazards of a remove/add script. The three-way merge owns
       // move reconciliation; a patch owns faithful replay.
-      out.push({ op: 'replace', path, value: clean(after) })
+      out.push({ op: 'replace', path, value: clean(after, nodePosition) })
     } else {
       for (let index = 0; index < before.length; index++) {
         build(before[index], after[index], pointer(path, String(index)), out, nodePosition)
@@ -80,12 +94,14 @@ function build(before: unknown, after: unknown, path: string, out: AstPatchOpera
     for (const key of keys) {
       const childPath = pointer(path, key)
       if (!Object.hasOwn(b, key)) out.push({ op: 'remove', path: childPath })
-      else if (!Object.hasOwn(a, key)) out.push({ op: 'add', path: childPath, value: clean(b[key]) })
+      else if (!Object.hasOwn(a, key)) {
+        out.push({ op: 'add', path: childPath, value: clean(b[key], childIsNode(a.type ?? b.type, key)) })
+      }
       else build(a[key], b[key], childPath, out, childIsNode(a.type ?? b.type, key))
     }
     return
   }
-  out.push({ op: 'replace', path, value: clean(after) })
+  out.push({ op: 'replace', path, value: clean(after, nodePosition) })
 }
 
 /** Produce position-independent operations that replay one semantic AST into another. */
@@ -129,6 +145,7 @@ export function applyAstPatch(
 ): AstJsonDocument {
   let root = clean(ast)
   for (const operation of operations) {
+    if (operation.op !== 'remove') assertBounded(operation.value)
     const parts = decode(operation.path)
     if (parts.length === 0) {
       if (operation.op === 'remove') throw new AstPatchError('the document root cannot be removed')
@@ -164,5 +181,7 @@ export function applyAstPatch(
   }
   const result = root as AstJsonDocument
   result.srcByteLength = 0
+  const payload = JSON.stringify(result)
+  fromAstJson(result, new TextEncoder().encode(payload).byteLength)
   return result
 }

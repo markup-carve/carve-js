@@ -127,6 +127,17 @@ describe('three-way structural merge', () => {
     }
   })
 
+  it('deduplicates identical insertions with different object key order', () => {
+    const base = carveToAstJson('Base.\n')
+    const ours = carveToAstJson('Base.\n\nAdded.\n')
+    const theirs = JSON.parse(JSON.stringify(ours)) as typeof ours
+    const added = theirs.children[1] as unknown as Record<string, unknown>
+    theirs.children[1] = Object.fromEntries(Object.entries(added).reverse()) as typeof theirs.children[number]
+    const result = mergeAst(base, ours, theirs)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(JSON.stringify(result.ast).match(/Added\./g)).toHaveLength(1)
+  })
+
   it('rejects malformed resolver answers', () => {
     const base = carveToAstJson('# Base\n')
     const ours = carveToAstJson('# Ours\n')
