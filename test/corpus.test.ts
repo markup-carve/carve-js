@@ -15,6 +15,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { carveToHtml } from '../src/index.js'
+import { expectedCorpusSize } from './helpers/corpus-population.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -374,6 +375,12 @@ const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+describe('spec corpus population', () => {
+  it('matches the independently derived example count', () => {
+    expect(pairs.length).toBe(expectedCorpusSize(resolve(__dirname, '../spec')))
+  })
+})
 
 // Coverage guard: every distinct `NN-slug` base category present in the spec
 // corpus MUST be listed in IMPLEMENTED. Categories not in IMPLEMENTED are run

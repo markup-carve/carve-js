@@ -31,6 +31,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse, carveToAstJson, fromAstJson } from '../src/index.js'
 import { renderCarve } from '../src/render-carve.js'
+import { expectedCorpusSize } from './helpers/corpus-population.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -84,7 +85,7 @@ describe('a document round-tripped through the AST', () => {
     : []
 
   it('finds the corpus', () => {
-    expect(sources.length).toBeGreaterThan(0)
+    expect(sources.length).toBe(expectedCorpusSize(resolve(__dirname, '../spec')))
   })
 
   it('comes back as the same source', () => {
