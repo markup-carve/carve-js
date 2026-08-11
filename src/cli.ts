@@ -47,6 +47,9 @@ import {
   type AstJsonDocument,
   type MigrationWarning,
   type ProfileOptions,
+  htmlToCarve,
+  type HtmlImportAdapter,
+  type HtmlImportMode,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
@@ -79,6 +82,8 @@ Usage:
                                    Three-way merge independent AST edits
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
+  carve migrate --from html [options] [file]
+                                   Import HTML and report lossy decisions
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -178,6 +183,44 @@ exits 1 if anything is reported, 0 if clean.
                      guessing at it.
   -h, --help     Show this help
 `
+
+async function runMigrate(args: string[], io: CliIO): Promise<number> {
+  let values: { from?: string; mode?: string; adapter?: string; report?: string; 'check-loss'?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        from: { type: 'string' }, mode: { type: 'string' }, adapter: { type: 'string' },
+        report: { type: 'string' }, 'check-loss': { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve migrate: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) { io.write(HELP); return 0 }
+  if (values.from !== 'html') { io.writeErr('carve migrate: --from html is required\n'); return 2 }
+  if (positionals.length > 1) { io.writeErr('carve migrate: takes at most one input file\n'); return 2 }
+  const modes = new Set(['safe', 'semantic', 'roundtrip'])
+  const adapters = new Set(['generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs'])
+  const mode = values.mode ?? 'safe'
+  const adapter = values.adapter ?? 'generic'
+  if (!modes.has(mode)) { io.writeErr(`carve migrate: unknown mode ${mode}\n`); return 2 }
+  if (!adapters.has(adapter)) { io.writeErr(`carve migrate: unknown adapter ${adapter}\n`); return 2 }
+  let source: string
+  try { source = positionals[0] ? io.readFile(positionals[0]) : await io.readStdin() }
+  catch { io.writeErr(`carve migrate: cannot read ${positionals[0]}\n`); return 2 }
+  const result = htmlToCarve(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })
+  io.write(result.value)
+  const report = JSON.stringify(result.report, null, 2) + '\n'
+  if (values.report === '-') io.writeErr(report)
+  else if (values.report) io.writeFile(values.report, report)
+  return values['check-loss'] && result.report.diagnostics.length > 0 ? 1 : 0
+}
 
 /** Report the un-auto-fixable (overlapping) warnings for one input. */
 function reportSkipped(skipped: MigrationWarning[], file: string, io: CliIO): void {
@@ -730,6 +773,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'diff') return runDiff(rest, io)
   if (sub === 'merge') return runMerge(rest, io)
   if (sub === 'portability') return runPortability(rest, io)
+  if (sub === 'migrate') return runMigrate(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
   // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
