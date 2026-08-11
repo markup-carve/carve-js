@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml } from '../src/index.js'
 
 const html = (s: string) => carveToHtml(s)
 
@@ -13,6 +13,12 @@ const html = (s: string) => carveToHtml(s)
 // outputs match it byte-for-byte (except the empty-body guard, whose blank-line
 // whitespace is a pre-existing js/rs difference unrelated to the opener bug).
 describe('a list-item colon-fence opener captures a nested-list body (§10/§12)', () => {
+  it('writes the closer directly after a final list', () => {
+    const source = '- ::: note\n  - para text\n  :::\n'
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+
   it('opens an admonition wrapping a nested unordered list', () => {
     expect(html('- ::: note\n  - para text\n  :::')).toBe(
       [
