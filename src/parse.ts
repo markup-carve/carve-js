@@ -2340,9 +2340,21 @@ function collectLinkDefs(lexer: Lexer) {
     // already re-bases to whatever `fence.contentCol` says.
     const openerCol = inFootnoteBody && contentCol === 0 ? keptIndent : contentCol
     const deIndented = keptIndent >= openerCol ? kept.slice(openerCol) : kept
+    // BOTH fence spellings, not just the code one. `RE_FENCE`'s language slot
+    // excludes `=`, so a raw block's ```` ```=FORMAT ```` opener matched nothing
+    // here and the fence went untracked - and then the CLOSER read as an opener,
+    // which put the whole rest of the document inside a fence that never closes.
+    // A definition after a raw block was therefore never collected (it did not
+    // reach the AST at all), while a definition written INSIDE the raw block was
+    // collected and went live in the link table, so a reference below it resolved
+    // against opaque passthrough content. That is carve-js#634's failure with a
+    // different opener. The two lazy-continuation sites already read both
+    // patterns; this prepass was the one place that read only one.
     const open = RE_FENCE.exec(deIndented)
-    if (open) {
-      fence = { ch: open[2]![0]!, len: open[2]!.length, contentCol: openerCol, quoted: rawIsQuoted }
+    const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
+    const run = open ? open[2]! : rawOpen?.[1]
+    if (run) {
+      fence = { ch: run[0]!, len: run.length, contentCol: openerCol, quoted: rawIsQuoted }
       continue
     }
     // Maintain footnote-body context (see `inFootnoteBody` above): a flush
