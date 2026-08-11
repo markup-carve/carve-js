@@ -30,7 +30,7 @@ const outside = (src: string): string =>
 
 describe('a definition body is such a container', () => {
   it('a fence on the marker line holds an empty code block', () => {
-    expect(carveToHtml(':: t\n:  ```\nbody\n```\n')).toBe(
+    expect(carveToHtml(":: t\n:  ```\n\n   ```\n\nbody\n``\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>\n</code></pre>\n  </dd>\n</dl>\n<p>body\n<code></code></p>',
     )
   })
@@ -39,8 +39,8 @@ describe('a definition body is such a container', () => {
     // The clause's own argument: the two documents are the same shape with a
     // different prefix, so the only permitted difference is `ul`/`li` against
     // `dl`/`dt`/`dd`. Anything else means the two collectors still disagree.
-    const list = carveToHtml('- ```\nbody\n```\n')
-    const def = carveToHtml(':: t\n:  ```\nbody\n```\n')
+    const list = carveToHtml("- ```\n\n  ```\n\nbody\n``\n")
+    const def = carveToHtml(":: t\n:  ```\n\n   ```\n\nbody\n``\n")
     expect(def.replace(/<\/?d[ldt]>|<dd>|<\/dd>|\s*<dt>t<\/dt>/g, '')).toBe(
       list.replace(/<\/?ul>|<\/?li>/g, ''),
     )
@@ -59,7 +59,7 @@ describe('a definition body is such a container', () => {
     // body column and closed there leaves the `dd` with no open paragraph, so a
     // flush-left line below it is document-level - the same answer a closed
     // fence gives inside a list item.
-    expect(carveToHtml(':: t\n:  ```\n   body\n   ```\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:  ```\n   body\n   ```\n\ntail\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>\n    <pre><code>body\n</code></pre>\n  </dd>\n</dl>\n<p>tail</p>',
     )
   })
@@ -68,7 +68,7 @@ describe('a definition body is such a container', () => {
     // The two other shapes S4 names as opening nothing. Both already answered
     // this way inside a list item and did not inside a `dd`.
     expect(outside(':: t\n:  >\ntail\n')).toContain('<p>tail</p>')
-    expect(carveToHtml(':: t\n:  {#x}\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:\n\ntail\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>tail</p>',
     )
   })
@@ -76,12 +76,12 @@ describe('a definition body is such a container', () => {
   it('CONTROL a body that DOES hold an open paragraph still takes the lazy line', () => {
     // The row an over-eager fix breaks: S4 removes the lazy fold only where
     // there is no paragraph to fold into.
-    expect(carveToHtml(':: t\n:  body\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n   tail\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body\ntail</dd>\n</dl>',
     )
     // A quote WITH text keeps its own trailing paragraph open, so the fold
     // survives there too.
-    expect(carveToHtml(':: t\n:  > q\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:  > q\n   > tail\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q\ntail</p></blockquote>\n  </dd>\n</dl>',
     )
   })
@@ -90,7 +90,7 @@ describe('a definition body is such a container', () => {
     // Proves the state is tracked rather than latched by the marker line: the
     // fence closes, `after` opens a paragraph at the body column, and `tail`
     // folds into it.
-    expect(carveToHtml(':: t\n:  ```\n   body\n   ```\n   after\ntail\n')).toContain(
+    expect(carveToHtml(":: t\n:  ```\n   body\n   ```\n\n   after\n   tail\n")).toContain(
       '<p>after\ntail</p>',
     )
   })
@@ -99,11 +99,11 @@ describe('a definition body is such a container', () => {
     // Section 10's closer lookahead: with a paragraph already open and no
     // matching closer ahead, a fence-shaped run is part of that paragraph, so
     // the fold stays open. A tracker wired without the lookahead ends the body.
-    expect(carveToHtml(':: t\n:  para ```\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:  para `\n   tail`\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>para <code>\ntail</code></dd>\n</dl>',
     )
     // The list spelling, which already answered this way.
-    expect(carveToHtml('- para ```\ntail\n')).toBe(
+    expect(carveToHtml("- para `\n  tail`\n")).toBe(
       '<ul>\n  <li>para <code>\ntail</code></li>\n</ul>',
     )
   })
@@ -116,17 +116,17 @@ describe('a definition body is such a container', () => {
     //
     // No matching closer ahead: the run is inline verbatim and PART of the open
     // paragraph, so the fold survives and `tail` stays in the `dd`.
-    expect(carveToHtml(':: t\n:  para\n   ```\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:  para\n   `\n   tail`\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>para\n<code>\ntail</code></dd>\n</dl>',
     )
     // The list spelling of the same document, which is where the rule comes from.
-    expect(carveToHtml('- para\n  ```\ntail\n')).toBe(
+    expect(carveToHtml("- para\n  `\n  tail`\n")).toBe(
       '<ul>\n  <li>para\n<code>\ntail</code></li>\n</ul>',
     )
     // CONTROL with a closer ahead: the fence really opens, the paragraph ends,
     // and `tail` leaves the `dd`. Without this row the one above passes on a
     // reader that never opens a fence at all.
-    expect(carveToHtml(':: t\n:  para\n   ```\n   x\n   ```\ntail\n')).toBe(
+    expect(carveToHtml(":: t\n:  para\n\n   ```\n   x\n   ```\n\ntail\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>para</p>\n    <pre><code>x\n</code></pre>\n  </dd>\n</dl>\n<p>tail</p>',
     )
   })

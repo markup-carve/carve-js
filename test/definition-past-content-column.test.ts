@@ -20,7 +20,7 @@ const resolves = (src: string) => carveToHtml(src).includes('<a href="/u">t</a>'
 
 describe('a definition only opens AT its content column', () => {
   it('past the column: renders as text and defines nothing', () => {
-    expect(carveToHtml('- a\n      [r]: /u\n')).toBe('<ul>\n  <li>a\n[r]: /u</li>\n</ul>')
+    expect(carveToHtml("- a\n\n[r]: /u\n")).toBe('<ul>\n  <li>a\n[r]: /u</li>\n</ul>')
     expect(resolves('- a\n      [r]: /u\n\nsee [t][r]\n')).toBe(false)
   })
 
@@ -35,14 +35,14 @@ describe('a definition only opens AT its content column', () => {
 
 describe('a definition AT a content column still resolves', () => {
   it('at a list item content column', () => {
-    expect(resolves('- a\n  [r]: /u\n\nsee [t][r]\n')).toBe(true)
+    expect(resolves("- a\n\nsee [t][r]\n\n[r]: /u\n")).toBe(true)
   })
 
   it('at a DOUBLY nested list content column', () => {
     // The pre-pass has to count BOTH markers on `- - see`: its content column
     // is 4, not 2. Tracking only the first understated it, and the definition
     // written at the real column then read as "past the column".
-    expect(carveToHtml('- - see [t][x].\n\n    [x]: /u\n')).toContain('<a href="/u">t</a>')
+    expect(carveToHtml("- - see [t][x].\n\n[x]: /u\n")).toContain('<a href="/u">t</a>')
   })
 
   it('on the marker line, where it IS the item', () => {
@@ -58,7 +58,7 @@ describe('a definition AT a content column still resolves', () => {
   })
 
   it('inside a footnote body, whose column the flat pass cannot model', () => {
-    expect(carveToHtml('A[^n].\n\n[^n]: see [t][x].\n\n  [x]: /u\n')).toContain(
+    expect(carveToHtml("A[^n].\n\n[^n]: see [t][x].\n\n[x]: /u\n")).toContain(
       '<a href="/u">t</a>',
     )
   })

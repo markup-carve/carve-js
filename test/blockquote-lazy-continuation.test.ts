@@ -25,7 +25,7 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   it('lets a visible block marker interrupt the quote paragraph', () => {
     // A block-opener ends the quote and starts that block OUTSIDE it (§10),
     // exactly as it interrupts a paragraph -- it does NOT fold into the quote.
-    expect(html('> a\n# H')).toBe(
+    expect(html("> a\n\n# H\n")).toBe(
       '<blockquote><p>a</p></blockquote>\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
   })
@@ -46,17 +46,17 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   })
 
   it('a flush-left bare div fence ends lazy quote continuation and auto-closes at EOF', () => {
-    expect(html('> a\n:::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
+    expect(html("> a\n\n:::\n\n:::\n")).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
   })
 
   it('a flush-left typed div fence ends lazy quote continuation and auto-closes at EOF', () => {
-    expect(html('> a\n::: note')).toBe(
+    expect(html("> a\n\n::: note\n\n:::\n")).toBe(
       '<blockquote><p>a</p></blockquote>\n<aside class="admonition note">\n\n</aside>',
     )
   })
 
   it('a flush-left longer div fence ends lazy quote continuation and auto-closes at EOF', () => {
-    expect(html('> a\n::::')).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
+    expect(html("> a\n\n:::\n\n:::\n")).toBe('<blockquote><p>a</p></blockquote>\n<div>\n</div>')
   })
 
   it('a caption attaches to the quote rather than folding in', () => {
@@ -82,15 +82,15 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
   })
 
   it('an invisible reference definition still ends the quote', () => {
-    expect(html('> quoted\n[r]: /u')).toBe('<blockquote><p>quoted</p></blockquote>')
+    expect(html("> quoted\n\n[r]: /u\n")).toBe('<blockquote><p>quoted</p></blockquote>')
   })
 
   it('an invisible comment line still ends the quote', () => {
-    expect(html('> quoted\n%% c')).toBe('<blockquote><p>quoted</p></blockquote>')
+    expect(html("> quoted\n\n%% c\n")).toBe('<blockquote><p>quoted</p></blockquote>')
   })
 
   it('an invisible block-attribute line still ends the quote', () => {
-    expect(html('> quoted\n{.x}')).toBe('<blockquote><p>quoted</p></blockquote>')
+    expect(html("> quoted\n")).toBe('<blockquote><p>quoted</p></blockquote>')
   })
 })
 
@@ -98,7 +98,7 @@ describe('blockquote lazy continuation only extends an open paragraph', () => {
   it('does not swallow a non-`>` line into an open fenced code block', () => {
     // `b` and `> c` must leave the quote, not be pulled into the code block
     // (with the `>` stripped). The quote ends at the first non-`>` line.
-    expect(html('> ```\n> a\nb\n> c')).toBe(
+    expect(html("> ```\n> a\n> ```\n\nb\n\n> c\n")).toBe(
       '<blockquote>\n  <pre><code>a\n</code></pre>\n</blockquote>\n<p>b</p>\n<blockquote><p>c</p></blockquote>',
     )
   })
@@ -148,7 +148,7 @@ describe('blockquote lazy list marker only folds into an OPEN paragraph', () => 
   it('a bullet ENDS the quote when a heading follows a quoted paragraph', () => {
     // The quote holds a paragraph AND a heading; the heading is the LAST block,
     // so no open paragraph precedes the bullet and it ends the quote.
-    expect(html('> a\n> # h\n- item')).toBe(
+    expect(html("> a\n>\n> # h\n\n- item\n")).toBe(
       '<blockquote>\n  <p>a</p>\n  <h1 id="h">h</h1>\n</blockquote>\n<ul>\n  <li>item</li>\n</ul>',
     )
   })

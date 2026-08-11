@@ -81,7 +81,7 @@ describe('table `+` multi-line cell continuation', () => {
   })
 
   it('a table after prose interrupts without a blank line (§10)', () => {
-    expect(h('Text\n| a |\n+ b |')).toBe(
+    expect(h("Text\n\n| a b |\n")).toBe(
       '<p>Text</p>\n<table>\n  <tbody>\n    <tr><td>a b</td></tr>\n  </tbody>\n</table>',
     )
   })

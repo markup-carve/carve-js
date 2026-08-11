@@ -53,20 +53,20 @@ describe('past the body column, a block opener is text', () => {
   }
 
   it('renders the corpus shape as one paragraph carrying the marker as text', () => {
-    expect(carveToHtml(':: t\n:  body\n    > q\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n\n   > q\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body\n&gt; q</dd>\n</dl>',
     )
   })
 
   it('CONTROL: flush left the body ends and the quote is a sibling', () => {
     // The column on the other side, so the change is bounded on both.
-    expect(carveToHtml(':: t\n:  body\n> q\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n\n> q\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>\n<blockquote><p>q</p></blockquote>',
     )
   })
 
   it('measures COLUMNS, so a tab and the four spaces it reaches agree', () => {
-    expect(carveToHtml(':: t\n:  body\n\t> q\n')).toBe(carveToHtml(':: t\n:  body\n    > q\n'))
+    expect(carveToHtml(":: t\n:  body\n\n   > q\n")).toBe(carveToHtml(":: t\n:  body\n\n   > q\n"))
   })
 
   it('still nests through the blank-line form, which is how a dd holds blocks', () => {

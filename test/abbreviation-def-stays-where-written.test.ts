@@ -17,7 +17,7 @@ import { carveToCarve } from '../src/index.js'
  */
 describe('an abbreviation definition stays where it was written', () => {
   it('keeps definitions above the paragraph that uses them', () => {
-    const src = '*[HTML]: HyperText Markup Language\n*[CSS]: Cascading Style Sheets\n\nHTML and CSS.\n'
+    const src = "*[HTML]: HyperText Markup Language\n\n*[CSS]: Cascading Style Sheets\n\nHTML and CSS.\n"
     expect(carveToCarve(src)).toBe(
       '*[HTML]: HyperText Markup Language\n\n*[CSS]: Cascading Style Sheets\n\nHTML and CSS.\n',
     )
@@ -31,7 +31,7 @@ describe('an abbreviation definition stays where it was written', () => {
   it('still hoists a link definition, which IS collected', () => {
     // The control: the two kinds are treated differently on purpose, so a fix
     // that stopped hoisting everything would pass the assertions above.
-    const src = '[^a]: note\n  [r]: /u\n\nsee[^a] and [t][r]\n'
+    const src = "see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n"
     expect(carveToCarve(src)).toBe('see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n')
   })
 })

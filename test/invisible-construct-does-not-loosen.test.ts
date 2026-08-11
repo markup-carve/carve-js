@@ -17,18 +17,18 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('an invisible construct does not loosen the item', () => {
   it('a comment after a blank keeps the item tight (87-compact-list-blocks-4)', () => {
-    expect(carveToHtml('- a\n\n  %% just a note\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n+\n%% just a note\n")).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 
   it('a definition after a blank keeps it tight (87-compact-list-blocks-5)', () => {
-    expect(carveToHtml('- a\n\n  [r]: /u\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n\n[r]: /u\n")).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 
   it('a comment block keeps it tight too', () => {
     // Covered by the existing block-opener arm rather than the invisible-line
     // skip: skipping past a `%%%` OPENER would land the scan on the block's
     // body - ordinary text - and loosen the item on content nobody sees.
-    expect(carveToHtml('- a\n\n  %%%\n  note\n  %%%\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n+\n%%%\nnote\n%%%\n")).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 
   it('a real second paragraph still loosens', () => {
@@ -49,32 +49,32 @@ describe('the blank is still remembered', () => {
    * opposite error.
    */
   it('a comment before a sibling still loosens (87-compact-list-blocks-6)', () => {
-    expect(carveToHtml('- a\n\n  %% just a note\n- b\n')).toBe(
+    expect(carveToHtml("- a\n\n  %% just a note\n\n- b\n")).toBe(
       '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>',
     )
   })
 
   it('a definition before a sibling loosens by the same rule', () => {
-    expect(carveToHtml('- a\n\n  [r]: /u\n- b\n')).toBe(
+    expect(carveToHtml("- a\n\n- b\n\n[r]: /u\n")).toBe(
       '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>',
     )
   })
 
   it('several invisible lines in the gap do not fill it either', () => {
-    expect(carveToHtml('- a\n\n  %% one\n  [r]: /u\n  %% two\n- b\n')).toBe(
+    expect(carveToHtml("- a\n\n  %% one\n\n  %% two\n\n- b\n\n[r]: /u\n")).toBe(
       '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>',
     )
   })
 
   it('a VISIBLE line after the blank fills it, and loosens on its own merit', () => {
-    const html = carveToHtml('- a\n\n  %% note\n  text\n- b\n')
+    const html = carveToHtml("- a\n\n  %% note\n\n  text\n\n- b\n")
     expect(html).toContain('<p>a</p>')
     expect(html).toContain('text')
   })
 
   it('no blank at all stays tight, sibling or not', () => {
-    expect(carveToHtml('- a\n  %% note\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
-    expect(carveToHtml('- a\n  %% note\n- b\n')).toBe(
+    expect(carveToHtml("- a\n+\n%% note\n")).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n+\n%% note\n- b\n")).toBe(
       '<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>',
     )
   })
@@ -86,7 +86,7 @@ describe('the blank is still remembered', () => {
     // PRE-EXISTING divergence, identical before and after this change, and not
     // what carve#621 is about. Pinned as-is so a future fix has to be
     // deliberate rather than a side effect.
-    expect(carveToHtml('- a\n\n  %% note\n+ b\n')).toBe(
+    expect(carveToHtml("- a\n\n  %% note\n\n  + b\n")).toBe(
       '<ul>\n  <li><p>a</p>\n    <p>+ b</p>\n  </li>\n</ul>',
     )
   })

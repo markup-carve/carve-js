@@ -21,7 +21,7 @@ describe('a block that renders to nothing contributes no line', () => {
   })
 
   it('a comment block inside a block quote', () => {
-    expect(h('> q\n> %%%\n> x\n> %%%\n> body')).toBe(
+    expect(h("> q\n>\n> %%%\n> x\n> %%%\n>\n> body\n")).toBe(
       ['<blockquote>', '  <p>q</p>', '  <p>body</p>', '</blockquote>'].join('\n'),
     )
   })

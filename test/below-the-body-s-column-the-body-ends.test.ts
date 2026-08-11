@@ -103,11 +103,11 @@ describe("BELOW the body's column the body ends", () => {
     // The whole document for the attribute case, so the row says what it means:
     // the block attribute did NOT attach to `para`, because the body ended and
     // the top level's own strict column-0 rule then made the line text.
-    expect(carveToHtml(':: t\n:  body\n {.x}\npara\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n\n\\{\\.x\\}\npara\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>\n<p>{.x}\npara</p>',
     )
     // CONTROL at column 0, where the attribute really attaches.
-    expect(carveToHtml(':: t\n:  body\n{.x}\npara\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n\n{.x}\npara\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>\n<p class="x">para</p>',
     )
   })

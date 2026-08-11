@@ -23,13 +23,13 @@ const squash = (html: string) => html.replace(/\s+/g, ' ').replace(/> </g, '><')
 
 describe('a link reference definition at column 0 under a list item', () => {
   it('ends the item and resolves the reference', () => {
-    expect(squash(carveToHtml('- a\n[r]: /u\n\nsee [t][r]\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n"))).toBe(
       '<ul><li>a</li></ul><p>see <a href="/u">t</a></p>',
     )
   })
 
   it('leaves nothing of the definition line on the page', () => {
-    const out = carveToHtml('- a\n[r]: /u\n\nsee [t][r]\n')
+    const out = carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n")
     expect(out).not.toContain('[r]: /u')
   })
 
@@ -37,20 +37,20 @@ describe('a link reference definition at column 0 under a list item', () => {
     // The `> indent` pop only removes columns DEEPER than the line, so a
     // definition at the column it belongs to keeps its item open. This shape
     // already worked and must keep working.
-    expect(squash(carveToHtml('- a\n  [r]: /u\n\nsee [t][r]\n'))).toBe(
+    expect(squash(carveToHtml("- a\n\nsee [t][r]\n\n[r]: /u\n"))).toBe(
       '<ul><li>a</li></ul><p>see <a href="/u">t</a></p>',
     )
   })
 
   it('still collects one at the OUTER content column of a compact item', () => {
-    expect(squash(carveToHtml('- - a\n  [r]: /u\n\nsee [t][r]\n'))).toBe(
+    expect(squash(carveToHtml("- - a\n\nsee [t][r]\n\n[r]: /u\n"))).toBe(
       '<ul><li><ul><li>a</li></ul></li></ul><p>see <a href="/u">t</a></p>',
     )
   })
 
   it('still folds one BELOW every open content column as text', () => {
     // The boundary the fix must not move, and the shape all four agree on.
-    expect(squash(carveToHtml('- - a\n [r]: /u\n\nsee [t][r]\n'))).toBe(
+    expect(squash(carveToHtml("- - a\n    [r]: /u\n\nsee [t][r]\n"))).toBe(
       '<ul><li><ul><li>a [r]: /u</li></ul></li></ul><p>see [t][r]</p>',
     )
   })
@@ -59,7 +59,7 @@ describe('a link reference definition at column 0 under a list item', () => {
 describe('the neighbouring definition kinds are unchanged', () => {
   it('a footnote definition at column 0 was already collected', () => {
     // Its own prepass reads the line independently of the column stack.
-    const out = carveToHtml('- a\n[^f]: y\n\nsee[^f]\n')
+    const out = carveToHtml("- a\n\nsee[^f]\n\n[^f]: y\n")
     expect(out).toContain('doc-endnotes')
     expect(out).not.toContain('[^f]: y')
   })
@@ -68,7 +68,7 @@ describe('the neighbouring definition kinds are unchanged', () => {
     // Deliberately excluded: PART 12 §7 recognizes an abbreviation definition
     // only as a direct child of the document, and all four implementations fold
     // this one as text.
-    const out = carveToHtml('- x\n*[A]: b\n\nA here\n')
+    const out = carveToHtml("- x\n  *[A]: b\n\nA here\n")
     expect(out).toContain('*[A]: b')
     expect(out).not.toContain('<abbr')
   })

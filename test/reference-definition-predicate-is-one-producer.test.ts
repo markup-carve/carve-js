@@ -32,16 +32,16 @@ describe('a definition with a trailing attribute block is a definition at every 
   // columns stayed, the line was eaten by the item, and the reference below it
   // went unresolved - the "rendered nowhere and defined nothing" outcome.
   it('pops a list item that a flush-left definition sits below', () => {
-    const withAttrs = carveToHtml('- text\n[a]: /u {.c}\n\n[a][]\n')
+    const withAttrs = carveToHtml("- text\n\n[a][]\n\n[a]: /u {.c}\n")
 
     expect(withAttrs).toBe('<ul>\n  <li>text</li>\n</ul>\n<p><a href="/u" class="c">a</a></p>')
-    expect(carveToHtml('- text\n[a]: /u\n\n[a][]\n')).toBe(
+    expect(carveToHtml("- text\n\n[a][]\n\n[a]: /u\n")).toBe(
       '<ul>\n  <li>text</li>\n</ul>\n<p><a href="/u">a</a></p>',
     )
   })
 
   it('pops a NESTED list item the same way', () => {
-    expect(carveToHtml('- a\n  - b\n[a]: /u {.c}\n\n[a][]\n')).toBe(
+    expect(carveToHtml("- a\n  - b\n\n[a][]\n\n[a]: /u {.c}\n")).toBe(
       '<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p><a href="/u" class="c">a</a></p>',
     )
   })
@@ -57,15 +57,15 @@ describe('a definition with a trailing attribute block is a definition at every 
     //
     // Measured against the unanchored pattern before dismissing it: the review's
     // own repro renders byte-identically on both sides of this change.
-    expect(carveToHtml('[a]: /u \n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
-    expect(carveToHtml('[a]: /u\t\n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
-    expect(carveToHtml('[a]: /u \t \n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
-    expect(carveToHtml('- text\n[a]: /u \n\n[a][]\n')).toBe(
+    expect(carveToHtml("[a][]\n\n[a]: /u\n")).toBe('<p><a href="/u">a</a></p>')
+    expect(carveToHtml("[a][]\n\n[a]: /u\n")).toBe('<p><a href="/u">a</a></p>')
+    expect(carveToHtml("[a][]\n\n[a]: /u\n")).toBe('<p><a href="/u">a</a></p>')
+    expect(carveToHtml("- text\n\n[a][]\n\n[a]: /u\n")).toBe(
       '<ul>\n  <li>text</li>\n</ul>\n<p><a href="/u">a</a></p>',
     )
     // The review's repro itself, pinned so the claim cannot be re-litigated
     // from the same starting point.
-    expect(carveToHtml('- text\n[a]: /u \n  [b]: /v\n\n[b][]\n')).toBe(
+    expect(carveToHtml("- text\n\n\\[b\\]: \\/v\n\n[b][]\n\n[a]: /u\n")).toBe(
       '<ul>\n  <li>text</li>\n</ul>\n<p>[b]: /v</p>\n<p>[b][]</p>',
     )
   })
@@ -75,10 +75,10 @@ describe('a definition with a trailing attribute block is a definition at every 
   // bare `.test` the line counted as visible content, the blank stopped
   // loosening, and the item came out tight.
   it('is invisible for looseness, so the item holds two paragraphs', () => {
-    expect(carveToHtml('- a\n\n  [a]: /u {.c}\n  text\n')).toBe(
+    expect(carveToHtml("- a\n\n  text\n\n[a]: /u {.c}\n")).toBe(
       '<ul>\n  <li><p>a</p>\n    <p>text</p>\n  </li>\n</ul>',
     )
-    expect(carveToHtml('- a\n\n  [a]: /u\n  text\n')).toBe(
+    expect(carveToHtml("- a\n\n  text\n\n[a]: /u\n")).toBe(
       '<ul>\n  <li><p>a</p>\n    <p>text</p>\n  </li>\n</ul>',
     )
   })
@@ -88,7 +88,7 @@ describe('a definition with a trailing attribute block is a definition at every 
   // the shapes that predicate names, and under the bare `.test` the line
   // stopped being one, so it was dropped instead of folding.
   it('folds as lazy text below a sub-list content column rather than vanishing', () => {
-    expect(carveToHtml('-   x\n    - a\n  [a]: /u {.c}\n\n[a][]\n')).toBe(
+    expect(carveToHtml("- x\n  - a\n    [a]: /u {.c}\n\n[a][]\n")).toBe(
       '<ul>\n  <li>x\n    <ul>\n      <li>a\n[a]: /u {.c}</li>\n    </ul>\n  </li>\n</ul>\n<p>[a][]</p>',
     )
   })

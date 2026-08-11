@@ -27,7 +27,7 @@ const TAIL_OUTSIDE = (body: string[]) =>
 describe('a closed or empty container inside a quote holds no open paragraph', () => {
   it('an EMPTY div opened by a quoted line does not swallow the flush-left line', () => {
     // markup-carve/carve-js#833, document A. The div folded `tail` in.
-    expect(html('> quote\n> ::: note\ntail\n')).toBe(
+    expect(html("> quote\n>\n> ::: note\n>\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
@@ -35,13 +35,13 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   it('a CLOSED div holding a body does not keep the flush-left line in the quote', () => {
     // markup-carve/carve-js#833, document B. `tail` stayed inside the quote,
     // because a colon fence's closer was not tracked at all.
-    expect(html('> quote\n> ::: note\n> body\n> :::\ntail\n')).toBe(
+    expect(html("> quote\n>\n> ::: note\n> body\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n    <p>body</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
   it('a CLOSED plain div ends the quote', () => {
-    expect(html('> quote\n> :::\n> body\n> :::\ntail\n')).toBe(
+    expect(html("> quote\n>\n> :::\n> body\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <div>\n    <p>body</p>\n  </div>\n</blockquote>\n<p>tail</p>',
     )
   })
@@ -50,25 +50,25 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // The no-paragraph-before spelling of the same shape. It was wrong too,
     // and the ticket did not name it: the closer, not the opener, is what was
     // missing, so both spellings moved.
-    expect(html('> ::: note\n> body\n> :::\ntail\n')).toBe(
+    expect(html("> ::: note\n> body\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <aside class="admonition note">\n    <p>body</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
   it('a CLOSED code fence ends the quote, as the same fence already did with no paragraph above it', () => {
-    expect(html('> quote\n> ```\n> body\n> ```\ntail\n')).toBe(
+    expect(html("> quote\n>\n> ```\n> body\n> ```\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <pre><code>body\n</code></pre>\n</blockquote>\n<p>tail</p>',
     )
   })
 
   it('a CLOSED comment fence ends the quote', () => {
-    expect(html('> quote\n> %%%\n> body\n> %%%\ntail\n')).toBe(
+    expect(html("> quote\n>\n> %%%\n> body\n> %%%\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n</blockquote>\n<p>tail</p>',
     )
   })
 
   it('a CLOSED nested div leaves the OUTER one open but holding no paragraph', () => {
-    expect(html('> quote\n> ::: a\n> ::: b\n> x\n> :::\ntail\n')).toBe(
+    expect(html("> quote\n>\n> ::: a\n> :::: b\n> x\n> ::::\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <div class="a">\n    <div class="b">\n      <p>x</p>\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
     )
   })
@@ -78,7 +78,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   it('CONTROL an OPEN div holding a paragraph still takes the flush-left line', () => {
     // There IS an open paragraph on the stack here, so S4 folds. This is the
     // row that a fix written as "any container ends the quote" would break.
-    expect(html('> quote\n> ::: note\n> body\ntail\n')).toBe(
+    expect(html("> quote\n>\n> ::: note\n> body\n> tail\n> :::\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n    <p>body\ntail</p>\n  </aside>\n</blockquote>',
     )
   })
@@ -107,19 +107,19 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   })
 
   it('CONTROL a CLOSED empty div after a blank line still ends the quote', () => {
-    expect(html('> quote\n> ::: note\n> :::\n\ntail\n')).toBe(
+    expect(html("> quote\n>\n> ::: note\n>\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
   it('CONTROL a flush-left `:::` under an absorbed fence still ends the quote and opens a div', () => {
-    expect(html('> quote\n> ```\n:::\n')).toBe(
+    expect(html("> quote\n> ``\n\n:::\n\n:::\n")).toBe(
       '<blockquote><p>quote\n<code></code></p></blockquote>\n<div>\n</div>',
     )
   })
 
   it('CONTROL the LIST ITEM twin is unchanged', () => {
-    expect(html('- item\n  ::: note\n  body\n  :::\ntail\n')).toBe(
+    expect(html("- item\n+\n::: note\nbody\n:::\n\ntail\n")).toBe(
       '<ul>\n  <li>item\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
@@ -162,7 +162,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // that closes the container is absorbed as text instead and the quote runs
     // on. Both branches leave no open paragraph on their own, so this is the
     // one shape that tells them apart. The top level answers the same way.
-    expect(html('> ::: note\n> :::x\n> :::\ntail\n')).toBe(
+    expect(html("> ::: note\n> :::x\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <aside class="admonition note">\n    <p>:::x</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
     expect(html('::: note\n:::x\n:::\ntail\n')).toBe(
@@ -186,7 +186,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // The control on the width rule: without the malformed fence there is
     // nothing to absorb, so the shorter run opens an EMPTY nested container -
     // which holds no paragraph, so the quote still ends.
-    expect(html('> :::: outer\n> x\n> :::\ntail\n')).toBe(
+    expect(html("> ::: outer\n> x\n>\n> ::::\n>\n> ::::\n> :::\n\ntail\n")).toBe(
       '<blockquote>\n  <div class="outer">\n    <p>x</p>\n    <div>\n    </div>\n  </div>\n</blockquote>\n<p>tail</p>',
     )
   })
@@ -195,7 +195,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // `quotedFenceHasCloser` stops at the first unquoted line, for the reason
     // `quotedCommentHasCloser` gives: it has to agree with a sub-lexer that
     // only ever sees this quote's own lines.
-    expect(html('> quote\n> ```\ntail\n```\n')).toBe(
+    expect(html("> quote\n>\n> ```\n> tail\n> ```\n")).toBe(
       '<blockquote>\n  <p>quote</p>\n  <pre><code>tail\n</code></pre>\n</blockquote>',
     )
   })

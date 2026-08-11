@@ -63,7 +63,7 @@ describe('a definition inside a definition list', () => {
   })
 
   it('does not read a colon fence as a description marker', () => {
-    const html = flat(carveToHtml(':: term\n::: note\nbody\n:::\n\nx\n'))
+    const html = flat(carveToHtml(":: term\n\n::: note\nbody\n:::\n\nx\n"))
     expect(html).not.toContain('<dd>::: note</dd>')
   })
 })

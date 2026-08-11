@@ -2126,6 +2126,10 @@ function collectLinkDefs(lexer: Lexer) {
   // here — a rarer residual case.)
   const listCols: number[] = []
   let prevBlank = true
+  // §10: definitions and fence-shaped lines inside an already-open paragraph
+  // are text, so the flat symbol-table pass must not claim them independently.
+  let paragraphOpen = false
+  let inDefinitionBody = false
   // Track whether we are inside a footnote body. A footnote continuation is
   // indented, so an indented link def inside a note body must still be collected
   // (the note's content column, not column 0) -- matching the spec oracle, which
@@ -2184,6 +2188,8 @@ function collectLinkDefs(lexer: Lexer) {
     // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
     // two answers drift.
     prevBlank = isBlankLine(raw)
+    if (RE_DEFLIST_DEF.test(raw)) inDefinitionBody = true
+    else if (isBlankLine(raw) || RE_DEFLIST_TERM.test(raw)) inDefinitionBody = false
     if (!fence) {
       // maintain the content-column stack (same rule as the migrator): a
       // marker opens an item at its marker width; a blank is transparent; a
@@ -2245,6 +2251,41 @@ function collectLinkDefs(lexer: Lexer) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
     }
+    if (!fence && commentFence === null && verse === null) {
+      const structuralListMarker = listCols.length > 0 && RE_PREPASS_MARKER.test(unquoted)
+      const structuralContinuation =
+        listCols.length > 0 && isContinuationMarker(raw) &&
+        leadingWhitespace(unquoted) < listCols[listCols.length - 1]!
+      const definitionBodyBoundary =
+        inDefinitionBody && leadingWhitespace(raw) === 0 && isLinkDefLine(raw)
+      if (
+        paragraphOpen && !isBlankLine(raw) && !structuralListMarker &&
+        !structuralContinuation && !definitionBodyBoundary && !RE_CAPTION.test(line)
+      ) {
+        continue
+      }
+      if (
+        isBlankLine(raw) || structuralListMarker || structuralContinuation ||
+        definitionBodyBoundary || RE_CAPTION.test(line)
+      )
+        paragraphOpen = false
+      if (structuralContinuation) continue
+
+      if (!paragraphOpen && !isBlankLine(raw)) {
+        let candidate = stripContainerPrefixes(raw, afterTerm)
+        const footnote = RE_FOOTNOTE_DEF.exec(candidate)
+        if (footnote) candidate = candidate.slice(footnote[0].indexOf(':') + 1).replace(/^[ \t]/, '')
+        const isDefinition = isLinkDefLine(candidate) || RE_ABBR_DEF.test(candidate)
+        const isBlockOnly = lineOpensBlock(candidate) || isDefinition || isBlockAttributeLine(candidate)
+        if (!isBlockOnly && !RE_CAPTION.test(candidate)) {
+          paragraphOpen = true
+          continue
+        }
+        // A footnote definition's inline body opens a paragraph in the note.
+        if (footnote && candidate !== '') paragraphOpen = true
+      }
+    }
+
     // strip the enclosing content column so a fence delimiter at that column
     // is recognized (kept-indent view keeps residual indent after markers)
     const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
@@ -2747,7 +2788,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Past the nesting limit, stop opening recursive containers and treat the
   // line as paragraph text. Prevents a call-stack overflow on pathologically
   // nested input (e.g. thousands of `> `); see MAX_NESTING_DEPTH.
-  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer, true)
+  if (lexer.depth >= MAX_NESTING_DEPTH) return parseParagraph(lexer)
 
   // Block-level constructs in priority order
   if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
@@ -3625,11 +3666,6 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
   while (!lexer.eof()) {
     const lineIndex = lexer.pos
     const text = lexer.peek()!
-    const interruptsParagraph: boolean = paragraphOpen && startsInterruptingBlock(lexer)
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) {
-      paragraphOpen = false
-      continue
-    }
     const close = RE_ADMONITION_CLOSE.exec(text)
 
     if (close && close[1]!.length === stack[stack.length - 1]?.fenceWidth) {
@@ -3637,6 +3673,18 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       stack.pop()
       if (stack.length === 0) break
       lines.push({ text, lineIndex })
+      paragraphOpen = false
+      continue
+    }
+
+    // An opener-shaped line inside prose is prose. Only the enclosing
+    // container's own closer above is structural while a paragraph is open.
+    if (paragraphOpen && !isBlankLine(text)) {
+      lexer.consume()
+      lines.push({ text, lineIndex })
+      continue
+    }
+    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) {
       paragraphOpen = false
       continue
     }
@@ -3653,7 +3701,7 @@ function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): ColonFen
       paragraphOpen = false
       continue
     }
-    paragraphOpen = !isBlankLine(text) && !interruptsParagraph && (paragraphOpen || !lineOpensBlock(text))
+    paragraphOpen = !isBlankLine(text) && !lineOpensBlock(text)
   }
 
   for (const unclosed of stack) {
@@ -4429,6 +4477,12 @@ function trackBlockQuoteLazyState(
     state.paragraphOpen = false
     return
   }
+  // Once prose is open, every nonblank quoted line remains in that paragraph.
+  // Marker classification resumes only after a blank or container boundary.
+  if (state.paragraphOpen) {
+    state.absorbingFence = wasAbsorbing
+    return
+  }
   // A heading, table row, or thematic break is an UNCONDITIONAL paragraph
   // interrupter (no matching-closer dependency), so it leaves no open trailing
   // paragraph even directly after quoted prose. A following lazy list marker
@@ -4621,42 +4675,20 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       }
       continue
     }
-    // Lazy continuation: a non-`>` line folds into the quote ONLY when it is
-    // plain text continuing an open paragraph (CommonMark-style; matches
-    // carve-php). A blank line ends the quote. A block-opener that INTERRUPTS a
-    // paragraph (§10) ends the quote too and starts that block OUTSIDE it --
-    // this covers visible blocks (heading/quote/table/fence/div/thematic) and
-    // the "invisible" reference/footnote/abbr definitions and comments. A bare
-    // list marker is NOT a paragraph interrupter, so it FOLDS into the quoted
-    // paragraph as literal text instead of ending the quote -- but ONLY when an
-    // open paragraph precedes it (the `paragraphOpen` guard below). When the
-    // last quoted block is a heading/table/fence/thematic break/div (no open
-    // paragraph), a list marker has nothing to fold into and ENDS the quote,
-    // mirroring the top level: `text\n- item` folds, `# h\n- item` is a heading
-    // plus a sibling list. A caption `^ …` attaches to the quote.
-    if (
-      isBlankLine(ln) ||
-      RE_CAPTION.test(ln) ||
-      colonFenceShapeEndsLazyContinuation(ln) ||
-      startsInterruptingBlock(lexer)
-    ) {
-      break
-    }
+    // A non-marked nonblank line lazily continues an open quoted paragraph,
+    // whatever its first characters look like. Captions retain their separate
+    // host-sensitive attachment rule.
+    if (isBlankLine(ln) || RE_CAPTION.test(ln)) break
     // A non-`>` line inside an open fence/comment, or after a block that left no
     // open paragraph (heading/table/fence/thematic/div), terminates the quote
     // instead of being swallowed. This is also what ends the quote on a lazy
     // list marker when no open paragraph precedes it.
     if (!state.paragraphOpen) break
-    const lineIndex = lexer.pos
     lexer.consume()
     inner.push(ln)
-    innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    trackBlockQuoteLazyState(
-      ln,
-      state,
-      (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-      (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-    )
+    innerLineNumbers.push(lexer.lineNumber(lexer.pos - 1))
+    // It is already known to be paragraph content, so no block classification
+    // or fence lookahead is needed here.
   }
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)
@@ -4963,99 +4995,6 @@ function lineOpensBlock(line: string): boolean {
     RE_DIV_OPEN.test(line) ||
     RE_LINE_BLOCK_OPEN.test(line) ||
     RE_HARDBREAKS_OPEN.test(line)
-  )
-}
-
-function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
-  // A VERBATIM fence ends the fold only WITH a closer ahead (§10 I4): an
-  // unterminated ``` is not a code block, it is an inline verbatim run that
-  // belongs to the item's paragraph. Without this the item was closed and the
-  // fence became a top-level code block, which the top-level path already got
-  // right (corpus 81-paragraph-interruption-18) and carve-rs got right
-  // everywhere (carve-js#540).
-  //
-  // The `:::` arms below stay lexer-free deliberately - I4 does not guard a
-  // colon fence (markup-carve/carve#514), and the comment there gives the
-  // separate reason.
-  if (RE_RAW_FENCE.test(line)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(line)![1]!)
-  if (RE_FENCE.test(line)) return fenceHasCloser(lexer, RE_FENCE.exec(line)![2]!)
-  return (
-    RE_COMMENT_BLOCK.test(line) ||
-    // A flush-left colon-fence shaped line ends list lazy continuation
-    // regardless of outer-stream closer lookahead. If the line belongs to the
-    // item, it must be indented and parsed by the item sub-lexer; otherwise a
-    // later flush-left `:::` can be incorrectly pulled in as the item's closer.
-    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
-    RE_DIV_OPEN.test(line) ||
-    RE_LINE_BLOCK_OPEN.test(line) ||
-    RE_HARDBREAKS_OPEN.test(line) ||
-    // No RE_ABBR_DEF: a lazy line is item content, so the definition form is
-    // not recognized and the line folds into the item as text.
-    //
-    // The other two are gated on the line being FLUSH, which is what every
-    // other predicate here gets for free from its own anchor. RE_LINK_DEF is
-    // deliberately whitespace-tolerant - other passes need it to recognize a
-    // quoted or nested def - and its leading class is "whitespace except NBSP",
-    // so it matches a leading SPACE. Unguarded, that made a definition ONE
-    // COLUMN IN end the fold, where a heading, quote, table row, colon fence or
-    // bullet in the same position folds as text (PART 1 S4). It also swallowed
-    // the footnote form, since `[^f]: x` has the link-def shape too, which is
-    // why the flush-anchored RE_FOOTNOTE_DEF above never had to match for the
-    // footnote case to break. A definition opens only AT its container's
-    // content column - the same strict rule `parseBlockInner` applies
-    // (carve-js#597).
-    (leadingWhitespace(line) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
-    RE_HR.test(line) ||
-    RE_HEADING.test(line) ||
-    // A caption line (`^ …`) ends the item's lazy continuation rather than
-    // folding in, matching carve-php / carve-rs (a caption is a heading/figure
-    // terminator, not plain prose the item absorbs).
-    RE_CAPTION.test(line) ||
-    // A BLOCK-ATTRIBUTE LINE ENDS THE FOLD (PART 9 §10 I5, markup-carve/carve#1028).
-    // I5 makes the invisible constructs interrupters - "a reference definition
-    // ..., a comment ..., and a block-attribute line (`{…}` alone on a line,
-    // §15)" - and I6 applies the relation to EVERY open paragraph, an item's
-    // included. Two arms above already carry the other two invisible kinds; this
-    // one was missing, so `- item` / `{.cls}` / `> quote` folded the attribute
-    // line INTO the item, where it had no following block to float onto and was
-    // dropped as dangling. The author's attribute reached neither the `<li>` nor
-    // the quote and rendered nowhere, which is the shape PART 2's LIST-ITEM
-    // ATTRIBUTES clause names and REJECTS by engine: "a trailing `{…}` line
-    // folded onto a tight item, which carve-php attached to the `<li>` and
-    // carve-js dropped".
-    //
-    // The lexer is positioned on this line, so the multi-line form (§15 A5) is
-    // recognized here exactly as `startsInterruptingBlock` recognizes it, rather
-    // than by a single-line spelling that would answer differently one column in.
-    peekBlockAttributes(lexer) ||
-    RE_DEFLIST_TERM.test(line) ||
-    RE_BLOCKQUOTE.test(line) ||
-    RE_TASK.test(line) ||
-    RE_UNORDERED.test(line) ||
-    RE_ORDERED.test(line) ||
-    extractItemAttr(line) !== null ||
-    isTableRow(line)
-  )
-}
-
-function colonFenceShapeEndsLazyContinuation(line: string): boolean {
-  return (
-    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
-    RE_DIV_OPEN.test(line) ||
-    RE_LINE_BLOCK_OPEN.test(line) ||
-    RE_HARDBREAKS_OPEN.test(line)
-  )
-}
-
-function isLiteralColonFenceLine(line: string): boolean {
-  line = line.replace(/^[ \t]+/, '')
-  return (
-    /^:{3,}/.test(line) &&
-    !RE_ADMONITION_CLOSE.test(line) &&
-    !(RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) &&
-    !RE_DIV_OPEN.test(line) &&
-    !RE_LINE_BLOCK_OPEN.test(line) &&
-    !RE_HARDBREAKS_OPEN.test(line)
   )
 }
 
@@ -5385,6 +5324,12 @@ function trackItemLazyState(
     state.absorbingFence = false
     return
   }
+  // Block-looking text cannot end an open paragraph. Structural list nesting
+  // is decided by the item collector before lines reach this state tracker.
+  if (state.lazyFoldable && !(state.divDepth > 0 && /^:{3,}[ \t]*$/.test(content))) {
+    state.absorbingFence = wasAbsorbing
+    return
+  }
   // A definition-list term or definition marker opens (or continues) a def
   // list in this item, and leaves an open paragraph for its body.
   if (RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content)) {
@@ -5533,6 +5478,10 @@ function trackItemLazyState(
 }
 
 function parseList(lexer: Lexer): List {
+  let enclosingColonWidth: number | null = null
+  for (let k = lexer.pos - 1; k >= 0 && enclosingColonWidth === null; k--) {
+    enclosingColonWidth = colonBlockOpenerRun(lexer.lines[k]!)
+  }
   const first = lexer.peek()!
   const baseIndent = indentColumns(first)
   // Classify on the marker after stripping any abutting `{...}` attribute block.
@@ -5630,6 +5579,7 @@ function parseList(lexer: Lexer): List {
       content = m[2]!
     }
     const itemAttrs = la ? la.attrs : undefined
+    const itemColonWidth = colonBlockOpenerRun(content)
 
     // item (continuation paragraphs or nested lists). Visual content column:
     // baseIndent (tab-aware columns) plus the marker width in characters. The
@@ -5880,6 +5830,14 @@ function parseList(lexer: Lexer): List {
         )
         lexer.consume()
       } else if (
+        !(
+          enclosingColonWidth !== null &&
+          RE_ADMONITION_CLOSE.exec(l)?.[1]?.length === enclosingColonWidth
+        ) &&
+        !(
+          itemColonWidth !== null &&
+          RE_ADMONITION_CLOSE.exec(l)?.[1]?.length === itemColonWidth
+        ) &&
         pendingBlanks === 0 &&
         // A dedented (below content-column) plain line only lazily continues an
         // OPEN paragraph (family-D rule). After a code fence or table -- which
@@ -5896,7 +5854,13 @@ function parseList(lexer: Lexer): List {
         // the opener its info string (see trackItemLazyState) latched the tracker
         // inside a comment that never closes, and the item ended there.
         (((lazyState.lazyFoldable || lazyState.inComment) &&
-          !lazyContinuationEndsList(l, lexer)) ||
+          !(
+            indentColumns(l, baseIndent + 1) <= baseIndent &&
+            (RE_TASK.test(l) ||
+              RE_UNORDERED.test(l) ||
+              RE_ORDERED.test(l) ||
+              extractItemAttr(l) !== null)
+          )) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
           // symmetric §10 no list marker interrupts a paragraph, so on the
@@ -6032,6 +5996,7 @@ function parseList(lexer: Lexer): List {
     // its body OPAQUE, so while one is innermost only its own closer is read.
     const open: Array<{ kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number }> = []
     let openIdx = -1
+    let paragraphOpenForFenceScan = false
     for (let k = 0; k < fenceLines.length; k++) {
       const line = fenceLines[k]!
       const inner = open[open.length - 1]
@@ -6064,6 +6029,11 @@ function parseList(lexer: Lexer): List {
           continue
         }
       }
+      if (isBlankLine(line)) {
+        paragraphOpenForFenceScan = false
+        continue
+      }
+      if (paragraphOpenForFenceScan) continue
       const fence = RE_FENCE.exec(line)
       const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
       const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
@@ -6083,7 +6053,10 @@ function parseList(lexer: Lexer): List {
             opened = { kind: 'colon', close: null, len: colon }
         }
       }
-      if (opened === null) continue
+      if (opened === null) {
+        if (!lineOpensBlock(line)) paragraphOpenForFenceScan = true
+        continue
+      }
       if (open.length === 0) openIdx = k
       open.push(opened)
     }
@@ -6921,7 +6894,7 @@ function endsHeadingOrQuote(lexer: Lexer): boolean {
  * "degrades to literal text" is the whole rule, and literal text groups the way
  * the same characters typed by an author would. (carve#547, carve#494)
  */
-function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
+function parseParagraph(lexer: Lexer): Paragraph {
   const lines: string[] = []
   const startLineIndex = lexer.pos
   while (!lexer.eof()) {
@@ -6943,13 +6916,6 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     // (e.g. a `>` past the depth cap) is routed here to become literal text —
     // without this guard startsInterruptingBlock would break before consuming,
     // looping forever on the same line.
-    if (
-      !flattened &&
-      lines.length > 0 &&
-      startsInterruptingBlock(lexer) &&
-      !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
-    )
-      break
     lexer.consume()
     lines.push(ln)
   }
@@ -6994,6 +6960,7 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
       startLine: lexer.lineNumber(startLineIndex),
       startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
       ...(anchors ? { lineAnchors: anchors } : {}),
+      paragraphContinuationLiteral: true,
     }),
   }
 }
@@ -7650,6 +7617,8 @@ interface InlineSource {
    * is what produced spans like "> quot" for the text "quoted".
    */
   anchored?: boolean
+  /** Paragraph continuation lines keep block-only openers literal (§10). */
+  paragraphContinuationLiteral?: boolean
 }
 
 function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
@@ -7660,6 +7629,7 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
   }
   if (overrides.lineAnchors) source.lineAnchors = overrides.lineAnchors
   if (overrides.anchored === false) source.anchored = false
+  if (overrides.paragraphContinuationLiteral) source.paragraphContinuationLiteral = true
   return source
 }
 
@@ -7863,7 +7833,12 @@ function scanInlineInner(
     // there - but inside a line block the whole stanza is inline content, so
     // the verse kept `%% c` as text where the other engines drop it, and this
     // one dropped it on the first line and not the second (carve#574).
-    if (c === '%' && text[i + 1] === '%' && (i === 0 || /[ \t\n]/.test(text[i - 1]!))) {
+    if (
+      c === '%' &&
+      text[i + 1] === '%' &&
+      (i === 0 || /[ \t\n]/.test(text[i - 1]!)) &&
+      !(source.paragraphContinuationLiteral && text[i - 1] === '\n')
+    ) {
       // Absorb the whitespace run immediately before `%%` so the visible text
       // keeps no trailing space. Flush the trimmed buffer with a source span
       // that ends where that whitespace begins, and start the comment node
@@ -8583,10 +8558,22 @@ function sourcePos(
 
 function shiftSource(source: InlineSource, text: string, by: number): InlineSource {
   const point = pointAt(source, text, by)
+  const lineIndex = newlineIndices(text).filter((offset) => offset < by).length
+  const lineAnchors = source.lineAnchors
+    ? [
+        { offset: point.offset, column: point.column },
+        ...source.lineAnchors.slice(lineIndex + 1),
+      ]
+    : undefined
   return {
-    baseOffset: source.baseOffset + by,
+    baseOffset: point.offset,
     startLine: point.line,
     startColumn: point.column,
+    ...(lineAnchors ? { lineAnchors } : {}),
+    ...(source.anchored === false ? { anchored: false } : {}),
+    ...(source.paragraphContinuationLiteral
+      ? { paragraphContinuationLiteral: true }
+      : {}),
   }
 }
 

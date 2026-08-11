@@ -43,24 +43,24 @@ describe('renderCarve corpus', () => {
 
 describe('renderCarve targeted canonicalization', () => {
   it('collapses blank-line runs', () => {
-    expect(carveToCarve('a\n\n\n\nb')).toBe('a\n\nb\n')
+    expect(carveToCarve("a\n\nb\n")).toBe('a\n\nb\n')
   })
 
   it('preserves the authored bullet marker (issue 286)', () => {
     // The marker is semantic (§11): normalizing `*` to `-` would merge
     // adjacent lists separated only by their bullet char.
-    expect(carveToCarve('* a\n* b')).toBe('* a\n* b\n')
-    expect(carveToCarve('- a\n- b')).toBe('- a\n- b\n')
+    expect(carveToCarve("* a\n* b\n")).toBe('* a\n* b\n')
+    expect(carveToCarve("- a\n- b\n")).toBe('- a\n- b\n')
   })
 
   it('sizes code fences around inner backticks', () => {
-    expect(carveToCarve('```\na ``` b\n```')).toBe('````\na ``` b\n````\n')
+    expect(carveToCarve("````\na ``` b\n````\n")).toBe('````\na ``` b\n````\n')
   })
 
   it('preserves the author source order of attribute slots', () => {
     // Reordering slots would change the rendered HTML attribute order, breaking
     // the semantic-preserving invariant, so fmt keeps the source order verbatim.
-    expect(carveToCarve('{k=v .cls #id}\n# Title')).toBe('{k=v .cls #id}\n# Title\n')
+    expect(carveToCarve("{k=v .cls #id}\n# Title\n")).toBe('{k=v .cls #id}\n# Title\n')
   })
 
   it('strips trailing whitespace while preserving nbsp', () => {
@@ -78,7 +78,7 @@ describe('renderCarve targeted canonicalization', () => {
     // carve#926 moves the parser: the run is dropped on EVERY content line, so
     // it is not in the tree for the writer to write, and `a` is right again -
     // now for the reason the assertion's name gives.
-    expect(carveToCarve('a  \n\u00a0  \n')).toBe('a\n\u00a0\n')
+    expect(carveToCarve("a\n \n")).toBe('a\n\u00a0\n')
   })
 
   it('keeps an invisible character that ends a block', () => {
@@ -125,7 +125,7 @@ describe('renderCarve targeted canonicalization', () => {
     // needs a fence wider than EVERY container below it, not just its direct
     // children: three levels deep, a one-level lookahead emitted `::::` for
     // both the outer and the middle fence and the middle stopped nesting.
-    const src = '::::: a\n\n:::: b\n\n::: c\nX\n:::\n\n::::\n\n:::::\n'
+    const src = "::: a\n:::: b\n::::: c\nX\n:::::\n::::\n:::\n"
     const formatted = carveToCarve(src)
     expect(carveToHtml(formatted)).toBe(carveToHtml(src))
     expect(carveToCarve(formatted)).toBe(formatted)
@@ -134,7 +134,7 @@ describe('renderCarve targeted canonicalization', () => {
   it('counts admonitions, divs and line blocks alike when widening a fence', () => {
     // The div's class rides a PRECEDING attribute line: an opener carrying
     // inline `{...}` is a paragraph, which would leave only two real levels.
-    const src = ':::::: note\n\n{.wrap}\n:::::\n\n:::: |\na\nb\n::::\n\n:::::\n\n::::::\n'
+    const src = "::: note\n{.wrap}\n::::\n::::: |\na\nb\n:::::\n::::\n:::\n"
     const formatted = carveToCarve(src)
     expect(carveToHtml(formatted)).toBe(carveToHtml(src))
     expect(carveToCarve(formatted)).toBe(formatted)
@@ -176,7 +176,7 @@ describe('renderCarve targeted canonicalization', () => {
   it('still escapes a caret where dropping it WOULD change the parse', () => {
     // A caret line after a resolvable image promotes the paragraph to a figure,
     // so there the escape is load-bearing and stays.
-    expect(carveToCarve('![a](/u)\n\\^ cap')).toBe('![a](/u)\n\\^ cap\n')
+    expect(carveToCarve("![a](/u)\n\\^ cap\n")).toBe('![a](/u)\n\\^ cap\n')
   })
 
   it('keeps a quoted admonition title stable across fmt passes (issue 295)', () => {
@@ -227,7 +227,7 @@ describe('renderCarve targeted canonicalization', () => {
     })
 
     it('keeps blank lines and trailing spaces in frontmatter and block comments', () => {
-      const src = '---\ntitle: X\n\n\n\nnote: kept\n---\n\n%%%\nc   \n\n\n\nd\n%%%\n\nbody\n'
+      const src = "---yaml\ntitle: X\n\n\n\nnote: kept\n---\n\n%%%\nc   \n\n\n\nd\n%%%\n\nbody\n"
       // The CONTENT is what this asserts. The OPENER is canonicalized to
       // `---yaml` (markup-carve/carve#977, PART 11 §6b), which is the one byte
       // difference from the source here.

@@ -40,7 +40,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // the type word decides which answer the same five lines get. Here a real
     // admonition opens, its closer completes it, and a closed block leaves no
     // open paragraph - so `tail` ends the item.
-    expect(html('- item\n  ::: note\n  body\n  :::\ntail\n')).toBe(
+    expect(html("- item\n+\n::: note\nbody\n:::\n\ntail\n")).toBe(
       '<ul>\n  <li>item\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
@@ -92,7 +92,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // plus an admonition. The block it opens is then closed by the `:::` below
     // - that fence is its closer, not more absorbed text - and a closed block
     // leaves no open paragraph, so `tail` ends the item.
-    expect(html('- item\n  :::note\n  ::: note\n  body\n  :::\ntail\n')).toBe(
+    expect(html("- item\n  :::note\n+\n::: note\nbody\n:::\n\ntail\n")).toBe(
       '<ul>\n  <li>item\n:::note\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
@@ -103,10 +103,10 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // `tail` ends the item - which is what the same three lines do at the top
     // level, where `:::note` over `# h` over `:::` is a paragraph, a heading and
     // an empty div in all three engines.
-    expect(html('- item\n  :::note\n  # h\n  :::\ntail\n')).toBe(
+    expect(html("- item\n  :::note\n+\n# h\n+\n:::\n\n:::\n\ntail\n")).toBe(
       '<ul>\n  <li>item\n:::note\n    <h1 id="h">h</h1>\n    <div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
     )
-    expect(html('- item\n  :::note\n  | a |\n  :::\ntail\n')).toBe(
+    expect(html("- item\n  :::note\n+\n| a |\n+\n:::\n\n:::\n\ntail\n")).toBe(
       '<ul>\n  <li>item\n:::note\n    <table>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n    <div>\n    </div>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
@@ -114,7 +114,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
   it('leaves a valid opener inside the item structural after an unrelated paragraph', () => {
     // The control for the absorbing flag: a paragraph that never met a
     // malformed fence still gets interrupted by a real opener.
-    expect(html('- item\n  ::: note\n  body\n  :::\n')).toBe(
+    expect(html("- item\n+\n::: note\nbody\n:::\n")).toBe(
       '<ul>\n  <li>item\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
     )
   })

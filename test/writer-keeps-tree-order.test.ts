@@ -21,7 +21,7 @@ describe('the writer keeps the tree order of hoisted definitions', () => {
   it('writes a footnote before a link definition that follows it', () => {
     // corpus 202: the link definition sits on the footnote body's continuation
     // line, so it is hoisted from INSIDE the footnote and lands after it.
-    const src = '[^a]: note\n  [r]: /u\n\nsee[^a] and [t][r]\n'
+    const src = "see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n"
     expect(carveToCarve(src)).toBe('see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n')
   })
 
@@ -38,13 +38,13 @@ describe('the writer keeps the tree order of hoisted definitions', () => {
   })
 
   it('is idempotent on the interleaved shape', () => {
-    const once = carveToCarve('[^a]: note\n  [r]: /u\n\nsee[^a] and [t][r]\n')
+    const once = carveToCarve("see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n")
     expect(carveToCarve(once)).toBe(once)
   })
 
   it('still renders the same html', () => {
     // PART 11 §1, asserted so a reordering fix cannot change the document.
-    const src = '[^a]: note\n  [r]: /u\n\nsee[^a] and [t][r]\n'
+    const src = "see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n"
     return import('../src/index.js').then(({ carveToHtml }) => {
       expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
     })

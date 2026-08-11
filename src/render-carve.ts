@@ -814,7 +814,28 @@ function definitionInGap(
  * them: a `figure` is an image line plus a caption line and an `image` is the
  * image line alone, which is why both read as paragraph text one column in.
  */
-const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image', 'figure'])
+// Under the 0.2 paragraph rule every nonblank line folds while a paragraph is
+// open. Consequently every following sibling block needs an explicit
+// structural boundary in a tight item; `+` supplies it without making the item
+// loose.
+const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set<BlockNode['type']>([
+  'paragraph',
+  'heading',
+  'thematic_break',
+  'block_quote',
+  'definition_list',
+  'code_block',
+  'raw_block',
+  'admonition',
+  'div',
+  'table',
+  'line_block',
+  'comment',
+  'image',
+  'figure',
+  'abbreviation_def',
+  'link_reference_definition',
+])
 
 function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
@@ -879,7 +900,11 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       if (previous !== undefined) {
         const written = definitionInGap(previous, b, ctx)
         if (written !== undefined && written.length > 0) {
-          parts.push(written)
+          // Definitions no longer interrupt the paragraph above. Attach the
+          // definition-led run explicitly at the marker column so it remains
+          // structural while the item stays tight.
+          parts.push(atMarkerColumn('+'), atMarkerColumn(written))
+          previousAtMarkerColumn = true
           separated = true
         }
       }

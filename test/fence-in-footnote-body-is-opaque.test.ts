@@ -20,7 +20,7 @@ const resolves = (src: string) => carveToHtml(src).includes('href="/u"')
 
 describe('a code fence inside a footnote body is opaque', () => {
   it('does not register a link definition written in it', () => {
-    const src = '[^a]: note\n  ```\n  [r]: /u\n  ```\n\nsee[^a] and [t][r]\n'
+    const src = "see[^a] and [t][r]\n\n[^a]: note\n\n  ```\n  [r]: /u\n  ```\n"
 
     expect(resolves(src)).toBe(false)
     // The reference stays literal, and the code line still renders as code.
@@ -32,7 +32,7 @@ describe('a code fence inside a footnote body is opaque', () => {
     // Passes on the parent commit too: the FOOTNOTE prepass already treats the
     // fence as opaque, and only the LINK-definition prepass had the gap. Kept as
     // the invariant either way, not as evidence of the fix.
-    const src = '[^a]: note\n  ```\n  [^b]: inner\n  ```\n\nsee[^a] and see[^b]\n'
+    const src = "see[^a] and see[^b]\n\n[^a]: note\n\n  ```\n  [^b]: inner\n  ```\n"
 
     // `[^b]` was never defined, so it cannot become a note reference.
     expect(carveToHtml(src)).toContain('see[^b]')
@@ -40,13 +40,13 @@ describe('a code fence inside a footnote body is opaque', () => {
 
   it('still collects a definition written OUTSIDE the fence in the same body', () => {
     // The boundary: the fix must not make the whole note body opaque.
-    const src = '[^a]: note\n  [r]: /u\n\nsee[^a] and [t][r]\n'
+    const src = "see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n"
 
     expect(resolves(src)).toBe(true)
   })
 
   it('reopens collection after the fence closes', () => {
-    const src = '[^a]: note\n  ```\n  x\n  ```\n\n  [r]: /u\n\nsee[^a] and [t][r]\n'
+    const src = "see[^a] and [t][r]\n\n[^a]: note\n\n  ```\n  x\n  ```\n\n[r]: /u\n"
 
     expect(resolves(src)).toBe(true)
   })

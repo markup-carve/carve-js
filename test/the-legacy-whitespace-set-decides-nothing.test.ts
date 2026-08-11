@@ -120,7 +120,7 @@ describe('a fence delimiter line', () => {
     // §10: an UNTERMINATED fence does not interrupt a paragraph. That lookahead
     // built its own closer regex, so a `<BOM>`-terminated fence counted as
     // closed and the opener interrupted prose it should have stayed inside.
-    const interrupts = (ch: string) => /<pre/.test(carveToHtml('p\n```\nx\n```' + ch + '\n'))
+    const interrupts = (ch: string) => /<pre/.test(carveToHtml("p\n\n```\nx\n```\n" + ch + '\n'))
     expect(interrupts('')).toBe(true)
     expect(interrupts('﻿')).toBe(false)
   })
@@ -133,7 +133,7 @@ describe('a fence delimiter line', () => {
     // after that. So `[r]: /u` is code either way, but if the prepass alone reads
     // the mark as a closer it collects the line as a definition and the reference
     // resolves to a URL the reader can see is inside a code block.
-    const html = carveToHtml('```\nx\n```﻿\n[r]: /u\n```\n\ny [t][r]\n')
+    const html = carveToHtml("````\nx\n```﻿\n[r]: /u\n````\n\ny [t][r]\n")
     expect(html).toContain('[r]: /u')
     expect(html).not.toContain('href="/u"')
   })
@@ -146,7 +146,7 @@ describe('a fence delimiter line', () => {
     // The only blank line in the document sits inside the fence, so the item is
     // TIGHT (`<li>b</li>`) when the fence is closed and LOOSE (`<li><p>b</p>`)
     // when it is not. A bare closer closes it; the mark must not.
-    const item = (ch: string) => carveToHtml('- a\n  ```\n  x\n\n  y\n  ```' + ch + '\n- b\n')
+    const item = (ch: string) => carveToHtml("- a\n+\n```\nx\n\ny\n```\n" + ch + '\n- b\n')
     expect(item('')).toContain('<li>b</li>')
     expect(item('﻿')).toContain('<li><p>b</p></li>')
     expect(item('X')).toContain('<li><p>b</p></li>')
@@ -260,6 +260,6 @@ describe('a continuation marker', () => {
     // The LEADING run is the line's indentation, where a tab is syntax and a
     // zero-width character is not (carve-js#790, #793). It was `\s` here too.
     expect(marker('')).toBe(true)
-    expect(/<ul>[\s\S]*<pre[\s\S]*<\/ul>/.test(carveToHtml('- a\n﻿+\n```\nq\n```\n'))).toBe(false)
+    expect(/<ul>[\s\S]*<pre[\s\S]*<\/ul>/.test(carveToHtml("- a\n  ﻿+\n\n```\nq\n```\n"))).toBe(false)
   })
 })

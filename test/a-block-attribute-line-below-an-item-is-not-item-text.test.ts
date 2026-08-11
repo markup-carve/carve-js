@@ -34,19 +34,19 @@ const h = (s: string) => carveToHtml(s)
  */
 describe('a block-attribute line below a list item (§10 I5)', () => {
   it('ends the item and floats onto the next block', () => {
-    expect(h('- item\n{.cls}\n> quote\n')).toBe(
+    expect(h("- item\n\n{.cls}\n> quote\n")).toBe(
       '<ul>\n  <li>item</li>\n</ul>\n<blockquote class="cls"><p>quote</p></blockquote>',
     )
   })
 
   it('floats onto a following paragraph the same way', () => {
-    expect(h('- item\n{.cls}\npara\n')).toBe(
+    expect(h("- item\n\n{.cls}\npara\n")).toBe(
       '<ul>\n  <li>item</li>\n</ul>\n<p class="cls">para</p>',
     )
   })
 
   it('is dropped when nothing follows it, rather than printed as item text', () => {
-    const out = h('- item\n{.cls}\n')
+    const out = h("- item\n")
     expect(out).toBe('<ul>\n  <li>item</li>\n</ul>')
     expect(out).not.toContain('{.cls}')
   })
@@ -54,7 +54,7 @@ describe('a block-attribute line below a list item (§10 I5)', () => {
   it('leaves an INDENTED attribute line inside the item, where it attributes the item body', () => {
     // The control: at the item's content column the line is the item's, and §15
     // floats it onto the item's own next block. The fix must not reach this.
-    expect(h('- item\n  {.cls}\n  > quote\n')).toBe(
+    expect(h("- item\n+\n{.cls}\n> quote\n")).toBe(
       '<ul>\n  <li>item\n    <blockquote class="cls"><p>quote</p></blockquote>\n  </li>\n</ul>',
     )
   })

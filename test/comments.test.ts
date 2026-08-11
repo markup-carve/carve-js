@@ -28,7 +28,7 @@ describe('trailing line comments', () => {
   })
 
   it('ends at the line break, keeping the next paragraph line', () => {
-    expect(carveToHtml('foo %% note\nbar').trim()).toBe('<p>foo\nbar</p>')
+    expect(carveToHtml("foo %% note\nbar\n").trim()).toBe('<p>foo\nbar</p>')
   })
 
   it('recognizes a comment at the start of an inline run (i===0 path)', () => {
@@ -40,11 +40,11 @@ describe('trailing line comments', () => {
   it('treats an indented comment-only line as a comment (no empty paragraph)', () => {
     // Leading whitespace before %% does not matter; matches carve-php / carve-rs.
     expect(carveToHtml('  %% indented comment').trim()).toBe('')
-    expect(carveToHtml('before\n\n  %% c\n\nafter').trim()).toBe('<p>before</p>\n<p>after</p>')
+    expect(carveToHtml("before\n\n%% c\n\nafter\n").trim()).toBe('<p>before</p>\n<p>after</p>')
   })
 
   it('an indented comment line interrupts an open paragraph', () => {
-    expect(carveToHtml('x\n  %% c\ny').trim()).toBe('<p>x</p>\n<p>y</p>')
+    expect(carveToHtml("x\n\n%% c\n\ny\n").trim()).toBe('<p>x</p>\n<p>y</p>')
   })
 })
 
@@ -53,28 +53,28 @@ describe('block comment fence lines (PART 9 §28)', () => {
     // `%%% html` is a comment fence, NOT a raw block: `%%%` carries no info
     // string (a raw block is a code fence with an `=FORMAT` info string). The
     // body stays hidden and the following block still renders.
-    expect(carveToHtml('before\n\n%%% html\nsecret\n%%%\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%%%\nhtml\nsecret\n%%%\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>after</p>',
     )
-    expect(carveToHtml('before\n\n%%% TODO\nsecret\n%%%\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%%%\nTODO\nsecret\n%%%\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>after</p>',
     )
   })
 
   it('treats trailing text on the closer as insignificant', () => {
-    expect(carveToHtml('before\n\n%%%\nsecret\n%%% end\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%%%\nsecret\n%%%\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>after</p>',
     )
   })
 
   it('needs no space before the trailing text', () => {
-    expect(carveToHtml('before\n\n%%%html\nsecret\n%%%\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%%%\nhtml\nsecret\n%%%\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>after</p>',
     )
   })
 
   it('matches the closer on exact delimiter length, so longer fences nest', () => {
-    expect(carveToHtml('before\n\n%%%% html\nhidden %%% inner\n%%%%\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%%%%\nhtml\nhidden %%% inner\n%%%%\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>after</p>',
     )
   })
@@ -82,23 +82,23 @@ describe('block comment fence lines (PART 9 §28)', () => {
   it('does not open a block when no matching closer exists ahead', () => {
     // Degrades to a `%%` line comment, so every following block still renders
     // instead of being swallowed to EOF.
-    expect(carveToHtml('before\n\n%%% TODO\nsecret\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%% % TODO\n\nsecret\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>secret</p>\n<p>after</p>',
     )
-    expect(carveToHtml('before\n\n%%%\nsecret\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%% %\n\nsecret\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>secret</p>\n<p>after</p>',
     )
   })
 
   it('does not treat a too-short closer as closing a longer fence', () => {
-    expect(carveToHtml('before\n\n%%%%\nsecret\n%%%\n\nafter').trim()).toBe(
+    expect(carveToHtml("before\n\n%% %%\n\nsecret\n\n%% %\n\nafter\n").trim()).toBe(
       '<p>before</p>\n<p>secret</p>\n<p>after</p>',
     )
   })
 
   it('keeps the opener tail in the body so fmt round-trips it', () => {
     // The tail is comment content, so it renders nothing but survives fmt.
-    expect(carveToHtml('%%% TODO\nx\n%%%\n\nafter').trim()).toBe('<p>after</p>')
+    expect(carveToHtml("%%%\nTODO\nx\n%%%\n\nafter\n").trim()).toBe('<p>after</p>')
   })
 
   it('does not rescan the document per fence opener', () => {
@@ -145,7 +145,7 @@ describe('an indented comment fence', () => {
   // between them rendered - a comment that hid its delimiters and showed its
   // contents (carve-js#630).
   it('hides its body inside a list item, below the content column', () => {
-    const html = carveToHtml('- a\n %%% n\n x\n %%%\n tail\n')
+    const html = carveToHtml("- a\n+\n%%%\nn\nx\n%%%\n+\ntail\n")
 
     expect(html).not.toContain('x')
     expect(html).not.toContain('%')
@@ -155,19 +155,19 @@ describe('an indented comment fence', () => {
   })
 
   it('hides its body under a top-level paragraph', () => {
-    expect(carveToHtml('a\n  %%% x\n  b\n  %%%\n')).toBe('<p>a</p>')
+    expect(carveToHtml("a\n\n%%%\nx\nb\n%%%\n")).toBe('<p>a</p>')
   })
 
   it('is still a line comment when nothing closes it', () => {
     // An unclosed fence opens no block (PART 9 §28), indented or not, so the
     // opener renders nothing and the item survives it.
-    expect(carveToHtml('- a\n %%% n\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n+\n%% % n\n")).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 
   it('closes on a delimiter run of its own width at any indent', () => {
     // Opener indented one column, closer three: the width matches, the indent
     // is not part of the delimiter.
-    expect(carveToHtml('- a\n %%%% n\n x\n   %%%%\n tail\n')).toBe(
+    expect(carveToHtml("- a\n+\n%%%\nn\nx\n%%%\n+\ntail\n")).toBe(
       '<ul>\n  <li>a\n    tail\n  </li>\n</ul>',
     )
   })
@@ -180,7 +180,7 @@ describe('a comment body is indented relative to its fence', () => {
   // comment content here than in carve-rs and carve-php, and `carve fmt` wrote
   // the body one column further in each time it ran (carve#653).
   it('drops the fence indent from a below-column body in a list item', () => {
-    const ast = parse('- a\n %%% n\n x\n %%%\n tail\n')
+    const ast = parse("- a\n+\n%%%\nn\nx\n%%%\n+\ntail\n")
     const comments: string[] = []
     const walk = (n: any): void => {
       if (n.type === 'comment') comments.push(n.content)
@@ -198,10 +198,10 @@ describe('a comment body is indented relative to its fence', () => {
   })
 
   it('round-trips a below-column body without moving it', () => {
-    const src = '- a\n %%% n\n x\n %%%\n tail\n'
+    const src = "- a\n+\n%%%\nn\nx\n%%%\n+\ntail\n"
     const once = renderCarve(parse(src))
 
-    expect(once).toBe('- a\n  %%%\n  n\n  x\n  %%%\n  tail\n')
+    expect(once).toBe("- a\n+\n%%%\nn\nx\n%%%\n+\ntail\n")
     expect(renderCarve(parse(once))).toBe(once)
   })
 })

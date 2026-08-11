@@ -19,7 +19,7 @@ const kinds = (source: string): string[] =>
 
 describe('collected definitions of different kinds', () => {
   it('publishes a footnote written first before a link definition', () => {
-    expect(kinds('[^a]: note\n[r]: /u\n\nsee[^a] and [t][r]\n')).toEqual([
+    expect(kinds("see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n")).toEqual([
       'paragraph',
       'footnote',
       'link_reference_definition',
@@ -36,7 +36,7 @@ describe('collected definitions of different kinds', () => {
 
   it('orders three definitions of two kinds by source position', () => {
     expect(
-      kinds('[r]: /u\n[^a]: note\n[s]: /v\n\nsee[^a] and [t][r] and [u][s]\n'),
+      kinds("see[^a] and [t][r] and [u][s]\n\n[r]: /u\n\n[^a]: note\n\n[s]: /v\n"),
     ).toEqual([
       'paragraph',
       'link_reference_definition',
@@ -47,7 +47,7 @@ describe('collected definitions of different kinds', () => {
 
   it('leaves the published positions ascending across the collected tail', () => {
     const children = carveToAstJson(
-      '[^a]: note\n[r]: /u\n\nsee[^a] and [t][r]\n',
+      "see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n",
     ).children
     const tail = children.filter(
       (child) =>

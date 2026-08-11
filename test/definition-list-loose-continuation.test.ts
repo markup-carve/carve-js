@@ -126,19 +126,19 @@ describe('terms fold continuation lines like a heading (no data loss)', () => {
   it('a below-content-column wrapped term line folds with its leading space stripped', () => {
     // `- ` opens content column 2; `:: term` is the term; ` wrapped` at column
     // 1 is below the content column, so its leading space is removed.
-    expect(html('- one\n  :: term\n wrapped')).toBe(
+    expect(html("- one\n+\n:: term\nwrapped\n")).toBe(
       '<ul>\n  <li>one\n    <dl>\n      <dt>term\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })
 
   it('a flush-left (column 0) wrapped term line folds identically', () => {
-    expect(html('- one\n  :: term\nwrapped')).toBe(
+    expect(html("- one\n+\n:: term\nwrapped\n")).toBe(
       '<ul>\n  <li>one\n    <dl>\n      <dt>term\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })
 
   it('a second below-column term continuation is also stripped', () => {
-    expect(html('- one\n  :: term\n  more\n wrapped')).toBe(
+    expect(html("- one\n+\n:: term\nmore\nwrapped\n")).toBe(
       '<ul>\n  <li>one\n    <dl>\n      <dt>term\nmore\nwrapped</dt>\n    </dl>\n  </li>\n</ul>',
     )
   })

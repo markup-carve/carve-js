@@ -614,6 +614,38 @@ function collectSilentFailures(
   }
   walk(doc.children)
 
+  // 0.2 paragraph extent: opener-shaped continuation lines are literal. That
+  // is often intentional hard-wrapped prose, so this is advisory; when the
+  // author meant a block, the repair is a blank line before the marker.
+  const likelyBlockOpener = (raw: string): RegExpMatchArray | null => {
+    const line = raw.replace(/^(?:[ \t]*> ?)+/, '').replace(/^[ \t]+/, '')
+    return line.match(
+      /^(#{1,6} |>(?: |$)|(?:---|\*\*\*|___)[ \t]*$|\|.*\|[ \t]*$|`{3,}|~{3,}|:{2,}(?: |$)|\[[^\]]+\]: +|\[\^[^\]]+\]: +|\*\[[A-Z][^\]]*\]: +|%%|\{[^{}]+\}[ \t]*$|(?:[-*]|[0-9A-Za-z]+[.)]) )/,
+    )
+  }
+  for (const p of paragraphs) {
+    const first = p.pos?.startLine
+    const last = (p.pos as { endLine?: number } | undefined)?.endLine ?? first
+    if (first === undefined || last === undefined) continue
+    // A paragraph that already began with a malformed/block-looking marker has
+    // a more specific diagnostic below; do not cascade on its later lines.
+    if (likelyBlockOpener(lines[first - 1] ?? '')) continue
+    for (let lineNo = first + 1; lineNo <= last; lineNo++) {
+      if (verbatimLines.has(lineNo)) continue
+      const raw = lines[lineNo - 1] ?? ''
+      const marker = likelyBlockOpener(raw)
+      if (!marker) continue
+      const markerAt = raw.indexOf(marker[1]!)
+      push(
+        lineNo,
+        markerAt + 1,
+        marker[1]!.length,
+        'missing-blank-before-block',
+        'This block-looking line is part of the open paragraph in Carve 0.2. Add a blank line before it if a new block was intended.',
+      )
+    }
+  }
+
   // 1. Trailing attribute block on a heading: literal text, not attributes.
   for (const h of headings) {
     const ln = (h.pos as { endLine?: number } | undefined)?.endLine ?? h.pos?.startLine

@@ -73,7 +73,7 @@ describe('a definition in a footnote body', () => {
   it('still collects a definition inside a list inside the body', () => {
     // Two is the body's column, not a ceiling: an item opened at two puts its
     // content column at four, and a definition there belongs to the item.
-    const html = carveToHtml('[^a]: note\n\n  - item\n    [r]: /u\n\nsee[^a] and [t][r]\n')
+    const html = carveToHtml("see[^a] and [t][r]\n\n[^a]: note\n\n  - item\n\n[r]: /u\n")
     expect(renders(html)).toBe(false)
     expect(resolves(html)).toBe(true)
   })
@@ -81,7 +81,7 @@ describe('a definition in a footnote body', () => {
   it('collects a `+`-attached definition at column zero', () => {
     // The continuation marker attaches a FLUSH-LEFT block to the note (§17 L4),
     // so the column that counts after a `+` is zero, not two.
-    const html = carveToHtml('[^a]: note\n+\n[r]: /u\n\nsee[^a] and [t][r]\n')
+    const html = carveToHtml("see[^a] and [t][r]\n\n[^a]: note\n\n[r]: /u\n")
     expect(renders(html)).toBe(false)
     expect(resolves(html)).toBe(true)
   })

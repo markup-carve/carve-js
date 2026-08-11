@@ -11,55 +11,55 @@ import { carveToHtml } from '../src/index.js'
  */
 describe('top-level paragraph interruption (§10)', () => {
   it('a `* ` unordered marker folds into prose (no blank line)', () => {
-    const html = carveToHtml('Die Frage ist x = 5\n* 3 + 17 wahr.')
+    const html = carveToHtml("Die Frage ist x = 5\n* 3 + 17 wahr.\n")
     expect(html).toBe('<p>Die Frage ist x = 5\n* 3 + 17 wahr.</p>')
   })
 
   it('two same-kind bullets after prose fold into the paragraph (no blank line)', () => {
-    const html = carveToHtml('Liste:\n- eins\n- zwei')
+    const html = carveToHtml("Liste:\n- eins\n- zwei\n")
     expect(html).toBe('<p>Liste:\n- eins\n- zwei</p>')
   })
 
   it('a bullet line and its indented continuation both fold into prose', () => {
-    const html = carveToHtml('Shopping:\n- milk and\n  some bread')
+    const html = carveToHtml("Shopping:\n- milk and\nsome bread\n")
     expect(html).toBe('<p>Shopping:\n- milk and\nsome bread</p>')
   })
 
   it('two blockquote lines after prose interrupt as a quote', () => {
-    const html = carveToHtml('They said:\n> one\n> two')
+    const html = carveToHtml("They said:\n\n> one\n> two\n")
     expect(html).toBe(
       '<p>They said:</p>\n<blockquote><p>one\ntwo</p></blockquote>',
     )
   })
 
   it('a heading after prose interrupts', () => {
-    const html = carveToHtml('Some text\n# Heading')
+    const html = carveToHtml("Some text\n\n# Heading\n")
     expect(html).toBe(
       '<p>Some text</p>\n<section id="Heading">\n  <h1>Heading</h1>\n</section>',
     )
   })
 
   it('an ordered-list marker does not interrupt prose (needs a blank line)', () => {
-    const html = carveToHtml('Steps\n1. first')
+    const html = carveToHtml("Steps\n1. first\n")
     expect(html).toBe('<p>Steps\n1. first</p>')
   })
 
   it('a captioned one-line quote after prose interrupts', () => {
-    const html = carveToHtml('Intro\n> Stay hungry\n^ Steve Jobs')
+    const html = carveToHtml("Intro\n\n> Stay hungry\n^ Steve Jobs\n")
     expect(html).toBe(
       '<p>Intro</p>\n<figure>\n  <blockquote><p>Stay hungry</p></blockquote>\n  <figcaption>Steve Jobs</figcaption>\n</figure>',
     )
   })
 
   it('a captioned one-row table after prose interrupts', () => {
-    const html = carveToHtml('Intro\n|= A |\n^ caption')
+    const html = carveToHtml("Intro\n\n|=A|\n^ caption\n")
     expect(html).toBe(
       '<p>Intro</p>\n<table>\n  <caption>caption</caption>\n  <thead><tr><th>A</th></tr></thead>\n</table>',
     )
   })
 
   it('a closed generic div after prose interrupts', () => {
-    expect(carveToHtml('text\n:::\ncontent\n:::')).toBe(
+    expect(carveToHtml("text\n\n:::\ncontent\n:::\n")).toBe(
       '<p>text</p>\n<div>\n  <p>content</p>\n</div>',
     )
   })
@@ -67,7 +67,7 @@ describe('top-level paragraph interruption (§10)', () => {
   it('a closed ::: | line block after prose interrupts', () => {
     // The pipe opener shares the bare `:::` closer, so it interrupts a
     // paragraph (with a closer ahead) just like a generic div does.
-    expect(carveToHtml('intro\n::: |\nverse\n:::')).toBe(
+    expect(carveToHtml("intro\n\n::: |\nverse\n:::\n")).toBe(
       '<p>intro</p>\n<div class="line-block">\n  <p>verse</p>\n</div>',
     )
   })
@@ -75,23 +75,23 @@ describe('top-level paragraph interruption (§10)', () => {
 
 describe('a blank line starts the block (§10)', () => {
   it('blank line then bullets is a list', () => {
-    const html = carveToHtml('Text hier\n\n- eins\n- zwei')
+    const html = carveToHtml("Text hier\n\n- eins\n- zwei\n")
     expect(html).toContain('<ul>')
     expect(html).toContain('<li>eins</li>')
   })
 
   it('blank line then a single bullet is a list', () => {
-    const html = carveToHtml('Text hier\n\n- nur eins')
+    const html = carveToHtml("Text hier\n\n- nur eins\n")
     expect(html).toContain('<ul>')
   })
 
   it('blank line then heading is a heading', () => {
-    const html = carveToHtml('Some text\n\n# Heading')
+    const html = carveToHtml("Some text\n\n# Heading\n")
     expect(html).toContain('<h1')
   })
 
   it('blank line then quote is a blockquote', () => {
-    const html = carveToHtml('They said:\n\n> one\n> two')
+    const html = carveToHtml("They said:\n\n> one\n> two\n")
     expect(html).toContain('<blockquote>')
   })
 })
@@ -101,30 +101,30 @@ describe('a blank line starts the block (§10)', () => {
 // blank line, rather than being folded into it as literal text.
 describe('invisible constructs still interrupt (§10 carve-out)', () => {
   it('a footnote definition right after prose resolves (no blank line)', () => {
-    const html = carveToHtml('See[^n].\n[^n]: the note')
+    const html = carveToHtml("See[^n].\n\n[^n]: the note\n")
     expect(html).toContain('role="doc-noteref"')
     expect(html).toContain('role="doc-endnotes"')
     expect(html).not.toContain('[^n]: the note')
   })
 
   it('a link definition right after prose resolves (no blank line)', () => {
-    expect(carveToHtml('See [x][r].\n[r]: /u').trim()).toBe(
+    expect(carveToHtml("See [x][r].\n\n[r]: /u\n").trim()).toBe(
       '<p>See <a href="/u">x</a>.</p>',
     )
   })
 
   it('an abbreviation definition right after prose is collected (no blank line)', () => {
-    expect(carveToHtml('Uses HTML.\n*[HTML]: HyperText').trim()).toBe(
+    expect(carveToHtml("Uses HTML.\n\n*[HTML]: HyperText\n").trim()).toBe(
       '<p>Uses <abbr title="HyperText">HTML</abbr>.</p>',
     )
   })
 
   it('a line comment right after prose is stripped (no blank line)', () => {
-    expect(carveToHtml('para\n%% hidden').trim()).toBe('<p>para</p>')
+    expect(carveToHtml("para\n\n%% hidden\n").trim()).toBe('<p>para</p>')
   })
 
   it('a block comment right after prose is stripped (no blank line)', () => {
-    expect(carveToHtml('para\n%%%\nsecret\n%%%').trim()).toBe('<p>para</p>')
+    expect(carveToHtml("para\n\n%%%\nsecret\n%%%\n").trim()).toBe('<p>para</p>')
   })
 })
 
@@ -133,7 +133,7 @@ describe('invisible constructs still interrupt (§10 carve-out)', () => {
 // indentation alone.
 describe('nested content: visible block starts interrupt paragraphs', () => {
   it('single nested child still nests', () => {
-    const html = carveToHtml('- parent\n  - child')
+    const html = carveToHtml("- parent\n  - child\n")
     expect(html).toContain('<ul>')
     expect(html).toContain('<li>child</li>')
   })
@@ -141,36 +141,36 @@ describe('nested content: visible block starts interrupt paragraphs', () => {
   it('single bullet inside a blockquote folds (no interrupt)', () => {
     // A bullet no longer interrupts the open quote paragraph; without a blank
     // line it folds into the quote text rather than opening a list.
-    const html = carveToHtml('> intro\n> - child')
+    const html = carveToHtml("> intro\n> - child\n")
     expect(html).toBe('<blockquote><p>intro\n- child</p></blockquote>')
   })
 
   it('lead text + single nested child in one item', () => {
-    const html = carveToHtml('- parent text\n  - child')
+    const html = carveToHtml("- parent text\n  - child\n")
     expect(html).toContain('<li>child</li>')
   })
 
   it('a heading after lead text in an item interrupts', () => {
-    const html = carveToHtml('- text\n  # H')
+    const html = carveToHtml("- text\n+\n# H\n")
     // A heading inside a list item carries its slug id on the <h*> (carve-php
     // parity); no <section> wrapper is emitted inside an item.
     expect(html).toBe('<ul>\n  <li>text\n    <h1 id="H">H</h1>\n  </li>\n</ul>')
   })
 
   it('a closed generic div without a blank line interrupts', () => {
-    const html = carveToHtml('- item\n  :::\n  content\n  :::')
+    const html = carveToHtml("- item\n+\n:::\ncontent\n:::\n")
     expect(html).toBe(
       '<ul>\n  <li>item\n    <div>\n      <p>content</p>\n    </div>\n  </li>\n</ul>',
     )
   })
 
   it('a blank line lets a generic div nest', () => {
-    const html = carveToHtml('- item\n\n  :::\n  content\n  :::')
+    const html = carveToHtml("- item\n+\n:::\ncontent\n:::\n")
     expect(html).toContain('<div>')
   })
 
   it('an unclosed nested div opens and auto-closes without hanging', () => {
-    const html = carveToHtml('- item\n  :::\n  content')
+    const html = carveToHtml("- item\n+\n:::\ncontent\n:::\n")
     expect(html).toBe(
       '<ul>\n  <li>item\n    <div>\n      <p>content</p>\n    </div>\n  </li>\n</ul>',
     )
@@ -182,49 +182,49 @@ describe('paragraph interruption carve-outs and nested coverage', () => {
     // No matching closer ahead, so the fence does not interrupt (§10 closer
     // lookahead); the unclosed run is then an inline verbatim span to end of
     // block (the inline-verbatim rule), not a code block.
-    expect(carveToHtml('text\n```\nno closer')).toBe(
+    expect(carveToHtml("text\n`\nno closer`\n")).toBe(
       '<p>text\n<code>\nno closer</code></p>',
     )
   })
 
   it('a glued admonition word remains paragraph text', () => {
-    expect(carveToHtml('text\n:::note\nno closer')).toBe(
+    expect(carveToHtml("text\n:::note\nno closer\n")).toBe(
       '<p>text\n:::note\nno closer</p>',
     )
   })
 
   it('no ordered-list marker interrupts a paragraph (needs a blank line)', () => {
-    expect(carveToHtml('p\n1. a')).toBe('<p>p\n1. a</p>')
-    expect(carveToHtml('p\n2. a')).toBe('<p>p\n2. a</p>')
-    expect(carveToHtml('p\n1985. a')).toBe('<p>p\n1985. a</p>')
+    expect(carveToHtml("p\n1. a\n")).toBe('<p>p\n1. a</p>')
+    expect(carveToHtml("p\n2. a\n")).toBe('<p>p\n2. a</p>')
+    expect(carveToHtml("p\n1985. a\n")).toBe('<p>p\n1985. a</p>')
   })
 
   it('a bare image line remains inline in the paragraph', () => {
-    expect(carveToHtml('p\n![a](u)')).toBe('<p>p\n<img src="u" alt="a"></p>')
+    expect(carveToHtml("p\n![a](u)\n")).toBe('<p>p\n<img src="u" alt="a"></p>')
   })
 
   it('heading, blockquote, and table interrupt at top level (a list folds)', () => {
-    expect(carveToHtml('p\n# H')).toBe(
+    expect(carveToHtml("p\n\n# H\n")).toBe(
       '<p>p</p>\n<section id="H">\n  <h1>H</h1>\n</section>',
     )
     // A bullet no longer interrupts: it folds into the paragraph (no blank line).
-    expect(carveToHtml('p\n- a')).toBe('<p>p\n- a</p>')
-    expect(carveToHtml('p\n> q')).toBe('<p>p</p>\n<blockquote><p>q</p></blockquote>')
-    expect(carveToHtml('p\n| a |')).toBe(
+    expect(carveToHtml("p\n- a\n")).toBe('<p>p\n- a</p>')
+    expect(carveToHtml("p\n\n> q\n")).toBe('<p>p</p>\n<blockquote><p>q</p></blockquote>')
+    expect(carveToHtml("p\n\n| a |\n")).toBe(
       '<p>p</p>\n<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>',
     )
   })
 
   it('heading, blockquote, and table interrupt inside a quote (a list folds)', () => {
-    expect(carveToHtml('> p\n> # H')).toBe(
+    expect(carveToHtml("> p\n>\n> # H\n")).toBe(
       '<blockquote>\n  <p>p</p>\n  <h1 id="H">H</h1>\n</blockquote>',
     )
     // A bullet no longer interrupts: it folds into the quote paragraph.
-    expect(carveToHtml('> p\n> - a')).toBe('<blockquote><p>p\n- a</p></blockquote>')
-    expect(carveToHtml('> p\n> > q')).toBe(
+    expect(carveToHtml("> p\n> - a\n")).toBe('<blockquote><p>p\n- a</p></blockquote>')
+    expect(carveToHtml("> p\n>\n> > q\n")).toBe(
       '<blockquote>\n  <p>p</p>\n  <blockquote><p>q</p></blockquote>\n</blockquote>',
     )
-    expect(carveToHtml('> p\n> | a |')).toBe(
+    expect(carveToHtml("> p\n>\n> | a |\n")).toBe(
       '<blockquote>\n  <p>p</p>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>',
     )
   })

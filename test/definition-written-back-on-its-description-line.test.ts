@@ -47,7 +47,7 @@ describe('a definition written inside a description', () => {
   it('leaves a definition written at document level where it was', () => {
     // The neighbouring case: no description claims it, so the writer's ordinary
     // placement is unchanged.
-    expect(carveToCarve('[r]: /u\n\nsee [t][r]\n')).toBe('see [t][r]\n\n[r]: /u\n')
+    expect(carveToCarve("see [t][r]\n\n[r]: /u\n")).toBe('see [t][r]\n\n[r]: /u\n')
   })
 
   it('leaves an ordinary description alone', () => {
@@ -55,7 +55,7 @@ describe('a definition written inside a description', () => {
   })
 
   it('leaves a footnote written at document level where it was', () => {
-    expect(carveToCarve('[^f]: x\n\nsee[^f]\n')).toBe('see[^f]\n\n[^f]: x\n')
+    expect(carveToCarve("see[^f]\n\n[^f]: x\n")).toBe('see[^f]\n\n[^f]: x\n')
   })
 })
 
@@ -84,19 +84,19 @@ describe('a definition written inside a description', () => {
  */
 describe('an emptied description survives both escape passes', () => {
   it('is written back when another entry follows', () => {
-    const src = ':: t1\n:  [r]: /u\n\n:: t2\n:  d2\n\nsee [t][r]\n'
+    const src = ":: t1\n:  [r]: /u\n:: t2\n:  d2\n\nsee [t][r]\n"
     expect(carveToCarve(src)).toContain('[r]: /u')
     expect(roundTrips(src)).toBe(true)
   })
 
   it('is written back when it is the last entry', () => {
-    const src = ':: t1\n:  d1\n\n:: t2\n:  [r]: /u\n\nsee [t][r]\n'
+    const src = ":: t1\n:  d1\n:: t2\n:  [r]: /u\n\nsee [t][r]\n"
     expect(carveToCarve(src)).toContain('[r]: /u')
     expect(roundTrips(src)).toBe(true)
   })
 
   it('is written back for a footnote when another entry follows', () => {
-    const src = ':: t1\n:  [^f]: x\n\n:: t2\n:  d2\n\nsee[^f]\n'
+    const src = ":: t1\n:  [^f]: x\n:: t2\n:  d2\n\nsee[^f]\n"
     expect(carveToCarve(src)).toContain('[^f]: x')
     expect(roundTrips(src)).toBe(true)
   })
@@ -110,7 +110,7 @@ describe('an emptied description survives both escape passes', () => {
   })
 
   it('still writes the definition exactly once', () => {
-    const out = carveToCarve(':: t1\n:  [r]: /u\n\n:: t2\n:  d2\n\nsee [t][r]\n')
+    const out = carveToCarve(":: t1\n:  [r]: /u\n:: t2\n:  d2\n\nsee [t][r]\n")
     expect(out.match(/\[r\]: \/u/g)?.length).toBe(1)
   })
 })
