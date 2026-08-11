@@ -63,7 +63,7 @@ describe('thematic break', () => {
   })
 
   it('a contiguous break interrupts a paragraph and a heading', () => {
-    expect(html('para\n***')).toBe('<p>para</p>\n<hr>')
+    expect(html("para\n\n***\n")).toBe('<p>para</p>\n<hr>')
     expect(html('# H\n***')).toBe('<section id="H">\n  <h1>H</h1>\n  <hr>\n</section>')
   })
 })

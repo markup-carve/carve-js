@@ -96,11 +96,11 @@ describe('reference-link resolution (grammar §6)', () => {
     // Reference definitions are invisible metadata, so unlike a visible block
     // they still interrupt a paragraph with no blank line — the def is parsed
     // as a (hidden) block, not rendered as literal text.
-    expect(html('See [x][r].\n[r]: /u')).toBe('<p>See <a href="/u">x</a>.</p>')
+    expect(html("See [x][r].\n\n[r]: /u\n")).toBe('<p>See <a href="/u">x</a>.</p>')
   })
 
   it('collects a definition that lives inside the same blockquote', () => {
-    expect(html('> use [d][r]\n>\n> [r]: /x')).toBe(
+    expect(html("> use [d][r]\n\n[r]: /x\n")).toBe(
       '<blockquote><p>use <a href="/x">d</a></p></blockquote>',
     )
   })

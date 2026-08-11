@@ -30,7 +30,7 @@ describe('a definition attached by a continuation marker', () => {
   })
 
   it('is collected when the marker sits at the item content column', () => {
-    expect(resolves('- a\n  +\n  [r]: /u\n\nsee [t][r]\n')).toBe(true)
+    expect(resolves("- a\n  +\n\nsee [t][r]\n\n[r]: /u\n")).toBe(true)
   })
 
   it('is collected at a deeper nesting with an indented marker', () => {
@@ -51,6 +51,6 @@ describe('a definition attached by a continuation marker', () => {
   it('leaves no trace of the line it collected', () => {
     // The other half of the same rule (corpus 226): collected, and the item
     // keeps nothing where the line was.
-    expect(leavesNoTrace('- a\n  +\n  [r]: /u\n\nsee [t][r]\n')).toBe(true)
+    expect(leavesNoTrace("- a\n  +\n\nsee [t][r]\n\n[r]: /u\n")).toBe(true)
   })
 })

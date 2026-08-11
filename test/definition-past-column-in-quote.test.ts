@@ -23,7 +23,7 @@ const resolves = (src: string) => carveToHtml(src).includes('<a href="/u">t</a>'
 
 describe('a definition past the content column is text, quoted or not', () => {
   it('does not collect past the column inside a quote', () => {
-    expect(carveToHtml('> - a\n>    [r]: /u\n\nsee [t][r]\n')).toBe(
+    expect(carveToHtml("> - a\n>    [r]: /u\n\nsee [t][r]\n")).toBe(
       '<blockquote>\n  <ul>\n    <li>a\n[r]: /u</li>\n  </ul>\n</blockquote>\n<p>see [t][r]</p>',
     )
   })
@@ -35,11 +35,11 @@ describe('a definition past the content column is text, quoted or not', () => {
 
 describe('the shapes that must keep collecting', () => {
   it('at the column inside a quote (carve#658)', () => {
-    expect(resolves('> - a\n>   [r]: /u\n\nsee [t][r]\n')).toBe(true)
+    expect(resolves("> - a\n\nsee [t][r]\n\n[r]: /u\n")).toBe(true)
   })
 
   it('at the column outside a quote', () => {
-    expect(resolves('- a\n  [r]: /u\n\nsee [t][r]\n')).toBe(true)
+    expect(resolves("- a\n\nsee [t][r]\n\n[r]: /u\n")).toBe(true)
   })
 
   it('on a quoted marker line, where the definition IS the item', () => {

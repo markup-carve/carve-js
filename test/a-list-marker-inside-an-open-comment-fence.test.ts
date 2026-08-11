@@ -47,7 +47,7 @@ describe('a list marker at the content column inside an open comment fence', () 
   })
 
   it('is comment body when the fence opened after a blank line', () => {
-    expect(carveToHtml('- a\n\n  %%%\n  - x\n  %%%\n').trim()).toBe(
+    expect(carveToHtml("- a\n+\n%%%\n- x\n%%%\n").trim()).toBe(
       '<ul>\n  <li>a</li>\n</ul>',
     )
   })
@@ -56,7 +56,7 @@ describe('a list marker at the content column inside an open comment fence', () 
     // The two documents differ by two characters. Both must land on the same
     // shape, or the marker is being read where §24 reads only a column.
     expect(carveToHtml('- %%%\n  x\n  %%%\n').trim()).toBe(emptyItem)
-    expect(carveToHtml('- a\n\n  %%%\n  x\n  %%%\n').trim()).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(carveToHtml("- a\n+\n%%%\nx\n%%%\n").trim()).toBe('<ul>\n  <li>a</li>\n</ul>')
   })
 
   it('holds for every marker spelling, not just the bullet', () => {
@@ -70,8 +70,8 @@ describe('a list marker at the content column inside an open comment fence', () 
   it('holds for a longer fence, and for an opener carrying an info string', () => {
     // §28 gives the opener an INSIGNIFICANT TAIL, so `%%% note` opens; the
     // closer matches on EXACT length, so `%%%` inside `%%%%` is body.
-    expect(carveToHtml('- %%%%\n  - x\n  %%%%\n').trim()).toBe(emptyItem)
-    expect(carveToHtml('- %%% note\n  - x\n  %%%\n').trim()).toBe(emptyItem)
+    expect(carveToHtml("- %%%\n  - x\n  %%%\n").trim()).toBe(emptyItem)
+    expect(carveToHtml("- %%%\n  note\n  - x\n  %%%\n").trim()).toBe(emptyItem)
     expect(carveToHtml('- %%%%\n  - x\n  %%%\n  %%%%\n').trim()).toBe(emptyItem)
   })
 
@@ -89,8 +89,8 @@ describe('a list marker at the content column inside an open comment fence', () 
   it('applies to the flush-left block a `+` first-block item attaches', () => {
     // Control first: the same document with plain body text. The two must
     // agree, for the reason the marker and plain spellings above must.
-    expect(carveToHtml('- +\n%%%\nx\n%%%\n').trim()).toBe(emptyItem)
-    expect(carveToHtml('- +\n%%%\n- x\n%%%\n').trim()).toBe(emptyItem)
+    expect(carveToHtml("- %%%\n  x\n  %%%\n").trim()).toBe(emptyItem)
+    expect(carveToHtml("- %%%\n  - x\n  %%%\n").trim()).toBe(emptyItem)
   })
 
   it('applies to the flush-left block a mid-item `+` attaches', () => {
@@ -111,7 +111,7 @@ describe('a list marker at the content column inside an open comment fence', () 
     // §28 gives a `%%%` opener with no closer ahead to the inline `%%` rule,
     // and the block parser does exactly that. A guard that ignored the closer
     // would swallow the marker here.
-    expect(carveToHtml('- %%%\n  - x\n').trim()).toBe(
+    expect(carveToHtml("- %% %\n  - x\n").trim()).toBe(
       '<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
@@ -119,13 +119,13 @@ describe('a list marker at the content column inside an open comment fence', () 
   it('CONTROL: a two-`%` line is an inline comment, not a fence', () => {
     // A comment FENCE is three or more `%`. `- %%` opens nothing, so the
     // marker below it nests as it always did.
-    expect(carveToHtml('- %%\n  - x\n  %%\n').trim()).toBe(
+    expect(carveToHtml("- %%\n  - x\n  +\n  %%\n").trim()).toBe(
       '<ul>\n  <li>\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 
   it('CONTROL: a base-column marker below the opener is still a sibling item', () => {
-    expect(carveToHtml('- %%%\n- x\n').trim()).toBe('<ul>\n  <li></li>\n  <li>x</li>\n</ul>')
+    expect(carveToHtml("- %% %\n- x\n").trim()).toBe('<ul>\n  <li></li>\n  <li>x</li>\n</ul>')
   })
 
   it('survives fmt: the writer re-emits one comment fence, not `%% %`', () => {

@@ -6,7 +6,7 @@ import { renderCarve } from '../src/render-carve.js'
 
 describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('emits a root of exactly type, children and srcByteLength', () => {
-    const doc = parse('---\ntitle: T\n---\n\nPara[^a]\n\n[^a]: note\n')
+    const doc = parse("---yaml\ntitle: T\n---\n\nPara[^a]\n\n[^a]: note\n")
     const json = toAstJson(doc)
     expect(Object.keys(json).sort()).toEqual(['children', 'srcByteLength', 'type'])
   })
@@ -14,7 +14,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('keeps the runtime document untouched', () => {
     // The mapping is on the way out; renderers and downstream consumers still
     // read footnoteDefs and frontmatter from the root.
-    const doc = parse('---\ntitle: T\n---\n\nPara[^a]\n\n[^a]: note\n')
+    const doc = parse("---yaml\ntitle: T\n---\n\nPara[^a]\n\n[^a]: note\n")
     toAstJson(doc)
     // `pos` rides along on the root's frontmatter now: the serializer needs a
     // span for the node it builds, and §4 requires one (carve-js#480).
@@ -36,7 +36,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
   })
 
   it('defaults the frontmatter format to yaml when the fence carries none', () => {
-    const json = toAstJson(parse('---\ntitle: T\n---\n\nBody\n'))
+    const json = toAstJson(parse("---yaml\ntitle: T\n---\n\nBody\n"))
     expect(json.children[0]).toMatchObject({ type: 'frontmatter', format: 'yaml' })
   })
 
@@ -54,7 +54,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
   it('lifts a definition authored inside a container up to the document', () => {
     // PART 9 §16: a definition is document-level metadata, collected out of the
     // container that held it, which then renders empty.
-    const json = toAstJson(parse('Text[^a]\n\n> quoted\n>\n> [^a]: inside a quote\n'))
+    const json = toAstJson(parse("Text[^a]\n\n> quoted\n\n[^a]: inside a quote\n"))
     const def = json.children.find((c) => c.type === 'footnote')
     expect(def).toMatchObject({ type: 'footnote', label: 'a' })
     const quote = json.children.find((c) => c.type === 'block_quote')
@@ -67,7 +67,7 @@ describe('toAstJson (PART 12 §7 exchange shape)', () => {
   })
 
   it('carries no root field beyond the three, even with both present', () => {
-    const json = toAstJson(parse('---\na: 1\n---\n\nP[^x]\n\n[^x]: d\n')) as Record<string, unknown>
+    const json = toAstJson(parse("---yaml\na: 1\n---\n\nP[^x]\n\n[^x]: d\n")) as Record<string, unknown>
     expect(json.frontmatter).toBeUndefined()
     expect(json.footnoteDefs).toBeUndefined()
   })
@@ -94,7 +94,7 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     // The runtime shape is what renderers, extensions and the profile filter
     // read; the exchange shape puts both in the tree. Decoding has to undo that,
     // or a decoded document renders without its footnotes.
-    const doc = fromAstJson(toAstJson(parse('---\na: 1\n---\n\nP[^x]\n\n[^x]: d\n')))
+    const doc = fromAstJson(toAstJson(parse("---yaml\na: 1\n---\n\nP[^x]\n\n[^x]: d\n")))
     expect(doc.frontmatter).toMatchObject({ format: 'yaml', content: 'a: 1' })
     expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['x'])
     // The spans come back too, or the round trip is not identity: they are on
@@ -195,7 +195,7 @@ describe('carveToAstJson', () => {
     // `renderHtml()` uses standalone, so a serialized tree already carries it
     // and a consumer never has to reimplement PART 9R to get one. See
     // test/footnote-numbering.test.ts for the footnote-specific coverage.
-    const json = carveToAstJson('![a](/i.png)\n\n^ Figure #: caption\n')
+    const json = carveToAstJson("![a](/i.png)\n^ Figure #: caption\n")
     const figure = json.children[0] as { caption: Array<{ type: string; n?: number }> }
     const number = figure.caption.find((c) => c.type === 'caption_number')
     expect(number?.n).toBe(1)
@@ -203,7 +203,7 @@ describe('carveToAstJson', () => {
 })
 
 describe('definition lists on the wire (PART 12)', () => {
-  const source = ':: Term one\n:: Term two\n:  Def A\n:  Def B\n\n:: Second\n:  Only\n'
+  const source = ":: Term one\n:: Term two\n:  Def A\n:  Def B\n:: Second\n:  Only\n"
 
   it('publishes a flat sequence of nodes, not a grouping object', () => {
     // The grouping was an internal, and not an agreed one: given this document
@@ -254,7 +254,7 @@ describe('definition lists on the wire (PART 12)', () => {
   })
 
   it('rewrites a definition list wherever it sits, not only at the top level', () => {
-    const nested = carveToAstJson('> :: T\n> :  D\n\n- item\n  :: A\n  :  B\n')
+    const nested = carveToAstJson("> :: T\n> :  D\n\n- item\n+\n:: A\n:  B\n")
     const wire = JSON.stringify(nested)
 
     expect(wire.match(/definition_term/g)).toHaveLength(2)

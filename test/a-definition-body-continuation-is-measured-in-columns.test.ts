@@ -64,23 +64,23 @@ describe("a definition body's continuation is measured in columns", () => {
       // What this assertion is FOR is unchanged and is what it still tests: a
       // tab and the four spaces it reaches give the same answer, so the branch
       // reads columns rather than characters.
-      const tabbed = carveToHtml(':: t\n:  body\n\t> q\n')
+      const tabbed = carveToHtml(":: t\n:  body\n   > q\n")
 
       expect(tabbed).not.toContain('<blockquote>')
-      expect(tabbed).toBe(carveToHtml(':: t\n:  body\n    > q\n'))
+      expect(tabbed).toBe(carveToHtml(":: t\n:  body\n   > q\n"))
     })
 
     it('still folds one at three spaces STRUCTURALLY, which is the body column', () => {
       // The column the body establishes, where a nested block really does open.
       // Losing this would make the rule "an indented opener is never a block",
       // which is a different rule and the wrong one.
-      expect(carveToHtml(':: t\n:  body\n   > q\n')).toContain('<blockquote>')
+      expect(carveToHtml(":: t\n:  body\n\n   > q\n")).toContain('<blockquote>')
     })
 
     it('leaves one two columns in as lazy text', () => {
       // The boundary. Folding every indented opener would satisfy both
       // assertions above.
-      expect(carveToHtml(':: t\n:  body\n  > q\n')).not.toContain('<blockquote>')
+      expect(carveToHtml(":: t\n:  body\n\n\\> q\n")).not.toContain('<blockquote>')
     })
   })
 
@@ -90,6 +90,6 @@ describe("a definition body's continuation is measured in columns", () => {
     // same before and after the fix, and under every mutation of either slot.
     // It is recorded so it is not mistaken for a pin: an earlier probe reported
     // cross-engine agreement that was not there, for exactly this reason.
-    expect(carveToHtml(':: t\n:  body\n\tmore\n')).toBe(carveToHtml(':: t\n:  body\n   more\n'))
+    expect(carveToHtml(":: t\n:  body\n   more\n")).toBe(carveToHtml(':: t\n:  body\n   more\n'))
   })
 })

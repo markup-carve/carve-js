@@ -50,6 +50,7 @@
  *    supports frontmatter resolves that ambiguity the same way, and so does
  *    Carve. An EMPTY fence pair carries no metadata and stays two rules.
  */
+import { migrateCarve01To02 } from './migrate-0-1-to-0-2.js'
 
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
 
@@ -1596,6 +1597,9 @@ export function markdownToCarve(markdown: string): string {
 
   // Collapse 3+ consecutive blank lines to 2.
   const body = out.join('\n').replace(/\n{3,}/g, '\n\n')
-  if (frontmatter.length === 0) return body
-  return body === '' ? frontmatter.join('\n') : `${frontmatter.join('\n')}\n${body}`
+  const migratedBody = migrateCarve01To02(body)
+  if (frontmatter.length === 0) return migratedBody
+  return migratedBody === ''
+    ? frontmatter.join('\n')
+    : `${frontmatter.join('\n')}\n${migratedBody}`
 }

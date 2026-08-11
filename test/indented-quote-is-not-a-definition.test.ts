@@ -24,14 +24,14 @@ describe('an indented quote-like line', () => {
   it('still defines AT a list item content column', () => {
     // The bound: there the quote is a real container, and all three engines
     // collect from it.
-    expect(carveToHtml('- a\n  > [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml("- a\n+\n>\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 
   it('still defines at column 0', () => {
-    expect(carveToHtml('> [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml(">\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 
   it('still defines inside a quoted list item', () => {
-    expect(carveToHtml('> - a\n>   [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
+    expect(carveToHtml("> - a\n\nsee [t][r]\n\n[r]: /u\n")).toContain('href="/u"')
   })
 })

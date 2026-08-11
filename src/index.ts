@@ -110,6 +110,7 @@ export {
   type MigrationFixResult,
 } from './djot-migrate.js'
 export { markdownToCarve } from './markdown-migrate.js'
+export { migrateCarve01To02 } from './migrate-0-1-to-0-2.js'
 export {
   lintCarve,
   formatLintWarnings,

@@ -36,7 +36,7 @@ describe('symmetric list interruption (§10)', () => {
   })
 
   it('a thematic break still interrupts (not a list marker)', () => {
-    expect(h('intro\n---\nmore')).toBe('<p>intro</p>\n<hr>\n<p>more</p>')
+    expect(h("intro\n\n---\n\nmore\n")).toBe('<p>intro</p>\n<hr>\n<p>more</p>')
   })
 
   it('a bullet ends an open heading and starts a sibling list, like an ordered marker', () => {

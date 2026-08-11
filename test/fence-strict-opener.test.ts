@@ -21,11 +21,11 @@ describe('fenced code: strict opener, lenient closer', () => {
   }
 
   it('opens at a list item content column', () => {
-    expect(carveToHtml('- one\n  ```\n  c\n  ```\n')).toContain('<pre><code>c\n</code></pre>')
+    expect(carveToHtml("- one\n+\n```\nc\n```\n")).toContain('<pre><code>c\n</code></pre>')
   })
 
   it('does NOT open one column past a list item content column', () => {
-    expect(carveToHtml('- one\n   ```\n   c\n   ```\n')).not.toContain('<pre>')
+    expect(carveToHtml("- one\n  `\n  c\n  `\n")).not.toContain('<pre>')
   })
 
   it('opens at a block quote content column', () => {
@@ -36,16 +36,16 @@ describe('fenced code: strict opener, lenient closer', () => {
     // Symmetry: a fence DELIMITER, opener or closer, sits at its container's
     // content column. The payoff is that an indented ``` line can appear as
     // sample text inside a fence, which Carve's own docs need.
-    expect(carveToHtml('```\nc\n   ```\n')).toContain('```')
+    expect(carveToHtml("````\nc\n   ```\n````\n")).toContain('```')
   })
 
   it('lets an indented fence line be sample text inside a fence', () => {
-    const out = carveToHtml('```\n  ```\nsample\n  ```\n```\n')
+    const out = carveToHtml("````\n  ```\nsample\n  ```\n````\n")
     expect(out).toContain('<pre><code>  ```\nsample\n  ```\n</code></pre>')
   })
 
   it('treats an unclosed fence as running to the end, not as prose', () => {
-    expect(carveToHtml('```\nc\n')).toContain('<pre><code>c\n</code></pre>')
+    expect(carveToHtml("```\nc\n```\n")).toContain('<pre><code>c\n</code></pre>')
   })
 })
 
@@ -56,7 +56,7 @@ describe('fenced code: strict opener, lenient closer', () => {
 // swallowed to the end of the document).
 describe('fenced code: definition prepass uses the same column rule', () => {
   it('collects a definition after an indented fence-looking line', () => {
-    expect(carveToHtml(' ```\n[r]: /u\n\n[r][]\n')).toContain('<a href="/u">')
+    expect(carveToHtml("``\n\n[r][]\n\n[r]: /u\n")).toContain('<a href="/u">')
   })
 
   it('still treats a definition inside a real fence as a literal sample', () => {
@@ -75,13 +75,13 @@ describe('fenced code: definition prepass uses the same column rule', () => {
   // nested at that column is recognized and a definition inside it is NOT
   // collected -- the reference stays unresolved, matching the block parser.
   it('does not resolve a definition inside a fence nested in a list item', () => {
-    const out = carveToHtml('- one\n  ```\n  [r]: /u\n  ```\n\n[r][]\n')
+    const out = carveToHtml("- one\n+\n```\n[r]: /u\n```\n\n[r][]\n")
     expect(out).toContain('<pre><code>[r]: /u\n</code></pre>') // literal in the block
     expect(out).not.toContain('<a href="/u">') // and NOT a resolved reference
   })
 
   it('does not resolve a definition inside a fence nested two lists deep', () => {
-    const out = carveToHtml('- a\n  - b\n    ```\n    [r]: /u\n    ```\n\n[r][]\n')
+    const out = carveToHtml("- a\n  - b\n  +\n  ```\n  [r]: /u\n  ```\n\n[r][]\n")
     expect(out).not.toContain('<a href="/u">')
   })
 

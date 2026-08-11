@@ -194,7 +194,7 @@ describe('mixed tab+space aligned sub-items are siblings (visual columns)', () =
   it('still nests a block opener AT the content column', () => {
     // The boundary the assertion above needs: making every indented opener
     // text would satisfy it and break the shape authors write.
-    expect(h('1. a\n   > quote')).toBe(
+    expect(h("1. a\n+\n> quote\n")).toBe(
       '<ol>\n  <li>a\n    <blockquote><p>quote</p></blockquote>\n  </li>\n</ol>',
     )
   })
@@ -202,7 +202,7 @@ describe('mixed tab+space aligned sub-items are siblings (visual columns)', () =
   it('parses a block opener after a sub-list as an outer-item sibling block', () => {
     // `> q` returns to the item content column after the sub-list, so it is a
     // block quote sibling of the sub-list within the outer item, not lazy text.
-    expect(h('1. a\n   1. b\n   > q')).toBe(
+    expect(h("1. a\n   1. b\n\n   > q\n")).toBe(
       '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
     )
   })

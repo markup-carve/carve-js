@@ -6,5 +6,5 @@
  * own release (keep in sync with package.json on release). Both feed the
  * provenance stamp written by `carve fmt --stamp`.
  */
-export const SPEC_VERSION = '0.1'
+export const SPEC_VERSION = '0.2'
 export const LIB_VERSION = '0.1.0'

@@ -31,7 +31,7 @@ describe("BELOW the body's column the body ends", () => {
   })
 
   it('CONTROL AT the column the opener opens inside the dd', () => {
-    const input = ':: t\n:  body\n' + ' '.repeat(3) + '> q\n'
+    const input = ':: t\n:  body\n\n' + ' '.repeat(3) + '> q\n'
     const expected =
       '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body</p>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>'
     expect(carveToHtml(input)).toBe(expected)
@@ -75,7 +75,7 @@ describe("BELOW the body's column the body ends", () => {
     // folding the opener in as lazy text, so an agreement test alone is a
     // control rather than a proof. `</dl>` followed by a block is what moved.
     const band = (n: number, opener: string) =>
-      carveToHtml(':: t\n:  body\n' + ' '.repeat(n) + opener + '\n')
+      carveToHtml(':: t\n:  body\n' + (n === 3 ? '\n' : '') + ' '.repeat(n) + opener + '\n')
     for (const opener of ['> q', '# h', '| a |', '---', '::: note']) {
       const left = '<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>\n'
       expect(band(1, opener).startsWith(left)).toBe(true)
@@ -103,11 +103,11 @@ describe("BELOW the body's column the body ends", () => {
     // The whole document for the attribute case, so the row says what it means:
     // the block attribute did NOT attach to `para`, because the body ended and
     // the top level's own strict column-0 rule then made the line text.
-    expect(carveToHtml(':: t\n:  body\n {.x}\npara\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n\n\\{\\.x\\}\npara\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>\n<p>{.x}\npara</p>',
     )
     // CONTROL at column 0, where the attribute really attaches.
-    expect(carveToHtml(':: t\n:  body\n{.x}\npara\n')).toBe(
+    expect(carveToHtml(":: t\n:  body\n\n{.x}\npara\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>body</dd>\n</dl>\n<p class="x">para</p>',
     )
   })

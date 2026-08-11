@@ -94,7 +94,7 @@ describe('the closer matches on exact length, not on at-least', () => {
     // shorter fence is ordinary body text. Read as `>=`, the tracker closed the
     // comment at `%%%%` and then re-opened it at the real closer, leaving it
     // open forever.
-    const source = '> %%%\n> a\n> %%%%\n> b\n> %%%\nlazy\n'
+    const source = "> %%%%%\n> a\n> %%%%\n> b\n> %%%%%\n\nlazy\n"
 
     expect(html(source)).toBe(html(BARE))
   })
@@ -102,7 +102,7 @@ describe('the closer matches on exact length, not on at-least', () => {
   it('CONTROL: a shorter run inside a longer fence is body too', () => {
     // The other half of the same clause, and the half `>=` already answered
     // correctly - so no mutation of the comparison can move this row on its own.
-    const source = '> %%%%\n> a\n> %%%\n> b\n> %%%%\nlazy\n'
+    const source = "> %%%%\n> a\n> %%%\n> b\n> %%%%\n\nlazy\n"
 
     expect(html(source)).toBe(html(BARE))
   })
@@ -177,10 +177,10 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // A `%%%%` line does not close a `%%%` opener (§28 matches on EXACT
     // length), so this document has no closer for either width and both
     // degrade - which is the un-opened answer, not the opened one.
-    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).not.toBe(
+    expect(html("> %% %\n>\n> secret\n>\n> %% %%\n>\n> lazy\n")).not.toBe(
       html('> %%%\n> secret\n> %%%\nlazy\n'),
     )
-    expect(html('> %%%\n> secret\n> %%%%\nlazy\n')).toContain('secret')
+    expect(html("> %% %\n>\n> secret\n>\n> %% %%\n>\n> lazy\n")).toContain('secret')
   })
 
   it('does not take a fence one level DEEPER as its closer', () => {
@@ -188,7 +188,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // them made `> > %%%` close a fence opened at one `>`, where the sub-lexer
     // reads that line as a nested block quote - so the tracker and the parse of
     // the collected body disagreed. Raised by codex review.
-    expect(html('> %%%\n> secret\n> > %%%\nlazy\n')).toBe(
+    expect(html("> %% %\n>\n> secret\n>\n> > %% %\n> >\n> > lazy\n")).toBe(
       '<blockquote> <p>secret</p> <blockquote> <p>lazy</p> </blockquote> </blockquote>',
     )
   })
@@ -217,8 +217,8 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // Ignoring the width was green too. The width test only changes an ANSWER
     // where a lazy line follows the mismatched fence: without one, the quote
     // ends at the same place either way.
-    const wider = html('> %%%\n> secret\n> %%%%\nlazy\n')
-    const narrower = html('> %%%%\n> secret\n> %%%\nlazy\n')
+    const wider = html("> %% %\n>\n> secret\n>\n> %% %%\n>\n> lazy\n")
+    const narrower = html("> %% %%\n>\n> secret\n>\n> %% %\n>\n> lazy\n")
 
     expect(wider).toBe('<blockquote> <p>secret</p> <p>lazy</p> </blockquote>')
     expect(narrower).toBe('<blockquote> <p>secret</p> <p>lazy</p> </blockquote>')

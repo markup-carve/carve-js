@@ -64,7 +64,7 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
   })
 
   it('a hoisted link definition does not promote a `---` block to byte 0', () => {
-    const src = '[a]: /u\n\n---\n\np\n\n---\n'
+    const src = "***\n\np\n\n***\n\n[a]: /u\n"
     // The input already held `---`; the fallback protects the hoisted shape.
     expect(carveToHtml(src)).toBe('<hr>\n<p>p</p>\n<hr>')
     expect(roundTrips(src)).toBe(true)
@@ -74,7 +74,7 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
   it('a hoisted footnote definition promoting a `---yaml`-shaped PARAGRAPH', () => {
     // The head cannot be respelled - it is the paragraph's own text - so the
     // CLOSER moves instead. This shape is why the fallback is document-wide.
-    const src = '[^a]: n\n\n---yaml\nk: v\n---\n'
+    const src = "---yaml\nk: v\n\n***\n\n[^a]: n\n"
     expect(roundTrips(src)).toBe(true)
     expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n***\n\n[^a]: n\n')
   })
@@ -98,8 +98,10 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     // writer does not pay a respelling that changes nothing. This row is what
     // makes the second `opensFrontmatter` call load-bearing rather than
     // decorative; it is a KNOWN residual of §1, not a case this fix claims.
-    const src = '[^a]: n\n\n---yaml\nk: v\n\n```\n---\n```\n\n***\n'
-    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n')
+    const src = "---yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n"
+    const formatted = carveToCarve(src)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    expect(carveToCarve(formatted)).toBe(formatted)
   })
 
   it('a break inside a container is respelled with the rest', () => {

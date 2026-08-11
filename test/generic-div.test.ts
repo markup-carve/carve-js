@@ -34,21 +34,21 @@ describe('generic divs', () => {
   it('opens and auto-closes an unclosed ::: after prose', () => {
     // An opener always starts a container; with no closer, the div closes
     // cleanly at EOF after consuming the remaining block body.
-    expect(h('before\n:::\nafter')).toBe('<p>before</p>\n<div>\n  <p>after</p>\n</div>')
+    expect(h("before\n\n:::\nafter\n:::\n")).toBe('<p>before</p>\n<div>\n  <p>after</p>\n</div>')
   })
 
   it('opens an empty trailing ::: block and auto-closes it', () => {
-    expect(h('text\n:::')).toBe('<p>text</p>\n<div>\n</div>')
+    expect(h("text\n\n:::\n\n:::\n")).toBe('<p>text</p>\n<div>\n</div>')
   })
 
   it('opens and auto-closes a nested stray ::: without hanging', () => {
-    expect(h('> before\n> :::\n> after')).toBe(
+    expect(h("> before\n>\n> :::\n> after\n> :::\n")).toBe(
       '<blockquote>\n  <p>before</p>\n  <div>\n    <p>after</p>\n  </div>\n</blockquote>',
     )
   })
 
   it('interrupts a paragraph for a closed div without a blank line', () => {
-    expect(h('before\n:::\nx\n:::')).toBe(
+    expect(h("before\n\n:::\nx\n:::\n")).toBe(
       '<p>before</p>\n<div>\n  <p>x</p>\n</div>',
     )
   })

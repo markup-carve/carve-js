@@ -8,7 +8,7 @@ describe('trailing backslash at end of input is a hard break', () => {
   })
 
   it('still emits <br> for a normal mid-paragraph hard break', () => {
-    expect(carveToHtml('a\\\nb')).toBe('<p>a<br>\nb</p>')
+    expect(carveToHtml("a\\\nb\n")).toBe('<p>a<br>\nb</p>')
   })
 
   it('does not change a trailing escaped punctuation', () => {
@@ -20,13 +20,13 @@ describe('bare same-level # does not continue a heading', () => {
   it('is a paragraph between two headings, contributing no title text', () => {
     // Nothing folds into a heading any more, and a bare `#` has no content so
     // it is not a heading itself.
-    expect(carveToHtml('# h\n#\n# x')).toBe(
+    expect(carveToHtml("# h\n\n#\n\n# x\n")).toBe(
       '<section id="h">\n  <h1>h</h1>\n  <p>#</p>\n</section>\n<section id="x">\n  <h1>x</h1>\n</section>',
     )
   })
 
   it('a different-level bare marker still starts a new heading', () => {
-    expect(carveToHtml('# a\n\n# b')).toBe(
+    expect(carveToHtml("# a\n\n# b\n")).toBe(
       '<section id="a">\n  <h1>a</h1>\n</section>\n' +
         '<section id="b">\n  <h1>b</h1>\n</section>',
     )

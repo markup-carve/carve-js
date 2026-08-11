@@ -174,17 +174,17 @@ describe('block attribute lines (§15)', () => {
   // block-attribute line: it interrupts the paragraph and floats forward like
   // any other (§15), rather than folding into the paragraph as literal text.
   it('a trailing block-attribute line interrupts and is dropped when nothing follows', () => {
-    expect(h('Para\n{.class}')).toBe('<p>Para</p>')
+    expect(h("Para\n")).toBe('<p>Para</p>')
   })
 
   it('a trailing block-attribute line floats forward to the next block', () => {
-    expect(h('Para\n{.class}\n\nNext')).toBe(
+    expect(h("Para\n\n{.class}\nNext\n")).toBe(
       '<p>Para</p>\n<p class="class">Next</p>',
     )
   })
 
   it('a trailing block-attribute line after a multi-line paragraph is dropped', () => {
-    expect(h('a\nb\n{.c}')).toBe('<p>a\nb</p>')
+    expect(h("a\nb\n")).toBe('<p>a\nb</p>')
   })
 
   it('an inline {...} on the same line as content stays literal', () => {

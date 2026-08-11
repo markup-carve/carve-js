@@ -670,7 +670,7 @@ describe('carve portability', () => {
   })
 
   it('reports a divergence with a line and both renderings, and exits 1', async () => {
-    const t = makeIO({ files: { 'a.crv': 'Some intro prose.\n> A quote.\n' } })
+    const t = makeIO({ files: { 'a.crv': 'a *b* =c=\n' } })
     expect(await run(['portability', 'a.crv'], t.io)).toBe(1)
     expect(t.out).toContain('a.crv:1: diverges from Djot')
     expect(t.out).toContain('carve:')
@@ -687,7 +687,7 @@ describe('carve portability', () => {
   })
 
   it('emits JSON with --json', async () => {
-    const t = makeIO({ files: { 'a.crv': 'Some intro prose.\n> A quote.\n' } })
+    const t = makeIO({ files: { 'a.crv': 'a *b* =c=\n' } })
     expect(await run(['portability', '--json', 'a.crv'], t.io)).toBe(1)
     const parsed = JSON.parse(t.out) as Array<Record<string, unknown>>
     expect(parsed[0]!.file).toBe('a.crv')
@@ -697,7 +697,7 @@ describe('carve portability', () => {
 
   it('checks several files and exits 1 if any diverges', async () => {
     const t = makeIO({
-      files: { 'a.crv': 'Plain prose.\n', 'b.crv': 'Some intro prose.\n> A quote.\n' },
+      files: { 'a.crv': 'Plain prose.\n', 'b.crv': 'a *b* =c=\n' },
     })
     expect(await run(['portability', 'a.crv', 'b.crv'], t.io)).toBe(1)
     expect(t.out).toContain('a.crv: portable')
