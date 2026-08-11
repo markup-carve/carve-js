@@ -4941,7 +4941,8 @@ function isInvisibleLine(line: string): boolean {
   // `RE_COMMENT_LINE` matches a `%%%` opener too, so exclude the block form
   // explicitly - skipping it lands the scan on the block's BODY.
   if (RE_COMMENT_BLOCK.test(l)) return false
-  if (RE_COMMENT_LINE.test(l) || isLinkDefLine(l) || RE_FOOTNOTE_DEF.test(l)) return true
+  if (RE_COMMENT_LINE.test(l)) return true
+  if (indentColumns(line, 1) === 0 && (isLinkDefLine(l) || RE_FOOTNOTE_DEF.test(l))) return true
 
   // A bare attribute line renders nothing either, but unlike the others it is
   // COLUMN-STRICT (§15): it opens only AT its container's content column, and
@@ -4960,8 +4961,18 @@ function lineOpensBlock(line: string): boolean {
     RE_FENCE.test(line) ||
     RE_COMMENT_BLOCK.test(line) ||
     // No RE_ABBR_DEF: these lines are item content, never document level.
-    RE_FOOTNOTE_DEF.test(line) ||
-    isLinkDefLine(line) ||
+    //
+    // The other two definition kinds are COLUMN-STRICT, like the attribute line
+    // below: collected only AT the container's content column, and one column
+    // further in they are not definitions at all - they render as ordinary text
+    // and open nothing. Testing the shape at any indent made an indented
+    // `[^f]: n` "open a block", so the looseness scan stopped short of the real
+    // second paragraph and left the item TIGHT where carve-php and carve-rs
+    // leave it loose (carve-js#976). `isLinkDefLine` is what actually fired:
+    // the anchored footnote pattern rejects the leading space, but a link
+    // definition reads `[^f]: n` as label `^f` - which is why the two are
+    // ordered as they are a few lines up.
+    (indentColumns(line, 1) === 0 && (RE_FOOTNOTE_DEF.test(line) || isLinkDefLine(line))) ||
     RE_HR.test(line) ||
     RE_HEADING.test(line) ||
     RE_DEFLIST_TERM.test(line) ||
