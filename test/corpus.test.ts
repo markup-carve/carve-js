@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-structural-attribute-leads-the-author-s-own',
   'a-caret-line-does-not-end-a-paragraph-it-cannot-caption',
   'heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key',
   'a-column-zero-definition-ends-an-open-list-item',
