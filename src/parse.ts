@@ -4363,11 +4363,14 @@ function parseAbbrDef(lexer: Lexer): AbbreviationDef {
   return { type: 'abbreviation_def', abbr: m[1]!, expansion: m[2]! }
 }
 
+type BlockQuoteLazyMode =
+  | { kind: 'closed' }
+  | { kind: 'paragraph'; absorbingFence: boolean }
+  | { kind: 'code_fence'; close: RegExp }
+  | { kind: 'comment_fence'; length: number }
+
 interface BlockQuoteLazyState {
-  inFence: boolean
-  fenceClose: RegExp | null
-  inComment: boolean
-  commentLen: number
+  mode: BlockQuoteLazyMode
   /**
    * Widths of the colon fences open in this quote, innermost last, so a bare
    * `:::` run reads as the innermost container's closer only on an EXACT width
@@ -4376,12 +4379,13 @@ interface BlockQuoteLazyState {
    * and the quote then ended on a line the top level folds in.
    */
   colonWidths: number[]
-  /**
-   * Whether the open paragraph has absorbed a MALFORMED colon fence, so a
-   * following bare run is absorbed as text too (§12).
-   */
-  absorbingFence: boolean
-  paragraphOpen: boolean
+}
+
+const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean =>
+  state.mode.kind === 'paragraph'
+
+const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
+  state.mode = { kind: 'closed' }
 }
 
 /**
@@ -4419,26 +4423,23 @@ function trackBlockQuoteLazyState(
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
   // continue the same paragraph, exactly as `trackItemLazyState` does it.
-  const wasAbsorbing = state.absorbingFence
-  state.absorbingFence = false
-  if (state.inComment) {
+  const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
+  if (state.mode.kind === 'comment_fence') {
     // EXACT length, per PART 9 §28: "The CLOSER matches on EXACT delimiter
     // length (§2), so a longer opener nests shorter fences and a too-short line
     // is content, not a closer." This read `>=`, which is the CODE fence's rule
     // (`fenceCloseRe`) and not this one - so a `%%%%` line inside a `%%%`
     // comment closed it here and was body text to the parser.
     const run = commentFenceRun(content)
-    if (run === state.commentLen) state.inComment = false
-    state.paragraphOpen = false
+    if (run === state.mode.length) state.mode = { kind: 'closed' }
     return
   }
-  if (state.inFence) {
-    if (state.fenceClose!.test(content)) state.inFence = false
-    state.paragraphOpen = false
+  if (state.mode.kind === 'code_fence') {
+    if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
     return
   }
   if (isBlankLine(content)) {
-    state.paragraphOpen = false
+    closeBlockQuoteParagraph(state)
     return
   }
   // A heading, table row, or thematic break is an UNCONDITIONAL paragraph
@@ -4449,7 +4450,7 @@ function trackBlockQuoteLazyState(
   // `> a\n> # h\n- item` is a quote (para + heading) plus a sibling list.
   // Mirrors trackItemLazyState.
   if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content)) {
-    state.paragraphOpen = false
+    closeBlockQuoteParagraph(state)
     return
   }
   // Two more kinds that leave no paragraph, for the same S4 reason. A
@@ -4466,7 +4467,7 @@ function trackBlockQuoteLazyState(
     RE_FOOTNOTE_DEF.test(content) ||
     isLinkDefLine(content)
   ) {
-    state.paragraphOpen = false
+    closeBlockQuoteParagraph(state)
     return
   }
   // The colon-fence arm below is `trackItemLazyState`'s, restated for the quote:
@@ -4484,7 +4485,7 @@ function trackBlockQuoteLazyState(
   const bareFence = bareFenceRun !== null
   if (bareFence && bareFenceRun![1]!.length === state.colonWidths[state.colonWidths.length - 1]) {
     state.colonWidths.pop()
-    state.paragraphOpen = false
+    closeBlockQuoteParagraph(state)
     return
   }
   if (
@@ -4501,23 +4502,21 @@ function trackBlockQuoteLazyState(
     // container's closer - that branch returned above - so absorption applies
     // inside a container as readily as at the quote's own level.
     if (wasAbsorbing && bareFence) {
-      state.absorbingFence = true
-      state.paragraphOpen = true
+      state.mode = { kind: 'paragraph', absorbingFence: true }
       return
     }
     // A colon-fence OPENER is structural and needs no closer ahead ("colon-fence
     // containers open immediately and auto-close at EOF"), so it interrupts an
     // open quoted paragraph and leaves an EMPTY container holding none either.
     state.colonWidths.push(colonFenceOpenerLen(content) ?? 3)
-    state.paragraphOpen = false
+    closeBlockQuoteParagraph(state)
     return
   }
   // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
   // (`:::note` fails §12's opener test - a type word needs a space), and from
   // here the paragraph absorbs the next bare fence-shaped line as well.
   if (/^:{3,}/.test(content)) {
-    state.absorbingFence = true
-    state.paragraphOpen = true
+    state.mode = { kind: 'paragraph', absorbingFence: true }
     return
   }
   // A code or raw fence interrupts an OPEN paragraph only when a matching
@@ -4529,10 +4528,8 @@ function trackBlockQuoteLazyState(
   const fence = RE_FENCE.exec(content)
   const raw = fence ? null : RE_RAW_FENCE.exec(content)
   const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
-  if (fenceMarker !== null && (!state.paragraphOpen || hasFenceCloser(fenceMarker))) {
-    state.inFence = true
-    state.fenceClose = fenceCloseRe(fenceMarker)
-    state.paragraphOpen = false
+  if (fenceMarker !== null && (!blockQuoteParagraphOpen(state) || hasFenceCloser(fenceMarker))) {
+    state.mode = { kind: 'code_fence', close: fenceCloseRe(fenceMarker) }
     return
   }
   // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 section 28). Every
@@ -4548,9 +4545,7 @@ function trackBlockQuoteLazyState(
   // comment line.
   const commentRun = commentFenceRun(content)
   if (commentRun !== undefined && hasCommentCloser(commentRun)) {
-    state.inComment = true
-    state.commentLen = commentRun
-    state.paragraphOpen = false
+    state.mode = { kind: 'comment_fence', length: commentRun }
     return
   }
   // Everything else (plain prose, a folded list-marker line, div body text, or
@@ -4562,8 +4557,7 @@ function trackBlockQuoteLazyState(
   // the prose line in between made the bare run open a real div here instead
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
-  state.absorbingFence = wasAbsorbing
-  state.paragraphOpen = true
+  state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing }
 }
 
 function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
@@ -4571,13 +4565,8 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const inner: string[] = []
   const innerLineNumbers: number[] = []
   const state: BlockQuoteLazyState = {
-    inFence: false,
-    fenceClose: null,
-    inComment: false,
-    commentLen: 0,
+    mode: { kind: 'closed' },
     colonWidths: [],
-    absorbingFence: false,
-    paragraphOpen: false,
   }
   const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
   while (!lexer.eof()) {
@@ -4629,7 +4618,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
         innerLineNumbers.push(attachedLineNumbers[attachedLineNumbers.length - 1]!)
         // The attached block closed any open paragraph: a following unmarked
         // line no longer lazily continues the quote.
-        state.paragraphOpen = false
+        closeBlockQuoteParagraph(state)
       }
       continue
     }
@@ -4658,7 +4647,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // open paragraph (heading/table/fence/thematic/div), terminates the quote
     // instead of being swallowed. This is also what ends the quote on a lazy
     // list marker when no open paragraph precedes it.
-    if (!state.paragraphOpen) break
+    if (!blockQuoteParagraphOpen(state)) break
     const lineIndex = lexer.pos
     lexer.consume()
     inner.push(ln)
