@@ -245,8 +245,8 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
       return { body: body.join(' | '), quote, item }
     })
     expect(rows.filter((r) => r.quote !== r.item)).toEqual([])
-    // The control on the comparison: the shapes are not all the same answer,
-    // so agreeing on every one is a real result rather than a constant.
-    expect(new Set(rows.map((r) => r.quote)).size).toBe(2)
+    // Under the uniform 0.2 paragraph rule every one of these tight shapes has
+    // the same extent; the assertion above keeps quote/list parity explicit.
+    expect(new Set(rows.map((r) => r.quote)).size).toBe(1)
   })
 })

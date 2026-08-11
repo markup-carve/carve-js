@@ -68,7 +68,7 @@ describe('a definition body is such a container', () => {
     // The two other shapes S4 names as opening nothing. Both already answered
     // this way inside a list item and did not inside a `dd`.
     expect(outside(':: t\n:  >\ntail\n')).toContain('<p>tail</p>')
-    expect(carveToHtml(":: t\n:\n\ntail\n")).toBe(
+    expect(carveToHtml(":: t\n:  +\n\ntail\n")).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>tail</p>',
     )
   })

@@ -15,6 +15,7 @@ export function migrateCarve01To02(source: string): string {
   let paragraphOpen = false
   let attachment: { marker: string; contentCol: number } | undefined
   const colonWidths: number[] = []
+  let quoteDepth = 0
   const isStructuralBlank = (raw: string): boolean =>
     raw.replace(/^(?:[ \t]*> ?)+/, '').trim() === ''
 
@@ -23,6 +24,7 @@ export function migrateCarve01To02(source: string): string {
     const quoted = /^((?:[ \t]*> ?)+)(.*)$/.exec(raw)
     const prefix = quoted?.[1] ?? ''
     const line = quoted?.[2] ?? raw.replace(/^[ \t]+/, '')
+    const currentQuoteDepth = (prefix.match(/>/g) ?? []).length
 
     if (opaque) {
       out.push(raw)
@@ -35,6 +37,7 @@ export function migrateCarve01To02(source: string): string {
       out.push(raw)
       paragraphOpen = false
       attachment = undefined
+      quoteDepth = currentQuoteDepth
       continue
     }
 
@@ -54,11 +57,15 @@ export function migrateCarve01To02(source: string): string {
 
     const previousBody = out.at(-1)?.replace(/^(?:[ \t]*> ?)+/, '').trim() ?? ''
     const previousIsContinuation = previousBody === '+' || /^(?::  |(?:[-*]|[0-9]+[.)]) +)\+$/.test(previousBody)
-    if (oldInterrupter && paragraphOpen && !previousIsContinuation && out.length > 0 && !isStructuralBlank(out[out.length - 1]!)) {
+    const opensNestedQuote = currentQuoteDepth > quoteDepth
+    if ((oldInterrupter || opensNestedQuote) && paragraphOpen && !previousIsContinuation && out.length > 0 && !isStructuralBlank(out[out.length - 1]!)) {
       // Inside an explicit quote, a marker-only quoted line is its blank. In
       // every other context an ordinary blank preserves the enclosing columns.
       const currentIndent = raw.length - raw.replace(/^[ \t]+/, '').length
-      out.push(prefix === '' ? (attachment && currentIndent < attachment.contentCol ? attachment.marker : '') : prefix.trimEnd())
+      const blankPrefix = opensNestedQuote
+        ? prefix.replace(/(?:[ \t]*> ?)[^>]*$/, '').trimEnd()
+        : prefix.trimEnd()
+      out.push(prefix === '' ? (attachment && currentIndent < attachment.contentCol ? attachment.marker : '') : blankPrefix)
     }
     out.push(raw)
     if (colonCloser) {
@@ -90,6 +97,7 @@ export function migrateCarve01To02(source: string): string {
       paragraphOpen = line.trim() !== '+'
       if (!paragraphOpen) attachment = undefined
     }
+    quoteDepth = currentQuoteDepth
   }
 
   return out.join(eol) + (hadFinalEol ? eol : '')

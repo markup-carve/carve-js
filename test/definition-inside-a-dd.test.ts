@@ -52,7 +52,7 @@ describe('a definition inside a definition list', () => {
   it('collects from a second description in the same entry', () => {
     // An entry is continued by a further description, so a term is not the only
     // thing that can precede one.
-    const html = flat(carveToHtml(':: term\n:  a\n:  [r]: /u\n\nsee [t][r]\n'))
+    const html = flat(carveToHtml(':: term\n:  a\n\n:  [r]: /u\n\nsee [t][r]\n'))
     expect(html).toContain('<a href="/u">t</a>')
   })
 

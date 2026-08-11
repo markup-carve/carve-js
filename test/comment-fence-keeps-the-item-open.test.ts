@@ -124,20 +124,20 @@ describe('a comment does not change a fold state that was already closed', () =>
   for (const [what, block] of CLOSED_BY) {
     it(`keeps the item closed after ${what}, with a comment in between`, () => {
       // Without the comment machine this renders `lazy` INSIDE the item.
-      const out = squash(carveToHtml(`- a\n${block}  %%% c\n  %%%\nlazy\n`))
+      const out = squash(carveToHtml(`- a\n\n${block}  %%% c\n  %%%\nlazy\n`))
 
       expect(out).toContain('<p>lazy</p>')
       expect(out).not.toContain('lazy </li>')
       // The CONTROL: the same document without the comment gives the same
       // answer, which is the whole claim - a comment is invisible.
-      expect(out).toBe(squash(carveToHtml(`- a\n${block}lazy\n`)))
+      expect(out).toBe(squash(carveToHtml(`- a\n\n${block}lazy\n`)))
     })
 
     it(`still folds after ${what} when a PARAGRAPH re-opens it`, () => {
       // The other side of the control, so this is not just asserting that
       // everything ends the item: a real paragraph after the block does re-open
       // the fold, and the comment must not prevent that either.
-      const out = squash(carveToHtml(`- a\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
+      const out = squash(carveToHtml(`- a\n\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
 
       expect(out).not.toContain('<p>lazy</p>')
     })

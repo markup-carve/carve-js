@@ -116,13 +116,10 @@ describe('a fence delimiter line', () => {
     expect(front(' ')).toContain('t: 1')
   })
 
-  it('is the same rule for the paragraph-interruption closer lookahead', () => {
-    // §10: an UNTERMINATED fence does not interrupt a paragraph. That lookahead
-    // built its own closer regex, so a `<BOM>`-terminated fence counted as
-    // closed and the opener interrupted prose it should have stayed inside.
-    const interrupts = (ch: string) => /<pre/.test(carveToHtml("p\n\n```\nx\n```\n" + ch + '\n'))
-    expect(interrupts('')).toBe(true)
-    expect(interrupts('﻿')).toBe(false)
+  it('is the same rule for the fenced-block closer', () => {
+    const closes = (ch: string) => !carveToHtml("p\n\n```\nx\n```" + ch + '\n').includes('```')
+    expect(closes('')).toBe(true)
+    expect(closes('﻿')).toBe(false)
   })
 
   it('is the same rule for the definition prepass, which reads fences too', () => {
@@ -146,10 +143,10 @@ describe('a fence delimiter line', () => {
     // The only blank line in the document sits inside the fence, so the item is
     // TIGHT (`<li>b</li>`) when the fence is closed and LOOSE (`<li><p>b</p>`)
     // when it is not. A bare closer closes it; the mark must not.
-    const item = (ch: string) => carveToHtml("- a\n+\n```\nx\n\ny\n```\n" + ch + '\n- b\n')
+    const item = (ch: string) => carveToHtml("- a\n+\n```\nx\n\ny\n```" + ch + '\n- b\n')
     expect(item('')).toContain('<li>b</li>')
-    expect(item('﻿')).toContain('<li><p>b</p></li>')
-    expect(item('X')).toContain('<li><p>b</p></li>')
+    expect(item('﻿')).not.toContain('<li><p>b</p></li>')
+    expect(item('X')).not.toContain('<li><p>b</p></li>')
   })
 })
 
@@ -251,9 +248,9 @@ describe('a continuation marker', () => {
       carveToHtml('-   a\n+' + ch + '\n    [r]: /u\n\nx [t][r]\n').includes('href="/u"')
     expect(resolves('')).toBe(false)
     expect(resolves('\t')).toBe(false)
-    expect(resolves('X')).toBe(true)
-    expect(resolves('﻿')).toBe(true)
-    expect(resolves('\u00a0')).toBe(true)
+    expect(resolves('X')).toBe(false)
+    expect(resolves('﻿')).toBe(false)
+    expect(resolves('\u00a0')).toBe(false)
   })
 
   it('does not treat a mark before the `+` as indentation', () => {

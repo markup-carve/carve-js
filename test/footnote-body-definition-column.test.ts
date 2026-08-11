@@ -21,7 +21,7 @@ import { carveToHtml } from '../src/index.js'
 
 /** `[^a]: note` + `[r]: /u` at N spaces + a use of both. */
 const document = (indent: number): string =>
-  `[^a]: note\n${' '.repeat(indent)}[r]: /u\n\nsee[^a] and [t][r]\n`
+  `[^a]: note\n\n${' '.repeat(indent)}[r]: /u\n\nsee[^a] and [t][r]\n`
 
 const renders = (html: string): boolean => html.includes('[r]: /u')
 const resolves = (html: string): boolean => html.includes('href="/u"')

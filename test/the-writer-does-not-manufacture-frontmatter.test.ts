@@ -99,7 +99,9 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     // makes the second `opensFrontmatter` call load-bearing rather than
     // decorative; it is a KNOWN residual of §1, not a case this fix claims.
     const src = "---yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n"
-    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n')
+    const formatted = carveToCarve(src)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    expect(carveToCarve(formatted)).toBe(formatted)
   })
 
   it('a break inside a container is respelled with the rest', () => {

@@ -202,7 +202,7 @@ describe('mixed tab+space aligned sub-items are siblings (visual columns)', () =
   it('parses a block opener after a sub-list as an outer-item sibling block', () => {
     // `> q` returns to the item content column after the sub-list, so it is a
     // block quote sibling of the sub-list within the outer item, not lazy text.
-    expect(h("1. a\n   1. b\n   > q\n")).toBe(
+    expect(h("1. a\n   1. b\n\n   > q\n")).toBe(
       '<ol>\n  <li>a\n    <ol>\n      <li>b</li>\n    </ol>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ol>',
     )
   })

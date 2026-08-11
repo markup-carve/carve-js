@@ -90,7 +90,7 @@ describe('an emptied description survives both escape passes', () => {
   })
 
   it('is written back when it is the last entry', () => {
-    const src = ":: t1\n:  d1\n:: t2\n:  [r]: /u\n\nsee [t][r]\n"
+    const src = ":: t1\n:  d1\n\n:: t2\n:  [r]: /u\n\nsee [t][r]\n"
     expect(carveToCarve(src)).toContain('[r]: /u')
     expect(roundTrips(src)).toBe(true)
   })

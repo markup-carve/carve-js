@@ -2168,8 +2168,13 @@ function collectLinkDefs(lexer: Lexer) {
     // emptied, so the author's line vanished and a reference to it stayed
     // literal (carve#840). A div was the one container that worked, because it
     // adds no per-line prefix for this to hide behind.
-    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[idx - 1] ?? ''))
+    const afterTerm =
+      RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[idx - 1] ?? '')) || inDefinitionBody
     const line = stripContainerPrefixes(raw, afterTerm)
+    // Enter/leave footnote context before paragraph tracking: an inline-body
+    // opener itself opens a paragraph and otherwise continues past this point.
+    if (RE_FOOTNOTE_DEF.test(line)) inFootnoteBody = true
+    else if (!isBlankLine(raw) && leadingWhitespace(raw) === 0) inFootnoteBody = false
     // Content columns are measured INSIDE the block quote. `> - a` puts the
     // item's content column at 2 of the quoted content, not of the raw line -
     // which carries the `> ` and matches no marker, so the column stayed 0 and
@@ -2189,7 +2194,7 @@ function collectLinkDefs(lexer: Lexer) {
     // two answers drift.
     prevBlank = isBlankLine(raw)
     if (RE_DEFLIST_DEF.test(raw)) inDefinitionBody = true
-    else if (isBlankLine(raw) || RE_DEFLIST_TERM.test(raw)) inDefinitionBody = false
+    else if (RE_DEFLIST_TERM.test(raw)) inDefinitionBody = false
     if (!fence) {
       // maintain the content-column stack (same rule as the migrator): a
       // marker opens an item at its marker width; a blank is transparent; a
@@ -2269,7 +2274,10 @@ function collectLinkDefs(lexer: Lexer) {
         definitionBodyBoundary || RE_CAPTION.test(line)
       )
         paragraphOpen = false
-      if (structuralContinuation) continue
+      if (structuralContinuation) {
+        plusColumn = leadingWhitespace(unquoted)
+        continue
+      }
 
       if (!paragraphOpen && !isBlankLine(raw)) {
         let candidate = stripContainerPrefixes(raw, afterTerm)
@@ -2386,10 +2394,6 @@ function collectLinkDefs(lexer: Lexer) {
       fence = { ch: open[2]![0]!, len: open[2]!.length, contentCol: openerCol, quoted: rawIsQuoted }
       continue
     }
-    // Maintain footnote-body context (see `inFootnoteBody` above): a flush
-    // footnote opener enters the body; a non-blank line at column 0 leaves it.
-    if (RE_FOOTNOTE_DEF.test(raw)) inFootnoteBody = true
-    else if (!isBlankLine(raw) && leadingWhitespace(raw) === 0) inFootnoteBody = false
     // An abbreviation def (`*[ABBR]: ...`) is not a link def - it is collected
     // HERE rather than by a scan of its own, because a scan of its own knew
     // nothing about what is opaque: it registered a definition written inside a
@@ -2486,7 +2490,8 @@ function collectLinkDefs(lexer: Lexer) {
     const notAtContentColumn = kept === unquoted && !atAnOpenContentColumn
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
-    const [defLine, defAttrText] = splitTrailingAttrBlock(line)
+    const nestedDefinitionLine = inFootnoteBody || contentCol > 0 ? deIndented : line
+    const [defLine, defAttrText] = splitTrailingAttrBlock(nestedDefinitionLine)
     const m = topLevelIndentedDef || notAtContentColumn ? null : RE_LINK_DEF.exec(defLine)
     if (m) {
       const def: LinkDef = { href: m[2]! }

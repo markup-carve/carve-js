@@ -863,14 +863,10 @@ function atMarkerColumn(text: string): string {
 }
 
 function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): string {
-  // A list item is a prefix/indent host: its fences start over at `:::`.
-  const outerFenceDepth = ctx.colonFenceDepth
-  ctx.colonFenceDepth = 0
-  try {
-    return renderListItemBody(item, ctx, tight)
-  } finally {
-    ctx.colonFenceDepth = outerFenceDepth
-  }
+  // Tight 0.2 items may attach a sibling block at the marker column with `+`.
+  // Such a fence is no longer protected by indentation from an enclosing
+  // colon fence, so retain the outer depth and give it a distinct width.
+  return renderListItemBody(item, ctx, tight)
 }
 
 function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
@@ -1007,7 +1003,8 @@ function romanMarker(n: number): string {
 
 function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
   const out: string[] = []
-  for (const item of items) {
+  for (const [itemIndex, item] of items.entries()) {
+    if (itemIndex > 0) out.push('')
     for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
     item.definitions.forEach((def, index) => {
       // An EMPTY description whose line carries a hoisted definition is one the
@@ -1066,7 +1063,11 @@ function colonFenceFor(ctx: CarveContext): string {
 function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
   ctx.colonFenceDepth++
   try {
-    return renderBlocks(children, ctx)
+    const body = renderBlocks(children, ctx)
+    // A host boundary closes the final list before the enclosing fence. Without
+    // this blank, the bare closer can be consumed by the last tight item under
+    // the 0.2 paragraph-extent rule and re-open as an empty sibling div.
+    return children.at(-1)?.type === 'list' ? `${body}\n` : body
   } finally {
     ctx.colonFenceDepth--
   }

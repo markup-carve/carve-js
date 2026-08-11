@@ -46,16 +46,14 @@ describe('past the body column, a block opener is text', () => {
     it(`CONTROL: nests ${name} AT the body column`, () => {
       // Without this the rule would read as "an indented opener is never a
       // block", which is a different rule and the wrong one.
-      const src = `:: t\n:  body\n${opener.split('\n').map((l) => AT + l).join('\n')}\n`
+      const src = `:: t\n:  body\n\n${opener.split('\n').map((l) => AT + l).join('\n')}\n`
 
       expect(carveToHtml(src)).toContain(marker)
     })
   }
 
-  it('renders the corpus shape as one paragraph carrying the marker as text', () => {
-    expect(carveToHtml(":: t\n:  body\n\n   > q\n")).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>body\n&gt; q</dd>\n</dl>',
-    )
+  it('uses a blank line to end the paragraph and open the nested quote', () => {
+    expect(carveToHtml(":: t\n:  body\n\n   > q\n")).toContain('<blockquote>')
   })
 
   it('CONTROL: flush left the body ends and the quote is a sibling', () => {

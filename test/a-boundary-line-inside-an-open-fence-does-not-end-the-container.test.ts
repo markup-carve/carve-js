@@ -185,19 +185,19 @@ describe('a boundary line inside an open fence does not end the container', () =
     // running tracker, and the boundary at issue is the sibling marker rather
     // than the blank. Two of the three fence kinds were already guarded here.
     it('keeps a colon fence whole across a marker at the body column', () => {
-      expect(html(doc('- x', '  :::', '  a', '  - m', '  b', '  :::'))).toBe(
+      expect(html(doc('- x', '', '  :::', '  a', '  - m', '  b', '  :::'))).toBe(
         '<ul><li>x <div><p>a - m b</p></div></li></ul>',
       )
     })
 
     it('keeps a code fence whole across a marker at the body column', () => {
-      expect(html(doc('- x', '  ```', '  a', '  - m', '  b', '  ```'))).toBe(
+      expect(html(doc('- x', '', '  ```', '  a', '  - m', '  b', '  ```'))).toBe(
         '<ul><li>x <pre><code>a - m b </code></pre></li></ul>',
       )
     })
 
     it('keeps a comment fence whole across a marker at the body column', () => {
-      expect(html(doc('- x', '  %%%', '  a', '  - m', '  b', '  %%%'))).toBe('<ul><li>x</li></ul>')
+      expect(html(doc('- x', '', '  %%%', '  a', '  - m', '  b', '  %%%'))).toBe('<ul><li>x</li></ul>')
     })
   })
 
@@ -222,8 +222,8 @@ describe('a boundary line inside an open fence does not end the container', () =
       // the rest of the scan: the CLOSED code fence below the unterminated
       // `%%%` is still a fenced block and its blank still must not loosen.
       // Raised by codex review on this change.
-      expect(html(doc('- x', '  %%%', '  ```', '  a', '', '  b', '  ```'))).toBe(
-        '<ul><li>x <pre><code>a b </code></pre></li></ul>',
+      expect(html(doc('- x', '  %%%', '', '  ```', '  a', '', '  b', '  ```'))).toBe(
+        '<ul><li>x %%% <pre><code>a b </code></pre></li></ul>',
       )
     })
   })

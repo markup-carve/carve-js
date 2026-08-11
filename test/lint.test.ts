@@ -356,7 +356,7 @@ describe('lintCarve — indented fenced-code delimiter', () => {
   })
 
   it('does not flag a fence at a list item content column', () => {
-    expect(rulesOf('- one\n  ```\n  code\n  ```\n')).not.toContain('fence-delimiter-indentation')
+    expect(rulesOf('- one\n\n  ```\n  code\n  ```\n')).not.toContain('fence-delimiter-indentation')
   })
 
   it('does not flag a fence inside a block quote', () => {
@@ -402,8 +402,8 @@ describe('lintCarve - unclosed container', () => {
     // the rest of the document into literal text - it closes at end of input.
     // Which is why it needs saying: the container silently runs further than
     // the author meant, and everything still renders.
-    const [warning] = unclosed('💡\n:::: note\nbody\n')
-    expect(warning).toMatchObject({ line: 2, column: 1, start: 3, end: 7 })
+    const [warning] = unclosed('💡\n\n:::: note\nbody\n')
+    expect(warning).toMatchObject({ line: 3, column: 1, start: 4, end: 8 })
     expect(warning?.message).toContain('runs to the end of the document')
     expect(warning?.message).toContain('bare fence of 4 colons')
   })
@@ -420,18 +420,18 @@ describe('lintCarve - unclosed container', () => {
   })
 
   it('reports all openers left open when a would-be outer closer is blocked by an inner opener', () => {
-    expect(unclosed('::::\n::: note\nbody\n::::\n')).toEqual([
+    expect(unclosed('::::\n::: note\nbody\n\n::::\n')).toEqual([
       expect.objectContaining({ line: 1, column: 1 }),
       expect.objectContaining({ line: 2, column: 1 }),
-      expect.objectContaining({ line: 4, column: 1 }),
+      expect.objectContaining({ line: 5, column: 1 }),
     ])
   })
 
   it('reports both sides of a wrong-width closer typo', () => {
-    const warnings = unclosed(':::: note\nbody\n:::\n')
+    const warnings = unclosed(':::: note\nbody\n\n:::\n')
     expect(warnings).toEqual([
       expect.objectContaining({ line: 1, column: 1 }),
-      expect.objectContaining({ line: 3, column: 1 }),
+      expect.objectContaining({ line: 4, column: 1 }),
     ])
     expect(warnings[0]?.message).toContain('bare fence of 4 colons')
     expect(warnings[1]?.message).toContain('bare fence of 3 colons')

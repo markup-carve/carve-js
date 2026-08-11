@@ -23,7 +23,7 @@ const resolves = (src: string) => carveToHtml(src).includes('<a href="/u">t</a>'
 
 describe('a definition past the content column is text, quoted or not', () => {
   it('does not collect past the column inside a quote', () => {
-    expect(carveToHtml("> - a\n\nsee [t][r]\n\n[r]: /u\n")).toBe(
+    expect(carveToHtml("> - a\n>    [r]: /u\n\nsee [t][r]\n")).toBe(
       '<blockquote>\n  <ul>\n    <li>a\n[r]: /u</li>\n  </ul>\n</blockquote>\n<p>see [t][r]</p>',
     )
   })
