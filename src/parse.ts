@@ -1285,8 +1285,17 @@ class Lexer {
     } else {
       this.lines = source.slice()
     }
-    // Drop trailing empty line introduced by terminal newline
-    if (this.lines.length && this.lines[this.lines.length - 1] === '') {
+    // Drop the trailing empty line a terminal newline introduces. ONLY for a
+    // string source, where that `''` is an artifact of the split: `'a\n'`
+    // splits to `['a', '']` and the document has one line, not two.
+    //
+    // An ARRAY source is a container body whose lines were already collected,
+    // so a trailing `''` is a REAL blank line. Popping it discarded the blank
+    // the flush above had just handed over, which is why an item-final fence
+    // came out one line short (markup-carve/carve-js#988). The old
+    // join-then-split round trip lost it the same way; reproducing that here
+    // reproduced the loss with it.
+    if (typeof source === 'string' && this.lines.length && this.lines[this.lines.length - 1] === '') {
       this.lines.pop()
     }
     // MEASURED ON THE SOURCE AS GIVEN, not on the normalized lines. `+1` per
@@ -1436,7 +1445,9 @@ function nestedSubLexer(
   // The default map is parallel to the Lexer's OWN lines, which drop one
   // trailing blank (see the constructor), so it is built to that length -
   // the length `normalizedSourceLines` used to report for the joined text.
-  const mapLength = lines.length > 0 && lines[lines.length - 1] === '' ? lines.length - 1 : lines.length
+  // Parallel to the Lexer's OWN lines, which no longer drop a trailing blank
+  // from an array source, so the map covers every line handed over.
+  const mapLength = lines.length
   const sub = subLexer(
     lines,
     parent.parseOptions,
@@ -5981,6 +5992,25 @@ function parseList(lexer: Lexer): List {
         break
       }
       if (!isInvisibleLine(ln)) break
+    }
+
+    // A blank line inside an OPEN verbatim fence is that fence's content, not
+    // spacing between blocks. Blanks are buffered in `pendingBlanks` and
+    // flushed only when a later line reaches the content column, so a fence
+    // running to the end of the item never received them.
+    //
+    // Only while a fence or comment is open: with nothing open the trailing
+    // blanks really are spacing, and flushing them would change list tightness
+    // and the item's end position (markup-carve/carve-js#988).
+    if (pendingBlanks > 0 && (lazyState.inFence || lazyState.inComment)) {
+      for (let k = 0; k < pendingBlanks; k++) {
+        nested.push('')
+        nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
+      }
+      // `pendingBlanks` is NOT cleared. The loose-list test below reads it to
+      // decide whether a blank separated this item from its sibling, and a
+      // blank is both at once: the fence's content AND the separator that
+      // loosens the list. Clearing it made `- a\n  %%% x\n b\n\n- c\n` tight.
     }
 
     // Blank line(s) before the next sibling marker make the list loose.
