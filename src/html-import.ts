@@ -1,4 +1,4 @@
-import { parseFragment, serialize } from 'parse5'
+import { parseFragment, serializeOuter } from 'parse5'
 import type {
   Attrs,
   BlockNode,
@@ -158,7 +158,7 @@ class Importer {
       if (!property) continue
       if (this.mode !== 'safe' && property === 'text-align' && ['left', 'right', 'center'].includes(val)) {
         keyValues.align = val
-      } else if (!['font-weight', 'font-style', 'text-decoration'].includes(property) || this.mode !== 'safe') {
+      } else {
         this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path)
       }
     }
@@ -228,7 +228,7 @@ class Importer {
     }
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
-      return [{ type: 'raw_block', format: 'html', content: serialize(node as never) }]
+      return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
     return this.blocks(node.childNodes ?? [], path, depth + 1)
@@ -326,7 +326,7 @@ class Importer {
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
-      return [{ type: 'raw_inline', format: 'html', content: serialize(node as never) }]
+      return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
     return children

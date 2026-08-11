@@ -23,7 +23,7 @@ describe('HTML import', () => {
 
   it('preserves unsupported trusted inline markup only in roundtrip mode', () => {
     const result = htmlToAst('<p><kbd>x</kbd></p>', { mode: 'roundtrip' })
-    expect(result.value.children[0]).toMatchObject({ children: [{ type: 'raw_inline', format: 'html' }] })
+    expect(result.value.children[0]).toMatchObject({ children: [{ type: 'raw_inline', format: 'html', content: '<kbd>x</kbd>' }] })
     expect(result.report.diagnostics[0]?.code).toBe('raw-preserved')
   })
 
