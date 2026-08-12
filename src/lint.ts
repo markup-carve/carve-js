@@ -39,7 +39,7 @@ import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
-import type { BlockNode, Document, Heading } from './ast.js'
+import type { Attrs, BlockNode, Document, Heading } from './ast.js'
 
 export interface LintWarning {
   /** 1-based line number. */
@@ -519,6 +519,7 @@ export function lintCarve(
   // per line replaces a per-line scan over a growing range list (was O(n^2),
   // and was computed twice).
   const verbatimLines = collectVerbatimLines(doc)
+  collectSemanticAttributeWarnings(doc, out, toUtf16)
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
@@ -564,6 +565,87 @@ const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
  * the content.
  */
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
+
+/**
+ * PART 9 §10's nine reserved names, in the order the renderer nests them.
+ *
+ * Mirrors SEMANTIC_SPAN_ORDER in render-html.ts. A name added there and not
+ * here goes unreported by both rules below.
+ */
+const SEMANTIC_SPAN_NAMES = ['abbr', 'time', 'code', 'mark', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+
+/**
+ * The three names whose authored value reaches the output, as `title` or
+ * `datetime`. On the other six the value only selects the wrapper and is
+ * dropped.
+ */
+const SEMANTIC_NAMES_KEEPING_A_VALUE = new Set<string>(['abbr', 'dfn', 'time'])
+
+/**
+ * Reserved names that ARE valid HTML attributes on a given element, so finding
+ * one there is the author getting what they asked for rather than a silent
+ * failure.
+ *
+ * `cite` on a blockquote is the case that matters: it is a URL attribute of
+ * `blockquote` and `q` in HTML, and `{cite="https://…"}` on a quote renders
+ * `<blockquote cite="https://…">`. Reporting that would be telling an author
+ * their correct markup is wrong.
+ */
+const VALID_ATTRIBUTE_ON: Record<string, ReadonlySet<string>> = {
+  block_quote: new Set(['cite']),
+}
+
+/**
+ * Two rules about the compact semantic-span names (PART 9 §10).
+ *
+ * Neither describes an engine defect - all three engines render these
+ * byte-identically and exactly as the clause says. They report the two places
+ * where the clause's own scope loses something an author wrote, with nothing
+ * else marking it (markup-carve/carve#1131, markup-carve/carve#1132).
+ */
+function collectSemanticAttributeWarnings(
+  doc: Document,
+  out: LintWarning[],
+  toUtf16: (offset: number) => number,
+): void {
+  walkDocument(doc, (node) => {
+    const attrs = (node as { attrs?: Attrs }).attrs
+    const values = attrs?.keyValues
+    if (!values) return
+    const type = node.type as string | undefined
+    if (typeof type !== 'string') return
+
+    for (const name of SEMANTIC_SPAN_NAMES) {
+      const value = values[name]
+      if (value === undefined) continue
+
+      if (type === 'span') {
+        // §10 applies. The value is kept only by the three that map it.
+        if (value !== '' && !SEMANTIC_NAMES_KEEPING_A_VALUE.has(name)) {
+          out.push({
+            ...locate(node as Positioned, toUtf16),
+            rule: 'semantic-attribute-value-ignored',
+            message:
+              `Value on the semantic attribute "${name}" is discarded: it selects the <${name}> wrapper ` +
+              'and reaches no output. Only abbr, dfn and time carry a value (as title or datetime).',
+          })
+        }
+        continue
+      }
+
+      // §10 is scoped to an ordinary span, so the same name anywhere else
+      // stays a raw attribute - ``c`{kbd}` renders `<code kbd="">`.
+      if (VALID_ATTRIBUTE_ON[type]?.has(name)) continue
+      out.push({
+        ...locate(node as Positioned, toUtf16),
+        rule: 'semantic-attribute-outside-span',
+        message:
+          `"${name}" is a semantic span attribute (PART 9 \u00a710) and only applies to an ordinary ` +
+          `[content]{attrs} span; on ${type} it stays a raw attribute and renders as ${name}="".`,
+      })
+    }
+  })
+}
 
 /**
  * The key Djot would match a label on: ends trimmed, interior whitespace runs
