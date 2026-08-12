@@ -147,6 +147,14 @@ export { listTable } from './list-table.js'
 export { glossary } from './glossary.js'
 export { headingNumbers, type HeadingNumbersOptions } from './heading-numbers.js'
 export { codeCallouts } from './code-callouts.js'
+export {
+  smartQuotes,
+  smartQuoteLocales,
+  isSmartQuoteLocaleSupported,
+  SMART_QUOTE_LOCALES,
+  type QuoteCharacters,
+  type SmartQuotesOptions,
+} from './smart-quotes.js'
 export { index } from './index-terms.js'
 export {
   citations,

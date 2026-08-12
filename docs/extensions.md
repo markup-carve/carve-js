@@ -1,5 +1,23 @@
 # Extensions
 
+## smartQuotes
+
+Select locale-specific opening and closing quote glyphs. This changes only the
+resolved presentation glyphs; source mode and canonical Carve output still emit
+the quotes the author typed.
+
+```ts
+import { carveToHtml, smartQuotes } from '@markup-carve/carve'
+
+carveToHtml('"Hallo"', { extensions: [smartQuotes({ locale: 'de' })] })
+// <p>„Hallo“</p>
+```
+
+Twenty locale sets match carve-php, with region/language fallback and explicit
+`openDoubleQuote`, `closeDoubleQuote`, `openSingleQuote`, and
+`closeSingleQuote` overrides. Apostrophes such as `don't` and `'70s` remain
+U+2019 in every locale.
+
 Extensions are plain objects passed via `{ extensions: [...] }` to `carveToHtml`
 (and the other renderers). They can add inline/block syntax with parse-stage
 matchers, transform the AST before rendering, and override renderers for
