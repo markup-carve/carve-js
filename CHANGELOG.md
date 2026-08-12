@@ -18,6 +18,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The existing nine-name semantic inline registry is now spec- and
+  corpus-pinned across all engines.** `:abbr[…]`, `:cite[…]`, `:dfn[…]`,
+  `:kbd[…]`, `:samp[…]`, `:var[…]`, `:time[…]`, `:code[…]`, and `:mark[…]`
+  retain their existing same-named HTML output; this release adds explicit
+  attribute-hardening, non-HTML and source-writer conformance coverage.
+
 - **The Markdown target leaves a bare ampersand alone.** Text was neutralized as
   `&amp;`, `&lt;` and `&gt;`; only two thirds of that was doing anything. An
   entity in Markdown TEXT decodes to a CHARACTER, and a character cannot open a
