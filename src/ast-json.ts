@@ -100,7 +100,7 @@ export interface AstJsonDocument {
  * plain objects in the runtime tree, and walking them as nodes would rewrite
  * data that is not one.
  */
-const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'title'] as const
+const CHILD_FIELDS = ['children', 'items', 'rows', 'cells', 'inline', 'content', 'caption', 'shortCaption', 'title'] as const
 
 /**
  * Rewrite definition lists into their wire shape, everywhere in a subtree, and
