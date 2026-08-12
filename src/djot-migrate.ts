@@ -211,9 +211,13 @@ const RULES: Rule[] = [
     pattern:
       /(?<=[A-Za-z0-9])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?=[A-Za-z0-9])/gd,
     message: () =>
-      'Djot emphasizes this intraword `_x_`; the migration leaves it literal, so the emphasis is lost. Brace it as `{_x_}` if it was meant.',
-    suggestion: (m) => `{_${m[1]}_}`,
-    delims: ['{_', '_}'],
+      'Djot emphasizes this intraword `_x_`; the migration leaves it literal, so the emphasis is lost. Brace it as `{/x/}` if it was meant.',
+    // `{/x/}`, NOT `{_x_}`: Carve's `_` is UNDERLINE, so the braced underscore
+    // would render `<u>` where Djot meant `<em>` - a rule that exists to stop a
+    // silent semantic change causing one. The sibling `djot-emphasis-underscore`
+    // converts `_x_` to `/x/` for the same reason.
+    suggestion: (m) => `{/${m[1]}/}`,
+    delims: ['{/', '/}'],
   },
   {
     id: 'djot-highlight-braces',

@@ -4,6 +4,7 @@ import {
   applyMigrationFixes,
   migrateScanSteps,
 } from '../src/djot-migrate.js'
+import { carveToHtml } from '../src/index.js'
 
 const rules = (src: string) =>
   djotMigrationWarnings(src).map((w) => w.rule)
@@ -514,7 +515,22 @@ describe('djot-intraword-underscore — the divergence made visible', () => {
   it('suggests the braced form for an author who did mean emphasis', () => {
     const w = djotMigrationWarnings('snake_case_name')
     const hit = w.find((x) => x.rule === 'djot-intraword-underscore')
-    expect(hit?.suggestion).toBe('{_case_}')
+    expect(hit?.suggestion).toBe('{/case/}')
+  })
+
+  /**
+   * The suggestion has to be the spelling that PRESERVES the meaning. Carve's
+   * `{_x_}` is an underline, so suggesting it would answer a lost `<em>` with a
+   * rendered `<u>` - a rule against silent semantic change causing one. This is
+   * the assertion that catches that, so it renders both forms rather than
+   * comparing strings.
+   */
+  it('suggests a spelling that renders as emphasis, not underline', () => {
+    const w = djotMigrationWarnings('snake_case_name')
+    const hit = w.find((x) => x.rule === 'djot-intraword-underscore')
+    const applied = `snake${hit!.suggestion}name`
+    expect(carveToHtml(applied)).toContain('<em>case</em>')
+    expect(carveToHtml(applied)).not.toContain('<u>')
   })
 
   it('leaves an ordinary fix applying alongside it', () => {
