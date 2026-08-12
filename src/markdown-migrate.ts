@@ -51,6 +51,8 @@
  *    Carve. An EMPTY fence pair carries no metadata and stays two rules.
  */
 
+import { escapePlainCarveInlineSyntax } from './carve-escape.js'
+
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
 
 /**
@@ -848,7 +850,10 @@ function convertInline(input: string): string {
   // the protection block (so code, destinations and URLs are placeholders) and
   // before the rewrites below (so the `/x/`, `=x=`, `~x~` and `{^x^}` forms
   // THEY generate are not escaped).
-  line = escapePlainCarveInlineSyntax(line)
+  // `*` and `_` are Markdown's own emphasis delimiters, bare and braced alike,
+  // and the passes below rewrite them into Carve. Escaping them here would
+  // freeze `*x*` as literal text before that rewrite ever sees it.
+  line = escapePlainCarveInlineSyntax(line, { braced: '*_', bare: '*_' })
 
   // Converted strong / bold-italic are stashed behind placeholders so their
   // single `*` / `/` are not re-matched by the emphasis passes below.
@@ -1109,71 +1114,6 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
   if (right) return '>'
   if (left) return '<'
   return ''
-}
-
-/**
- * The braced-pair delimiters that are literal text in Markdown.
- *
- * `{X…X}` is a Carve construct for each of these: superscript, subscript,
- * highlight, insert, delete, strike, emphasis and an editorial comment. The
- * list is deliberately longer than the obvious two — a delimiter missing from
- * it renders as markup.
- *
- * `*` and `_` are absent on purpose: `{*x*}` and `{_x_}` carry MARKDOWN
- * emphasis inside literal braces, so their content is not plain text and the
- * rewrites own it. `@` and `"` are absent because `{@x@}` and `{"x"}`
- * reinterpret through mentions and smart typography, which apply to any Carve
- * source rather than being introduced here.
- */
-const BRACED_DELIMITER_CHARS = '^,=+-~/#'
-
-/** The delimiters as a regex character class. Derived, so the list lives once. */
-const BRACED_DELIMITERS = BRACED_DELIMITER_CHARS.replace(/[\\^\-/\]]/g, (c) => `\\${c}`)
-
-const RE_BRACED_LITERAL = new RegExp(
-  `(?<!\\\\)\\{([${BRACED_DELIMITERS}])(?!\\s)[^\\n]+?(?<!\\s)\\1\\}`,
-  'g',
-)
-
-/**
- * Escape the Carve inline constructs that CommonMark treats as literal text.
- *
- * Escaping the first delimiter is enough to keep the run literal. Doing nothing
- * let `a {,y,} b` render as a subscript and `a %%c%% b` lose its text outright,
- * since `%%` opens a comment.
- */
-function escapePlainCarveInlineSyntax(line: string): string {
-  const escapeFirst = (m: string): string => `\\${m}`
-
-  let out = line.replace(/(^|[ \t])%%(?!%)/g, '$1\\%%')
-
-  // Braced forms first, so the bare rules below see an escaped `{` and leave
-  // the delimiter inside it alone instead of escaping it twice.
-  //
-  // Repeated until stable, because one pass escapes only the outermost brace of
-  // a nested `{^a{,b,}c^}` — the match consumes the inner pair, which would then
-  // render as a subscript inside literal text. The `(?<!\\)` guard is what makes
-  // this terminate: an escaped brace is never re-matched.
-  let previous: string
-  do {
-    previous = out
-    out = out.replace(RE_BRACED_LITERAL, escapeFirst)
-  } while (out !== previous)
-
-  // These run INSIDE an already-escaped brace too, unlike the php port: `=`, `~`
-  // and `/` are bare constructs in their own right here, so `\{=x=}` still
-  // renders `{<mark>x</mark>}` — the literal brace does not suppress the run.
-  // Escaping the inner delimiter as well is what makes the whole thing literal.
-  //
-  // The `/` in the slash rule's lookbehind is load-bearing, not symmetry:
-  // without it the SECOND slash of `ftp://x/` matched, and escaping it freed the
-  // first one to open emphasis — `ftp:/\/x/` rendering as `ftp:<em>/x</em>`.
-  // Only http and https URLs are protected above, so every other scheme reaches
-  // this rule.
-  out = out.replace(/(?<![A-Za-z0-9/])\/(?!\s)([^/]+?)(?<!\s)\/(?![A-Za-z0-9])/g, escapeFirst)
-  out = out.replace(/(?<![A-Za-z0-9=])=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, escapeFirst)
-
-  return out.replace(/(?<![A-Za-z0-9~])~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, escapeFirst)
 }
 
 /**
