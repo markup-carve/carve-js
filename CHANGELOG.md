@@ -16,6 +16,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   matched exactly.` The rule id is unchanged, so a consumer keying on
   `unresolved-footnote` is unaffected.
 
+- **The footnote-definition lint rules see definitions inside containers.**
+  They scanned raw source lines, so a definition in a block quote or list item
+  was invisible to them while the parser had already collected it and the
+  document rendered it: `> [^a]: one` twice reported no duplicate. The scanner
+  strips the same container prefixes the parser strips - block quotes, bullet
+  and decimal list items, description markers - and reports only labels the
+  parser collected, which fixes `duplicate-footnote-definition`, gives
+  `unused-footnote-definition` the definition's own line instead of line 1, and
+  covers the new whitespace-twin rule. Alphabetic and Roman list markers are
+  still not stripped, matching the parser's own helper.
+
 - **New rule `footnote-labels-differ-only-in-whitespace`.** Two definitions
   whose labels differ only in whitespace are legal and distinct, and are almost
   always one definition typed twice: the difference does not survive into

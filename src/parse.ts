@@ -2059,9 +2059,20 @@ export function normalizeRefLabel(label: string): string {
 // `::` is the TERM marker and a `:::` fence opener is a fence; both need
 // whitespace after a SINGLE colon and neither has it, so neither matches.
 const RE_DESCRIPTION_PREFIX = /^[ \t]*:[ \t]+/
-const RE_AFTER_TERM = /^[ \t]*(?:::(?!:)|:)[ \t]/
+export const RE_AFTER_TERM = /^[ \t]*(?:::(?!:)|:)[ \t]/
 
-function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): string {
+/**
+ * Exported for `lint.ts`, which scans source lines for footnote definitions and
+ * has to strip the same prefixes the collector strips - otherwise a definition
+ * inside a block quote or list item is invisible to the lint rules while the
+ * parser has already collected it (carve-js#1019).
+ *
+ * The KEEP-INDENT variant is the one lint wants. Residual indentation is what
+ * separates `> [^a]: x` (a definition in a quote) from a line merely indented
+ * under something, and dropping it would make an over-indented literal line
+ * look like a definition.
+ */
+export function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): string {
   let line = raw
   let prev: string
   do {
@@ -2074,7 +2085,7 @@ function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false): strin
   return line
 }
 
-function stripContainerPrefixes(raw: string, afterTerm = false): string {
+export function stripContainerPrefixes(raw: string, afterTerm = false): string {
   // Residual INDENTATION, which is `whitespace` - a space or a tab and nothing
   // else (markup-carve/carve#977, PART 7). This is the view the definition
   // collector matches against, so a character eaten here resolved a reference

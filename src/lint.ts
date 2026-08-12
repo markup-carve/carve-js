@@ -25,7 +25,12 @@
  * position and skip verbatim regions (code/raw blocks) the parser already
  * accounts for.
  */
-import { parse, type UnclosedContainer } from './parse.js'
+import {
+  parse,
+  stripContainerPrefixesKeepIndent,
+  RE_AFTER_TERM,
+  type UnclosedContainer,
+} from './parse.js'
 import {
   slugify,
   inlineText,
@@ -1081,15 +1086,34 @@ function collectFootnoteDefinitionWarnings(
   // collides with it can name its twin.
   const firstByWhitespaceKey = new Map<string, string>()
 
+  const defs = doc.footnoteDefs ?? {}
+
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
-    const m = FOOTNOTE_DEF.exec(line)
+    // A definition inside a block quote or list item is a definition: the
+    // parser strips the container prefix before collecting it, and the
+    // document renders it. Scanning the raw line made every rule below blind
+    // to those, so `> [^a]: one` twice reported no duplicate (carve-js#1019).
+    // The parser's own stripper is used rather than a second spelling of it.
+    // Indentation is KEPT: it is what separates a definition inside a quote
+    // from a line merely indented under something else. Dropping it made an
+    // over-indented literal `    [^a]: x` match, and a real definition for the
+    // same label elsewhere then made it look like a duplicate.
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixesKeepIndent(lines[i - 1] ?? ''))
+    const m = FOOTNOTE_DEF.exec(stripContainerPrefixesKeepIndent(line, afterTerm))
     if (!m) continue
     // Raw, like the parser: a footnote label is matched exactly (PART 9 §16),
     // so `[^ a ]` and `[^a]` are two different definitions and neither is a
     // duplicate of the other.
     const label = m[1]!
+    // The parser is the authority on what a definition IS. Stripping prefixes
+    // line-by-line has no block context, so on its own it would read a marker
+    // on a hard-wrapped prose line as a container (the limitation
+    // `stripContainerPrefixes` documents). Reporting only labels the parser
+    // actually collected keeps these rules from inventing a definition the
+    // document does not have.
+    if (!hasOwnKey(defs, label)) continue
     const col = line.indexOf('[^') + 1
     const start = (lineStart[i] ?? 0) + (col - 1)
     const site = { line: i + 1, col, start, end: start + m[0].length }
@@ -1112,14 +1136,6 @@ function collectFootnoteDefinitionWarnings(
       // Djot's answer is to merge them, which silently drops one definition's
       // content and emits duplicate ids. Carve keeps both and says so here
       // instead, which is the same information without the data loss.
-      // SCOPE: this loop reads raw lines, so a definition nested in a block
-      // quote or list item is not seen here - `> [^a b]: one` and
-      // `> [^a  b]: two` are both real definitions and neither is reported.
-      // That blind spot is this scanner's, not this rule's: the sibling
-      // `duplicate-footnote-definition` misses nested definitions the same way
-      // and predates it. Closing it means teaching the scanner container
-      // prefixes, which is a change to all three definition rules at once and
-      // is filed separately rather than smuggled in here.
       const key = whitespaceKey(label)
       const twin = firstByWhitespaceKey.get(key)
       if (twin !== undefined && twin !== label) {
