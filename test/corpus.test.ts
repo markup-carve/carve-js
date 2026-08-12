@@ -344,6 +344,7 @@ const IMPLEMENTED = new Set([
   // and the `+` that attaches a flush-left block to each of them - and five of
   // them answered it wrong before, one per fence kind.
   'a-boundary-line-inside-an-open-fence-does-not-end-the-container',
+  'a-fence-keeps-the-blank-line-at-the-end-of-its-content',
 ])
 
 /**
