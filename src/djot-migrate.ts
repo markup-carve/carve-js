@@ -90,13 +90,6 @@ interface Rule {
    * (the `+` bullet), which fix via `suggestion` as a single edit.
    */
   delims?: [string, string]
-  /**
-   * Report but never auto-fix. The migration deliberately does NOT rewrite
-   * this construct, so a fix would contradict the converters rather than
-   * complete them; the warning exists so the loss is visible and reviewable
-   * instead of silent. See `djot-intraword-underscore`.
-   */
-  advisory?: true
 }
 
 // Order matters: more specific patterns (``**``, ``~~``) are tested before
@@ -199,15 +192,24 @@ const RULES: Rule[] = [
     // on purpose, because the documents they exist for are full of identifiers
     // no author meant as emphasis.
     //
-    // That is a deliberate divergence, and this rule is what stops it being a
-    // SILENT one: the author's Djot said emphasis, the migration says literal
-    // text, and a human should see that rather than discover it. Advisory, so
-    // `applyMigrationFixes` reports it and changes nothing - auto-fixing here
-    // would undo the very choice the converters make.
+    // It CONVERTS, rather than being reported and left alone, because the input
+    // is a DJOT document: Djot emphasizes an intraword `_` and an author who
+    // wanted the literal characters had to escape them. `snake\_case\_name`
+    // renders as `snake_case_name` in Djot and reaches here already escaped, so
+    // an UNESCAPED `snake_case_name` in a Djot source is emphasis the author
+    // saw in their own renderer and kept. Leaving it literal drops meaning the
+    // source states.
+    //
+    // The braced form is required, not stylistic: a bare `/` is literal
+    // intraword in Carve, so `snake/case/name` renders as itself and only
+    // `snake{/case/}name` gives back `snake<em>case</em>name`.
+    //
+    // This does NOT transfer to the Markdown converter, whose flanking rules
+    // leave an intraword `_` literal - there the identifier reading is correct
+    // and `markdown-migrate` keeps it.
     id: 'djot-intraword-underscore',
     category: 'djot-shift',
     family: '_',
-    advisory: true,
     pattern:
       /(?<=[A-Za-z0-9])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?=[A-Za-z0-9])/gd,
     message: () =>
@@ -392,8 +394,6 @@ interface ScanHit extends MigrationWarning {
    * collide.
    */
   edits: Edit[]
-  /** Copied from the rule: report, never splice. */
-  advisory: boolean
 }
 
 /** Project a ScanHit down to the public warning shape (drop `edits`). */
@@ -566,7 +566,6 @@ function scanHits(source: string): ScanHit[] {
         start,
         end,
         edits,
-        advisory: rule.advisory === true,
       })
     }
   }
@@ -593,13 +592,6 @@ export interface MigrationFixResult {
    * (`**_x_**`) are NOT skipped - they compose and land in `applied`.
    */
   skipped: MigrationWarning[]
-  /**
-   * Warnings from ADVISORY rules, which are reported and never applied. The
-   * migration deliberately does not rewrite these constructs, so a fix would
-   * contradict the converters; the warning exists so the loss is visible.
-   * Distinct from `skipped`, which is about ambiguity rather than intent.
-   */
-  advisory: MigrationWarning[]
 }
 
 /**
@@ -658,13 +650,8 @@ export function applyMigrationFixes(source: string): MigrationFixResult {
 
   const applied: ScanHit[] = []
   const skipped: ScanHit[] = []
-  const advisory: ScanHit[] = []
   for (const h of hits) {
-    // Advisory first: an advisory hit is never spliced, whether or not it also
-    // crosses something, because the reason it is not applied is intent rather
-    // than ambiguity.
-    if (h.advisory) advisory.push(h)
-    else if (crossed.has(h)) skipped.push(h)
+    if (crossed.has(h)) skipped.push(h)
     else applied.push(h)
   }
 
@@ -680,7 +667,6 @@ export function applyMigrationFixes(source: string): MigrationFixResult {
     output,
     applied: applied.map(stripHit),
     skipped: skipped.map(stripHit),
-    advisory: advisory.map(stripHit),
   }
 }
 

@@ -83,16 +83,15 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.line).toBe(5)
   })
 
-  it('does not treat snake_case as Djot emphasis', () => {
-    // It is still not emphasis, and still never rewritten - that is the
-    // converters' deliberate choice. What changed is that the loss is now
-    // REPORTED rather than silent, as an advisory `djot-intraword-underscore`
-    // (a `djot-shift`, so `carve lint` hides it without `--from-djot`).
+  it('routes snake_case to the intraword rule, not the bare one', () => {
+    // The BARE rule does not claim it - `djot-emphasis-underscore` is word
+    // bounded, and its output `/x/` is literal intraword in Carve anyway. The
+    // intraword rule claims it instead and converts to the braced form.
     const w = djotMigrationWarnings('a snake_case_name value')
     expect(w.map((x) => x.rule)).not.toContain('djot-emphasis-underscore')
     expect(w.map((x) => x.rule)).toEqual(['djot-intraword-underscore'])
     expect(applyMigrationFixes('a snake_case_name value').output).toBe(
-      'a snake_case_name value',
+      'a snake{/case/}name value',
     )
   })
 
@@ -505,11 +504,29 @@ describe('djot-intraword-underscore — the divergence made visible', () => {
     expect(w.map((x) => x.rule)).not.toContain('djot-intraword-underscore')
   })
 
-  it('reports without rewriting: the source is returned untouched', () => {
+  /**
+   * It CONVERTS. The input is a Djot document, where an intraword `_` IS
+   * emphasis and an author who wanted the literal characters had to escape
+   * them - so an unescaped run is emphasis the author saw in their own renderer
+   * and kept, and dropping it would lose what the source states.
+   */
+  it('converts the intraword run to the braced form', () => {
     const result = applyMigrationFixes('snake_case_name here')
-    expect(result.output).toBe('snake_case_name here')
-    expect(result.applied).toHaveLength(0)
-    expect(result.advisory.map((w) => w.rule)).toContain('djot-intraword-underscore')
+    expect(result.output).toBe('snake{/case/}name here')
+    expect(result.applied.map((w) => w.rule)).toContain('djot-intraword-underscore')
+  })
+
+  /**
+   * The other side of the same argument, and the row that makes it safe: an
+   * author who meant the literal identifier escaped it in Djot, and the escape
+   * survives untouched. Djot renders `snake\_case\_name` as `snake_case_name`
+   * and so does the converted output.
+   */
+  it('leaves an escaped identifier alone', () => {
+    const result = applyMigrationFixes('snake\\_case\\_name here')
+    expect(result.output).toBe('snake\\_case\\_name here')
+    expect(carveToHtml(result.output)).toContain('snake_case_name')
+    expect(carveToHtml(result.output)).not.toContain('<em>')
   })
 
   it('suggests the braced form for an author who did mean emphasis', () => {
@@ -533,10 +550,9 @@ describe('djot-intraword-underscore — the divergence made visible', () => {
     expect(carveToHtml(applied)).not.toContain('<u>')
   })
 
-  it('leaves an ordinary fix applying alongside it', () => {
+  it('applies alongside an ordinary fix in the same document', () => {
     const result = applyMigrationFixes('snake_case_name and **bold**')
-    expect(result.output).toContain('*bold*')
-    expect(result.output).toContain('snake_case_name')
-    expect(result.advisory).toHaveLength(1)
+    expect(result.output).toBe('snake{/case/}name and *bold*')
+    expect(result.applied).toHaveLength(2)
   })
 })
