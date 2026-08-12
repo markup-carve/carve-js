@@ -7428,6 +7428,11 @@ function isIdentStart(c: string): boolean {
 function isIdentPart(c: string): boolean {
   return isIdentStart(c) || (c >= '0' && c <= '9') || c === '-'
 }
+/** ASCII letter or digit, the only characters a BCP 47 subtag may hold. */
+function isAsciiAlphanumeric(c: string): boolean {
+  return /^[A-Za-z0-9]$/.test(c)
+}
+
 function spanAttrProvablyInvalid(text: string, brace: number): boolean {
   const n = text.length
   let i = brace + 1
@@ -7453,6 +7458,16 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
       if (d === undefined || !isIdentStart(d)) return true
       i += 2
       while (i < n && isIdentPart(text[i]!)) i++
+      continue
+    }
+    if (c === ':') {
+      // `{:TAG}` (and the empty `{:}`) is the language attribute, sugar for
+      // `lang=TAG`. It is the THIRD place the attribute grammar is spelled -
+      // `parseAttrs`'s `re` and `isValidAttrPayload`'s strip are the other two -
+      // and the three move together or this fast path rejects a payload the
+      // regexes accept, which is silent: the span simply never forms.
+      i++
+      while (i < n && (isAsciiAlphanumeric(text[i]!) || text[i] === '-')) i++
       continue
     }
     if (isIdentStart(c)) {
@@ -8992,7 +9007,7 @@ function isValidAttrPayload(inner: string): boolean {
   // fast path); they move together or the fast path accepts what the regex
   // rejects.
   const stripped = inner.replace(
-    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^ \t\n\r]+))|(?:[a-zA-Z_][\w-]*)|[ \t\n\r]+/g,
+    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^ \t\n\r]+))|(?:(?<=^|[ \t\n\r]):(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?(?=[ \t\n\r]|$))|(?:[a-zA-Z_][\w-]*)|[ \t\n\r]+/g,
     '',
   )
   return stripped === ''
@@ -9087,7 +9102,7 @@ export function parseAttrs(src: string): Attrs {
   // The bareword alternative (m[7]) is LAST so `key=value` matches as a
   // key/value, not as a bareword `key` with a leftover `=value`. A bareword is
   // a value-less (boolean) attribute -> rendered `name=""` (djot-php form).
-  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:([a-zA-Z_][\w-]*))/g
+  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z_][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
@@ -9111,8 +9126,17 @@ export function parseAttrs(src: string): Attrs {
         attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[3]]: val }
         note(m[3])
       }
-    } else if (m[7]) {
-      if (m[7] === 'id') {
+    } else if (m[7] !== undefined) {
+      // `{:TAG}` is exact sugar for `lang=TAG`, and `{:}` for `lang=""` - an
+      // explicit "the language here is unknown", which stops inheritance from a
+      // surrounding language in a way that omitting the attribute does not.
+      // It desugars during attribute parsing, so there is no new AST node, no
+      // new field, and a consumer that has never heard of the shorthand sees an
+      // ordinary `lang` key/value.
+      attrs.keyValues = { ...(attrs.keyValues ?? {}), lang: m[7] }
+      note('lang')
+    } else if (m[8]) {
+      if (m[8] === 'id') {
         // A bare boolean `id` also feeds the id slot (value ''), last-wins and
         // single -- `{id id=j}` -> `id="j"`, `{id}` -> `id=""` -- so `id` never
         // enters keyValues and no duplicate `id` attribute can be produced.
@@ -9120,8 +9144,8 @@ export function parseAttrs(src: string): Attrs {
         note('#id')
       } else {
         // Boolean attribute: a bare word with no value.
-        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[7]]: '' }
-        note(m[7])
+        attrs.keyValues = { ...(attrs.keyValues ?? {}), [m[8]]: '' }
+        note(m[8])
       }
     }
   }

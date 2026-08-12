@@ -1705,7 +1705,9 @@ function renderAttrs(attrs: Attrs | undefined): string {
   }
   const emitKey = (key: string) => {
     if (kv[key] === undefined) return
-    parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(kv[key]!)}`)
+    const value = kv[key]!
+    if (key.toLowerCase() === 'lang' && isLanguageTag(value)) parts.push(`:${value}`)
+    else parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(value)}`)
   }
 
   // Honor the author's source slot order so the reparsed Attrs - and therefore
@@ -1732,6 +1734,10 @@ function renderAttrs(attrs: Attrs | undefined): string {
   }
 
   return parts.length ? `{${parts.join(' ')}}` : ''
+}
+
+function isLanguageTag(value: string): boolean {
+  return value === '' || /^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value)
 }
 
 function quoteAttrValue(value: string): string {
