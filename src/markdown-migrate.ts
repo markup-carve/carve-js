@@ -12,15 +12,20 @@
  *                      ( _x_ is UNDERLINE in Carve, not emphasis )
  *        strong        double-star / double-underscore -> single star *x*
  *        bold-italic   triple-star / triple-underscore -> star+slash
- *        strikethrough double-tilde -> single tilde ~x~
- *        highlight     ==x==       -> =x=     ( Carve highlight is a single `=` )
- *        superscript   ^x^         -> {^x^}   ( Carve has no bare superscript )
- *        inline math   $x$         -> $`x`
+ *        strikethrough one OR two tildes -> single tilde ~x~
  *
- *      Carve's highlight marker is a single char (`=x=`); the doubled form
- *      `==x==` is literal. Superscript has NO bare form in Carve, so Markdown
- *      `^x^` maps to the braced form (`{^x^}`), which renders in every
- *      position.
+ * The dialect is CommonMark + GFM. Constructs that exist only in a wider
+ * flavour are OPT-IN via `MarkdownDialect`, because converting one that was
+ * not in the source invents markup the author never saw:
+ *
+ *        highlight     ==x==  -> =x=     ( dialect.highlight  — Obsidian, Quarto )
+ *        superscript   ^x^    -> {^x^}   ( dialect.superscript — Pandoc )
+ *        inline math   $x$    -> $`x`    ( dialect.math — Pandoc, GitHub )
+ *
+ *      All three are LITERAL text in CommonMark and GFM; `marked` renders
+ *      `a ==b== c`, `a ^b^ c` and `a $x+y$ c` unchanged. Carve's highlight
+ *      marker is a single char (`=x=`), and superscript has no bare form in
+ *      Carve, so `^x^` maps to the braced `{^x^}`, which renders anywhere.
  *
  * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
  * keeps `_x_`, which Carve renders as underline — a silent mis-render.
@@ -749,7 +754,30 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
 }
 
 /** Convert inline Markdown formatting in non-code text to Carve. */
-function convertInline(input: string): string {
+/**
+ * Markdown constructs that exist only in a wider flavour than CommonMark+GFM.
+ *
+ * They default to OFF because converting one that was not in the source
+ * INVENTS markup: a `<sup>` in a migrated GitHub README renders differently
+ * from anything its author saw, while leaving Pandoc superscript flat loses a
+ * raised character but keeps the text readable. Failing toward literal is the
+ * recoverable direction, so each flavour extension is opt-in.
+ *
+ * `marked`, a GFM implementation, renders all three as plain text: `a ==b== c`,
+ * `a ^b^ c` and `a $x+y$ c` all come back unchanged.
+ */
+export interface MarkdownDialect {
+  /** `==x==` is a highlight (Obsidian, Quarto, pandoc's `mark` extension). */
+  highlight?: boolean
+  /** `^x^` is a superscript (Pandoc). */
+  superscript?: boolean
+  /** `$x$` is inline math (Pandoc, and GitHub's own renderer). */
+  math?: boolean
+}
+
+const COMMONMARK_GFM: MarkdownDialect = {}
+
+function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL bytes — which cannot occur in the source
   // text — so ordinary text like "P0" is never mistaken for a placeholder.
@@ -846,15 +874,18 @@ function convertInline(input: string): string {
   )
 
   // Math, converted and protected before the emphasis passes so a formula
-  // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup.
-  // $$display$$ -> $$`display`
-  line = line.replace(/\$\$([^$]+)\$\$/g, (_m, inner) => protect(`$$\`${inner}\``))
-  // $inline$ -> $`inline`; a bare-number body ($5, $3.50) is currency, kept.
-  // The `(?!\d)` keeps a currency range like `$5-$10` literal (otherwise the
-  // first..second `$` would be paired as math).
-  line = line.replace(/\$([^$\s][^$]*[^$\s]|\S)\$(?!\d)/g, (m, inner: string) =>
-    /^[\d.,]+$/.test(inner) ? m : protect(`$\`${inner}\``),
-  )
+  // body containing * _ ~ (e.g. $*x*$) is not rewritten as markup. Opt-in:
+  // CommonMark and GFM both read a dollar as literal text.
+  if (dialect.math) {
+    // $$display$$ -> $$`display`
+    line = line.replace(/\$\$([^$]+)\$\$/g, (_m, inner) => protect(`$$\`${inner}\``))
+    // $inline$ -> $`inline`; a bare-number body ($5, $3.50) is currency, kept.
+    // The `(?!\d)` keeps a currency range like `$5-$10` literal (otherwise the
+    // first..second `$` would be paired as math).
+    line = line.replace(/\$([^$\s][^$]*[^$\s]|\S)\$(?!\d)/g, (m, inner: string) =>
+      /^[\d.,]+$/.test(inner) ? m : protect(`$\`${inner}\``),
+    )
+  }
 
   // Carve-only inline syntax in what is, in Markdown, plain text. Runs after
   // the protection block (so code, destinations and URLs are placeholders) and
@@ -863,7 +894,11 @@ function convertInline(input: string): string {
   // `*` and `_` are Markdown's own emphasis delimiters, bare and braced alike,
   // and the passes below rewrite them into Carve. Escaping them here would
   // freeze `*x*` as literal text before that rewrite ever sees it.
-  line = escapePlainCarveInlineSyntax(line, { braced: '*_', bare: '*_' })
+  // `~` joins them: GFM strikethrough is a matching pair of ONE or two tildes,
+  // so `~b~` is struck, and Carve spells strikethrough the same way. Escaping
+  // it here froze it as literal text, and the doubled form's rule below could
+  // then never see it.
+  line = escapePlainCarveInlineSyntax(line, { braced: '*_', bare: '*_~' })
 
   // Converted strong / bold-italic are stashed behind placeholders so their
   // single `*` / `/` are not re-matched by the emphasis passes below.
@@ -919,7 +954,11 @@ function convertInline(input: string): string {
   // ==highlight== -> =highlight=. Carve highlight is a single `=`; a literal
   // `==x==` renders as plain text in Carve (corpus 74-two-char-delimiter-runs),
   // so a Markdown highlight left unchanged would silently mis-render.
-  line = line.replace(/==(?!\s)([^=]+?)(?<!\s)==/g, '=$1=')
+  // Opt-in: `==x==` is literal text in CommonMark and GFM alike, so converting
+  // it unconditionally invented a highlight the source never had.
+  if (dialect.highlight) {
+    line = line.replace(/==(?!\s)([^=]+?)(?<!\s)==/g, '=$1=')
+  }
 
   // Attribute-free HTML inline tags -> Carve. Run after the emphasis/strong
   // passes: the tag bodies contain no * _ ~ delimiters, so the markup they
@@ -935,7 +974,10 @@ function convertInline(input: string): string {
   // The brace guards skip an already-braced `{^x^}` so it is not wrapped
   // twice. The `[` guards skip carets that belong to footnote references
   // (`[^x] … [^y]` must not pair up as a superscript span across the line).
-  line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
+  // Opt-in: `^x^` is literal text in CommonMark and GFM alike.
+  if (dialect.superscript) {
+    line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
+  }
 
   line = decodeHtmlEntities(line)
 
@@ -1053,8 +1095,11 @@ function leadingIndentWidth(line: string): number {
   return line.length - line.replace(/^[ \t]+/, '').length
 }
 
-function restorePrefixedInlineRun(run: readonly PrefixedInlineLine[]): string[] {
-  const converted = convertInline(run.map((part) => part.text).join('\n')).split('\n')
+function restorePrefixedInlineRun(
+  run: readonly PrefixedInlineLine[],
+  dialect: MarkdownDialect,
+): string[] {
+  const converted = convertInline(run.map((part) => part.text).join('\n'), dialect).split('\n')
   return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
 }
 
@@ -1070,7 +1115,11 @@ function blockquotePrefix(line: string): { prefix: string; text: string } | null
   return { prefix, text: rest }
 }
 
-function collectBlockquoteInlineRun(lines: readonly string[], start: number): {
+function collectBlockquoteInlineRun(
+  lines: readonly string[],
+  start: number,
+  dialect: MarkdownDialect,
+): {
   lines: string[]
   end: number
 } {
@@ -1084,7 +1133,7 @@ function collectBlockquoteInlineRun(lines: readonly string[], start: number): {
     end++
   }
   if (run.length === 0) return { lines: [lines[start]!.replace(/^[ \t]{1,3}(?=>)/, '')], end: start + 1 }
-  return { lines: restorePrefixedInlineRun(run), end }
+  return { lines: restorePrefixedInlineRun(run, dialect), end }
 }
 
 /**
@@ -1129,13 +1178,17 @@ function collectIndentedCode(lines: readonly string[], start: number): {
   return { lines: out, end }
 }
 
-function collectListInlineRun(lines: readonly string[], start: number): {
+function collectListInlineRun(
+  lines: readonly string[],
+  start: number,
+  dialect: MarkdownDialect,
+): {
   lines: string[]
   end: number
 } {
   const first = lines[start]!
   const marker = first.match(RE_LIST_MARKER)
-  if (!marker) return { lines: [convertInline(first)], end: start + 1 }
+  if (!marker) return { lines: [convertInline(first, dialect)], end: start + 1 }
 
   const contentCol = marker[0].length
   const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
@@ -1158,7 +1211,7 @@ function collectListInlineRun(lines: readonly string[], start: number): {
     end++
   }
 
-  return { lines: restorePrefixedInlineRun(run), end }
+  return { lines: restorePrefixedInlineRun(run, dialect), end }
 }
 
 /** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
@@ -1257,8 +1310,16 @@ function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bo
   return none
 }
 
-/** Convert a Markdown document to Carve. */
-export function markdownToCarve(markdown: string): string {
+/**
+ * Convert a Markdown document to Carve.
+ *
+ * The dialect is CommonMark + GFM. Pass a {@link MarkdownDialect} to opt into
+ * constructs that exist only in a wider flavour.
+ */
+export function markdownToCarve(
+  markdown: string,
+  dialect: MarkdownDialect = COMMONMARK_GFM,
+): string {
   const allLines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const { frontmatter, bodyStart } = splitFrontmatter(allLines)
   const lines = allLines.slice(bodyStart)
@@ -1413,7 +1474,7 @@ export function markdownToCarve(markdown: string): string {
         if (aligns.length === headerCells.length) {
           let header = ''
           for (let c = 0; c < headerCells.length; c++) {
-            const cell = convertInline(unescapePipesInCodeSpans(headerCells[c]!))
+            const cell = convertInline(unescapePipesInCodeSpans(headerCells[c]!), dialect)
             header += `|=${aligns[c] ?? ''} ${cell} `
           }
           header += '|'
@@ -1456,13 +1517,13 @@ export function markdownToCarve(markdown: string): string {
     // inline conversion only — no top-level block spacing or dedent.
     if (prevType === 'list' && indent >= 1) {
       if (isList) {
-        const run = collectListInlineRun(lines, i)
+        const run = collectListInlineRun(lines, i, dialect)
         out.push(...run.lines.map((l) => l.replace(/^(\s*)\+(\s)/, '$1-$2')))
         i = run.end - 1
         prevType = 'list'
         continue
       }
-      out.push(convertInline(line))
+      out.push(convertInline(line, dialect))
       prevType = 'list'
       continue
     }
@@ -1483,7 +1544,7 @@ export function markdownToCarve(markdown: string): string {
       (/^=+$/.test(underline) || /^-+$/.test(underline))
     ) {
       if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-      out.push(convertInline(`${underline[0] === '=' ? '#' : '##'} ${trimmed}`))
+      out.push(convertInline(`${underline[0] === '=' ? '#' : '##'} ${trimmed}`, dialect))
       i++ // consume the underline line
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
       prevType = 'heading'
@@ -1542,14 +1603,14 @@ export function markdownToCarve(markdown: string): string {
     // Markdown `+` bullet to `-` so the converted list survives.
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
     if (isBlockquote) {
-      const run = collectBlockquoteInlineRun(lines, i)
+      const run = collectBlockquoteInlineRun(lines, i, dialect)
       out.push(...run.lines)
       i = run.end - 1
       prevType = 'block_quote'
       continue
     }
     if (isList) {
-      const run = collectListInlineRun(lines, i)
+      const run = collectListInlineRun(lines, i, dialect)
       out.push(...run.lines.map((l) => l.replace(/^(\s*)\+(\s)/, '$1-$2')))
       i = run.end - 1
       prevType = 'list'
@@ -1563,14 +1624,14 @@ export function markdownToCarve(markdown: string): string {
         end++
       }
       if (run.length > 1) {
-        out.push(convertInline(run.join('\n')))
+        out.push(convertInline(run.join('\n'), dialect))
         i = end - 1
         prevType = 'text'
         continue
       }
     }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
-    out.push(convertInline(body))
+    out.push(convertInline(body, dialect))
 
     if (isHeading && i + 1 < lines.length) {
       const next = lines[i + 1]!.trim()
