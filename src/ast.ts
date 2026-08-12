@@ -235,6 +235,8 @@ export interface ThematicBreak extends BaseNode {
 export interface Table extends BaseNode {
   type: 'table'
   caption?: InlineNode[]
+  /** Structured publishing/navigation label; Carve 0.1 source has no spelling. */
+  shortCaption?: InlineNode[]
   rows: TableRow[]
 }
 
@@ -375,6 +377,8 @@ export interface Figure extends BaseNode {
   type: 'figure'
   target: Image | BlockQuote | Table | CodeBlock | Paragraph
   caption: InlineNode[]
+  /** Structured publishing/navigation label; ordinary renderers ignore it. */
+  shortCaption?: InlineNode[]
 }
 
 export interface AbbreviationDef extends BaseNode {
