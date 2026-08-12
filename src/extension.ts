@@ -201,6 +201,8 @@ export interface BeforeRenderContext {
 /** A named extension unit contributing any subset of the lifecycle hooks. */
 export interface CarveExtension {
   name: string
+  /** Parse-time opening/closing double and single quote glyphs. */
+  quoteCharacters?: readonly [string, string, string, string]
   /** Parse-stage inline matcher (adds inline syntax; never hijacks core). */
   matchInline?: InlineMatcher
   /** Parse-stage block matcher (tried before the paragraph fallback). */

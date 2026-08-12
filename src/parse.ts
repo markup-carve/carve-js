@@ -1801,6 +1801,11 @@ export function opensFrontmatter(source: string, opts: ParseOptions = {}): boole
 
 export function parse(source: string, opts: ParseOptions = {}): Document {
   newlineIndexCache.clear()
+  const previousQuoteCharacters = activeQuoteCharacters
+  activeQuoteCharacters = opts.extensions
+    ?.map((extension) => extension.quoteCharacters)
+    .filter((quotes): quotes is readonly [string, string, string, string] => quotes !== undefined)
+    .at(-1) ?? previousQuoteCharacters
   // Strip a single leading UTF-8 BOM (U+FEFF) at the DOCUMENT start so `﻿# T`
   // is a heading, not literal text. Only here in the root entry -- nested
   // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
@@ -1858,6 +1863,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   } finally {
     activeMatchers = prevMatchers
     activeMatcherCtx = prevCtx
+    activeQuoteCharacters = previousQuoteCharacters
   }
 }
 
@@ -7597,6 +7603,8 @@ function lastEmittedGlyph(out: InlineNode[]): string {
   return 'x'
 }
 
+let activeQuoteCharacters: readonly [string, string, string, string] = ['“', '”', '‘', '’']
+
 function smartToken(
   text: string,
   i: number,
@@ -7615,7 +7623,7 @@ function smartToken(
   const c = text[i]!
   if (c === '"') {
     const open = isQuoteOpenContext(prev)
-    return { out: open ? '“' : '”', len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
+    return { out: open ? activeQuoteCharacters[0] : activeQuoteCharacters[1], len: 1, kind: open ? 'left_double_quote' : 'right_double_quote' }
   }
   if (c === "'") {
     // Contextual single quote (matches djot): an apostrophe / closing
@@ -7624,11 +7632,12 @@ function smartToken(
     // `'24'` -> `’24’` as djot does); an opening quote `‘` in an open
     // context (`'word'`, `rock 'n' roll`); otherwise `’`.
     const next = text[i + 1] ?? ''
-    const apostrophe = isAlnum(prev) || /[0-9]/.test(next) || !isQuoteOpenContext(prev)
+    const open = isQuoteOpenContext(prev)
+    const apostrophe = /[0-9]/.test(next) || (!open && isAlnum(next))
     return {
-      out: apostrophe ? '’' : '‘',
+      out: apostrophe ? '’' : open ? activeQuoteCharacters[2] : activeQuoteCharacters[3],
       len: 1,
-      kind: apostrophe ? 'right_single_quote' : 'left_single_quote',
+      kind: open && !apostrophe ? 'left_single_quote' : 'right_single_quote',
     }
   }
   return null

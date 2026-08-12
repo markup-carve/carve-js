@@ -8,6 +8,7 @@ import {
   carveToMarkdown,
   carveToPlainText,
   citations,
+  smartQuotes,
 } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -48,6 +49,8 @@ const targets: Record<string, { extension: string; render: Render }> = {
  * than one target.
  */
 const featureRunners: Record<string, (source: string, render: Render) => string> = {
+  'smart-quotes-locale-de': (source, render) =>
+    render(source, { extensions: [smartQuotes({ locale: 'de' })] }),
   'social-link-templates': (source, render) =>
     render(source, {
       mentionUrl: '/users/{name}',

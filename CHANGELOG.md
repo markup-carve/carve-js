@@ -7,6 +7,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`smartQuotes` locale extension.** It matches carve-php's additive
+  smart-quote configuration: 20 built-in locale sets, exact-locale then
+  language fallback (`de-AT` → `de`, `fr_FR` → `fr`), English fallback for an
+  unknown locale, and optional per-quote overrides. Apostrophes remain U+2019
+  regardless of locale. The German optional-corpus case is now shared rather
+  than PHP-only.
+
 ### Changed
 
 - **The Markdown target leaves a bare ampersand alone.** Text was neutralized as
