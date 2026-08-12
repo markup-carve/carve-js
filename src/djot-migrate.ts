@@ -183,6 +183,45 @@ const RULES: Rule[] = [
     delims: ['/', '/'],
   },
   {
+    // The counterpart to `djot-emphasis-underscore`'s word-boundary guard.
+    //
+    // Djot's spec puts NO word boundary on emphasis - a `_` opens when not
+    // directly followed by whitespace and closes when not directly preceded by
+    // whitespace - so `snake_case_name` IS emphasis in Djot, and pandoc's Djot
+    // reader renders `snake<em>case</em>name`. The converters leave it literal
+    // on purpose, because the documents they exist for are full of identifiers
+    // no author meant as emphasis.
+    //
+    // It CONVERTS, rather than being reported and left alone, because the input
+    // is a DJOT document: Djot emphasizes an intraword `_` and an author who
+    // wanted the literal characters had to escape them. `snake\_case\_name`
+    // renders as `snake_case_name` in Djot and reaches here already escaped, so
+    // an UNESCAPED `snake_case_name` in a Djot source is emphasis the author
+    // saw in their own renderer and kept. Leaving it literal drops meaning the
+    // source states.
+    //
+    // The braced form is required, not stylistic: a bare `/` is literal
+    // intraword in Carve, so `snake/case/name` renders as itself and only
+    // `snake{/case/}name` gives back `snake<em>case</em>name`.
+    //
+    // This does NOT transfer to the Markdown converter, whose flanking rules
+    // leave an intraword `_` literal - there the identifier reading is correct
+    // and `markdown-migrate` keeps it.
+    id: 'djot-intraword-underscore',
+    category: 'djot-shift',
+    family: '_',
+    pattern:
+      /(?<=[A-Za-z0-9])_(?!\s)((?:(?!\n[ \t]*\n)[^_])+?)(?<!\s)_(?=[A-Za-z0-9])/gd,
+    message: () =>
+      'Djot emphasizes this intraword `_x_`; the migration leaves it literal, so the emphasis is lost. Brace it as `{/x/}` if it was meant.',
+    // `{/x/}`, NOT `{_x_}`: Carve's `_` is UNDERLINE, so the braced underscore
+    // would render `<u>` where Djot meant `<em>` - a rule that exists to stop a
+    // silent semantic change causing one. The sibling `djot-emphasis-underscore`
+    // converts `_x_` to `/x/` for the same reason.
+    suggestion: (m) => `{/${m[1]}/}`,
+    delims: ['{/', '/}'],
+  },
+  {
     id: 'djot-highlight-braces',
     category: 'djot-shift',
     family: '{',
@@ -624,7 +663,11 @@ export function applyMigrationFixes(source: string): MigrationFixResult {
   for (const e of edits) {
     output = output.slice(0, e.start) + e.text + output.slice(e.end)
   }
-  return { output, applied: applied.map(stripHit), skipped: skipped.map(stripHit) }
+  return {
+    output,
+    applied: applied.map(stripHit),
+    skipped: skipped.map(stripHit),
+  }
 }
 
 /** Format warnings as `file:line:col rule — message (use: suggestion)`. */

@@ -4,6 +4,7 @@ import {
   applyMigrationFixes,
   migrateScanSteps,
 } from '../src/djot-migrate.js'
+import { carveToHtml } from '../src/index.js'
 
 const rules = (src: string) =>
   djotMigrationWarnings(src).map((w) => w.rule)
@@ -82,8 +83,16 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.line).toBe(5)
   })
 
-  it('does not treat snake_case as Djot emphasis', () => {
-    expect(djotMigrationWarnings('a snake_case_name value')).toEqual([])
+  it('routes snake_case to the intraword rule, not the bare one', () => {
+    // The BARE rule does not claim it - `djot-emphasis-underscore` is word
+    // bounded, and its output `/x/` is literal intraword in Carve anyway. The
+    // intraword rule claims it instead and converts to the braced form.
+    const w = djotMigrationWarnings('a snake_case_name value')
+    expect(w.map((x) => x.rule)).not.toContain('djot-emphasis-underscore')
+    expect(w.map((x) => x.rule)).toEqual(['djot-intraword-underscore'])
+    expect(applyMigrationFixes('a snake_case_name value').output).toBe(
+      'a snake{/case/}name value',
+    )
   })
 
   it('reports multiple warnings sorted by position', () => {
@@ -480,5 +489,70 @@ describe('djot-heading-continuation — openers Djot has and Carve does not', ()
     expect(contHits('# Title\nSome text.\n')).toHaveLength(1)
     expect(contHits('## A\n## B\n')).toHaveLength(1)
     expect(applyMigrationFixes('# Title\nSome text.\n').output).toBe('# Title Some text.\n')
+  })
+})
+
+describe('djot-intraword-underscore — the divergence made visible', () => {
+  it('flags an intraword pair that Djot emphasizes and the migration does not', () => {
+    const w = djotMigrationWarnings('snake_case_name here')
+    expect(w.map((x) => x.rule)).toContain('djot-intraword-underscore')
+  })
+
+  it('does not flag a word-bounded pair, which the emphasis rule already owns', () => {
+    const w = djotMigrationWarnings('use _emphasis_ here')
+    expect(w.map((x) => x.rule)).toContain('djot-emphasis-underscore')
+    expect(w.map((x) => x.rule)).not.toContain('djot-intraword-underscore')
+  })
+
+  /**
+   * It CONVERTS. The input is a Djot document, where an intraword `_` IS
+   * emphasis and an author who wanted the literal characters had to escape
+   * them - so an unescaped run is emphasis the author saw in their own renderer
+   * and kept, and dropping it would lose what the source states.
+   */
+  it('converts the intraword run to the braced form', () => {
+    const result = applyMigrationFixes('snake_case_name here')
+    expect(result.output).toBe('snake{/case/}name here')
+    expect(result.applied.map((w) => w.rule)).toContain('djot-intraword-underscore')
+  })
+
+  /**
+   * The other side of the same argument, and the row that makes it safe: an
+   * author who meant the literal identifier escaped it in Djot, and the escape
+   * survives untouched. Djot renders `snake\_case\_name` as `snake_case_name`
+   * and so does the converted output.
+   */
+  it('leaves an escaped identifier alone', () => {
+    const result = applyMigrationFixes('snake\\_case\\_name here')
+    expect(result.output).toBe('snake\\_case\\_name here')
+    expect(carveToHtml(result.output)).toContain('snake_case_name')
+    expect(carveToHtml(result.output)).not.toContain('<em>')
+  })
+
+  it('suggests the braced form for an author who did mean emphasis', () => {
+    const w = djotMigrationWarnings('snake_case_name')
+    const hit = w.find((x) => x.rule === 'djot-intraword-underscore')
+    expect(hit?.suggestion).toBe('{/case/}')
+  })
+
+  /**
+   * The suggestion has to be the spelling that PRESERVES the meaning. Carve's
+   * `{_x_}` is an underline, so suggesting it would answer a lost `<em>` with a
+   * rendered `<u>` - a rule against silent semantic change causing one. This is
+   * the assertion that catches that, so it renders both forms rather than
+   * comparing strings.
+   */
+  it('suggests a spelling that renders as emphasis, not underline', () => {
+    const w = djotMigrationWarnings('snake_case_name')
+    const hit = w.find((x) => x.rule === 'djot-intraword-underscore')
+    const applied = `snake${hit!.suggestion}name`
+    expect(carveToHtml(applied)).toContain('<em>case</em>')
+    expect(carveToHtml(applied)).not.toContain('<u>')
+  })
+
+  it('applies alongside an ordinary fix in the same document', () => {
+    const result = applyMigrationFixes('snake_case_name and **bold**')
+    expect(result.output).toBe('snake{/case/}name and *bold*')
+    expect(result.applied).toHaveLength(2)
   })
 })
