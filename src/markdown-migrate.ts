@@ -27,11 +27,12 @@
  *
  * Delimiters inside inline code and fenced code blocks are never rewritten.
  *
+ * Carve has no indented code block (like Djot), so a Markdown 4-space one is
+ * rewritten as a FENCE rather than carried across; and Carve gives trailing
+ * spaces no meaning, so a Markdown hard break becomes a trailing backslash.
+ * Both used to pass through unchanged, which lost them.
+ *
  * Known limitations:
- *  - Markdown indented (4-space) code blocks are preserved byte-for-byte, but
- *    Carve has no indented code block (like Djot), so they still parse as
- *    paragraph text after migration. Use a fenced ``` block in the source for
- *    a semantic code block.
  *  - Markdown lazy continuation is not preserved — Carve has none. A non-`>`
  *    line after a blockquote, or an unindented line after a list item, stays
  *    a separate paragraph rather than folding into the quote/item. Put `>` on
@@ -768,6 +769,15 @@ function convertInline(input: string): string {
   // is handled by convertInlineHtml as raw HTML so attributes are not lost.
   line = line.replace(/<code>([^<]+)<\/code>/gi, (_m, inner) => protect(`\`${inner}\``))
 
+  // A Markdown HARD BREAK is two or more spaces before a newline; Carve spells
+  // it with a trailing backslash. Trailing spaces mean NOTHING in Carve, so
+  // carrying them across dropped the break: `a  \nb` migrated to a `<p>a\nb</p>`
+  // with no `<br>`. Runs are joined before this call, so a newline here means
+  // another line of the same paragraph follows - which is exactly CommonMark's
+  // condition, a hard break being impossible at a paragraph's end. Code spans
+  // are already protected, so a multi-line span keeps its own spacing.
+  line = line.replace(/ {2,}\n/g, '\\\n')
+
   // Normalize a `(dest "title")` part: Carve's link parser closes the
   // destination at the first `)`, so balanced parens in the URL are
   // percent-encoded (Titan_(moon) -> Titan_%28moon%29).
@@ -959,6 +969,9 @@ const RE_TABLE_DELIMITER = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?$/
  */
 const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 
+/** A Markdown indented code line: four spaces, or one tab. */
+const RE_MD_INDENTED_CODE = /^(?: {4,}|\t)/
+
 /**
  * Split a pipe-delimited table row into trimmed cell texts, honoring `\|`
  * escapes and dropping the empty cells produced by a leading/trailing pipe.
@@ -1072,6 +1085,48 @@ function collectBlockquoteInlineRun(lines: readonly string[], start: number): {
   }
   if (run.length === 0) return { lines: [lines[start]!.replace(/^[ \t]{1,3}(?=>)/, '')], end: start + 1 }
   return { lines: restorePrefixedInlineRun(run), end }
+}
+
+/**
+ * Collect a Markdown indented code block and re-emit it as a Carve fence.
+ *
+ * The run is the contiguous stretch of lines indented 4+ columns, plus any
+ * blank lines BETWEEN them - a blank line does not end an indented code block
+ * in CommonMark, only a less-indented non-blank one does. Trailing blanks
+ * belong to the document rather than the code, so they are given back.
+ *
+ * Exactly four columns are removed, which is what CommonMark strips; deeper
+ * indentation is the code's own and is kept.
+ */
+function collectIndentedCode(lines: readonly string[], start: number): {
+  lines: string[]
+  end: number
+} {
+  const run: string[] = []
+  let end = start
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line.trim() === '') {
+      run.push(line)
+      continue
+    }
+    // The same test the caller's branch uses, deliberately: a different
+    // measure here could take a line the caller would not have called code.
+    if (!RE_MD_INDENTED_CODE.test(line)) break
+    run.push(line)
+    end = i + 1
+  }
+
+  const body = run
+    .slice(0, end - start)
+    .map((line) => (line.trim() === '' ? '' : line.replace(/^(?: {4}|\t)/, '')))
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(body.join('\n')) + 1))
+  const out = [fence, ...body, fence]
+  // Carve needs a blank line after a block; the caller resumes at `end`, which
+  // is the first line the run did not take.
+  if (end < lines.length && lines[end]!.trim() !== '') out.push('')
+
+  return { lines: out, end }
 }
 
 function collectListInlineRun(lines: readonly string[], start: number): {
@@ -1311,9 +1366,24 @@ export function markdownToCarve(markdown: string): string {
       continue
     }
 
-    if ((wasPrevBlank || prevType === 'blank' || prevType === 'code') && /^(?: {4,}|\t)/.test(line)) {
-      out.push(line)
-      prevType = 'code'
+    // A Markdown INDENTED code block becomes a Carve FENCE. Carve has no
+    // indented code block, so carrying the run through byte-for-byte did not
+    // preserve it - it made the code a PARAGRAPH, and the code's own `*` and
+    // `_` were then read as emphasis: `    let x = *not bold*` rendered as
+    // `<p>let x = <strong>not bold</strong></p>`.
+    //
+    // The condition is unchanged, and it is what keeps this safe: the previous
+    // line must be blank, so an indented line under a list item - which is item
+    // continuation, not code - never reaches here.
+    if (
+      (wasPrevBlank || prevType === 'blank' || prevType === 'code') &&
+      RE_MD_INDENTED_CODE.test(line)
+    ) {
+      const block = collectIndentedCode(lines, i)
+      if (prevType !== 'blank' && out.length > 0) out.push('')
+      out.push(...block.lines)
+      i = block.end - 1
+      prevType = 'code_fence'
       continue
     }
 
