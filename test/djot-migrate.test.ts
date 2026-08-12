@@ -83,7 +83,16 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
   })
 
   it('does not treat snake_case as Djot emphasis', () => {
-    expect(djotMigrationWarnings('a snake_case_name value')).toEqual([])
+    // It is still not emphasis, and still never rewritten - that is the
+    // converters' deliberate choice. What changed is that the loss is now
+    // REPORTED rather than silent, as an advisory `djot-intraword-underscore`
+    // (a `djot-shift`, so `carve lint` hides it without `--from-djot`).
+    const w = djotMigrationWarnings('a snake_case_name value')
+    expect(w.map((x) => x.rule)).not.toContain('djot-emphasis-underscore')
+    expect(w.map((x) => x.rule)).toEqual(['djot-intraword-underscore'])
+    expect(applyMigrationFixes('a snake_case_name value').output).toBe(
+      'a snake_case_name value',
+    )
   })
 
   it('reports multiple warnings sorted by position', () => {
@@ -480,5 +489,38 @@ describe('djot-heading-continuation — openers Djot has and Carve does not', ()
     expect(contHits('# Title\nSome text.\n')).toHaveLength(1)
     expect(contHits('## A\n## B\n')).toHaveLength(1)
     expect(applyMigrationFixes('# Title\nSome text.\n').output).toBe('# Title Some text.\n')
+  })
+})
+
+describe('djot-intraword-underscore — the divergence made visible', () => {
+  it('flags an intraword pair that Djot emphasizes and the migration does not', () => {
+    const w = djotMigrationWarnings('snake_case_name here')
+    expect(w.map((x) => x.rule)).toContain('djot-intraword-underscore')
+  })
+
+  it('does not flag a word-bounded pair, which the emphasis rule already owns', () => {
+    const w = djotMigrationWarnings('use _emphasis_ here')
+    expect(w.map((x) => x.rule)).toContain('djot-emphasis-underscore')
+    expect(w.map((x) => x.rule)).not.toContain('djot-intraword-underscore')
+  })
+
+  it('reports without rewriting: the source is returned untouched', () => {
+    const result = applyMigrationFixes('snake_case_name here')
+    expect(result.output).toBe('snake_case_name here')
+    expect(result.applied).toHaveLength(0)
+    expect(result.advisory.map((w) => w.rule)).toContain('djot-intraword-underscore')
+  })
+
+  it('suggests the braced form for an author who did mean emphasis', () => {
+    const w = djotMigrationWarnings('snake_case_name')
+    const hit = w.find((x) => x.rule === 'djot-intraword-underscore')
+    expect(hit?.suggestion).toBe('{_case_}')
+  })
+
+  it('leaves an ordinary fix applying alongside it', () => {
+    const result = applyMigrationFixes('snake_case_name and **bold**')
+    expect(result.output).toContain('*bold*')
+    expect(result.output).toContain('snake_case_name')
+    expect(result.advisory).toHaveLength(1)
   })
 })
