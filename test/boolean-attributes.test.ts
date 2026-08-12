@@ -32,7 +32,7 @@ describe('boolean (bare-word) attributes', () => {
   })
 
   it('multiple bare words', () => {
-    expect(h('[x]{kbd foo}')).toBe('<p><span kbd="" foo="">x</span></p>')
+    expect(h('[x]{kbd foo}')).toBe('<p><span foo=""><kbd>x</kbd></span></p>')
   })
 
   it('mixes with class (both applied, source order)', () => {

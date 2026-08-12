@@ -162,6 +162,7 @@ const IMPLEMENTED = new Set([
   'abbreviation-definition-interrupts-a-paragraph',
   'literal-less-than-in-prose',
   'boolean-attributes',
+  'a-boolean-and-a-key-value-of-the-same-name-are-one-attribute',
   'table-span-marker-in-first-column',
   'table-cell-attributes',
   'table-row-attributes',

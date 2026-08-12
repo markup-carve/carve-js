@@ -374,6 +374,12 @@ HTML element. Unknown names retain `<span class="ext-name">`; plain and ANSI
 render only the content. `:cite[…]` is not a bibliographic `[@key]` citation,
 and `:abbr[…]` is independent of automatic abbreviation definitions.
 
+The same registry is available as compact span-attribute sugar:
+`[Ctrl]{kbd}`, `[HTML]{abbr="HyperText Markup Language"}`, and combinations
+such as `[CSS]{dfn abbr="Cascading Style Sheets"}`. Non-semantic attributes
+remain on one outer span. `abbr`, `dfn`, and `time` values map to `title`,
+`title`, and `datetime`, respectively.
+
 ## headingPermalinks
 
 `headingPermalinks()` adds a clickable anchor to each heading (ported from
