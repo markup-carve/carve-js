@@ -35,6 +35,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   source now remains ordinary text around a soft break, matching the grammar;
   rendered HTML and canonical source are unchanged.
 
+- **`applyMigrationFixes` converts Djot's braced subscript instead of doubling
+  its braces.** `{~y~}` came out as `{{,y,}}`, rendering the stray literal
+  braces `{<sub>y</sub>}` where Djot means `<sub>y</sub>`. The
+  `djot-subscript-tilde` span covered `~y~` but not the surrounding braces,
+  while its suggestion supplied braces of its own, so the splice left the
+  source's behind. The braced form now has its own rule and converts as a
+  single edit; the bare rule is guarded off it. Unlike the superscript pair, it
+  cannot simply be skipped: `{~x~}` is subscript in Djot and strikethrough in
+  Carve, so it still has to be rewritten.
+
 - **A nested list is indented once on the Markdown target, not twice.**
   `renderList` padded every emitted line by the list's own depth, and the
   enclosing item padded the same lines again by the width of its marker, so each

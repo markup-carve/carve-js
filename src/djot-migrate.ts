@@ -119,10 +119,35 @@ const RULES: Rule[] = [
     delims: ['~', '~'],
   },
   {
+    // Djot spells subscript braced as well as bare and means the same by each,
+    // so the braced form converts too - but as ONE edit that replaces the
+    // braces, not as the bare rule matching inside them. The bare rule's
+    // suggestion carries its own `{`/`}`, so splicing it into a span that
+    // stopped inside the source's braces produced `{{,y,}}`, rendering the
+    // stray literal braces `{<sub>y</sub>}`.
+    //
+    // This differs from the superscript pair below, where the braced form is
+    // valid Carve as-is and the right answer is to leave it alone: Djot's
+    // `{~x~}` is subscript and Carve's is strikethrough, so it still has to be
+    // converted.
+    id: 'djot-subscript-tilde-braced',
+    category: 'djot-shift',
+    family: '~',
+    pattern: /\{~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~\}/gd,
+    message: () =>
+      'Djot subscript `{~x~}` renders as *strikethrough* in Carve.',
+    suggestion: (m) => `{,${m[1]},}`,
+    delims: ['{,', ',}'],
+  },
+  {
     id: 'djot-subscript-tilde',
     category: 'djot-shift',
     family: '~',
-    pattern: /~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~/gd,
+    // The `{`/`}` guards keep this off the braced form the rule above owns.
+    // Without them both rules match the same subscript and, being strictly
+    // nested, compose instead of colliding - which is how the doubled braces
+    // reached the output.
+    pattern: /(?<!\{)~(?!\s)((?:(?!\n[ \t]*\n)[^~])+?)(?<!\s)~(?!\})/gd,
     message: () =>
       'Djot subscript `~x~` renders as *strikethrough* in Carve.',
     // Forced brace form: a Djot `~x~` is often intraword (e.g. H~2~O), where a
