@@ -7121,8 +7121,10 @@ function sliceColumns(line: string, cols: number, keepResidual = false): string 
 // Inline parsing
 // ============================================================================
 
-// Footnote reference `[^label]` (no `]` in the label).
-const RE_FOOTNOTE_REF = /^\[\^([^\]]+)\]/
+// Footnote reference `[^label]`. A label is a physical-line identifier: it
+// contains neither `]` nor a source newline. Letting this cross a soft break
+// creates an id no definition marker (which is necessarily one line) can bind.
+const RE_FOOTNOTE_REF = /^\[\^([^\]\r\n]+)\]/
 // extension_name = identifier = (letter|'_'){letter|digit|'_'|'-'}
 // (grammar.ebnf:968-969,1122) -- a lone `_` is a valid extension name.
 const RE_EXTENSION = /^:([a-zA-Z_][\w-]*)\[([^\]]*)\](?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
