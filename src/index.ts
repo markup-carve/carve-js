@@ -133,6 +133,11 @@ export {
   type MigrationCategory,
   type MigrationFixResult,
 } from './djot-migrate.js'
+export {
+  bbcodeToCarve,
+  BbcodeInputTooLargeError,
+  BBCODE_MAX_INPUT_LENGTH,
+} from './bbcode-migrate.js'
 export { markdownToCarve } from './markdown-migrate.js'
 export {
   lintCarve,
