@@ -20,6 +20,7 @@ import type {
   List,
   ListItem,
   Paragraph,
+  Span,
   Table,
   TableCell,
   TableRow,
@@ -44,6 +45,7 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 // calls. Rendering is synchronous and single-threaded, so a module-scoped
 // tracker is safe and avoids threading a counter through every signature.
 let abbrBudget: AbbrBudget | null = null
+let suppressAutomaticAbbreviation = false
 
 // Per-render document id namespace (extensions contract §2.6): seeded with
 // every explicit / heading id in the resolved AST, consumed by extensions via
@@ -714,6 +716,41 @@ function renderAttrs(attrs?: Attrs): string {
     }
   }
   return parts.length ? ' ' + parts.join(' ') : ''
+}
+
+const SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'code', 'mark', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+
+/** Render PART 10 §10 compact semantic attributes on an ordinary span. */
+function renderSemanticSpan(node: Span, opts: RenderOptions): string {
+  const values = node.attrs?.keyValues
+  const names = SEMANTIC_SPAN_ORDER.filter((name) => values?.[name] !== undefined)
+  const previousSuppress = suppressAutomaticAbbreviation
+  if (values?.abbr !== undefined) suppressAutomaticAbbreviation = true
+  let body: string
+  try {
+    body = renderInlines(node.children, opts)
+  } finally {
+    suppressAutomaticAbbreviation = previousSuppress
+  }
+  if (names.length === 0) return `<span${renderAttrs(node.attrs)}>${body}</span>`
+
+  let html = body
+  for (const name of names) {
+    const value = values![name]!
+    const mapped = value !== '' && name === 'abbr' ? ` title="${escapeAttr(value)}"`
+      : value !== '' && name === 'dfn' ? ` title="${escapeAttr(value)}"`
+        : value !== '' && name === 'time' ? ` datetime="${escapeAttr(value)}"`
+          : ''
+    html = `<${name}${mapped}>${html}</${name}>`
+  }
+
+  const isSemantic = (key: string) => SEMANTIC_SPAN_ORDER.includes(key as typeof SEMANTIC_SPAN_ORDER[number])
+  const keyValues = Object.fromEntries(Object.entries(values ?? {}).filter(([key]) => !isSemantic(key)))
+  const attrs: Attrs = { ...node.attrs, keyValues }
+  if (attrs.order) attrs.order = attrs.order.filter((key) => !isSemantic(key))
+  const outer = renderAttrs(attrs)
+  const hasRemaining = attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || Object.keys(keyValues).length > 0
+  return hasRemaining ? `<span${outer}>${html}</span>` : html
 }
 
 /**
@@ -1571,7 +1608,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'image':
       return renderImage(node, opts)
     case 'span':
-      return `<span${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</span>`
+      return renderSemanticSpan(node, opts)
     case 'math': {
       const base = node.display ? 'math display' : 'math inline'
       // Static mode: if a build-time math renderer is supplied, emit its
@@ -1697,6 +1734,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return renderExtension(node.name, node.content, node.attrs, opts)
     }
     case 'abbreviation': {
+      if (suppressAutomaticAbbreviation) return escapeHtml(node.abbr)
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to plain key text (no <abbr>, no title). charge() accounts for the
       // expansion's UTF-8 bytes.

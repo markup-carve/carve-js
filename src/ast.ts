@@ -611,7 +611,7 @@ export interface Image extends BaseNode {
   rawRef?: string
 }
 
-/** Inline span: `[text]{attrs}` -> <span {attrs}>text</span> (PART 9 §14). */
+/** Inline span: `[text]{attrs}` (PART 9 §14); semantic attributes affect HTML rendering. */
 export interface Span extends BaseNode {
   type: 'span'
   children: InlineNode[]
