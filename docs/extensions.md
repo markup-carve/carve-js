@@ -367,6 +367,13 @@ Configurable `target`, `rel`, and `nofollow`. Relative and anchor links are
 left untouched. (Semantic spans like `:kbd[…]`, `:abbr[…]`, `:dfn[…]` are
 already core, no extension needed.)
 
+The complete built-in semantic registry is `abbr`, `cite`, `dfn`, `kbd`,
+`samp`, `var`, `time`, `code`, and `mark`. Each `:name[content]{attrs}` form
+remains an ordinary `inline_extension` AST node and renders as the same-named
+HTML element. Unknown names retain `<span class="ext-name">`; plain and ANSI
+render only the content. `:cite[…]` is not a bibliographic `[@key]` citation,
+and `:abbr[…]` is independent of automatic abbreviation definitions.
+
 ## headingPermalinks
 
 `headingPermalinks()` adds a clickable anchor to each heading (ported from
