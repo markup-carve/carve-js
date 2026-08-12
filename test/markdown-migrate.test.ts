@@ -627,9 +627,12 @@ describe('markdownToCarve — HTML entities', () => {
   })
 
   it('keeps entities literal inside indented code blocks', () => {
-    const markdown = '    a&nbsp;b &amp; c'
-    expect(conv(markdown)).toBe(markdown)
-    expect(carveToHtml(conv(markdown))).toBe('<p>a&amp;nbsp;b &amp;amp; c</p>')
+    // The indented block becomes a fence, so it stays CODE - it used to land
+    // as a paragraph, which is what the old `<p>` expectation here recorded.
+    expect(conv('    a&nbsp;b &amp; c')).toBe('```\na&nbsp;b &amp; c\n```')
+    expect(carveToHtml(conv('    a&nbsp;b &amp; c'))).toBe(
+      '<pre><code>a&amp;nbsp;b &amp;amp; c\n</code></pre>',
+    )
   })
 
   it('escapes a decoded Carve delimiter so it renders literally', () => {
@@ -1015,5 +1018,75 @@ describe('markdownToCarve — frontmatter', () => {
     // is the meaning-preserving one. Guards the existing line-0 rule behavior.
     expect(carveToHtml(conv('---\n---'))).toBe('<hr>\n<hr>')
     expect(carveToHtml(conv('---\n\n---'))).toBe('<hr>\n<hr>')
+  })
+})
+
+describe('markdownToCarve — hard breaks', () => {
+  it('converts two trailing spaces to a backslash break', () => {
+    // Carve gives trailing spaces no meaning, so carrying them across DROPPED
+    // the break; the backslash is Carve's spelling for it.
+    expect(conv('a  \nb')).toBe('a\\\nb')
+    expect(carveToHtml(conv('a  \nb'))).toBe('<p>a<br>\nb</p>')
+  })
+
+  it('leaves trailing spaces at the end of a paragraph alone', () => {
+    // CommonMark has no hard break at a paragraph's end, so there is none to
+    // convert - and a stray backslash there would render as a literal one.
+    expect(carveToHtml(conv('a  \n\nb'))).toBe('<p>a</p>\n<p>b</p>')
+  })
+
+  it('does not touch spacing inside a code span', () => {
+    expect(carveToHtml(conv('`a  b`'))).toBe('<p><code>a  b</code></p>')
+  })
+
+  it('converts a hard break inside a list item', () => {
+    expect(carveToHtml(conv('- a  \n  b'))).toContain('<br>')
+  })
+})
+
+describe('markdownToCarve — indented code blocks', () => {
+  it('becomes a fence, so the code stays code', () => {
+    expect(conv('    indented\n    code')).toBe('```\nindented\ncode\n```')
+    expect(carveToHtml(conv('    indented\n    code'))).toBe(
+      '<pre><code>indented\ncode\n</code></pre>',
+    )
+  })
+
+  it('stops the code being read as markup', () => {
+    // The bug this fixes: as a paragraph, the code's own delimiters were
+    // parsed, so `*not bold*` rendered BOLD.
+    const html = carveToHtml(conv('    let x = *not bold* and _not em_'))
+    expect(html).not.toContain('<strong>')
+    expect(html).toContain('let x = *not bold* and _not em_')
+  })
+
+  it('keeps a blank line that is inside the block', () => {
+    // A blank line does not end an indented code block in CommonMark; only a
+    // less-indented non-blank line does.
+    expect(conv('    a\n\n    b')).toBe('```\na\n\nb\n```')
+  })
+
+  it('gives a trailing blank line back to the document', () => {
+    expect(carveToHtml(conv('    a\n\ntext'))).toBe(
+      '<pre><code>a\n</code></pre>\n<p>text</p>',
+    )
+  })
+
+  it('removes exactly four columns, keeping the code own indent', () => {
+    expect(conv('    a\n        b')).toBe('```\na\n    b\n```')
+  })
+
+  it('picks a fence longer than any backtick run inside', () => {
+    expect(conv('    ```\n    x\n    ```')).toBe('````\n```\nx\n```\n````')
+  })
+
+  it('a tab-indented block is code too', () => {
+    expect(conv('\ta')).toBe('```\na\n```')
+  })
+
+  it('leaves an indented continuation line under a list item alone', () => {
+    // Four spaces under a list item is item content, not a code block; the
+    // previous line is not blank, so it never reaches the code branch.
+    expect(carveToHtml(conv('- a\n    b'))).not.toContain('<pre>')
   })
 })
