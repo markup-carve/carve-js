@@ -3390,9 +3390,13 @@ function parseCommentBlock(lexer: Lexer): Comment {
 function parseFootnoteDef(lexer: Lexer): null {
   const defLineIndex = lexer.pos
   const m = RE_FOOTNOTE_DEF.exec(lexer.consume())!
-  // PART 7's four characters, not the host trim: a label is bounded by
-  // `whitespace`, so `[^ <VT>f]` keeps the vertical tab the native trim ate.
-  const label = trimNonNbsp(m[1]!)
+  // EXACT, not trimmed. PART 9 §16 says a label may contain spaces and tabs
+  // and is matched exactly; `footnote_label` runs to the closing `]`, so the
+  // ends are part of the identifier. This engine trimmed both the definition
+  // key and the reference lookup, which resolved `[^ a ]` against `[^a]:`
+  // where carve-php and carve-rs leave it literal. Same defect and same
+  // reasoning as the link-reference labels in carve-js#673.
+  const label = m[1]!
   const bodyLines = [m[2]!]
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
   let pendingBlanks = 0
@@ -8125,7 +8129,7 @@ function scanInlineInner(
         const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
         if (mfn) {
           flush()
-          out.push(withPos({ type: 'footnote_ref', id: trimNonNbsp(mfn[1]!) } as FootnoteRef, source, text, i, i + mfn[0].length))
+          out.push(withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
           i += mfn[0].length
           continue
         }
@@ -8196,7 +8200,7 @@ function scanInlineInner(
       const mfn = inFootnote ? null : RE_FOOTNOTE_REF.exec(rest)
       if (mfn) {
         flush()
-        out.push(withPos({ type: 'footnote_ref', id: trimNonNbsp(mfn[1]!) } as FootnoteRef, source, text, i, i + mfn[0].length))
+        out.push(withPos({ type: 'footnote_ref', id: mfn[1]! } as FootnoteRef, source, text, i, i + mfn[0].length))
         i += mfn[0].length
         continue
       }
