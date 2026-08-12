@@ -35,6 +35,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Footnote labels are matched exactly, without trimming their ends.** The
+  parser trimmed the label on both the definition and the reference side, so
+  `[^ a ]` resolved against `[^a]: …` and rendered a note. PART 9 §16 says a
+  label may contain spaces and tabs and is matched exactly, and carve-php and
+  carve-rs leave that pair literal. Interior whitespace was already
+  significant; now the ends are too. The two footnote lint rules key on the
+  same raw label, so a padded definition is reported as unused rather than
+  silently counted as the bare one.
+
 - **A footnote reference no longer crosses a source newline.** The parser used
   to publish an unresolved `footnote_ref` whose id contained that newline,
   although the one-line definition marker could never bind it. The bracketed

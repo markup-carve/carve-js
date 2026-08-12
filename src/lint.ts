@@ -968,7 +968,10 @@ function collectFootnoteDefinitionWarnings(
     const line = lines[i]!
     const m = FOOTNOTE_DEF.exec(line)
     if (!m) continue
-    const label = m[1]!.trim()
+    // Raw, like the parser: a footnote label is matched exactly (PART 9 §16),
+    // so `[^ a ]` and `[^a]` are two different definitions and neither is a
+    // duplicate of the other.
+    const label = m[1]!
     const col = line.indexOf('[^') + 1
     const start = (lineStart[i] ?? 0) + (col - 1)
     const site = { line: i + 1, col, start, end: start + m[0].length }
@@ -1294,7 +1297,9 @@ function collectUnpublishedLines(
   source.split('\n').forEach((line, i) => {
     const m = FOOTNOTE_DEF.exec(line)
     if (!m) return
-    const label = m[1]!.trim()
+    // Raw: `doc.footnoteDefs` is keyed by the label as written, so trimming
+    // here would miss a padded definition and report it as referenced.
+    const label = m[1]!
     if (hasOwnKey(defs, label) && !referencedFootnotes.has(label)) lines.add(i + 1)
   })
   // Frontmatter carries no node in `children`, but it DOES report a span - so
