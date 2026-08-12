@@ -34,6 +34,11 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-language-attribute-is-exact-sugar-for-lang',
+  'a-malformed-language-tag-leaves-the-whole-block-literal',
+  'a-language-attribute-and-lang-are-one-key',
+  'the-language-sigil-takes-no-padding',
+  'a-semantic-span-keeps-its-wrapper-unless-consumption-empties-it',
   'a-structural-attribute-leads-the-author-s-own',
   'a-caret-line-does-not-end-a-paragraph-it-cannot-caption',
   'heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key',
