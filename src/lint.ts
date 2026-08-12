@@ -484,13 +484,33 @@ export function lintCarve(
   const footnoteRefs = collectFootnoteRefs(doc)
   const footnoteDefs = doc.footnoteDefs ?? {}
   const referencedFootnotes = new Set<string>()
+  // Definitions grouped by their whitespace-insensitive key, so a miss can name
+  // the definition the author probably meant. Built once, not per reference.
+  const defsByWhitespaceKey = new Map<string, string[]>()
+  for (const label of Object.keys(footnoteDefs)) {
+    const key = whitespaceKey(label)
+    const bucket = defsByWhitespaceKey.get(key)
+    if (bucket) bucket.push(label)
+    else defsByWhitespaceKey.set(key, [label])
+  }
   for (const { id, node } of footnoteRefs) {
     referencedFootnotes.add(id)
     if (hasOwnKey(footnoteDefs, id)) continue
+    // A near miss is worth naming. "No matching definition" is true but leaves
+    // the reader hunting for a difference they cannot see - the definition is
+    // RIGHT THERE and differs by a space. Saying which one, and that matching
+    // is exact, turns a hunt into a fix.
+    const near = (defsByWhitespaceKey.get(whitespaceKey(id)) ?? []).filter((label) => label !== id)
+    const hint =
+      near.length === 1
+        ? ` Definition [^${near[0]}] differs only in whitespace; footnote labels are matched exactly.`
+        : near.length > 1
+          ? ` ${near.length} definitions differ from it only in whitespace; footnote labels are matched exactly.`
+          : ''
     out.push({
       ...locate(node, toUtf16),
       rule: 'unresolved-footnote',
-      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.`,
+      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.${hint}`,
     })
   }
 
@@ -544,6 +564,19 @@ const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
  * the content.
  */
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
+
+/**
+ * The key Djot would match a label on: ends trimmed, interior whitespace runs
+ * collapsed.
+ *
+ * Carve matches labels EXACTLY (PART 9 §16), so this is NEVER used to resolve
+ * anything - only to explain a miss. Two labels sharing this key are the pair a
+ * reader is most likely to have meant as one, and the difference between them
+ * is invisible in rendered output and usually in the editor too.
+ */
+function whitespaceKey(label: string): string {
+  return label.trim().replace(/\s+/g, ' ')
+}
 
 /**
  * The set of 1-based source line numbers that fall inside a verbatim region
@@ -962,6 +995,9 @@ function collectFootnoteDefinitionWarnings(
   }
 
   const firstSites = new Map<string, { line: number; col: number; start: number; end: number }>()
+  // First label seen for each whitespace-insensitive key, so a later label that
+  // collides with it can name its twin.
+  const firstByWhitespaceKey = new Map<string, string>()
 
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
@@ -985,6 +1021,37 @@ function collectFootnoteDefinitionWarnings(
         end: site.end,
       })
     } else {
+      // Two definitions that differ only in whitespace are LEGAL and distinct -
+      // that is the exact-matching rule working. They are also, almost always,
+      // one definition the author typed twice: the difference does not survive
+      // into rendered output and is invisible in most editors, so a reader
+      // comparing the two sees no reason they are separate footnotes.
+      //
+      // Djot's answer is to merge them, which silently drops one definition's
+      // content and emits duplicate ids. Carve keeps both and says so here
+      // instead, which is the same information without the data loss.
+      // SCOPE: this loop reads raw lines, so a definition nested in a block
+      // quote or list item is not seen here - `> [^a b]: one` and
+      // `> [^a  b]: two` are both real definitions and neither is reported.
+      // That blind spot is this scanner's, not this rule's: the sibling
+      // `duplicate-footnote-definition` misses nested definitions the same way
+      // and predates it. Closing it means teaching the scanner container
+      // prefixes, which is a change to all three definition rules at once and
+      // is filed separately rather than smuggled in here.
+      const key = whitespaceKey(label)
+      const twin = firstByWhitespaceKey.get(key)
+      if (twin !== undefined && twin !== label) {
+        out.push({
+          line: site.line,
+          column: site.col,
+          rule: 'footnote-labels-differ-only-in-whitespace',
+          message: `Footnote definitions [^${twin}] and [^${label}] differ only in whitespace, so they are two separate footnotes; labels are matched exactly.`,
+          start: site.start,
+          end: site.end,
+        })
+      } else if (twin === undefined) {
+        firstByWhitespaceKey.set(key, label)
+      }
       firstSites.set(label, site)
     }
   }

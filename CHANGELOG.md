@@ -9,6 +9,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`lintCarve` explains a near-miss footnote label.** An unresolved reference
+  whose definition differs only in whitespace now names it -
+  `Footnote reference [^a  b] has no matching definition; it renders as literal
+  text. Definition [^a b] differs only in whitespace; footnote labels are
+  matched exactly.` The rule id is unchanged, so a consumer keying on
+  `unresolved-footnote` is unaffected.
+
+- **New rule `footnote-labels-differ-only-in-whitespace`.** Two definitions
+  whose labels differ only in whitespace are legal and distinct, and are almost
+  always one definition typed twice: the difference does not survive into
+  rendered output and is invisible in most editors. Djot merges such labels,
+  which drops one definition's content and emits duplicate ids; this reports
+  the pair instead.
+
 - **`smartQuotes` locale extension.** It matches carve-php's additive
   smart-quote configuration: 20 built-in locale sets, exact-locale then
   language fallback (`de-AT` → `de`, `fr_FR` → `fr`), English fallback for an
