@@ -138,7 +138,7 @@ export {
   BbcodeInputTooLargeError,
   BBCODE_MAX_INPUT_LENGTH,
 } from './bbcode-migrate.js'
-export { markdownToCarve } from './markdown-migrate.js'
+export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
 export {
   lintCarve,
   formatLintWarnings,
