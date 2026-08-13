@@ -43,24 +43,37 @@ describe('Markdown renderer is safe-by-default', () => {
   })
 
   it('neutralizes embedded HTML in text and HTML-fallback tags', () => {
-    expect(md('plain <img onerror=x> text')).not.toContain('<img')
+    // The claim is that no TAG survives, not that a particular spelling does.
+    // PART 11 section 8a M1e escapes the `<` with a backslash rather than
+    // rewriting it to an entity, so the OPENER is what has to be checked: an
+    // `<img` preceded by a backslash cannot open, and a plain `toContain`
+    // reports the escaped form as a hit because the escape sits before it.
+    const liveTag = /(^|[^\\])<img/
+    expect(md('plain <img onerror=x> text')).not.toMatch(liveTag)
+    expect(md('plain <img onerror=x> text')).toContain('\\<img')
     const sup = md('{^<img src=x onerror=alert(1)>^}')
     expect(sup).toContain('<sup>')
-    expect(sup).not.toContain('<img')
+    expect(sup).not.toMatch(liveTag)
   })
 
-  it('entity-escapes < and > in text, and leaves & bare', () => {
-    expect(md('a < b & c')).toBe('a &lt; b & c')
+  it('escapes a < only where it would open markup, and leaves & bare', () => {
+    // M1e is conditional: a `<` before a space was never markup, so it is
+    // emitted as itself. A mid-line `>` is inert in every flavour and takes
+    // nothing either (carve#1148).
+    expect(md('a < b & c')).toBe('a < b & c')
+    expect(md('x > y')).toBe('x > y')
   })
 
   it('a bare ampersand cannot reintroduce a tag', () => {
     // The reason `&` stopped being escaped (carve#1071): an entity in Markdown
     // TEXT decodes to a CHARACTER, and a character cannot open a tag. Text
     // authored as `&lt;script&gt;` therefore comes back as the four characters
-    // a reader sees, never as live markup - which is what a bare `<` would be,
-    // and why `<` and `>` keep the entity form.
+    // a reader sees, never as live markup.
     expect(md('a &lt;script&gt; b')).toBe('a &lt;script&gt; b')
-    expect(md('a <script>x</script> b')).toBe('a &lt;script&gt;x&lt;/script&gt; b')
+    // A literal tag in text IS the hazard, and the backslash is what stops it:
+    // measured through a CommonMark reader, `a \\<script>x\\</script> b` renders
+    // the brackets as text and opens nothing.
+    expect(md('a <script>x</script> b')).toBe('a \\<script>x\\</script> b')
   })
 
   it('escapes quotes and backslashes in link/image titles', () => {

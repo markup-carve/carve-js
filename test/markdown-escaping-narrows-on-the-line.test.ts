@@ -244,7 +244,20 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
 
     it('still neutralizes embedded HTML in text', () => {
-      expect(md('a <img src=x onerror=y> b')).toBe('a &lt;img src=x onerror=y&gt; b')
+      // M1e narrows the angle bracket the same way this section narrows `_`,
+      // `#` and `[`: the `<` is escaped because a tag name follows it, and the
+      // closing `>` takes nothing because a tag that cannot open cannot be
+      // closed (carve#1148). The neutralization is unchanged - only its
+      // spelling is, from an entity to the backslash this section actually
+      // describes.
+      expect(md('a <img src=x onerror=y> b')).toBe('a \\<img src=x onerror=y> b')
+    })
+
+    it('and leaves the angle brackets that open nothing', () => {
+      // The other half, and the reason the rule is conditional: neither of
+      // these was ever markup, and both used to be rewritten anyway.
+      expect(md('a < b')).toBe('a < b')
+      expect(md('x > y')).toBe('x > y')
     })
   })
 })

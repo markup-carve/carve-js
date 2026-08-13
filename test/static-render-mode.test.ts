@@ -341,9 +341,12 @@ describe('core caption floor — unconsumed div [label]', () => {
   it('escapes a labeled div in the Markdown renderer (no live HTML)', async () => {
     const { carveToMarkdown } = await import('../src/index.js')
     const md = carveToMarkdown('::: [<img src=x onerror=alert(1)>]\nBody.\n:::')
-    // HTML metacharacters escaped, not emitted live.
-    expect(md).not.toContain('<img')
-    expect(md).toContain('&lt;img')
+    // No LIVE tag. PART 11 section 8a M1e escapes the opener with a backslash
+    // rather than rewriting it to an entity (carve#1148), so the check is on an
+    // `<img` that is NOT preceded by one - a plain substring test reports the
+    // escaped form as a hit, because the escape sits right before it.
+    expect(md).not.toMatch(/(^|[^\\])<img/)
+    expect(md).toContain('\\<img')
   })
 
   it('a labeled admonition renders title first, then the label floor', () => {
