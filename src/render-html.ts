@@ -1363,7 +1363,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     }
   }
   if (headerEnd > 0) {
-    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts))
+    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts, true))
     lines.push(`${pad}  <thead>${rows.join('')}</thead>`)
   }
   if (headerEnd < grid.length) {
@@ -1397,9 +1397,34 @@ function stripStructuralAttrs(attrs: Attrs | undefined, emitted: Set<string>): A
   return out
 }
 
+/**
+ * PART 10 §T9: a header cell states what it heads - `col` in the leading
+ * header-row run, `row` below it. Empty when the cell is not a header, or when
+ * the author named a `scope` themselves.
+ *
+ * An authored value REPLACES the default rather than joining it: emitting both
+ * gives `<th scope="col" scope="colgroup">`, two attributes of one name and
+ * invalid HTML. Suppressing it is also what keeps `colgroup` and `rowgroup`
+ * reachable, since neither has a marker spelling here.
+ *
+ * The test is case-INSENSITIVE, the one place this departs from Carve's
+ * case-sensitive attribute names: `{Scope=…}` stays a different Carve attribute
+ * and still reaches the output as `Scope`, but HTML attribute names are not
+ * case-sensitive, so emitting the default beside it is the same collision by
+ * another spelling.
+ */
+function cellScopeAttr(cell: TableCell, isHeaderCell: boolean, inHeaderRun: boolean): string {
+  if (!isHeaderCell) return ''
+  const keys = Object.keys(cell.attrs?.keyValues ?? {})
+  if (keys.some((key) => key.toLowerCase() === 'scope')) return ''
+
+  return ` scope="${inHeaderRun ? 'col' : 'row'}"`
+}
+
 function renderTableRowFlat(
   cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
   opts: RenderOptions,
+  inHeaderRun = false,
 ): string {
   // A row attribute block (`| … |{.x}`) lives on the TableRow, shared by every
   // grid entry in this row.
@@ -1424,7 +1449,10 @@ function renderTableRowFlat(
     // Author cell attributes (a `{...}` glued to the opening pipe) come first,
     // then the structural span / alignment attributes; any author copy of a
     // structural key actually emitted here is dropped to avoid a duplicate.
+    // The scope default LEADS the author's attributes, which is the order the
+    // corpus pins (`<th scope="col" class="highlight">`).
     const attrStr =
+      cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
       (attrs.length ? ' ' + attrs.join(' ') : '')
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)

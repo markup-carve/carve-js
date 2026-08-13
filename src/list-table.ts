@@ -188,6 +188,11 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
       const isHeaderCell = isHeaderRow || col < headerCols
       const tag = isHeaderCell ? 'th' : 'td'
       let attrHtml = ''
+      // PART 10 §T9, the same rule and the same position as the pipe table:
+      // `col` in the header-row run, `row` for a cell that is a header only
+      // because it falls inside `header-cols`. A ListTable and the pipe table
+      // it is equivalent to must not differ in accessibility markup.
+      if (isHeaderCell) attrHtml += ` scope="${isHeaderRow ? 'col' : 'row'}"`
       if (entry.rowspan > 1) attrHtml += ` rowspan="${entry.rowspan}"`
       if (entry.colspan > 1) attrHtml += ` colspan="${entry.colspan}"`
       // Carry the cell's own list-item attributes (e.g. `{.x}`) onto the
@@ -205,8 +210,11 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
     // suppresses padding (placement.rowReach accounts for it).
     let col = Math.max(nextCol, placement.rowReach[rowIndex]!)
     for (; col < columnCount; col++) {
-      const tag = isHeaderRow || col < headerCols ? 'th' : 'td'
-      html += `<${tag}></${tag}>`
+      const isPadHeader = isHeaderRow || col < headerCols
+      const tag = isPadHeader ? 'th' : 'td'
+      // A padded cell is still a header cell where the grid says so.
+      const scope = isPadHeader ? ` scope="${isHeaderRow ? 'col' : 'row'}"` : ''
+      html += `<${tag}${scope}></${tag}>`
     }
 
     return `<tr>${html}</tr>`

@@ -22,7 +22,7 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <caption>Quarterly results</caption>',
-        '  <thead><tr><th>Region</th><th>Notes</th></tr></thead>',
+        '  <thead><tr><th scope="col">Region</th><th scope="col">Notes</th></tr></thead>',
         '  <tbody>',
         '    <tr><td>EMEA</td><td>Strong quarter.</td></tr>',
         '  </tbody>',
@@ -59,7 +59,7 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
-  it('promotes the first N columns to row-header <th> with header-cols', () => {
+  it('promotes the first N columns to row-header <th scope="col"> with header-cols', () => {
     const src = [
       '{header-cols=1}',
       '::: list-table',
@@ -73,8 +73,8 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <tbody>',
-        '    <tr><th>Region</th><td>Revenue</td></tr>',
-        '    <tr><th>EMEA</th><td>1.2M</td></tr>',
+        '    <tr><th scope="row">Region</th><td>Revenue</td></tr>',
+        '    <tr><th scope="row">EMEA</th><td>1.2M</td></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
@@ -94,7 +94,7 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th>Region</th><th>Notes</th></tr></thead>',
+        '  <thead><tr><th scope="col">Region</th><th scope="col">Notes</th></tr></thead>',
         '  <tbody>',
         '    <tr><td>EMEA</td><td>ok</td></tr>',
         '  </tbody>',
@@ -117,8 +117,8 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <tbody>',
-        '    <tr><th>Region</th><td>Notes</td></tr>',
-        '    <tr><th>EMEA</th><td>ok</td></tr>',
+        '    <tr><th scope="row">Region</th><td>Notes</td></tr>',
+        '    <tr><th scope="row">EMEA</th><td>ok</td></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
@@ -141,9 +141,9 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th>Metric</th><th>Q1</th><th>Q2</th></tr></thead>',
+        '  <thead><tr><th scope="col">Metric</th><th scope="col">Q1</th><th scope="col">Q2</th></tr></thead>',
         '  <tbody>',
-        '    <tr><th>EMEA</th><td>1.0</td><td>1.2</td></tr>',
+        '    <tr><th scope="row">EMEA</th><td>1.0</td><td>1.2</td></tr>',
         '  </tbody>',
         '</table>',
       ].join('\n'),
@@ -313,7 +313,7 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <caption>Sales</caption>',
-        '  <thead><tr><th>Region</th><th>Q1</th><th>Q2</th></tr></thead>',
+        '  <thead><tr><th scope="col">Region</th><th scope="col">Q1</th><th scope="col">Q2</th></tr></thead>',
         '  <tbody>',
         '    <tr><td rowspan="2">EMEA</td><td>10</td><td>12</td></tr>',
         '    <tr><td>14</td><td>16</td></tr>',
@@ -367,7 +367,7 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th>A</th><th>B</th><th>C</th></tr></thead>',
+        '  <thead><tr><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th></tr></thead>',
         '  <tbody>',
         '    <tr><td></td><td>E</td><td>F</td></tr>',
         '  </tbody>',
@@ -391,7 +391,7 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th colspan="2">A</th><th>C</th></tr></thead>',
+        '  <thead><tr><th scope="col" colspan="2">A</th><th scope="col">C</th></tr></thead>',
         '  <tbody>',
         '    <tr><td>x</td><td></td><td>y</td></tr>',
         '  </tbody>',
@@ -416,7 +416,7 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th>H1</th><th>H2</th></tr></thead>',
+        '  <thead><tr><th scope="col">H1</th><th scope="col">H2</th></tr></thead>',
         '  <tbody>',
         '    <tr><td rowspan="2">A</td><td>B</td></tr>',
         '    <tr><td>C</td></tr>',
@@ -450,7 +450,7 @@ describe('list-table Tier-3 extension', () => {
     // A fuzz-found overlap: a `^` whose source cell was itself merged by a `<`.
     // The span resolution (rowspan/colspan attributes) must match the equivalent
     // carve-js pipe table exactly. Compared after stripping pure-empty padding
-    // <td></td>/<th></th> cells - the list-table pads ragged/overlapping grids
+    // <td></td>/<th scope="col"></th> cells - the list-table pads ragged/overlapping grids
     // rectangular while the pipe table leaves the browser to auto-flow, a layout
     // difference that does not affect the span markup itself.
     const rows = [
@@ -573,7 +573,7 @@ describe('list-table Tier-3 extension', () => {
     expect(html).toBe(
       [
         '<table>',
-        '  <thead><tr><th>H1</th><th>H2</th></tr></thead>',
+        '  <thead><tr><th scope="col">H1</th><th scope="col">H2</th></tr></thead>',
         '  <tbody>',
         '    <tr><td></td><td>x</td></tr>',
         '  </tbody>',

@@ -18,7 +18,7 @@ describe('table row attributes ({...} glued to the closing pipe)', () => {
 
   it('applies to a header row and composes with the GFM separator', () => {
     expect(h('| H |{.hd}\n|---|\n| c |{.bd}')).toBe(
-      '<table>\n  <thead><tr class="hd"><th>H</th></tr></thead>\n  <tbody>\n    <tr class="bd"><td>c</td></tr>\n  </tbody>\n</table>',
+      '<table>\n  <thead><tr class="hd"><th scope="col">H</th></tr></thead>\n  <tbody>\n    <tr class="bd"><td>c</td></tr>\n  </tbody>\n</table>',
     )
   })
 
