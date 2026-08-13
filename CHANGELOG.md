@@ -7,6 +7,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Markdown target escapes `<` only where it would open markup** (PART 11
+  §8a M1e, markup-carve/carve#1148). `<` and `>` were rewritten to `&lt;` and
+  `&gt;` unconditionally, with no clause behind it. A `<` is now escaped with a
+  BACKSLASH when the next character is an ASCII letter, `/`, `!` or `?` - the
+  four things that open raw HTML - and left alone otherwise; `>` takes nothing,
+  since it is inert mid-line and a block quote marker at line start, which M1
+  already covers. So `a < b` survives as itself instead of becoming
+  `a &lt; b`, and `a <b> c` becomes `a \<b> c`, which a CommonMark reader gives
+  back as text. An entity is not an escape: it replaces the character rather
+  than protecting it, which is why the old behavior could not be derived from
+  the section.
+
 ### Fixed
 
 - **`htmlToCarve` keeps an authored table-cell `scope` position cannot explain**

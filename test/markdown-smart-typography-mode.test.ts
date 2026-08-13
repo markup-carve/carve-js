@@ -33,7 +33,11 @@ describe('markdown smart typography mode', () => {
     // bare on this target (carve#1071); what this asserts is that the smart
     // typography mode does not change that either way.
     expect(carveToMarkdown('a & b', { smartTypography: 'source' }).trim()).toBe('a & b')
-    expect(carveToMarkdown('a < b', { smartTypography: 'source' }).trim()).toBe('a &lt; b')
+    // A `<` before a space opens nothing, so M1e leaves it alone too
+    // (carve#1148); one before a tag name is escaped, in this mode as in any
+    // other.
+    expect(carveToMarkdown('a < b', { smartTypography: 'source' }).trim()).toBe('a < b')
+    expect(carveToMarkdown('a <b> c', { smartTypography: 'source' }).trim()).toBe('a \\<b> c')
   })
 
   it('leaves code spans alone', () => {

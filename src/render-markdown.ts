@@ -816,12 +816,26 @@ function escapeText(text: string): string {
   // this renderer sees `"a &"` and `"; b"` as separate text nodes. That is the
   // mistake section 8a documents for `_`, `#` and `[`, which is why those three
   // are emitted as sentinels and decided in normalize().
-  text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  // Escape Markdown metacharacters (none overlap with the HTML chars above).
+  // Escape Markdown metacharacters (none overlap with the angle brackets
+  // handled below).
   // `_`, `#` and `[` are emitted as SENTINELS rather than as backslashes:
   // section 8a decides those three on the EMITTED LINE, which only normalize()
   // can see. `*` and everything else keep M1 here and unconditionally.
-  return text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+  text = text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+  // PART 11 section 8a M1e: a `<` is escaped only where the emitted line would
+  // read it as markup - before an ASCII letter, `/`, `!` or `?`, the four
+  // things that open raw HTML. Everything else is inert, and so is `>`
+  // mid-line; at line start `>` is a block quote marker M1 already covers.
+  //
+  // A BACKSLASH, not an entity. This wrote `&lt;`/`&gt;` unconditionally with no
+  // clause behind it (carve#1148), and that is precisely because an entity is
+  // not the operation this section describes: M2 and M3 protect a character so
+  // it survives as itself, and `&lt;` replaces it instead. Escaping the `<`
+  // alone suffices - a tag that cannot open cannot be closed.
+  //
+  // AFTER the metacharacter pass, so the backslash this inserts is not itself
+  // escaped by it.
+  return text.replace(/<(?=[A-Za-z/!?])/g, '\\<')
 }
 
 /** Keep paragraph continuation lines from becoming lists in Markdown readers. */
