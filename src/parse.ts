@@ -9017,12 +9017,24 @@ function isValidAttrPayload(inner: string): boolean {
   // producers spell this run (here, `parseAttrs`'s `re` below, and WS_NO_NL's
   // fast path); they move together or the fast path accepts what the regex
   // rejects.
-  const stripped = inner.replace(
-    /(?:#[a-zA-Z_][\w-]*)|(?:\.[a-zA-Z_][\w-]*)|(?:[a-zA-Z_][\w-]*=(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^ \t\n\r]+))|(?:(?<=^|[ \t\n\r]):(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?(?=[ \t\n\r]|$))|(?:[a-zA-Z_][\w-]*)|[ \t\n\r]+/g,
-    '',
-  )
-  return stripped === ''
+  // A SEPARATOR IS REQUIRED BETWEEN TWO ATTRIBUTES. `attribute_list` is
+  // `attribute, {space+, attribute}` (PART 7), so `{.a.b}` and `{#i.c}` are not
+  // attribute blocks and stay literal. This engine used to strip items and
+  // whitespace in any order and accept whatever emptied, which admitted every
+  // adjacent pair; the executable spec has always refused them, and nothing in
+  // the corpus pinned the question either way.
+  return ATTR_PAYLOAD.test(inner)
 }
+
+/**
+ * `^ ws* item (ws+ item)* ws*$`, spelled once. Anchored rather than stripped,
+ * because stripping cannot express "these two may not touch".
+ */
+const ATTR_ITEM_SRC =
+  '(?:#[a-zA-Z_][\\w-]*)|(?:\\.[a-zA-Z_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z_][\\w-]*)'
+const ATTR_PAYLOAD = new RegExp(
+  `^[ \\t\\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\t\\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\t\\n\\r]*)?$`,
+)
 
 /**
  * The same question for an INLINE attribute block, which additionally requires
