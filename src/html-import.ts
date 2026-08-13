@@ -133,6 +133,13 @@ class Importer {
         keyValues[name] = attr.value
       } else if (name === 'title' && node.tagName !== 'a' && node.tagName !== 'img') {
         keyValues.title = attr.value
+      } else if (name === 'scope' && node.tagName === 'th') {
+        // Kept here, and dropped again in `table()` when it matches the value
+        // the renderer derives from position. `colgroup` and `rowgroup` have no
+        // marker spelling and no positional derivation, so an authored one is
+        // the only way to reach them and nothing can reconstruct it
+        // (markup-carve/carve-js#1032).
+        keyValues.scope = attr.value
       } else if (!this.isSemanticHtmlAttribute(node.tagName ?? '', name)) {
         this.add('attribute-dropped', `Dropped unsupported attribute ${name} on <${node.tagName}>`, 'info', path)
       }
@@ -259,6 +266,19 @@ class Importer {
       else for (const child of n.childNodes ?? []) walk(child)
     }
     walk(node)
+    // The leading run of all-header rows is what PART 10 §T9 gives `scope="col"`;
+    // a header cell below it gets `scope="row"`. Computed over the rows rather
+    // than per cell, because the run ENDS at the first row carrying a `td` and
+    // a cell cannot see that on its own.
+    const headerCells = (row: P5Node): P5Node[] =>
+      (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+    let leadingHeaderRows = 0
+    for (const row of tr) {
+      const cells = headerCells(row)
+      if (cells.length === 0 || !cells.every((n) => n.tagName === 'th')) break
+      leadingHeaderRows += 1
+    }
+
     const rows: TableRow[] = tr.map((row, r) => ({
       type: 'table_row',
       cells: (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c): TableCell => {
@@ -267,7 +287,35 @@ class Importer {
           this.add('table-degraded', 'Table spans were flattened by this importer', 'warning', cellPath)
         }
         const cellAttrs = this.attrs(cell, cellPath)
-        return { type: 'table_cell', header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(cellAttrs ? { attrs: cellAttrs } : {}) }
+        // A `scope` the renderer would regenerate from position is the
+        // generator's own output, not something the author typed: importing it
+        // writes it back as if they had. Only a value position cannot explain
+        // survives.
+        const scope = cellAttrs?.keyValues?.scope
+        if (scope !== undefined) {
+          const positional = r < leadingHeaderRows ? 'col' : 'row'
+          // Outside the leading header run there is nowhere to put it: the
+          // grammar gives `header_cell` no attribute slot (`header_cell = '=',
+          // …` against `data_cell = [cell_attributes], …`), so the writer spells
+          // such a cell `|{scope=…}=A|`, which re-parses as a DATA cell whose
+          // content is the literal `=A`. Keeping the value there would trade a
+          // header cell for an attribute. Reported rather than silently traded.
+          const spellable = r < leadingHeaderRows
+          if (scope === positional || !spellable) {
+            delete cellAttrs!.keyValues!.scope
+            if (Object.keys(cellAttrs!.keyValues!).length === 0) delete cellAttrs!.keyValues
+            if (scope !== positional) {
+              this.add(
+                'attribute-dropped',
+                `Dropped scope="${scope}" on a header cell below the header rows: Carve has no attribute slot on a header cell`,
+                'warning',
+                cellPath,
+              )
+            }
+          }
+        }
+        const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
+        return { type: 'table_cell', header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) }
       }),
     }))
     return { type: 'table', rows, ...(attrs ? { attrs } : {}) }
