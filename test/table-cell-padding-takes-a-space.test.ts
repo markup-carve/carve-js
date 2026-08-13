@@ -24,7 +24,7 @@ import { carveToHtml } from '../src/index.js'
  * every corpus document.
  */
 
-/** Rendered `<td>`/`<th>` inner texts, in document order. */
+/** Rendered `<td>`/`<th scope="col">` inner texts, in document order. */
 const cells = (html: string): string[] =>
   [...html.matchAll(/<t([dh])(?:\s[^>]*)?>([\s\S]*?)<\/t\1>/g)].map((m) => m[2]!)
 

@@ -15,7 +15,7 @@ describe('table `+` multi-line cell continuation', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th>Feature</th><th>Description</th></tr></thead>',
+        '  <thead><tr><th scope="col">Feature</th><th scope="col">Description</th></tr></thead>',
         '  <tbody>',
         '    <tr><td>Complex</td><td>A long description that continues across lines.</td></tr>',
         '    <tr><td>Simple</td><td>Single line.</td></tr>',
@@ -53,7 +53,7 @@ describe('table `+` multi-line cell continuation', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th>Category</th><th>Item</th></tr></thead>',
+        '  <thead><tr><th scope="col">Category</th><th scope="col">Item</th></tr></thead>',
         '  <tbody>',
         '    <tr><td rowspan="2">Fresh Fruits from local farms</td><td>Apple</td></tr>',
         '    <tr><td>Banana</td></tr>',
@@ -67,7 +67,7 @@ describe('table `+` multi-line cell continuation', () => {
     expect(h('|=A|\n|^|')).toBe(
       [
         '<table>',
-        '  <thead><tr><th rowspan="2">A</th></tr></thead>',
+        '  <thead><tr><th scope="col" rowspan="2">A</th></tr></thead>',
         '  <tbody>',
         '    <tr></tr>',
         '  </tbody>',
@@ -106,7 +106,7 @@ describe('table `+` multi-line cell continuation', () => {
     expect(h('| a | b |\n| - | - |\n+ cont |')).toBe(
       [
         '<table>',
-        '  <thead><tr><th>a</th><th>b</th></tr></thead>',
+        '  <thead><tr><th scope="col">a</th><th scope="col">b</th></tr></thead>',
         '</table>',
         '<p>+ cont |</p>',
       ].join('\n'),
