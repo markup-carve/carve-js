@@ -7,6 +7,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).
+  `collectPortableWhitespace` was retained behind an explicit
+  `void collectPortableWhitespace` statement and called from nowhere, so the id
+  could not fire for any input or option - the blockquote marker rule became core
+  syntax and is reported by `blockquote-marker-without-space`, which is
+  documented and does fire. No behavior changes: the `portable` option was
+  already a no-op and still accepts its value, so no caller breaks.
+
 ### Fixed
 
 - **An abbreviation expands inside the `:name[…]` extension form**
