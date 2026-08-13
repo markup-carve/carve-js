@@ -577,7 +577,7 @@ const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
  * Mirrors SEMANTIC_SPAN_ORDER in render-html.ts. A name added there and not
  * here goes unreported by both rules below.
  */
-const SEMANTIC_SPAN_NAMES = ['abbr', 'time', 'code', 'mark', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+const SEMANTIC_SPAN_NAMES = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
 
 /**
  * The three names whose authored value reaches the output, as `title` or

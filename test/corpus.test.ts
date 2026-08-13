@@ -34,6 +34,7 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'the-semantic-registry-holds-no-element-carve-already-spells',
   'a-boolean-lang-is-the-third-spelling-of-the-same-key',
   'a-language-attribute-is-exact-sugar-for-lang',
   'a-malformed-language-tag-leaves-the-whole-block-literal',
