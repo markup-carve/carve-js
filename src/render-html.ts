@@ -1162,16 +1162,28 @@ function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number):
     child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
   )
   const visible = node.children.filter((_, i) => rendered[i] !== '')
-  if (visible.length === 1 && visible[0]!.type === 'paragraph') {
+  // PART 9 §4a: a `^` caption on a quote is its ATTRIBUTION, and it renders
+  // INSIDE the quote - where a quotation's source belongs - rather than turning
+  // the quote into a figure with a figcaption (carve#1159).
+  const attribution =
+    node.attribution === undefined
+      ? ''
+      : `\n${pad}  <footer>${renderInlines(node.attribution, opts)}</footer>`
+  if (visible.length === 1 && visible[0]!.type === 'paragraph' && attribution === '') {
     const para = visible[0] as Paragraph
     const inner = renderInlines(para.children, opts)
     return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
+  }
+  if (attribution !== '' && visible.length === 1 && visible[0]!.type === 'paragraph') {
+    const para = visible[0] as Paragraph
+    const inner = renderInlines(para.children, opts)
+    return `${pad}<blockquote${attrs}>\n${pad}  <p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p>${attribution}\n${pad}</blockquote>`
   }
   const inner = node.children
     .map((child, i) => rendered[i] ?? renderBlock(child, opts, level + 1))
     .filter((piece) => piece !== '')
     .join('\n')
-  return `${pad}<blockquote${attrs}>\n${inner}\n${pad}</blockquote>`
+  return `${pad}<blockquote${attrs}>\n${inner}${attribution}\n${pad}</blockquote>`
 }
 
 function renderList(node: List, opts: RenderOptions, level: number): string {

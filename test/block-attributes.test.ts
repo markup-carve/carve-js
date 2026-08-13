@@ -154,7 +154,7 @@ describe('block attribute lines (§15)', () => {
 
   it('attaches attributes to a figure', () => {
     expect(h('{#f}\n> q\n^ cap')).toBe(
-      '<figure id="f">\n  <blockquote><p>q</p></blockquote>\n  <figcaption>cap</figcaption>\n</figure>',
+      '<blockquote id="f">\n  <p>q</p>\n  <footer>cap</footer>\n</blockquote>',
     )
   })
 

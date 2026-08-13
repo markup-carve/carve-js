@@ -11,7 +11,7 @@ export const WIRE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "abbreviation_def": ["abbr", "attrs", "expansion", "pos", "type"],
   "admonition": ["attrs", "children", "kind", "label", "pos", "title", "type"],
   "autolink": ["attrs", "href", "pos", "text", "type"],
-  "block_quote": ["attrs", "children", "pos", "type"],
+  "block_quote": ["attribution", "attrs", "children", "pos", "type"],
   "caption_number": ["attrs", "n", "pos", "type"],
   "citation_group": ["attrs", "items", "mode", "pos", "raw", "type"],
   "code": ["attrs", "pos", "type", "value"],
@@ -84,6 +84,7 @@ export const WIRE_HELPER_FIELDS: Readonly<Record<string, readonly string[]>> = {
  * shaped {"type":"widget"} in the tree.
  */
 export const NODE_FIELDS: readonly string[] = [
+  "attribution",
   "caption",
   "cells",
   "children",
@@ -120,6 +121,7 @@ export const NODE_FIELDS: readonly string[] = [
 export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'records'>> = {
   "admonition.children": "nodes",
   "admonition.title": "nodes",
+  "block_quote.attribution": "nodes",
   "block_quote.children": "nodes",
   "citation_group.items": "records",
   "definition_description.children": "nodes",
@@ -246,7 +248,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "admonition": { "attrs": "object", "children": "array", "kind": "string", "label": "string", "pos": "object", "title": "array" },
   "attrs": { "classes": "string[]", "id": "string", "keyValues": "object", "order": "string[]" },
   "autolink": { "attrs": "object", "href": "string", "pos": "object", "text": "string" },
-  "block_quote": { "attrs": "object", "children": "array", "pos": "object" },
+  "block_quote": { "attribution": "array", "attrs": "object", "children": "array", "pos": "object" },
   "caption_number": { "attrs": "object", "n": "integer", "pos": "object" },
   "citation_group": { "attrs": "object", "items": "array", "pos": "object", "raw": "string" },
   "code": { "attrs": "object", "pos": "object", "value": "string" },
@@ -318,6 +320,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
 export const NODE_POSITION_TYPES: Readonly<Record<string, readonly string[]>> = {
   "admonition.children": ["abbreviation_def", "admonition", "block_quote", "code_block", "comment", "definition_description", "definition_list", "definition_term", "div", "figure", "footnote", "frontmatter", "heading", "image", "line_block", "link_reference_definition", "list", "list_item", "paragraph", "raw_block", "table", "table_cell", "table_row", "thematic_break"],
   "admonition.title": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
+  "block_quote.attribution": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
   "block_quote.children": ["abbreviation_def", "admonition", "block_quote", "code_block", "comment", "definition_description", "definition_list", "definition_term", "div", "figure", "footnote", "frontmatter", "heading", "image", "line_block", "link_reference_definition", "list", "list_item", "paragraph", "raw_block", "table", "table_cell", "table_row", "thematic_break"],
   "definition_description.children": ["abbreviation_def", "admonition", "block_quote", "code_block", "comment", "definition_description", "definition_list", "definition_term", "div", "figure", "footnote", "frontmatter", "heading", "image", "line_block", "link_reference_definition", "list", "list_item", "paragraph", "raw_block", "table", "table_cell", "table_row", "thematic_break"],
   "definition_list.items": ["definition_description", "definition_term"],
@@ -328,7 +331,7 @@ export const NODE_POSITION_TYPES: Readonly<Record<string, readonly string[]>> = 
   "emphasis.children": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
   "figure.caption": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
   "figure.shortCaption": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
-  "figure.target": ["block_quote", "code_block", "image", "paragraph", "table"],
+  "figure.target": ["code_block", "image", "paragraph", "table"],
   "footnote.children": ["abbreviation_def", "admonition", "block_quote", "code_block", "comment", "definition_description", "definition_list", "definition_term", "div", "figure", "footnote", "frontmatter", "heading", "image", "line_block", "link_reference_definition", "list", "list_item", "paragraph", "raw_block", "table", "table_cell", "table_row", "thematic_break"],
   "heading.children": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
   "highlight.children": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],

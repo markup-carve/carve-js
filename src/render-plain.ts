@@ -89,8 +89,15 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'code_block':
       return `${stripControls(node.content)}\n\n`
-    case 'block_quote':
-      return `"${trimNonNbsp(renderBlocks(node.children, ctx))}"\n\n`
+    case 'block_quote': {
+      const quoted = `"${trimNonNbsp(renderBlocks(node.children, ctx))}"`
+      // The attribution is visible content, so a text target keeps it.
+      // A BLANK LINE, not a single newline: the attribution is a separate block
+      // in a text target, and the non-html parity test names that spacing.
+      const attribution =
+        node.attribution === undefined ? '' : `\n\n${renderInlines(node.attribution, ctx)}`
+      return `${quoted}${attribution}\n\n`
+    }
     case 'list':
       return renderList(node, ctx)
     case 'thematic_break':

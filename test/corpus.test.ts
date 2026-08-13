@@ -36,6 +36,7 @@ if (!existsSync(corpusDir)) {
 const IMPLEMENTED = new Set([
   'a-semantic-name-renames-the-span-and-the-leftovers-ride-the-element',
   'a-derived-title-yields-to-an-authored-one',
+  'two-attributes-need-a-separator-between-them',
   'the-semantic-registry-holds-no-element-carve-already-spells',
   'a-boolean-lang-is-the-third-spelling-of-the-same-key',
   'a-language-attribute-is-exact-sugar-for-lang',
@@ -377,69 +378,6 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    "293-a-semantic-span-keeps-its-wrapper-unless-consumption-empties-it-3",
-    {
-      reason: "the tier split: leftovers ride the outermost semantic element instead of an outer span",
-      html: "<p><kbd>x</kbd></p>",
-    },
-  ],
-  [
-    "45-inline-extensions",
-    {
-      reason: "the tier split (spec PART 9 §9/§10): core reserves three span attributes and registers no `:name[…]` handler",
-      html: "<p>Press <span class=\"ext-kbd\">Ctrl+C</span> to copy.</p>",
-    },
-  ],
-  [
-    "45-inline-extensions-7",
-    {
-      reason: "the tier split (spec PART 9 §9/§10): core reserves three span attributes and registers no `:name[…]` handler",
-      html: "<p><span class=\"ext-abbr\" title=\"HyperText Markup Language\">HTML</span> <span class=\"ext-cite\">The Book</span> <span class=\"ext-dfn\">term</span>\n<span class=\"ext-samp\">ready</span> <span class=\"ext-var\">x</span> <span class=\"ext-time\" datetime=\"12:00\">noon</span> <span class=\"ext-code\">x</span> <span class=\"ext-mark\">relevant</span></p>",
-    },
-  ],
-  [
-    "45-inline-extensions-8",
-    {
-      reason: "the tier split (spec PART 9 §9/§10): core reserves three span attributes and registers no `:name[…]` handler",
-      html: "<p><span id=\"copy\" class=\"ext-kbd shortcut\" data-key=\"copy\"><strong>Ctrl</strong>+C</span></p>",
-    },
-  ],
-  [
-    "45-inline-extensions-9",
-    {
-      reason: "the tier split: `dfn`, `samp`, `var`, `cite`, `code` and `mark` are not core names, so they ride the element they were written on as ordinary attributes",
-      html: "<p><abbr title=\"Cascading Style Sheets\" dfn=\"\">CSS</abbr>\n<time datetime=\"12:00\">Noon</time> <kbd code=\"\" mark=\"\" samp=\"\" var=\"\" cite=\"\">x</kbd></p>",
-    },
-  ],
-  [
-    "45-inline-extensions-10",
-    {
-      reason: "the tier split: leftovers ride the outermost semantic element instead of an outer span",
-      html: "<p><kbd id=\"copy\" class=\"shortcut\" data-key=\"copy\"><strong>Ctrl</strong>+C</kbd>\n<kbd>x</kbd></p>",
-    },
-  ],
-  [
-    "46-symbols",
-    {
-      reason: "the tier split (spec PART 9 §9/§10): core reserves three span attributes and registers no `:name[…]` handler",
-      html: "<p>Great :rocket: and <span class=\"ext-kbd\">Ctrl</span> is an extension.</p>",
-    },
-  ],
-  [
-    "71-attribute-edge-cases-8",
-    {
-      reason: "the tier split (spec PART 9 §9/§10): core reserves three span attributes and registers no `:name[…]` handler",
-      html: "<p><span class=\"ext-kbd\" k=\"{y}\">x</span></p>",
-    },
-  ],
-  [
-    "71-attribute-edge-cases-10",
-    {
-      reason: "the tier split (spec PART 9 §9/§10): core reserves three span attributes and registers no `:name[…]` handler",
-      html: "<p><span class=\"ext-kbd foo\">x</span></p>",
-    },
-  ],
 ])
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
