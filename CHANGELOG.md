@@ -9,6 +9,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`htmlToCarve` keeps an authored table-cell `scope` position cannot explain**
+  (markup-carve/carve-js#1032). `<th scope="colgroup">` imports as
+  `|{scope=colgroup}A|`; `scope="col"` in the leading header run and
+  `scope="row"` below it are still dropped, because the renderer derives those
+  from position and importing them would write the generator's own output back
+  as if the author had typed it. A `scope` on a header cell BELOW the header
+  rows is dropped with a diagnostic rather than kept: `header_cell` has no
+  attribute slot in the grammar, so writing it produces `|{scope=…}=A|`, which
+  re-parses as a data cell whose content is the literal `=A`.
+
+### Fixed
+
 - **`lintCarve` reports the semantic-attribute rules against the render the
   caller configured** (markup-carve/carve#1167). PART 9 §9 splits the reserved
   names by tier, so `samp`, `var`, `cite` and `dfn` become elements only once

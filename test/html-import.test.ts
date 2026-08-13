@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, htmlToAst, htmlToCarve } from '../src/index.js'
+import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -63,5 +63,42 @@ describe('HTML import', () => {
   it('enforces resource limits with a typed error', () => {
     expect(() => htmlToAst('<p>x</p>', { maxNodes: 1 })).toThrow(HtmlImportLimitError)
     expect(() => htmlToAst('<p onclick="x()">x</p>', { maxDiagnostics: 0 })).toThrow(HtmlImportLimitError)
+  })
+})
+
+/*
+ * An authored `scope` is only worth importing where position cannot explain it
+ * (markup-carve/carve-js#1032). The renderer derives `col` in the leading
+ * header run and `row` below it, so importing those writes the generator's own
+ * output back as if the author had typed it - the bug carve-php fixed alongside
+ * markup-carve/carve-php#1234.
+ *
+ * The pairs are the point: each kept value has a dropped twin, because "keeps
+ * scope" and "keeps only what position cannot explain" are different claims.
+ */
+describe('table cell scope on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('drops a scope the renderer derives from position', () => {
+    expect(carve('<table><thead><tr><th scope="col">A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>'))
+      .toBe('|=A|\n| 1 |')
+    expect(carve('<table><tbody><tr><th scope="row">A</th><td>1</td></tr></tbody></table>')).toBe('|=A| 1 |')
+  })
+
+  it('keeps a scope position cannot explain, and it round-trips', () => {
+    const source = carve('<table><thead><tr><th scope="colgroup">A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>')
+    expect(source).toBe('|{scope=colgroup}A|\n|---|\n| 1 |')
+    expect(carveToHtml(source)).toContain('<th scope="colgroup">A</th>')
+  })
+
+  it('reports the one it cannot spell instead of trading the header for it', () => {
+    // `header_cell = '=', …` has no attribute slot - only `data_cell` does - so
+    // a header cell BELOW the header rows cannot carry one. Writing it anyway
+    // produces `|{scope=rowgroup}=A|`, which re-parses as a data cell whose
+    // content is the literal `=A`.
+    const html = '<table><tbody><tr><th scope="rowgroup">A</th><td>1</td></tr></tbody></table>'
+    expect(carve(html)).toBe('|=A| 1 |')
+    expect(codes(html)).toContain('attribute-dropped')
   })
 })
