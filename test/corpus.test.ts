@@ -377,8 +377,9 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+
+
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
@@ -392,6 +393,24 @@ const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+/*
+ * AN ENTRY THAT NAMES NOTHING IS NOT A PASS.
+ *
+ * The two assertions below only run for an entry whose slug is IN the corpus,
+ * so a declaration left behind after an upstream RENAME - which is what a spec
+ * change does to a category whose section title moved - matched no case, ran no
+ * assertion, and read as coverage. That is how the tier-split entries survived
+ * the bump that made them stale: `293-a-semantic-span-keeps-its-wrapper-…`
+ * became `293-a-semantic-name-renames-the-span-…` upstream, and nine entries
+ * quietly stopped being checked in either direction.
+ */
+describe('AHEAD_OF_PIN', () => {
+  it('names only corpus cases that exist', () => {
+    const orphaned = [...AHEAD_OF_PIN.keys()].filter((slug) => !pairs.includes(slug))
+    expect(orphaned, 'renamed upstream, or already retired - either way the entry asserts nothing').toEqual([])
+  })
+})
 
 describe('spec corpus population', () => {
   it('matches the independently derived example count', () => {
