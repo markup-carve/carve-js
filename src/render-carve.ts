@@ -1706,7 +1706,16 @@ function renderAttrs(attrs: Attrs | undefined): string {
   const emitKey = (key: string) => {
     if (kv[key] === undefined) return
     const value = kv[key]!
-    if (key.toLowerCase() === 'lang' && isLanguageTag(value)) parts.push(`:${value}`)
+    // EXACT key match, not case-insensitive. `LANG` and `lang` are different
+    // attribute names - the parser keeps the authored case and the HTML shows
+    // it - so folding here rewrote `[x]{LANG=fr}` into `[x]{:fr}` and changed
+    // the name, which breaks PART 11 §1 (carve#1137).
+    if (key === 'lang' && isLanguageTag(value)) parts.push(`:${value}`)
+    // PART 11 §6c: a value-less attribute comes back as the bare name, which is
+    // the production the language has for it. Guarded on the key being a valid
+    // attribute identifier, because that is what `boolean_attribute` is - a key
+    // that needs escaping has no bare spelling to fall back to.
+    else if (value === '' && isAttrIdentifier(key)) parts.push(escapeAttrKey(key))
     else parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(value)}`)
   }
 

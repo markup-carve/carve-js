@@ -22,7 +22,9 @@ describe('compact semantic span attributes', () => {
     expect(node).toMatchObject({ type: 'span', attrs: { keyValues: { kbd: '' } } })
     expect(renderPlainText(doc)).toBe('Ctrl\n')
     expect(renderAnsi(doc)).toBe('Ctrl\n')
-    expect(renderCarve(doc)).toBe('[Ctrl]{kbd=""}\n')
+    // PART 11 §6c: a value-less attribute comes back as the bare name, which is
+    // also the form PART 9 §10 documents for this construct.
+    expect(renderCarve(doc)).toBe('[Ctrl]{kbd}\n')
   })
 
   it('leaves unknown and case-variant attributes ordinary', () => {
