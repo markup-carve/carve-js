@@ -7,6 +7,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An abbreviation expands inside the `:name[…]` extension form**
+  (markup-carve/carve#1151). PART 9R R3 matches a term in rendered text at word
+  boundaries and says nothing about the container it sits in, but an
+  `inline_extension` keeps its inlines under `content` while the abbreviation
+  walk recursed generically into `children` - so `:kbd[HTML]` silently dropped
+  an expansion that `*HTML*`, `[HTML](/u)` and `[HTML]{.x}` all got.
+
 ### Changed
 
 - **The Markdown target escapes `<` only where it would open markup** (PART 11

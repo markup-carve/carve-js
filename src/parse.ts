@@ -8845,6 +8845,18 @@ function applyAbbreviations(
           defs,
         )
       }
+      // An inline_extension keeps its inlines under `content`, not `children`,
+      // so the generic recursion above never reached them and `:kbd[HTML]`
+      // silently dropped an expansion that `*HTML*` and `[HTML](/u)` got.
+      // PART 9R R3 matches a term in RENDERED TEXT at word boundaries and says
+      // nothing about the container it sits in (carve#1151).
+      const anyContent = (node as unknown as { content?: InlineNode[] }).content
+      if (Array.isArray(anyContent)) {
+        ;(node as unknown as { content: InlineNode[] }).content = applyAbbreviations(
+          anyContent,
+          defs,
+        )
+      }
       out.push(node)
       continue
     }
