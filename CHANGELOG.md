@@ -7,6 +7,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **`code` and `mark` leave the built-in semantic registry.** Both spellings
+  follow the spec's seven-name list - `abbr`, `time`, `samp`, `var`, `kbd`,
+  `cite`, `dfn` - so `:code[x]` and `:mark[x]` take the generic
+  `<span class="ext-NAME">` fallback and `[x]{code}` / `[x]{mark}` are ordinary
+  boolean attributes on the outer span. A name belongs in the registry only
+  where Carve has no other way to write that element, and these two have one:
+  a code span writes `<code>`, `=x=` writes `<mark>`. `code` was also the name
+  that made the duplication a defect rather than a wart - a code span is
+  verbatim while an extension body is parsed, so `` `*b*` `` and `:code[*b*]`
+  produced the same tag with different content models, and nothing reported
+  the switch (markup-carve/carve#1146). `lintCarve` follows: a value on `code`
+  or `mark` is no longer reported as ignored, because it is no longer ignored.
+
 ### Added
 
 - **`carve migrate --from` reaches the Markdown and BBCode importers**, not

@@ -718,7 +718,7 @@ function renderAttrs(attrs?: Attrs): string {
   return parts.length ? ' ' + parts.join(' ') : ''
 }
 
-const SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'code', 'mark', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+const SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
 
 /** Render PART 10 §10 compact semantic attributes on an ordinary span. */
 function renderSemanticSpan(node: Span, opts: RenderOptions): string {
@@ -1840,7 +1840,12 @@ function renderExtension(
   // Author attributes on the extension (grammar §415 `extension_inline …
   // [attributes]`) attach to its output element, e.g. `:kbd[x]{.foo}`.
   // Handle common semantic shorthands
-  const semanticTags = new Set(['kbd', 'dfn', 'abbr', 'cite', 'samp', 'var', 'code', 'mark', 'time'])
+  // PART 9 §9: the registry holds no element Carve already spells, so
+  // `code` and `mark` are NOT here - a code span writes <code> and =x= writes
+  // <mark>. `code` was also the name that turned a duplicate into a defect: a
+  // code span is verbatim and this body is parsed, so one tag carried two
+  // content models depending on which spelling the author reached for.
+  const semanticTags = new Set(['kbd', 'dfn', 'abbr', 'cite', 'samp', 'var', 'time'])
   if (semanticTags.has(name)) {
     return `<${name}${renderAttrs2(attrs)}>${inner}</${name}>`
   }

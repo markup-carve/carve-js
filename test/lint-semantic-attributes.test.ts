@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { lintCarve } from '../src/lint.js'
 import { carveToHtml } from '../src/index.js'
 
-// PART 9 §10 gives nine names a wrapper meaning on an ordinary span. Neither
+// PART 9 §10 gives seven names a wrapper meaning on an ordinary span. Neither
 // rule here describes an engine defect - carve-js, carve-php and carve-rs
 // render every shape below byte-identically, and exactly as the clause says.
 // They report the two places where the clause's own scope loses something the
@@ -19,12 +19,20 @@ const rules = (source: string): string[] =>
   lintCarve(source).map((w) => w.rule).filter((r) => r.startsWith('semantic-'))
 
 describe('a value on a wrapper-only semantic attribute is reported', () => {
-  it.each(['code', 'mark', 'samp', 'var', 'kbd', 'cite'])(
+  it.each(['samp', 'var', 'kbd', 'cite'])(
     'reports a value on %s, which only selects the wrapper',
     (name) => {
       expect(rules(`[x]{${name}="V"}\n`)).toEqual(['semantic-attribute-value-ignored'])
     },
   )
+
+  // `code` and `mark` left the registry (PART 9 §9), so there is no wrapper to
+  // select and no value to lose: both are ordinary attributes that reach the
+  // output. A rule still firing here would report a loss that is not happening.
+  it.each(['code', 'mark'])('stays quiet for %s, which is no longer a semantic name', (name) => {
+    expect(rules(`[x]{${name}="V"}\n`)).toEqual([])
+    expect(carveToHtml(`[x]{${name}="V"}\n`).trim()).toBe(`<p><span ${name}="V">x</span></p>`)
+  })
 
   // The claim behind the rule: the value reaches no output at all.
   it('the reported value is absent from the rendered HTML', () => {

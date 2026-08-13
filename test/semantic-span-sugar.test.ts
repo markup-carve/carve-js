@@ -5,7 +5,7 @@ describe('compact semantic span attributes', () => {
   it('renders the fixed registry and value mappings', () => {
     expect(carveToHtml('[CSS]{dfn abbr="Cascading Style Sheets"}\n[Noon]{time="12:00"} [x]{code mark samp var kbd cite}')).toBe(
       '<p><dfn><abbr title="Cascading Style Sheets">CSS</abbr></dfn>\n' +
-      '<time datetime="12:00">Noon</time> <cite><kbd><var><samp><mark><code>x</code></mark></samp></var></kbd></cite></p>',
+      '<time datetime="12:00">Noon</time> <span code="" mark=""><cite><kbd><var><samp>x</samp></var></kbd></cite></span></p>',
     )
   })
 

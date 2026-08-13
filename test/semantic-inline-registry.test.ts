@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToAnsi, carveToCarve, carveToHtml, carveToPlainText } from '../src/index.js'
 
-const names = ['abbr', 'cite', 'dfn', 'kbd', 'samp', 'var', 'time', 'code', 'mark'] as const
+const names = ['abbr', 'cite', 'dfn', 'kbd', 'samp', 'var', 'time'] as const
 
 describe('built-in semantic inline registry', () => {
   for (const name of names) {
@@ -14,6 +14,15 @@ describe('built-in semantic inline registry', () => {
     expect(carveToHtml(':time[*noon*]{#clock .local datetime="12:00" onclick="x"}')).toBe(
       '<p><time id="clock" class="local" datetime="12:00"><strong>noon</strong></time></p>',
     )
+  })
+
+  it('leaves the two names Carve already spells on the generic fallback', () => {
+    // PART 9 §9: the registry holds no element the language can already
+    // write, so these take the ext- fallback rather than their tag.
+    expect(carveToHtml(':code[*b*]')).toBe('<p><span class="ext-code"><strong>b</strong></span></p>')
+    expect(carveToHtml(':mark[*b*]')).toBe('<p><span class="ext-mark"><strong>b</strong></span></p>')
+    expect(carveToHtml('`*b*`')).toBe('<p><code>*b*</code></p>')
+    expect(carveToHtml('=*b*=')).toBe('<p><mark><strong>b</strong></mark></p>')
   })
 
   it('keeps unknown names on the generic fallback', () => {
