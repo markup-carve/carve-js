@@ -9,6 +9,26 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`carve migrate --from` reaches the Markdown and BBCode importers**, not
+  just the HTML one it started with: `--from markdown` (with the `md` short
+  name) and `--from bbcode` now convert on the command line, where
+  `markdownToCarve` and `bbcodeToCarve` were library-only. `--mode`,
+  `--adapter`, `--report` and `--check-loss` stay HTML's alone - it is the only
+  importer that drops anything - and are ignored rather than rejected for the
+  other two. An unknown format now fails with `unknown source format <name>`
+  instead of the old `--from html is required`. Djot is deliberately not
+  accepted: this package has no Djot importer, only the `carve fix` linter, so
+  it reports as unknown rather than looking supported.
+
+### Fixed
+
+- **The Markdown migration table documented the pre-dialect behavior.** After
+  the CommonMark-plus-GFM default landed, `==x==`, `^x^` and `$x$` stay literal
+  unless `dialect.highlight` / `superscript` / `math` opts in, but
+  `docs/migration.md` still showed them converting unconditionally. Corrected,
+  with the opt-in spelling and the note that the `<mark>` / `<sub>` / `<sup>`
+  tags are unaffected because they mean the same thing in every dialect.
+
 - **`lintCarve` explains a near-miss footnote label.** An unresolved reference
   whose definition differs only in whitespace now names it -
   `Footnote reference [^a  b] has no matching definition; it renders as literal

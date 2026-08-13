@@ -27,6 +27,11 @@ to the canonical writer. `report.diagnostics` records every lossy decision.
 Use `semantic` for trusted editor HTML and `roundtrip` only for Carve-produced
 HTML. The CLI equivalent is `carve migrate --from html --report report.json`.
 
+`migrate` reaches the other importers too - `--from markdown` (or `md`) and
+`--from bbcode` - which need no report because they parse their source whole
+and drop nothing. See
+[Migration and linting](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md).
+
 ## Install and develop
 
 ```sh

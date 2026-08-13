@@ -25,13 +25,35 @@ Carve's blank-line-around-blocks rule:
 | `**x**`, `__x__`             | `*x*`      | Carve strong is a single `*`                               |
 | `***x***`, `___x___`         | `/*x*/`    | Carve's canonical bold-italic                              |
 | `~~x~~`                      | `~x~`      | Carve strikethrough is a single `~`                        |
-| `==x==`                      | `=x=`      | highlight: Carve uses a single `=` (`==x==` renders literal) |
-| `^x^`                        | `^x^`      | superscript: identical in Carve                            |
+| `==x==`                      | `==x==`    | literal by default - not CommonMark or GFM (`dialect.highlight` converts it to `=x=`) |
+| `^x^`                        | `^x^`      | literal by default - not CommonMark or GFM (`dialect.superscript` converts it to `{^x^}`) |
 | `<mark>x</mark>`             | `=x=`      | highlight tag → bare marker (brace-forced `{=x=}` intraword) |
 | `<sub>x</sub>`               | `,x,`      | subscript tag → bare marker (`H<sub>2</sub>O` → `H{,2,}O` intraword) |
 | `<sup>x</sup>`               | `^x^`      | superscript tag → bare marker (brace-forced `{^x^}` intraword) |
-| `$x$`                        | `` $`x` `` | inline math (`$5` left as currency)                        |
+| `$x$`                        | `$x$`      | literal by default - not CommonMark or GFM (`dialect.math` converts it to `` $`x` ``, leaving `$5` as currency) |
 | `<em>`/`<strong>`/`<del>`/…  | Carve form | other inline HTML tags map to their Carve markers          |
+
+The default dialect is **CommonMark plus GFM and nothing else**, so a source
+construct neither of them defines stays as written rather than becoming Carve
+markup. Three flavour extensions are opt-in through the second argument:
+
+```ts
+markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math: true })
+// => 'a =hi= {^up^} $`x`'
+```
+
+The HTML tags below are unaffected: `<mark>`, `<sub>` and `<sup>` mean one
+thing in every dialect, so they always convert.
+
+On the command line the same transform is `carve migrate --from markdown`
+(`--from md` works too), which reads a named file or stdin and writes Carve to
+stdout. The dialect flags have no CLI spelling yet, so the command is
+CommonMark plus GFM only.
+
+```sh
+carve migrate --from markdown README.md > README.crv
+cat post.txt | carve migrate --from bbcode
+```
 
 > [!NOTE]
 > Carve's highlight and subscript markers are **single** characters (`=x=`,

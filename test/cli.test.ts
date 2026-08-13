@@ -69,6 +69,64 @@ describe('carve migrate — HTML import', () => {
   })
 })
 
+describe('carve migrate — the other importers', () => {
+  it.each([
+    ['markdown', '**bold** and _em_\n'],
+    ['md', '**bold** and _em_\n'],
+  ])('converts Markdown with --from %s', async (from, stdin) => {
+    const t = makeIO({ stdin })
+    const code = await run(['migrate', '--from', from], t.io)
+    expect(code).toBe(0)
+    expect(t.err).toBe('')
+    expect(t.out).toContain('*bold* and /em/')
+  })
+
+  it('converts BBCode with --from bbcode', async () => {
+    const t = makeIO({ stdin: '[b]bold[/b] and [i]em[/i]\n' })
+    const code = await run(['migrate', '--from', 'bbcode'], t.io)
+    expect(code).toBe(0)
+    expect(t.out).toContain('*bold* and /em/')
+  })
+
+  it('reads the input file rather than stdin when one is named', async () => {
+    const t = makeIO({ files: { 'in.md': '# Title\n' } })
+    const code = await run(['migrate', '--from', 'markdown', 'in.md'], t.io)
+    expect(code).toBe(0)
+    expect(t.out).toContain('# Title')
+  })
+
+  // Djot has no importer here yet, only the `fix` linter, so it must fail as
+  // an unknown format rather than look supported.
+  it.each(['djot', 'rst'])('rejects the unsupported source format %s', async (from) => {
+    const t = makeIO({ stdin: 'x' })
+    const code = await run(['migrate', '--from', from], t.io)
+    expect(code).toBe(2)
+    expect(t.err).toContain(`unknown source format ${from}`)
+  })
+
+  it('names every supported format when --from is missing', async () => {
+    const t = makeIO({ stdin: 'x' })
+    const code = await run(['migrate'], t.io)
+    expect(code).toBe(2)
+    expect(t.err).toContain('html, markdown or bbcode')
+  })
+
+  /**
+   * The loss report belongs to the HTML importer alone, so a Markdown
+   * migration ignores its options instead of validating or honoring them.
+   */
+  it('ignores the HTML-only options for the other formats', async () => {
+    const t = makeIO({ stdin: '**bold**\n' })
+    const code = await run(
+      ['migrate', '--from', 'markdown', '--mode', 'nonsense', '--check-loss', '--report', 'report.json'],
+      t.io,
+    )
+    expect(code).toBe(0)
+    expect(t.out).toBe('*bold*\n')
+    expect(t.files['report.json']).toBeUndefined()
+  })
+})
+
 describe('carve fix — stdin mode', () => {
   it('fixes stdin and writes the result to stdout', async () => {
     const t = makeIO({ stdin: 'use _emphasis_ here' })

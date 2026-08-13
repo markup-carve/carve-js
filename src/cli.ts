@@ -48,6 +48,8 @@ import {
   type MigrationWarning,
   type ProfileOptions,
   htmlToCarve,
+  markdownToCarve,
+  bbcodeToCarve,
   type HtmlImportAdapter,
   type HtmlImportMode,
 } from './index.js'
@@ -82,8 +84,11 @@ Usage:
                                    Three-way merge independent AST edits
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
-  carve migrate --from html [options] [file]
-                                   Import HTML and report lossy decisions
+  carve migrate --from FORMAT [options] [file]
+                                   Convert html, markdown (md) or bbcode to
+                                   Carve. --mode, --adapter, --report and
+                                   --check-loss are html's alone: it is the
+                                   only importer that drops anything
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -203,17 +208,35 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
     return 2
   }
   if (values.help) { io.write(HELP); return 0 }
-  if (values.from !== 'html') { io.writeErr('carve migrate: --from html is required\n'); return 2 }
+  const from = values.from
+  if (from === undefined) {
+    io.writeErr('carve migrate: --from html, markdown or bbcode is required\n')
+    return 2
+  }
+  if (!['html', 'markdown', 'md', 'bbcode'].includes(from)) {
+    io.writeErr(`carve migrate: unknown source format ${from}\n`)
+    return 2
+  }
   if (positionals.length > 1) { io.writeErr('carve migrate: takes at most one input file\n'); return 2 }
   const modes = new Set(['safe', 'semantic', 'roundtrip'])
   const adapters = new Set(['generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs'])
   const mode = values.mode ?? 'safe'
   const adapter = values.adapter ?? 'generic'
-  if (!modes.has(mode)) { io.writeErr(`carve migrate: unknown mode ${mode}\n`); return 2 }
-  if (!adapters.has(adapter)) { io.writeErr(`carve migrate: unknown adapter ${adapter}\n`); return 2 }
+  // Only the HTML importer drops anything: the other two parse their source
+  // whole, so --mode, --adapter, --report and --check-loss describe decisions
+  // they never make. They stay unvalidated and unused there rather than
+  // rejected, which is how carve-rs already treats them on its markdown path.
+  if (from === 'html') {
+    if (!modes.has(mode)) { io.writeErr(`carve migrate: unknown mode ${mode}\n`); return 2 }
+    if (!adapters.has(adapter)) { io.writeErr(`carve migrate: unknown adapter ${adapter}\n`); return 2 }
+  }
   let source: string
   try { source = positionals[0] ? io.readFile(positionals[0]) : await io.readStdin() }
   catch { io.writeErr(`carve migrate: cannot read ${positionals[0]}\n`); return 2 }
+  if (from !== 'html') {
+    io.write(from === 'bbcode' ? bbcodeToCarve(source) : markdownToCarve(source))
+    return 0
+  }
   const result = htmlToCarve(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })
   io.write(result.value)
   const report = JSON.stringify(result.report, null, 2) + '\n'
