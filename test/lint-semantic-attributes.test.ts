@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { lintCarve } from '../src/lint.js'
 import { carveToHtml, semanticSpan } from '../src/index.js'
+import type { CarveExtension } from '../src/extension.js'
 
 // PART 9 §10 gives seven names a wrapper meaning on an ordinary span. Neither
 // rule here describes an engine defect - carve-js, carve-php and carve-rs
@@ -15,14 +16,38 @@ import { carveToHtml, semanticSpan } from '../src/index.js'
 // block-quote `cite` bound is the one that actually caught something: a first
 // draft reported it.
 
-const rules = (source: string): string[] =>
-  lintCarve(source).map((w) => w.rule).filter((r) => r.startsWith('semantic-'))
+const rules = (source: string, extensions?: CarveExtension[]): string[] =>
+  lintCarve(source, extensions ? { extensions } : {})
+    .map((w) => w.rule)
+    .filter((r) => r.startsWith('semantic-'))
 
 describe('a value on a wrapper-only semantic attribute is reported', () => {
-  it.each(['samp', 'var', 'kbd', 'cite'])(
-    'reports a value on %s, which only selects the wrapper',
+  // PART 9 §9 splits the names by tier, so which of them lose a value depends
+  // on the render the caller configured, and the rules take the extension set
+  // to answer for that render rather than for a fixed list
+  // (markup-carve/carve#1167). These four become elements only with the
+  // SemanticSpan extension enabled.
+  it.each(['samp', 'var', 'cite'])(
+    'reports a value on %s once the extension makes it an element',
     (name) => {
-      expect(rules(`[x]{${name}="V"}\n`)).toEqual(['semantic-attribute-value-ignored'])
+      expect(rules(`[x]{${name}="V"}\n`, [semanticSpan()])).toEqual([
+        'semantic-attribute-value-ignored',
+      ])
+    },
+  )
+
+  it('reports a value on kbd, which core renders as an element on its own', () => {
+    expect(rules('[x]{kbd="V"}\n')).toEqual(['semantic-attribute-value-ignored'])
+  })
+
+  // The other half of the same rule, and the reason it needs the extension set:
+  // in a CORE render these stay ordinary attributes and their value reaches the
+  // output intact, so reporting it would report a loss that is not happening.
+  it.each(['samp', 'var', 'cite'])(
+    'stays quiet for %s in a core render, where the value survives',
+    (name) => {
+      expect(rules(`[x]{${name}="V"}\n`)).toEqual([])
+      expect(carveToHtml(`[x]{${name}="V"}\n`).trim()).toBe(`<p><span ${name}="V">x</span></p>`)
     },
   )
 
