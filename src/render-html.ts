@@ -54,6 +54,14 @@ let docIds: DocumentIdRegistry | null = null
 
 export interface RenderOptions {
   /**
+   * The semantic span names this render consumes, inner to outer.
+   *
+   * Absent means core's three (PART 9 §9). The SemanticSpan extension passes
+   * the seven-name order (PART 9 §10) so its four extra names behave exactly
+   * as core's do - one code path, one nesting order, one riding rule.
+   */
+  semanticSpanNames?: readonly string[]
+  /**
    * Render mode. `"interactive"` (default) emits the live forms - clickable
    * tabs, client-script diagrams, KaTeX-ready math. `"static"` emits a
    * self-contained page for a medium that cannot interact or run client
@@ -385,6 +393,18 @@ function sourceLineAttr(
 const RENDER_MODES = new Set(['interactive', 'static'])
 
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
+  // PART 9 §10: an extension may add semantic span names. Core renders them,
+  // so the order below is the union in the canonical order rather than
+  // whatever sequence the extensions were registered in.
+  const declared = opts.extensions?.flatMap((e) => e.semanticSpanNames ?? []) ?? []
+  if (declared.length > 0 && opts.semanticSpanNames === undefined) {
+    opts = {
+      ...opts,
+      semanticSpanNames: EXTENDED_SEMANTIC_SPAN_ORDER.filter(
+        (name) => CORE_SEMANTIC_SPAN_ORDER.includes(name as never) || declared.includes(name),
+      ),
+    }
+  }
   // Reject an unknown mode rather than guess (spec: an impl MUST reject an
   // unknown mode value). Omitting it means "interactive".
   if (opts.mode !== undefined && !RENDER_MODES.has(opts.mode)) {
@@ -718,12 +738,36 @@ function renderAttrs(attrs?: Attrs): string {
   return parts.length ? ' ' + parts.join(' ') : ''
 }
 
-const SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+/**
+ * PART 9 §9: the names core reserves on a span, inner to outer.
+ *
+ * THREE, not the seven this once carried. A name is core when it carries data
+ * the author would otherwise lose (`abbr`'s expansion, `time`'s machine-readable
+ * value) or when a core clause already rules its interaction (`abbr` again,
+ * against abbreviation definitions); `kbd` is core on ubiquity alone. `samp`,
+ * `var`, `cite` and `dfn` are the SemanticSpan extension's (PART 9 §10) and
+ * reach this renderer through {@link RenderOptions.semanticSpanNames}.
+ */
+export const CORE_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'kbd'] as const
 
-/** Render PART 10 §10 compact semantic attributes on an ordinary span. */
-function renderSemanticSpan(node: Span, opts: RenderOptions): string {
+/** The extension's full order, for the four names it adds. */
+export const EXTENDED_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+
+/** The attribute a non-empty value maps to, per name. */
+const SEMANTIC_VALUE_ATTRIBUTE: Record<string, string | undefined> = {
+  abbr: 'title',
+  dfn: 'title',
+  time: 'datetime',
+}
+
+/** Render PART 9 §9 semantic attributes on an ordinary span. */
+export function renderSemanticSpanWith(
+  node: Span,
+  opts: RenderOptions,
+  order: readonly string[],
+): string {
   const values = node.attrs?.keyValues
-  const names = SEMANTIC_SPAN_ORDER.filter((name) => values?.[name] !== undefined)
+  const names = order.filter((name) => values?.[name] !== undefined)
   const previousSuppress = suppressAutomaticAbbreviation
   if (values?.abbr !== undefined) suppressAutomaticAbbreviation = true
   let body: string
@@ -734,23 +778,33 @@ function renderSemanticSpan(node: Span, opts: RenderOptions): string {
   }
   if (names.length === 0) return `<span${renderAttrs(node.attrs)}>${body}</span>`
 
+  // PART 9 §9: leftovers RIDE the outermost semantic element. A consumed name
+  // RENAMES the span rather than wrapping it, so the author's id, classes and
+  // remaining key/values land on the element they were written on.
+  const isSemantic = (key: string) => order.includes(key)
+  const keyValues = Object.fromEntries(Object.entries(values ?? {}).filter(([key]) => !isSemantic(key)))
+  const riding: Attrs = { ...node.attrs, keyValues }
+  if (riding.order) riding.order = riding.order.filter((key) => !isSemantic(key))
+
   let html = body
+  const outermost = names[names.length - 1]
   for (const name of names) {
     const value = values![name]!
-    const mapped = value !== '' && name === 'abbr' ? ` title="${escapeAttr(value)}"`
-      : value !== '' && name === 'dfn' ? ` title="${escapeAttr(value)}"`
-        : value !== '' && name === 'time' ? ` datetime="${escapeAttr(value)}"`
-          : ''
-    html = `<${name}${mapped}>${html}</${name}>`
+    const mapsTo = value !== '' ? SEMANTIC_VALUE_ATTRIBUTE[name] : undefined
+    // A DERIVED ATTRIBUTE YIELDS TO AN AUTHORED ONE of the same name: `title`
+    // and `datetime` are names an author may also write, and one element never
+    // carries the same attribute twice.
+    const attrs: Attrs = name === outermost ? riding : {}
+    const derived = mapsTo !== undefined && attrs.keyValues?.[mapsTo] === undefined
+      ? ` ${mapsTo}="${escapeAttr(value)}"`
+      : ''
+    html = `<${name}${derived}${renderAttrs(attrs)}>${html}</${name}>`
   }
+  return html
+}
 
-  const isSemantic = (key: string) => SEMANTIC_SPAN_ORDER.includes(key as typeof SEMANTIC_SPAN_ORDER[number])
-  const keyValues = Object.fromEntries(Object.entries(values ?? {}).filter(([key]) => !isSemantic(key)))
-  const attrs: Attrs = { ...node.attrs, keyValues }
-  if (attrs.order) attrs.order = attrs.order.filter((key) => !isSemantic(key))
-  const outer = renderAttrs(attrs)
-  const hasRemaining = attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || Object.keys(keyValues).length > 0
-  return hasRemaining ? `<span${outer}>${html}</span>` : html
+function renderSemanticSpan(node: Span, opts: RenderOptions): string {
+  return renderSemanticSpanWith(node, opts, opts.semanticSpanNames ?? CORE_SEMANTIC_SPAN_ORDER)
 }
 
 /**
@@ -1839,16 +1893,12 @@ function renderExtension(
   const inner = renderInlines(content, opts)
   // Author attributes on the extension (grammar §415 `extension_inline …
   // [attributes]`) attach to its output element, e.g. `:kbd[x]{.foo}`.
-  // Handle common semantic shorthands
-  // PART 9 §9: the registry holds no element Carve already spells, so
-  // `code` and `mark` are NOT here - a code span writes <code> and =x= writes
-  // <mark>. `code` was also the name that turned a duplicate into a defect: a
-  // code span is verbatim and this body is parsed, so one tag carried two
-  // content models depending on which spelling the author reached for.
-  const semanticTags = new Set(['kbd', 'dfn', 'abbr', 'cite', 'samp', 'var', 'time'])
-  if (semanticTags.has(name)) {
-    return `<${name}${renderAttrs2(attrs)}>${inner}</${name}>`
-  }
+  // PART 9 §10: CORE REGISTERS NO `:name[…]` HANDLER AT ALL, semantic or
+  // otherwise. The extension SYNTAX is core; the handlers are Tier-2/3, which
+  // is what docs/extensions.md always said and what this function stopped
+  // doing when a hardcoded set of seven tags lived here. The SemanticSpan
+  // extension re-registers them as a soft-deprecated spelling; without it
+  // every name takes the readable fallback.
   return `<span${renderAttrs2(attrs, { baseClass: `ext-${name}` })}>${inner}</span>`
 }
 

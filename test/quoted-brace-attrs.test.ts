@@ -20,7 +20,7 @@ describe('} inside a quoted attribute value', () => {
   })
 
   it('inline extension', () => {
-    expect(h(':kbd[x]{k="{y}"}')).toBe('<p><kbd k="{y}">x</kbd></p>')
+    expect(h(':kbd[x]{k="{y}"}')).toBe('<p><span class="ext-kbd" k="{y}">x</span></p>')
   })
 
   it('heading (attrs via preceding line)', () => {
@@ -41,7 +41,7 @@ describe('} inside a quoted attribute value', () => {
 
   it('single-quoted value (grammar quoted_value supports both quote forms)', () => {
     expect(h(`[x]{k='{y}'}`)).toBe('<p><span k="{y}">x</span></p>')
-    expect(h(`:kbd[x]{k='{y}'}`)).toBe('<p><kbd k="{y}">x</kbd></p>')
+    expect(h(`:kbd[x]{k='{y}'}`)).toBe('<p><span class="ext-kbd" k="{y}">x</span></p>')
   })
 })
 
@@ -71,16 +71,18 @@ describe('single-quoted attribute values', () => {
  * extension emits them on the `ext-<name>` span.
  */
 describe('inline extension attributes', () => {
-  it('applies a class to a semantic-tag extension', () => {
-    expect(h(':kbd[x]{.foo}')).toBe('<p><kbd class="foo">x</kbd></p>')
+  it('applies a class to an extension name core no longer handles', () => {
+    // PART 9 §10: core registers no `:name[…]` handler, semantic or not, so
+    // these ride the fallback span like any other unclaimed name.
+    expect(h(':kbd[x]{.foo}')).toBe('<p><span class="ext-kbd foo">x</span></p>')
   })
 
-  it('applies an id to a semantic-tag extension', () => {
-    expect(h(':kbd[x]{#bar}')).toBe('<p><kbd id="bar">x</kbd></p>')
+  it('applies an id to an extension name core no longer handles', () => {
+    expect(h(':kbd[x]{#bar}')).toBe('<p><span class="ext-kbd" id="bar">x</span></p>')
   })
 
-  it('applies a key/value to a semantic-tag extension', () => {
-    expect(h(':kbd[x]{k=v}')).toBe('<p><kbd k="v">x</kbd></p>')
+  it('applies a key/value to an extension name core no longer handles', () => {
+    expect(h(':kbd[x]{k=v}')).toBe('<p><span class="ext-kbd" k="v">x</span></p>')
   })
 
   it('keeps the base ext- class ahead of author classes on an unknown extension', () => {
