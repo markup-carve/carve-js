@@ -226,8 +226,10 @@ describe('extension renderers', () => {
     )
   })
 
-  it('falls back to the built-in extension rendering when no renderer matches', () => {
-    expect(carveToHtml(':kbd[x]').trim()).toBe('<p><kbd>x</kbd></p>')
+  it('falls back to the generic span when no renderer matches', () => {
+    // There is no built-in rendering left to fall back TO: PART 9 §10 moved
+    // every `:name[…]` handler out of core.
+    expect(carveToHtml(':kbd[x]').trim()).toBe('<p><span class="ext-kbd">x</span></p>')
   })
 })
 

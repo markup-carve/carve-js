@@ -9,6 +9,35 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`semanticSpan()` extension.** The four semantic span names core does not
+  reserve - `samp`, `var`, `cite`, `dfn` - plus the `:name[…]` spelling for all
+  seven as a SOFT-DEPRECATED compatibility form, scheduled for removal in 0.2
+  (markup-carve/carve#1146). The span half is declarative: the extension names
+  what it claims and the core renderer renders it, so the nesting order, the
+  value mapping and the riding rule have one implementation rather than two.
+
+### Changed
+
+- **Semantic spans split by tier.** Core reserves three span attributes -
+  `abbr`, `time`, `kbd` - because the first two carry data the author would
+  otherwise lose and the third is what every comparable system ships. `samp`,
+  `var`, `cite` and `dfn` are ordinary attributes unless `semanticSpan()` is
+  registered.
+
+- **Core registers no `:name[…]` handler at all.** `:kbd[x]` renders
+  `<span class="ext-kbd">x</span>`; the extension re-registers the seven names
+  as the deprecated spelling. The extension SYNTAX is core and the handlers are
+  Tier-2/3, which is what the spec always said and what a hardcoded set of
+  seven tags in this renderer had been contradicting since the first release.
+
+- **Leftover attributes ride the outermost semantic element.** `[Tab]{#k .key kbd}`
+  is `<kbd id="k" class="key">Tab</kbd>` rather than a `<span>` wrapping a
+  `<kbd>`, and `[x]{kbd onclick="…"}` is a bare `<kbd>`. A span with no semantic
+  name is unchanged. A DERIVED attribute yields to an AUTHORED one of the same
+  name, so `[x]{abbr="gen" title="authored"}` carries `title` once.
+
+### Added
+
 - **The `{:TAG}` language attribute** (markup-carve/carve#1114). `[x]{:fr}` is
   exact sugar for `{lang=fr}`, on inline spans and block attribute lines alike;
   `{:}` is the explicit "language unknown" form and desugars to `lang=""`. A

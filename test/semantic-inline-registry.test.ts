@@ -1,40 +1,101 @@
 import { describe, expect, it } from 'vitest'
-import { carveToAnsi, carveToCarve, carveToHtml, carveToPlainText } from '../src/index.js'
+import { carveToAnsi, carveToCarve, carveToHtml, carveToPlainText, semanticSpan } from '../src/index.js'
 
-const names = ['abbr', 'cite', 'dfn', 'kbd', 'samp', 'var', 'time'] as const
+const CORE = ['abbr', 'time', 'kbd'] as const
+const EXTENSION_ONLY = ['samp', 'var', 'cite', 'dfn'] as const
 
-describe('built-in semantic inline registry', () => {
-  for (const name of names) {
-    it(`renders :${name} as its matching HTML element`, () => {
-      expect(carveToHtml(`:${name}[x]`)).toBe(`<p><${name}>x</${name}></p>`)
+/*
+ * PART 9 §9/§10, the tier split. Core reserves three SPAN ATTRIBUTES; the four
+ * other names and the `:name[...]` spelling are the SemanticSpan extension's.
+ *
+ * The pairs matter more than the rows: every assertion here has a twin with the
+ * extension off, because "renders <samp>" and "renders <samp> only when asked"
+ * are different claims and a suite that only ever registers the extension
+ * cannot tell them apart.
+ */
+describe('core semantic span attributes', () => {
+  for (const name of CORE) {
+    it(`consumes ${name} with no extension registered`, () => {
+      expect(carveToHtml(`[x]{${name}}`)).toBe(`<p><${name}>x</${name}></p>`)
     })
   }
 
-  it('keeps nested content and hardened authored attributes on the element', () => {
-    expect(carveToHtml(':time[*noon*]{#clock .local datetime="12:00" onclick="x"}')).toBe(
-      '<p><time id="clock" class="local" datetime="12:00"><strong>noon</strong></time></p>',
-    )
+  for (const name of EXTENSION_ONLY) {
+    it(`leaves ${name} an ordinary attribute with no extension registered`, () => {
+      expect(carveToHtml(`[x]{${name}}`)).toBe(`<p><span ${name}="">x</span></p>`)
+    })
+  }
+
+  it('maps a value to the attribute it stands for', () => {
+    expect(carveToHtml('[HTML]{abbr="HyperText Markup Language"}'))
+      .toBe('<p><abbr title="HyperText Markup Language">HTML</abbr></p>')
+    expect(carveToHtml('[now]{time="2026-01-01"}'))
+      .toBe('<p><time datetime="2026-01-01">now</time></p>')
   })
 
-  it('leaves the two names Carve already spells on the generic fallback', () => {
-    // PART 9 §9: the registry holds no element the language can already
-    // write, so these take the ext- fallback rather than their tag.
-    expect(carveToHtml(':code[*b*]')).toBe('<p><span class="ext-code"><strong>b</strong></span></p>')
-    expect(carveToHtml(':mark[*b*]')).toBe('<p><span class="ext-mark"><strong>b</strong></span></p>')
-    expect(carveToHtml('`*b*`')).toBe('<p><code>*b*</code></p>')
-    expect(carveToHtml('=*b*=')).toBe('<p><mark><strong>b</strong></mark></p>')
+  it('yields a derived attribute to an authored one of the same name', () => {
+    expect(carveToHtml('[x]{abbr="derived" title="authored"}'))
+      .toBe('<p><abbr title="authored">x</abbr></p>')
   })
 
-  it('keeps unknown names on the generic fallback', () => {
-    expect(carveToHtml(':widget[x]{.control}')).toBe(
-      '<p><span class="ext-widget control">x</span></p>',
-    )
+  it('rides leftovers on the outermost element instead of a wrapper', () => {
+    expect(carveToHtml('[Tab]{#k .key kbd}')).toBe('<p><kbd id="k" class="key">Tab</kbd></p>')
+    expect(carveToHtml('[x]{kbd onclick="alert(1)"}')).toBe('<p><kbd>x</kbd></p>')
   })
 
-  it('renders only content in plain and ANSI and preserves source spelling', () => {
-    const source = ':abbr[*HTML*]{title="HyperText Markup Language"}'
+  it('keeps the span where no name was consumed', () => {
+    expect(carveToHtml('[x]{}')).toBe('<p><span>x</span></p>')
+    expect(carveToHtml('[x]{onclick="alert(1)"}')).toBe('<p><span>x</span></p>')
+  })
+
+  it('nests several in the fixed order, not the authored one', () => {
+    expect(carveToHtml('[x]{kbd abbr="A"}')).toBe(carveToHtml('[x]{abbr="A" kbd}'))
+    expect(carveToHtml('[x]{kbd abbr="A"}')).toBe('<p><kbd><abbr title="A">x</abbr></kbd></p>')
+  })
+
+  it('registers no :name[...] handler at all', () => {
+    for (const name of [...CORE, ...EXTENSION_ONLY, 'code', 'mark']) {
+      expect(carveToHtml(`:${name}[x]`)).toBe(`<p><span class="ext-${name}">x</span></p>`)
+    }
+  })
+
+  it('renders content only on plain and ANSI, and preserves the source', () => {
+    const source = '[*HTML*]{abbr="HyperText Markup Language"}'
     expect(carveToPlainText(source)).toBe('HTML\n')
     expect(carveToAnsi(source)).toContain('HTML')
     expect(carveToCarve(source)).toBe(source + '\n')
+  })
+})
+
+describe('the SemanticSpan extension', () => {
+  const html = (src: string) => carveToHtml(src, { extensions: [semanticSpan()] })
+
+  for (const name of EXTENSION_ONLY) {
+    it(`consumes ${name} when registered`, () => {
+      expect(html(`[x]{${name}}`)).toBe(`<p><${name}>x</${name}></p>`)
+    })
+  }
+
+  it('maps a dfn value to title, and rides leftovers like core', () => {
+    // The DERIVED attribute leads the authored ones, which is what PART 10 §1
+    // already says for every attribute an element derives from its own markup
+    // (an `<ol>`'s type, a link's href): structural first, authored after, in
+    // source order.
+    expect(html('[CSS]{#c dfn="Cascading Style Sheets"}'))
+      .toBe('<p><dfn title="Cascading Style Sheets" id="c">CSS</dfn></p>')
+  })
+
+  it('nests its names with core\'s in one order', () => {
+    expect(html('[x]{cite kbd samp}')).toBe('<p><cite><kbd><samp>x</samp></kbd></cite></p>')
+  })
+
+  it('accepts the deprecated :name[...] spelling for all seven', () => {
+    expect(html(':kbd[Ctrl]')).toBe('<p><kbd>Ctrl</kbd></p>')
+    expect(html(':samp[out]{.o}')).toBe('<p><samp class="o">out</samp></p>')
+  })
+
+  it('claims no name outside the seven', () => {
+    expect(html(':code[x]')).toBe('<p><span class="ext-code">x</span></p>')
+    expect(html('[x]{mark}')).toBe('<p><span mark="">x</span></p>')
   })
 })

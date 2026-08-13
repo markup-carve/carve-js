@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { lintCarve } from '../src/lint.js'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, semanticSpan } from '../src/index.js'
 
 // PART 9 §10 gives seven names a wrapper meaning on an ordinary span. Neither
 // rule here describes an engine defect - carve-js, carve-php and carve-rs
@@ -34,15 +34,20 @@ describe('a value on a wrapper-only semantic attribute is reported', () => {
     expect(carveToHtml(`[x]{${name}="V"}\n`).trim()).toBe(`<p><span ${name}="V">x</span></p>`)
   })
 
-  // The claim behind the rule: the value reaches no output at all.
+  // The claim behind the rule: where the name IS consumed, the value reaches no
+  // output at all. `cite` is the extension's now, so the claim is checked with
+  // it registered - unregistered the attribute survives, which is a different
+  // (and lossless) outcome.
   it('the reported value is absent from the rendered HTML', () => {
-    expect(carveToHtml('[x]{cite="https://example.org/dune"}\n').trim())
+    expect(carveToHtml('[x]{cite="https://example.org/dune"}\n', { extensions: [semanticSpan()] }).trim())
       .toBe('<p><cite>x</cite></p>')
+    expect(carveToHtml('[x]{cite="https://example.org/dune"}\n').trim())
+      .toBe('<p><span cite="https://example.org/dune">x</span></p>')
   })
 
   it.each(['abbr', 'dfn'])('stays quiet for %s, which maps its value to title', (name) => {
     expect(rules(`[x]{${name}="V"}\n`)).toEqual([])
-    expect(carveToHtml(`[x]{${name}="V"}\n`)).toContain('title="V"')
+    expect(carveToHtml(`[x]{${name}="V"}\n`, { extensions: [semanticSpan()] })).toContain('title="V"')
   })
 
   it('stays quiet for time, which maps its value to datetime', () => {

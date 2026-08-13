@@ -577,6 +577,10 @@ const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
  * Mirrors SEMANTIC_SPAN_ORDER in render-html.ts. A name added there and not
  * here goes unreported by both rules below.
  */
+// The seven names PART 9 §9 and §10 reserve between them: three in core, four
+// in the SemanticSpan extension. The lint rules cover both tiers deliberately -
+// a value silently dropped is worth reporting whether the name is core or
+// opt-in, and an author reading `[x]{samp="v"}` cannot see which tier it is in.
 const SEMANTIC_SPAN_NAMES = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
 
 /**
