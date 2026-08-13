@@ -72,10 +72,13 @@ describe('resolve: caption numbering + crossrefs', () => {
     expect(out).toContain('Abbildung 1: b')
   })
 
-  it('numbers a captioned figure nested inside a captioned blockquote', () => {
+  it('numbers a captioned figure nested inside a quote, and not the quote', () => {
+    // PART 9 §4a: the quote's own `^` line is an ATTRIBUTION, and an
+    // attribution takes no number - the `#` in it stays literal, while the
+    // figure nested inside still numbers normally (carve#1159).
     const out = h('> ![x](x.jpg)\n> ^ Figure #: inner\n\n^ Quote #: outer')
     expect(out).toContain('<figcaption>Figure 1: inner</figcaption>')
-    expect(out).toContain('<figcaption>Quote 1: outer</figcaption>')
+    expect(out).toContain('<footer>Quote #: outer</footer>')
   })
 
   it('does not emit a broken anchor for a label with an implicit heading ref', () => {

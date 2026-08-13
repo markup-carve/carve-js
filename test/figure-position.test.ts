@@ -39,7 +39,6 @@ describe('a figure carries its own position', () => {
     ['an image', '![a](p.png)\n^ cap\n'],
     ['a reference image', '![a][ok]\n^ cap\n\n[ok]: /p.png\n'],
     ['a code block', '```\ncode\n```\n^ cap\n'],
-    ['a block quote', '> quoted\n^ cap\n'],
     ['display math', '$$`x`\n^ cap\n'],
   ]
 
@@ -50,6 +49,23 @@ describe('a figure carries its own position', () => {
       expect(figure!.pos, `figure wrapping ${what} has no pos`).toBeDefined()
     })
   }
+
+  it('gives a captioned quote a position, and no figure', () => {
+    // PART 9 §4a: a captioned quote is a `block_quote` carrying an
+    // `attribution`, not a figure wrapping the quote (carve#1159). It keeps the
+    // span the figure used to carry - the quote plus its attribution line - so
+    // no node is left without one.
+    expect(figureOf('> quoted\n^ cap\n')).toBeNull()
+    const doc = carveToAstJson('> quoted\n^ cap\n') as unknown as {
+      children: Array<Record<string, unknown>>
+    }
+    const quote = doc.children[0]!
+    expect(quote['type']).toBe('block_quote')
+    expect(quote['attribution']).toBeDefined()
+    const pos = quote['pos'] as Record<string, number>
+    expect(pos.startLine).toBe(1)
+    expect(pos.endLine).toBe(2)
+  })
 
   it('spans the target and the caption together', () => {
     // The image is line 1 and the caption line 2, so the figure covers both -

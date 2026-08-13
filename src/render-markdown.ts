@@ -150,7 +150,13 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     }
     case 'block_quote': {
       const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
-      return `${lines.map((line) => `> ${line}`).join('\n')}\n\n`
+      const quoted = lines.map((line) => `> ${line}`).join('\n')
+      // Markdown has no attribution slot, so the source follows the quote as an
+      // ordinary paragraph rather than being dropped - the same treatment an
+      // admonition title gets here.
+      const attribution =
+        node.attribution === undefined ? '' : `\n\n${renderInlines(node.attribution, ctx)}`
+      return `${quoted}${attribution}\n\n`
     }
     case 'list':
       return renderList(node, ctx)

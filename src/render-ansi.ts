@@ -122,7 +122,12 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       {
         const out = renderBlocks(node.children, ctx)
         ctx.blockQuoteDepth--
-        return out
+        // The attribution keeps the caption's styling it had while a quote was
+        // a figure - italic and dim - so a terminal reader sees the same thing
+        // it saw before, only inside the quote rather than under a figure.
+        return node.attribution === undefined
+          ? out
+          : `${trimEndNonNbsp(out)}\n\n${renderCaption(node.attribution, ctx)}`
       }
     case 'list':
       return renderList(node, ctx)

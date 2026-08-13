@@ -4694,7 +4694,6 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'block_quote', children }
-  const quoteEndIndex = lexer.pos
   // Optional caption with ^
   // Allow one blank line between
   let lookahead = 0
@@ -4706,15 +4705,17 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // or is separated by at most ONE blank line.
     if (cap && lookahead <= 1) {
       for (let i = 0; i <= lookahead; i++) lexer.consume()
-      // The block loop spans the FIGURE, so the quote it wraps would otherwise
-      // have no position of its own (PART 12 section 4). It ends where the
-      // caption begins.
-      attachBlockPos(lexer, bq, firstLineIndex, quoteEndIndex)
-      return {
-        type: 'figure',
-        target: bq,
-        caption: parseCaptionInline(lexer, cap[1]!),
-      } as Figure
+      // PART 9 §4a: the caption on a quote is its ATTRIBUTION. The quote is
+      // returned as itself rather than wrapped in a figure, so it takes no
+      // figure number and nothing walking the tree for figures finds it
+      // (carve#1159). The block loop attaches the span, which now covers the
+      // quote plus its caption - there is no inner node left without one.
+      // PARSED AS ORDINARY INLINE, not as a caption. A caption's `#` is the
+      // number placeholder, and an attribution has no number to place - PART 9
+      // §4a says the placeholder stays LITERAL there, which it cannot do if the
+      // parser turns it into a `caption_number` that renders as nothing.
+      bq.attribution = parseCaptionInline(lexer, cap[1]!, false)
+      return bq
     }
   }
   return bq
@@ -6903,7 +6904,19 @@ function startsInterruptingBlock(lexer: Lexer, content?: string): boolean {
  * is sitting on does not end with the caption text, the mapping is not exact
  * and the positions are dropped, as before.
  */
-function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
+/**
+ * @param captionContext - false for a quote's ATTRIBUTION (PART 9 §4a). The
+ * only difference is the bare `#`: a caption's is the number placeholder, and
+ * an attribution has no number to place, so §4a keeps it literal. Everything
+ * else - the continuation lines, the document anchors that give each inline
+ * node a real position - is shared, and was the reason a separate parser here
+ * produced text nodes whose `pos` sliced back to the wrong bytes.
+ */
+function parseCaptionInline(
+  lexer: Lexer,
+  firstLine: string,
+  captionContext = true,
+): InlineNode[] {
   const capIndex = lexer.pos - 1
   const capLine = lexer.lines[capIndex]
   const anchors: Array<{ offset: number; column: number }> = []
@@ -6919,7 +6932,7 @@ function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
   const text = readCaptionText(lexer, firstLine, anchorable ? anchors : undefined)
   if (!anchorable) {
     return stripPositions(
-      parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, true),
+      parseInline(text, lexer.abbrDefs, lexer.linkDefs, undefined, captionContext),
     )
   }
   return parseInline(
@@ -6933,7 +6946,7 @@ function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
       startColumn: anchors[0]!.column,
       lineAnchors: anchors,
     }),
-    true,
+    captionContext,
   )
 }
 
