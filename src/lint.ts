@@ -297,6 +297,21 @@ export function lintCarve(
      * input.
      */
     platforms?: readonly LintPlatform[]
+    /**
+     * The extensions the caller actually renders with, so the semantic-attribute
+     * rules can describe the output the author will get (markup-carve/carve#1167).
+     *
+     * PART 9 §9 splits the reserved names by tier: core renders `abbr`, `time`
+     * and `kbd` as elements, and `samp`, `var`, `cite` and `dfn` only become
+     * elements once the SemanticSpan extension is enabled. In a core render
+     * those four stay ORDINARY attributes and their value reaches the output
+     * intact, so reporting it as discarded reports a loss that is not
+     * happening - the same defect these rules exist to catch, pointed the other
+     * way. With the extension on, the value IS dropped and the report is right.
+     *
+     * Pass what you pass to `carveToHtml`. Omitted means a core render.
+     */
+    extensions?: readonly { name?: string; semanticSpanNames?: readonly string[] }[]
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
@@ -524,7 +539,7 @@ export function lintCarve(
   // per line replaces a per-line scan over a growing range list (was O(n^2),
   // and was computed twice).
   const verbatimLines = collectVerbatimLines(doc)
-  collectSemanticAttributeWarnings(doc, out, toUtf16)
+  collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
   collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
@@ -578,17 +593,36 @@ const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
  * here goes unreported by both rules below.
  */
 // The seven names PART 9 §9 and §10 reserve between them: three in core, four
-// in the SemanticSpan extension. The lint rules cover both tiers deliberately -
-// a value silently dropped is worth reporting whether the name is core or
-// opt-in, and an author reading `[x]{samp="v"}` cannot see which tier it is in.
+// in the SemanticSpan extension.
 const SEMANTIC_SPAN_NAMES = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
 
+/** The three core renders as elements with no extension enabled (PART 9 §9). */
+const CORE_SEMANTIC_NAMES = new Set<string>(['abbr', 'time', 'kbd'])
+
 /**
- * The three names whose authored value reaches the output, as `title` or
- * `datetime`. On the other six the value only selects the wrapper and is
- * dropped.
+ * The names whose authored value reaches the output, as `title` or `datetime`.
+ * On every other name that becomes an element the value only selects that
+ * element and is dropped.
  */
 const SEMANTIC_NAMES_KEEPING_A_VALUE = new Set<string>(['abbr', 'dfn', 'time'])
+
+/**
+ * The names that will actually become an ELEMENT in the caller's render.
+ *
+ * Core's three, plus whatever the enabled extensions add. A name outside this
+ * set stays an ordinary attribute, so its value reaches the output and nothing
+ * is lost - see the `extensions` option above for why that distinction is the
+ * whole point of these two rules.
+ */
+function semanticElementNames(
+  extensions?: readonly { semanticSpanNames?: readonly string[] }[],
+): ReadonlySet<string> {
+  const names = new Set(CORE_SEMANTIC_NAMES)
+  for (const extension of extensions ?? []) {
+    for (const name of extension.semanticSpanNames ?? []) names.add(name)
+  }
+  return names
+}
 
 /**
  * Reserved names that ARE valid HTML attributes on a given element, so finding
@@ -616,6 +650,7 @@ function collectSemanticAttributeWarnings(
   doc: Document,
   out: LintWarning[],
   toUtf16: (offset: number) => number,
+  elementNames: ReadonlySet<string>,
 ): void {
   walkDocument(doc, (node) => {
     const attrs = (node as { attrs?: Attrs }).attrs
@@ -629,18 +664,29 @@ function collectSemanticAttributeWarnings(
       if (value === undefined) continue
 
       if (type === 'span') {
-        // §10 applies. The value is kept only by the three that map it.
-        if (value !== '' && !SEMANTIC_NAMES_KEEPING_A_VALUE.has(name)) {
+        // §10 applies only to a name that becomes an ELEMENT in this render.
+        // One that does not stays an ordinary attribute and carries its value
+        // to the output, so there is nothing to report.
+        if (
+          value !== '' &&
+          elementNames.has(name) &&
+          !SEMANTIC_NAMES_KEEPING_A_VALUE.has(name)
+        ) {
           out.push({
             ...locate(node as Positioned, toUtf16),
             rule: 'semantic-attribute-value-ignored',
             message:
-              `Value on the semantic attribute "${name}" is discarded: it selects the <${name}> wrapper ` +
+              `Value on the semantic attribute "${name}" is discarded: it selects the <${name}> element ` +
               'and reaches no output. Only abbr, dfn and time carry a value (as title or datetime).',
           })
         }
         continue
       }
+
+      // Same tier test for the other rule: a name this render leaves an
+      // ordinary attribute is an ordinary attribute everywhere, so it is not
+      // "outside the span" - it is exactly what the author asked for.
+      if (!elementNames.has(name)) continue
 
       // §10 is scoped to an ordinary span, so the same name anywhere else
       // stays a raw attribute - ``c`{kbd}` renders `<code kbd="">`.

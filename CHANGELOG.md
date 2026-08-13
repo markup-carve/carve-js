@@ -7,6 +7,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`lintCarve` reports the semantic-attribute rules against the render the
+  caller configured** (markup-carve/carve#1167). PART 9 §9 splits the reserved
+  names by tier, so `samp`, `var`, `cite` and `dfn` become elements only once
+  the SemanticSpan extension is enabled; in a core render they stay ordinary
+  attributes and their value reaches the output intact. The rules reported a
+  discarded value for all seven regardless, so a core render produced three
+  false reports - a loss that is not happening, which is the same defect these
+  rules exist to catch, pointed the other way. `lintCarve` now takes the
+  `extensions` the caller renders with (pass what you pass to `carveToHtml`)
+  and answers for that render. With no extensions it reports only `kbd`; with
+  `semanticSpan()` enabled it reports `samp`, `var`, `cite` and `kbd`, and
+  stays quiet for the three that map their value to `title` or `datetime`.
+
 ### Added
 
 - **`semanticSpan()` extension.** The four semantic span names core does not
