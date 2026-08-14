@@ -1015,6 +1015,20 @@ const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const RE_MD_INDENTED_CODE = /^(?: {4,}|\t)/
 
 /**
+ * A link reference definition carrying its destination on the same line -
+ * `[label]: destination`.
+ *
+ * Not a full reader for the construct: a label may run over lines, a
+ * destination may sit on the line below its colon, and a title may sit below
+ * that. Reading all of it would be a parser, and this file has none. It is only
+ * ever asked whether a line is paragraph TEXT, and the destination is what
+ * decides that on the line itself - a bare `[label]:` with nothing after it is
+ * not a definition at all but a paragraph, which a setext underline may turn
+ * into a heading like any other.
+ */
+const RE_MD_LINK_REFERENCE = /^ {0,3}\[[^\]]*\]:[ \t]*\S/
+
+/**
  * Split a pipe-delimited table row into trimmed cell texts, honoring `\|`
  * escapes and dropping the empty cells produced by a leading/trailing pipe.
  */
@@ -1151,6 +1165,97 @@ function restorePrefixedInlineRun(
   return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
 }
 
+/**
+ * Fold a setext heading a CONTAINER holds into the ATX line Carve spells it
+ * with, given the paragraph line and the line under it as the container holds
+ * them - marker stripped, indent measured from the container's own content.
+ *
+ * Returns the replacement text for the paragraph line, or null when the two
+ * lines are not a setext heading.
+ *
+ * BOTH lines have to sit in the same container, and the container shows up in
+ * two places. The collector has already put what it consumed in `prefix`, and
+ * two lines it consumed the same width of are two lines it holds - `- ` and
+ * the `  ` under it are one item, while the quote collector's `> > ` and `> `
+ * are two different quotes, so `> > T` over `> ===` is not a heading (the
+ * underline is a lazy continuation of the inner paragraph there). What the
+ * collector did NOT consume is peeled here: the LIST collector holds
+ * `- > T` / `  > ===` as the texts `> T` and `> ===`, still quote-marked, and
+ * that marker has to match too. Peeling both is what lets one helper serve a
+ * quote, a list item, and a quote inside a list item alike.
+ *
+ * Four columns past the container's content is code rather than an underline
+ * (CommonMark), so `>     =====` under a quoted paragraph stays paragraph
+ * continuation; one to three columns of slack is still an underline.
+ *
+ * The line above the underline has to be paragraph TEXT, which is what
+ * `isParagraphRunLine` already decides for the top level. A container holds
+ * blocks other than paragraphs and the collectors hand those over here too,
+ * where a `=` or `-` line under one is not an underline at all: under a fence
+ * opener it is the code's first line, under a list marker it is a lazy
+ * continuation of the item's own paragraph that an underline cannot reach, and
+ * under a link reference definition it is a paragraph of its own. Folding any
+ * of those destroyed the block. The test runs on the text with the quote
+ * marker already peeled, so a quoted paragraph a list item holds still counts
+ * as one. It also covers the rule case - `***` over `---` is two thematic
+ * breaks, not an h2 titled `***` - while the separate heading guard stops a
+ * second underline from re-folding a heading this pass just wrote.
+ */
+function containerSetextHeading(
+  paragraph: PrefixedInlineLine,
+  underline: PrefixedInlineLine,
+): string | null {
+  if (paragraph.prefix.length !== underline.prefix.length) return null
+  const above = blockquotePrefix(paragraph.text)
+  const below = blockquotePrefix(underline.text)
+  if ((above === null) !== (below === null)) return null
+  if (above && below && above.prefix !== below.prefix) return null
+  const quote = above?.prefix ?? ''
+  const text = above ? above.text : paragraph.text
+  const rule = below ? below.text : underline.text
+  if (indentColumns(text) >= 4 || indentColumns(rule) >= 4) return null
+  const run = /^[ \t]*(=+|-+)[ \t]*$/.exec(rule)
+  if (!run) return null
+  const body = text.trim()
+  if (body === '') return null
+  if (/^#{1,6}([ \t]|$)/.test(body)) return null
+  // `blank`, not `text`: after a blank an ordered marker of any number opens a
+  // list, which is the reading that rejects the fold, and rejecting is the
+  // safe side of a line this helper cannot classify.
+  if (!isParagraphRunLine([text], 0, 'blank')) return null
+  if (RE_MD_LINK_REFERENCE.test(text)) return null
+  return `${quote}${run[1]![0] === '=' ? '#' : '##'} ${body}`
+}
+
+/**
+ * Rewrite every setext heading a collected container run holds.
+ *
+ * The run is already the container's content with its marker held separately,
+ * so a setext heading is just two adjacent entries in it. Folding the pair
+ * needs no blank line after it: a heading interrupts a paragraph inside a
+ * quote and inside a list item alike, so `> One` / `> # Two` keeps the
+ * paragraph and the heading apart on its own.
+ *
+ * Where the paragraph is more than one line, the line ABOVE the underline
+ * becomes the heading and the earlier lines stay a paragraph. That is the
+ * approximation the top-level branch already makes, and it is forced: a Carve
+ * heading is one line, so the multi-line heading CommonMark reads here has
+ * nothing to convert into.
+ */
+function foldContainerSetext(run: readonly PrefixedInlineLine[]): PrefixedInlineLine[] {
+  const out: PrefixedInlineLine[] = []
+  for (const part of run) {
+    const above = out[out.length - 1]
+    const folded = above ? containerSetextHeading(above, part) : null
+    if (above && folded !== null) {
+      out[out.length - 1] = { prefix: above.prefix, text: folded }
+      continue
+    }
+    out.push(part)
+  }
+  return out
+}
+
 function blockquotePrefix(line: string): { prefix: string; text: string } | null {
   let rest = line
   let prefix = ''
@@ -1196,7 +1301,10 @@ function collectBlockquoteInlineRun(
     end++
   }
   if (run.length === 0) return { lines: [pad + strip(lines[start]!)], end: start + 1 }
-  return { lines: restorePrefixedInlineRun(run, dialect).map((l) => pad + l), end }
+  return {
+    lines: restorePrefixedInlineRun(foldContainerSetext(run), dialect).map((l) => pad + l),
+    end,
+  }
 }
 
 /**
@@ -1285,7 +1393,7 @@ function collectListInlineRun(
     end++
   }
 
-  return { lines: restorePrefixedInlineRun(run, dialect), end }
+  return { lines: restorePrefixedInlineRun(foldContainerSetext(run), dialect), end }
 }
 
 /** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
@@ -1824,7 +1932,14 @@ export function markdownToCarve(
 
     // Setext heading: a paragraph line immediately followed by a line of only
     // `=` (h1) or `-` (h2). Carve has no setext, so rewrite to an ATX heading
-    // and consume the underline. Only at the top level (not list/quote/code).
+    // and consume the underline.
+    //
+    // This branch answers for the top level only. A quote line or a list line
+    // never reaches it, because the collectors below take the whole run of
+    // them in one step, so a container's own setext heading is folded there,
+    // by `foldContainerSetext`, where the marker is already held apart from
+    // the content. Letting the guards through instead would write the heading
+    // at column 0 and take it out of the container that held it.
     const underline = i + 1 < lines.length ? lines[i + 1]!.trim() : ''
     if (
       !isHeading &&
