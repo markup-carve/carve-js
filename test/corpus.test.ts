@@ -366,6 +366,22 @@ const IMPLEMENTED = new Set([
   'a-boundary-line-inside-an-open-fence-does-not-end-the-container',
   'a-fence-keeps-the-blank-line-at-the-end-of-its-content',
   'a-boolean-and-a-key-value-of-the-same-name-are-one-attribute',
+  // Added with the spec bump that carries carve#1198. Only the last of these
+  // is the rule this bump implements (PART 9R R2); the other nine are
+  // documents this engine already rendered correctly, and the pin was simply
+  // behind. Categories 310, 311 and 314-4 are the ones a fix keyed on
+  // "brackets" rather than on "the text reached the reader" would break, so
+  // they are listed here rather than left as silent todos.
+  'a-captioned-quote-holds-more-than-one-block',
+  'an-empty-inline-note-is-literal',
+  'a-multi-letter-ordered-marker-opens-no-list',
+  'a-note-s-content-recognizes-no-note',
+  'a-footnote-in-link-text-nests-the-anchors',
+  'a-footnote-in-reference-link-text-nests-the-anchors-too',
+  'a-note-body-s-own-references-resolve',
+  'a-reference-link-s-text-survives-its-own-frame',
+  'an-inline-note-s-content-resolves-after-the-note',
+  'a-footnote-in-an-unresolved-reference-is-not-a-reference',
 ])
 
 /**

@@ -189,6 +189,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A footnote inside an unresolved reference no longer counts as a reference**
+  (markup-carve/carve-js#1064, ruled in markup-carve/carve#1198 as PART 9R R2).
+  An unresolved reference degrades to its literal source, so the link text built
+  for it never reaches the reader; a `[^label]` use or an `^[content]` note
+  sitting in that text was nevertheless numbered, because footnotes were
+  resolved before the reference was known to have failed. A document whose only
+  use of a definition sat there grew an endnotes section for a note nothing
+  references, with a backlink to an id no element carries, and where a live use
+  followed, the one noteref a reader can see was numbered `fnref1-2`, a repeat
+  of a reference the document does not contain. Such a use now draws no number,
+  its definition stays unreferenced and is dropped, and the surviving use is the
+  first one. This covers the collapsed spelling, an unresolved reference nested
+  in a resolved one, one inside a footnote body, and every container a reference
+  can sit in. Text that does reach the reader is unchanged: a note in a
+  reference that resolves, and a note in a bracketed run that never carried a
+  tail, are ordinary references as before.
+
 - **The Markdown importer no longer makes a table from a pipe row that has no
   delimiter row** (markup-carve/carve-js#1061). Carve reads any line that begins
   and ends with `|` as a table row and needs no delimiter row, so passing such a

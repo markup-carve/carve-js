@@ -39,6 +39,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { isUnresolvedReference } from './unresolved-reference.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -1561,8 +1562,9 @@ function renderImage(img: Image, opts: RenderOptions): string {
   // JSON never goes through.
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
-  // no longer answers this question (carve#596).
-  if (img.ref !== undefined && !img.src) return escapeHtml(img.rawRef ?? '')
+  // no longer answers this question (carve#596) - the shared predicate is the
+  // one the footnote-numbering pass asks as well.
+  if (isUnresolvedReference(img)) return escapeHtml(img.rawRef ?? '')
   const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
   const src = escapeAttr(sanitizeUrl(img.src, opts))
   // The sanitized structural src wins; never re-emit an author-supplied
@@ -1703,7 +1705,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined && !node.href) return escapeHtml(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return escapeHtml(node.rawRef ?? '')
       // LINKS NEVER NEST, AT THE RENDER SEAM (PART 12 §3a,
       // markup-carve/carve#817). An anchor may not contain another anchor, and
       // that is a RENDERING rule: the node reaches the serialized tree as the
