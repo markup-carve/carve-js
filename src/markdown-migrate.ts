@@ -1076,6 +1076,10 @@ function isParagraphRunLine(
   if (/^#{1,6}\s/.test(trimmed) || trimmed.startsWith('>')) return false
   if (RE_MD_THEMATIC.test(line) || hasFollowingSetextUnderline(lines, index)) return false
   if (startsTableHeader(lines, index) || isStandardTableRow(line)) return false
+  // An HTML block whose condition may interrupt a paragraph ends the run, the
+  // way a heading or a fence does. Carried into the run instead, a `<div>` on
+  // the line after prose stayed INSIDE the paragraph as an inline raw span.
+  if (interruptingHtmlBlock(line)) return false
 
   const ordered = trimmed.match(/^(\d+)[.)]\s/)
   const isList =
@@ -1129,6 +1133,10 @@ function collectBlockquoteInlineRun(
     const line = lines[end]!.replace(/^[ \t]{1,3}(?=>)/, '')
     const parsed = blockquotePrefix(line)
     if (!parsed || parsed.text.trim() === '') break
+    // What the quote holds is measured with the marker stripped, so an HTML
+    // block opening mid-quote ends the inline run and the caller re-enters on
+    // that line as a block.
+    if (end > start && interruptingHtmlBlock(parsed.text)) break
     run.push(parsed)
     end++
   }
@@ -1206,6 +1214,8 @@ function collectListInlineRun(
 
     // Leave fenced code blocks inside list items to the main fence handler.
     if (/^[ \t]{0,3}(`{3,}|~{3,})/.test(line.slice(contentCol))) break
+    // Same for an HTML block opening at the item's content column.
+    if (interruptingHtmlBlock(line.slice(contentCol))) break
 
     run.push({ prefix: line.slice(0, contentCol), text: line.slice(contentCol) })
     end++
@@ -1246,19 +1256,35 @@ function alignMarker(cell: string): '' | '<' | '>' | '~' {
 const RE_MD_FRONTMATTER_OPEN = /^--- ?(\w*)\s*$/
 const RE_MD_FRONTMATTER_CLOSE = /^---\s*$/
 
-function htmlBlockAt(lines: readonly string[], start: number): { lines: string[]; end: number } | null {
+/**
+ * A run of lines that CommonMark reads as an HTML block, plus whether the
+ * condition that opened it may interrupt a paragraph.
+ *
+ * Only condition 7 (a complete open or close tag alone on the line) may not -
+ * every other condition can start a block on the line right after prose. The
+ * flag is what keeps a `<span>` on its own line from silently eating the
+ * paragraph above it while a `<footer>` correctly ends that paragraph.
+ */
+type HtmlBlockRun = { lines: string[]; end: number; interrupts: boolean }
+
+/** Matches nothing, so `collectUntil` runs to its blank-line fallback. */
+const RE_NEVER = /(?!)/
+
+function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | null {
   const first = lines[start]!
   if (/^(?: {4,}|\t)/.test(first)) return null
   const trimmed = first.replace(/^ {0,3}/, '')
-  const collectUntil = (endRe: RegExp, fallbackBlank: boolean): { lines: string[]; end: number } => {
+  const collectUntil = (endRe: RegExp, fallbackBlank: boolean, interrupts = true): HtmlBlockRun => {
     const block: string[] = []
     for (let i = start; i < lines.length; i++) {
       const line = lines[i]!
-      if (i > start && fallbackBlank && line.trim() === '') return { lines: block, end: i - 1 }
+      if (i > start && fallbackBlank && line.trim() === '') {
+        return { lines: block, end: i - 1, interrupts }
+      }
       block.push(line)
-      if (endRe.test(line)) return { lines: block, end: i }
+      if (endRe.test(line)) return { lines: block, end: i, interrupts }
     }
-    return { lines: block, end: lines.length - 1 }
+    return { lines: block, end: lines.length - 1, interrupts }
   }
 
   if (trimmed.startsWith('<!--')) return collectUntil(/-->/, false)
@@ -1273,14 +1299,91 @@ function htmlBlockAt(lines: readonly string[], start: number): { lines: string[]
   }
   if (HTML_BLOCK_TAGS.has(tag.name)) {
     if (tag.selfClosing || tag.closing || new RegExp(`</${tag.name}\\s*>`, 'i').test(trimmed.slice(tag.end))) {
-      return { lines: [first], end: start }
+      return { lines: [first], end: start, interrupts: true }
     }
     return collectUntil(new RegExp(`</${tag.name}\\s*>`, 'i'), true)
   }
+  // Condition 7: a complete tag, alone on the line. The block runs to the next
+  // blank line - taking only the opening line split `<span>`/`text`/`</span>`
+  // into a fence, a paragraph and an inline span, which is three readings of
+  // one block.
   if (/^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?\s*\/?>\s*$/.test(trimmed)) {
-    return { lines: [first], end: start }
+    return collectUntil(RE_NEVER, true, false)
   }
   return null
+}
+
+/**
+ * The same HTML-block condition, applied to what a CONTAINER holds.
+ *
+ * CommonMark opens an HTML block inside a block quote or a list item exactly as
+ * it does at the top level - the container's marker or content column is
+ * stripped first, and the condition is tested against what is left. Testing the
+ * raw line instead answered the question twice wrong: a `<footer>` in a quote
+ * never matched (the line starts with `>`), so it fell through to the inline
+ * converter and came back as a raw SPAN wrapped in a paragraph the source did
+ * not have; a `<footer>` under a list item matched, but the fence was written
+ * at column 0 and landed outside the item.
+ *
+ * The prefix comes back with the run so the caller can re-emit the fence where
+ * the container holds it. Any 1-3 space indent the block carries INSIDE the
+ * container joins that prefix: in `>   <footer>x</footer>` the two spaces are
+ * the enclosing list item's content column, and dropping them would move the
+ * block out of the item and into the quote.
+ */
+function containerHtmlBlockAt(
+  lines: readonly string[],
+  start: number,
+  listCols: readonly number[],
+): { prefix: string; lines: string[]; end: number } | null {
+  const stripLeadingQuoteIndent = (line: string): string => line.replace(/^[ \t]{1,3}(?=>)/, '')
+  const quoted = blockquotePrefix(stripLeadingQuoteIndent(lines[start]!))
+  const collect = (
+    prefix: string,
+    inner: readonly string[],
+  ): { prefix: string; lines: string[]; end: number } | null => {
+    const block = htmlBlockAt(inner, 0)
+    if (!block) return null
+    const pad = /^ {0,3}/.exec(block.lines[0]!)![0]
+    const dedent = new RegExp(`^ {0,${pad.length}}`)
+    return {
+      prefix: prefix + pad,
+      lines: block.lines.map((line) => line.replace(dedent, '')),
+      end: start + block.end,
+    }
+  }
+
+  if (quoted) {
+    const inner: string[] = []
+    let end = start
+    while (end < lines.length) {
+      const parsed = blockquotePrefix(stripLeadingQuoteIndent(lines[end]!))
+      // A change of quote depth is a different container, so the run ends.
+      if (!parsed || parsed.prefix !== quoted.prefix) break
+      inner.push(parsed.text)
+      end++
+    }
+    return collect(quoted.prefix, inner)
+  }
+
+  const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
+  if (contentCol === 0) return null
+  if (leadingIndentWidth(lines[start]!) < contentCol) return null
+  const inner: string[] = []
+  let end = start
+  while (end < lines.length) {
+    const line = lines[end]!
+    if (line.trim() !== '' && leadingIndentWidth(line) < contentCol) break
+    inner.push(line.trim() === '' ? '' : line.slice(contentCol))
+    end++
+  }
+  return collect(' '.repeat(contentCol), inner)
+}
+
+/** Does an HTML block open on this line, and may it interrupt a paragraph? */
+function interruptingHtmlBlock(line: string): boolean {
+  const block = htmlBlockAt([line], 0)
+  return block !== null && block.interrupts
 }
 
 /**
@@ -1424,6 +1527,22 @@ export function markdownToCarve(
         out.push(dedented)
         prevType = 'code'
       }
+      continue
+    }
+
+    // An HTML block held by a container: a raw fence carrying the container's
+    // own prefix, so the block stays where the source put it. Placed BEFORE the
+    // indented-code branch, because a line four columns in is code only when
+    // those columns are four past its container's content column - inside a
+    // nested item whose content starts at column 4 it is an ordinary block.
+    const contained = containerHtmlBlockAt(lines, i, listCols)
+    if (contained) {
+      const fence = '`'.repeat(Math.max(3, longestBacktickRun(contained.lines.join('\n')) + 1))
+      for (const emitted of [`${fence}=html`, ...contained.lines, fence]) {
+        out.push(emitted === '' ? contained.prefix.trimEnd() : contained.prefix + emitted)
+      }
+      i = contained.end
+      prevType = contained.prefix.trimStart().startsWith('>') ? 'block_quote' : 'list'
       continue
     }
 
