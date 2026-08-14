@@ -189,6 +189,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The `semantic-attribute-outside-span` diagnostic names the value the
+  renderer writes** (markup-carve/carve-js#1058). Its closing sentence ended
+  with a fixed `name=""`, which is what the boolean form renders and is false
+  for every authored value: `` `c`{kbd="keyboard"} `` renders
+  `<code kbd="keyboard">` while the message reported `kbd=""`. It now quotes
+  the value the render actually contains - escaped as the renderer escapes it,
+  blanked where the attribute sanitizer blanks it (a `javascript:` value really
+  does render empty), and cut at 120 codepoints with an ellipsis so a pasted
+  paragraph cannot push the explanation off the screen. The rule id, the
+  trigger and the `cite`-on-a-block-quote carve-out are unchanged, as is every
+  rendering. The sibling `semantic-attribute-value-ignored` never interpolated
+  a value and is unchanged.
+
 - **A referenced abbreviation definition splits by target on plain text and the
   terminal** (markup-carve/carve#1185, PART 11 section 10f). Both targets used
   to emit the `*[TERM]: expansion` definition line whether or not anything

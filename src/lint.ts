@@ -44,6 +44,7 @@ import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
+import { renderedAttrValue, escapeAttrValue } from './render-html.js'
 import type { Attrs, BlockNode, Document, Heading } from './ast.js'
 
 export interface LintWarning {
@@ -639,6 +640,37 @@ const VALID_ATTRIBUTE_ON: Record<string, ReadonlySet<string>> = {
 }
 
 /**
+ * Longest authored value quoted back whole, in CODEPOINTS.
+ *
+ * Past it the diagnostic keeps its head and marks the cut, so a pasted
+ * paragraph in an attribute cannot push the sentence explaining the problem off
+ * the reader's screen. Counted in codepoints rather than UTF-16 units so the
+ * cut never lands between the halves of a surrogate pair.
+ */
+const QUOTED_VALUE_LIMIT = 120
+
+/** Marks a value the diagnostic cut, inside the quotes it was cut from. */
+const QUOTED_VALUE_ELLIPSIS = '…'
+
+/**
+ * The rendered value as the diagnostic quotes it: what the renderer writes,
+ * cut if it is long, escaped as the renderer escapes it.
+ *
+ * The three steps run in exactly that order and none of them commutes. The
+ * sanitizer reads the WHOLE value, so cutting first could quote a long
+ * `javascript:…` back as a harmless-looking prefix while the output holds an
+ * empty attribute. Escaping last is what keeps the cut off the middle of an
+ * entity, which would quote `&qu` at an author who wrote a quote.
+ */
+function quotedAttrValue(name: string, value: string): string {
+  const rendered = renderedAttrValue(name, value)
+  const chars = Array.from(rendered)
+  if (chars.length <= QUOTED_VALUE_LIMIT) return escapeAttrValue(rendered)
+
+  return escapeAttrValue(chars.slice(0, QUOTED_VALUE_LIMIT).join('')) + QUOTED_VALUE_ELLIPSIS
+}
+
+/**
  * Two rules about the compact semantic-span names (PART 9 §10).
  *
  * Neither describes an engine defect - all three engines render these
@@ -689,14 +721,21 @@ function collectSemanticAttributeWarnings(
       if (!elementNames.has(name)) continue
 
       // §10 is scoped to an ordinary span, so the same name anywhere else
-      // stays a raw attribute - ``c`{kbd}` renders `<code kbd="">`.
+      // stays a raw attribute - ``c`{kbd}` renders `<code kbd="">`, and
+      // ``c`{kbd="keyboard"}` renders `<code kbd="keyboard">`.
       if (VALID_ATTRIBUTE_ON[type]?.has(name)) continue
       out.push({
         ...locate(node as Positioned, toUtf16),
         rule: 'semantic-attribute-outside-span',
         message:
           `"${name}" is a semantic span attribute (PART 9 \u00a710) and only applies to an ordinary ` +
-          `[content]{attrs} span; on ${type} it stays a raw attribute and renders as ${name}="".`,
+          `[content]{attrs} span; on ${type} it stays a raw attribute and renders as ` +
+          // The value the RENDERER writes, not a fixed empty one. The boolean
+          // form does render an empty value, which is why this read true until
+          // a value was authored; naming it unconditionally made the sentence
+          // false on exactly the inputs it exists to explain
+          // (markup-carve/carve-js#1058).
+          `${name}="${quotedAttrValue(name, value)}".`,
       })
     }
   })
