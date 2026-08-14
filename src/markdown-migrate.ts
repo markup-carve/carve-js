@@ -1015,6 +1015,15 @@ const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const RE_MD_INDENTED_CODE = /^(?: {4,}|\t)/
 
 /**
+ * A link reference definition opening a line - `[label]: destination`.
+ *
+ * Not a full reader for the construct (the label may run over lines, and the
+ * title may follow on the next one). It is only ever asked whether a line is
+ * paragraph TEXT, and a definition never is.
+ */
+const RE_MD_LINK_REFERENCE = /^ {0,3}\[[^\]]*\]:/
+
+/**
  * Split a pipe-delimited table row into trimmed cell texts, honoring `\|`
  * escapes and dropping the empty cells produced by a leading/trailing pipe.
  */
@@ -1172,11 +1181,20 @@ function restorePrefixedInlineRun(
  *
  * Four columns past the container's content is code rather than an underline
  * (CommonMark), so `>     =====` under a quoted paragraph stays paragraph
- * continuation; one to three columns of slack is still an underline. The
- * paragraph line may not itself be a rule or an already-converted heading -
- * `***` over `---` is two thematic breaks, not an h2 titled `***`, and the
- * heading guard also stops a second underline from re-folding a heading this
- * pass just wrote.
+ * continuation; one to three columns of slack is still an underline.
+ *
+ * The line above the underline has to be paragraph TEXT, which is what
+ * `isParagraphRunLine` already decides for the top level. A container holds
+ * blocks other than paragraphs and the collectors hand those over here too,
+ * where a `=` or `-` line under one is not an underline at all: under a fence
+ * opener it is the code's first line, under a list marker it is a lazy
+ * continuation of the item's own paragraph that an underline cannot reach, and
+ * under a link reference definition it is a paragraph of its own. Folding any
+ * of those destroyed the block. The test runs on the text with the quote
+ * marker already peeled, so a quoted paragraph a list item holds still counts
+ * as one. It also covers the rule case - `***` over `---` is two thematic
+ * breaks, not an h2 titled `***` - while the separate heading guard stops a
+ * second underline from re-folding a heading this pass just wrote.
  */
 function containerSetextHeading(
   paragraph: PrefixedInlineLine,
@@ -1196,7 +1214,11 @@ function containerSetextHeading(
   const body = text.trim()
   if (body === '') return null
   if (/^#{1,6}([ \t]|$)/.test(body)) return null
-  if (RE_MD_THEMATIC.test(text)) return null
+  // `blank`, not `text`: after a blank an ordered marker of any number opens a
+  // list, which is the reading that rejects the fold, and rejecting is the
+  // safe side of a line this helper cannot classify.
+  if (!isParagraphRunLine([text], 0, 'blank')) return null
+  if (RE_MD_LINK_REFERENCE.test(text)) return null
   return `${quote}${run[1]![0] === '=' ? '#' : '##'} ${body}`
 }
 

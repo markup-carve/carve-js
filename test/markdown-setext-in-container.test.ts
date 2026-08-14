@@ -173,6 +173,31 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
     expect(markdownToCarve('> # T\n> ===\n')).toBe('> # T\n> ===\n')
   })
 
+  it('leaves the first line of a fenced code block a quote holds', () => {
+    // CommonMark reads: <blockquote>\n<pre><code>===\n</code></pre>\n</blockquote>
+    // The `===` is the code's own first line, not an underline.
+    expect(markdownToCarve('> ```\n> ===\n> ```\n')).toBe('> ```\n> ===\n> ```\n')
+  })
+
+  it('leaves the first line of a fenced code block a list item holds', () => {
+    // CommonMark reads: <ul>\n<li>\n<pre><code>===\n</code></pre>\n</li>\n</ul>
+    expect(markdownToCarve('- ```\n  ===\n  ```\n')).toBe('- ```\n  ===\n\n  ```\n')
+    expect(markdownToCarve('- > ```\n  > ===\n  > ```\n')).toBe('- > ```\n  > ===\n  > ```\n')
+  })
+
+  it('leaves a list marker a quote holds', () => {
+    // CommonMark reads: <blockquote>\n<ul>\n<li>a\n===</li>\n</ul>\n</blockquote>
+    // An underline cannot reach the item's paragraph from outside the item.
+    expect(markdownToCarve('> - a\n> ===\n')).toBe('> - a\n> ===\n')
+    expect(markdownToCarve('> 2. a\n> ===\n')).toBe('> 2. a\n> ===\n')
+  })
+
+  it('leaves a link reference definition a quote holds', () => {
+    // CommonMark reads: <blockquote>\n<p>===</p>\n</blockquote> - the
+    // definition is consumed and the `===` is a paragraph of its own.
+    expect(markdownToCarve('> [a]: /x\n> ===\n')).toBe('> [a]: /x\n> ===\n')
+  })
+
   it('does not pair two lines at different quote depths', () => {
     // CommonMark reads the underline as a lazy continuation of the inner
     // paragraph, not as a heading for it.
