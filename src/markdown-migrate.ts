@@ -1235,6 +1235,83 @@ function startsTableHeader(lines: readonly string[], index: number): boolean {
   return splitTableRow(trimmed).length === splitTableRow(next).length
 }
 
+/**
+ * Does a GFM table already under way keep this line as a body row?
+ *
+ * GFM ends the table at a blank line or at a block construct, and NOT at a line
+ * that merely stops looking like a row: measured against `marked` 18 with
+ * `gfm: true`, a plain unpiped line after a table body is a one-cell row, while
+ * a heading, a bullet, a quote or a fence closes the table and starts its own
+ * block.
+ *
+ * Only ever asked about a line inside a run a header opened, so it does not
+ * have to decide what STARTS a table - `startsTableHeader` does that.
+ */
+function continuesGfmTableBody(line: string): boolean {
+  const trimmed = line.trim()
+  if (trimmed === '') return false
+  if (/^#{1,6}([ \t]|$)/.test(trimmed)) return false
+  if (trimmed.startsWith('>')) return false
+  if (/^(`{3,}|~{3,})/.test(trimmed)) return false
+  if (RE_MD_THEMATIC.test(line)) return false
+  // An HTML block that can interrupt a paragraph ends the table too, and the
+  // same predicate answers both: `marked` 18 closes the table at `<div>` and
+  // `<script>` and keeps `<span>` as a body row, which is exactly the type-1-to-6
+  // split this tests. Without it a row after the block stayed marked as part of
+  // the table and came through unescaped.
+  if (interruptingHtmlBlock(line)) return false
+  // Four columns in ends it too: `marked` closes the table at an indented line
+  // and reads what follows as a fresh block. Measured on the line as its own
+  // container holds it, so an indented table is not four columns in - only a
+  // line indented past its neighbours is.
+  if (RE_MD_INDENTED_CODE.test(line)) return false
+
+  return !/^(?:[-*+]|\d+[.)])([ \t]|$)/.test(trimmed)
+}
+
+/**
+ * Which of these lines GFM reads as part of a table: a header, the delimiter
+ * row under it, and the body rows that follow until the table ends.
+ *
+ * The whole point of asking is the INVERSE. Carve reads `| a | b |` as a table
+ * row on its own, with no delimiter row anywhere, so every line this returns
+ * `false` for and Carve would still read as a row is a table the source did not
+ * have (markup-carve/carve-js#1061). The caller escapes those.
+ */
+function gfmTableRowLines(lines: readonly string[]): boolean[] {
+  const inTable = lines.map(() => false)
+  let i = 0
+  while (i < lines.length) {
+    if (!startsTableHeader(lines, i)) {
+      i++
+      continue
+    }
+    inTable[i] = true
+    inTable[i + 1] = true
+    i += 2
+    while (i < lines.length && continuesGfmTableBody(lines[i]!)) {
+      inTable[i] = true
+      i++
+    }
+  }
+
+  return inTable
+}
+
+/**
+ * Keep a line Carve would read as a table row as ordinary text, by escaping the
+ * pipe that opens it.
+ *
+ * The OPENING pipe alone, because that is the whole of Carve's rule: a row has
+ * to both begin and end with one, so `\| a | b |` renders the pipes it was
+ * written with and needs no further escaping - which is what keeps the line
+ * readable, and lets it stay in the paragraph it belongs to rather than
+ * becoming a block of its own.
+ */
+function keepPipeRowLiteral(line: string): string {
+  return line.replace(/^(\s*)\|/, '$1\\|')
+}
+
 function isParagraphRunLine(
   lines: readonly string[],
   index: number,
@@ -1314,12 +1391,81 @@ function stripColumns(line: string, columns: number): string {
   return ' '.repeat(Math.max(0, col - columns)) + line.slice(i)
 }
 
+/**
+ * The block-quote markers a line still carries, split off byte-for-byte so
+ * `marker + body` is the line again.
+ *
+ * The collectors do NOT leave every container in `prefix`. The quote collector
+ * peels all the levels it found, and the list collector peels only the item's
+ * columns, so a quoted line inside an item reaches here with its `>` still on
+ * the text. Both have to be visible to group a run by the container it is
+ * really in.
+ */
+function peelQuoteMarkers(line: string): { marker: string; body: string } {
+  const marker = /^(?:>[ \t]?)*/.exec(line)![0]
+
+  return { marker, body: line.slice(marker.length) }
+}
+
+/** How many quote levels a peeled marker names; `>` and `> ` are one level. */
+function quoteDepth(marker: string): number {
+  return marker.split('>').length - 1
+}
+
 function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
 ): string[] {
   const converted = convertInline(run.map((part) => part.text).join('\n'), dialect).split('\n')
-  return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
+  const held = run.map((part) => peelQuoteMarkers(part.text))
+  // Only a run whose lines this function can place in a container gets the
+  // escape at all. What `prefix` holds is up to the collector, and a run can
+  // still carry a container it does not model: the OUTER item of `- - | a |` is
+  // in `prefix` while the inner one is left on the text, so the header sits at
+  // an inner item and the rows under it sit at that item's content column.
+  // Grouped as one container those three lines are not a table, and escaping
+  // them broke a nested table this converter got right. A marker or an indent
+  // still on the body is that signal, and the run is left exactly as it was.
+  const modellable = held.every(
+    (part) => !RE_LIST_MARKER.test(part.body) && !/^[ \t]/.test(part.body),
+  )
+  if (!modellable) return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
+
+  // A container holds tables too, and the source decides which of its lines are
+  // rows exactly as it does at the top level - so the same question is asked of
+  // what each container HOLDS (markup-carve/carve-js#1061).
+  //
+  // ONE CONTAINER AT A TIME. Asked of the whole run, lines from different
+  // containers form a header/delimiter/body sequence that exists in none of
+  // them: `> | a | b |` over `> > |---|---|` over `> | x | y |` is a quoted
+  // paragraph, a deeper quote and another quoted paragraph, and reading it as
+  // one table left all three unescaped. The item's own columns are already in
+  // `prefix`, whose WIDTH is what separates two items - `- ` and the `  ` under
+  // it are one item, the same rule `containerSetextHeading` states - and the
+  // quote levels are counted off the text, since a list collector leaves them
+  // there.
+  const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}`)
+  const inTable = new Array<boolean>(run.length).fill(false)
+  for (let start = 0; start < run.length; ) {
+    let end = start + 1
+    while (end < run.length && container[end] === container[start]) end++
+    const flags = gfmTableRowLines(held.slice(start, end).map((part) => part.body))
+    for (let offset = 0; offset < flags.length; offset++) inTable[start + offset] = flags[offset]!
+    start = end
+  }
+
+  return run.map((part, idx) => {
+    const line = converted[idx] ?? ''
+    if (inTable[idx]) return part.prefix + line
+    const quoted = peelQuoteMarkers(line)
+
+    return (
+      part.prefix +
+      (isStandardTableRow(quoted.body)
+        ? quoted.marker + keepPipeRowLiteral(quoted.body)
+        : line)
+    )
+  })
 }
 
 /**
@@ -1823,6 +1969,14 @@ export function markdownToCarve(
   // fence indented to a list item's content stays in the item (strip nothing);
   // a document-level 1-3 space fence dedents to column 0.
   const listCols: number[] = []
+  // Which source lines GFM reads as part of a table. Answered once, from the
+  // SOURCE, because that is where the delimiter row still is - by the time a
+  // header has been rewritten to `|=` the row that made it a table is gone.
+  // Lines a fence or a container holds get an answer here too and are never
+  // asked for it: a fenced line never reaches the text branch below, and a
+  // contained one is answered again by `restorePrefixedInlineRun` against what
+  // its container holds, marker peeled.
+  const inGfmTable = gfmTableRowLines(lines)
   // was the previous line blank? A dedented line only leaves a list item when a
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
@@ -2203,7 +2357,15 @@ export function markdownToCarve(
       }
     }
     if (isStandardTableRow(body)) body = unescapePipesInCodeSpans(body)
-    out.push(convertInline(body, dialect))
+    const converted = convertInline(body, dialect)
+    // A pipe row GFM did NOT read as a table row stays text. Carve needs no
+    // delimiter row, so passing the line through was itself the conversion and
+    // the migrated document grew a table the author never saw
+    // (markup-carve/carve-js#1061). Escaping only the opening pipe keeps the
+    // line in the paragraph it belongs to.
+    out.push(
+      !inGfmTable[i] && isStandardTableRow(converted) ? keepPipeRowLiteral(converted) : converted,
+    )
 
     if (isHeading && i + 1 < lines.length) {
       const next = lines[i + 1]!.trim()
