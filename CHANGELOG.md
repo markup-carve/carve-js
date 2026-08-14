@@ -7,6 +7,37 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A quote attribution stays attached to its quote on every target**
+  (markup-carve/carve#1179, PART 11 §10c). It used to follow the quote as a
+  sibling separated by a blank line, which kept the words but not what they
+  mean - read back, the attribution was attached to nothing, and a round trip
+  produced a blockquote with no attribution at all. Markdown now emits a
+  `<footer>` element inside the quote (that target already writes `<u>`,
+  `<mark>` and `<ins>` for constructs with no Markdown spelling, and through a
+  CommonMark reader `<footer>` opens an HTML block rather than being wrapped in
+  a paragraph, so the rendered HTML matches the HTML target's); the terminal
+  carries its quote bar onto the attribution line; plain text attaches by
+  adjacency, dropping the blank line. A quote with no attribution is unchanged.
+
+- **Presentation targets no longer discard authored text**
+  (markup-carve/carve#1179). `docs/graceful-degradation.md` states the floor as
+  a MUST - "losing the click is fine; losing the words is not" - and three kinds
+  of authored text were dropped outright:
+
+  - a table caption vanished on the Markdown target. It now sits on its own line
+    under the table, which is how an image and a listing caption already degrade
+    there, so the table stops being the odd one out.
+  - a fence header (`"src/app.js"`) and a grouping label (`[Node]`) vanished on
+    the plain-text and terminal targets. Plain emits them as standalone lines
+    ahead of the code, matching the caption floor the `div` renderer already
+    applied; the terminal joins them to the rule line it was already drawing, so
+    a captioned fence still reads as one block.
+
+  Nothing else moves: an uncaptioned table, a fence with no header and every
+  other target are byte-identical to before.
+
 ### Removed
 
 - **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).

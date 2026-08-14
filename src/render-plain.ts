@@ -91,15 +91,26 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'paragraph':
       return `${renderInlines(node.children, ctx)}\n\n`
-    case 'code_block':
-      return `${stripControls(node.content)}\n\n`
+    case 'code_block': {
+      // Caption floor, the same one the `div` case below already applies: a
+      // fence header (`"src/app.js"`) and a grouping label (`[Node]`) are
+      // authored text, and this target has nowhere to attach them, so they
+      // become standalone lines rather than being dropped. Header first when
+      // both are present, matching the div's title-then-label order.
+      const header = node.header ? `${stripControls(node.header)}\n\n` : ''
+      const label = node.label ? `${stripControls(node.label)}\n\n` : ''
+      return `${header}${label}${stripControls(node.content)}\n\n`
+    }
     case 'block_quote': {
       const quoted = `"${trimNonNbsp(renderBlocks(node.children, ctx))}"`
-      // The attribution is visible content, so a text target keeps it.
-      // A BLANK LINE, not a single newline: the attribution is a separate block
-      // in a text target, and the non-html parity test names that spacing.
+      // PART 11 §10c T3. ADJACENCY, not a blank line. A blank line is what
+      // separates blocks on this target, so putting one here said the
+      // attribution was a block of its own rather than the quotation's source -
+      // the words survived, the attachment did not. No punctuation is invented:
+      // a dash prefix would put a character in the output the author never
+      // wrote.
       const attribution =
-        node.attribution === undefined ? '' : `\n\n${renderInlines(node.attribution, ctx)}`
+        node.attribution === undefined ? '' : `\n${renderInlines(node.attribution, ctx)}`
       return `${quoted}${attribution}\n\n`
     }
     case 'list':

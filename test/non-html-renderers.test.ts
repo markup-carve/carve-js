@@ -49,12 +49,36 @@ for (const [name, g] of Object.entries(golden)) {
 }
 
 describe('non-html renderer parity fixes', () => {
-  it('keeps blockquote attribution separated from the quote body', () => {
+  /*
+   * PART 11 §10c. This used to pin the OPPOSITE - the attribution as a sibling
+   * separated by a blank line - and that spacing was the defect: the words
+   * survived but the attachment did not, so a reader (and a re-parse) saw a
+   * paragraph that merely followed a quotation rather than its source.
+   *
+   * Each target keeps the attachment with what it actually has: Markdown a
+   * `<footer>` element inside the quote, the terminal its own quote bar, plain
+   * text adjacency (no blank line).
+   */
+  it('keeps blockquote attribution attached to its quote', () => {
     const src = '> q\n^ Attr'
 
-    expect(carveToMarkdown(src)).toBe('> q\n\nAttr\n')
-    expect(carveToPlainText(src)).toBe('"q"\n\nAttr\n')
-    expect(carveToAnsi(src)).toBe('\x1b[36m\x1b[2m│\x1b[0m q\n\n\x1b[3m\x1b[2mAttr\x1b[0m\n')
+    expect(carveToMarkdown(src)).toBe('> q\n>\n> <footer>Attr</footer>\n')
+    expect(carveToPlainText(src)).toBe('"q"\nAttr\n')
+    expect(carveToAnsi(src)).toBe(
+      '\x1b[36m\x1b[2m│\x1b[0m q\n\x1b[36m\x1b[2m│\x1b[0m\n\x1b[36m\x1b[2m│\x1b[0m \x1b[3m\x1b[2mAttr\x1b[0m\n',
+    )
+  })
+
+  it('leaves a quote with no attribution alone', () => {
+    // The change adds a line only where the author wrote an attribution.
+    expect(carveToMarkdown('> q\n')).toBe('> q\n')
+    expect(carveToPlainText('> q\n')).toBe('"q"\n')
+    expect(carveToAnsi('> q\n')).toBe('\x1b[36m\x1b[2m│\x1b[0m q\n')
+  })
+
+  it('keeps a block after an attributed quote separate', () => {
+    expect(carveToMarkdown('> q\n^ A\n\nafter\n')).toBe('> q\n>\n> <footer>A</footer>\n\nafter\n')
+    expect(carveToPlainText('> q\n^ A\n\nafter\n')).toBe('"q"\nA\n\nafter\n')
   })
 
   it('keeps a code-fence header in Markdown output', () => {
@@ -64,6 +88,61 @@ describe('non-html renderer parity fixes', () => {
   it('renders critic deletion as del HTML in Markdown output', () => {
     expect(carveToMarkdown('{-del-}')).toBe('<del>del</del>\n')
     expect(carveToMarkdown('{+ins+}')).toBe('<ins>ins</ins>\n')
+  })
+
+  /*
+   * docs/graceful-degradation.md states the floor as a MUST: a renderer may drop
+   * a construct's INTERACTION but not its WORDS. Three kinds of authored text
+   * were dropped outright while this whole file stayed green, because nothing
+   * asserted that a caption or a fence header reached these targets at all.
+   *
+   * The first three cases are the losses; the last three are CONTROLS that
+   * already held, and they are what makes the first three a defect rather than a
+   * limitation of the targets - an image caption and a listing caption survive
+   * the same target the table's caption did not. carve-php and carve-rs dropped
+   * exactly the same three, so `compare:impls` could never have caught it
+   * (markup-carve/carve#1179).
+   */
+  it.each([
+    ['table caption', '|= H |\n| a |\n^ Table caption\n', 'Table caption'],
+    ['fence header', '``` js "src/app.js"\nlet a = 1\n```\n', 'src/app.js'],
+    ['grouping label', '``` js [Node]\na\n```\n', 'Node'],
+    ['image caption (control)', '![alt](i.png)\n^ Figure caption\n', 'Figure caption'],
+    ['listing caption (control)', '``` js\nlet a = 1\n```\n^ Listing caption\n', 'Listing caption'],
+    ['admonition title (control)', '::: note "Title"\nbody\n:::\n', 'Title'],
+  ])('keeps authored text on every presentation target: %s', (_name, src, authored) => {
+    // Containment, not bytes: a renderer may keep changing HOW it presents these
+    // and still be held to keeping them.
+    for (const [target, render] of [
+      ['markdown', carveToMarkdown],
+      ['plain', carveToPlainText],
+      ['ansi', carveToAnsi],
+    ] as const) {
+      expect(render(src), `the ${target} target dropped ${JSON.stringify(authored)}`).toContain(
+        authored,
+      )
+    }
+  })
+
+  it('puts a table caption on its own line under the table', () => {
+    // The shape an image and a listing caption already use on this target.
+    expect(carveToMarkdown('|= H |\n| a |\n^ Table caption\n')).toBe(
+      '| H |\n| --- |\n| a |\nTable caption\n',
+    )
+    // A table with no caption is untouched - the line appears only where the
+    // author wrote one.
+    expect(carveToMarkdown('|= H |\n| a |\n')).toBe('| H |\n| --- |\n| a |\n')
+    // And a following block keeps its blank-line separation.
+    expect(carveToMarkdown('|= H |\n| a |\n^ Cap\n\nafter\n')).toBe(
+      '| H |\n| --- |\n| a |\nCap\n\nafter\n',
+    )
+  })
+
+  it('carries the fence header and label on the terminal rule line', () => {
+    // They join the rule the renderer already draws, so a captioned fence still
+    // reads as one block rather than three.
+    const ansi = carveToAnsi('``` js "src/app.js" [Node]\nlet a = 1\n```\n')
+    expect(ansi.replace(/\x1b\[[0-9;]*m/g, '')).toContain('┌── js src/app.js [Node]')
   })
 
   it('renders link text, not link destinations, in plain text output', () => {
