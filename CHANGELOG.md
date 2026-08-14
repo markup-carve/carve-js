@@ -155,6 +155,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer converts a setext heading a block quote or a list
+  item holds** (markup-carve/carve-js#1052). It converted one only at the top
+  level, so `> Title` over `> =====` arrived in Carve as prose with the
+  underline still in it. Where the underline was `-`, the migrated document
+  also gained a thematic break the source never had, and nothing in the result
+  told a reader that rule apart from one the author wrote. The conversion now
+  runs on what a container holds, at that container's own depth, so it reaches
+  a quote, a nested quote, a bullet or ordered item, and a quote inside an
+  item. The bounds a reference reader draws are kept: an underline four columns
+  past the container's content is still code, one to three columns of slack is
+  still an underline, and `> ***` over `> ---` is still two rules rather than a
+  heading. A setext heading whose text runs over several lines is approximated
+  as the top level already approximates it - the line above the underline
+  becomes the heading - because a Carve heading is a single line.
 - **A table caption is separated from the table by a blank line on the Markdown
   target** (markup-carve/carve#1179, PART 11 §10e). It was written on the line
   directly after the last row, which a GFM reader takes as another row: the
