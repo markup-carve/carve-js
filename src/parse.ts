@@ -7353,6 +7353,27 @@ function verbatimSpanEnd(text: string, i: number): { end: number; closed: boolea
   return { end: text.length, closed: false, openLen }
 }
 
+/**
+ * Does a RAW bracketed run re-read as itself when written between `[` and `]`?
+ *
+ * The writer needs this because a raw run - an image's alt text - resolves no
+ * escapes: whatever sits between the brackets IS the value, backslashes and
+ * all. So the writer cannot neutralize a `]` by escaping it; it can only ask
+ * whether the reader's own scan of the run would close where the writer puts
+ * the `]`, and emit the run verbatim when it does.
+ *
+ * It is the READER's scan, not a second spelling of it: the same
+ * `buildBracketMap` that the inline pass consults, run over the run wrapped in
+ * the brackets it will be written between. Balanced, escape-aware and
+ * literal-span-aware therefore hold here by construction rather than by a
+ * comment promising they do - which is the failure markup-carve/carve#1206
+ * found four times upstream, where one production was written flat in four
+ * places and all four agreed with each other and with nothing else.
+ */
+export function rawBracketRunCloses(text: string): boolean {
+  return buildBracketMap(`[${text}]`)[0] === text.length + 1
+}
+
 function buildBracketMap(s: string): Record<number, number> {
   const map: Record<number, number> = {}
   const stack: number[] = []
