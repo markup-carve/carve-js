@@ -32,19 +32,6 @@ export function wireFieldsSource(schema) {
     }
     byType.set(type, Object.keys(def.properties).sort());
   }
-  // The two objects that hang off a node without carrying a `type` of their
-  // own. They are closed in the schema too, and they are where a stray key is
-  // most likely to be smuggled in, since every node kind can carry them.
-  const helpers = new Map();
-  for (const name of ["attrs", "pos"]) {
-    const def = defs[name];
-    if (def?.additionalProperties !== false) {
-      throw new Error(
-        `${name} is not closed in the schema; section 11 has nothing to check against`,
-      );
-    }
-    helpers.set(name, Object.keys(def.properties).sort());
-  }
   /*
    * Field names that hold NODES somewhere in the schema (PART 12 section 12(c)).
    *
@@ -81,6 +68,111 @@ export function wireFieldsSource(schema) {
       if (holdsNode(property)) nodeFields.add(name);
     }
   }
+
+  /*
+   * THE CLOSED RECORDS THE SCHEMA NESTS UNDER A NODE, and WHERE each one sits.
+   *
+   * These are the objects that hang off a node without carrying a `type` of
+   * their own, so nothing keyed by `type` reaches them - and they are where a
+   * stray key is most likely to be smuggled in, since a caller writing one is
+   * usually writing it by hand.
+   *
+   * DERIVED, not named. `attrs` and `pos` were listed here literally, which was
+   * a complete description of the wire for exactly as long as they were the only
+   * two: `table.rowGroups` arrived through the schema (markup-carve/carve#1186)
+   * and was emitted as `"object"` and nothing more, so `rowGroups: {}` and
+   * `rowGroups: {junk: -5}` both decoded, survived into the tree and were
+   * published again on the way out - this engine vouching for a payload it never
+   * looked at (markup-carve/carve-js#1055). A hand-written list of the schema's
+   * nested records is the schema expressed a second time, and this is the shape
+   * that rots.
+   *
+   * TWO SPELLINGS reach a record, and both are read here:
+   *
+   *   a `$ref` to a closed `$def` the schema gives no `type` - `attrs` and
+   *   `pos`. Its RECORD NAME is the def name, which is also how the errors have
+   *   always spelled those two.
+   *
+   *   an INLINE `{"type": "object", "additionalProperties": false}` under a
+   *   property - `table.rowGroups`, and `table.rowGroups.bodies`'s items inside
+   *   it. It has no def name, so its record name is its dotted POSITION, which
+   *   is also why the map below is keyed by owner and field rather than by name:
+   *   an inline record is only findable through the position that holds it.
+   *
+   * The walk is TRANSITIVE - a record's own properties are searched again - and
+   * that is not decoration. `rowGroups.bodies` is a list of closed records and
+   * each carries an `attrs`, so a pass that closed only the outer object would
+   * leave the same hole one level down.
+   *
+   * A NODE POSITION IS NOT THIS WALK'S BUSINESS, which is what `holdsNode`
+   * settles. `citation_group.items` holds `citation` records - closed, typeless,
+   * and by every other measure a record - but the node walk already claims that
+   * position as `NODE_POSITION_KIND: "records"` and rules on it deliberately:
+   * requiring a `type` there would refuse a tree this engine's own parser
+   * produced. Claiming it here as well would be two producers of one rule, and
+   * it measurably changes an existing answer - a citation item carrying
+   * `type: null` is a section 12(c) node-type error today, and would become a
+   * section 11 unknown-field error instead. What a citation item's own fields
+   * are checked against is a separate question from this one.
+   *
+   * `attrs.keyValues` is deliberately not one of these either. Its
+   * `additionalProperties` is a SCHEMA rather than `false` - an open map of
+   * string values, since an attribute may be named anything - so there is no
+   * closed record to emit. That its values are unchecked as strings is a
+   * separate and much narrower question.
+   */
+  const isPlainRecordDef = (def) =>
+    def?.type === "object" &&
+    def.properties !== undefined &&
+    def.properties.type === undefined;
+  const isInlineRecord = (property) =>
+    property?.type === "object" &&
+    property.properties !== undefined &&
+    property.additionalProperties === false;
+  /** The record a property holds, if it holds one, and whether as an array. */
+  const recordAt = (owner, field, property) => {
+    const one = property?.type === "array" ? property.items : property;
+    const array = property?.type === "array";
+    if (typeof one?.$ref === "string") {
+      const name = one.$ref.replace("#/$defs/", "");
+      if (!isPlainRecordDef(defs[name])) return null;
+      if (defs[name].additionalProperties !== false) {
+        throw new Error(
+          `${name} is not closed in the schema; section 11 has nothing to check against`,
+        );
+      }
+      return { record: name, def: defs[name], array };
+    }
+    if (!isInlineRecord(one)) return null;
+    return { record: `${owner}.${field}`, def: one, array };
+  };
+  const records = new Map();
+  const nestedAt = new Map();
+  const walkRecords = (owner, properties) => {
+    for (const [field, property] of Object.entries(properties)) {
+      if (holdsNode(property)) continue;
+      const found = recordAt(owner, field, property);
+      if (found === null) continue;
+      nestedAt.set(`${owner}.${field}`, {
+        record: found.record,
+        array: found.array,
+      });
+      if (records.has(found.record)) continue;
+      records.set(found.record, found.def);
+      walkRecords(found.record, found.def.properties);
+    }
+  };
+  for (const def of Object.values(defs)) {
+    const type = def?.properties?.type?.const;
+    if (typeof type !== "string") continue;
+    walkRecords(type, def.properties);
+  }
+  const recordFields = new Map(
+    [...records.entries()].map(([name, def]) => [
+      name,
+      Object.keys(def.properties).sort(),
+    ]),
+  );
   /*
    * WHAT EACH NODE POSITION HOLDS, spelled `<owning type>.<field>` (PART 12
    * section 12(c)).
@@ -116,11 +208,7 @@ export function wireFieldsSource(schema) {
     Object.entries(defs)
       .filter(
         ([name, def]) =>
-          name !== "attrs" &&
-          name !== "pos" &&
-          def?.type === "object" &&
-          def?.properties !== undefined &&
-          def.properties.type === undefined,
+          name !== "attrs" && name !== "pos" && isPlainRecordDef(def),
       )
       .map(([name]) => name),
   );
@@ -194,7 +282,11 @@ export function wireFieldsSource(schema) {
     }
     if (typeof property.$ref === "string") {
       const target = property.$ref.replace("#/$defs/", "");
-      if (target === "attrs" || target === "pos") return "object";
+      // A ref to a PLAIN RECORD is an object, not a node: the schema gives it no
+      // `type`, so requiring one there would refuse a tree this engine's own
+      // parser produced (section 9(a)). `WIRE_NESTED_RECORDS` is what says which
+      // record, and checks its contents.
+      if (isPlainRecordDef(defs[target])) return "object";
       return "node";
     }
     return undefined;
@@ -218,7 +310,7 @@ export function wireFieldsSource(schema) {
     const type = def?.properties?.type?.const;
     if (typeof type === "string") collect(type, def);
   }
-  for (const name of ["attrs", "pos"]) collect(name, defs[name]);
+  for (const [name, def] of records) collect(name, def);
 
   /*
    * WHICH NODE TYPES EACH POSITION ADMITS, spelled `<owning type>.<field>`
@@ -292,8 +384,18 @@ export function wireFieldsSource(schema) {
   const middle = [
     "}",
     "",
-    "/** Properties the schema names for the objects that hang off a node. */",
-    "export const WIRE_HELPER_FIELDS: Readonly<Record<string, readonly string[]>> = {",
+    "/**",
+    " * Properties the schema names for each CLOSED RECORD it nests under a node.",
+    " *",
+    " * A record is an object the schema gives no `type`, so nothing keyed by type",
+    " * reaches it. Named by its `$defs` key where it has one - `attrs`, `pos` -",
+    " * and by its dotted POSITION where the schema writes it inline and it has no",
+    " * other name: `table.rowGroups`, `table.rowGroups.bodies`.",
+    " *",
+    " * A position the NODE walk already claims is absent: `citation_group.items`",
+    " * holds records, and `NODE_POSITION_KIND` rules on it.",
+    " */",
+    "export const WIRE_RECORD_FIELDS: Readonly<Record<string, readonly string[]>> = {",
   ].join("\n");
   const sorted = (m) =>
     [...m.entries()]
@@ -412,7 +514,52 @@ export function wireFieldsSource(schema) {
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(entry)
     .join("\n");
-  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(helpers)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n${typesDoc}\n${typesList}\n}\n`;
+  const nestedDoc = [
+    "}",
+    "",
+    "/**",
+    " * WHERE each closed record sits, grouped by the node type or record that",
+    " * OWNS the position, so the decoder can descend into one without knowing its",
+    " * name in advance.",
+    " *",
+    " * Keyed by owner rather than by record name because an INLINE record has no",
+    " * name of its own - `table.rowGroups` is findable only through the position",
+    " * that holds it - and because a field name does not identify a record on its",
+    " * own: `bodies` means one thing under `table.rowGroups` and would mean",
+    " * another anywhere else the schema spells it.",
+    " *",
+    " * An owner may itself be a record: `table.rowGroups` owns `bodies`, whose",
+    " * groups own an `attrs`. That nesting is the reason this is a map of maps",
+    " * rather than a flat list of two names - a pass that closed only what hangs",
+    " * off a NODE would leave `rowGroups.bodies` open, which is the reported",
+    " * defect surviving its own fix.",
+    " */",
+    "export const WIRE_NESTED_RECORDS: Readonly<",
+    "  Record<string, Readonly<Record<string, { record: string; array: boolean }>>>",
+    "> = {",
+  ].join("\n");
+  const byOwner = new Map();
+  for (const [position, nested] of nestedAt) {
+    const cut = position.lastIndexOf(".");
+    const owner = position.slice(0, cut);
+    const field = position.slice(cut + 1);
+    if (!byOwner.has(owner)) byOwner.set(owner, new Map());
+    byOwner.get(owner).set(field, nested);
+  }
+  const nestedList = [...byOwner.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(
+      ([owner, fields]) =>
+        `  ${JSON.stringify(owner)}: { ${[...fields.entries()]
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(
+            ([field, nested]) =>
+              `${JSON.stringify(field)}: { record: ${JSON.stringify(nested.record)}, array: ${nested.array} }`,
+          )
+          .join(", ")} },`,
+    )
+    .join("\n");
+  return `${header}\n${sorted(byType)}\n${middle}\n${sorted(recordFields)}\n${tail}\n${list}\n${kindDoc}\n${kindList}\n${schemaDoc}\n${requiredList}\n${kindsDoc}\n${kindsList}\n${typesDoc}\n${typesList}\n${nestedDoc}\n${nestedList}\n}\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

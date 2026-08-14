@@ -67,10 +67,22 @@ export const WIRE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "underline": ["attrs", "children", "pos", "type"],
 }
 
-/** Properties the schema names for the objects that hang off a node. */
-export const WIRE_HELPER_FIELDS: Readonly<Record<string, readonly string[]>> = {
+/**
+ * Properties the schema names for each CLOSED RECORD it nests under a node.
+ *
+ * A record is an object the schema gives no `type`, so nothing keyed by type
+ * reaches it. Named by its `$defs` key where it has one - `attrs`, `pos` -
+ * and by its dotted POSITION where the schema writes it inline and it has no
+ * other name: `table.rowGroups`, `table.rowGroups.bodies`.
+ *
+ * A position the NODE walk already claims is absent: `citation_group.items`
+ * holds records, and `NODE_POSITION_KIND` rules on it.
+ */
+export const WIRE_RECORD_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "attrs": ["classes", "id", "keyValues", "order"],
   "pos": ["endColumn", "endLine", "endOffset", "startColumn", "startLine", "startOffset"],
+  "table.rowGroups": ["bodies", "footRows", "headRows"],
+  "table.rowGroups.bodies": ["attrs", "bodyRows", "headRows", "rowHeadColumns"],
 }
 
 /**
@@ -223,6 +235,8 @@ export const WIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   "superscript": ["children", "type"],
   "symbol": ["name", "type"],
   "table": ["rows", "type"],
+  "table.rowGroups": ["bodies", "footRows", "headRows"],
+  "table.rowGroups.bodies": ["bodyRows", "headRows"],
   "table_cell": ["children", "header", "type"],
   "table_row": ["cells", "type"],
   "tag": ["name", "type"],
@@ -297,6 +311,8 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "superscript": { "attrs": "object", "children": "array", "pos": "object" },
   "symbol": { "attrs": "object", "name": "string", "pos": "object" },
   "table": { "attrs": "object", "caption": "array", "pos": "object", "rowGroups": "object", "rows": "array", "shortCaption": "array" },
+  "table.rowGroups": { "bodies": "array", "footRows": "integer>=0", "headRows": "integer>=0" },
+  "table.rowGroups.bodies": { "attrs": "object", "bodyRows": "integer>=0", "headRows": "integer>=0", "rowHeadColumns": "integer>=0" },
   "table_cell": { "align": "enum:left\u0000right\u0000center", "attrs": "object", "children": "array", "header": "boolean", "pos": "object", "span": "enum:rowspan\u0000colspan" },
   "table_row": { "attrs": "object", "cells": "array", "pos": "object" },
   "tag": { "attrs": "object", "name": "string", "pos": "object" },
@@ -354,4 +370,85 @@ export const NODE_POSITION_TYPES: Readonly<Record<string, readonly string[]>> = 
   "table_cell.children": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
   "table_row.cells": ["table_cell"],
   "underline.children": ["abbreviation", "autolink", "caption_number", "citation_group", "code", "comment", "critic_comment", "delete", "emphasis", "escaped_text", "footnote_ref", "hard_break", "heading_ref", "highlight", "image", "inline_extension", "inline_footnote", "insert", "link", "literal_inline", "math", "mention", "raw_inline", "smart_punctuation", "soft_break", "span", "strike", "strong", "subscript", "substitution", "superscript", "symbol", "tag", "text", "underline"],
+}
+
+/**
+ * WHERE each closed record sits, grouped by the node type or record that
+ * OWNS the position, so the decoder can descend into one without knowing its
+ * name in advance.
+ *
+ * Keyed by owner rather than by record name because an INLINE record has no
+ * name of its own - `table.rowGroups` is findable only through the position
+ * that holds it - and because a field name does not identify a record on its
+ * own: `bodies` means one thing under `table.rowGroups` and would mean
+ * another anywhere else the schema spells it.
+ *
+ * An owner may itself be a record: `table.rowGroups` owns `bodies`, whose
+ * groups own an `attrs`. That nesting is the reason this is a map of maps
+ * rather than a flat list of two names - a pass that closed only what hangs
+ * off a NODE would leave `rowGroups.bodies` open, which is the reported
+ * defect surviving its own fix.
+ */
+export const WIRE_NESTED_RECORDS: Readonly<
+  Record<string, Readonly<Record<string, { record: string; array: boolean }>>>
+> = {
+  "abbreviation": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "abbreviation_def": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "admonition": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "autolink": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "block_quote": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "caption_number": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "citation_group": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "code": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "code_block": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "comment": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "critic_comment": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "definition_description": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "definition_list": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "definition_term": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "delete": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "div": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "emphasis": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "escaped_text": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "figure": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "footnote": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "footnote_ref": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "frontmatter": { "pos": { record: "pos", array: false } },
+  "hard_break": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "heading": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "heading_ref": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "highlight": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "image": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "inline_extension": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "inline_footnote": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "insert": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "line_block": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "link": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "link_reference_definition": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "list": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "list_item": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "literal_inline": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "math": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "mention": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "paragraph": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "raw_block": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "raw_inline": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "smart_punctuation": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "soft_break": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "span": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "strike": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "strong": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "subscript": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "substitution": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "superscript": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "symbol": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "table": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false }, "rowGroups": { record: "table.rowGroups", array: false } },
+  "table.rowGroups": { "bodies": { record: "table.rowGroups.bodies", array: true } },
+  "table.rowGroups.bodies": { "attrs": { record: "attrs", array: false } },
+  "table_cell": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "table_row": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "tag": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "text": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "thematic_break": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
+  "underline": { "attrs": { record: "attrs", array: false }, "pos": { record: "pos", array: false } },
 }
