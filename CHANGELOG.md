@@ -155,6 +155,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer reads a block-level HTML element inside a container as
+  a block** (markup-carve/carve-js#1045). `markdownToCarve` decided
+  block-vs-inline by testing the raw source line against CommonMark's HTML block
+  conditions, and inside a container the raw line is not what the container
+  holds. In a block quote nothing ever matched - the line starts with `>` - so a
+  `<footer>` came back as an inline raw span wrapped in a paragraph the source
+  did not have, which is invalid HTML, since `<p>` takes phrasing content. Under
+  a list item the block was recognized and then written at column 0, landing
+  outside the item. Both now strip what the container contributes and re-emit the
+  raw fence with the container's own prefix, through nested quotes, ordered and
+  nested items, and a list item a quote holds. An inline `<span>` in the same
+  position still migrates inline. Two related readings at the top level are fixed
+  with it: an opener on the line after prose now interrupts that paragraph
+  instead of being carried into it as a span, and an HTML block ends where
+  CommonMark ends it - at the next blank line - rather than at the element's
+  closing tag or, for a complete tag alone on a line, at that line. Cut early, a
+  `<div>x</div>` followed by prose fenced the element alone and migrated the
+  prose as a paragraph outside the block the source had put it in.
 - **A quote attribution stays attached to its quote on every target**
   (markup-carve/carve#1179, PART 11 §10c). It used to follow the quote as a
   sibling separated by a blank line, which kept the words but not what they
