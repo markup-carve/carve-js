@@ -68,6 +68,29 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **HTML import spells the seven semantic elements instead of unwrapping them**
+  (markup-carve/carve#1140). `<kbd>Tab</kbd>` imports as `[Tab]{kbd}`,
+  `<abbr title="X">c</abbr>` as `[c]{abbr="X"}` and `<time datetime="X">c</time>`
+  as `[c]{time="X"}`, with `samp`, `var`, `cite` and `dfn` alongside them; an
+  absent `title` or `datetime` gives the bare boolean, and leftover `id`,
+  `class` and `data-*` ride the same span. In 0.1.3 each of the seven came back
+  as its bare text with an `element-unwrapped` diagnostic, and `<time>` lost its
+  `datetime` to an `attribute-dropped` one step earlier, so a document Carve can
+  express exactly arrived as plain text. Both diagnostics stop firing for these
+  elements, because neither loss still happens. The compact attribute form, not
+  `:kbd[…]`: the generic spelling is the soft-deprecated compatibility form, so
+  importing into it would write a form scheduled for removal into freshly
+  migrated documents. `<mark>` and inline `<code>` are unchanged, each already
+  having its own syntax, and `<pre><code>` still imports as a code block. All
+  three modes map alike: none of the seven is active content for `safe` to
+  withhold, and `roundtrip` raw-preserves only what Carve cannot express, so an
+  exotic attribute on one of them (`<kbd dir="rtl">`) is now diagnosed as
+  dropped rather than riding along inside raw HTML - the treatment `<mark>` and
+  `<em>` already get there. `kbd`, `abbr` and `time` are core and round-trip
+  through a plain render; `samp`, `var`, `cite` and `dfn` belong to
+  `semanticSpan()`, so without that extension registered they render as
+  `<span samp="">out</span>` rather than `<samp>` - the semantic survives as an
+  attribute a reader can recover, where it was discarded before.
 - **A table's `rowGroups` is validated on ingest, at every depth**
   (markup-carve/carve-js#1055). `fromAstJson` now refuses a `rowGroups` that is
   missing `headRows`, `bodies` or `footRows`, carries a property the schema does

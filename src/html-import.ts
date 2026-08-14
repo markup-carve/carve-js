@@ -81,6 +81,27 @@ const ADAPTERS = new Set<HtmlImportAdapter>([
   'generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs',
 ])
 
+/**
+ * The elements PART 9 §9 and §10 spell as an attribute on a span, so the
+ * importer writes `[Tab]{kbd}` rather than unwrapping to `Tab` (carve#1140).
+ *
+ * Mirrors EXTENDED_SEMANTIC_SPAN_ORDER in render-html.ts. `mark` and `code` are
+ * NOT here: the tier split retired them from the registry and each already has
+ * its own syntax (`=m=`, a code span), so importing them here would give one
+ * input two spellings.
+ *
+ * A Set rather than an object literal, because `constructor` and `toString` are
+ * tag names a fragment may carry.
+ */
+const SEMANTIC_SPAN_TAGS = new Set(['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'])
+
+/**
+ * Where each name's VALUE comes from in the HTML. The rest are value-less and
+ * import as the bare boolean attribute (PART 11 §6c), as does one of these
+ * whose source attribute is absent.
+ */
+const SEMANTIC_SPAN_VALUE_SOURCE = new Map([['abbr', 'title'], ['dfn', 'title'], ['time', 'datetime']])
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -155,6 +176,11 @@ class Importer {
     if (tag === 'ol') return name === 'start' || name === 'type'
     if (tag === 'input') return name === 'type' || name === 'checked'
     if (tag === 'td' || tag === 'th') return name === 'colspan' || name === 'rowspan'
+    // `datetime` is the VALUE of the `time` span attribute, not an unsupported
+    // extra: `semanticSpan()` reads it off the node and it survives the import,
+    // so reporting it dropped here would be a diagnostic for a loss that no
+    // longer happens. `title` needs no entry - `attrs()` already keeps it.
+    if (tag === 'time') return name === 'datetime'
     return false
   }
 
@@ -414,6 +440,7 @@ class Importer {
       return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title ? { title } : {}), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'br') return [{ type: 'hard_break' }]
+    if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
@@ -421,6 +448,37 @@ class Importer {
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
     return children
+  }
+
+  /**
+   * One of the seven semantic elements, as the span attribute that spells it.
+   *
+   * `<kbd>Tab</kbd>` -> `[Tab]{kbd}`, `<abbr title="X">c</abbr>` -> `[c]{abbr="X"}`,
+   * `<time datetime="X">c</time>` -> `[c]{time="X"}` (carve#1140). The compact
+   * form, not `:kbd[…]`: the generic spelling has no core handler and is the
+   * extension's soft-deprecated compatibility form, so importing into it would
+   * write a form scheduled for removal into freshly migrated documents.
+   *
+   * Placed with the other mapped elements rather than behind a mode branch:
+   * `roundtrip` raw-preserves only what Carve CANNOT express, so an element
+   * that now has a spelling is spelled in every mode - the same treatment
+   * `<mark>` and `<em>` already get.
+   *
+   * `samp`, `var`, `cite` and `dfn` belong to the SemanticSpan extension, so a
+   * CORE render returns `<span samp="">out</span>` rather than `<samp>`. Still
+   * strictly better than the unwrap it replaces, where the semantic was
+   * discarded outright, but it is a real difference and the tests show it.
+   */
+  private semanticSpan(tag: string, node: P5Node, children: InlineNode[], attrs?: Attrs): InlineNode {
+    const source = SEMANTIC_SPAN_VALUE_SOURCE.get(tag)
+    const value = source === undefined ? '' : this.attr(node, source) ?? ''
+    const keyValues: Record<string, string> = { ...attrs?.keyValues }
+    // A `title` on `<abbr>`/`<dfn>` IS the value here, not a leftover to ride
+    // along: `attrs()` collected it before the tag was known, and keeping both
+    // would render the same attribute onto the element twice over.
+    if (source === 'title') delete keyValues.title
+    keyValues[tag] = value
+    return { type: 'span', children, attrs: { ...attrs, keyValues } }
   }
 
   private text(node: P5Node): string {
