@@ -21,6 +21,7 @@ import type {
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
+import { isUnresolvedReference } from './unresolved-reference.js'
 
 /**
  * Implicit heading references match a heading's visible TEXT, which is a
@@ -28,16 +29,6 @@ import { TRANSLIT_MAP } from './translit-map.js'
  * case-sensitive in normalizeRefLabel). `[getting started][]` should still
  * resolve `# Getting Started`, so heading-text matching folds case here.
  */
-/**
- * An image the document never resolved: it carries a reference and no source.
- *
- * PART 12 §3a keeps `ref` and `rawRef` on a RESOLVED reference as well, so the
- * presence of a ref stopped answering this on its own (carve#596).
- */
-function isUnresolvedImage(image: Image): boolean {
-  return image.ref !== undefined && !image.src
-}
-
 /**
  * The key an implicit heading reference and a heading's text are compared on:
  * trimmed, internal whitespace collapsed (both in `normalizeRefLabel`),
@@ -180,7 +171,7 @@ export function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): I
         // UNRESOLVED means no destination: §3a keeps `ref` on a resolved
         // reference too, and a RESOLVED one nested in a link unwraps to its
         // display text like any other nested link (carve#596).
-        if (insideLink && n.ref !== undefined && !n.href) {
+        if (insideLink && isUnresolvedReference(n)) {
           out.push({ type: 'text', value: n.rawRef ?? '' } as Text)
           break
         }
@@ -710,7 +701,7 @@ export function resolveHeadingIds(
       // implicit heading index. It used to be told apart by `ref` being gone;
       // PART 12 §3a keeps `ref` on a resolved reference, so the test is the
       // destination itself (carve#596).
-      if (n.type === 'link' && n.ref !== undefined && !n.href) {
+      if (n.type === 'link' && isUnresolvedReference(n)) {
         // No explicit `[label]: url` def matched in applyLinkDefs.
         // Try the implicit-heading index; otherwise fall back to the
         // raw source text. Explicit defs win because applyLinkDefs
@@ -1180,7 +1171,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // formatter path, where the unresolved Image survives). UNRESOLVED means
       // no destination: PART 12 §3a keeps `ref` on a resolved reference too
       // (carve#596).
-      !isUnresolvedImage(b.children[0] as Image)
+      !isUnresolvedReference(b.children[0] as Image)
     ) {
       const img = b.children[0] as Image
       // A leading block-attribute line (`{#id}`) landed on the paragraph; carry
@@ -1204,7 +1195,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       b.children[0]!.type === 'image' &&
       // A REAL image only (see above): an unresolved reference is literal text,
       // not a figure target.
-      !isUnresolvedImage(b.children[0] as Image) &&
+      !isUnresolvedReference(b.children[0] as Image) &&
       // Strict column-0 rule: an image+caption forms a <figure> ONLY when the
       // image begins at its container's content column. parseParagraph strips a
       // paragraph's leading indentation, so the AST text alone can't tell an
