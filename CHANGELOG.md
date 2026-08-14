@@ -155,6 +155,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A referenced abbreviation definition splits by target on plain text and the
+  terminal** (markup-carve/carve#1185, PART 11 section 10f). Both targets used
+  to emit the `*[TERM]: expansion` definition line whether or not anything
+  referenced it, and plain text emitted no expansion at all - so on the
+  terminal the same words appeared twice, and in a plain-text document a line
+  of Carve source sat there while the expansion the author defined appeared
+  nowhere. A definition whose own expansion is emitted now loses its line on
+  both targets, and plain text writes `TERM (expansion)` at every occurrence,
+  the shape the terminal already used. A definition whose expansion reaches no
+  output keeps its line exactly as before: one that is never referenced, one an
+  authored `abbr` outranks, and the losing half of a term defined twice.
+  Markdown keeps the line and the expansion beside it, because `*[TERM]:` is
+  PHP Markdown Extra's own spelling and keeping it is what lets the export
+  round-trip; the canonical writer keeps it too.
 - **The Markdown importer converts a setext heading a block quote or a list
   item holds** (markup-carve/carve-js#1052). It converted one only at the top
   level, so `> Title` over `> =====` arrived in Carve as prose with the

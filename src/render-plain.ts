@@ -1,4 +1,5 @@
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
+import { abbreviationPairKey, emittedAbbreviationExpansions } from './abbr-expansion-emitted.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -10,6 +11,19 @@ import { stripBidiControls } from './bidi-controls.js'
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
 let suppressAutomaticAbbreviation = false
+
+/**
+ * The inline types whose authored `abbr` the switch below honors, which is the
+ * set `emittedAbbreviationExpansions` has to be told about for §10f. Taken from
+ * the `case` labels that share the `span` arm, so the two cannot drift apart.
+ */
+const AUTHORED_ABBR_CARRIERS: ReadonlySet<string> = new Set([
+  'emphasis',
+  'strong',
+  'underline',
+  'superscript',
+  'span',
+])
 
 export interface PlainTextRenderOptions {
   /**
@@ -48,11 +62,14 @@ export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}
     blockDepth: 0,
     inlineDepth: 0,
     // This target expands a crossref label exactly as the other three do, so it
-    // needs the same bound. It is the only expansion here - an abbreviation
-    // renders as its key on this target - which is why there was no budget
-    // until the crossref needed one (markup-carve/carve-js#892).
+    // needs the same bound. It shares that bound with the abbreviation, which
+    // expands here as of PART 11 §10f; before that clause an abbreviation
+    // rendered as its bare key and the crossref was the only expansion, which
+    // is why there was no budget until the crossref needed one
+    // (markup-carve/carve-js#892).
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    expandedDefinitions: emittedAbbreviationExpansions(ast, AUTHORED_ABBR_CARRIERS),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -73,6 +90,13 @@ interface PlainContext {
    * path never populates because it does no numbering.
    */
   definedFootnotes: Set<string>
+  /**
+   * The `(term, expansion)` pairs this render expands, so an
+   * `abbreviation_def` can tell whether ITS OWN expansion is emitted. PART 11
+   * §10f, and see abbr-expansion-emitted.ts for why that is the test rather
+   * than "is the term referenced".
+   */
+  expandedDefinitions: ReadonlySet<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
@@ -145,7 +169,12 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       // following block is not glued to it, matching carve-php / carve-rs.
       return `${renderImageText(node)}\n\n`
     case 'abbreviation_def':
-      // PART 10 §10a - see the note in render-markdown.
+      // PART 11 §10f: this target DROPS a definition whose own expansion it
+      // emits, because the words would otherwise appear twice - once as this
+      // line and once beside every occurrence. A definition whose expansion
+      // reaches no output keeps its line, which is §10a and is what the pair
+      // lookup answers; see abbr-expansion-emitted.ts.
+      if (ctx.expandedDefinitions.has(abbreviationPairKey(node.abbr, node.expansion))) return ''
       return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
     case 'raw_block':
     case 'comment':
@@ -382,12 +411,19 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return renderInlines(node.content, ctx)
     case 'abbreviation':
       // Inside a span carrying its own `abbr`, only the visible text
-      // (carve#1127). The key is what this target prints either way, so the
-      // flag changes nothing here today - it is set so the rule is stated in
-      // one place across all four targets rather than three.
+      // (carve#1127): the authored value has already been printed by the span,
+      // and it OUTRANKS this expansion (PART 9 §9).
       if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
-
-      return stripControls(node.abbr)
+      // DoS guard, the same one the terminal spends: once cumulative expansion
+      // bytes exceed the budget, degrade to the key alone.
+      if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return stripControls(node.abbr)
+      // PART 11 §10f: `TERM (expansion)`, the shape the terminal already
+      // writes and the shape PART 9 §9 already writes here for an AUTHORED
+      // value. This half is not separable from dropping the definition line
+      // above - carve#1178 left plain without an automatic expansion on the
+      // ground that the line carried the mapping, and §10f takes that line
+      // away, so emitting neither would lose the author's expansion outright.
+      return `${stripControls(node.abbr)} (${stripControls(node.expansion)})`
     case 'footnote_ref':
     case 'inline_footnote': {
       if (node.inline) {

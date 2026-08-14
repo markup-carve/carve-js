@@ -2,6 +2,7 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
+import { abbreviationPairKey, emittedAbbreviationExpansions } from './abbr-expansion-emitted.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
@@ -12,6 +13,17 @@ import { stripBidiControls } from './bidi-controls.js'
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
 let suppressAutomaticAbbreviation = false
+
+/**
+ * The inline types whose authored `abbr` the switch below honors, which is the
+ * set `emittedAbbreviationExpansions` has to be told about for PART 11 §10f.
+ * `span` alone here, and deliberately narrower than the plain target's five:
+ * this switch gives `emphasis`, `strong`, `underline` and `superscript` their
+ * own arms, and none of them reads `abbr`. Passing the plain target's wider set
+ * would claim a suppression that does not happen and drop a definition line
+ * whose expansion this target does emit.
+ */
+const AUTHORED_ABBR_CARRIERS: ReadonlySet<string> = new Set(['span'])
 
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
@@ -59,6 +71,7 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
     inlineDepth: 0,
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    expandedDefinitions: emittedAbbreviationExpansions(ast, AUTHORED_ABBR_CARRIERS),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -81,6 +94,13 @@ interface AnsiContext {
    * path never populates because it does no numbering.
    */
   definedFootnotes: Set<string>
+  /**
+   * The `(term, expansion)` pairs this render expands, so an
+   * `abbreviation_def` can tell whether ITS OWN expansion is emitted. PART 11
+   * §10f, and see abbr-expansion-emitted.ts for why that is the test rather
+   * than "is the term referenced".
+   */
+  expandedDefinitions: ReadonlySet<string>
 }
 
 /**
@@ -194,7 +214,12 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'raw_block':
       return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
     case 'abbreviation_def':
-      // PART 10 §10a - see the note in render-markdown.
+      // PART 11 §10f: this target DROPS a definition whose own expansion it
+      // emits, because the words would otherwise appear twice - once as this
+      // dim line and once beside every occurrence. A definition whose expansion
+      // reaches no output keeps its line, which is §10a and is what the pair
+      // lookup answers; see abbr-expansion-emitted.ts.
+      if (ctx.expandedDefinitions.has(abbreviationPairKey(node.abbr, node.expansion))) return ''
       return `${style(`*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}`, DIM)}\n\n`
     case 'comment':
       return ''
