@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { carveToMarkdown, carveToPlainText, carveToAnsi } from '../src/index.js'
+import {
+  carveToMarkdown,
+  carveToPlainText,
+  carveToAnsi,
+  renderMarkdown,
+  renderPlainText,
+} from '../src/index.js'
+import type { Document, Table, Text } from '../src/ast.js'
+
+const text = (value: string): Text => ({ type: 'text', value })
 
 /**
  * SELF-REGRESSION snapshots for the non-HTML renderers: this engine's own
@@ -124,25 +133,93 @@ describe('non-html renderer parity fixes', () => {
     }
   })
 
-  it('puts a table caption on its own line under the table', () => {
-    // The shape an image and a listing caption already use on this target.
+  it('separates a table caption from the table by a blank line', () => {
+    // PART 11 §10e T2. The blank line is the whole point: written directly
+    // after the last row, the caption is read by a GFM reader as ANOTHER ROW,
+    // so the words come back as a fabricated data cell. Surviving that way is
+    // worse than being dropped, because neither a reader nor a parser can tell
+    // the cell from one the author wrote.
     expect(carveToMarkdown('|= H |\n| a |\n^ Table caption\n')).toBe(
-      '| H |\n| --- |\n| a |\nTable caption\n',
+      '| H |\n| --- |\n| a |\n\nTable caption\n',
     )
     // A table with no caption is untouched - the line appears only where the
     // author wrote one.
     expect(carveToMarkdown('|= H |\n| a |\n')).toBe('| H |\n| --- |\n| a |\n')
     // And a following block keeps its blank-line separation.
     expect(carveToMarkdown('|= H |\n| a |\n^ Cap\n\nafter\n')).toBe(
-      '| H |\n| --- |\n| a |\nCap\n\nafter\n',
+      '| H |\n| --- |\n| a |\n\nCap\n\nafter\n',
     )
   })
 
-  it('carries the fence header and label on the terminal rule line', () => {
-    // They join the rule the renderer already draws, so a captioned fence still
-    // reads as one block rather than three.
-    const ansi = carveToAnsi('``` js "src/app.js" [Node]\nlet a = 1\n```\n')
-    expect(ansi.replace(/\x1b\[[0-9;]*m/g, '')).toContain('┌── js src/app.js [Node]')
+  it('separates a table caption from the table on the figure path too', () => {
+    // A `figure` whose target is a `table` is not reachable from Carve source -
+    // `^ cap` under a table sets the table's own caption - but it is reachable
+    // through the public renderer and the AST-JSON ingest path. That branch kept
+    // an EMPTY separator, correct only while a table dropped its caption
+    // outright: since it stopped doing that, the caption was welded onto the
+    // last row's closing pipe (`| a |Fruit prices`), which is the fabricated
+    // cell §10e names, with no newline at all to soften it.
+    const table: Table = {
+      type: 'table',
+      rows: [
+        { type: 'table_row', cells: [{ type: 'table_cell', header: true, children: [text('H')] }] },
+        { type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [text('a')] }] },
+      ],
+    }
+    const doc: Document = {
+      type: 'document',
+      children: [{ type: 'figure', target: table, caption: [text('Fruit prices')] }],
+    }
+    expect(renderMarkdown(doc)).toBe('| H |\n| --- |\n| a |\n\nFruit prices\n')
+    // The plain target is not ruled by §10e, but it welded the caption on the
+    // same way (`aFruit prices`). It takes the position this target's own table
+    // renderer already uses - its own line - rather than an invented one.
+    expect(renderPlainText(doc)).toBe('H\na\nFruit prices\n')
+  })
+
+  it('gives a fence title and label a bold standalone line each on the terminal', () => {
+    // PART 11 §10e T1: they render the way a fenced div's already do - title
+    // first, label second, a blank line after each, above the block. Folding
+    // them into the `┌── ` rule instead was considered and rejected, because
+    // that rule exists only when the fence has a LANGUAGE.
+    expect(carveToAnsi('``` php "src/Auth.php" [Composer]\ncomposer require x\n```\n')).toBe(
+      '\x1b[1msrc/Auth.php\x1b[0m\n\n' +
+        '\x1b[1mComposer\x1b[0m\n\n' +
+        '\x1b[2m┌── php \x1b[0m\n' +
+        '\x1b[97m  composer require x\x1b[0m\n',
+    )
+    // Each token alone, in the same slot it takes when both are present.
+    expect(carveToAnsi('```php "src/Auth.php"\n$ok = true;\n```\n')).toBe(
+      '\x1b[1msrc/Auth.php\x1b[0m\n\n\x1b[2m┌── php \x1b[0m\n\x1b[97m  $ok = true;\x1b[0m\n',
+    )
+    expect(carveToAnsi('```php [NPM]\nnpm install x\n```\n')).toBe(
+      '\x1b[1mNPM\x1b[0m\n\n\x1b[2m┌── php \x1b[0m\n\x1b[97m  npm install x\x1b[0m\n',
+    )
+    // The language keeps the slot this target already gave it: a fence with
+    // neither token is byte-identical to before, and a fence with no language
+    // still draws no rule line - which is exactly why the tokens could not join
+    // one.
+    expect(carveToAnsi('```php\n$ok = true;\n```\n')).toBe(
+      '\x1b[2m┌── php \x1b[0m\n\x1b[97m  $ok = true;\x1b[0m\n',
+    )
+    expect(carveToAnsi('``` "src/app.js"\nconst a = 1\n```\n')).toBe(
+      '\x1b[1msrc/app.js\x1b[0m\n\n\x1b[97m  const a = 1\x1b[0m\n',
+    )
+  })
+
+  it('renders a fence title and label the way a div already renders them', () => {
+    // §10e T1 writes down an existing rule rather than a new one: a fence
+    // carries the SAME two tokens in the SAME two slots as `::: note "T" [L]`,
+    // so it renders them the same way. Stripped of styling, the two are equal
+    // above the block on both targets that lost them.
+    const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '')
+    const div = '::: note "T" [L]\nbody\n:::\n'
+    const fence = '``` js "T" [L]\nbody\n```\n'
+    for (const render of [carveToPlainText, carveToAnsi]) {
+      expect(strip(render(fence)).startsWith(strip(render(div)).slice(0, 'T\n\nL\n\n'.length))).toBe(
+        true,
+      )
+    }
   })
 
   it('renders link text, not link destinations, in plain text output', () => {

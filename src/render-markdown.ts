@@ -359,14 +359,16 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     out += `| ${Array.from({ length: headerColumns }, (_, i) => separator(i)).join(' | ')} |\n`
   }
   out += `${rows.join('\n')}\n`
-  // A caption is authored text, and Markdown has no table-caption syntax - so it
-  // goes on its own line under the table rather than being dropped. Dropping it
-  // was the only place a presentation target discarded authored text outright,
-  // against the MUST in docs/graceful-degradation.md ("losing the click is fine;
-  // losing the words is not"). An image and a listing caption already degrade
-  // exactly this way, so the table stops being the odd one out.
+  // PART 11 §10e T2: a caption is authored text, and Markdown has no
+  // table-caption syntax - so it survives as body text AFTER the table,
+  // separated by one blank line, the position an image caption and a listing
+  // caption already take on this target. The blank line is not cosmetic: a GFM
+  // reader takes a line written directly after the last row as ANOTHER ROW, so
+  // the caption comes back as a fabricated data cell, which is worse than
+  // losing it. Adjacency attaches only where it does not change what the
+  // adjacent block is, which is why §10d's move is unavailable here.
   if (node.caption && node.caption.length > 0) {
-    out += `${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
+    out += `\n${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
   }
   return `${out}\n`
 }
@@ -379,10 +381,13 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
         ? trimNonNbsp(renderTable(node.target, ctx))
         : trimNonNbsp(renderBlock(node.target, ctx))
   // The caption sits on its own line directly under the figure (`\n`) - an
-  // image target used to glue it on (`![a](/u)cap`). A blockquote target keeps
-  // the blank-line separation; a table drops the caption entirely.
+  // image target used to glue it on (`![a](/u)cap`). A block quote keeps the
+  // blank-line separation, and so does a table: PART 11 §10e T2 requires one
+  // blank line there, because a line directly after the last row is read as
+  // another row. The empty separator this branch used to take was only ever
+  // right while a table dropped its caption outright.
   const sep =
-    node.target.type === 'block_quote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
+    node.target.type === 'block_quote' || node.target.type === 'table' ? '\n\n' : '\n'
   // End with the block separator so a following block is not glued to the
   // caption (matching every other block renderer and carve-php).
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`

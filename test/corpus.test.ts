@@ -34,6 +34,14 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // Four categories the pin bump for PART 11 §10e brings into the corpus. The
+  // engine work for each of them already landed here (`#1029`, `#1030`,
+  // `#1038`, `#1041`); only the pin was behind, so these are bookkeeping and
+  // not new behavior - each runs as a real test from here on.
+  'a-marker-glued-to-a-name-opens-nothing',
+  'a-math-span-s-base-class-keeps-the-class-slot-in-place',
+  'an-abbreviation-expands-inside-an-inline-container',
+  'an-angle-bracket-is-escaped-only-where-it-opens-markup',
   'a-semantic-name-renames-the-span-and-the-leftovers-ride-the-element',
   'a-derived-title-yields-to-an-authored-one',
   'two-attributes-need-a-separator-between-them',
