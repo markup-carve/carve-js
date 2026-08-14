@@ -2,7 +2,7 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
-import { abbreviationPairKey, emittedAbbreviationExpansions } from './abbr-expansion-emitted.js'
+import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
@@ -14,16 +14,8 @@ import { stripBidiControls } from './bidi-controls.js'
 // abbreviation inside it contributes only its visible text (carve#1127).
 let suppressAutomaticAbbreviation = false
 
-/**
- * The inline types whose authored `abbr` the switch below honors, which is the
- * set `emittedAbbreviationExpansions` has to be told about for PART 11 §10f.
- * `span` alone here, and deliberately narrower than the plain target's five:
- * this switch gives `emphasis`, `strong`, `underline` and `superscript` their
- * own arms, and none of them reads `abbr`. Passing the plain target's wider set
- * would claim a suppression that does not happen and drop a definition line
- * whose expansion this target does emit.
- */
-const AUTHORED_ABBR_CARRIERS: ReadonlySet<string> = new Set(['span'])
+/** No definition has been found expanded yet - the first pass, or no definition. */
+const NO_EXPANDED_DEFINITIONS: ReadonlySet<string> = new Set()
 
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
@@ -62,6 +54,20 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  // PART 11 §10f, and see the twin comment in render-plain.ts: the definition
+  // lines come before the occurrences that decide whether they survive, so a
+  // document holding a definition is rendered once to find out which pairs were
+  // actually expanded and once for real.
+  if (!documentHasAbbreviationDef(ast)) return renderPass(ast, opts, NO_EXPANDED_DEFINITIONS).text
+  const probe = renderPass(ast, opts, NO_EXPANDED_DEFINITIONS)
+  return renderPass(ast, opts, probe.expanded).text
+}
+
+function renderPass(
+  ast: Document,
+  opts: AnsiRenderOptions,
+  expandedDefinitions: ReadonlySet<string>,
+): { text: string; expanded: Set<string> } {
   const ctx: AnsiContext = {
     smartSource: smartTypographyIsSource(opts.smartTypography),
     listDepth: 0,
@@ -71,11 +77,12 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
     inlineDepth: 0,
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
-    expandedDefinitions: emittedAbbreviationExpansions(ast, AUTHORED_ABBR_CARRIERS),
+    expandedDefinitions,
+    expanded: new Set(),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return stripBidiControls(normalize(`${out}${footnotes}`))
+  return { text: stripBidiControls(normalize(`${out}${footnotes}`)), expanded: ctx.expanded }
 }
 
 interface AnsiContext {
@@ -95,12 +102,15 @@ interface AnsiContext {
    */
   definedFootnotes: Set<string>
   /**
-   * The `(term, expansion)` pairs this render expands, so an
+   * The `(term, expansion)` pairs the FIRST pass expanded, so an
    * `abbreviation_def` can tell whether ITS OWN expansion is emitted. PART 11
    * §10f, and see abbr-expansion-emitted.ts for why that is the test rather
-   * than "is the term referenced".
+   * than "is the term referenced". Empty on the first pass, where every
+   * definition line is written and thrown away with the rest of the string.
    */
   expandedDefinitions: ReadonlySet<string>
+  /** The pairs THIS pass expanded, which is what the first pass is run for. */
+  expanded: Set<string>
 }
 
 /**
@@ -561,8 +571,11 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to the plain key text only (no ` (EXPANSION)` suffix).
+      // A degraded occurrence emits no expansion, so it records no pair and the
+      // definition it came from keeps its line (PART 11 §10f).
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion)))
         return stripControls(node.abbr)
+      ctx.expanded.add(abbreviationPairKey(node.abbr, node.expansion))
       return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
     }
     case 'footnote_ref':

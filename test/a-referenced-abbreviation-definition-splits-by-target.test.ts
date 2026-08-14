@@ -133,6 +133,50 @@ describe('PART 11 §10f: a referenced abbreviation definition splits by target',
     })
   })
 
+  it('keeps the line when the occurrence sits in a branch that is never rendered', () => {
+    // An unresolved reference link renders as its raw source (PART 12 §3a) and
+    // its children are never reached, so the `abbreviation` under it emits
+    // nothing and the definition's expansion reaches no output.
+    //
+    // A STRUCTURAL WALK OVER THE TREE GETS THIS WRONG and this test was written
+    // because one did: it saw the abbreviation node, called the definition
+    // consumed, and dropped the line - so `Hyper Text` appeared nowhere in the
+    // document at all. Deciding from what the render EMITTED rather than from
+    // what the tree CONTAINS is what makes the answer true here without having
+    // to enumerate every branch that skips its children.
+    const src = '*[HTML]: Hyper Text\n\n[HTML][missing]\n'
+
+    expect(carveToPlainText(src)).toBe('*[HTML]: Hyper Text\n\n[HTML][missing]\n')
+    expect(carveToAnsi(src)).toBe(
+      `${definitionLine('HTML', 'Hyper Text')}\n\n[HTML][missing]\n`,
+    )
+  })
+
+  it('keeps the line when the expansion budget degraded every occurrence', () => {
+    // The per-render expansion budget (abbr-budget.ts) degrades an occurrence to
+    // the bare key once cumulative expansion bytes pass the bound. A definition
+    // whose every occurrence degraded emits no expansion, so §10f keeps its
+    // line - otherwise the DoS guard would turn into a content-loss bug, which
+    // is the shape it exists to avoid.
+    //
+    // `HT` exhausts the budget with a 50KB expansion over many uses; `Z` is
+    // reached afterwards with nothing left to spend.
+    const big = 'X'.repeat(50_000)
+    const src = `*[HT]: ${big}\n*[Z]: hello\n\n` + 'HT '.repeat(1000) + '\n\nZ here.\n'
+
+    const plain = carveToPlainText(src)
+    // `HT` did expand, within budget, so its line is gone.
+    expect(plain.includes('*[HT]:')).toBe(false)
+    expect(plain.split(big).length - 1).toBeGreaterThan(0)
+    // `Z` never expanded, so its line stays and `hello` survives.
+    expect(plain.includes('*[Z]: hello')).toBe(true)
+    expect(plain.includes('Z (hello)')).toBe(false)
+
+    const ansi = carveToAnsi(src)
+    expect(ansi.includes('*[Z]: hello')).toBe(true)
+    expect(ansi.includes(`${DIM} (hello)${RESET}`)).toBe(false)
+  })
+
   it('answers per TARGET, because the two disagree on where an authored `abbr` counts', () => {
     // `renderPlainText` honors an authored `abbr` on emphasis, strong,
     // underline, superscript and span; `renderAnsi` honors it on span only, and

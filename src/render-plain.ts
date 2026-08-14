@@ -1,5 +1,5 @@
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
-import { abbreviationPairKey, emittedAbbreviationExpansions } from './abbr-expansion-emitted.js'
+import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -12,18 +12,8 @@ import { stripBidiControls } from './bidi-controls.js'
 // abbreviation inside it contributes only its visible text (carve#1127).
 let suppressAutomaticAbbreviation = false
 
-/**
- * The inline types whose authored `abbr` the switch below honors, which is the
- * set `emittedAbbreviationExpansions` has to be told about for §10f. Taken from
- * the `case` labels that share the `span` arm, so the two cannot drift apart.
- */
-const AUTHORED_ABBR_CARRIERS: ReadonlySet<string> = new Set([
-  'emphasis',
-  'strong',
-  'underline',
-  'superscript',
-  'span',
-])
+/** No definition has been found expanded yet - the first pass, or no definition. */
+const NO_EXPANDED_DEFINITIONS: ReadonlySet<string> = new Set()
 
 export interface PlainTextRenderOptions {
   /**
@@ -56,6 +46,22 @@ export function smartTypographyIsSource(
  */
 
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
+  // PART 11 §10f: a definition whose own expansion this render emits loses its
+  // line, and the lines come before the occurrences that decide it. So when the
+  // document has a definition at all, render once to find out which pairs were
+  // actually expanded - budget, unreached branches and all - and once for real.
+  // See abbr-expansion-emitted.ts for why predicting that from the tree instead
+  // is wrong in the direction that deletes text.
+  if (!documentHasAbbreviationDef(ast)) return renderPass(ast, opts, NO_EXPANDED_DEFINITIONS).text
+  const probe = renderPass(ast, opts, NO_EXPANDED_DEFINITIONS)
+  return renderPass(ast, opts, probe.expanded).text
+}
+
+function renderPass(
+  ast: Document,
+  opts: PlainTextRenderOptions,
+  expandedDefinitions: ReadonlySet<string>,
+): { text: string; expanded: Set<string> } {
   const ctx: PlainContext = {
     smartSource: smartTypographyIsSource(opts.smartTypography),
     listDepth: 0,
@@ -69,11 +75,12 @@ export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}
     // (markup-carve/carve-js#892).
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
-    expandedDefinitions: emittedAbbreviationExpansions(ast, AUTHORED_ABBR_CARRIERS),
+    expandedDefinitions,
+    expanded: new Set(),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return stripBidiControls(normalize(`${out}${footnotes}`))
+  return { text: stripBidiControls(normalize(`${out}${footnotes}`)), expanded: ctx.expanded }
 }
 
 interface PlainContext {
@@ -91,12 +98,15 @@ interface PlainContext {
    */
   definedFootnotes: Set<string>
   /**
-   * The `(term, expansion)` pairs this render expands, so an
+   * The `(term, expansion)` pairs the FIRST pass expanded, so an
    * `abbreviation_def` can tell whether ITS OWN expansion is emitted. PART 11
    * §10f, and see abbr-expansion-emitted.ts for why that is the test rather
-   * than "is the term referenced".
+   * than "is the term referenced". Empty on the first pass, where every
+   * definition line is written and thrown away with the rest of the string.
    */
   expandedDefinitions: ReadonlySet<string>
+  /** The pairs THIS pass expanded, which is what the first pass is run for. */
+  expanded: Set<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
@@ -415,8 +425,11 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // and it OUTRANKS this expansion (PART 9 §9).
       if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
       // DoS guard, the same one the terminal spends: once cumulative expansion
-      // bytes exceed the budget, degrade to the key alone.
+      // bytes exceed the budget, degrade to the key alone. A degraded
+      // occurrence emits no expansion, so it records no pair and the definition
+      // it came from keeps its line.
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return stripControls(node.abbr)
+      ctx.expanded.add(abbreviationPairKey(node.abbr, node.expansion))
       // PART 11 §10f: `TERM (expansion)`, the shape the terminal already
       // writes and the shape PART 9 §9 already writes here for an AUTHORED
       // value. This half is not separable from dropping the definition line
