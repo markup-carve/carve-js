@@ -1015,13 +1015,18 @@ const RE_MD_THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const RE_MD_INDENTED_CODE = /^(?: {4,}|\t)/
 
 /**
- * A link reference definition opening a line - `[label]: destination`.
+ * A link reference definition carrying its destination on the same line -
+ * `[label]: destination`.
  *
- * Not a full reader for the construct (the label may run over lines, and the
- * title may follow on the next one). It is only ever asked whether a line is
- * paragraph TEXT, and a definition never is.
+ * Not a full reader for the construct: a label may run over lines, a
+ * destination may sit on the line below its colon, and a title may sit below
+ * that. Reading all of it would be a parser, and this file has none. It is only
+ * ever asked whether a line is paragraph TEXT, and the destination is what
+ * decides that on the line itself - a bare `[label]:` with nothing after it is
+ * not a definition at all but a paragraph, which a setext underline may turn
+ * into a heading like any other.
  */
-const RE_MD_LINK_REFERENCE = /^ {0,3}\[[^\]]*\]:/
+const RE_MD_LINK_REFERENCE = /^ {0,3}\[[^\]]*\]:[ \t]*\S/
 
 /**
  * Split a pipe-delimited table row into trimmed cell texts, honoring `\|`

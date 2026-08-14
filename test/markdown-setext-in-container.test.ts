@@ -198,6 +198,14 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
     expect(markdownToCarve('> [a]: /x\n> ===\n')).toBe('> [a]: /x\n> ===\n')
   })
 
+  it('converts a bare `[label]:` a quote holds, which is not a definition', () => {
+    // CommonMark reads: <blockquote>\n<h1>[a]:</h1>\n</blockquote>. With no
+    // destination there is no definition, so the line is paragraph text and
+    // the underline heads it - the same reading the top level already gives.
+    expect(markdownToCarve('[a]:\n===\n')).toBe('# [a]:\n')
+    expect(markdownToCarve('> [a]:\n> ===\n')).toBe('> # [a]:\n')
+  })
+
   it('does not pair two lines at different quote depths', () => {
     // CommonMark reads the underline as a lazy continuation of the inner
     // paragraph, not as a heading for it.
