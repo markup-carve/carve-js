@@ -1297,12 +1297,11 @@ function htmlBlockAt(lines: readonly string[], start: number): HtmlBlockRun | nu
   if (RAWTEXT_HTML_BLOCK_TAGS.has(tag.name)) {
     return collectUntil(new RegExp(`</${tag.name}\\s*>`, 'i'), false)
   }
-  if (HTML_BLOCK_TAGS.has(tag.name)) {
-    if (tag.selfClosing || tag.closing || new RegExp(`</${tag.name}\\s*>`, 'i').test(trimmed.slice(tag.end))) {
-      return { lines: [first], end: start, interrupts: true }
-    }
-    return collectUntil(new RegExp(`</${tag.name}\\s*>`, 'i'), true)
-  }
+  // Condition 6: a known block tag name. The block ends at the next blank line,
+  // NOT at the element's closing tag - `<div>x</div>` followed by prose is one
+  // HTML block holding both, and ending at the tag migrated that prose as a
+  // paragraph outside the block the source put it in.
+  if (HTML_BLOCK_TAGS.has(tag.name)) return collectUntil(RE_NEVER, true)
   // Condition 7: a complete tag, alone on the line. The block runs to the next
   // blank line - taking only the opening line split `<span>`/`text`/`</span>`
   // into a fence, a paragraph and an inline span, which is three readings of

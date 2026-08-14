@@ -157,6 +157,21 @@ describe('a block-level HTML element inside a container', () => {
       expect(carveToHtml(carve)).not.toContain('<p>b')
     })
 
+    it('a condition-6 block runs to the blank line, not to its closing tag', () => {
+      // marked keeps `more` in the HTML block: condition 6 ends at a blank
+      // line, and the element's own closing tag is not that. Ended at the tag,
+      // the container path fenced the `<div>` alone and migrated `more` as a
+      // paragraph the source had inside the block.
+      const carve = markdownToCarve('<div>x</div>\nmore\n\ndone\n')
+      expect(carve).toBe('```=html\n<div>x</div>\nmore\n```\n\ndone\n')
+    })
+
+    it('a condition-6 block in a quote runs to the blank line too', () => {
+      const carve = markdownToCarve('> <div>x</div>\n> text\n')
+      expect(carve).toBe('> ```=html\n> <div>x</div>\n> text\n> ```\n')
+      expect(carveToHtml(carve)).not.toContain('<p>text')
+    })
+
     it('CONTROL: a condition-7 opener does NOT interrupt a paragraph', () => {
       // marked keeps all four lines in one paragraph. Only condition 7 is
       // barred from interrupting, and that is the whole difference between
