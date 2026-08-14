@@ -155,6 +155,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer re-bases a tab-indented fenced code block to its list
+  item's column** (markup-carve/carve-js#1048). The fence handler already
+  re-based to the item's content column, but measured the fence's own indent in
+  characters, so a tab counted as one column rather than four: it read as less
+  indented than the item holding it, nothing was stripped, and the tab reached
+  Carve, which does not read a tab-indented fence inside an item as a fence at
+  all. Both the measurement and the strip work in columns now. A space-indented
+  fence, at the document level or inside an item, is unchanged.
 - **The Markdown importer recognizes indented code inside a block quote**
   (markup-carve/carve-js#1048). The four columns that open an indented code
   block are counted after the quote marker, where the quote's content starts;

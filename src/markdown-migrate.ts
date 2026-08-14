@@ -1644,9 +1644,17 @@ export function markdownToCarve(
       // own indent IS the content column, so nothing is stripped and it stays
       // in the item. The same strip comes off the body and closer, since
       // Markdown already treats that indent as the fence's, not the sample's.
-      const openerIndent = open[1]!.length
+      //
+      // The slack is measured, and stripped, in COLUMNS. Measured in
+      // characters a tab-indented fence inside a list item counted as one
+      // column, less than the item's own two, so nothing was stripped and the
+      // tab went through to Carve, which does not read a tab-indented fence
+      // inside an item as a fence at all.
+      const openerIndent = columnWidth(open[1]!)
       fenceStrip = Math.max(0, openerIndent - contentCol)
-      out.push(open[1]!.slice(fenceStrip) + open[2]! + info)
+      // Whatever the opener's own indent was, what survives the strip is
+      // exactly the content column, so the fence goes back there.
+      out.push(containerPad + open[2]! + info)
       prevType = 'code_fence'
       continue
     }
@@ -1654,7 +1662,7 @@ export function markdownToCarve(
     // Inside a fence — a closer is a run of the same char at least as long as
     // the opener (indented by at most 3 spaces); a shorter inner run is code.
     if (inCode) {
-      const dedented = fenceStrip > 0 ? line.replace(new RegExp(`^ {0,${fenceStrip}}`), '') : line
+      const dedented = stripColumns(line, fenceStrip)
       if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(line)) {
         inCode = false
         fenceChar = ''

@@ -205,5 +205,31 @@ describe('a block at its container content column', () => {
       const md = lines('- item', '', sp(2) + '```js', sp(2) + 'x = 1', sp(2) + '```')
       expect(markdownToCarve(md)).toBe(md)
     })
+
+    it('still dedents a top-level fence out of its 1-3 space slack', () => {
+      expect(markdownToCarve(lines('para', '', sp(3) + '```js', sp(3) + 'x', sp(3) + '```'))).toBe(
+        lines('para', '', '```js', 'x', '```'),
+      )
+    })
+  })
+
+  describe('a fenced code block indented with a tab inside an item', () => {
+    it('is re-based to the item column, in columns rather than characters', () => {
+      // A tab is one character and four columns. Measured in characters the
+      // fence counted as one column, less than the item's two, so nothing was
+      // stripped and the tab reached Carve, which does not read a tab-indented
+      // fence inside an item as a fence.
+      // commonmark + marked: <li><p>item</p><pre><code class="language-js">x
+      const md = lines('- item', '', '\t```js', '\tx', '\t```')
+      const carve = markdownToCarve(md)
+      expect(carve).toBe(lines('- item', '', sp(2) + '```js', sp(2) + 'x', sp(2) + '```'))
+      expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<pre><code class="language-js">x/)
+    })
+
+    it('does the same in an ordered item, whose column is 3', () => {
+      const carve = markdownToCarve(lines('1. item', '', '\t```js', '\tx', '\t```'))
+      expect(carve).toBe(lines('1. item', '', sp(3) + '```js', sp(3) + 'x', sp(3) + '```'))
+      expect(carveToHtml(carve)).toMatch(/<li>[\s\S]*<pre><code class="language-js">x/)
+    })
   })
 })
