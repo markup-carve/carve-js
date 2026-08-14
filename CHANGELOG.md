@@ -155,6 +155,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A table caption is separated from the table by a blank line on the Markdown
+  target** (markup-carve/carve#1179, PART 11 §10e). It was written on the line
+  directly after the last row, which a GFM reader takes as another row: the
+  caption came back as a fabricated data cell that no reader and no parser can
+  tell from one the author wrote. A blank line separates it, the position an
+  image caption and a listing caption already take on this target. The same
+  separation reaches a `figure` whose target is a table, where the caption had
+  no separator at all and was welded onto the last row's closing pipe; on the
+  plain-text target that path now writes the caption on its own line, matching
+  what that target's own table renderer already does.
+- **A fence title and a fence grouping label take a bold standalone line each
+  on the terminal target** (markup-carve/carve#1179, PART 11 §10e). Both were
+  folded into the `┌── ` rule line. That rule exists only when the fence has a
+  language, so a titled fence without one had a rule line invented for it and a
+  fence carrying both tokens had a separator invented too. They now render the
+  way a fenced div's title and label already do on this target - title first,
+  then the label, above the block - and the rule line carries only the
+  language. A fence with neither token is unchanged.
+
 - **The Markdown importer re-bases a tab-indented fenced code block to its list
   item's column** (markup-carve/carve-js#1048). The fence handler already
   re-based to the item's content column, but measured the fence's own indent in

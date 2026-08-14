@@ -231,14 +231,18 @@ function renderHeading(level: number, content: string): string {
 
 function renderCodeBlock(content: string, lang?: string, header?: string, label?: string): string {
   let out = ''
-  // Caption floor: a fence header (`"src/app.js"`) and a grouping label
-  // (`[Node]`) are authored text. This target had a rule line already and put
-  // only the language on it, so both were dropped outright - the one thing
-  // docs/graceful-degradation.md says a target may never do. They join the rule
-  // rather than taking lines of their own, so a captioned fence still reads as
-  // one block in a terminal.
-  const parts = [lang, header, label && `[${label}]`].filter(Boolean)
-  if (parts.length > 0) out += `${style(`┌── ${parts.join(' ')} `, DIM)}\n`
+  // PART 11 §10e T1: a fence's title (`"src/app.js"`) and grouping label
+  // (`[Node]`) render the way a fenced div's already do on this target - a bold
+  // standalone line each, above the block, the title always before the label.
+  // Both are authored text, and docs/graceful-degradation.md forbids dropping
+  // it. Folding them into the rule line instead was considered and rejected:
+  // the rule line exists only when the fence has a LANGUAGE, so a titled fence
+  // without one would have needed a rule line invented for it, and a fence
+  // carrying both tokens would have needed a separator invented too.
+  if (header) out += `${style(header, BOLD)}\n\n`
+  if (label) out += `${style(label, BOLD)}\n\n`
+  // The language keeps the slot this target already gave it, unchanged.
+  if (lang) out += `${style(`┌── ${lang} `, DIM)}\n`
   for (const line of content.replace(/\n$/, '').split('\n')) {
     out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}\n`
   }

@@ -218,10 +218,14 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
         : trimNonNbsp(renderBlock(node.target, ctx))
   // The caption sits on its own line directly under the figure (`\n`) - an
   // image target used to glue it on. A blockquote target keeps the blank-line
-  // separation; a table drops the caption entirely. End with the block
-  // separator so a following block is not glued (matching carve-php).
-  const sep =
-    node.target.type === 'block_quote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
+  // separation. A table takes the same single newline as every other target:
+  // the empty separator this branch used to take was only right while a table
+  // dropped its caption outright, and since it stopped doing that the caption
+  // was welded onto the last body line instead. This target's own table
+  // renderer already writes a caption on its own line, so the two agree. End
+  // with the block separator so a following block is not glued (matching
+  // carve-php).
+  const sep = node.target.type === 'block_quote' ? '\n\n' : '\n'
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
 }
 
