@@ -59,11 +59,30 @@ describe('core semantic span attributes', () => {
     }
   })
 
-  it('renders content only on plain and ANSI, and preserves the source', () => {
+  it('carries the AUTHORED expansion on plain and ANSI, and preserves the source', () => {
+    // An authored `abbr` has no `*[TERM]: …` definition line to carry its
+    // expansion, so a target that drops it loses the text outright. Both of
+    // these print it parenthetically - the idiom each already uses for an
+    // ordinary abbreviation, and on plain the idiom it already uses for an
+    // inline footnote (markup-carve/carve#1176).
+    //
+    // This row previously asserted `HTML\n` on plain and only `toContain('HTML')`
+    // on ANSI. The loose ANSI assertion hid that this test's own title was
+    // already wrong there: ANSI has always appended the expansion, so "content
+    // only on plain and ANSI" described neither target accurately.
     const source = '[*HTML*]{abbr="HyperText Markup Language"}'
-    expect(carveToPlainText(source)).toBe('HTML\n')
-    expect(carveToAnsi(source)).toContain('HTML')
+    expect(carveToPlainText(source)).toBe('HTML (HyperText Markup Language)\n')
+    expect(carveToAnsi(source)).toContain('(HyperText Markup Language)')
     expect(carveToCarve(source)).toBe(source + '\n')
+  })
+
+  it('prints no expansion when the authored abbr is empty', () => {
+    // `{abbr=""}` is the spelling for "mark this as an abbreviation with no
+    // expansion" - HTML emits a bare `<abbr>`, so the flattening targets add
+    // nothing. This is what keeps `abbr=""` and `abbr="X"` distinguishable.
+    const source = '[HTML]{abbr=""}'
+    expect(carveToPlainText(source)).toBe('HTML\n')
+    expect(carveToHtml(source)).toBe('<p><abbr>HTML</abbr></p>')
   })
 })
 

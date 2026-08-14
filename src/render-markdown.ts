@@ -19,6 +19,10 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 
+// Set while rendering a span that carries an authored `abbr`, so a resolved
+// abbreviation inside it contributes only its visible text (carve#1127).
+let suppressAutomaticAbbreviation = false
+
 /**
  * Whether smart typography renders as its glyph or as the source run the author
  * typed.
@@ -434,8 +438,32 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return renderLink(node, ctx)
     case 'image':
       return renderImage(node)
-    case 'span':
+    case 'span': {
+      // PART 9 §10 + carve#1127: an authored `abbr` OUTRANKS automatic
+      // expansion, and a resolved abbreviation inside such a span contributes
+      // only its visible text - a renderer must not emit the nested expansion.
+      // The HTML target already did this; markdown and ansi emitted the
+      // DEFINITION's text instead, so `[HTML]{abbr="Custom"}` under a
+      // `*[HTML]: Hyper Text Markup Language` line came out with the wrong
+      // title on two of five targets (carve#1176).
+      const authoredAbbr = node.attrs?.keyValues?.abbr
+      if (authoredAbbr !== undefined) {
+        const previous = suppressAutomaticAbbreviation
+        suppressAutomaticAbbreviation = true
+        try {
+          const inner = renderInlines(node.children, ctx)
+          if (authoredAbbr === '') return inner
+          if (!ctx.abbrBudget.charge(utf8ByteLength(authoredAbbr))) return inner
+          const title = escapeMdHtml(stripControls(authoredAbbr)).replace(/"/g, '&quot;')
+
+          return `<abbr title="${title}">${inner}</abbr>`
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
+
       return renderInlines(node.children, ctx)
+    }
     case 'math': {
       // Escaped, exactly as the HTML target escapes the same content: a
       // consumer decodes the entity back to the character before its math
@@ -478,6 +506,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // survives (markdown allows inline HTML), matching carve-php. Dropping it
       // to plain text would lose the expansion.
       const text = escapeMdHtml(stripControls(node.abbr))
+      // Inside a span carrying its own `abbr`, only the visible text (carve#1127).
+      if (suppressAutomaticAbbreviation) return text
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to the plain key text only (no <abbr>, no title).
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return text
