@@ -120,6 +120,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return renderCodeBlock(
         stripControls(node.content),
         node.lang ? stripControls(node.lang) : node.lang,
+        node.header ? stripControls(node.header) : undefined,
+        node.label ? stripControls(node.label) : undefined,
       )
     case 'block_quote':
       ctx.blockQuoteDepth++
@@ -216,9 +218,16 @@ function renderHeading(level: number, content: string): string {
   return `${out}\n\n`
 }
 
-function renderCodeBlock(content: string, lang?: string): string {
+function renderCodeBlock(content: string, lang?: string, header?: string, label?: string): string {
   let out = ''
-  if (lang) out += `${style(`┌── ${lang} `, DIM)}\n`
+  // Caption floor: a fence header (`"src/app.js"`) and a grouping label
+  // (`[Node]`) are authored text. This target had a rule line already and put
+  // only the language on it, so both were dropped outright - the one thing
+  // docs/graceful-degradation.md says a target may never do. They join the rule
+  // rather than taking lines of their own, so a captioned fence still reads as
+  // one block in a terminal.
+  const parts = [lang, header, label && `[${label}]`].filter(Boolean)
+  if (parts.length > 0) out += `${style(`┌── ${parts.join(' ')} `, DIM)}\n`
   for (const line of content.replace(/\n$/, '').split('\n')) {
     out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}\n`
   }

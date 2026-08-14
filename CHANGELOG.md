@@ -7,6 +7,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Presentation targets no longer discard authored text**
+  (markup-carve/carve#1179). `docs/graceful-degradation.md` states the floor as
+  a MUST - "losing the click is fine; losing the words is not" - and three kinds
+  of authored text were dropped outright:
+
+  - a table caption vanished on the Markdown target. It now sits on its own line
+    under the table, which is how an image and a listing caption already degrade
+    there, so the table stops being the odd one out.
+  - a fence header (`"src/app.js"`) and a grouping label (`[Node]`) vanished on
+    the plain-text and terminal targets. Plain emits them as standalone lines
+    ahead of the code, matching the caption floor the `div` renderer already
+    applied; the terminal joins them to the rule line it was already drawing, so
+    a captioned fence still reads as one block.
+
+  Nothing else moves: an uncaptioned table, a fence with no header and every
+  other target are byte-identical to before.
+
 ### Removed
 
 - **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).

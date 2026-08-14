@@ -158,6 +158,13 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Markdown has no attribution slot, so the source follows the quote as an
       // ordinary paragraph rather than being dropped - the same treatment an
       // admonition title gets here.
+      //
+      // This keeps the words but not the attachment: re-read, the attribution is
+      // a sibling of the quotation rather than its source. Quoting it as a final
+      // block inside the quote would preserve both, but PART 9 §4a is normative
+      // only about the AST and the HTML and says nothing about this target, and
+      // carve-php and carve-rs place it the same way - so moving it is a spec
+      // ruling rather than an engine fix. Tracked in carve#1179.
       const attribution =
         node.attribution === undefined ? '' : `\n\n${renderInlines(node.attribution, ctx)}`
       return `${quoted}${attribution}\n\n`
@@ -346,8 +353,17 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     // reject the entire table (carve#1042, PART 11 §10b).
     out += `| ${Array.from({ length: headerColumns }, (_, i) => separator(i)).join(' | ')} |\n`
   }
-  out += `${rows.join('\n')}\n\n`
-  return out
+  out += `${rows.join('\n')}\n`
+  // A caption is authored text, and Markdown has no table-caption syntax - so it
+  // goes on its own line under the table rather than being dropped. Dropping it
+  // was the only place a presentation target discarded authored text outright,
+  // against the MUST in docs/graceful-degradation.md ("losing the click is fine;
+  // losing the words is not"). An image and a listing caption already degrade
+  // exactly this way, so the table stops being the odd one out.
+  if (node.caption && node.caption.length > 0) {
+    out += `${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
+  }
+  return `${out}\n`
 }
 
 function renderFigure(node: Figure, ctx: MarkdownContext): string {

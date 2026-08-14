@@ -91,8 +91,16 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'paragraph':
       return `${renderInlines(node.children, ctx)}\n\n`
-    case 'code_block':
-      return `${stripControls(node.content)}\n\n`
+    case 'code_block': {
+      // Caption floor, the same one the `div` case below already applies: a
+      // fence header (`"src/app.js"`) and a grouping label (`[Node]`) are
+      // authored text, and this target has nowhere to attach them, so they
+      // become standalone lines rather than being dropped. Header first when
+      // both are present, matching the div's title-then-label order.
+      const header = node.header ? `${stripControls(node.header)}\n\n` : ''
+      const label = node.label ? `${stripControls(node.label)}\n\n` : ''
+      return `${header}${label}${stripControls(node.content)}\n\n`
+    }
     case 'block_quote': {
       const quoted = `"${trimNonNbsp(renderBlocks(node.children, ctx))}"`
       // The attribution is visible content, so a text target keeps it.
