@@ -66,6 +66,61 @@ describe('non-html renderer parity fixes', () => {
     expect(carveToMarkdown('{+ins+}')).toBe('<ins>ins</ins>\n')
   })
 
+  /*
+   * docs/graceful-degradation.md states the floor as a MUST: a renderer may drop
+   * a construct's INTERACTION but not its WORDS. Three kinds of authored text
+   * were dropped outright while this whole file stayed green, because nothing
+   * asserted that a caption or a fence header reached these targets at all.
+   *
+   * The first three cases are the losses; the last three are CONTROLS that
+   * already held, and they are what makes the first three a defect rather than a
+   * limitation of the targets - an image caption and a listing caption survive
+   * the same target the table's caption did not. carve-php and carve-rs dropped
+   * exactly the same three, so `compare:impls` could never have caught it
+   * (markup-carve/carve#1179).
+   */
+  it.each([
+    ['table caption', '|= H |\n| a |\n^ Table caption\n', 'Table caption'],
+    ['fence header', '``` js "src/app.js"\nlet a = 1\n```\n', 'src/app.js'],
+    ['grouping label', '``` js [Node]\na\n```\n', 'Node'],
+    ['image caption (control)', '![alt](i.png)\n^ Figure caption\n', 'Figure caption'],
+    ['listing caption (control)', '``` js\nlet a = 1\n```\n^ Listing caption\n', 'Listing caption'],
+    ['admonition title (control)', '::: note "Title"\nbody\n:::\n', 'Title'],
+  ])('keeps authored text on every presentation target: %s', (_name, src, authored) => {
+    // Containment, not bytes: a renderer may keep changing HOW it presents these
+    // and still be held to keeping them.
+    for (const [target, render] of [
+      ['markdown', carveToMarkdown],
+      ['plain', carveToPlainText],
+      ['ansi', carveToAnsi],
+    ] as const) {
+      expect(render(src), `the ${target} target dropped ${JSON.stringify(authored)}`).toContain(
+        authored,
+      )
+    }
+  })
+
+  it('puts a table caption on its own line under the table', () => {
+    // The shape an image and a listing caption already use on this target.
+    expect(carveToMarkdown('|= H |\n| a |\n^ Table caption\n')).toBe(
+      '| H |\n| --- |\n| a |\nTable caption\n',
+    )
+    // A table with no caption is untouched - the line appears only where the
+    // author wrote one.
+    expect(carveToMarkdown('|= H |\n| a |\n')).toBe('| H |\n| --- |\n| a |\n')
+    // And a following block keeps its blank-line separation.
+    expect(carveToMarkdown('|= H |\n| a |\n^ Cap\n\nafter\n')).toBe(
+      '| H |\n| --- |\n| a |\nCap\n\nafter\n',
+    )
+  })
+
+  it('carries the fence header and label on the terminal rule line', () => {
+    // They join the rule the renderer already draws, so a captioned fence still
+    // reads as one block rather than three.
+    const ansi = carveToAnsi('``` js "src/app.js" [Node]\nlet a = 1\n```\n')
+    expect(ansi.replace(/\x1b\[[0-9;]*m/g, '')).toContain('┌── js src/app.js [Node]')
+  })
+
   it('renders link text, not link destinations, in plain text output', () => {
     expect(carveToPlainText('[t](u)')).toBe('t\n')
     expect(carveToPlainText('[t](u "ti")')).toBe('t\n')
