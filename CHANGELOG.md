@@ -155,6 +155,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer recognizes indented code inside a block quote**
+  (markup-carve/carve-js#1048). The four columns that open an indented code
+  block are counted after the quote marker, where the quote's content starts;
+  counted from column 0 they were never reached, because the line begins with
+  `>`, so quoted code came through as quote prose and Carve then read the
+  sample's `*` and `_` as emphasis. It now migrates to a fence carrying the
+  quote's own marker, through nested quotes and a quote a list item holds, with
+  a blank line carried through the sample and a trailing blank given back to the
+  quote. An indented line that lazily continues quoted prose is still prose, as
+  CommonMark reads it.
 - **The Markdown importer writes a block held by a list item at that item's
   content column** (markup-carve/carve-js#1048). Every block branch other than
   the HTML one measured a line's indent and emitted its block from column 0, so

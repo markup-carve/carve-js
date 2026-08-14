@@ -1444,6 +1444,61 @@ function containerHtmlBlockAt(
   return collect(' '.repeat(contentCol), inner)
 }
 
+/**
+ * Collect indented code a BLOCK QUOTE holds and re-emit it as a Carve fence
+ * carrying the quote's own marker.
+ *
+ * The four columns that make a line code are counted after the quote marker,
+ * because that is where the quote's content starts. Tested against the raw
+ * line the count never reached four - the line begins with `>` - so quoted
+ * code migrated as a PARAGRAPH, and the sample's `*` and `_` were then read as
+ * emphasis, the same way top-level indented code used to be lost.
+ *
+ * Code opens only after a blank line, so the quote line before this one must
+ * hold nothing, or there must be no such quote line at all and the code opens
+ * the quote. Without that test a quoted paragraph's own indented continuation -
+ * lazy continuation, which is prose - would come back as code.
+ */
+function quotedIndentedCodeAt(
+  lines: readonly string[],
+  start: number,
+  contentCol: number,
+): { prefix: string; lines: string[]; end: number } | null {
+  const held = (line: string): string =>
+    stripColumns(line, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')
+  const head = blockquotePrefix(held(lines[start]!))
+  if (!head || !RE_MD_INDENTED_CODE.test(head.text)) return null
+
+  const previous = start > 0 ? blockquotePrefix(held(lines[start - 1]!)) : null
+  const opensHere =
+    previous === null || previous.prefix !== head.prefix || previous.text.trim() === ''
+  if (!opensHere) return null
+
+  const body: string[] = []
+  let end = start
+  while (end < lines.length) {
+    const parsed = blockquotePrefix(held(lines[end]!))
+    // A change of quote depth is a different container, so the run ends.
+    if (!parsed || parsed.prefix !== head.prefix) break
+    if (parsed.text.trim() === '') {
+      body.push('')
+      end++
+      continue
+    }
+    if (!RE_MD_INDENTED_CODE.test(parsed.text)) break
+    body.push(parsed.text.replace(/^(?: {4}|\t)/, ''))
+    end++
+  }
+  // A blank line does not end an indented code block, but trailing blanks
+  // belong to the quote rather than to the code.
+  while (body.length > 0 && body[body.length - 1] === '') {
+    body.pop()
+    end--
+  }
+  if (body.length === 0) return null
+  return { prefix: ' '.repeat(contentCol) + head.prefix, lines: body, end }
+}
+
 /** Does an HTML block open on this line, and may it interrupt a paragraph? */
 function interruptingHtmlBlock(line: string): boolean {
   const block = htmlBlockAt([line], 0)
@@ -1628,6 +1683,22 @@ export function markdownToCarve(
       }
       i = contained.end
       prevType = contained.prefix.trimStart().startsWith('>') ? 'block_quote' : 'list'
+      continue
+    }
+
+    // Indented code a block quote holds. Placed before the indented-code branch
+    // below, which measures from column 0 and so never fires on a line that
+    // begins with `>`, and after the HTML one, which reads the same content and
+    // is the narrower match.
+    const quotedCode = quotedIndentedCodeAt(lines, i, contentCol)
+    if (quotedCode) {
+      const fence = '`'.repeat(Math.max(3, longestBacktickRun(quotedCode.lines.join('\n')) + 1))
+      if (prevType !== 'blank' && prevType !== 'block_quote' && out.length > 0) out.push('')
+      for (const emitted of [fence, ...quotedCode.lines, fence]) {
+        out.push(emitted === '' ? quotedCode.prefix.trimEnd() : quotedCode.prefix + emitted)
+      }
+      i = quotedCode.end - 1
+      prevType = 'block_quote'
       continue
     }
 
