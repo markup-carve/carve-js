@@ -19,6 +19,29 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An authored `abbr` wins on the Markdown and ANSI targets too**
+  (markup-carve/carve#1176). markup-carve/carve#1127 ruled that an explicit
+  `abbr` outranks automatic expansion, and the HTML target honoured it while
+  Markdown and ANSI emitted the DEFINITION's text - so
+  `[HTML]{abbr="Custom"}` under a `*[HTML]: Hyper Text Markup Language` line
+  came out with the wrong title on two of five targets. Both now carry the
+  authored value, using the same suppression the HTML renderer already had.
+  The plain-text target carries it too: an authored expansion has no
+  `*[TERM]: …` definition line to state it once, so dropping it lost the text
+  outright, and plain already uses `(…)` for an inline footnote.
+
+### Removed
+
+- **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).
+  `collectPortableWhitespace` was retained behind an explicit
+  `void collectPortableWhitespace` statement and called from nowhere, so the id
+  could not fire for any input or option - the blockquote marker rule became core
+  syntax and is reported by `blockquote-marker-without-space`, which is
+  documented and does fire. No behavior changes: the `portable` option was
+  already a no-op and still accepts its value, so no caller breaks.
+
+### Fixed
+
 - **An abbreviation expands inside the `:name[…]` extension form**
   (markup-carve/carve#1151). PART 9R R3 matches a term in rendered text at word
   boundaries and says nothing about the container it sits in, but an

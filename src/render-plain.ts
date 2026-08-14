@@ -7,6 +7,10 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 
+// Set while rendering a span that carries an authored `abbr`, so a resolved
+// abbreviation inside it contributes only its visible text (carve#1127).
+let suppressAutomaticAbbreviation = false
+
 export interface PlainTextRenderOptions {
   /**
    * `'source'` (or `false`) emits the run the author typed instead of the
@@ -287,9 +291,36 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'strong':
     case 'underline':
     case 'superscript':
+    case 'span': {
+      // An AUTHORED `abbr` is the one expansion this target has to print
+      // inline. The automatic case does not need it: the `*[TERM]: expansion`
+      // definition line is emitted verbatim, so the mapping survives once at
+      // the definition rather than at every occurrence. An authored value has
+      // NO definition line to carry it, so dropping it loses the text
+      // outright - `[HTML]{abbr="Custom"}` came out as bare `HTML` with
+      // "Custom" nowhere in the output (carve#1176).
+      //
+      // Parentheses are already this target's idiom for an aside: an inline
+      // footnote renders `(content)` here.
+      const authoredAbbr = node.attrs?.keyValues?.abbr
+      if (authoredAbbr !== undefined) {
+        const previous = suppressAutomaticAbbreviation
+        suppressAutomaticAbbreviation = true
+        try {
+          const inner = renderInlines(node.children, ctx)
+          if (authoredAbbr === '') return inner
+          if (!ctx.abbrBudget.charge(utf8ByteLength(authoredAbbr))) return inner
+
+          return `${inner} (${stripControls(authoredAbbr)})`
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
+
+      return renderInlines(node.children, ctx)
+    }
     case 'subscript':
     case 'highlight':
-    case 'span':
     case 'insert':
     case 'strike':
       return renderInlines(node.children, ctx)
@@ -335,6 +366,12 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'inline_extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation':
+      // Inside a span carrying its own `abbr`, only the visible text
+      // (carve#1127). The key is what this target prints either way, so the
+      // flag changes nothing here today - it is set so the rule is stated in
+      // one place across all four targets rather than three.
+      if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
+
       return stripControls(node.abbr)
     case 'footnote_ref':
     case 'inline_footnote': {

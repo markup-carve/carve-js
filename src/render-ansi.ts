@@ -9,6 +9,10 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 
+// Set while rendering a span that carries an authored `abbr`, so a resolved
+// abbreviation inside it contributes only its visible text (carve#1127).
+let suppressAutomaticAbbreviation = false
+
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
   smartTypography?: SmartTypographyMode | boolean
@@ -451,8 +455,28 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     }
     case 'image':
       return renderImage(node)
-    case 'span':
+    case 'span': {
+      // carve#1127 again: the authored value wins, and the nested expansion is
+      // not emitted. ANSI has no markup to carry a title, so the expansion is
+      // parenthetical text - the same shape this target already uses for an
+      // ordinary abbreviation, carrying the AUTHORED text (carve#1176).
+      const authoredAbbr = node.attrs?.keyValues?.abbr
+      if (authoredAbbr !== undefined) {
+        const previous = suppressAutomaticAbbreviation
+        suppressAutomaticAbbreviation = true
+        try {
+          const inner = renderInlines(node.children, ctx)
+          if (authoredAbbr === '') return inner
+          if (!ctx.abbrBudget.charge(utf8ByteLength(authoredAbbr))) return inner
+
+          return `${inner}${style(` (${stripControls(authoredAbbr)})`, DIM)}`
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
+
       return renderInlines(node.children, ctx)
+    }
     case 'math':
       return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
     case 'raw_inline':
@@ -484,6 +508,8 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'inline_extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation': {
+      // Inside a span carrying its own `abbr`, only the visible text (carve#1127).
+      if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to the plain key text only (no ` (EXPANSION)` suffix).
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion)))
