@@ -155,6 +155,26 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer writes a block held by a list item at that item's
+  content column** (markup-carve/carve-js#1048). Every block branch other than
+  the HTML one measured a line's indent and emitted its block from column 0, so
+  a block a list item held was read as something else or written outside the
+  item. A paragraph sitting AT a nested item's content column matched the
+  four-column indented-code test and became a top-level code fence, taking a
+  quote or a rule at that column with it; a quote or a heading at an item's
+  content column looked like Markdown's 1-3 space slack and was dedented out of
+  the item; genuine indented code inside an item was fenced at column 0 still
+  carrying the item's columns as leading whitespace of the sample; and a rule, a
+  converted setext heading and a converted GFM table header were all written at
+  column 0, the table's body rows staying behind so that one table became a
+  table plus a paragraph. All of them now measure from, and emit at, the
+  innermost open item's content column. Two measurement bugs go with it: a tab
+  counts as four columns rather than one character, so a tab-indented
+  continuation no longer closes the item holding it, and a spaced thematic break
+  that could also read as a bullet (`* * *`) is a rule, so it no longer opens a
+  content column that padded out every following block. The document level is
+  unchanged: top-level indented code, a top-level quote or heading in its 1-3
+  space slack, and lazy continuation all migrate exactly as before.
 - **The Markdown importer reads a block-level HTML element inside a container as
   a block** (markup-carve/carve-js#1045). `markdownToCarve` decided
   block-vs-inline by testing the raw source line against CommonMark's HTML block

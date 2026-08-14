@@ -1099,6 +1099,50 @@ function leadingIndentWidth(line: string): number {
   return line.length - line.replace(/^[ \t]+/, '').length
 }
 
+/**
+ * The width in COLUMNS of a string, a tab advancing to the next four-column
+ * stop.
+ *
+ * Not the same as the character count once a tab is involved, and columns are
+ * what CommonMark measures a block's indent in: a single tab opens an indented
+ * code block, four characters of it or not. Measured in characters, one tab
+ * counted as one column, so a tab-indented continuation looked less indented
+ * than the list item holding it and closed the item.
+ */
+function columnWidth(text: string): number {
+  let col = 0
+  for (const ch of text) col += ch === '\t' ? 4 - (col % 4) : 1
+  return col
+}
+
+/** The width in columns of a line's leading whitespace. */
+function indentColumns(line: string): number {
+  return columnWidth(/^[ \t]*/.exec(line)![0]!)
+}
+
+/**
+ * Drop `columns` columns of leading whitespace - what an enclosing container
+ * consumes before its content begins.
+ *
+ * A tab that straddles the boundary comes back as the spaces it covered past
+ * it, which is how CommonMark splits a tab a container has partially eaten. A
+ * plain `slice` by character count cannot do that, and on a tab-indented line
+ * it removes the tab and the first letters of the content with it.
+ */
+function stripColumns(line: string, columns: number): string {
+  if (columns <= 0) return line
+  let col = 0
+  let i = 0
+  while (col < columns && i < line.length) {
+    const ch = line[i]!
+    if (ch === ' ') col += 1
+    else if (ch === '\t') col += 4 - (col % 4)
+    else break
+    i++
+  }
+  return ' '.repeat(Math.max(0, col - columns)) + line.slice(i)
+}
+
 function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
@@ -1119,19 +1163,30 @@ function blockquotePrefix(line: string): { prefix: string; text: string } | null
   return { prefix, text: rest }
 }
 
+/**
+ * Collect a run of block-quote lines and convert their inlines.
+ *
+ * The quote is re-emitted at `contentCol`, the column its container holds its
+ * content at, and the Markdown 1-3 space slack is stripped from what is left
+ * above that column. Stripping the slack from column 0 instead took the list
+ * item's content column with it, and the quote left the item.
+ */
 function collectBlockquoteInlineRun(
   lines: readonly string[],
   start: number,
   dialect: MarkdownDialect,
+  contentCol = 0,
 ): {
   lines: string[]
   end: number
 } {
+  const pad = ' '.repeat(contentCol)
+  const strip = (line: string): string =>
+    stripColumns(line, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')
   const run: PrefixedInlineLine[] = []
   let end = start
   while (end < lines.length) {
-    const line = lines[end]!.replace(/^[ \t]{1,3}(?=>)/, '')
-    const parsed = blockquotePrefix(line)
+    const parsed = blockquotePrefix(strip(lines[end]!))
     if (!parsed || parsed.text.trim() === '') break
     // What the quote holds is measured with the marker stripped, so an HTML
     // block opening mid-quote ends the inline run and the caller re-enters on
@@ -1140,8 +1195,8 @@ function collectBlockquoteInlineRun(
     run.push(parsed)
     end++
   }
-  if (run.length === 0) return { lines: [lines[start]!.replace(/^[ \t]{1,3}(?=>)/, '')], end: start + 1 }
-  return { lines: restorePrefixedInlineRun(run, dialect), end }
+  if (run.length === 0) return { lines: [pad + strip(lines[start]!)], end: start + 1 }
+  return { lines: restorePrefixedInlineRun(run, dialect).map((l) => pad + l), end }
 }
 
 /**
@@ -1154,8 +1209,14 @@ function collectBlockquoteInlineRun(
  *
  * Exactly four columns are removed, which is what CommonMark strips; deeper
  * indentation is the code's own and is kept.
+ *
+ * Both the four columns and the emitted fence are measured from `contentCol`,
+ * the column at which the enclosing container holds its content. Measured from
+ * column 0 instead, code inside a list item lost the item (the fence was
+ * written at column 0) and kept the item's columns as leading whitespace of the
+ * sample.
  */
-function collectIndentedCode(lines: readonly string[], start: number): {
+function collectIndentedCode(lines: readonly string[], start: number, contentCol = 0): {
   lines: string[]
   end: number
 } {
@@ -1169,16 +1230,19 @@ function collectIndentedCode(lines: readonly string[], start: number): {
     }
     // The same test the caller's branch uses, deliberately: a different
     // measure here could take a line the caller would not have called code.
-    if (!RE_MD_INDENTED_CODE.test(line)) break
+    if (!RE_MD_INDENTED_CODE.test(stripColumns(line, contentCol))) break
     run.push(line)
     end = i + 1
   }
 
   const body = run
     .slice(0, end - start)
-    .map((line) => (line.trim() === '' ? '' : line.replace(/^(?: {4}|\t)/, '')))
+    .map((line) =>
+      line.trim() === '' ? '' : stripColumns(line, contentCol).replace(/^(?: {4}|\t)/, ''),
+    )
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(body.join('\n')) + 1))
-  const out = [fence, ...body, fence]
+  const pad = ' '.repeat(contentCol)
+  const out = [fence, ...body, fence].map((emitted) => (emitted === '' ? '' : pad + emitted))
   // Carve needs a blank line after a block; the caller resumes at `end`, which
   // is the first line the run did not take.
   if (end < lines.length && lines[end]!.trim() !== '') out.push('')
@@ -1367,13 +1431,14 @@ function containerHtmlBlockAt(
 
   const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
   if (contentCol === 0) return null
-  if (leadingIndentWidth(lines[start]!) < contentCol) return null
+  // Columns, matching the unit the stack is kept in - a tab is four of them.
+  if (indentColumns(lines[start]!) < contentCol) return null
   const inner: string[] = []
   let end = start
   while (end < lines.length) {
     const line = lines[end]!
-    if (line.trim() !== '' && leadingIndentWidth(line) < contentCol) break
-    inner.push(line.trim() === '' ? '' : line.slice(contentCol))
+    if (line.trim() !== '' && indentColumns(line) < contentCol) break
+    inner.push(line.trim() === '' ? '' : stripColumns(line, contentCol))
     end++
   }
   return collect(' '.repeat(contentCol), inner)
@@ -1464,8 +1529,17 @@ export function markdownToCarve(
     // item continues); a non-blank line pops items whose content starts to its
     // right. Code content never changes list tracking.
     if (!inCode) {
-      const marker = line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
-      const indent = line.length - line.replace(/^[ \t]+/, '').length
+      // A thematic break wins over a list item on a line that could be read as
+      // either (CommonMark: `* * *` is a rule, not a bullet holding `* *`).
+      // Counted as a marker its columns became a content column, and the rule
+      // itself - and every block after it - was padded out to them.
+      const openCol = listCols.length ? listCols[listCols.length - 1]! : 0
+      const marker = RE_MD_THEMATIC.test(stripColumns(line, openCol))
+        ? null
+        : line.match(/^([ \t]*)(?:[-*+]|\d+[.)]) +/)
+      // Columns, not characters: the stack is compared against a line's indent
+      // and a tab is worth four of them.
+      const indent = indentColumns(line)
       // A dedented line leaves a list item when a blank precedes it OR the line
       // itself starts a block (heading, block quote, fence, thematic break) --
       // those interrupt lazy paragraph continuation, so the item ends (§10).
@@ -1476,12 +1550,25 @@ export function markdownToCarve(
         htmlBlockAt(lines, i) !== null ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)
       if (marker && /\S/.test(line.slice(marker[0].length))) {
-        while (listCols.length && listCols[listCols.length - 1]! > marker[1]!.length) listCols.pop()
-        listCols.push(marker[0].length)
+        const markerIndent = columnWidth(marker[1]!)
+        while (listCols.length && listCols[listCols.length - 1]! > markerIndent) listCols.pop()
+        listCols.push(columnWidth(marker[0]!))
       } else if (trimmed !== '' && (wasPrevBlank || startsBlock)) {
         while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       }
     }
+
+    // The column at which the innermost open container holds its content, and
+    // the padding that puts a block back there. Every block branch below both
+    // MEASURES from here and WRITES BACK to here: a line is indented code only
+    // four columns past it, Markdown's 0-3 space slack is counted from it, and
+    // an emitted block that ignores it leaves the item that held it. Nothing on
+    // the stack means column 0, the document itself.
+    const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
+    const containerPad = ' '.repeat(contentCol)
+    // What that container holds on this line, its content column removed. The
+    // block tests run against this rather than the raw line.
+    const held = stripColumns(line, contentCol)
 
     // Opening fence — a >=3 run of ` or ~, indented at most 3 spaces (the
     // Markdown rule). Carve accepts a single language token over a real-world
@@ -1503,7 +1590,6 @@ export function markdownToCarve(
       // in the item. The same strip comes off the body and closer, since
       // Markdown already treats that indent as the fence's, not the sample's.
       const openerIndent = open[1]!.length
-      const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
       fenceStrip = Math.max(0, openerIndent - contentCol)
       out.push(open[1]!.slice(fenceStrip) + open[2]! + info)
       prevType = 'code_fence'
@@ -1551,14 +1637,17 @@ export function markdownToCarve(
     // `_` were then read as emphasis: `    let x = *not bold*` rendered as
     // `<p>let x = <strong>not bold</strong></p>`.
     //
-    // The condition is unchanged, and it is what keeps this safe: the previous
-    // line must be blank, so an indented line under a list item - which is item
-    // continuation, not code - never reaches here.
+    // The previous line must be blank, so an indented line under a list item -
+    // which is item continuation, not code - never reaches here. The four
+    // columns are counted from the container's content column, not from column
+    // 0: a paragraph sitting AT a nested item's content column is the item's
+    // own content, and reading it as code both lost the paragraph and moved it
+    // out of the item.
     if (
       (wasPrevBlank || prevType === 'blank' || prevType === 'code') &&
-      RE_MD_INDENTED_CODE.test(line)
+      RE_MD_INDENTED_CODE.test(held)
     ) {
-      const block = collectIndentedCode(lines, i)
+      const block = collectIndentedCode(lines, i, contentCol)
       if (prevType !== 'blank' && out.length > 0) out.push('')
       out.push(...block.lines)
       i = block.end - 1
@@ -1597,7 +1686,10 @@ export function markdownToCarve(
           }
           header += '|'
           if (prevType !== 'blank' && out.length > 0) out.push('')
-          out.push(header)
+          // At the container's content column, so the converted header keeps
+          // the item that holds it. Written at column 0 it left the item while
+          // the body rows stayed behind, splitting one table into two blocks.
+          out.push(containerPad + header)
           i++ // consume the delimiter row
           prevType = 'text'
           continue
@@ -1608,6 +1700,11 @@ export function markdownToCarve(
     const isBlank = trimmed === ''
     const isHeading = /^#{1,6}\s/.test(trimmed)
     const indent = line.length - line.replace(/^\s+/, '').length
+    // How far the line sits PAST its container's content column - the measure
+    // Markdown's 0-3 space slack and its four-column code rule are both stated
+    // in. `indent` is the absolute one, which is the same number only at the
+    // document level.
+    const relIndent = indentColumns(held)
     const isBlockquote = trimmed.startsWith('>')
     // An ordered marker other than `1` cannot interrupt a paragraph
     // (CommonMark), so after a paragraph it stays prose; bullets and `1.`
@@ -1623,7 +1720,7 @@ export function markdownToCarve(
       continue
     }
 
-    if (indent >= 4 && (prevType === 'blank' || prevType === 'code')) {
+    if (relIndent >= 4 && (prevType === 'blank' || prevType === 'code')) {
       out.push(line)
       prevType = 'code'
       continue
@@ -1658,11 +1755,13 @@ export function markdownToCarve(
       // rule, not a setext heading text line. CommonMark: `***\n---` is two
       // thematic breaks, not an h2 titled `***`; guard so the rule falls
       // through to the thematic-break normalization below.
-      !RE_MD_THEMATIC.test(line) &&
+      !RE_MD_THEMATIC.test(held) &&
       (/^=+$/.test(underline) || /^-+$/.test(underline))
     ) {
       if (prevType !== 'blank' && prevType !== 'heading') out.push('')
-      out.push(convertInline(`${underline[0] === '=' ? '#' : '##'} ${trimmed}`, dialect))
+      out.push(
+        containerPad + convertInline(`${underline[0] === '=' ? '#' : '##'} ${trimmed}`, dialect),
+      )
       i++ // consume the underline line
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
       prevType = 'heading'
@@ -1675,9 +1774,9 @@ export function markdownToCarve(
     // (CommonMark: setext wins over a thematic break under a paragraph), while a
     // rule line that is not a setext underline for a preceding paragraph falls
     // through to here (the setext guard above skips rule lines themselves).
-    if (RE_MD_THEMATIC.test(line)) {
+    if (RE_MD_THEMATIC.test(held)) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
-      out.push('---')
+      out.push(containerPad + '---')
       if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
       prevType = 'blank'
       continue
@@ -1689,11 +1788,11 @@ export function markdownToCarve(
     // inside the quote (a stricter Carve parser would otherwise read the spaced
     // form as a nested list). Rules nested inside LIST items are a known
     // limitation — the line-based migrator does not restructure item indent.
-    const bqRule = line.match(/^ {0,3}((?:>[ \t]?){1,})(.*)$/)
+    const bqRule = held.match(/^ {0,3}((?:>[ \t]?){1,})(.*)$/)
     if (bqRule && RE_MD_THEMATIC.test(bqRule[2]!)) {
       const depth = (bqRule[1]!.match(/>/g) ?? []).length
       if (prevType !== 'blank' && prevType !== 'block_quote' && out.length > 0) out.push('')
-      out.push('> '.repeat(depth) + '---')
+      out.push(containerPad + '> '.repeat(depth) + '---')
       prevType = 'block_quote'
       continue
     }
@@ -1709,19 +1808,23 @@ export function markdownToCarve(
     const isTopLevelList = isList && prevType !== 'list'
     if (isTopLevelList && prevType !== 'blank') out.push('')
 
-    // Carve recognizes `#` headings and `>` blockquotes only at column 1, but
-    // Markdown allows 1-3 spaces of indent — dedent so the block survives.
+    // Carve recognizes `#` headings and `>` blockquotes at their container's
+    // content column, but Markdown allows 1-3 further spaces of indent — dedent
+    // that slack so the block survives. The slack is measured from the content
+    // column, and the block goes back to it: measured from column 0, a heading
+    // or a quote sitting AT a list item's content column looked like slack and
+    // was dedented out of the item.
     // Lists are NOT dedented: Carve parses indented lists fine, and dedenting
     // only some items of an indented list would reparent its siblings.
-    const dedent = indent >= 1 && indent <= 3 && (isHeading || isBlockquote)
-    let body = dedent ? line.slice(indent) : line
+    const dedent = relIndent >= 1 && relIndent <= 3 && (isHeading || isBlockquote)
+    let body = dedent ? containerPad + line.slice(indent) : line
     // Strip an ATX heading's optional closing `#` run (Carve keeps it as text).
     if (isHeading) body = body.replace(/[ \t]+#+[ \t]*$/, '')
     // Carve has no `+` bullet (it is the list-continuation marker); normalize a
     // Markdown `+` bullet to `-` so the converted list survives.
     if (isList) body = body.replace(/^(\s*)\+(\s)/, '$1-$2')
     if (isBlockquote) {
-      const run = collectBlockquoteInlineRun(lines, i, dialect)
+      const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol)
       out.push(...run.lines)
       i = run.end - 1
       prevType = 'block_quote'
