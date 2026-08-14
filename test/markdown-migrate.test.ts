@@ -237,11 +237,30 @@ describe('markdownToCarve — multiline paragraph inline mapping', () => {
     expect(carveToHtml(carve)).toBe('<p><a href="/u">a\nb</a></p>')
   })
 
+  // The rows carry a DELIMITER ROW because that is what makes them a table:
+  // without one GFM reads the block as a paragraph, and the converter now keeps
+  // it as one (markup-carve/carve-js#1061). The subject here is the row
+  // boundary, so it needs rows that really are rows.
   it('does not let emphasis leak across table row boundaries', () => {
-    const md = ['| *a | b |', '| c | d* |', '| **x** | *y* |', '| **z** | *w* |'].join('\n')
-    const carve = ['| *a | b |', '| c | d* |', '| *x* | /y/ |', '| *z* | /w/ |'].join('\n')
+    const md = [
+      '| h1 | h2 |',
+      '|---|---|',
+      '| *a | b |',
+      '| c | d* |',
+      '| **x** | *y* |',
+      '| **z** | *w* |',
+    ].join('\n')
+    const carve = [
+      '|= h1 |= h2 |',
+      '| *a | b |',
+      '| c | d* |',
+      '| *x* | /y/ |',
+      '| *z* | /w/ |',
+    ].join('\n')
     expect(conv(md)).toBe(carve)
     expect(carveToHtml(carve)).toContain('<tr><td><strong>x</strong></td><td><em>y</em></td></tr>')
+    // The unpaired `*` stayed on its own row rather than pairing across two.
+    expect(carveToHtml(carve)).toContain('<tr><td>*a</td><td>b</td></tr>')
   })
 
   it('preserves line count and leading whitespace in a multiline paragraph', () => {

@@ -189,6 +189,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer no longer makes a table from a pipe row that has no
+  delimiter row** (markup-carve/carve-js#1061). Carve reads any line that begins
+  and ends with `|` as a table row and needs no delimiter row, so passing such a
+  line through was itself a conversion, and a migrated document grew a table
+  its author never saw. Measured against `marked` 18 with `gfm: true`, every
+  partly-formed shape renders as a paragraph and now migrates as one: a pipe row
+  with no delimiter row, a delimiter row with no header above it, a delimiter
+  row alone, a header and delimiter whose column counts disagree, a stray row
+  before or after a real table, a row following a paragraph line, and the same
+  inside a block quote or a list item. The opening pipe is escaped, which keeps
+  the row readable and keeps it in the paragraph it belongs to. A table GFM does
+  read is untouched, including its alignment markers and the tables a container
+  holds.
+
 - **The `semantic-attribute-outside-span` diagnostic names the value the
   renderer writes** (markup-carve/carve-js#1058). Its closing sentence ended
   with a fixed `name=""`, which is what the boolean form renders and is false

@@ -33,9 +33,9 @@ Carve's blank-line-around-blocks rule:
 | `$x$`                        | `$x$`      | literal by default - not CommonMark or GFM (`dialect.math` converts it to `` $`x` ``, leaving `$5` as currency) |
 | `<em>`/`<strong>`/`<del>`/…  | Carve form | other inline HTML tags map to their Carve markers          |
 
-The default dialect is **CommonMark plus GFM and nothing else**, so a source
-construct neither of them defines stays as written rather than becoming Carve
-markup. Seven flavour extensions are opt-in through the second argument:
+The default dialect is **CommonMark plus GFM, plus footnote references**, so a
+source construct none of those defines stays as written rather than becoming
+Carve markup. Seven flavour extensions are opt-in through the second argument:
 
 ```ts
 markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math: true })
@@ -67,6 +67,16 @@ A handful of Carve constructs have no Markdown spelling in any flavour and are
 always escaped, with no flag: `` a $`x` `` and `` a $$`x` `` (math spans),
 `` a !`x` `` (a literal span), `a :term[x]` (an extension call), and a leading
 `^ ` on a paragraph (a caption, which binds to the block above it).
+
+**One exception to the contract: `[^1]` footnote references convert by
+default.** They are in neither CommonMark nor GFM, so the rule above would put
+them behind a flag. The rule exists to stop a migrated document from rendering
+differently than its author saw it, and here it would cause exactly that:
+github.com renders footnotes, so an author who wrote one saw one, and leaving
+it literal would take it away. Where the letter of the contract and the reason
+for it disagree, the reason governs. `[^1]` with its `[^1]: …` definition
+therefore migrates to a Carve footnote, and this is the only construct the
+contract makes room for.
 
 The HTML tags below are unaffected: `<mark>`, `<sub>` and `<sup>` mean one
 thing in every dialect, so they always convert.
@@ -111,6 +121,34 @@ becomes
 ```
 
 Body rows are already valid Carve, so they pass through unchanged.
+
+**A pipe row without a delimiter row stays text.** Carve reads any line that
+begins and ends with `|` as a table row, with no delimiter row anywhere, so a
+row GFM shows as a paragraph would otherwise become a table on migration:
+
+```md
+| a | b |
+| c | d |
+```
+
+GFM renders that as one paragraph, and so does the migrated document - the
+opening pipe of each line is escaped, which keeps the row literal and keeps it
+in the paragraph it belongs to:
+
+```
+\| a | b |
+\| c | d |
+```
+
+The same applies to every partly-formed table: a delimiter row with no header
+above it, a header and delimiter whose column counts disagree, and a stray pipe
+row before or after a real table. A table GFM does read - inside a block quote
+or a list item as much as at the top level - is untouched.
+
+> [!NOTE]
+> A `---` kept as literal text still renders as an em dash, because Carve
+> applies smart typography to prose. That is true of any `---` a migrated
+> document carries, not only one inside a pipe row.
 
 To go the other way - flagging a Djot document that would silently mis-render
 under Carve - use `djotMigrationWarnings`, and to rewrite those collisions in
