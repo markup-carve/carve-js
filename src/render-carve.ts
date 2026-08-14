@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { opensFrontmatter, parse, TABLE_ALIGNMENT_MARKERS } from './parse.js'
+import { opensFrontmatter, parse, rawBracketRunCloses, TABLE_ALIGNMENT_MARKERS } from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -656,7 +656,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // backslashes renderInlines already produced and compounds on every
       // fmt pass (issue 295).
       const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
-      const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
+      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
       const fence = colonFenceFor(ctx)
       const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
@@ -689,7 +689,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // attrs - only the child break nodes differ - so we let those break nodes
       // serialize themselves, which round-trips both. (A line block is its own
       // node type and is handled above.)
-      const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
+      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
       const fence = colonFenceFor(ctx)
       const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
@@ -1271,10 +1271,10 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
   // is not recorded anywhere in the tree - so it is spelled to say what it is
   // rather than to carry anything.
   if (body === '') {
-    return `[^${escapeFootnoteLabel(label)}]: ${EMPTY_FOOTNOTE_BODY}`
+    return `[^${writeFlatBracketRun(label)}]: ${EMPTY_FOOTNOTE_BODY}`
   }
   const lines = body.split('\n')
-  const defLines = [`[^${escapeFootnoteLabel(label)}]: ${lines.shift() ?? ''}`]
+  const defLines = [`[^${writeFlatBracketRun(label)}]: ${lines.shift() ?? ''}`]
   // TWO spaces, the body's own column (PART 9 §16). Three is legal
   // continuation, but it leaves the body's blocks at a relative column above
   // zero - and a reader that takes the body's column as two then sees an
@@ -1495,7 +1495,7 @@ function renderInline(
     case 'inline_footnote':
       return withAttrs(node.inline
         ? `^[${renderInlines(node.inline, ctx)}]`
-        : `[^${escapeFootnoteLabel(node.id ?? '')}]`)
+        : `[^${writeFlatBracketRun(node.id ?? '')}]`)
     case 'soft_break':
       return '\n'
     case 'hard_break':
@@ -1679,7 +1679,7 @@ function codeFenceInfo(lang: string | undefined, header: string | undefined, lab
   // on parse, and it cannot contain a quote. Emit it verbatim - escaping a
   // backslash here would round-trip to a doubled backslash (issue 295).
   if (header !== undefined) parts.push(`"${header}"`)
-  if (label !== undefined) parts.push(`[${escapeBracketText(label)}]`)
+  if (label !== undefined) parts.push(`[${writeFlatBracketRun(label)}]`)
   return parts.length ? ` ${parts.join(' ')}` : ''
 }
 
@@ -2227,8 +2227,32 @@ function escapePlainLine(text: string): string {
   return text.replace(/\n/g, ' ')
 }
 
+/**
+ * An image's ALT TEXT, written between `![` and `]`.
+ *
+ * ALT IS RAW. It is an HTML attribute, so nothing inside is inline-parsed and
+ * no escape inside it is resolved: `![t\]z](/i.png)` gives `alt="t\]z"`, with
+ * the backslash in the value. That is what makes escaping the wrong tool here -
+ * a `\]` the writer emits is not a neutralized bracket, it is two more
+ * characters of alt text, and the document says something else on the next
+ * read. It compounded, too: each pass escaped the backslash the last pass
+ * wrote (markup-carve/carve#1197).
+ *
+ * The run closes at the MATCHING `]`, by the balanced, escape- and
+ * literal-span-aware scan a link's text closes by - so the alt an author can
+ * write is exactly the alt that re-reads as itself, and the writer's job is to
+ * put it back verbatim rather than to neutralize anything
+ * (markup-carve/carve#1206).
+ *
+ * The fallback covers an alt that has NO Carve spelling - a bare unbalanced
+ * `]`, or a run ending inside an unclosed code span. `parse` cannot produce
+ * one; an ingested AST can. Escaping is not a representation of that value
+ * either, but it keeps the image a well-formed image instead of letting a
+ * stray `]` split the line, and it settles: the escaped alt IS representable,
+ * so the pass after it writes the same bytes.
+ */
 function escapeImageAlt(text: string): string {
-  return text.replace(/[\\[\]]/g, '\\$&')
+  return rawBracketRunCloses(text) ? text : text.replace(/[\\[\]]/g, '\\$&')
 }
 
 /**
@@ -2286,14 +2310,40 @@ function escapeQuoted(text: string): string {
   return text.replace(/[\\"]/g, '\\$&')
 }
 
-function escapeBracketText(text: string): string {
-  return text.replace(/[\\\]]/g, '\\$&')
+/**
+ * A FLAT raw bracketed run: a colon-fence or code-fence `[label]`, and a
+ * footnote's `[^id]` in both its definition and its references.
+ *
+ * Same rule as an alt text and the same reason - the value is raw, so an
+ * escape the writer emits reaches the reader as two characters of content
+ * rather than as a neutralized bracket - but a narrower close. These readers
+ * scan `[^\]]*` and stop at the first `]`, with no balance and no escape, so a
+ * run is representable exactly when it holds neither a `]` nor a line break.
+ *
+ * One function for one rule. It was written twice, and both spellings escaped,
+ * so `::: [a\b]` and `[^n\m]` grew a backslash on every format pass.
+ *
+ * WRITTEN AS AUTHORED WITH NO FALLBACK, unlike an alt text. A value holding a
+ * `]` has no spelling here either, but the escape is not a spelling of it: the
+ * label regexes require the run to be the whole of what follows, so `[a\]b]`
+ * fails to match exactly as `[a]b]` does, and `::: [a\]b]` and `::: [a]b]`
+ * render the same paragraph, container and all. Where the construct instead
+ * survives as text - a code fence, a footnote definition - the escape only
+ * adds a backslash a reader can see. So the branch would change no output
+ * anywhere, which is a branch that cannot fail, and it is not written.
+ */
+function writeFlatBracketRun(text: string): string {
+  return text
 }
 
-function escapeFootnoteLabel(text: string): string {
-  return text.replace(/[\\\]]/g, '\\$&')
-}
-
+/**
+ * NOT the same rule, deliberately. `RE_ABBR_DEF` reads the abbreviation as
+ * `[A-Za-z0-9]+`, so neither character this would escape can reach it from a
+ * parse, and an ingested abbreviation carrying one has no `*[…]:` spelling
+ * with or without the backslash. Left as it stands rather than folded into the
+ * function above, which would claim a shared rule where there is only a shared
+ * shape.
+ */
 function escapeAbbr(text: string): string {
   return text.replace(/[\\\]]/g, '\\$&')
 }

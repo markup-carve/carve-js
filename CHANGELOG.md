@@ -189,6 +189,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`fmt` no longer escapes into a run whose content is raw.** An image's alt
+  text, a colon-fence or code-fence `[label]` and a footnote's `[^id]` are all
+  read verbatim, so a backslash the writer emitted to neutralize a bracket
+  arrived as two more characters of the value: `![t[z]](/i.png)` came back as
+  `alt="t\[z\]"`, and `::: note [a\b]` and `[^n\m]` grew a backslash on every
+  pass, because each one escaped what the last one wrote. All four constructs
+  are now written as authored, which is correct wherever the run has a Carve
+  spelling at all - an alt text closes at the MATCHING `]`, by the balanced,
+  escape- and literal-span-aware scan a link's text closes by
+  (markup-carve/carve#1197, ruled in markup-carve/carve#1206). The read path
+  was already right; only the writer was not. An escape is still emitted where
+  the reader resolves one - a link's text, a span's, an inline note's - and for
+  an ingested alt that has no spelling, where it keeps the image well formed
+  and settles on the next pass.
 - **A footnote inside an unresolved reference no longer counts as a reference**
   (markup-carve/carve-js#1064, ruled in markup-carve/carve#1198 as PART 9R R2).
   An unresolved reference degrades to its literal source, so the link text built

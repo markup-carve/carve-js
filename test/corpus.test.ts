@@ -382,6 +382,15 @@ const IMPLEMENTED = new Set([
   'a-reference-link-s-text-survives-its-own-frame',
   'an-inline-note-s-content-resolves-after-the-note',
   'a-footnote-in-an-unresolved-reference-is-not-a-reference',
+  // The two categories markup-carve/carve#1206 adds. All twelve documents were
+  // rendered and compared against their fixtures before either name was added:
+  // this engine's READ path already closes an alt text at the matching `]`, so
+  // every one of them matched byte for byte at the pin this commit moves off.
+  // What was wrong was the WRITE path, which this commit fixes - four of the
+  // twelve failed the formatter sweep in `render-carve.test.ts`, none the
+  // renderer sweep here.
+  'an-image-s-alt-text-closes-where-a-link-s-text-closes',
+  'an-editorial-comment-s-bracket-is-content-not-the-close',
 ])
 
 /**
