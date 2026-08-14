@@ -322,6 +322,27 @@ function sanitizeAttrValue(name: string, value: string): string {
   return value
 }
 
+/**
+ * The value this renderer WRITES for a raw `name="…"` attribute, before
+ * escaping - which is to say, the authored text unless the sanitizer above
+ * blanked it.
+ *
+ * The single place that answers "what does the output actually contain?" for a
+ * raw attribute, so a caller outside the renderer cannot answer it from a
+ * second copy of the rules. `lint.ts` quotes it in
+ * `semantic-attribute-outside-span` (markup-carve/carve-js#1058), where naming
+ * the authored text instead would describe an output that does not exist:
+ * `{kbd="javascript:alert(1)"}` renders `kbd=""`.
+ */
+export function renderedAttrValue(name: string, value: string): string {
+  return sanitizeAttrValue(name, value)
+}
+
+/** How this renderer escapes a value it writes inside `name="…"`. */
+export function escapeAttrValue(value: string): string {
+  return escapeAttr(value)
+}
+
 /** Detect script-bearing / fetching constructs in a CSS `style` value. Blanks
  *  the whole value rather than attempting CSS surgery: `expression()` (legacy
  *  IE script), `url(...)` (can fetch or carry `javascript:`), `@import`, and

@@ -124,6 +124,145 @@ describe('a reserved semantic name off-span is reported', () => {
   })
 })
 
+// markup-carve/carve-js#1058. The message ends `renders as name="…"`, and the
+// value it named used to be a fixed empty string. That reads true for the
+// BOOLEAN form and false for every authored value, which is the half of the
+// input space the sentence exists to explain.
+//
+// The load-bearing test is the first one below. It does not compare the message
+// against a second copy of the expected value; it reads the value back OUT of
+// the message and checks the rendered HTML actually contains it. A message
+// quoting anything the renderer does not write fails it, whatever the reason.
+describe('the off-span message quotes the value the renderer emits', () => {
+  const outsideSpanMessage = (source: string): string => {
+    const found = lintCarve(source)
+      .filter((w) => w.rule === 'semantic-attribute-outside-span')
+      .map((w) => w.message)
+    expect(found).toHaveLength(1)
+
+    return found[0]!
+  }
+
+  it.each([
+    ['a code span', '`c`{kbd="K"}\n'],
+    ['a link', '[t](http://e.com){kbd="K"}\n'],
+    ['an image', '![a](i.png){kbd="K"}\n'],
+    ['a block attribute line on a paragraph', '{kbd="K"}\nPara\n'],
+    ['a block attribute line on a heading', '{kbd="K"}\n# H\n'],
+    ['a table row', '| a |\n| --- |\n| c |{kbd="K"}\n'],
+    ['a block quote, for a name not valid there', '{kbd="K"}\n> q\n'],
+    ['a code span carrying no value at all', '`c`{kbd}\n'],
+    ['a code span whose value the sanitizer blanks', '`c`{kbd="javascript:alert(1)"}\n'],
+    ['a code span whose value needs escaping', '`c`{kbd="a\\"&<b>\'c"}\n'],
+  ])('names what the render of %s contains', (_label, source) => {
+    const quoted = /renders as (kbd="[^"]*")\.$/.exec(outsideSpanMessage(source))
+    expect(quoted).not.toBeNull()
+    expect(carveToHtml(source)).toContain(quoted![1])
+  })
+
+  // The exact bytes, so a later edit cannot satisfy the reader above by quoting
+  // something merely present in the output - an `alt` or an `href` would pass a
+  // containment check too.
+  const message = (rendered: string): string =>
+    '"kbd" is a semantic span attribute (PART 9 §10) and only applies to an ordinary ' +
+    '[content]{attrs} span; on code it stays a raw attribute and renders as ' +
+    `kbd="${rendered}".`
+
+  it('reports an empty value for the boolean form, which is what it renders', () => {
+    expect(outsideSpanMessage('`c`{kbd}\n')).toBe(message(''))
+    expect(carveToHtml('`c`{kbd}\n').trim()).toBe('<p><code kbd="">c</code></p>')
+  })
+
+  it('reports the authored value, which used to be reported as empty', () => {
+    expect(outsideSpanMessage('`c`{kbd="keyboard"}\n')).toBe(message('keyboard'))
+    expect(carveToHtml('`c`{kbd="keyboard"}\n').trim()).toBe('<p><code kbd="keyboard">c</code></p>')
+  })
+
+  it('escapes the value the way the renderer escapes it', () => {
+    expect(outsideSpanMessage('`c`{kbd="a\\"&<b>\'c"}\n')).toBe(
+      message('a&quot;&amp;&lt;b&gt;&apos;c'),
+    )
+    expect(carveToHtml('`c`{kbd="a\\"&<b>\'c"}\n').trim()).toBe(
+      '<p><code kbd="a&quot;&amp;&lt;b&gt;&apos;c">c</code></p>',
+    )
+  })
+
+  // The sanitizer blanks a dangerous scheme BEFORE the attribute is written, so
+  // the empty value is the true one here. Quoting the authored text would be
+  // the same defect in the other direction.
+  it('reports the empty value the sanitizer leaves, not the authored scheme', () => {
+    expect(outsideSpanMessage('`c`{kbd="javascript:alert(1)"}\n')).toBe(message(''))
+    expect(carveToHtml('`c`{kbd="javascript:alert(1)"}\n').trim()).toBe(
+      '<p><code kbd="">c</code></p>',
+    )
+  })
+
+  it('reports in full a value the sanitizer leaves alone', () => {
+    expect(outsideSpanMessage('`c`{kbd="url(x)"}\n')).toBe(message('url(x)'))
+  })
+
+  it('quotes a value of exactly the limit whole', () => {
+    const value = 'x'.repeat(120)
+    expect(outsideSpanMessage(`\`c\`{kbd="${value}"}\n`)).toBe(message(value))
+  })
+
+  it('cuts one character past the limit and marks the cut', () => {
+    expect(outsideSpanMessage(`\`c\`{kbd="${'x'.repeat(121)}"}\n`)).toBe(
+      message(`${'x'.repeat(120)}…`),
+    )
+  })
+
+  // Cutting the ESCAPED text could land inside an entity. Each character here
+  // escapes to five, so a cut applied after escaping shows entity wreckage
+  // instead of 120 ampersands.
+  it('cuts before escaping, so no entity is split', () => {
+    expect(outsideSpanMessage(`\`c\`{kbd="${'&'.repeat(200)}"}\n`)).toBe(
+      message(`${'&amp;'.repeat(120)}…`),
+    )
+  })
+
+  // Cutting BEFORE sanitizing would quote a long `javascript:` payload back as
+  // a prefix that reads like an ordinary value, while the output holds nothing.
+  it('sanitizes the whole value before cutting, not the cut prefix', () => {
+    expect(outsideSpanMessage(`\`c\`{kbd="javascript:${'a'.repeat(200)}"}\n`)).toBe(message(''))
+  })
+
+  // An astral character is one codepoint and two UTF-16 units. Cutting by units
+  // would split the pair and quote half a character.
+  it('cuts by codepoints, so a surrogate pair survives whole', () => {
+    expect(outsideSpanMessage(`\`c\`{kbd="${'\u{1f600}'.repeat(200)}"}\n`)).toBe(
+      message(`${'\u{1f600}'.repeat(120)}…`),
+    )
+  })
+})
+
+// The ticket asked whether the sibling rule carries the same assumption. It
+// does not: its message interpolates only the NAME, twice, and never a value.
+// What it does assert is that the value reaches no output, so that is what is
+// pinned here - for every reserved name that loses one, rather than the single
+// name the rule was written against.
+describe('the value-ignored message asserts a loss that really happens', () => {
+  const valueIgnoredMessages = (source: string, extensions?: CarveExtension[]): string[] =>
+    lintCarve(source, extensions ? { extensions } : {})
+      .filter((w) => w.rule === 'semantic-attribute-value-ignored')
+      .map((w) => w.message)
+
+  it.each([
+    ['kbd', false],
+    ['samp', true],
+    ['var', true],
+    ['cite', true],
+  ])('names %s and no value, and the value is absent from the render', (name, needsExtension) => {
+    const source = `[x]{${name}="LOSTVALUE"}\n`
+    const options = needsExtension ? { extensions: [semanticSpan()] } : {}
+    expect(valueIgnoredMessages(source, needsExtension ? [semanticSpan()] : undefined)).toEqual([
+      `Value on the semantic attribute "${name}" is discarded: it selects the <${name}> element ` +
+        'and reaches no output. Only abbr, dfn and time carry a value (as title or datetime).',
+    ])
+    expect(carveToHtml(source, options)).not.toContain('LOSTVALUE')
+  })
+})
+
 describe('both rules are default-on', () => {
   // Every other rule here reports a silent failure in Carve and needs no
   // opting in; only the platform rules are target-specific. These two are not.
