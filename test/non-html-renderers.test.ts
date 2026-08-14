@@ -49,12 +49,36 @@ for (const [name, g] of Object.entries(golden)) {
 }
 
 describe('non-html renderer parity fixes', () => {
-  it('keeps blockquote attribution separated from the quote body', () => {
+  /*
+   * PART 11 §10c. This used to pin the OPPOSITE - the attribution as a sibling
+   * separated by a blank line - and that spacing was the defect: the words
+   * survived but the attachment did not, so a reader (and a re-parse) saw a
+   * paragraph that merely followed a quotation rather than its source.
+   *
+   * Each target keeps the attachment with what it actually has: Markdown a
+   * `<footer>` element inside the quote, the terminal its own quote bar, plain
+   * text adjacency (no blank line).
+   */
+  it('keeps blockquote attribution attached to its quote', () => {
     const src = '> q\n^ Attr'
 
-    expect(carveToMarkdown(src)).toBe('> q\n\nAttr\n')
-    expect(carveToPlainText(src)).toBe('"q"\n\nAttr\n')
-    expect(carveToAnsi(src)).toBe('\x1b[36m\x1b[2m│\x1b[0m q\n\n\x1b[3m\x1b[2mAttr\x1b[0m\n')
+    expect(carveToMarkdown(src)).toBe('> q\n>\n> <footer>Attr</footer>\n')
+    expect(carveToPlainText(src)).toBe('"q"\nAttr\n')
+    expect(carveToAnsi(src)).toBe(
+      '\x1b[36m\x1b[2m│\x1b[0m q\n\x1b[36m\x1b[2m│\x1b[0m\n\x1b[36m\x1b[2m│\x1b[0m \x1b[3m\x1b[2mAttr\x1b[0m\n',
+    )
+  })
+
+  it('leaves a quote with no attribution alone', () => {
+    // The change adds a line only where the author wrote an attribution.
+    expect(carveToMarkdown('> q\n')).toBe('> q\n')
+    expect(carveToPlainText('> q\n')).toBe('"q"\n')
+    expect(carveToAnsi('> q\n')).toBe('\x1b[36m\x1b[2m│\x1b[0m q\n')
+  })
+
+  it('keeps a block after an attributed quote separate', () => {
+    expect(carveToMarkdown('> q\n^ A\n\nafter\n')).toBe('> q\n>\n> <footer>A</footer>\n\nafter\n')
+    expect(carveToPlainText('> q\n^ A\n\nafter\n')).toBe('"q"\nA\n\nafter\n')
   })
 
   it('keeps a code-fence header in Markdown output', () => {

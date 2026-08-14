@@ -128,12 +128,23 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       {
         const out = renderBlocks(node.children, ctx)
         ctx.blockQuoteDepth--
+        if (node.attribution === undefined) return out
         // The attribution keeps the caption's styling it had while a quote was
         // a figure - italic and dim - so a terminal reader sees the same thing
         // it saw before, only inside the quote rather than under a figure.
-        return node.attribution === undefined
-          ? out
-          : `${trimEndNonNbsp(out)}\n\n${renderCaption(node.attribution, ctx)}`
+        //
+        // PART 11 §10c T2: it also carries the QUOTE BAR. The bar is already
+        // this target's marker for "inside the quote", and the attribution was
+        // the one line in the quote that did not get it - so the source read as
+        // a separate block that merely happened to follow. Nothing new is
+        // invented; the prefix the body lines already use is applied one line
+        // further.
+        const bar = `${style('│', FG_CYAN + DIM)} `
+        // Trim the caption's own block separator BEFORE prefixing: prefixing it
+        // would draw a bar on the trailing blank lines, so the quote appeared to
+        // continue past its own end.
+        const attribution = prefixLines(trimEndNonNbsp(renderCaption(node.attribution, ctx)), bar)
+        return `${trimEndNonNbsp(out)}\n${bar.trimEnd()}\n${attribution}\n\n`
       }
     case 'list':
       return renderList(node, ctx)
