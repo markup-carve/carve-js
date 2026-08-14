@@ -7,6 +7,152 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`semanticSpan()` extension.** The four semantic span names core does not
+  reserve - `samp`, `var`, `cite`, `dfn` - plus the `:name[…]` spelling for all
+  seven as a SOFT-DEPRECATED compatibility form, scheduled for removal in 0.2
+  (markup-carve/carve#1146). The span half is declarative: the extension names
+  what it claims and the core renderer renders it, so the nesting order, the
+  value mapping and the riding rule have one implementation rather than two.
+- **The `{:TAG}` language attribute** (markup-carve/carve#1114). `[x]{:fr}` is
+  exact sugar for `{lang=fr}`, on inline spans and block attribute lines alike;
+  `{:}` is the explicit "language unknown" form and desugars to `lang=""`. A
+  tag is hyphen-separated ASCII-alphanumeric subtags of at most eight
+  characters, a malformed candidate leaves the whole block literal, and the
+  sigil takes no padding, so `{: fr}` is the empty attribute plus a separate
+  boolean. `:tag` and `lang=tag` are one key, last value at the first position.
+  This shipped without a changelog entry when the feature landed; recording it
+  here rather than leaving it to the diff.
+- **`carve migrate --from` reaches the Markdown and BBCode importers**, not
+  just the HTML one it started with: `--from markdown` (with the `md` short
+  name) and `--from bbcode` now convert on the command line, where
+  `markdownToCarve` and `bbcodeToCarve` were library-only. `--mode`,
+  `--adapter`, `--report` and `--check-loss` stay HTML's alone - it is the only
+  importer that drops anything - and are ignored rather than rejected for the
+  other two. An unknown format now fails with `unknown source format <name>`
+  instead of the old `--from html is required`. Djot is deliberately not
+  accepted: this package has no Djot importer, only the `carve fix` linter, so
+  it reports as unknown rather than looking supported.
+- **`smartQuotes` locale extension.** It matches carve-php's additive
+  smart-quote configuration: 20 built-in locale sets, exact-locale then
+  language fallback (`de-AT` → `de`, `fr_FR` → `fr`), English fallback for an
+  unknown locale, and optional per-quote overrides. Apostrophes remain U+2019
+  regardless of locale. The German optional-corpus case is now shared rather
+  than PHP-only.
+- **New rule `footnote-labels-differ-only-in-whitespace`.** Two definitions
+  whose labels differ only in whitespace are legal and distinct, and are almost
+  always one definition typed twice: the difference does not survive into
+  rendered output and is invisible in most editors. Djot merges such labels,
+  which drops one definition's content and emits duplicate ids; this reports
+  the pair instead.
+
+- **Structural three-way AST merge and patches** (#970). Explicit JSON-Pointer
+  conflicts, optional conflict resolution, deterministic handling of
+  independent edits, insertions, deletions and moves, position-independent
+  patch creation and replay, and `carve merge [--json] base ours theirs` on
+  the CLI. Final trees are validated as PART 12, malformed inputs are
+  rejected, ambiguous wide-list matching is bounded, and prototype-pollution
+  paths are avoided. Authored attributes named `pos` or `srcByteLength`
+  survive; stale generated positions are discarded.
+
+- **An AST-first HTML importer and migration CLI** (#985). `htmlToCarve`
+  builds the tree instead of splicing strings, and the CLI reports what it
+  could not carry faithfully rather than dropping it silently.
+
+- **`bbcodeToCarve` importer** (#1014), the BBCode-to-Carve migration ported
+  from carve-php's `BbcodeToCarve`.
+
+- **Structural short captions are preserved in AST JSON** (#1006), with
+  accessors on the owning nodes.
+
+### Changed
+
+- **Semantic spans split by tier.** Core reserves three span attributes -
+  `abbr`, `time`, `kbd` - because the first two carry data the author would
+  otherwise lose and the third is what every comparable system ships. `samp`,
+  `var`, `cite` and `dfn` are ordinary attributes unless `semanticSpan()` is
+  registered.
+- **Core registers no `:name[…]` handler at all.** `:kbd[x]` renders
+  `<span class="ext-kbd">x</span>`; the extension re-registers the seven names
+  as the deprecated spelling. The extension SYNTAX is core and the handlers are
+  Tier-2/3, which is what the spec always said and what a hardcoded set of
+  seven tags in this renderer had been contradicting since the first release.
+- **Leftover attributes ride the outermost semantic element.** `[Tab]{#k .key kbd}`
+  is `<kbd id="k" class="key">Tab</kbd>` rather than a `<span>` wrapping a
+  `<kbd>`, and `[x]{kbd onclick="…"}` is a bare `<kbd>`. A span with no semantic
+  name is unchanged. A DERIVED attribute yields to an AUTHORED one of the same
+  name, so `[x]{abbr="gen" title="authored"}` carries `title` once.
+- **A caption on a block quote is now that quote's attribution** (PART 9 §4a,
+  markup-carve/carve#1159). `> To be` followed by `^ Hamlet` no longer parses as
+  a `figure` wrapping a `block_quote`; it is a `block_quote` carrying an
+  `attribution`, and HTML renders `<footer>Hamlet</footer>` inside the
+  `<blockquote>` rather than a `<figure>` / `<figcaption>` pair. A quote is not
+  a figure, takes no number, and no longer turns up in a walk for figures. The
+  Markdown, plain-text, ANSI and Carve writers all carry the attribution, and
+  the HTML importer reads a trailing `<footer>` in a `<blockquote>` back as the
+  attribution so the renderer's own output round-trips. A `<figure>` wrapping a
+  quote and a `<figcaption>` imports as a quote with an attribution too, since
+  a quote is no longer a figure target.
+- **`code` and `mark` leave the built-in semantic registry.** Both spellings
+  follow the spec's seven-name list - `abbr`, `time`, `samp`, `var`, `kbd`,
+  `cite`, `dfn` - so `:code[x]` and `:mark[x]` take the generic
+  `<span class="ext-NAME">` fallback and `[x]{code}` / `[x]{mark}` are ordinary
+  boolean attributes on the outer span. A name belongs in the registry only
+  where Carve has no other way to write that element, and these two have one:
+  a code span writes `<code>`, `=x=` writes `<mark>`. `code` was also the name
+  that made the duplication a defect rather than a wart - a code span is
+  verbatim while an extension body is parsed, so `` `*b*` `` and `:code[*b*]`
+  produced the same tag with different content models, and nothing reported
+  the switch (markup-carve/carve#1146). `lintCarve` follows: a value on `code`
+  or `mark` is no longer reported as ignored, because it is no longer ignored.
+- **Compact semantic span attributes are now portable core syntax.**
+  `[Ctrl]{kbd}`, `[HTML]{abbr="…"}`, and combined forms such as
+  `[CSS]{dfn abbr="…"}` render without an opt-in extension and match PHP and
+  Rust. The AST and non-HTML renderers retain ordinary span behavior.
+- **The existing nine-name semantic inline registry is now spec- and
+  corpus-pinned across all engines.** `:abbr[…]`, `:cite[…]`, `:dfn[…]`,
+  `:kbd[…]`, `:samp[…]`, `:var[…]`, `:time[…]`, `:code[…]`, and `:mark[…]`
+  retain their existing same-named HTML output; this release adds explicit
+  attribute-hardening, non-HTML and source-writer conformance coverage.
+- **The Markdown target escapes `<` only where it would open markup** (PART 11
+  §8a M1e, markup-carve/carve#1148). `<` and `>` were rewritten to `&lt;` and
+  `&gt;` unconditionally, with no clause behind it. A `<` is now escaped with a
+  BACKSLASH when the next character is an ASCII letter, `/`, `!` or `?` - the
+  four things that open raw HTML - and left alone otherwise; `>` takes nothing,
+  since it is inert mid-line and a block quote marker at line start, which M1
+  already covers. So `a < b` survives as itself instead of becoming
+  `a &lt; b`, and `a <b> c` becomes `a \<b> c`, which a CommonMark reader gives
+  back as text. An entity is not an escape: it replaces the character rather
+  than protecting it, which is why the old behavior could not be derived from
+  the section.
+- **The Markdown target leaves a bare ampersand alone.** Text was neutralized as
+  `&amp;`, `&lt;` and `&gt;`; only two thirds of that was doing anything. An
+  entity in Markdown TEXT decodes to a CHARACTER, and a character cannot open a
+  tag, so `&` carried no risk to leave bare - measured against pandoc 3.5,
+  commonmark.js and marked with raw HTML allowed. `<` and `>` keep the entity
+  form, which is what actually neutralizes embedded HTML. `Aktionen & Reaktionen`
+  now writes as itself. Text authored as `&#65;` is emitted as itself too and a
+  consumer may decode it; there is no character-reference exception.
+
+- **Bidi control characters are stripped from presentation targets** (#964),
+  and ANSI widths ignore the controls they are about to strip (#967), so
+  Trojan-Source reordering cannot survive into plain-text, ANSI or Markdown
+  output.
+
+- **Plain-text and ANSI targets preserve list structure** (#966) instead of
+  flattening items into prose.
+
+### Removed
+
+- **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).
+  `collectPortableWhitespace` was retained behind an explicit
+  `void collectPortableWhitespace` statement and called from nowhere, so the id
+  could not fire for any input or option - the blockquote marker rule became core
+  syntax and is reported by `blockquote-marker-without-space`, which is
+  documented and does fire. No behavior changes: the `portable` option was
+  already a no-op and still accepts its value, so no caller breaks.
+
 ### Fixed
 
 - **A quote attribution stays attached to its quote on every target**
@@ -20,7 +166,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a paragraph, so the rendered HTML matches the HTML target's); the terminal
   carries its quote bar onto the attribution line; plain text attaches by
   adjacency, dropping the blank line. A quote with no attribution is unchanged.
-
 - **Presentation targets no longer discard authored text**
   (markup-carve/carve#1179). `docs/graceful-degradation.md` states the floor as
   a MUST - "losing the click is fine; losing the words is not" - and three kinds
@@ -37,19 +182,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   Nothing else moves: an uncaptioned table, a fence with no header and every
   other target are byte-identical to before.
-
-### Removed
-
-- **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).
-  `collectPortableWhitespace` was retained behind an explicit
-  `void collectPortableWhitespace` statement and called from nowhere, so the id
-  could not fire for any input or option - the blockquote marker rule became core
-  syntax and is reported by `blockquote-marker-without-space`, which is
-  documented and does fire. No behavior changes: the `portable` option was
-  already a no-op and still accepts its value, so no caller breaks.
-
-### Fixed
-
 - **An authored `abbr` wins on the Markdown and ANSI targets too**
   (markup-carve/carve#1176). markup-carve/carve#1127 ruled that an explicit
   `abbr` outranks automatic expansion, and the HTML target honoured it while
@@ -60,42 +192,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The plain-text target carries it too: an authored expansion has no
   `*[TERM]: …` definition line to state it once, so dropping it lost the text
   outright, and plain already uses `(…)` for an inline footnote.
-
-### Removed
-
-- **The dead `portable-quote-marker-space` collector** (markup-carve/carve#1142).
-  `collectPortableWhitespace` was retained behind an explicit
-  `void collectPortableWhitespace` statement and called from nowhere, so the id
-  could not fire for any input or option - the blockquote marker rule became core
-  syntax and is reported by `blockquote-marker-without-space`, which is
-  documented and does fire. No behavior changes: the `portable` option was
-  already a no-op and still accepts its value, so no caller breaks.
-
-### Fixed
-
 - **An abbreviation expands inside the `:name[…]` extension form**
   (markup-carve/carve#1151). PART 9R R3 matches a term in rendered text at word
   boundaries and says nothing about the container it sits in, but an
   `inline_extension` keeps its inlines under `content` while the abbreviation
   walk recursed generically into `children` - so `:kbd[HTML]` silently dropped
   an expansion that `*HTML*`, `[HTML](/u)` and `[HTML]{.x}` all got.
-
-### Changed
-
-- **The Markdown target escapes `<` only where it would open markup** (PART 11
-  §8a M1e, markup-carve/carve#1148). `<` and `>` were rewritten to `&lt;` and
-  `&gt;` unconditionally, with no clause behind it. A `<` is now escaped with a
-  BACKSLASH when the next character is an ASCII letter, `/`, `!` or `?` - the
-  four things that open raw HTML - and left alone otherwise; `>` takes nothing,
-  since it is inert mid-line and a block quote marker at line start, which M1
-  already covers. So `a < b` survives as itself instead of becoming
-  `a &lt; b`, and `a <b> c` becomes `a \<b> c`, which a CommonMark reader gives
-  back as text. An entity is not an escape: it replaces the character rather
-  than protecting it, which is why the old behavior could not be derived from
-  the section.
-
-### Fixed
-
 - **`htmlToCarve` keeps an authored table-cell `scope` position cannot explain**
   (markup-carve/carve-js#1032). `<th scope="colgroup">` imports as
   `|{scope=colgroup}A|`; `scope="col"` in the leading header run and
@@ -105,9 +207,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rows is dropped with a diagnostic rather than kept: `header_cell` has no
   attribute slot in the grammar, so writing it produces `|{scope=…}=A|`, which
   re-parses as a data cell whose content is the literal `=A`.
-
-### Fixed
-
 - **`lintCarve` reports the semantic-attribute rules against the render the
   caller configured** (markup-carve/carve#1167). PART 9 §9 splits the reserved
   names by tier, so `samp`, `var`, `cite` and `dfn` become elements only once
@@ -120,104 +219,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and answers for that render. With no extensions it reports only `kbd`; with
   `semanticSpan()` enabled it reports `samp`, `var`, `cite` and `kbd`, and
   stays quiet for the three that map their value to `title` or `datetime`.
-
-### Added
-
-- **`semanticSpan()` extension.** The four semantic span names core does not
-  reserve - `samp`, `var`, `cite`, `dfn` - plus the `:name[…]` spelling for all
-  seven as a SOFT-DEPRECATED compatibility form, scheduled for removal in 0.2
-  (markup-carve/carve#1146). The span half is declarative: the extension names
-  what it claims and the core renderer renders it, so the nesting order, the
-  value mapping and the riding rule have one implementation rather than two.
-
-### Changed
-
-- **Semantic spans split by tier.** Core reserves three span attributes -
-  `abbr`, `time`, `kbd` - because the first two carry data the author would
-  otherwise lose and the third is what every comparable system ships. `samp`,
-  `var`, `cite` and `dfn` are ordinary attributes unless `semanticSpan()` is
-  registered.
-
-- **Core registers no `:name[…]` handler at all.** `:kbd[x]` renders
-  `<span class="ext-kbd">x</span>`; the extension re-registers the seven names
-  as the deprecated spelling. The extension SYNTAX is core and the handlers are
-  Tier-2/3, which is what the spec always said and what a hardcoded set of
-  seven tags in this renderer had been contradicting since the first release.
-
-- **Leftover attributes ride the outermost semantic element.** `[Tab]{#k .key kbd}`
-  is `<kbd id="k" class="key">Tab</kbd>` rather than a `<span>` wrapping a
-  `<kbd>`, and `[x]{kbd onclick="…"}` is a bare `<kbd>`. A span with no semantic
-  name is unchanged. A DERIVED attribute yields to an AUTHORED one of the same
-  name, so `[x]{abbr="gen" title="authored"}` carries `title` once.
-
-### Added
-
-- **The `{:TAG}` language attribute** (markup-carve/carve#1114). `[x]{:fr}` is
-  exact sugar for `{lang=fr}`, on inline spans and block attribute lines alike;
-  `{:}` is the explicit "language unknown" form and desugars to `lang=""`. A
-  tag is hyphen-separated ASCII-alphanumeric subtags of at most eight
-  characters, a malformed candidate leaves the whole block literal, and the
-  sigil takes no padding, so `{: fr}` is the empty attribute plus a separate
-  boolean. `:tag` and `lang=tag` are one key, last value at the first position.
-  This shipped without a changelog entry when the feature landed; recording it
-  here rather than leaving it to the diff.
-
-### Changed
-
-- **A caption on a block quote is now that quote's attribution** (PART 9 §4a,
-  markup-carve/carve#1159). `> To be` followed by `^ Hamlet` no longer parses as
-  a `figure` wrapping a `block_quote`; it is a `block_quote` carrying an
-  `attribution`, and HTML renders `<footer>Hamlet</footer>` inside the
-  `<blockquote>` rather than a `<figure>` / `<figcaption>` pair. A quote is not
-  a figure, takes no number, and no longer turns up in a walk for figures. The
-  Markdown, plain-text, ANSI and Carve writers all carry the attribution, and
-  the HTML importer reads a trailing `<footer>` in a `<blockquote>` back as the
-  attribution so the renderer's own output round-trips. A `<figure>` wrapping a
-  quote and a `<figcaption>` imports as a quote with an attribution too, since
-  a quote is no longer a figure target.
-
-- **`code` and `mark` leave the built-in semantic registry.** Both spellings
-  follow the spec's seven-name list - `abbr`, `time`, `samp`, `var`, `kbd`,
-  `cite`, `dfn` - so `:code[x]` and `:mark[x]` take the generic
-  `<span class="ext-NAME">` fallback and `[x]{code}` / `[x]{mark}` are ordinary
-  boolean attributes on the outer span. A name belongs in the registry only
-  where Carve has no other way to write that element, and these two have one:
-  a code span writes `<code>`, `=x=` writes `<mark>`. `code` was also the name
-  that made the duplication a defect rather than a wart - a code span is
-  verbatim while an extension body is parsed, so `` `*b*` `` and `:code[*b*]`
-  produced the same tag with different content models, and nothing reported
-  the switch (markup-carve/carve#1146). `lintCarve` follows: a value on `code`
-  or `mark` is no longer reported as ignored, because it is no longer ignored.
-
-### Added
-
-- **`carve migrate --from` reaches the Markdown and BBCode importers**, not
-  just the HTML one it started with: `--from markdown` (with the `md` short
-  name) and `--from bbcode` now convert on the command line, where
-  `markdownToCarve` and `bbcodeToCarve` were library-only. `--mode`,
-  `--adapter`, `--report` and `--check-loss` stay HTML's alone - it is the only
-  importer that drops anything - and are ignored rather than rejected for the
-  other two. An unknown format now fails with `unknown source format <name>`
-  instead of the old `--from html is required`. Djot is deliberately not
-  accepted: this package has no Djot importer, only the `carve fix` linter, so
-  it reports as unknown rather than looking supported.
-
-### Fixed
-
 - **The Markdown migration table documented the pre-dialect behavior.** After
   the CommonMark-plus-GFM default landed, `==x==`, `^x^` and `$x$` stay literal
   unless `dialect.highlight` / `superscript` / `math` opts in, but
   `docs/migration.md` still showed them converting unconditionally. Corrected,
   with the opt-in spelling and the note that the `<mark>` / `<sub>` / `<sup>`
   tags are unaffected because they mean the same thing in every dialect.
-
 - **`lintCarve` explains a near-miss footnote label.** An unresolved reference
   whose definition differs only in whitespace now names it -
   `Footnote reference [^a  b] has no matching definition; it renders as literal
   text. Definition [^a b] differs only in whitespace; footnote labels are
   matched exactly.` The rule id is unchanged, so a consumer keying on
   `unresolved-footnote` is unaffected.
-
 - **The footnote-definition lint rules see definitions inside containers.**
   They scanned raw source lines, so a definition in a block quote or list item
   was invisible to them while the parser had already collected it and the
@@ -228,45 +241,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `unused-footnote-definition` the definition's own line instead of line 1, and
   covers the new whitespace-twin rule. Alphabetic and Roman list markers are
   still not stripped, matching the parser's own helper.
-
-- **New rule `footnote-labels-differ-only-in-whitespace`.** Two definitions
-  whose labels differ only in whitespace are legal and distinct, and are almost
-  always one definition typed twice: the difference does not survive into
-  rendered output and is invisible in most editors. Djot merges such labels,
-  which drops one definition's content and emits duplicate ids; this reports
-  the pair instead.
-
-- **`smartQuotes` locale extension.** It matches carve-php's additive
-  smart-quote configuration: 20 built-in locale sets, exact-locale then
-  language fallback (`de-AT` → `de`, `fr_FR` → `fr`), English fallback for an
-  unknown locale, and optional per-quote overrides. Apostrophes remain U+2019
-  regardless of locale. The German optional-corpus case is now shared rather
-  than PHP-only.
-
-### Changed
-
-- **Compact semantic span attributes are now portable core syntax.**
-  `[Ctrl]{kbd}`, `[HTML]{abbr="…"}`, and combined forms such as
-  `[CSS]{dfn abbr="…"}` render without an opt-in extension and match PHP and
-  Rust. The AST and non-HTML renderers retain ordinary span behavior.
-
-- **The existing nine-name semantic inline registry is now spec- and
-  corpus-pinned across all engines.** `:abbr[…]`, `:cite[…]`, `:dfn[…]`,
-  `:kbd[…]`, `:samp[…]`, `:var[…]`, `:time[…]`, `:code[…]`, and `:mark[…]`
-  retain their existing same-named HTML output; this release adds explicit
-  attribute-hardening, non-HTML and source-writer conformance coverage.
-
-- **The Markdown target leaves a bare ampersand alone.** Text was neutralized as
-  `&amp;`, `&lt;` and `&gt;`; only two thirds of that was doing anything. An
-  entity in Markdown TEXT decodes to a CHARACTER, and a character cannot open a
-  tag, so `&` carried no risk to leave bare - measured against pandoc 3.5,
-  commonmark.js and marked with raw HTML allowed. `<` and `>` keep the entity
-  form, which is what actually neutralizes embedded HTML. `Aktionen & Reaktionen`
-  now writes as itself. Text authored as `&#65;` is emitted as itself too and a
-  consumer may decode it; there is no character-reference exception.
-
-### Fixed
-
 - **Footnote labels are matched exactly, without trimming their ends.** The
   parser trimmed the label on both the definition and the reference side, so
   `[^ a ]` resolved against `[^a]: …` and rendered a note. PART 9 §16 says a
@@ -275,13 +249,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   significant; now the ends are too. The two footnote lint rules key on the
   same raw label, so a padded definition is reported as unused rather than
   silently counted as the bare one.
-
 - **A footnote reference no longer crosses a source newline.** The parser used
   to publish an unresolved `footnote_ref` whose id contained that newline,
   although the one-line definition marker could never bind it. The bracketed
   source now remains ordinary text around a soft break, matching the grammar;
   rendered HTML and canonical source are unchanged.
-
 - **`applyMigrationFixes` converts Djot's braced subscript instead of doubling
   its braces.** `{~y~}` came out as `{{,y,}}`, rendering the stray literal
   braces `{<sub>y</sub>}` where Djot means `<sub>y</sub>`. The
@@ -291,7 +263,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   single edit; the bare rule is guarded off it. Unlike the superscript pair, it
   cannot simply be skipped: `{~x~}` is subscript in Djot and strikethrough in
   Carve, so it still has to be rewritten.
-
 - **A nested list is indented once on the Markdown target, not twice.**
   `renderList` padded every emitted line by the list's own depth, and the
   enclosing item padded the same lines again by the width of its marker, so each
@@ -301,6 +272,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Carve itself. Nesting now comes from the parent's continuation pad alone -
   `- a` / `  - b` / `    - c` - and a line with no content no longer takes that
   pad, which removes the whitespace-only lines PART 11 §7 forbids.
+
+- **A raw block is opaque to the link-definition prepass** (#973), and a
+  definition past the content column is visible to the looseness scan (#979).
+
+- **A fence running to the end of a container keeps its trailing blank lines**
+  (#989), and an invisible child no longer changes a list item's or a block
+  quote's framing (#991, #992).
+
+- **Adjacent sibling lists stay separate through fmt** (#981).
+
+- **The Markdown importer keeps a hard break and an indented code block**
+  (#1015), and stays on CommonMark plus GFM (#1020).
+
+- **A value-less attribute is written as a boolean** (#1025), and an attribute
+  needs a separator before it (#1029).
+
+- **`djot-migrate` reports an intraword underscore instead of losing it
+  silently** (#997).
 
 ## [0.1.3] - 2026-08-10
 
