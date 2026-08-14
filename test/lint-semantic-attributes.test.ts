@@ -223,8 +223,37 @@ describe('the off-span message quotes the value the renderer emits', () => {
 
   // Cutting BEFORE sanitizing would quote a long `javascript:` payload back as
   // a prefix that reads like an ordinary value, while the output holds nothing.
+  //
+  // THE PADDING GOES IN FRONT, and this test is worthless without it. A scheme
+  // written at the START sits inside the 120-codepoint cut, so both orders
+  // sanitize the same string and reach the same message - the check cannot
+  // fail. Pushing the scheme PAST the cut is what tells the two apart: the cut
+  // prefix is 120 spaces with no colon in it, which the sanitizer leaves alone,
+  // so cutting first would quote the padding and an ellipsis instead of the
+  // empty value the output holds. The sanitizer strips whitespace before
+  // reading the scheme (`SCHEME_PROBE_STRIP_RE`), so the padded value is still
+  // blanked whole.
+  //
+  // Built rather than pasted, and asserted byte for byte, because a fixture
+  // whose entire meaning is a run of spaces is exactly what a formatter or an
+  // editor trimming trailing whitespace destroys without a trace.
+  const PADDING = ' '.repeat(200)
+
+  it('pads with spaces that actually push the scheme past the cut', () => {
+    expect(PADDING.length).toBe(200)
+    expect([...new Set(PADDING)]).toEqual([' '])
+    expect(PADDING.charCodeAt(0)).toBe(0x20)
+    // 120 is `QUOTED_VALUE_LIMIT`; the assertion is that the padding clears it
+    // with room to spare, not that it equals any particular length.
+    expect(PADDING.length).toBeGreaterThan(120)
+  })
+
   it('sanitizes the whole value before cutting, not the cut prefix', () => {
-    expect(outsideSpanMessage(`\`c\`{kbd="javascript:${'a'.repeat(200)}"}\n`)).toBe(message(''))
+    const source = `\`c\`{kbd="${PADDING}javascript:alert(1)"}\n`
+    expect(outsideSpanMessage(source)).toBe(message(''))
+    // The output really does hold the empty value the message names, so the
+    // assertion above is not describing a render of its own invention.
+    expect(carveToHtml(source).trim()).toBe('<p><code kbd="">c</code></p>')
   })
 
   // An astral character is one codepoint and two UTF-16 units. Cutting by units
