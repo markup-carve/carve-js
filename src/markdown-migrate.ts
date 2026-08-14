@@ -27,6 +27,19 @@
  *      marker is a single char (`=x=`), and superscript has no bare form in
  *      Carve, so `^x^` maps to the braced `{^x^}`, which renders anywhere.
  *
+ * Four more flavour constructs need no rewrite at all, because Carve spells
+ * them the way the source does - so leaving them alone WAS the conversion, and
+ * a CommonMark document grew markup it never had. They are escaped unless the
+ * flag is on:
+ *
+ *        inline note   ^[x]         ( dialect.inlineFootnotes — Pandoc )
+ *        abbreviation  *[HTML]: …   ( dialect.abbreviations — Markdown Extra )
+ *        fenced div    ::: note     ( dialect.fencedDivs — Pandoc, Quarto )
+ *        attributes    [t]{.c}      ( dialect.attributes — Pandoc, kramdown )
+ *
+ * Carve constructs that no Markdown flavour spells at all are escaped
+ * unconditionally - see `escapeCarveConstructsSpelledLikeText`.
+ *
  * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
  * keeps `_x_`, which Carve renders as underline — a silent mis-render.
  *
@@ -763,8 +776,17 @@ function protectCodeSpans(s: string, repl: (span: string) => string): string {
  * raised character but keeps the text readable. Failing toward literal is the
  * recoverable direction, so each flavour extension is opt-in.
  *
- * `marked`, a GFM implementation, renders all three as plain text: `a ==b== c`,
- * `a ^b^ c` and `a $x+y$ c` all come back unchanged.
+ * `marked`, a GFM implementation, renders them all as plain text: `a ==b== c`,
+ * `a ^b^ c`, `a $x+y$ c`, `a ^[note] b`, `*[HTML]: …`, `::: note` and
+ * `a [t]{.c} b` all come back unchanged, and so does `commonmark`.
+ *
+ * A flavour construct reaches Carve two ways, and both are covered here. Some
+ * this converter REWRITES (`^x^` to `{^x^}`); others need no rewrite because
+ * Carve happens to spell them the same way, so leaving the source alone is
+ * itself the conversion (`::: note` is a paragraph in CommonMark and a div in
+ * Carve). The second kind is the quieter defect: nothing in the converter
+ * mentions the construct, yet the migrated document grows markup the source
+ * never had. Those are escaped unless the matching flag is on.
  */
 export interface MarkdownDialect {
   /** `==x==` is a highlight (Obsidian, Quarto, pandoc's `mark` extension). */
@@ -773,9 +795,141 @@ export interface MarkdownDialect {
   superscript?: boolean
   /** `$x$` is inline math (Pandoc, and GitHub's own renderer). */
   math?: boolean
+  /** `^[body]` is an inline footnote (Pandoc). */
+  inlineFootnotes?: boolean
+  /** `*[HTML]: HyperText` defines an abbreviation (PHP Markdown Extra). */
+  abbreviations?: boolean
+  /** `::: note` opens a fenced div (Pandoc, Quarto). */
+  fencedDivs?: boolean
+  /** `{.cls}` and `[text]{.cls}` carry attributes (Pandoc, kramdown). */
+  attributes?: boolean
 }
 
 const COMMONMARK_GFM: MarkdownDialect = {}
+
+/**
+ * Escape the Carve constructs that CommonMark and GFM read as ORDINARY TEXT.
+ *
+ * `escapePlainCarveInlineSyntax` covers the constructs whose spelling is a
+ * delimiter run (`{^x^}`, `=x=`, `#tag`, `%%comment%%`). It cannot cover the
+ * ones spelled as a bracket, a marker column or a sigil-plus-code-span, and
+ * every one of those reached the migrated document live:
+ *
+ *   a $`x+y` c     a math span, where the source says `$` then a code span
+ *   a !`x` c       a literal span - the `!` and the code formatting vanish
+ *   a :term[x] b   an extension call, where the source says a colon then text
+ *   ^ caption      a caption bound to the block above it
+ *
+ * None of those is a Markdown construct in ANY flavour, so they are escaped
+ * unconditionally. Four more are real syntax somewhere, so each is escaped
+ * unless its {@link MarkdownDialect} flag opts in:
+ *
+ *   a ^[note] b    an inline footnote (Pandoc)
+ *   *[HTML]: …     an abbreviation definition (PHP Markdown Extra)
+ *   ::: note       a fenced div (Pandoc, Quarto)
+ *   a [t]{.c} b    an attributed span, and `{.c}` alone on a line, a block's
+ *                  attributes (Pandoc, kramdown)
+ *
+ * `input` is one paragraph-ish run, so a rule anchored at the run start is
+ * anchored at the paragraph start.
+ */
+function escapeCarveConstructsSpelledLikeText(
+  input: string,
+  dialect: MarkdownDialect,
+  protectedSpans: readonly string[],
+): string {
+  let out = input
+
+  // `$`x`` / `$$`x`` (math) and `!`x`` (literal). The code span is already a
+  // placeholder by now, so the sigil is matched against the placeholder and the
+  // stored span is checked to BE a code span rather than some other protected
+  // construct. EVERY dollar of the run is escaped, not just the first: in
+  // `\$$`x`` the second dollar still opens inline math.
+  out = out.replace(/(?<!\\)(\$+|!)\x00P(\d+)\x00/g, (m, sigil: string, index: string) => {
+    if (!protectedSpans[Number(index)]?.startsWith('`')) return m
+    return [...sigil].map((c) => `\\${c}`).join('') + m.slice(sigil.length)
+  })
+
+  // `:name[…]` calls an extension. The opener needs no left boundary - Carve
+  // reads `foo:term[x]` as an extension call the same as ` :term[x]` - so the
+  // rule takes none either. `note:[see below]` and `at 10:30[x]` are untouched
+  // because the name must start with a letter and reach the bracket without a
+  // break, and `:name{…}` is not an extension call at all.
+  out = out.replace(/(?<!\\):(?=[A-Za-z][A-Za-z0-9-]*\[)/g, '\\:')
+
+  // `^ text` is a CAPTION, and it binds to the block above: after a quote,
+  // table or fence it became a `<footer>`/`<caption>`/`<figcaption>` and left
+  // the flow of the document. It binds only at a block start, and a run is one
+  // block, so the run start is the whole exposure.
+  out = out.replace(/^\^(?= )/, '\\^')
+
+  if (!dialect.inlineFootnotes) {
+    // `^[body]` is an inline footnote: the text moves to the foot of the
+    // document. The superscript rule below already refuses to pair across a
+    // `[`, so this is the only thing standing between the source and a note.
+    // A brace before the caret changes nothing - Carve reads the note in
+    // `a {^[body] b` too - so only an existing escape is excluded. A footnote
+    // REFERENCE is untouched: the caret in `a[^1]` is followed by the label,
+    // not by a bracket.
+    out = out.replace(/(?<!\\)\^(?=\[)/g, '\\^')
+  }
+
+  if (!dialect.abbreviations) {
+    // `*[HTML]: HyperText` defines an abbreviation: the definition line
+    // disappears from the render and every later `HTML` becomes an `<abbr>`.
+    // Carve wants the space after the colon, so `*[A]:x` is already literal.
+    out = out.replace(/^(?=\*\[[^\]\n]+\]:[ \t])/gm, '\\')
+  }
+
+  if (!dialect.fencedDivs) {
+    // `::: name` opens a div and `:::` closes it: both fence lines disappear
+    // from the render and everything between them is wrapped. Carve wants a
+    // space or a line end after the colons, so `:::note` is already literal.
+    out = out.replace(/^(?=:{3,}([ \t]|$))/gm, '\\')
+  }
+
+  return out
+}
+
+/**
+ * Escape a `{…}` attribute list that would ATTACH to the construct before it.
+ *
+ * Runs after the delimiter rewrites, not with the rest of the escaping, because
+ * what an attribute list attaches to is decided by what precedes it and half of
+ * those things do not exist yet earlier in the pass: `a *x*{.c} b` becomes
+ * `a /x/{.c} b`, and a link, image, code span or autolink is a placeholder by
+ * then. Anchoring on `]` alone caught the bare span form and left the other
+ * eight - `[t](u){.c}`, `` `x`{.c} ``, `<https://e.com/>{.c}` and the emphasis
+ * family - attaching live attributes to text CommonMark renders with the braces
+ * showing.
+ *
+ * A list attaches to a Carve inline element and to nothing else, so `a x{.c} b`
+ * and `a (foo){.c} b` are left alone: the character before the brace has to be
+ * a closer. `\x00` covers every placeholder in one lookbehind, since each ends
+ * with the sentinel byte.
+ *
+ * A braced DELIMITER pair is not an attribute list and must not be escaped as
+ * one: Carve reads `{,x,}` as a subscript wherever it stands, including alone
+ * on a line and directly after another construct, and this converter emits that
+ * form itself for `<sub>x</sub>`.
+ */
+const RE_BRACED_DELIMITER_FORM = /^([\^,=+\-~/#*_])[^\n]*\1$/
+
+function escapeAttributeListsThatAttach(input: string): string {
+  const escapeUnlessDelimiterPair = (match: string, interior: string): string => {
+    if (RE_BRACED_DELIMITER_FORM.test(interior)) return match
+    // A TAG opener at the head of the payload needs escaping too. The general
+    // tag rule skips a `#` that an unescaped `{` precedes, because inside a
+    // brace it is the braced form's business - and escaping the brace here is
+    // what takes that premise away, so `{#id}` came out as `\{` plus a live
+    // `#id` tag. Only the head position is affected; `{.a #b}` is escaped by
+    // the general rule already, and escaping it twice would print a backslash.
+    return `\\{${interior.replace(/^#(?=[A-Za-z0-9-])/, '\\#')}}`
+  }
+  return input
+    .replace(/(?<=\x00|[\]/*_~=,^}])\{([^}\n]*)\}/g, escapeUnlessDelimiterPair)
+    .replace(/^\{([^}\n]*)\}(?=[ \t]*$)/gm, escapeUnlessDelimiterPair)
+}
 
 function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM): string {
   // Protect inline code spans so their delimiters are never rewritten.
@@ -899,6 +1053,7 @@ function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM)
   // it here froze it as literal text, and the doubled form's rule below could
   // then never see it.
   line = escapePlainCarveInlineSyntax(line, { braced: '*_', bare: '*_~' })
+  line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
 
   // Converted strong / bold-italic are stashed behind placeholders so their
   // single `*` / `/` are not re-matched by the emphasis passes below.
@@ -978,6 +1133,8 @@ function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM)
   if (dialect.superscript) {
     line = line.replace(/(?<![{[])\^(?![\s[])([^^\n]+?)(?<![\s[])\^(?!\})/g, '{^$1^}')
   }
+
+  if (!dialect.attributes) line = escapeAttributeListsThatAttach(line)
 
   line = decodeHtmlEntities(line)
 

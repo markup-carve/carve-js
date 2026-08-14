@@ -362,6 +362,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `docs/migration.md` still showed them converting unconditionally. Corrected,
   with the opt-in spelling and the note that the `<mark>` / `<sub>` / `<sup>`
   tags are unaffected because they mean the same thing in every dialect.
+- **The Markdown importer keeps the constructs Carve spells the way the source
+  does.** The CommonMark-plus-GFM default covered the constructs the converter
+  REWRITES (`^x^`, `==x==`, `$x$`). It could not cover the ones that need no
+  rewrite because Carve happens to use the same spelling, so leaving the source
+  alone was itself the conversion: `a ^[note] b`, `*[HTML]: HyperText`,
+  `::: note`, an attribute list on any inline construct (`[t]{.c}`, `[t](u){.c}`,
+  `` `x`{.c} ``, `<https://e.com/>{.c}`, `*x*{.c}`) and a `{.cls}` line all
+  reached the migrated document as live markup, while `commonmark` and `marked`
+  read every one of them as ordinary text. A braced delimiter pair is exempt:
+  `{,x,}` is a subscript in Carve wherever it stands, and it is what
+  `<sub>x</sub>` converts to. Each is now escaped, and each has a flag that restores
+  the conversion - `inlineFootnotes`, `abbreviations`, `fencedDivs` and
+  `attributes`, alongside the three that were already there. Five more Carve
+  constructs have no Markdown spelling in any flavour and are escaped
+  unconditionally: `` a $`x` ``, `` a $$`x` ``, `` a !`x` `` (which dropped the
+  `!` and the code formatting outright), `a :term[x]`, and a leading `^ ` on a
+  paragraph, which bound itself to the block above as that block's caption.
+  Footnote references (`[^1]` with `[^1]: …`) are deliberately left converting:
+  GitHub renders them, so the migrated document matches what the author saw.
 - **`lintCarve` explains a near-miss footnote label.** An unresolved reference
   whose definition differs only in whitespace now names it -
   `Footnote reference [^a  b] has no matching definition; it renders as literal

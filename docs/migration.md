@@ -35,12 +35,38 @@ Carve's blank-line-around-blocks rule:
 
 The default dialect is **CommonMark plus GFM and nothing else**, so a source
 construct neither of them defines stays as written rather than becoming Carve
-markup. Three flavour extensions are opt-in through the second argument:
+markup. Seven flavour extensions are opt-in through the second argument:
 
 ```ts
 markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math: true })
 // => 'a =hi= {^up^} $`x`'
 ```
+
+| Source                | Flavour            | Flag              | Off (the default)         | On                    |
+| --------------------- | ------------------ | ----------------- | ------------------------- | --------------------- |
+| `==x==`               | Obsidian, Quarto   | `highlight`       | literal                   | `=x=`                 |
+| `^x^`                 | Pandoc             | `superscript`     | literal                   | `{^x^}`               |
+| `$x$`                 | Pandoc, GitHub     | `math`            | literal                   | `` $`x` ``            |
+| `^[body]`             | Pandoc             | `inlineFootnotes` | `\^[body]`                | an inline footnote    |
+| `*[HTML]: HyperText`  | PHP Markdown Extra | `abbreviations`   | `\*[HTML]: HyperText`     | an abbreviation       |
+| `::: note`            | Pandoc, Quarto     | `fencedDivs`      | `\::: note`               | a div                 |
+| `[t]{.c}`, `{.c}`     | Pandoc, kramdown   | `attributes`      | `[t]\{.c}`, `\{.c}`       | attributes            |
+
+`attributes` covers an attribute list wherever it would attach, not just the
+bare span: `[t](u){.c}`, `![alt](u){.c}`, `` `x`{.c} ``, `<https://e.com/>{.c}`
+and the emphasis family are all escaped with it off. A braced delimiter pair is
+not an attribute list and is never escaped as one - `{,x,}` is a subscript in
+Carve wherever it stands, and it is what `<sub>x</sub>` converts to.
+
+The last four differ from the first three in how they got here: Carve spells
+them the way the source does, so nothing had to be rewritten for a CommonMark
+document to grow markup its author never saw. Escaping is what keeps them
+literal, which is why the "off" column shows a backslash.
+
+A handful of Carve constructs have no Markdown spelling in any flavour and are
+always escaped, with no flag: `` a $`x` `` and `` a $$`x` `` (math spans),
+`` a !`x` `` (a literal span), `a :term[x]` (an extension call), and a leading
+`^ ` on a paragraph (a caption, which binds to the block above it).
 
 The HTML tags below are unaffected: `<mark>`, `<sub>` and `<sup>` mean one
 thing in every dialect, so they always convert.
