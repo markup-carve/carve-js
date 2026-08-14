@@ -38,7 +38,8 @@ import {
   NODE_POSITION_KIND,
   NODE_POSITION_TYPES,
   WIRE_FIELDS,
-  WIRE_HELPER_FIELDS,
+  WIRE_NESTED_RECORDS,
+  WIRE_RECORD_FIELDS,
   WIRE_REQUIRED,
   WIRE_VALUE_KINDS,
 } from './wire-fields.js'
@@ -620,14 +621,12 @@ function refuseSchemaViolations(node: unknown, path: string): void {
         )
       }
     }
-    // The two typeless objects that hang off a node. Every node kind can carry
-    // them, which makes them the easiest place for a wrong shape to ride in -
-    // and `pos` missing `endOffset` was accepted by two of the three engines.
-    for (const helper of ['attrs', 'pos'] as const) {
-      const value = record[helper]
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) continue
-      refuseHelperShape(value as Record<string, unknown>, helper, `${path}.${helper}`)
-    }
+    // The typeless RECORDS that hang off a node. Every node kind can carry
+    // `attrs` and `pos`, which makes them the easiest place for a wrong shape to
+    // ride in - `pos` missing `endOffset` was accepted by two of the three
+    // engines - and `table.rowGroups` was accepted with any shape at all,
+    // because those two were named here by hand rather than derived.
+    refuseNestedRecordShapes(type as string, record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -682,27 +681,65 @@ function refuseNodeAt(value: unknown, admitted: readonly string[] | undefined, p
   }
 }
 
-/** The required fields and value shapes of `attrs` or `pos`. */
-function refuseHelperShape(
-  value: Record<string, unknown>,
-  helper: 'attrs' | 'pos',
+/**
+ * §12(d) inside every closed RECORD the owner nests, and inside their own.
+ *
+ * The owner is a node type or a record name, and the recursion is the point:
+ * `table.rowGroups` holds `bodies`, a list of closed records that each carry an
+ * `attrs`. Closing only what hangs off a NODE would have left the reported hole
+ * one level further down.
+ *
+ * A position whose value is the WRONG SHAPE entirely is not settled here. The
+ * owner's own `WIRE_VALUE_KINDS` entry already gives `rowGroups` as `object` and
+ * `bodies` as `array`, and that check has run by the time this is called, so a
+ * value that got past it is either the right shape or absent.
+ */
+function refuseNestedRecordShapes(
+  owner: string,
+  record: Record<string, unknown>,
   path: string,
 ): void {
-  for (const field of WIRE_REQUIRED[helper] ?? []) {
-    if (!(field in value)) {
+  const nested = ownValue(WIRE_NESTED_RECORDS, owner)
+  if (nested === undefined) return
+  for (const [field, { record: name, array }] of Object.entries(nested)) {
+    const value = record[field]
+    const at = `${path}.${field}`
+    if (array) {
+      if (!Array.isArray(value)) continue
+      value.forEach((item, index) => refuseRecordShape(item, name, `${at}[${index}]`))
+      continue
+    }
+    refuseRecordShape(value, name, at)
+  }
+}
+
+/** The required fields and value shapes of one closed record. */
+function refuseRecordShape(value: unknown, name: string, path: string): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    // An element of an ARRAY of records reaches this with any shape at all,
+    // because the array's own kind says nothing about what is in it. A single
+    // record's shape was settled by the owner's value kind, so a non-object
+    // there is already refused and this only sees `undefined`.
+    if (value === undefined) return
+    throw new AstJsonSchemaError(`${describe(value)} sits where the schema gives a record`, path)
+  }
+  const item = value as Record<string, unknown>
+  for (const field of WIRE_REQUIRED[name] ?? []) {
+    if (!(field in item)) {
       throw new AstJsonSchemaError(`required property "${field}" is missing`, path)
     }
   }
-  const kinds = WIRE_VALUE_KINDS[helper] ?? {}
+  const kinds = WIRE_VALUE_KINDS[name] ?? {}
   for (const [field, kind] of Object.entries(kinds)) {
-    if (!(field in value) || value[field] === undefined) continue
-    if (!matchesKind(value[field], kind)) {
+    if (!(field in item) || item[field] === undefined) continue
+    if (!matchesKind(item[field], kind)) {
       throw new AstJsonSchemaError(
-        `"${field}" is ${describe(value[field])} where the schema gives ${kind}`,
+        `"${field}" is ${describe(item[field])} where the schema gives ${kind}`,
         path,
       )
     }
   }
+  refuseNestedRecordShapes(name, item, path)
 }
 
 /** A short, non-leaking description of a value, for an error message. */
@@ -739,6 +776,43 @@ const LEGACY_DEFINITION_ENTRY_FIELDS: ReadonlySet<string> = new Set([
  */
 function isLegacyDefinitionEntry(record: Record<string, unknown>): boolean {
   return record.type === undefined && Array.isArray(record['terms'])
+}
+
+/**
+ * §11 inside every closed RECORD the owner nests, and inside their own.
+ *
+ * `WIRE_FIELDS` is keyed by `type` and a record has none, so nothing else
+ * reaches one. Derived from the schema rather than named here: `attrs` and `pos`
+ * were written out literally, which described the whole wire only until the
+ * schema grew a third record (markup-carve/carve-js#1055).
+ */
+function refuseUnknownRecordFields(
+  owner: string,
+  record: Record<string, unknown>,
+  path: string,
+): void {
+  const nested = ownValue(WIRE_NESTED_RECORDS, owner)
+  if (nested === undefined) return
+  for (const [field, { record: name, array }] of Object.entries(nested)) {
+    const value = record[field]
+    const at = `${path}.${field}`
+    const items: Array<[unknown, string]> = array
+      ? Array.isArray(value)
+        ? value.map((item, index) => [item, `${at}[${index}]`])
+        : []
+      : [[value, at]]
+    for (const [item, itemPath] of items) {
+      // A value that is not a record at all is §12(d)'s to refuse, with the
+      // shape it names. Saying it here as well would be two producers of one
+      // rule, and this one has no shape to report.
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) continue
+      const allowed = new Set(WIRE_RECORD_FIELDS[name])
+      for (const key of Object.keys(item as Record<string, unknown>)) {
+        if (!allowed.has(key)) throw new AstJsonUnknownFieldError(key, itemPath, name)
+      }
+      refuseUnknownRecordFields(name, item as Record<string, unknown>, itemPath)
+    }
+  }
 }
 
 function refuseUnknownFields(node: unknown, path: string): void {
@@ -780,19 +854,10 @@ function refuseUnknownFields(node: unknown, path: string): void {
     for (const key of Object.keys(record)) {
       if (!known.includes(key)) throw new AstJsonUnknownFieldError(key, path, type as string)
     }
-    // The two objects that hang off a node without a `type` of their own. They
-    // are closed in the schema too, and every node kind can carry them, which
-    // makes them the easiest place to smuggle a key past a type-keyed check.
-    for (const helper of Object.keys(WIRE_HELPER_FIELDS)) {
-      const value = record[helper]
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) continue
-      const allowedHelper = new Set(WIRE_HELPER_FIELDS[helper])
-      for (const key of Object.keys(value as Record<string, unknown>)) {
-        if (!allowedHelper.has(key)) {
-          throw new AstJsonUnknownFieldError(key, `${path}.${helper}`, helper)
-        }
-      }
-    }
+    // The objects that hang off a node without a `type` of their own. They are
+    // closed in the schema too, and a type-keyed check cannot reach them - which
+    // is how `rowGroups: {junk: -5}` decoded and was published again.
+    refuseUnknownRecordFields(type as string, record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     refuseUnknownFields(value, path === '' ? key : `${path}.${key}`)

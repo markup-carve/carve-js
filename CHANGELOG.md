@@ -68,6 +68,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A table's `rowGroups` is validated on ingest, at every depth**
+  (markup-carve/carve-js#1055). `fromAstJson` now refuses a `rowGroups` that is
+  missing `headRows`, `bodies` or `footRows`, carries a property the schema does
+  not name, or gives a negative count - inside a body group as well as on the
+  record itself. It previously accepted any object at all there, including `{}`
+  and `{junk: -5}`, kept it in the tree and published it again from
+  `toAstJson`, which put this engine's decode behind a payload it had not
+  looked at. Since 0.1.3 refused `rowGroups` outright as a property the schema
+  did not name, nothing that decoded then stops decoding now: a well-formed
+  `rowGroups` is newly accepted and rides through unchanged. This engine still
+  neither produces nor reads the field.
 - **Semantic spans split by tier.** Core reserves three span attributes -
   `abbr`, `time`, `kbd` - because the first two carry data the author would
   otherwise lose and the third is what every comparable system ships. `samp`,
