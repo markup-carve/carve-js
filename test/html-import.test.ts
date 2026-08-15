@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, parse, semanticSpan } from '../src/index.js'
+import { HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, parse, renderHtml, semanticSpan } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -678,6 +678,65 @@ describe('disclosures and quotations on import', () => {
   it('leaves a summary-less disclosure to the default label, as the element does', () => {
     expect(carve('<details><p>b</p></details>')).toBe('::: details\nb\n:::')
     expect(carveToHtml(carve('<details><p>b</p></details>'), { extensions: [details()] })).toContain('<summary>Details</summary>')
+  })
+
+  it('keeps the disclosure when its label cannot be a title', () => {
+    /*
+     * The title slot is delimited by `"` and has no escape, so a quote in the
+     * summary ends it early and the opening line stops being an opener: the
+     * whole block - body included - re-reads as ONE paragraph. Recording that
+     * as a writer loss would leave the destroyed document in place, so this is
+     * the one place the import degrades the TREE instead: the label becomes the
+     * body's first paragraph, which is where it landed before this mapping
+     * existed anyway.
+     */
+    const html = '<details><summary>Say "hi"</summary><p>The body.</p></details>'
+    expect(carve(html)).toBe('::: details\nSay \\"hi\\"\n\nThe body.\n:::')
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toBe(
+      '<details>\n  <summary>Details</summary>\n  <p>Say "hi"</p>\n  <p>The body.</p>\n</details>',
+    )
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'element-unwrapped',
+      severity: 'warning',
+      message: expect.stringContaining('cannot spell a double quote or a line break'),
+      path: '/details[1]/summary[1]',
+    }))
+  })
+
+  it('and does the same for a label broken across lines', () => {
+    expect(carveToHtml(carve('<details><summary>a<br>b</summary><p>x</p></details>'), { extensions: [details()] })).toContain('<details>')
+  })
+
+  it('CONTROL: the titles that ARE spellable keep the slot', () => {
+    // Measured against the parser, not assumed: emphasis, an apostrophe and the
+    // typographic quotes all survive the title slot.
+    for (const label of ['a <em>b</em>', "it's", 'He said \u201chi\u201d']) {
+      const written = carve(`<details><summary>${label}</summary><p>x</p></details>`)
+      expect(written.startsWith('::: details "')).toBe(true)
+      expect(carveToHtml(written, { extensions: [details()] })).toContain('<summary>')
+    }
+  })
+
+  it('reports what the label carried, since the title slot holds no attributes', () => {
+    expect(htmlToCarve('<details><summary id="sum" class="k">T</summary><p>b</p></details>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped id, class on <summary>: a disclosure label has no attribute slot',
+        path: '/details[1]/summary[1]',
+      }),
+    ])
+  })
+
+  it('does not write the open state twice in a static render', () => {
+    // The static renderer adds `open` for print; an imported `<details open>`
+    // already carries it in the attributes, and adding it again wrote
+    // `<details open open="">`. A hand-written `{open}` reached it too.
+    const src = htmlToCarve('<details open><summary>T</summary><p>b</p></details>').value
+    expect(renderHtml(parse(src), { extensions: [details()], mode: 'static' })).toBe(
+      '<details open="">\n  <summary>T</summary>\n  <p>b</p>\n</details>',
+    )
+    expect(renderHtml(parse('::: details "T"\nb\n:::\n'), { extensions: [details()], mode: 'static' })).toContain('<details open>')
   })
 
   it('reads <q> as the marks a browser draws for it', () => {

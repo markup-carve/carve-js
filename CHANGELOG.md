@@ -15,7 +15,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the box rather than on it and nothing could get back to a disclosure element.
   It now writes `::: details "Summary"`, which the `details()` extension renders
   as a real `<details>/<summary>` and a core render marks as the admonition
-  title. `<details open>` keeps its state as the bare `{open}` attribute.
+  title. `<details open>` keeps its state as the bare `{open}` attribute. A
+  label the title slot cannot spell - it is delimited by `"` and has no escape -
+  stays the body's first paragraph and is reported, and the attributes a
+  `<summary>` carried are reported rather than dropped in silence.
 - **HTML import reads `<q>` as quotation marks.** The element unwrapped, so the
   content arrived without the marks that made it a quotation. It now writes the
   typographic pair a browser draws, alternating double and single by nesting
@@ -243,6 +246,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already a no-op and still accepts its value, so no caller breaks.
 
 ### Fixed
+
+- **A `details` block carrying `{open}` renders it once in a static render.**
+  The static renderer adds `open` so the body is expanded for print and did not
+  check whether the block already carried it, so a hand-written `::: details
+  {open}` came out as `<details open open="">`.
 
 - **`<ol start>` is read by HTML's integer rules on import.** `Number()` stood
   there and accepted what the attribute does not: `start="2.9"` opened a list at

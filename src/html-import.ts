@@ -421,7 +421,7 @@ class Importer {
    * attribute is reported, and skipping the call made these three the only
    * places in the importer where active markup was dropped in silence.
    */
-  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div'): void {
+  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div' | 'summary', noun?: string): void {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
     const names = [
@@ -429,8 +429,8 @@ class Importer {
       ...(attrs.classes ? ['class'] : []),
       ...Object.keys(attrs.keyValues ?? {}),
     ]
-    const noun = tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'
-    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${noun} has no attribute slot`, 'warning', path)
+    const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
+    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
   }
 
   /**
@@ -560,15 +560,52 @@ class Importer {
    */
   private disclosure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
     const summary = (node.childNodes ?? []).find((n) => n.tagName === 'summary')
+    const summaryPath = `${path}/summary[1]`
     const body = (node.childNodes ?? []).filter((n) => n !== summary)
-    const title = summary ? this.inlines(summary.childNodes ?? [], `${path}/summary[1]`, depth + 1) : undefined
+    if (summary) this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
+    const title = summary ? this.inlines(summary.childNodes ?? [], summaryPath, depth + 1) : undefined
+    const children = this.blocks(body, path, depth + 1)
+    if (title && this.visible(title) && !this.spellableTitle(title)) {
+      // Kept as the body's first paragraph rather than as the title. This is
+      // the one place the import degrades the TREE instead of recording a
+      // writer loss, because the written form here is not a degraded document
+      // but a destroyed one: an unspellable title makes the opening line
+      // ordinary text, and the whole disclosure - body included - re-reads as
+      // one paragraph. The label survives as a paragraph instead, which is
+      // where it landed before this mapping existed anyway.
+      this.add(
+        'element-unwrapped',
+        'Unwrapped a <summary> into the body: a disclosure title cannot spell a double quote or a line break, and writing one makes the whole block a paragraph',
+        'warning',
+        summaryPath,
+      )
+      return { type: 'admonition', kind: 'details', children: [{ type: 'paragraph', children: title }, ...children], ...(attrs ? { attrs } : {}) }
+    }
     return {
       type: 'admonition',
       kind: 'details',
       ...(title && this.visible(title) ? { title } : {}),
-      children: this.blocks(body, path, depth + 1),
+      children,
       ...(attrs ? { attrs } : {}),
     }
+  }
+
+  /**
+   * Whether the writer can put these inlines in the quoted title slot.
+   *
+   * The slot is delimited by `"` and the grammar gives it no escape, so a
+   * double quote in the text ends the title early and the opener stops being
+   * one. A line break inside it does the same thing for the same reason - the
+   * opener is a LINE. Both were measured against the parser; emphasis, an
+   * apostrophe and the typographic quotes all survive and are not on this list.
+   */
+  private spellableTitle(title: InlineNode[]): boolean {
+    return title.every((node) => {
+      if (node.type === 'hard_break') return false
+      if (node.type === 'text') return !node.value.includes('"') && !node.value.includes('\n')
+      const children = (node as { children?: InlineNode[] }).children
+      return children === undefined || this.spellableTitle(children)
+    })
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
