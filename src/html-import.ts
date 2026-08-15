@@ -282,6 +282,23 @@ class Importer {
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
       return tag === 'div' && attrs ? [{ type: 'div', children, attrs }] : children
     }
+    /*
+     * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
+     *
+     * `video`, `audio`, `iframe`, `svg`, `object`, `embed` and `canvas` reach
+     * this arm and take its two answers: unwrapped to their fallback content in
+     * `safe` and `semantic`, raw-preserved in `roundtrip`. Their `src`, and
+     * every other attribute, is reported dropped on the way past.
+     *
+     * Not an oversight and not a to-do. Carve has no embed node, and giving it
+     * one is a SPEC question - which media types, which attributes, what a
+     * non-HTML renderer does with them, what a `src` means for a document that
+     * has to be safe to render from an untrusted source - and it is decided in
+     * the spec repo rather than by whichever importer needed it first. Until
+     * then the honest import is the one that keeps the fallback content the
+     * author wrote for exactly this case, says what it dropped, and keeps the
+     * markup verbatim in the mode whose contract is Carve-produced HTML.
+     */
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
