@@ -1675,7 +1675,16 @@ function codeFenceInfo(lang: string | undefined, header: string | undefined, lab
   // backslash here would round-trip to a doubled backslash (issue 295).
   if (header !== undefined) parts.push(`"${header}"`)
   if (label !== undefined) parts.push(`[${writeFlatBracketRun(label)}]`)
-  return parts.length ? ` ${parts.join(' ')}` : ''
+  // NO SPACE between the fence run and the info string. `fenced_code_block`
+  // names the slot OPTIONAL and the no-space form CANONICAL: "The no-space form
+  // (```php) is canonical and is what the X->Carve converters emit." The reader
+  // stays lenient and accepts both, which is why a single-pass output check
+  // never caught this - `` ``` js `` re-parses to the same tree.
+  //
+  // The separators BETWEEN the parts are a different slot and stay: inside
+  // `code_fence_info` they are `space+`, mandatory, so ```js"t" is not a fence
+  // opener at all and joining without one would lose the header.
+  return parts.join(' ')
 }
 
 function safeFence(content: string, min: number): string {

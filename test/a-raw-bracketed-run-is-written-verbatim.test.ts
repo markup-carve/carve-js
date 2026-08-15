@@ -101,7 +101,7 @@ describe('a flat raw bracketed run is written verbatim too', () => {
     ['a footnote label', 'a[^n\\m]\n\n[^n\\m]: body\n', (s) => labelsIn(s, 'id')],
     ['an admonition label', '::: note [a\\b]\nx\n:::\n', (s) => labelsIn(s, 'label')],
     ['a div label', '::: [a\\b]\nx\n:::\n', (s) => labelsIn(s, 'label')],
-    ['a code-fence label', '``` js [a\\b]\nx\n```\n', (s) => labelsIn(s, 'label')],
+    ['a code-fence label', '```js [a\\b]\nx\n```\n', (s) => labelsIn(s, 'label')],
   ]
 
   for (const [name, src, value] of flat) {

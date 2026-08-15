@@ -126,7 +126,7 @@ describe('semantic elements on import', () => {
   it('leaves mark, inline code and a code block alone', () => {
     expect(carve('<p><mark>m</mark></p>')).toBe('=m=')
     expect(carve('<p><code>c</code></p>')).toBe('`c`')
-    expect(carve('<pre><code class="language-js">x()</code></pre>')).toBe('``` js\nx()\n```')
+    expect(carve('<pre><code class="language-js">x()</code></pre>')).toBe('```js\nx()\n```')
   })
 
   /*
