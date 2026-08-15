@@ -759,6 +759,24 @@ describe('disclosures and quotations on import', () => {
     expect(renderHtml(parse('::: details "T"\nb\n:::\n'), { extensions: [details()], mode: 'static' })).toContain('<details open>')
   })
 
+  it('reports a disclosure body under the path it came in on', () => {
+    // Filtering the summary out of the child list renumbers everything after
+    // it, and a summary that is not first is not `summary[1]` either.
+    expect(htmlToCarve('<details><p>a</p><summary id="s">S</summary></details>').report.diagnostics).toEqual([
+      expect.objectContaining({ path: '/details[1]/summary[2]' }),
+    ])
+    expect(htmlToCarve('<details><summary>S</summary><blockquote onclick="x()">b</blockquote></details>').report.diagnostics).toEqual([
+      expect.objectContaining({ path: '/details[1]/blockquote[2]' }),
+    ])
+  })
+
+  it('counts the summary against the node budget', () => {
+    // An empty `<summary>` is a DOM node the caller's limit is counting;
+    // reading straight past it let a document process more nodes than allowed.
+    expect(() => htmlToAst('<details><summary></summary></details>', { maxNodes: 2 })).not.toThrow()
+    expect(() => htmlToAst('<details><summary></summary></details>', { maxNodes: 1 })).toThrow(HtmlImportLimitError)
+  })
+
   it('reads <q> as the marks a browser draws for it', () => {
     // The content reached the document before this; the marks that made it a
     // quotation did not.

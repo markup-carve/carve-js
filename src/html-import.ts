@@ -559,12 +559,31 @@ class Importer {
    * which is what the element itself does in a browser.
    */
   private disclosure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
-    const summary = (node.childNodes ?? []).find((n) => n.tagName === 'summary')
-    const summaryPath = `${path}/summary[1]`
-    const body = (node.childNodes ?? []).filter((n) => n !== summary)
-    if (summary) this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
-    const title = summary ? this.inlines(summary.childNodes ?? [], summaryPath, depth + 1) : undefined
-    const children = this.blocks(body, path, depth + 1)
+    const children0 = node.childNodes ?? []
+    const summaryIndex = children0.findIndex((n) => n.tagName === 'summary')
+    const summary = summaryIndex < 0 ? undefined : children0[summaryIndex]
+    // The paths stay the ones the elements arrived under. Filtering the summary
+    // out renumbers everything after it, so a `<script>` at `/details[1]/
+    // script[2]` would be reported at `script[1]` - and a summary that is not
+    // first is not `summary[1]` either.
+    const summaryPath = summary ? this.childPath(path, summary, summaryIndex) : ''
+    const body: P5Node[] = []
+    const bodyPaths: string[] = []
+    children0.forEach((child, index) => {
+      if (child === summary) return
+      body.push(child)
+      bodyPaths.push(this.childPath(path, child, index))
+    })
+    let title: InlineNode[] | undefined
+    if (summary) {
+      // The element itself, not only its children: an empty `<summary>` is a
+      // DOM node the caller's `maxNodes` is counting, and reading straight past
+      // it let a document process more nodes than the limit allows.
+      this.enter(depth + 1)
+      this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
+      title = this.inlines(summary.childNodes ?? [], summaryPath, depth + 2)
+    }
+    const children = this.blocks(body, path, depth + 1, bodyPaths)
     if (title && this.visible(title) && !this.spellableTitle(title)) {
       // Kept as the body's first paragraph rather than as the title. This is
       // the one place the import degrades the TREE instead of recording a
