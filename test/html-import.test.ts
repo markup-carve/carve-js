@@ -251,3 +251,88 @@ describe('table caption on import', () => {
     expect(carveToHtml(carve(html))).not.toContain('<p>^')
   })
 })
+
+/*
+ * `<dl>` had no branch at all, and `dt`/`dd` are not block tags, so a
+ * definition list did not degrade - it was destroyed. Every term and every
+ * definition landed in one inline buffer and came out as a single paragraph
+ * with the texts run together:
+ *
+ * ```
+ * <dl><dt>Term</dt><dd>Definition</dd></dl>
+ * ```
+ *
+ * imported as `TermDefinition`, and the only diagnostic said an unsupported
+ * element had been unwrapped.
+ *
+ * The assertions are on the emitted source and on the HTML it re-reads to,
+ * because a mapping that builds the right nodes and writes them unspellably
+ * would pass an AST-shape check and still lose the list.
+ */
+describe('definition lists on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('reads terms and definitions as a definition list, not as one paragraph', () => {
+    const html = '<dl><dt>Carve</dt><dd>A markup language.</dd></dl>'
+    expect(carve(html)).toBe(':: Carve\n:  A markup language.')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Carve</dt>\n  <dd>A markup language.</dd>\n</dl>')
+  })
+
+  it('groups a run of terms with the definitions that follow it', () => {
+    const html = '<dl><dt>HTML</dt><dt>HyperText Markup Language</dt><dd>The web page format.</dd><dd>Also a Carve import source.</dd><dt>CSS</dt><dd>Styling.</dd></dl>'
+    expect(htmlToAst(html).value.children).toMatchObject([
+      {
+        type: 'definition_list',
+        items: [
+          { terms: [[{ value: 'HTML' }], [{ value: 'HyperText Markup Language' }]], definitions: [[{ type: 'paragraph' }], [{ type: 'paragraph' }]] },
+          { terms: [[{ value: 'CSS' }]], definitions: [[{ type: 'paragraph' }]] },
+        ],
+      },
+    ])
+    expect(carve(html)).toBe(':: HTML\n:: HyperText Markup Language\n:  The web page format.\n:  Also a Carve import source.\n:: CSS\n:  Styling.')
+  })
+
+  it('walks through the HTML5 <div> wrapper around a name-value group', () => {
+    const html = '<dl><div class="row"><dt>Carve</dt><dd>A markup language.</dd></div><div class="row"><dt>Djot</dt><dd>Its closest relative.</dd></div></dl>'
+    expect(carve(html)).toBe(':: Carve\n:  A markup language.\n:: Djot\n:  Its closest relative.')
+    expect(codes(html)).toEqual([])
+  })
+
+  it('keeps block content in a definition', () => {
+    const html = '<dl><dt>Modes</dt><dd><p>Three of them:</p><ul><li>safe</li><li>semantic</li></ul></dd></dl>'
+    expect(carve(html)).toBe(':: Modes\n:  Three of them:\n\n   - safe\n\n   - semantic')
+    expect(carveToHtml(carve(html))).toContain('<ul>')
+  })
+
+  it('carries the list attributes onto the node', () => {
+    expect(carve('<dl id="glossary" class="compact"><dt>T</dt><dd>D</dd></dl>')).toBe('{#glossary .compact}\n:: T\n:  D')
+  })
+
+  it('reports a definition with no term only when a writer has to spell it', () => {
+    const html = '<dl><dd>A description of nothing.</dd></dl>'
+    expect(htmlToAst(html).value.children).toMatchObject([
+      { type: 'definition_list', items: [{ terms: [], definitions: [[{ type: 'paragraph' }]] }] },
+    ])
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('<dd> with no <dt>'),
+      path: '/dl[1]/dd[1]',
+    }))
+    // The diagnostic states what actually happens to the written source.
+    expect(carveToHtml(carve(html))).toBe('<p>:  A description of nothing.</p>')
+  })
+
+  it('keeps content the model has no slot for, after the list, and says so', () => {
+    const html = '<dl><dt>T</dt><dd>D</dd><p>An editor stray.</p></dl>'
+    expect(carve(html)).toBe(':: T\n:  D\n\nAn editor stray.')
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'element-unwrapped',
+      severity: 'warning',
+      message: expect.stringContaining('Moved <p> content out of the <dl>'),
+    }))
+  })
+})
