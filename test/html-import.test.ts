@@ -52,6 +52,44 @@ describe('HTML import', () => {
   })
 })
 
+describe('unspellable HTML import structures', () => {
+  const tableFigure = '<figure><table><tr><td>1</td></tr></table><figcaption>Cap</figcaption></figure>'
+
+  it('reports a table figure only when serializing the imported AST', () => {
+    expect(htmlToAst(tableFigure).report.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: 'structure-unspellable' }),
+    )
+    expect(htmlToCarve(tableFigure).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('figure wrapping a table'),
+      path: '/figure[1]',
+    }))
+  })
+
+  it('does not report a table whose caption is already inside it', () => {
+    const result = htmlToCarve('<table><caption>Cap</caption><tr><td>1</td></tr></table>')
+    expect(result.report.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('structure-unspellable')
+  })
+
+  it('does not report an image figure, whose wrapper has a Carve spelling', () => {
+    const result = htmlToCarve('<figure><img src="x.png" alt="X"><figcaption>Cap</figcaption></figure>')
+    expect(result.report.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('structure-unspellable')
+  })
+
+  it('finds a table figure nested in a div', () => {
+    const result = htmlToCarve(`<div class="outer">${tableFigure}</div>`)
+    expect(result.report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      path: '/div[1]/figure[1]',
+    }))
+  })
+
+  it('applies the existing diagnostics limit to serialization losses', () => {
+    expect(() => htmlToCarve(tableFigure, { maxDiagnostics: 0 })).toThrow(HtmlImportLimitError)
+  })
+})
+
 /*
  * The seven elements PART 9 §9 and §10 spell as a span attribute (carve#1140).
  * Each one used to unwrap to its text, so `<kbd>Tab</kbd>` came back as `Tab`

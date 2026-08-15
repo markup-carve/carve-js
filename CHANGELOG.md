@@ -68,6 +68,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **HTML-to-Carve conversion reports the figure wrapper it cannot spell**
+  (markup-carve/carve#1211, PART 12 §16). A `<figure>` wrapping a table imports
+  as a figure whose target is the table, which Carve source has no spelling for,
+  so the writer emits the table and a `^ ` caption line. That re-reads as the
+  table's own caption, moving the text from a `<figcaption>` beside the table to
+  a `<caption>` inside it. `htmlToCarve` now reports that as a
+  `structure-unspellable` warning and `carve migrate --from html --check-loss`
+  exits 1 for such input. `htmlToAst` is unchanged and reports nothing: a
+  consumer that keeps the AST keeps the wrapper.
 - **HTML import spells the seven semantic elements instead of unwrapping them**
   (markup-carve/carve#1140). `<kbd>Tab</kbd>` imports as `[Tab]{kbd}`,
   `<abbr title="X">c</abbr>` as `[c]{abbr="X"}` and `<time datetime="X">c</time>`

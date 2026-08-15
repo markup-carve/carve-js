@@ -67,6 +67,18 @@ describe('carve migrate — HTML import', () => {
     expect(t.out).toBe('Hello\n')
     expect(JSON.parse(t.files['report.json']!)).toMatchObject({ mode: 'safe', diagnostics: [{ code: 'attribute-dropped' }] })
   })
+
+  it('fails the loss check and reports an unspellable table figure wrapper', async () => {
+    const html = '<figure><table><tr><td>1</td></tr></table><figcaption>Cap</figcaption></figure>'
+    const t = makeIO({ stdin: html })
+    const code = await run(['migrate', '--from', 'html', '--report', 'report.json', '--check-loss'], t.io)
+    const report = JSON.parse(t.files['report.json']!)
+    expect(code).toBe(1)
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      message: expect.stringContaining('figure wrapping a table'),
+    }))
+  })
 })
 
 describe('carve migrate — the other importers', () => {

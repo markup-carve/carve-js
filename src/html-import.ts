@@ -26,6 +26,7 @@ export type HtmlImportDiagnosticCode =
   | 'attribute-dropped'
   | 'style-unmapped'
   | 'table-degraded'
+  | 'structure-unspellable'
   | 'raw-preserved'
   | 'diagnostics-truncated'
 
@@ -106,6 +107,8 @@ class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
   readonly diagnostics: HtmlImportDiagnostic[] = []
+  /** Where the import built a structure only a serializer loses (§16). */
+  private readonly unspellable: string[] = []
   private nodes = 0
   private readonly maxDepth: number
   private readonly maxNodes: number
@@ -381,6 +384,17 @@ class Importer {
         )
         return [target, ...targets.slice(1)]
       }
+      /*
+       * PART 12 §16: the wrapper around a TABLE is the one figure this import
+       * produces that Carve source cannot spell, so it survives in the AST and
+       * not in the written source. Recorded rather than reported here -
+       * `htmlToAst` loses nothing, and `htmlToCarve` is where the loss happens.
+       *
+       * Reached only when a figure is actually built: the branch above returns
+       * the table itself when it already carries a caption, and no wrapper
+       * exists to lose in that case.
+       */
+      if (target.type === 'table') this.unspellable.push(path)
       return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], `${path}/figcaption[1]`, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)
@@ -480,6 +494,27 @@ class Importer {
   private mergeClass(attrs: Attrs | undefined, className: string): Attrs {
     return { ...attrs, classes: [...(attrs?.classes ?? []), className] }
   }
+
+  /**
+   * The losses a WRITER takes, reported by whoever writes (PART 12 §16).
+   *
+   * A canonical Carve writer has no spelling for a figure wrapping a table, so
+   * it emits the table and a `^ ` caption line, and that re-reads as the
+   * table's own caption - `<caption>` inside the table rather than a
+   * `<figcaption>` beside it. The rendering changes, so the severity is
+   * `warning`, and the limit is the importer's own: these diagnostics are not
+   * a second budget.
+   */
+  reportSerializationLosses(): void {
+    for (const path of this.unspellable) {
+      this.add(
+        'structure-unspellable',
+        'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
+        'warning',
+        path,
+      )
+    }
+  }
 }
 
 export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlImportResult<Document> {
@@ -489,6 +524,11 @@ export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlIm
 }
 
 export function htmlToCarve(html: string, options: HtmlImportOptions = {}): HtmlImportResult<string> {
-  const result = htmlToAst(html, options)
-  return { value: renderCarve(result.value), report: result.report }
+  const importer = new Importer(options)
+  const value = importer.import(html)
+  // The loss belongs to serialization, not to the import: a consumer that keeps
+  // the AST `htmlToAst` returns keeps the figure wrapper and loses nothing. So
+  // the importer records where it built one and only this function reports it.
+  importer.reportSerializationLosses()
+  return { value: renderCarve(value), report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
 }
