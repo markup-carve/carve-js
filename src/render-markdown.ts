@@ -127,6 +127,48 @@ function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
   }
 }
 
+/**
+ * A block MARKER joined to the content it introduces, with the space that
+ * separates the two dropped when there IS no content.
+ *
+ * Every marker this target emits carries that separator - `> `, `- `, `1. `,
+ * `- [ ] `, `: `, `## `, `[^a]: `, `*[X]: `. Where the content is empty the
+ * separator is all that is left on the line, and a line ending in whitespace is
+ * not stable: editors that strip it on save, `git apply --whitespace=fix` and CI
+ * whitespace checks all rewrite it, so the renderer produces output that
+ * ordinary tooling changes behind it. That is the argument PART 11 section 9
+ * makes ON THIS TARGET when it forbids the two-trailing-space hard break, and
+ * the one section 7 makes for the canonical writer; `renderList`'s continuation
+ * pad already applied it here, and this extends it to the marker lines.
+ *
+ * The separator carries no meaning to a reader either: `> ` and `>`, `- ` and
+ * `-`, `## ` and `##`, `1. ` and `1.` parse to the same document in commonmark
+ * 0.31.2, and PART 2's NO TRAILING WHITESPACE clause drops the run on every
+ * content line - so the dropped byte is one Carve's own parser would not read
+ * back.
+ *
+ * THE TEST IS ON THE CONTENT, not on the finished line, and that is what keeps
+ * VERBATIM payload intact. A fenced code block's body is the block's payload,
+ * not a content line (PART 2, WHERE IT DOES NOT REACH), so a body line of
+ * `abc<SP>` - or one that is a single space - keeps its bytes even inside a
+ * quote, where it arrives here as non-empty content behind a `> `. Corpus case
+ * 268-trailing-whitespace-on-a-content-line-is-dropped-9 pins that. A sweep over
+ * the emitted LINE, or over the finished document, would corrupt it; the
+ * canonical writer runs such a sweep and needs a verbatim-sentinel scheme to do
+ * it safely, which this target has no need of.
+ */
+function withMarker(marker: string, content: string): string {
+  if (content !== '') return `${marker}${content}`
+
+  // A SPACE, not PART 2's two-character `whitespace` terminal. Every marker
+  // above separates itself from its content with a space and none of them uses
+  // a tab, so a `[ \t]` class here would carry a branch no input can reach -
+  // and an unreachable branch reads as a rule that is wider than it is. The
+  // sibling helper in the canonical writer does take the full terminal, because
+  // that one sweeps AUTHOR lines, where a tab is reachable.
+  return marker.replace(/ +$/, '')
+}
+
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'heading': {
@@ -136,7 +178,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r]*\n[ \t\r]*/g, ' '))
       const id = node.attrs?.id
       const suffix = id && ctx.referencedHeadingIds.has(id) ? ` {#${id}}` : ''
-      return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
+      return `${withMarker(`${'#'.repeat(node.level)} `, `${text}${suffix}`)}\n\n`
     }
     case 'paragraph':
       return `${protectParagraphListMarkers(renderInlines(node.children, ctx))}\n\n`
@@ -155,7 +197,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
     }
     case 'block_quote': {
       const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
-      return `${lines.map((line) => `> ${line}`).join('\n')}\n\n`
+      return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
     case 'list':
       return renderList(node, ctx)
@@ -207,7 +249,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // target's contract is that embedded HTML cannot become live markup
       // downstream. Writing the occurrence escaped and the definition raw made
       // one output disagree with itself (markup-carve/carve-js#894).
-      return `*[${escapeMdHtml(stripControls(node.abbr))}]: ${escapeMdHtml(stripControls(node.expansion))}\n\n`
+      return `${withMarker(`*[${escapeMdHtml(stripControls(node.abbr))}]: `, escapeMdHtml(stripControls(node.expansion)))}\n\n`
     case 'comment':
       return ''
     case 'link_reference_definition':
@@ -260,7 +302,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     // own content-column model is lenient enough to read it back as a list,
     // which is why this was invisible from inside the engine and only pandoc
     // showed it (carve#1069, carve-php#1142).
-    out += `${prefix}${lines.shift() ?? ''}\n`
+    out += `${withMarker(prefix, lines.shift() ?? '')}\n`
     const continuation = ' '.repeat(prefix.length)
     // A line with no content takes no pad: PART 11 section 7 emits such a line
     // empty, and trailing whitespace is what editors and `git apply
@@ -279,7 +321,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   let out = ''
   for (const item of items) {
     for (const term of item.terms) out += `**${renderInlines(term, ctx)}**\n`
-    for (const def of item.definitions) out += `: ${trimNonNbsp(renderBlocks(def, ctx))}\n`
+    for (const def of item.definitions) out += `${withMarker(': ', trimNonNbsp(renderBlocks(def, ctx)))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -382,7 +424,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    out += `[^${escapeMdHtml(stripControls(label))}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
+    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx))))}\n`
   }
   return out
 }
