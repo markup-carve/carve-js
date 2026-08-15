@@ -594,18 +594,20 @@ class Importer {
    * Whether the writer can put these inlines in the quoted title slot.
    *
    * The slot is delimited by `"` and the grammar gives it no escape, so a
-   * double quote in the text ends the title early and the opener stops being
-   * one. A line break inside it does the same thing for the same reason - the
-   * opener is a LINE. Both were measured against the parser; emphasis, an
-   * apostrophe and the typographic quotes all survive and are not on this list.
+   * double quote ends the title early and the opener stops being one. A line
+   * break does the same thing for the same reason: the opener is a LINE.
+   *
+   * The question is asked of the WRITTEN form, not of the text nodes. A quote
+   * reaches the title through more than its own text - an attribute VALUE is
+   * written quoted, so `<span title='a"b'>hi</span>` is spelled
+   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
+   * spellings that can produce one is the kind of second copy of the grammar
+   * that goes stale the next time a spelling is added. Rendering the inlines
+   * asks the writer itself.
    */
   private spellableTitle(title: InlineNode[]): boolean {
-    return title.every((node) => {
-      if (node.type === 'hard_break') return false
-      if (node.type === 'text') return !node.value.includes('"') && !node.value.includes('\n')
-      const children = (node as { children?: InlineNode[] }).children
-      return children === undefined || this.spellableTitle(children)
-    })
+    const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: title }] })
+    return !written.includes('"') && !written.trimEnd().includes('\n')
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {

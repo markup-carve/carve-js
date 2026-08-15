@@ -707,6 +707,26 @@ describe('disclosures and quotations on import', () => {
     expect(carveToHtml(carve('<details><summary>a<br>b</summary><p>x</p></details>'), { extensions: [details()] })).toContain('<details>')
   })
 
+  it('asks the writer, so a quote inside an attribute value counts too', () => {
+    // A quote reaches the title through more than its own text: an attribute
+    // VALUE is written quoted, and a code span carries its content verbatim.
+    // Enumerating the spellings that can produce one would be a second copy of
+    // the grammar, so the check renders the inlines and looks at the result.
+    for (const label of ['<span title="a&quot;b">hi</span>', '<code>a"b</code>']) {
+      const html = `<details><summary>${label}</summary><p>body</p></details>`
+      expect(htmlToCarve(html).value.startsWith('::: details "')).toBe(false)
+      expect(carveToHtml(htmlToCarve(html).value, { extensions: [details()] })).toContain('<details>')
+    }
+  })
+
+  it('CONTROL: a quote in a LINK DESTINATION does not cost the title', () => {
+    // Percent-encoded in the href, so the written form carries no quote and the
+    // title slot is still available. A rule that looked for the character in
+    // the input rather than in the output would give this one up.
+    expect(htmlToCarve('<details><summary><a href="/x?q=%22">link</a></summary><p>b</p></details>').value)
+      .toBe('::: details "[link](/x?q=%22)"\nb\n:::\n')
+  })
+
   it('CONTROL: the titles that ARE spellable keep the slot', () => {
     // Measured against the parser, not assumed: emphasis, an apostrophe and the
     // typographic quotes all survive the title slot.
