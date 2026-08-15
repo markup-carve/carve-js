@@ -1045,7 +1045,14 @@ describe('the import decisions that are policy', () => {
         message: 'Dropped id, class, data-x with the unwrapped <video>: there is no element left to carry them',
       }),
     ])
-    for (const html of ['<section id="s">x</section>', '<form id="f">x</form>', '<p><ruby id="r">x</ruby></p>']) {
+    for (const html of [
+      '<section id="s">x</section>',
+      '<form id="f">x</form>',
+      '<p><ruby id="r">x</ruby></p>',
+      // The figure that has no representable target is a fourth unwrap arm,
+      // and it kept the same silence.
+      '<figure id="f"><ul><li>a</li></ul><figcaption>c</figcaption></figure>',
+    ]) {
       expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
     }
   })
