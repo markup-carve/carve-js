@@ -895,6 +895,33 @@ describe('table spans on import', () => {
     expect(htmlToCarve(html).report.diagnostics).toEqual([])
   })
 
+  it('stops a rowspan at its row group, whatever the number says', () => {
+    // HTML clips a rowspan at the group boundary, so a `rowspan="5"` on the
+    // last body row does not reach into the `<tfoot>` below it. Only the `0`
+    // form was resolved against the group at first, and a positive one walked
+    // straight through.
+    const html = '<table><tbody><tr><td rowspan="5">b</td><td>x</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
+    expect(htmlToCarve(html).value).toBe('| b | x |\n| f |\n| g |\n')
+  })
+
+  it('reads a tall table in time proportional to its rows', () => {
+    // Asking each cell for its group's size meant scanning the whole table per
+    // cell. The rows here are the same shape, so the ratio is the measurement:
+    // quadratic work doubles it, linear work does not.
+    const table = (rows: number) => `<table>${Array.from({ length: rows }, (_, i) => `<tr><td>${i}</td></tr>`).join('')}</table>`
+    // Warm the parser so the first-call cost is not what is being compared.
+    htmlToCarve(table(200))
+    const time = (rows: number) => {
+      const started = performance.now()
+      htmlToCarve(table(rows))
+      return performance.now() - started
+    }
+    const small = time(1500)
+    const large = time(3000)
+
+    expect(large).toBeLessThan(small * 4)
+  })
+
   it('reports the empty cell a short row needs, and only when it invents one', () => {
     // A row shorter than the spans reaching into it needs the index kept. The
     // continuation itself costs nothing - the span already owns that cell - so

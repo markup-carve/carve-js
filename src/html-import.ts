@@ -762,19 +762,33 @@ class Importer {
       leadingHeaderRows += 1
     }
 
+    // How many rows are left in each row's own group, INCLUDING it. Computed
+    // once: asking per cell meant scanning the whole table for each one, which
+    // is quadratic in the row count and showed as 3000 rows in 299 ms against
+    // 6000 in 852 ms.
+    const remainingInGroup = new Map<P5Node, number>()
+    const groupTotals = new Map<P5Node | undefined, number>()
+    for (const row of tr) groupTotals.set(group.get(row), (groupTotals.get(group.get(row)) ?? 0) + 1)
+    const groupSeen = new Map<P5Node | undefined, number>()
+    for (const row of tr) {
+      const section = group.get(row)
+      const index = groupSeen.get(section) ?? 0
+      groupSeen.set(section, index + 1)
+      remainingInGroup.set(row, (groupTotals.get(section) ?? 1) - index)
+    }
+
     const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
       (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c) => {
         const cellPath = `${path}/tr[${r + 1}]/${cell.tagName}[${c + 1}]`
         const colspan = this.spanCount(cell, 'colspan', 1000, 1)
-        // `rowspan="0"` is HTML's "to the end of this row group", so it is
-        // resolved against the group the row is actually in rather than
-        // against the whole table - a `<tfoot>` below the body would otherwise
-        // be swallowed by a cell that HTML stops at the body's last row.
+        // A rowspan stops at its ROW GROUP in HTML, and `rowspan="0"` means
+        // exactly "to the end of it". Both are resolved against the group the
+        // row is actually in, so a `<tfoot>` below the body is not swallowed by
+        // a cell the layout stops at the body's last row - not only the `0`
+        // form, which was the half this handled first.
         const declaredRowspan = this.spanCount(cell, 'rowspan', 65534, 0)
-        const groupRows = tr.filter((other) => group.get(other) === group.get(row))
-        const rowspan = declaredRowspan === 0
-          ? Math.max(1, groupRows.length - groupRows.indexOf(row))
-          : declaredRowspan
+        const left = remainingInGroup.get(row) ?? 1
+        const rowspan = declaredRowspan === 0 ? left : Math.min(declaredRowspan, left)
         const cellAttrs = this.attrs(cell, cellPath)
         // A `scope` the renderer would regenerate from position is the
         // generator's own output, not something the author typed: importing it
