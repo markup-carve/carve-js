@@ -206,18 +206,20 @@ describe('table cell scope on import', () => {
 
   it('keeps a scope position cannot explain, and it round-trips', () => {
     const source = carve('<table><thead><tr><th scope="colgroup">A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>')
-    expect(source).toBe('|{scope=colgroup}A|\n|---|\n| 1 |')
+    expect(source).toBe('|={scope=colgroup}A|\n| 1 |')
     expect(carveToHtml(source)).toContain('<th scope="colgroup">A</th>')
   })
 
-  it('reports the one it cannot spell instead of trading the header for it', () => {
-    // `header_cell = '=', …` has no attribute slot - only `data_cell` does - so
-    // a header cell BELOW the header rows cannot carry one. Writing it anyway
-    // produces `|{scope=rowgroup}=A|`, which re-parses as a data cell whose
-    // content is the literal `=A`.
+  it('keeps it below the header rows too, where it used to be dropped', () => {
+    // `header_cell` has an attribute slot now, after its markers (§5 T10), so
+    // this is a real spelling. It used to be dropped and reported: the only
+    // shape available was `|{scope=rowgroup}=A|`, which re-parses as a data
+    // cell whose content is the literal `=A`, so keeping the value there traded
+    // a header cell for an attribute.
     const html = '<table><tbody><tr><th scope="rowgroup">A</th><td>1</td></tr></tbody></table>'
-    expect(carve(html)).toBe('|=A| 1 |')
-    expect(codes(html)).toContain('attribute-dropped')
+    expect(carve(html)).toBe('|={scope=rowgroup}A| 1 |')
+    expect(codes(html)).not.toContain('attribute-dropped')
+    expect(carveToHtml(carve(html))).toContain('<th scope="rowgroup">A</th>')
   })
 })
 

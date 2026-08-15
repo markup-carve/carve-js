@@ -157,6 +157,39 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **BREAKING: a table cell's attribute block binds after its kind and alignment
+  markers** (markup-carve/carve#1226, spec §5 T10). `header_cell` had no
+  attributes slot, so an attributed header cell had no spelling at all: the only
+  shape available was `|{#x}=R|`, which the grammar reads as a data cell whose
+  content starts with `=`. Both productions take one order now - the `=`, then
+  the alignment marker, then the block - so `|={.total} Total |`, `|=~{#score}
+  Score |` and `|>{.num} 9 |` are cells the parser reads and the writer emits.
+  That also reaches `scope="colgroup"` and `scope="rowgroup"`, which §5 T9
+  documented as spellings and which were not expressible.
+
+  The retired order is what breaks: `|{#x}< content |` was documented as
+  attributes then a left-alignment marker. The `<` is no longer in a marker
+  position, so it is literal content and the cell is not aligned. Nothing
+  changes in practice for a document this engine already rendered - it read that
+  source as attributes plus a literal `<` before this change too - but the
+  documented meaning did move, so the new lint rule
+  `table-cell-attribute-before-marker` reports the shape and names both
+  spellings. It is a REPORT, not a rewrite: rewriting it inside `fmt` would add
+  `text-align: left` and remove a character from the content, breaking
+  `toHtml(fmt(x)) == toHtml(x)` on a document that is currently correct.
+
+  Row attributes are untouched. They still glue to the row's closing `|`.
+- **The canonical writer spells an attributed header cell natively.** It used to
+  promote such a row with a GFM delimiter row instead, because the native form
+  did not exist; it now writes `|={.x} a |` and keeps the delimiter row only for
+  the one shape that still has no native spelling, a span marker promoted to a
+  header cell.
+- **HTML import keeps a `scope` below the header rows.** A `<th scope="rowgroup">`
+  in a body row had its scope dropped and reported, because writing it produced
+  `|{scope=rowgroup}=A|` - a data cell whose content is the literal `=A`, which
+  would have traded the header cell for an attribute. The cell has an attributes
+  slot now, so the value is kept and the cell re-reads as the header cell it was.
+  A scope the renderer derives from position is still dropped.
 - **HTML-to-Carve conversion reports the figure wrapper it cannot spell**
   (markup-carve/carve#1211, PART 12 §16). A `<figure>` wrapping a table imports
   as a figure whose target is the table, which Carve source has no spelling for,

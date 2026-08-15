@@ -27,8 +27,13 @@
  */
 import {
   parse,
+  isTableRow,
+  readCellAttributeBlock,
+  rowAttrsFromLine,
+  splitTableRowSpans,
   stripContainerPrefixesKeepIndent,
   RE_AFTER_TERM,
+  TABLE_ALIGNMENT_MARKERS,
   type UnclosedContainer,
 } from './parse.js'
 import {
@@ -628,8 +633,15 @@ export function lintCarve(
   // per line replaces a per-line scan over a growing range list (was O(n^2),
   // and was computed twice).
   const verbatimLines = collectVerbatimLines(doc)
+  // The source-line rules skip a COMMENT body as well as a verbatim one. A
+  // comment is discarded text - it reaches no output at all - so a report that
+  // some construct inside it silently degraded is describing something that was
+  // never going to render. Raised by codex review against the new table-cell
+  // rule; `fence-delimiter-indentation` beside it had the same false positive.
+  const unrendered = new Set(verbatimLines)
+  for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
-  collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
+  collectSilentFailures(source, doc, unrendered, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never
@@ -655,6 +667,7 @@ export function lintCarve(
 const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
 /** A fenced block whose info string is the legacy `raw FORMAT` form. */
 const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
+
 /** A line that looks like the old tight blockquote spelling. */
 const BLOCKQUOTE_WITHOUT_SPACE = /^(>)([^ ].*)$/
 /** A line that opens like a block construct (`:::`, `{#`, `{.`). */
@@ -1080,6 +1093,60 @@ function collectSilentFailures(
     )
   }
 
+  // 6. A cell attribute block written BEFORE an alignment marker, which is the
+  //    order §5 T10 retired. `|{#x}< content |` used to be read as attributes
+  //    plus a left-alignment marker; the marker run now comes first, so the `<`
+  //    is literal content and the cell is not aligned.
+  //
+  //    REPORTED, NOT REWRITTEN. `fmt` must not turn `|{#x}< content |` into
+  //    `|<{#x} content |` in its default path: that ADDS `text-align: left` and
+  //    REMOVES a literal `<` from the content, so it would break
+  //    `toHtml(fmt(x)) == toHtml(x)` on a document that is currently correct.
+  //    Every engine measured renders this source as attributes plus a literal
+  //    `<` today, which is exactly why the author has to be the one to choose.
+  //    The message therefore names both spellings.
+  //
+  //    SPLIT WITH THE PARSER'S OWN SPLITTER, not with a pipe regex. A pipe
+  //    inside a code span or behind a backslash does not open a cell, so a
+  //    regex over the raw line reported `| a \|{#x}< b |` - where the block is
+  //    ordinary content and there is no cell to align.
+  for (let i = 0; i < lines.length; i++) {
+    if (verbatimLines.has(i + 1)) continue
+    const line = lines[i]!
+    // A table opens inside a blockquote and inside a list item too, so the row
+    // is found through the container prefixes rather than only at the top
+    // level. Every strip is anchored at the start, so what it removed is a
+    // prefix and its WIDTH maps the column back onto the source line.
+    const stripped = stripContainerPrefixesKeepIndent(line)
+    const prefixWidth = line.length - stripped.length
+    const indent = stripped.length - stripped.trimStart().length
+    const row = stripped.slice(indent)
+    // A COMPLETE row, gated by the parser's own predicate. A leading `|` with
+    // no closing one is a paragraph (`|{#x}< content` renders as text), and
+    // reporting cell syntax there would be reporting a cell that does not
+    // exist. A `+` continuation row is out of scope for the same reason the
+    // parser only reads one inside an open table: whether it is a row at all is
+    // a question about the lines above it.
+    if (!isTableRow(row)) continue
+    const { body } = rowAttrsFromLine(row)
+    for (const { text, start } of splitTableRowSpans(body)) {
+      const block = readCellAttributeBlock(text)
+      if (!block) continue
+      const marker = text[block.length]
+      if (marker === undefined || !TABLE_ALIGNMENT_MARKERS.has(marker)) continue
+      const spelling = text.slice(0, block.length + 1)
+      push(
+        i + 1,
+        prefixWidth + indent + start + 1,
+        block.length + 1,
+        'table-cell-attribute-before-marker',
+        `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
+          `which Carve no longer reads as one: the "${marker}" is literal content and the ` +
+          `cell is not aligned. Write "${marker}${text.slice(0, block.length)}" to align it, ` +
+          `or put a space after the block to keep the "${marker}" as content deliberately.`,
+      )
+    }
+  }
 }
 
 function collectFootnoteDefinitionWarnings(

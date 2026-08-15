@@ -1149,24 +1149,29 @@ function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
  * cells - brought every body cell back aligned, so `parse(fmt(x)) == parse(x)`
  * did not hold (issue 359).
  *
- * Two header shapes have no native spelling, because `header_cell` in the
- * grammar is `'=' [alignment_marker] content` and admits neither an attribute
- * block nor a span marker:
+ * ONE header shape has no native spelling: a SPAN marker promoted to a header
+ * cell (`| < | b |`), which `header_cell` does not admit.
  *
  *   | < | b |     a span marker promoted to a header cell
- *   |{.x} a | b | a header cell carrying attributes
  *
- * Those still need a delimiter row to promote the first row. It is emitted BARE
+ * That still needs a delimiter row to promote the first row. It is emitted BARE
  * (`|---|---|`), never with colons: the cells keep their own alignment markers,
  * so the delimiter contributes structure only and cannot spill alignment down
  * the column.
+ *
+ * An ATTRIBUTED header cell used to be in that list, for the reason the whole
+ * order changed: `header_cell` had no attributes slot, so the only shape
+ * available was `|{.x}=a |`, which the grammar reads as a data cell whose
+ * content starts with `=`. Falling back to a delimiter row avoided writing it,
+ * at the cost of promoting the row with syntax the AST did not ask for. §5 T10
+ * gives `header_cell` the slot, after the markers, so `|={.x} a |` is a real
+ * spelling now and the fallback is not needed for it.
  */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
   const first = node.rows[0]
   const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
-  const needsDelimiter =
-    headerRow && first.cells.some((c) => c.span !== undefined || c.attrs !== undefined)
+  const needsDelimiter = headerRow && first.cells.some((c) => c.span !== undefined)
 
   node.rows.forEach((row, rowIndex) => {
     const cells: RenderedCell[] = []
@@ -1214,7 +1219,14 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
       : { text: `${attrs} ${spanMarker}`, tight: true }
   }
   const align = alignMarker(cell.align)
-  const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${align}`
+  // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
+  // after the kind marker and after the alignment marker, so `|={.x} h |` is
+  // an attributed header cell. Writing the block ahead of the markers instead
+  // produced `|{.x}=h |`, which is the one shape the grammar cannot tell from
+  // a data cell whose content starts with `=` - and reads it as that, so an
+  // attributed header cell round-tripped into `<td class="x">=h</td>` and
+  // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
+  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${attrs}`
   const rendered = renderInlines(cell.children, ctx)
   // A PREFIXED CELL IS TIGHT, so the first character of the content is the
   // character the parser's alignment scan reads. That scan runs at the position

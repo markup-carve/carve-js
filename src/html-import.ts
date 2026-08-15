@@ -848,24 +848,17 @@ class Importer {
         const scope = cellAttrs?.keyValues?.scope
         if (scope !== undefined) {
           const positional = r < leadingHeaderRows ? 'col' : 'row'
-          // Outside the leading header run there is nowhere to put it: the
-          // grammar gives `header_cell` no attribute slot (`header_cell = '=',
-          // …` against `data_cell = [cell_attributes], …`), so the writer spells
-          // such a cell `|{scope=…}=A|`, which re-parses as a DATA cell whose
-          // content is the literal `=A`. Keeping the value there would trade a
-          // header cell for an attribute. Reported rather than silently traded.
-          const spellable = r < leadingHeaderRows
-          if (scope === positional || !spellable) {
+          // Only the POSITIONAL value goes. Every other one is kept wherever
+          // the cell sits, including below the header rows: `header_cell` has
+          // an attribute slot now, after its markers (§5 T10), so such a cell
+          // is spelled `|={scope=rowgroup}A|` and re-reads as the header cell
+          // it was. It used to be dropped and reported, because the only shape
+          // available then was `|{scope=…}=A|` - a DATA cell whose content is
+          // the literal `=A` - and keeping the value there traded a header cell
+          // for an attribute.
+          if (scope === positional) {
             delete cellAttrs!.keyValues!.scope
             if (Object.keys(cellAttrs!.keyValues!).length === 0) delete cellAttrs!.keyValues
-            if (scope !== positional) {
-              this.add(
-                'attribute-dropped',
-                `Dropped scope="${scope}" on a header cell below the header rows: Carve has no attribute slot on a header cell`,
-                'warning',
-                cellPath,
-              )
-            }
           }
         }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
