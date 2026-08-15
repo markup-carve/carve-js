@@ -533,6 +533,36 @@ export class AstJsonSchemaError extends Error {
 }
 
 /**
+ * A `table.rowGroups` that does not partition the table's rows.
+ *
+ * PART 12 §15 makes it a MUST: the counts consume `rows` in order - head first,
+ * then each body, then the foot - and account for every row EXACTLY ONCE. The
+ * schema cannot say so. JSON Schema has no way to relate one field's value to
+ * the length of another's, so `headRows: 5` on a two-row table validates
+ * cleanly, decodes, and reaches a consumer that then reads rows the table does
+ * not have.
+ *
+ * Which is why this is checked on the INPUT path and given an error of its own:
+ * a green validator is not evidence here, and a producer that has just built
+ * both the rows and the counts from the same arrays cannot check it either -
+ * that check could not fail. The payloads worth checking are the ones that
+ * arrive from somewhere else.
+ */
+export class AstJsonPartitionError extends Error {
+  constructor(
+    readonly counted: number,
+    readonly rows: number,
+    readonly path: string,
+  ) {
+    super(
+      `AST payload has a table.rowGroups that does not partition its rows at ${path === '' ? '$' : path}: ` +
+        `the head, bodies and foot account for ${counted} row${counted === 1 ? '' : 's'} of ${rows}`,
+    )
+    this.name = 'AstJsonPartitionError'
+  }
+}
+
+/**
  * Whether `value` matches the shape the schema gives it.
  *
  * The kinds are the subset of JSON Schema `resources/ast-schema.json` actually
@@ -627,6 +657,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     // engines - and `table.rowGroups` was accepted with any shape at all,
     // because those two were named here by hand rather than derived.
     refuseNestedRecordShapes(type as string, record, path)
+    refusePartition(record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -711,6 +742,25 @@ function refuseNestedRecordShapes(
     }
     refuseRecordShape(value, name, at)
   }
+}
+
+/**
+ * §15's MUST, checked where the payload comes from outside: the group counts
+ * partition `rows`.
+ *
+ * Runs after the shape checks, so every count it adds is already known to be a
+ * non-negative integer and `bodies` is already known to be an array of records.
+ */
+function refusePartition(record: Record<string, unknown>, path: string): void {
+  if (record.type !== 'table') return
+  const groups = record.rowGroups as
+    | { headRows?: number; footRows?: number; bodies?: Array<{ headRows?: number; bodyRows?: number }> }
+    | undefined
+  if (groups === undefined) return
+  const rows = Array.isArray(record.rows) ? record.rows.length : 0
+  const counted = (groups.headRows ?? 0) + (groups.footRows ?? 0) +
+    (groups.bodies ?? []).reduce((total, body) => total + (body.headRows ?? 0) + (body.bodyRows ?? 0), 0)
+  if (counted !== rows) throw new AstJsonPartitionError(counted, rows, path)
 }
 
 /** The required fields and value shapes of one closed record. */
