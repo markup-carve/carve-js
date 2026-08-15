@@ -112,6 +112,8 @@ class Importer {
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ path: string; message: string }> = []
   private nodes = 0
+  /** How many `<q>` elements enclose the one being read, for the mark pair. */
+  private quoteDepth = 0
   private readonly maxDepth: number
   private readonly maxNodes: number
   private readonly maxDiagnostics: number
@@ -159,6 +161,11 @@ class Importer {
         keyValues[name] = attr.value
       } else if (name === 'title' && node.tagName !== 'a' && node.tagName !== 'img') {
         keyValues.title = attr.value
+      } else if (name === 'open' && node.tagName === 'details') {
+        // The disclosure's own state, and the one attribute of a `<details>`
+        // that means something after the import: `{open}` is PART 11 §6c's
+        // bare boolean, which the details extension renders back onto the tag.
+        keyValues.open = ''
       } else if (name === 'scope' && node.tagName === 'th') {
         // Kept here, and dropped again in `table()` when it matches the value
         // the renderer derives from position. `colgroup` and `rowgroup` have no
@@ -269,7 +276,7 @@ class Importer {
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
-    if (tag === 'details') return [{ type: 'div', children: this.blocks(node.childNodes ?? [], path, depth + 1), attrs: this.mergeClass(attrs, 'details') }]
+    if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
       if (tag !== 'div') this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
@@ -536,6 +543,34 @@ class Importer {
     return { olType: value }
   }
 
+  /**
+   * `<details>/<summary>` -> the `details` admonition (`::: details "Summary"`).
+   *
+   * It used to become a generic `div` carrying a `details` CLASS, and the
+   * `<summary>` was not recognized at all: it unwrapped into the body, so the
+   * label of the disclosure became its first paragraph and re-rendered inside
+   * the box rather than on it. Nothing round-tripped - `<div class="details">`
+   * is not a disclosure element, and a reader had no way back to one.
+   *
+   * The admonition is what the `details()` extension renders as a real
+   * `<details>`, with the title as the `<summary>`, so the import lands on the
+   * form Carve already has for this rather than on a container that resembles
+   * it. A `<details>` with no `<summary>` keeps the extension's default label,
+   * which is what the element itself does in a browser.
+   */
+  private disclosure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
+    const summary = (node.childNodes ?? []).find((n) => n.tagName === 'summary')
+    const body = (node.childNodes ?? []).filter((n) => n !== summary)
+    const title = summary ? this.inlines(summary.childNodes ?? [], `${path}/summary[1]`, depth + 1) : undefined
+    return {
+      type: 'admonition',
+      kind: 'details',
+      ...(title && this.visible(title) ? { title } : {}),
+      children: this.blocks(body, path, depth + 1),
+      ...(attrs ? { attrs } : {}),
+    }
+  }
+
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
     /*
      * `<caption>` is a DIRECT child of the table and holds the table's own
@@ -681,6 +716,7 @@ class Importer {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path)
       return []
     }
+    if (tag === 'q') return this.quotation(node, path, depth)
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
@@ -724,6 +760,38 @@ class Importer {
   }
 
   /**
+   * `<q>` -> the quotation marks a browser draws for it.
+   *
+   * Carve has no quotation element and needs none: the element's whole rendered
+   * effect is the pair of marks, which are ordinary text. So this is a MAPPING
+   * rather than the unwrap it used to be - the same content reached the
+   * document before, without the marks that made it a quotation.
+   *
+   * The marks alternate by nesting depth, as a browser's do: double outside,
+   * single inside. They are the typographic characters rather than `"`, which
+   * the writer escapes back to a straight quote (PART 11 §5 keeps a quote that
+   * reached it as TEXT), so the curly pair is both what the element renders as
+   * and what survives being written.
+   *
+   * Still reported, at `info`: the ELEMENT does not come back, and a converter
+   * going the other way sees text where a `<q>` was. The message says the
+   * mapping was deliberate rather than claiming something was unwrapped.
+   */
+  private quotation(node: P5Node, path: string, depth: number): InlineNode[] {
+    const [open, close] = this.quoteDepth % 2 === 0 ? ['\u201c', '\u201d'] : ['\u2018', '\u2019']
+    this.quoteDepth += 1
+    try {
+      const children = this.inlines(node.childNodes ?? [], path, depth + 1)
+      const attrs = this.attrs(node, path)
+      const quoted: InlineNode[] = [{ type: 'text', value: open! }, ...children, { type: 'text', value: close! }]
+      this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path)
+      return attrs ? [{ type: 'span', children: quoted, attrs }] : quoted
+    } finally {
+      this.quoteDepth -= 1
+    }
+  }
+
+  /**
    * One of the seven semantic elements, as the span attribute that spells it.
    *
    * `<kbd>Tab</kbd>` -> `[Tab]{kbd}`, `<abbr title="X">c</abbr>` -> `[c]{abbr="X"}`,
@@ -761,10 +829,6 @@ class Importer {
 
   private visible(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || node.value.trim() !== '')
-  }
-
-  private mergeClass(attrs: Attrs | undefined, className: string): Attrs {
-    return { ...attrs, classes: [...(attrs?.classes ?? []), className] }
   }
 
   /**

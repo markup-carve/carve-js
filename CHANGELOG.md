@@ -9,6 +9,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import reads `<details>/<summary>` as the `details` admonition.** It
+  became a generic `div` carrying a `details` class, and `<summary>` was not
+  recognized at all: the label unwrapped into the body, so it re-rendered inside
+  the box rather than on it and nothing could get back to a disclosure element.
+  It now writes `::: details "Summary"`, which the `details()` extension renders
+  as a real `<details>/<summary>` and a core render marks as the admonition
+  title. `<details open>` keeps its state as the bare `{open}` attribute.
+- **HTML import reads `<q>` as quotation marks.** The element unwrapped, so the
+  content arrived without the marks that made it a quotation. It now writes the
+  typographic pair a browser draws, alternating double and single by nesting
+  depth, and reports the mapping at `info` rather than claiming an unwrap.
+
 - **HTML import keeps an edit as an edit.** `<ins>` unwrapped to its text, so
   the insertion vanished and only its words stayed; it maps to the `insert`
   node now. `<del>` moves with it, from `strike` to `delete`: `<del>`/`<ins>`

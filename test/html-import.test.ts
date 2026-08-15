@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, parse, semanticSpan } from '../src/index.js'
+import { HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, parse, semanticSpan } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -638,5 +638,76 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
       expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
     ])
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P9's two recognition upgrades for carve-js.
+ */
+describe('disclosures and quotations on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('reads a disclosure as the details admonition, summary and all', () => {
+    // It became a generic `div` with a `details` CLASS, and `<summary>` was not
+    // recognized at all: the label unwrapped into the body, so it re-rendered
+    // inside the box rather than on it.
+    const html = '<details><summary>More info</summary><p>The body.</p></details>'
+    expect(carve(html)).toBe('::: details "More info"\nThe body.\n:::')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toBe(
+      '<details>\n  <summary>More info</summary>\n  <p>The body.</p>\n</details>',
+    )
+  })
+
+  it('keeps the label on the box even without the extension', () => {
+    // A core render has no `<details>`, but the summary is the admonition TITLE
+    // now rather than an anonymous first paragraph.
+    expect(carveToHtml(carve('<details><summary>More info</summary><p>b</p></details>'))).toContain(
+      '<p class="admonition-title">More info</p>',
+    )
+  })
+
+  it('keeps the disclosure open when the HTML says it is', () => {
+    const html = '<details open><summary>T</summary><p>b</p></details>'
+    expect(carve(html)).toBe('{open}\n::: details "T"\nb\n:::')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toContain('<details open="">')
+  })
+
+  it('leaves a summary-less disclosure to the default label, as the element does', () => {
+    expect(carve('<details><p>b</p></details>')).toBe('::: details\nb\n:::')
+    expect(carveToHtml(carve('<details><p>b</p></details>'), { extensions: [details()] })).toContain('<summary>Details</summary>')
+  })
+
+  it('reads <q> as the marks a browser draws for it', () => {
+    // The content reached the document before this; the marks that made it a
+    // quotation did not.
+    expect(carve('<p>He said <q>hi</q>.</p>')).toBe('He said “hi”.')
+    expect(htmlToCarve('<p>He said <q>hi</q>.</p>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'element-unwrapped',
+        severity: 'info',
+        message: 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping',
+        path: '/p[1]/q[2]',
+      }),
+    ])
+  })
+
+  it('alternates the marks by nesting depth', () => {
+    expect(carve('<p><q>nested <q>inner</q></q></p>')).toBe('“nested ‘inner’”')
+  })
+
+  it('writes the typographic marks, which survive being written', () => {
+    // A straight `"` is escaped back to a straight quote by the writer (PART 11
+    // section 5 keeps a quote that reached it as TEXT), so the curly pair is
+    // both what the element renders as and what round-trips.
+    const written = carve('<p><q>hi</q></p>')
+    expect(written).not.toContain('\\"')
+    expect(carveToHtml(written)).toBe('<p>“hi”</p>')
+  })
+
+  it('keeps what a quotation carried, on a span', () => {
+    expect(carve('<p><q id="cited" class="key">hi</q></p>')).toBe('[“hi”]{#cited .key}')
   })
 })
