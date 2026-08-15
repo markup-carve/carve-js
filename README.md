@@ -35,7 +35,9 @@ rather than a placeholder for a mapping still to come:
 - **Embedded media** - `<video>`, `<audio>`, `<iframe>`, `<svg>`, `<object>`,
   `<embed>`, `<canvas>` - is unwrapped to the fallback content the author wrote
   for it in `safe` and `semantic` mode, and kept verbatim in `roundtrip`. Every
-  attribute it carried, `src` included, is reported dropped. Carve has no embed
+  attribute it carried is reported dropped: the ones Carve cannot represent as
+  it reads them, and the ones it can - an `id`, a `class`, a `data-` pair - when
+  the element they belonged to is unwrapped out from under them. Carve has no embed
   node, and giving it one is a spec question (which media, which attributes,
   what a non-HTML renderer does with them, what a `src` means in a document that
   must be safe to render from an untrusted source), so it is settled in the spec

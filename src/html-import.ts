@@ -285,7 +285,10 @@ class Importer {
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
     if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
-      if (tag !== 'div') this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+      if (tag !== 'div') {
+        this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+        this.reportUnwrappedAttributes(attrs, tag, path)
+      }
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
       return tag === 'div' && attrs ? [{ type: 'div', children, attrs }] : children
     }
@@ -298,6 +301,7 @@ class Importer {
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+    this.reportUnwrappedAttributes(attrs, tag, path)
     return this.blocks(node.childNodes ?? [], path, depth + 1)
   }
 
@@ -435,13 +439,31 @@ class Importer {
   private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div' | 'summary', noun?: string): void {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
-    const names = [
+    const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
+    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
+  }
+
+  private attrNames(attrs: Attrs): string[] {
+    return [
       ...(attrs.id ? ['id'] : []),
       ...(attrs.classes ? ['class'] : []),
       ...Object.keys(attrs.keyValues ?? {}),
     ]
-    const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
-    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
+  }
+
+  /**
+   * The attributes an UNWRAPPED element takes with it.
+   *
+   * `attrs()` reports the ones it cannot represent, and keeps the rest - an id
+   * an anchor points at, a class a stylesheet selects on, a `data-` pair an
+   * editor round-trips. When the element itself is then unwrapped there is
+   * nothing left to hang them on, and they went in silence: a
+   * `<video id="player">` reported that the element was unwrapped and never
+   * that the id had gone with it.
+   */
+  private reportUnwrappedAttributes(attrs: Attrs | undefined, tag: string, path: string): void {
+    if (attrs === undefined) return
+    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} with the unwrapped <${tag}>: there is no element left to carry them`, 'warning', path)
   }
 
   /**
@@ -994,6 +1016,7 @@ class Importer {
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+    this.reportUnwrappedAttributes(attrs, tag, path)
     return children
   }
 

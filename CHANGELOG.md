@@ -260,6 +260,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An unwrapped element reports the attributes it takes with it.** The importer
+  keeps an `id`, a `class` and `data-` pairs while it reads an element, and when
+  the element itself is unwrapped there is nothing left to hang them on - so
+  they went in silence. `<video id="player">` said the element had been
+  unwrapped and never that the id had gone with it. Applies to every unwrap arm:
+  embeds, `<section>` and friends, and any unmapped inline element.
+
 - **A `details` block carrying `{open}` renders it once in a static render.**
   The static renderer adds `open` so the body is expanded for print and did not
   check whether the block already carried it, so a hand-written `::: details

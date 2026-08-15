@@ -1026,6 +1026,36 @@ describe('the import decisions that are policy', () => {
     }
   })
 
+  it('reports what an unwrapped element takes with it, not only its src', () => {
+    /*
+     * `attrs()` reports the attributes it cannot represent and KEEPS the rest -
+     * an id an anchor points at, a class a stylesheet selects on. When the
+     * element is then unwrapped there is nothing left to hang them on, and they
+     * went in silence, so the docs line promising every attribute is accounted
+     * for was false for all but `src`.
+     *
+     * Not only embeds: the same arms unwrap `<section>`, `<form>` and any
+     * unmapped inline element.
+     */
+    expect(htmlToCarve('<video id="player" class="wide" data-x="1">fallback</video>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'element-unwrapped' }),
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped id, class, data-x with the unwrapped <video>: there is no element left to carry them',
+      }),
+    ])
+    for (const html of ['<section id="s">x</section>', '<form id="f">x</form>', '<p><ruby id="r">x</ruby></p>']) {
+      expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
+    }
+  })
+
+  it('CONTROL: a div KEEPS its attributes, so nothing is reported there', () => {
+    // It becomes a `div` node, which has an attribute slot. A rule that fired
+    // on every unwrap arm would report a loss that does not happen here.
+    expect(htmlToCarve('<div id="d">x</div>', { mode: 'semantic' }).report.diagnostics).toEqual([])
+  })
+
   it('keeps an embed verbatim in roundtrip mode, whose contract is Carve-produced HTML', () => {
     for (const tag of EMBEDS) {
       const html = `<${tag} src="clip.mp4">fallback</${tag}>`
