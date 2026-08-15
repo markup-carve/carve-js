@@ -24,6 +24,8 @@
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "unpkg": "./dist/carve.iife.min.js",
+  "jsdelivr": "./dist/carve.iife.min.js",
   "bin": {
     "carve": "./dist/cli.js"
   },
@@ -49,8 +51,9 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:browser": "node scripts/build-browser.mjs",
     "drift": "node scripts/published-drift.mjs",
-    "prepare": "npm run build",
+    "prepare": "npm run build && npm run build:browser",
     "test": "vitest run",
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
     "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
@@ -60,6 +63,7 @@
   "devDependencies": {
     "@djot/djot": "^0.3.2",
     "@types/node": "^22.19.20",
+    "esbuild": "^0.28.2",
     "prettier": "^3.9.6",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",

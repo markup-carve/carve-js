@@ -78,6 +78,23 @@ HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
 mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes
 render literally.
 
+### Browser (script tag)
+
+For consumers that load classic scripts rather than ESM — CDN script tags,
+sandboxed iframes, userscript hosts — the package ships the same public API as
+a minified IIFE bundle exposing a `carve` global (`unpkg`/`jsdelivr` point at
+it):
+
+```html
+<script src="https://unpkg.com/@markup-carve/carve/dist/carve.iife.min.js"></script>
+<script>
+  carve.carveToHtml('# Hello\n\nThis is /italic/ and *bold*.')
+</script>
+```
+
+The bundle contains no Node builtins (the CLI is a separate entry) and does
+not embed `@djot/djot`, which stays dependency-injected as in the ESM build.
+
 ### Renderers refuse a tree that nests too deeply
 
 Every `render*` function stops at `MAX_RENDER_DEPTH` and throws a
