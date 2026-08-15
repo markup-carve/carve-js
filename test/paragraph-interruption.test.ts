@@ -47,7 +47,7 @@ describe('top-level paragraph interruption (§10)', () => {
   it('a captioned one-line quote after prose interrupts', () => {
     const html = carveToHtml('Intro\n> Stay hungry\n^ Steve Jobs')
     expect(html).toBe(
-      '<p>Intro</p>\n<blockquote>\n  <p>Stay hungry</p>\n  <footer>Steve Jobs</footer>\n</blockquote>',
+      '<p>Intro</p>\n<figure>\n  <blockquote><p>Stay hungry</p></blockquote>\n  <figcaption>Steve Jobs</figcaption>\n</figure>',
     )
   })
 

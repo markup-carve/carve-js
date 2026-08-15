@@ -243,7 +243,7 @@ class Importer {
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'p') return [{ type: 'paragraph', children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
-    if (tag === 'blockquote') return [this.blockQuote(node, path, depth, attrs)]
+    if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return [this.list(node, path, depth, tag === 'ol', attrs)]
     if (tag === 'pre') {
       const code = node.childNodes?.find((n) => n.tagName === 'code')
@@ -347,53 +347,12 @@ class Importer {
     return { type: 'table', rows, ...(attrs ? { attrs } : {}) }
   }
 
-  /**
-   * A `<blockquote>`, with a trailing `<footer>` read as its ATTRIBUTION.
-   *
-   * PART 9 §4a puts the source of a quotation on the quote itself, and this
-   * renderer emits it as a `<footer>` inside the `<blockquote>` - so without
-   * this, the engine's own HTML did not survive a round trip through the
-   * importer: the footer came back as an ordinary second paragraph and the
-   * `^ ` line was gone from the Carve it wrote (carve#1159).
-   *
-   * The LAST footer child, because that is the one the renderer emits and the
-   * one an author writing HTML by hand puts after the quoted text. An earlier
-   * footer stays an ordinary block.
-   */
-  private blockQuote(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
-    const children = node.childNodes ?? []
-    const candidates = children.map((n, index) => ({ n, index })).filter(({ n }) => n.tagName === 'footer')
-    // The slot holds INLINE content, so a footer carrying blocks does not fit
-    // it. Flattening one would run its paragraphs together with no separator;
-    // leaving it an ordinary block inside the quote keeps every word, which is
-    // the better answer when the shape cannot be represented.
-    const last = candidates.filter(({ n }) => !(n.childNodes ?? []).some((c) => c.tagName && BLOCK.has(c.tagName))).at(-1)
-    const footerIndex = last?.index ?? -1
-    const footer = footerIndex === -1 ? undefined : children[footerIndex]
-    const body = footer ? children.filter((n) => n !== footer) : children
-    return {
-      type: 'block_quote',
-      children: this.blocks(body, path, depth + 1),
-      ...(footer ? { attribution: this.inlines(footer.childNodes ?? [], `${path}/footer[1]`, depth + 1) } : {}),
-      ...(attrs ? { attrs } : {}),
-    }
-  }
-
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
     const captionNode = node.childNodes?.find((n) => n.tagName === 'figcaption')
     const body = (node.childNodes ?? []).filter((n) => n !== captionNode)
     const targets = this.blocks(body, path, depth + 1)
     const target = targets[0]
-    // A quote is no longer a figure target (PART 9 §4a): `<figure>` wrapping a
-    // `<blockquote>` and a `<figcaption>` is the shape this renderer used to
-    // emit, and it comes back as the quote carrying the caption as its
-    // attribution rather than as a figure the schema would refuse.
-    if (target?.type === 'block_quote' && captionNode) {
-      target.attribution = this.inlines(captionNode.childNodes ?? [], `${path}/figcaption[1]`, depth + 1)
-      if (attrs && !target.attrs) target.attrs = attrs
-      return targets
-    }
-    if (target && ['image', 'table', 'code_block', 'paragraph'].includes(target.type)) {
+    if (target && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)) {
       return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], `${path}/figcaption[1]`, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)

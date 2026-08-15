@@ -12,8 +12,8 @@
  *
  * carve-js' AST is heterogeneous: children live under different fields
  * depending on the node (`children`, `items`, `rows`, `cells`, `terms`,
- * `definitions`, `inline`, `content`, `target`, `caption`, `title`,
- * `attribution`). We expose a uniform child-list view over those fields so
+ * `definitions`, `inline`, `content`, `target`, `caption`, and `title`). We
+ * expose a uniform child-list view over those fields so
  * the walk mirrors carve-php's `getChildren()` / `removeChild()` /
  * `replaceChildNode()` semantics.
  */
@@ -145,7 +145,6 @@ function childArrays(node: NodeLike): ChildArray[] {
       break
     case 'block_quote':
       push(node['children'], true)
-      if (node['attribution']) push(node['attribution'], false)
       break
     case 'heading':
     case 'paragraph':

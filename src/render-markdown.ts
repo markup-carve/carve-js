@@ -154,26 +154,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
-      let body = trimNonNbsp(renderBlocks(node.children, ctx))
-      // PART 11 §10c T1. The attribution is the quotation's SOURCE, so it stays
-      // inside the quote. It used to follow as a sibling paragraph, which kept
-      // the words but not what they mean - read back, it was attached to
-      // nothing, and round-tripping produced a blockquote with no attribution.
-      //
-      // Markdown has no attribution syntax but does admit HTML, and this target
-      // already writes `<u>`, `<mark>`, `<sub>`, `<ins>` and `<del>` for
-      // constructs with no Markdown spelling. Through a CommonMark reader
-      // `<footer>` opens an HTML BLOCK inside the quote (it is not wrapped in a
-      // paragraph), so the rendered HTML is what the HTML target produces from
-      // the same source.
-      if (node.attribution !== undefined) {
-        body += `\n\n<footer>${trimNonNbsp(renderInlines(node.attribution, ctx))}</footer>`
-      }
-      const quoted = body
-        .split('\n')
-        .map((line) => (line === '' ? '>' : `> ${line}`))
-        .join('\n')
-      return `${quoted}\n\n`
+      const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
+      return `${lines.map((line) => `> ${line}`).join('\n')}\n\n`
     }
     case 'list':
       return renderList(node, ctx)

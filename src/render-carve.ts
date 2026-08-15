@@ -636,12 +636,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
         .split('\n')
         .map((line) => (line === '' ? '>' : `> ${line}`))
         .join('\n')
-      // PART 9 §4a: an attribution is written back as the `^` line it was read
-      // from. Without this the writer dropped it - `fmt` is not allowed to lose
-      // content (PART 11 §1), and the loss was silent because the field is new.
-      const attribution =
-        node.attribution === undefined ? '' : `\n^ ${renderInlines(node.attribution, ctx)}`
-      return withAttrs(body) + attribution
+      return withAttrs(body)
     }
     case 'list':
       return withAttrs(renderList(node, ctx))

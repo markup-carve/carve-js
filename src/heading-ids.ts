@@ -963,7 +963,6 @@ export function resolveHeadingIds(
         fn(b.children)
         break
       case 'block_quote':
-        if (b.attribution) fn(b.attribution)
         b.children.forEach((c) => walkBlock(c, fn))
         break
       case 'list':

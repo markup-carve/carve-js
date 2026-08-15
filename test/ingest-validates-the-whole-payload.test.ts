@@ -172,13 +172,11 @@ describe('a node position is checked for WHICH node, not only that it is one', (
 
   it('CONTROL: accepts each node type the position DOES admit', () => {
     // Otherwise the rule could be "refuse every node position".
-    // `block_quote` is NOT here: PART 9 §4a took it out of `figure.target`,
-    // because a captioned quote is a quote carrying an `attribution`
-    // (carve#1159). The schema refuses it now, which is the rule working.
     for (const target of [
       { type: 'image', src: '/a.png', alt: '' },
       { type: 'paragraph', children: [] },
       { type: 'code_block', content: '' },
+      { type: 'block_quote', children: [] },
     ]) {
       expect(() =>
         fromAstJson({

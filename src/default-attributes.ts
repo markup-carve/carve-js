@@ -131,11 +131,6 @@ function visit(node: AnyNode, byType: Map<string, Record<string, string>>): void
     case 'figure':
       visit((block as unknown as { target: AnyNode }).target, byType)
       break
-    case 'block_quote': {
-      const attribution = (block as unknown as { attribution?: InlineNode[] }).attribution
-      if (attribution) for (const c of attribution) visit(c, byType)
-      break
-    }
     default:
       break
   }

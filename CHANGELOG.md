@@ -117,17 +117,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `<kbd>`, and `[x]{kbd onclick="…"}` is a bare `<kbd>`. A span with no semantic
   name is unchanged. A DERIVED attribute yields to an AUTHORED one of the same
   name, so `[x]{abbr="gen" title="authored"}` carries `title` once.
-- **A caption on a block quote is now that quote's attribution** (PART 9 §4a,
-  markup-carve/carve#1159). `> To be` followed by `^ Hamlet` no longer parses as
-  a `figure` wrapping a `block_quote`; it is a `block_quote` carrying an
-  `attribution`, and HTML renders `<footer>Hamlet</footer>` inside the
-  `<blockquote>` rather than a `<figure>` / `<figcaption>` pair. A quote is not
-  a figure, takes no number, and no longer turns up in a walk for figures. The
-  Markdown, plain-text, ANSI and Carve writers all carry the attribution, and
-  the HTML importer reads a trailing `<footer>` in a `<blockquote>` back as the
-  attribution so the renderer's own output round-trips. A `<figure>` wrapping a
-  quote and a `<figcaption>` imports as a quote with an attribution too, since
-  a quote is no longer a figure target.
 - **`code` and `mark` leave the built-in semantic registry.** Both spellings
   follow the spec's seven-name list - `abbr`, `time`, `samp`, `var`, `kbd`,
   `cite`, `dfn` - so `:code[x]` and `:mark[x]` take the generic
@@ -350,17 +339,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   closing tag or, for a complete tag alone on a line, at that line. Cut early, a
   `<div>x</div>` followed by prose fenced the element alone and migrated the
   prose as a paragraph outside the block the source had put it in.
-- **A quote attribution stays attached to its quote on every target**
-  (markup-carve/carve#1179, PART 11 §10c). It used to follow the quote as a
-  sibling separated by a blank line, which kept the words but not what they
-  mean - read back, the attribution was attached to nothing, and a round trip
-  produced a blockquote with no attribution at all. Markdown now emits a
-  `<footer>` element inside the quote (that target already writes `<u>`,
-  `<mark>` and `<ins>` for constructs with no Markdown spelling, and through a
-  CommonMark reader `<footer>` opens an HTML block rather than being wrapped in
-  a paragraph, so the rendered HTML matches the HTML target's); the terminal
-  carries its quote bar onto the attribution line; plain text attaches by
-  adjacency, dropping the blank line. A quote with no attribution is unchanged.
 - **Presentation targets no longer discard authored text**
   (markup-carve/carve#1179). `docs/graceful-degradation.md` states the floor as
   a MUST - "losing the click is fine; losing the words is not" - and three kinds

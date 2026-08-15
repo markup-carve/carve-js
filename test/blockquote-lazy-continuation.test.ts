@@ -61,7 +61,7 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
 
   it('a caption attaches to the quote rather than folding in', () => {
     expect(html('> quote\n^ Caption')).toBe(
-      '<blockquote>\n  <p>quote</p>\n  <footer>Caption</footer>\n</blockquote>',
+      '<figure>\n  <blockquote><p>quote</p></blockquote>\n  <figcaption>Caption</figcaption>\n</figure>',
     )
   })
 
