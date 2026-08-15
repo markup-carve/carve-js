@@ -1167,6 +1167,12 @@ describe('table row groups on import', () => {
       .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
     expect(groupsOf('<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><th rowspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
       .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 })
+    // Both dimensions at once. A carried `^` occupies ONE slot however many
+    // columns its origin covers - that is the array-index model the renderer
+    // resolves - so the row below a `<th rowspan="2" colspan="2">` has a single
+    // slot standing for two columns, and counting slots reported one.
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th rowspan="2" colspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
   })
 
   it('partitions the rows it was built from, in every shape that emits one', () => {

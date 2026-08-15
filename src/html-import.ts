@@ -1019,12 +1019,33 @@ class Importer {
       }
       return cell.header
     }
+    // How many COLUMNS an origin covers: itself plus the `<` run after it.
+    const widthAt = (r: number, c: number): number => {
+      let width = 1
+      while (allRows[r]?.cells[c + width]?.span === 'colspan') width += 1
+      return width
+    }
+    const originRow = (r: number, c: number): number => {
+      let up = r - 1
+      while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
+      return up
+    }
     const leading = (row: TableRow, r: number): number => {
-      let count = 0
-      while (count < row.cells.length && headerAt(r, count)) count += 1
+      let columns = 0
+      let slot = 0
+      while (slot < row.cells.length && headerAt(r, slot)) {
+        const cell = row.cells[slot]!
+        // A carried `^` occupies ONE slot however many columns its origin
+        // covers - that is the array-index model the renderer resolves - so a
+        // `<th rowspan="2" colspan="2">` leaves the row below it with a single
+        // slot standing for two columns. Counting slots reported one.
+        const up = cell.span === 'rowspan' ? originRow(r, slot) : -1
+        columns += up >= 0 ? widthAt(up, slot) : 1
+        slot += 1
+      }
       // An all-header row would say every column is a row head, which is what
       // an intermediate HEADER row is, not a row-head column.
-      return count === row.cells.length ? 0 : count
+      return slot === row.cells.length ? 0 : columns
     }
     return Math.min(...groupRows.map((row, offset) => leading(row, firstIndex + offset)))
   }
