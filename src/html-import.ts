@@ -213,7 +213,15 @@ class Importer {
     return `${parent}/${name}[${index + 1}]`
   }
 
-  private blocks(nodes: P5Node[], parentPath: string, depth: number): BlockNode[] {
+  /**
+   * `paths` overrides the path a node is reported under, index-parallel to
+   * `nodes`. One caller needs it: a `<dl>` collects the children that are
+   * neither a term nor a definition and converts them AFTER the list, and
+   * rebuilding their paths from the filtered array would renumber them - a
+   * `<p>` reported as `/dl[1]/p[3]` on its way out would report its own
+   * attribute losses under `/dl[1]/p[1]`, so one element spoke under two names.
+   */
+  private blocks(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): BlockNode[] {
     const out: BlockNode[] = []
     let inlineBuffer: P5Node[] = []
     const flush = (): void => {
@@ -222,7 +230,7 @@ class Importer {
       if (this.visible(children)) out.push({ type: 'paragraph', children })
     }
     nodes.forEach((node, index) => {
-      const path = this.childPath(parentPath, node, index)
+      const path = paths?.[index] ?? this.childPath(parentPath, node, index)
       if (node.nodeName === '#text' && !(node.value ?? '').trim()) {
         if (inlineBuffer.length) inlineBuffer.push(node)
         return
@@ -322,6 +330,7 @@ class Importer {
   private definitionList(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
     const items: DefinitionItem[] = []
     const trailing: P5Node[] = []
+    const trailingPaths: string[] = []
     let current: DefinitionItem | undefined
     const openEntry = (): DefinitionItem => {
       const entry: DefinitionItem = { terms: [], definitions: [] }
@@ -335,7 +344,13 @@ class Importer {
         if (child.tagName === 'div') {
           this.enter(level)
           this.entryAttributes(child, childPath, 'div')
+          // The wrapper IS the group boundary (HTML 5.2), so an entry never
+          // spans two of them: without the reset a `<dd>` opening the second
+          // wrapper attached to the first wrapper's term, which both merges two
+          // groups and suppresses the no-term diagnostic it is owed.
+          current = undefined
           visit(child.childNodes ?? [], childPath, level + 1)
+          current = undefined
           return
         }
         if (child.tagName === 'dt') {
@@ -379,11 +394,12 @@ class Importer {
         }
         this.add('element-unwrapped', `Moved <${child.tagName ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath)
         trailing.push(child)
+        trailingPaths.push(childPath)
       })
     }
     visit(node.childNodes ?? [], path, depth + 1)
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
-    return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1)]
+    return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }
 
   /**

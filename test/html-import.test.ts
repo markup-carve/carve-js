@@ -310,6 +310,36 @@ describe('definition lists on import', () => {
     ])
   })
 
+  it('does not carry an entry across a group wrapper boundary', () => {
+    // The wrapper IS the group (HTML 5.2). A `<dd>` opening the second one is a
+    // description with no term of its own, not a second description of the
+    // first group's term.
+    const html = '<dl><div><dt>A</dt><dd>One</dd></div><div><dd>Orphan</dd></div></dl>'
+    expect(htmlToAst(html).value.children).toMatchObject([
+      {
+        type: 'definition_list',
+        items: [
+          { terms: [[{ value: 'A' }]], definitions: [[{ type: 'paragraph' }]] },
+          { terms: [], definitions: [[{ type: 'paragraph' }]] },
+        ],
+      },
+    ])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      message: expect.stringContaining('<dd> with no <dt>'),
+      path: '/dl[1]/div[2]/dd[1]',
+    }))
+  })
+
+  it('reports displaced content under the path it came in on', () => {
+    // The strays are converted AFTER the list, from a filtered array. Rebuilding
+    // their paths from that array renumbers them, so one element would report
+    // its own losses under a different name than the message that displaced it.
+    const html = '<dl><dt>T</dt><dd>D</dd><p onclick="evil()">stray</p></dl>'
+    const paths = htmlToCarve(html).report.diagnostics.map((d) => d.path)
+    expect(paths).toEqual(['/dl[1]/p[3]', '/dl[1]/p[3]'])
+  })
+
   it('keeps block content in a definition', () => {
     const html = '<dl><dt>Modes</dt><dd><p>Three of them:</p><ul><li>safe</li><li>semantic</li></ul></dd></dl>'
     expect(carve(html)).toBe(':: Modes\n:  Three of them:\n\n   - safe\n\n   - semantic')
