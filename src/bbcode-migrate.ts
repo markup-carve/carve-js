@@ -17,7 +17,12 @@
  * which is what keeps `literal *stars*` from becoming Carve bold.
  */
 
-import { escapePlainCarveInlineSyntax } from './carve-escape.js'
+import {
+  escapeAttributeBlockOpener,
+  escapeLiteralBackslashes,
+  escapePlainCarveInlineSyntax,
+  escapeVerbatimDelimiter,
+} from './carve-escape.js'
 
 /**
  * Maximum input length. The pipeline runs many full-string passes, so cost is
@@ -63,7 +68,15 @@ function escapePlainBbcodeText(bbcode: string): string {
   // convertLists is about to read (carve-php#1141).
   text = text.replace(/\[\*\]/g, protect)
 
-  text = escapePlainCarveInlineSyntax(text)
+  // BBCode owns no backslash escape, no attribute block and no code span of the
+  // shape Carve spells with a backtick, so each of those characters in a post
+  // is one the author typed. Run after the tags and code spans are stashed, so
+  // only real text is touched, and in this order: doubling the backslashes
+  // first is what leaves every run from source text EVEN, which is how the two
+  // stages after it tell a delimiter the author escaped from one they did not.
+  text = escapePlainCarveInlineSyntax(
+    escapeAttributeBlockOpener(escapeVerbatimDelimiter(escapeLiteralBackslashes(text))),
+  )
 
   return text.replace(
     new RegExp(`${open}(\\d+)${close}`, 'gu'),

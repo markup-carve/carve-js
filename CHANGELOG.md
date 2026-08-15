@@ -276,6 +276,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **BBCode keeps the backslash, the brace and the backtick a post typed.**
+  `bbcodeToCarve` ran one of the four escaping stages a language without a
+  backslash escape of its own needs, so three characters that are literal text
+  in a forum post became markup. A backslash was read as a Carve escape and ate
+  the character after it, turning `a \ b` into a non-breaking space with the
+  backslash gone; `a {#id} c` opened an attribute block and came back as a tag
+  span; and a backtick opened a code span, a lone one included. All three now
+  survive as the text the post wrote. A `[code]` body is unaffected: it is
+  stashed before any escaping runs.
+- **A delimiter the calling converter handles keeps its brace bare.** The
+  escaper escaped the delimiter inside an UNESCAPED brace, which is only right
+  when the brace was escaped - a bare one is a brace the caller declared it
+  owns. `{=x=}` is a highlight in Djot as well as in Carve, so a converter
+  passing `=` as handled meant the run to survive, and it came back as literal
+  braces and equals signs instead of a mark.
+- **A braced opener with no closer on its line is escaped.** The escaper is
+  line-oriented and a braced run is not, so an opener left bare let the NEXT
+  line close it: `a {^x` over `y^}` turned two lines of literal source text into
+  a superscript. Escaping it costs nothing when nothing closes the run, since
+  both spellings render alike. An attribute block opener is excluded, since it
+  is not a pair opener and escaping its brace would destroy a pinned id.
 - **An unwrapped element reports the attributes it takes with it.** The importer
   keeps an `id`, a `class` and `data-` pairs while it reads an element, and when
   the element itself is unwrapped there is nothing left to hang them on - so
