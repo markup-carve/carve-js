@@ -930,6 +930,37 @@ describe('table spans on import', () => {
     expect(large).toBeLessThan(small * 8)
   })
 
+  it('clips a rowspan that would leave the head the renderer synthesizes', () => {
+    /*
+     * Carve derives the head from the LEADING RUN of all-header rows, so a span
+     * reaching out of that run is written into a `<thead>` with its other rows
+     * in the `<tbody>`. Browsers clip a rowspan across row groups, so keeping
+     * the number would produce a document claiming a grid it does not render.
+     *
+     * The grid fixtures cannot catch this one: their expander is the layout
+     * algorithm without the group rule, which is exactly the rule that bites.
+     */
+    const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><td>B</td></tr></table>'
+    expect(htmlToCarve(html).value).toBe('|=H|=A|\n| B |\n')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'table-degraded',
+        severity: 'warning',
+        message: expect.stringContaining('Clipped a rowspan at the header rows'),
+        path: '/table[1]/tr[1]/th[1]',
+      }),
+    ])
+    // The written table renders no rowspan at all, which is what a browser
+    // shows for the clipped one.
+    expect(carveToHtml(htmlToCarve(html).value)).not.toContain('rowspan')
+  })
+
+  it('CONTROL: a span WITHIN the header rows is untouched', () => {
+    const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>'
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(carveToHtml(htmlToCarve(html).value)).toContain('rowspan="2"')
+  })
+
   it('reports the empty cell a short row needs, and only when it invents one', () => {
     // A row shorter than the spans reaching into it needs the index kept. The
     // continuation itself costs nothing - the span already owns that cell - so

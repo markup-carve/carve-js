@@ -16,7 +16,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the model already had (`^` continues the cell above, `<` the one to its left),
   so the imported grid re-reads as the grid that came in. `rowspan="0"` is
   resolved against the row group, as HTML defines it; both spans are clamped to
-  HTML's maxima and every generated cell is charged to `maxNodes`. A second
+  HTML's maxima and every generated cell is charged to `maxNodes`; a span that
+  would leave the head the renderer derives is clipped and reported, because a
+  rowspan across row groups is one browsers clip anyway. A second
   `<caption>` is reported instead of dropped in silence, mirroring the parser's
   first-caption-wins rule.
 

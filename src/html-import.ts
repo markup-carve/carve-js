@@ -788,7 +788,23 @@ class Importer {
         // form, which was the half this handled first.
         const declaredRowspan = this.spanCount(cell, 'rowspan', 65534, 0)
         const left = remainingInGroup.get(row) ?? 1
-        const rowspan = declaredRowspan === 0 ? left : Math.min(declaredRowspan, left)
+        let rowspan = declaredRowspan === 0 ? left : Math.min(declaredRowspan, left)
+        // And it stops at the head the RENDERER will synthesize. Carve derives
+        // the head from the leading run of all-header rows, so a span reaching
+        // out of that run lands in a `<thead>` with its other rows in the
+        // `<tbody>` - which browsers clip, making the written table say
+        // something the source table did not. Clipped here instead, where it
+        // can be reported: the alternative is a document that claims a grid it
+        // does not render.
+        if (r < leadingHeaderRows && r + rowspan > leadingHeaderRows) {
+          this.add(
+            'table-degraded',
+            'Clipped a rowspan at the header rows: Carve derives the head from the leading header rows, and a span leaving them crosses a boundary browsers clip anyway',
+            'warning',
+            cellPath,
+          )
+          rowspan = leadingHeaderRows - r
+        }
         const cellAttrs = this.attrs(cell, cellPath)
         // A `scope` the renderer would regenerate from position is the
         // generator's own output, not something the author typed: importing it
