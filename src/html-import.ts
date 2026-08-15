@@ -88,10 +88,17 @@ const ADAPTERS = new Set<HtmlImportAdapter>([
  * The elements PART 9 §9 and §10 spell as an attribute on a span, so the
  * importer writes `[Tab]{kbd}` rather than unwrapping to `Tab` (carve#1140).
  *
- * Mirrors EXTENDED_SEMANTIC_SPAN_ORDER in render-html.ts. `mark` and `code` are
- * NOT here: the tier split retired them from the registry and each already has
- * its own syntax (`=m=`, a code span), so importing them here would give one
- * input two spellings.
+ * Mirrors EXTENDED_SEMANTIC_SPAN_ORDER in render-html.ts.
+ *
+ * `mark` and `code` are not here, and their ABSENCE is not what keeps them out:
+ * `inline()` maps each of them a few lines before it consults this set, so
+ * adding either name changes no output at all. The rule they follow - the tier
+ * split retired them from the registry and each already has its own syntax
+ * (`=m=`, a code span), so importing them here as well would give one input two
+ * spellings - is enforced by those earlier branches, and that is what a test
+ * has to move to fail. Stated here because the comment that used to sit in this
+ * spot claimed the membership was the guarantee, and a mutation that added both
+ * names passed every test.
  *
  * A Set rather than an object literal, because `constructor` and `toString` are
  * tag names a fragment may carry.
@@ -282,23 +289,10 @@ class Importer {
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
       return tag === 'div' && attrs ? [{ type: 'div', children, attrs }] : children
     }
-    /*
-     * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
-     *
-     * `video`, `audio`, `iframe`, `svg`, `object`, `embed` and `canvas` reach
-     * this arm and take its two answers: unwrapped to their fallback content in
-     * `safe` and `semantic`, raw-preserved in `roundtrip`. Their `src`, and
-     * every other attribute, is reported dropped on the way past.
-     *
-     * Not an oversight and not a to-do. Carve has no embed node, and giving it
-     * one is a SPEC question - which media types, which attributes, what a
-     * non-HTML renderer does with them, what a `src` means for a document that
-     * has to be safe to render from an untrusted source - and it is decided in
-     * the spec repo rather than by whichever importer needed it first. Until
-     * then the honest import is the one that keeps the fallback content the
-     * author wrote for exactly this case, says what it dropped, and keeps the
-     * markup verbatim in the mode whose contract is Carve-produced HTML.
-     */
+    // The four block tags with no mapping: `address`, `fieldset`, `form` and
+    // `hgroup`. The EMBEDS do not reach here - none of them is in `BLOCK`, so
+    // they take the inline arm of this same pair of answers, where the policy
+    // that covers them is written down.
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
@@ -977,6 +971,24 @@ class Importer {
     if (tag === 'br') return [{ type: 'hard_break' }]
     if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
+    /*
+     * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
+     *
+     * `video`, `audio`, `iframe`, `svg`, `object`, `embed` and `canvas` are
+     * none of them in `BLOCK`, so they arrive at THIS arm and take its two
+     * answers: unwrapped to their fallback content in `safe` and `semantic`,
+     * raw-preserved in `roundtrip`. Their `src`, and every other attribute, is
+     * reported dropped on the way past.
+     *
+     * Not an oversight and not a to-do. Carve has no embed node, and giving it
+     * one is a SPEC question - which media types, which attributes, what a
+     * non-HTML renderer does with them, what a `src` means for a document that
+     * has to be safe to render from an untrusted source - decided in the spec
+     * repo rather than by whichever importer needed it first. Until then the
+     * honest import is the one that keeps the fallback content the author wrote
+     * for exactly this case, says what it dropped, and keeps the markup
+     * verbatim in the mode whose contract is Carve-produced HTML.
+     */
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
