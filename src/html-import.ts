@@ -286,6 +286,14 @@ class Importer {
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
+    /*
+     * `<caption>` is a DIRECT child of the table and holds the table's own
+     * caption, which `table.caption` has a slot for and Carve spells `^ text`
+     * after the rows. The row walk below looks only for `tr`, so before this
+     * the element was skipped and the caption left the document silently -
+     * pandoc emits exactly this shape for every captioned table.
+     */
+    const captionNode = (node.childNodes ?? []).find((n) => n.tagName === 'caption')
     const tr: P5Node[] = []
     const walk = (n: P5Node): void => {
       if (n.tagName === 'tr') tr.push(n)
@@ -344,7 +352,10 @@ class Importer {
         return { type: 'table_cell', header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) }
       }),
     }))
-    return { type: 'table', rows, ...(attrs ? { attrs } : {}) }
+    const caption = captionNode
+      ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
+      : undefined
+    return { type: 'table', rows, ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
   }
 
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
@@ -353,6 +364,23 @@ class Importer {
     const targets = this.blocks(body, path, depth + 1)
     const target = targets[0]
     if (target && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)) {
+      /*
+       * A table brings its own caption slot, so a figure-wrapped table can
+       * arrive carrying TWO captions - its own `<caption>` and the figure's
+       * `<figcaption>`. Carve spells one `^ ` line per host, and the wrapper
+       * itself has no spelling at all, so the figure's caption is the one that
+       * cannot survive. Keeping both wrote two `^ ` lines, and the second
+       * re-read as a literal paragraph.
+       */
+      if (target.type === 'table' && (target as { caption?: unknown }).caption && captionNode) {
+        this.add(
+          'table-degraded',
+          'Dropped a <figcaption> from a figure wrapping a table that carries its own <caption>: Carve spells one caption per table',
+          'warning',
+          `${path}/figcaption[1]`,
+        )
+        return [target, ...targets.slice(1)]
+      }
       return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], `${path}/figcaption[1]`, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)

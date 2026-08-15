@@ -181,3 +181,35 @@ describe('table cell scope on import', () => {
     expect(codes(html)).toContain('attribute-dropped')
   })
 })
+
+describe('table caption on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('reads a table\'s own <caption>, which pandoc emits for every captioned table', () => {
+    // The row walk looks only for `tr`, so before this the <caption> element
+    // was skipped and its text left the document with no diagnostic at all.
+    const source = carve(
+      '<table><caption>Fruit prices</caption><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>',
+    )
+    expect(source).toBe('|=A|\n| 1 |\n^ Fruit prices')
+    expect(carveToHtml(source)).toContain('<caption>Fruit prices</caption>')
+    expect(codes('<table><caption>C</caption><tbody><tr><td>1</td></tr></tbody></table>')).toEqual([])
+  })
+
+  it('puts a figure-wrapped table\'s figcaption in the caption slot the table left empty', () => {
+    expect(carve('<figure><table><tbody><tr><td>1</td></tr></tbody></table><figcaption>Outer</figcaption></figure>'))
+      .toBe('| 1 |\n^ Outer')
+  })
+
+  it('keeps the table\'s own caption when a figure also captions it, and says so', () => {
+    // Two captions, one slot. Carve cannot spell the figure WRAPPER around a
+    // table at all, so the figure's caption is the one that cannot survive.
+    // Writing both produced a second `^ ` line that re-read as a paragraph.
+    const html =
+      '<figure><table><caption>Inner</caption><tbody><tr><td>1</td></tr></tbody></table><figcaption>Outer</figcaption></figure>'
+    expect(carve(html)).toBe('| 1 |\n^ Inner')
+    expect(codes(html)).toEqual(['table-degraded'])
+    expect(carveToHtml(carve(html))).not.toContain('<p>^')
+  })
+})
