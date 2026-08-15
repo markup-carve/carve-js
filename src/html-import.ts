@@ -485,7 +485,7 @@ class Importer {
     const raw = this.attr(node, 'start')
     if (raw === undefined) return 1
     const value = Number(raw.trim())
-    if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && Math.abs(value) <= 2_147_483_647) return value
+    if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647) return value
     this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path)
     return 1
   }
@@ -512,10 +512,14 @@ class Importer {
     // Roman notation ends at 3999. Past it the writer has no numeral and
     // repeats the thousands letter instead, so `start="1000000000"` is a
     // 40-byte input asking for a million characters PER ITEM - the kind of
-    // amplification `maxNodes` and `maxDepth` are here to refuse. The list
-    // keeps its decimal counting, which spells any start in its own digits.
-    if (!alphabetic && start > 3999) {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": roman notation has no numeral above 3999`, 'warning', path)
+    // amplification `maxNodes` and `maxDepth` are here to refuse. The LAST
+    // item is the one to ask about, not the first: a list opened at 3999 and
+    // run long crosses the same boundary from inside, and its output then
+    // grows as the square of its length. The list keeps its decimal counting,
+    // which spells any position in its own digits.
+    const last = start + Math.max(items, 1) - 1
+    if (!alphabetic && last > 3999) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path)
       return {}
     }
     if (alphabetic && start > 26) {
