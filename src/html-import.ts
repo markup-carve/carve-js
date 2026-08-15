@@ -470,7 +470,7 @@ class Importer {
    *   1000 come back as the other kind. A second item settles it - `v.` `vi.`
    *   is roman 5 - which is why the count is part of the question.
    */
-  private olType(node: P5Node, path: string, ordered: boolean, items: number): { olType?: List['olType'] } {
+  private olType(node: P5Node, path: string, ordered: boolean, items: number): Record<string, never> | { olType: NonNullable<List['olType']> } {
     const value = ordered ? this.attr(node, 'type') : undefined
     if (value === undefined || value === '1') return {}
     if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
@@ -480,6 +480,17 @@ class Importer {
     const parsed = Number(this.attr(node, 'start') ?? '1')
     const start = Number.isFinite(parsed) ? parsed : 1
     const alphabetic = value === 'a' || value === 'A'
+    // An alphabet counts from ONE. `start="0"` and a negative start are valid
+    // HTML and there is no letter at those positions, so this is not a marker
+    // the writer loses - it is a value the mapping has no image for, and the
+    // list stays the decimal one it already was. Keeping the alphabet here
+    // would be worse than the loss it reports: the writer derives its letter
+    // arithmetically, so zero comes out as a BACKTICK and -3 as `]`, putting
+    // characters in the document that can pair with a later one.
+    if (start < 1) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path)
+      return {}
+    }
     if (alphabetic && start > 26) {
       this.unspellable.push({
         path,

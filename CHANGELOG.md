@@ -23,7 +23,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the written MARKER - an alphabetic list starting past the 26th letter, and a
   one-item list whose only marker is a letter the other alphabet claims - and
   both are reported as serialization losses instead of being traded for a
-  silently different list.
+  silently different list. A zero or negative `start` claims no alphabet at all,
+  since none has a letter there.
 
 - **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
   `dt`/`dd` are not block tags, so every term and every definition landed in one

@@ -557,6 +557,30 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToAst(html).report.diagnostics).toEqual([])
   })
 
+  it('claims no alphabet before its first letter', () => {
+    // `start="0"` and a negative start are valid HTML and no alphabet has a
+    // letter there. Keeping the type would be worse than the loss it reports:
+    // the writer derives its letter arithmetically, so zero came out as a
+    // BACKTICK and -3 as `]` - characters that can pair with a later one.
+    const zero = htmlToCarve('<ol type="a" start="0"><li>x</li><li>y</li></ol>')
+    expect(zero.value).toBe('0. x\n\n1. y\n')
+    expect(zero.report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped type="a" on <ol> with start="0": an alphabet has no letter before the first',
+      }),
+    ])
+    expect(htmlToCarve('<ol type="i" start="-3"><li>x</li></ol>').value).not.toContain('`')
+  })
+
+  it('CONTROL: a decimal list with the same start is untouched by that rule', () => {
+    // What a negative start does to a list is the existing decimal behavior and
+    // no part of this change: `type="1"` takes the same path it always did.
+    expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').value).toBe('-3. x\n')
+    expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').report.diagnostics).toEqual([])
+  })
+
   it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {
     expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
       expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
