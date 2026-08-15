@@ -231,11 +231,58 @@ export interface ThematicBreak extends BaseNode {
   marker?: '-' | '*' | '_'
 }
 
+/**
+ * One body group of {@link TableRowGroups}, consuming `headRows + bodyRows` of
+ * the table's rows.
+ */
+export interface TableBodyGroup {
+  /** Rows at the start of this group forming its intermediate header. */
+  headRows: number
+  /** Rows in this group after its intermediate header. */
+  bodyRows: number
+  /**
+   * Leading columns of this group's rows that are row headers. Absent means
+   * zero. It sits on the group rather than on the table because that is where
+   * the exchanged model puts it.
+   */
+  rowHeadColumns?: number
+  attrs?: Attrs
+}
+
+/**
+ * An explicit head/body/foot partition of a table's rows (PART 12 §15).
+ *
+ * It PARTITIONS `rows` and never repeats them: the counts consume `rows` in
+ * order, head first, then each body, then the foot, and they MUST account for
+ * every row exactly once. `fromAstJson` refuses a payload where they do not,
+ * because JSON Schema cannot relate one field's value to another's length and
+ * a non-summing partition therefore validates cleanly.
+ *
+ * Carve 0.1 SOURCE has no spelling for it. Absent means the implicit structure
+ * every renderer already derives - the leading run of header rows as the head,
+ * everything after it as one body, no foot, no row-head columns - so a table
+ * that carries it says something that derivation cannot. HTML, plain and ANSI
+ * output ignore it.
+ */
+export interface TableRowGroups {
+  /**
+   * Rows at the start of `rows` forming the table head. Stated rather than
+   * derived, because a body's own intermediate header rows are header rows too
+   * and the leading run alone cannot say where one ends and the other begins.
+   */
+  headRows: number
+  /** The body groups, in order, each consuming the next `headRows + bodyRows`. */
+  bodies: TableBodyGroup[]
+  /** Rows at the end of `rows` forming the table foot. */
+  footRows: number
+}
+
 export interface Table extends BaseNode {
   type: 'table'
   caption?: InlineNode[]
   /** Structured publishing/navigation label; Carve 0.1 source has no spelling. */
   shortCaption?: InlineNode[]
+  rowGroups?: TableRowGroups
   rows: TableRow[]
 }
 

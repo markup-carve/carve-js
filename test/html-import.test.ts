@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseFragment } from 'parse5'
-import { HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, parse, renderHtml, semanticSpan } from '../src/index.js'
+import { AstJsonPartitionError, HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, fromAstJson, parse, renderHtml, semanticSpan, toAstJson } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -892,7 +892,9 @@ describe('table spans on import', () => {
     // swallowed by a cell HTML stops at the body's last row.
     const html = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td rowspan="0">b</td><td>x</td></tr><tr><td>y</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
     expect(htmlToCarve(html).value).toBe('|=h|\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
-    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    // The `<tfoot>` is a grouping the written source cannot spell, which is its
+    // own row's business; no span is reported here.
+    expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
   })
 
   it('stops a rowspan at its row group, whatever the number says', () => {
@@ -1086,5 +1088,161 @@ describe('the import decisions that are policy', () => {
     expect(htmlToCarve('<p><mark>m</mark><code>c</code></p>').report.diagnostics).toEqual([])
     // The contrast, in the same assertion style: one of the seven.
     expect(htmlToCarve('<p><kbd>Tab</kbd></p>').value).toBe('[Tab]{kbd}\n')
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P1's row-group row for carve-js, under decision D1
+ * as ruled: (b), emit only where the partition says something a reader cannot
+ * derive from the rows alone.
+ */
+describe('table row groups on import', () => {
+  const groupsOf = (html: string) =>
+    (htmlToAst(html).value.children[0] as { rowGroups?: unknown }).rowGroups
+
+  it('says nothing for the tables every renderer already derives', () => {
+    // The derivation is: the leading run of all-header rows is the head,
+    // everything after it is one body, no foot, no row-head columns. A
+    // `<thead>` over a `<tbody>` IS that, and so is a bare header row - the
+    // HTML parser wraps it in an implicit `<tbody>`, which is not a statement
+    // about the table.
+    expect(groupsOf('<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody></table>')).toBeUndefined()
+    expect(groupsOf('<table><tr><th>h</th></tr><tr><td>b</td></tr></table>')).toBeUndefined()
+    expect(groupsOf('<table><tbody><tr><th>h</th></tr><tr><td>b</td></tr></tbody></table>')).toBeUndefined()
+    expect(groupsOf('<table><tr><td>a</td></tr><tr><td>b</td></tr></table>')).toBeUndefined()
+  })
+
+  const nonTrivial: Array<[string, string, unknown]> = [
+    [
+      'a foot',
+      '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 },
+    ],
+    [
+      'a second body',
+      '<table><tbody><tr><td>a</td></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>',
+      { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 },
+    ],
+    [
+      'row-head columns',
+      '<table><thead><tr><th>h</th><th>x</th></tr></thead><tbody><tr><th>r</th><td>1</td></tr><tr><th>s</th><td>2</td></tr></tbody></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 },
+    ],
+    [
+      'a head that is not header cells',
+      // What Word and pandoc emit. The derived head is EMPTY here and the
+      // stated one is not, so the two disagree and the field is the difference.
+      '<table><thead><tr><td>h</td></tr></thead><tbody><tr><td>b</td></tr></tbody></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 },
+    ],
+    [
+      'a body with its own header rows under a head',
+      '<table><thead><tr><th>h</th></tr></thead><tbody><tr><th>g</th></tr><tr><td>a</td></tr></tbody></table>',
+      { headRows: 1, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 },
+    ],
+  ]
+
+  for (const [name, html, expected] of nonTrivial) {
+    it(`states the partition for ${name}`, () => {
+      expect(groupsOf(html)).toEqual(expected)
+    })
+  }
+
+  it('partitions the rows it was built from, in every shape that emits one', () => {
+    // PART 12 section 15's MUST, asserted where it CAN fail: over the produced
+    // field against the produced rows. The producer itself does not check it -
+    // both come from the same row list there, so such a check could not fail.
+    for (const [, html] of nonTrivial) {
+      const table = htmlToAst(html).value.children[0] as { rows: unknown[]; rowGroups: { headRows: number; footRows: number; bodies: Array<{ headRows: number; bodyRows: number }> } }
+      const counted = table.rowGroups.headRows + table.rowGroups.footRows +
+        table.rowGroups.bodies.reduce((total, body) => total + body.headRows + body.bodyRows, 0)
+
+      expect(counted).toBe(table.rows.length)
+    }
+  })
+
+  it('keeps it in the AST and reports it when a writer has to spell it', () => {
+    // Carve source has no spelling for the field, so `htmlToAst` loses nothing
+    // and `htmlToCarve` is where the loss happens - the split PART 12 section
+    // 16 draws, and the same one the figure-wrapping-a-table loss uses.
+    const html = '<table><tbody><tr><td>a</td></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>'
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'structure-unspellable',
+        severity: 'warning',
+        message: expect.stringContaining('explicit head/body/foot grouping'),
+        path: '/table[1]',
+      }),
+    ])
+  })
+
+  it('refuses to describe a head or foot that is not at the edge of the rows', () => {
+    // The field can only say "the first N rows" and "the last N rows". A
+    // `<thead>` after a `<tbody>` is a table it cannot describe, so the
+    // grouping goes and is reported rather than being stated wrongly.
+    const html = '<table><tbody><tr><td>b</td></tr></tbody><thead><tr><th>h</th></tr></thead></table>'
+    expect(groupsOf(html)).toBeUndefined()
+    expect(htmlToAst(html).report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('not at the edge of its rows') }),
+    ])
+  })
+
+  it('survives the wire in both directions', () => {
+    const doc = htmlToAst('<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>').value
+    const wire = toAstJson(doc)
+    expect((wire.children[0] as { rowGroups?: unknown }).rowGroups).toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 })
+    expect((fromAstJson(JSON.parse(JSON.stringify(wire))).children[0] as { rowGroups?: unknown }).rowGroups)
+      .toEqual((doc.children[0] as { rowGroups?: unknown }).rowGroups)
+  })
+})
+
+describe('a row-group partition arriving from outside', () => {
+  const payload = (rowGroups: unknown) => ({
+    type: 'document',
+    srcByteLength: 0,
+    children: [
+      {
+        type: 'table',
+        rows: [
+          { type: 'table_row', cells: [{ type: 'table_cell', header: true, children: [{ type: 'text', value: 'h' }] }] },
+          { type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [{ type: 'text', value: 'b' }] }] },
+        ],
+        rowGroups,
+      },
+    ],
+  })
+
+  it('is refused when the counts do not consume the rows', () => {
+    /*
+     * PART 12 section 15 makes it a MUST, and JSON SCHEMA CANNOT SAY SO: there
+     * is no way to relate one field's value to the length of another's, so
+     * `headRows: 5` on a two-row table validates cleanly. A green validator is
+     * not evidence, which is why this is checked here.
+     */
+    expect(() => fromAstJson(payload({ headRows: 5, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never))
+      .toThrow(AstJsonPartitionError)
+    expect(() => fromAstJson(payload({ headRows: 0, bodies: [], footRows: 0 }) as never)).toThrow(AstJsonPartitionError)
+    expect(() => fromAstJson(payload({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 }) as never))
+      .toThrow(AstJsonPartitionError)
+  })
+
+  it('names both numbers, so the payload can be fixed', () => {
+    try {
+      fromAstJson(payload({ headRows: 5, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never)
+      expect.unreachable('the partition should have been refused')
+    } catch (error) {
+      expect(error).toBeInstanceOf(AstJsonPartitionError)
+      expect((error as AstJsonPartitionError).counted).toBe(6)
+      expect((error as AstJsonPartitionError).rows).toBe(2)
+      expect((error as Error).message).toContain('account for 6 rows of 2')
+    }
+  })
+
+  it('CONTROL: a partition that does consume them is accepted', () => {
+    expect(() => fromAstJson(payload({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never)).not.toThrow()
+    expect(() => fromAstJson(payload({ headRows: 0, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 }) as never)).not.toThrow()
+    // And a table with no grouping at all is not asked the question.
+    expect(() => fromAstJson(payload(undefined) as never)).not.toThrow()
   })
 })

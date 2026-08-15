@@ -7,8 +7,10 @@ import type {
   FigureGroup,
   InlineNode,
   List,
+  TableBodyGroup,
   TableCell,
   TableRow,
+  TableRowGroups,
 } from './ast.js'
 import { renderCarve } from './render-carve.js'
 
@@ -875,10 +877,121 @@ class Importer {
       }),
     )
     const rows = this.spanGrid(built, path, depth)
+    const rowGroups = this.rowGroups(tr, group, leadingHeaderRows, path)
     const caption = captionNode
       ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
       : undefined
-    return { type: 'table', rows, ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+    return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * `<thead>/<tbody>/<tfoot>` -> `table.rowGroups`, when the partition says
+   * something a reader cannot derive (carve#1210 D1, ruled as (b)).
+   *
+   * Every renderer already derives a structure from the rows alone: the leading
+   * run of all-header rows is the head, everything after it is one body, there
+   * is no foot and there are no row-head columns. A `<thead>` over a `<tbody>`
+   * is exactly that, so emitting the field for it would put structure into
+   * every imported table that the source form cannot spell and hand-written
+   * Carve never carries - which is what (a) was and what (b) rejects.
+   *
+   * So it is emitted only where the two DISAGREE: a `<tfoot>`, a second
+   * `<tbody>`, a body with its own intermediate header rows, a body with
+   * row-head columns, or a `<thead>` whose rows are not all header cells (Word
+   * and pandoc both emit `<thead><tr><td>`), where the derived head is empty
+   * and the stated one is not.
+   *
+   * The counts are not checked against `rows.length` here. They are built from
+   * the same row list the rows are built from, so a check at this point cannot
+   * fail; PART 12 §15's MUST is enforced where a payload arrives from
+   * elsewhere, in `fromAstJson`.
+   */
+  private rowGroups(
+    tr: P5Node[],
+    group: Map<P5Node, P5Node>,
+    leadingHeaderRows: number,
+    path: string,
+  ): TableRowGroups | undefined {
+    if (tr.length === 0) return undefined
+    const sectionOf = (row: P5Node): string => group.get(row)?.tagName ?? 'tbody'
+    const isHeaderRow = (row: P5Node): boolean => {
+      const cells = (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+      return cells.length > 0 && cells.every((n) => n.tagName === 'th')
+    }
+    // The head is a PREFIX of `rows` and the foot a SUFFIX, which is what the
+    // field can express. A `<thead>` that is not first, or a `<tfoot>` with
+    // rows after it, is a table this cannot describe.
+    const sections = tr.map(sectionOf)
+    const headRows = sections.findIndex((name) => name !== 'thead') === -1 ? tr.length : sections.findIndex((name) => name !== 'thead')
+    let footRows = 0
+    while (footRows < tr.length - headRows && sections[tr.length - 1 - footRows] === 'tfoot') footRows += 1
+    const middle = tr.slice(headRows, tr.length - footRows)
+    if (middle.some((row) => sectionOf(row) === 'thead' || sectionOf(row) === 'tfoot')) {
+      this.add(
+        'table-degraded',
+        'Dropped the row grouping of a table whose <thead> or <tfoot> is not at the edge of its rows: the head is a prefix of the rows and the foot a suffix',
+        'warning',
+        path,
+      )
+      return undefined
+    }
+
+    const bodies: TableBodyGroup[] = []
+    let index = 0
+    while (index < middle.length) {
+      const section = group.get(middle[index]!)
+      const rows: P5Node[] = []
+      while (index < middle.length && group.get(middle[index]!) === section) rows.push(middle[index++]!)
+      let groupHead = 0
+      while (groupHead < rows.length && isHeaderRow(rows[groupHead]!)) groupHead += 1
+      // A group whose rows are ALL header rows is an intermediate header with
+      // nothing under it, which is what the counts say and not something to
+      // reinterpret.
+      const rowHeadColumns = this.rowHeadColumns(rows.slice(groupHead))
+      bodies.push({ headRows: groupHead, bodyRows: rows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}) })
+    }
+
+    // No `<thead>` at all: the leading run of header rows is what every renderer
+    // reads as the head, so it is counted as one here too. Without this, the
+    // ORDINARY table - a header row and some data rows, with only the implicit
+    // `<tbody>` the HTML parser inserts - came out with an intermediate header
+    // and no head, which is a different statement about the same table and puts
+    // the field on nearly every document. That is exactly what (b) rejects.
+    let headRows2 = headRows
+    if (headRows2 === 0 && bodies.length > 0 && leadingHeaderRows > 0) {
+      const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
+      headRows2 = absorbed
+      bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
+      if (bodies[0]!.headRows === 0 && bodies[0]!.bodyRows === 0 && bodies[0]!.rowHeadColumns === undefined) bodies.shift()
+    }
+
+    const derivable =
+      headRows2 === leadingHeaderRows &&
+      footRows === 0 &&
+      bodies.length <= 1 &&
+      bodies.every((body) => body.headRows === 0 && (body.rowHeadColumns ?? 0) === 0)
+    if (derivable) return undefined
+    // Carve SOURCE has no spelling for the field, so a writer loses it. The
+    // AST keeps it and `htmlToCarve` reports it, which is the split §16 draws.
+    this.unspellable.push({
+      path,
+      message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
+    })
+    return { headRows: headRows2, bodies, footRows }
+  }
+
+  /** Leading columns that are header cells in EVERY row of the group. */
+  private rowHeadColumns(rows: P5Node[]): number {
+    if (rows.length === 0) return 0
+    const leading = (row: P5Node): number => {
+      const cells = (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+      let count = 0
+      while (count < cells.length && cells[count]!.tagName === 'th') count += 1
+      // An all-header row would say every column is a row head, which is what
+      // an intermediate HEADER row is, not a row-head column.
+      return count === cells.length ? 0 : count
+    }
+    return Math.min(...rows.map(leading))
   }
 
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {

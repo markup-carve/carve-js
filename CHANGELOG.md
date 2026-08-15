@@ -9,6 +9,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import states a table's row grouping, where it says something.**
+  `<thead>`, `<tbody>` and `<tfoot>` map to `table.rowGroups` - a foot, a second
+  body, a body with its own header rows or with row-head columns, and a
+  `<thead>` whose rows are not header cells (what Word and pandoc emit). A plain
+  `<thead>` over a `<tbody>` still emits nothing: that IS the structure every
+  renderer derives from the rows, and carrying the field for it would put
+  unspellable structure in every imported table (decision D1, ruled as (b)).
+  Carve source cannot spell the field, so `htmlToAst` keeps it and `htmlToCarve`
+  reports the loss.
+- **`AstJsonPartitionError`.** `fromAstJson` refuses a `table.rowGroups` whose
+  counts do not consume the table's rows. PART 12 section 15 makes the sum a
+  MUST and JSON Schema cannot express it - there is no way to relate one field's
+  value to another's length - so `headRows: 5` on a two-row table validated
+  cleanly, decoded, and reached a consumer that then read rows the table does
+  not have.
+
 - **HTML import keeps a table's spans.** `colspan` and `rowspan` were thrown
   away, so a spanning cell was written as an ordinary one and its row came up
   short: `<td colspan="2">` under a two-column header produced a one-column row,
