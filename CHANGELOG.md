@@ -24,7 +24,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one-item list whose only marker is a letter the other alphabet claims - and
   both are reported as serialization losses instead of being traded for a
   silently different list. A zero or negative `start` claims no alphabet at all,
-  since none has a letter there.
+  since none has a letter there, and a roman start above 3999 claims none
+  either, because past it the writer has no numeral and repeats the thousands
+  letter - a 40-byte input asking for a million characters per item.
 
 - **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
   `dt`/`dd` are not block tags, so every term and every definition landed in one
@@ -227,6 +229,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already a no-op and still accepts its value, so no caller breaks.
 
 ### Fixed
+
+- **`<ol start>` is read by HTML's integer rules on import.** `Number()` stood
+  there and accepted what the attribute does not: `start="2.9"` opened a list at
+  2.9 and `start="1e3"` at 1000, both written back as their own marker, and
+  `start="foo"` became `NaN`, which the writer spelled `NaN. x`. Such a value is
+  now reported and the list starts where it would without the attribute.
 
 - **The canonical writer no longer over-escapes a definition list it did not
   parse.** Its escape decision compares the two renders as trees and skips

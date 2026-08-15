@@ -295,8 +295,8 @@ class Importer {
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
     })
-    const start = ordered ? Number(this.attr(node, 'start') ?? '1') : undefined
-    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length), ...(attrs ? { attrs } : {}) }
+    const start = this.listStart(node, path, ordered)
+    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
   }
 
   /**
@@ -470,15 +470,33 @@ class Importer {
    *   1000 come back as the other kind. A second item settles it - `v.` `vi.`
    *   is roman 5 - which is why the count is part of the question.
    */
-  private olType(node: P5Node, path: string, ordered: boolean, items: number): Record<string, never> | { olType: NonNullable<List['olType']> } {
+  /**
+   * `<ol start>` under HTML's own rules for parsing integers: optional sign,
+   * then digits, within a signed 32-bit range. Anything else is not a number
+   * the attribute defines and the default stands, which is what a browser does
+   * with it too.
+   *
+   * `Number()` stood here and accepts what HTML does not: `2.9` opened a list
+   * at 2.9 and `1e3` at 1000, both written back as their own marker, and `foo`
+   * became NaN, which the writer spelled `NaN. x`. None of it was reported.
+   */
+  private listStart(node: P5Node, path: string, ordered: boolean): number | undefined {
+    if (!ordered) return undefined
+    const raw = this.attr(node, 'start')
+    if (raw === undefined) return 1
+    const value = Number(raw.trim())
+    if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && Math.abs(value) <= 2_147_483_647) return value
+    this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path)
+    return 1
+  }
+
+  private olType(node: P5Node, path: string, ordered: boolean, items: number, start: number): Record<string, never> | { olType: NonNullable<List['olType']> } {
     const value = ordered ? this.attr(node, 'type') : undefined
     if (value === undefined || value === '1') return {}
     if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
       this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
       return {}
     }
-    const parsed = Number(this.attr(node, 'start') ?? '1')
-    const start = Number.isFinite(parsed) ? parsed : 1
     const alphabetic = value === 'a' || value === 'A'
     // An alphabet counts from ONE. `start="0"` and a negative start are valid
     // HTML and there is no letter at those positions, so this is not a marker
@@ -489,6 +507,15 @@ class Importer {
     // characters in the document that can pair with a later one.
     if (start < 1) {
       this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path)
+      return {}
+    }
+    // Roman notation ends at 3999. Past it the writer has no numeral and
+    // repeats the thousands letter instead, so `start="1000000000"` is a
+    // 40-byte input asking for a million characters PER ITEM - the kind of
+    // amplification `maxNodes` and `maxDepth` are here to refuse. The list
+    // keeps its decimal counting, which spells any start in its own digits.
+    if (!alphabetic && start > 3999) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": roman notation has no numeral above 3999`, 'warning', path)
       return {}
     }
     if (alphabetic && start > 26) {

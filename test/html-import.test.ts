@@ -581,6 +581,36 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').report.diagnostics).toEqual([])
   })
 
+  it('refuses a roman start no roman numeral spells', () => {
+    // Past 3999 the writer has no numeral and repeats the thousands letter, so
+    // a 40-byte input asks for a million characters PER ITEM. The list keeps
+    // its decimal counting, which spells any start in its own digits.
+    const huge = htmlToCarve('<ol type="i" start="1000000000"><li>x</li></ol>')
+    expect(huge.value).toBe('1000000000. x\n')
+    expect(huge.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('no numeral above 3999') }),
+    ])
+    // The boundary itself is spellable and keeps the alphabet.
+    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li></ol>').value).toBe('mmmcmxcix. x\n')
+  })
+
+  it('reads the start by HTML integer rules, not by Number()', () => {
+    // `Number()` accepted what the attribute does not. `foo` became NaN, which
+    // the writer spelled `NaN. x` in a decimal list and, once a type could be
+    // kept, as a NUL byte in an alphabetic one; `2.9` opened a list at 2.9 and
+    // `1e3` at 1000. None of it was reported.
+    for (const bad of ['foo', '2.9', '1e3', '']) {
+      expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).value).toBe('1. x\n')
+      expect(htmlToCarve(`<ol type="a" start="${bad}"><li>x</li></ol>`).value).toBe('a. x\n')
+      expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).report.diagnostics).toEqual([
+        expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('not an integer HTML defines') }),
+      ])
+    }
+    // A well-formed one still counts from where it says.
+    expect(htmlToCarve('<ol start="7"><li>x</li></ol>').value).toBe('7. x\n')
+    expect(htmlToCarve('<ol start="7"><li>x</li></ol>').report.diagnostics).toEqual([])
+  })
+
   it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {
     expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
       expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
