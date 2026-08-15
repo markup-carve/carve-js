@@ -14,8 +14,10 @@ import type {
   CaptionNumber,
   Document,
   Figure,
+  FigureGroup,
   Image,
   InlineNode,
+  Table,
   Text,
 } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -649,6 +651,9 @@ export function resolveHeadingIds(
         case 'figure':
           if (b.target.type === 'block_quote') assignIds(b.target.children, true)
           break
+        case 'figure_group':
+          assignIds(b.children, inBlockquote)
+          break
         default:
           break
       }
@@ -992,6 +997,10 @@ export function resolveHeadingIds(
         if (b.target.type === 'block_quote' || b.target.type === 'table')
           walkBlock(b.target, fn)
         break
+      case 'figure_group':
+        if (b.caption) fn(b.caption)
+        b.children.forEach((c) => walkBlock(c, fn))
+        break
       default:
         break
     }
@@ -1014,18 +1023,19 @@ export function resolveHeadingIds(
   // these on an ingested tree (carve#758). What stays here is the crossref
   // target registration, which only makes sense while resolution is running.
   const numberBlocks = (blocks: BlockNode[]): void => {
-    numberCaptionsIn(blocks, counters, (labelNodes, next, attrs) => {
+    numberCaptionsIn(blocks, counters, (labelNodes, next, attrs, suffix) => {
       const id = attrs?.id
       if (id === undefined || targets.has(id)) return
       // Clean "Label N" auto-text: clone the label inlines, trim trailing
       // whitespace on the final text node, then append " N". Markup in the
-      // label is preserved.
+      // label is preserved. A composite figure's PANEL arrives with a letter
+      // suffix (`Figure 2a`, §4c) on the group's own number.
       const autoNodes = labelNodes.map((n) => ({ ...n })) as InlineNode[]
       const last = autoNodes[autoNodes.length - 1]
       if (last && last.type === 'text') {
         last.value = last.value.replace(RE_TRAILING_LABEL_WS, '')
       }
-      autoNodes.push({ type: 'text', value: ` ${next}` } as Text)
+      autoNodes.push({ type: 'text', value: ` ${next}${suffix ?? ''}` } as Text)
       targets.set(id, autoNodes)
     })
   }
@@ -1265,6 +1275,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       case 'block_quote':
       case 'admonition':
       case 'div':
+      case 'figure_group':
         promoteBlockImages(b.children, figuresOnly)
         break
       case 'list':
@@ -1288,7 +1299,36 @@ type CaptionNumbered = (
   labelNodes: InlineNode[],
   n: number,
   attrs: Attrs | undefined,
+  /**
+   * PART 9 §4c: a composite figure's PANEL takes the GROUP's number plus a
+   * letter (`a`, `b`, …) derived from its order among the panels. The letter
+   * arrives here as a suffix on the registered auto-text (`Figure 2a`); the
+   * group's own registration and every non-panel caption pass none.
+   */
+  suffix?: string,
 ) => void
+
+/**
+ * The §4c panel letter for panel index `k` (0-based): `a`..`z`, then `aa`,
+ * `ab`, … - bijective base 26, matching the executable spec's `panelLetter`.
+ */
+function panelLetter(k: number): string {
+  let s = ''
+  k++
+  while (k > 0) {
+    k--
+    s = String.fromCharCode(97 + (k % 26)) + s
+    k = Math.floor(k / 26)
+  }
+  return s
+}
+
+/** The §4c panels of a group: its `figure` and `table` children, in order. */
+export function figureGroupPanels(group: FigureGroup): (Figure | Table)[] {
+  return group.children.filter(
+    (c): c is Figure | Table => c.type === 'figure' || c.type === 'table',
+  )
+}
 
 /**
  * Assign `caption_number.n` per label, in document order, over `blocks`.
@@ -1308,49 +1348,83 @@ export function numberCaptionsIn(
   counters: Map<string, number>,
   onNumbered?: CaptionNumbered,
 ): void {
-  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined): void => {
+  const numberCaption = (caption: InlineNode[], attrs: Attrs | undefined): number | undefined => {
     const idx = caption.findIndex((n) => n.type === 'caption_number')
-    if (idx === -1) return
+    if (idx === -1) return undefined
     const labelNodes = caption.slice(0, idx)
     const label = inlineText(labelNodes).replace(RE_TRAILING_LABEL_WS, '')
     const next = (counters.get(label) ?? 0) + 1
     counters.set(label, next)
     ;(caption[idx] as CaptionNumber).n = next
     onNumbered?.(labelNodes, next, attrs)
+    return idx
   }
 
-  const walk = (bs: BlockNode[]): void => {
+  // PART 9 §4c: a PANEL of a composite figure is not a sequence unit. Its
+  // caption's `#` placeholder draws no number and registers nothing - the
+  // caption_number node STAYS in the tree, un-numbered, and every renderer
+  // emits its authored spelling (the unresolved-reference precedent: keep the
+  // typed node, render what the author wrote). Decided here, in the one
+  // shared numbering pass, so the parse path and the AST-JSON ingest path
+  // (carve#758) publish the same wire shape as carve-php and carve-rs.
+  const walk = (bs: BlockNode[], inPanel: boolean): void => {
     for (const b of bs) {
       if (b.type === 'figure') {
-        numberCaption(b.caption, b.attrs)
+        if (!inPanel) numberCaption(b.caption, b.attrs)
       } else if (b.type === 'table' && b.caption) {
-        numberCaption(b.caption, b.attrs)
+        if (!inPanel) numberCaption(b.caption, b.attrs)
       }
       switch (b.type) {
         case 'block_quote':
         case 'admonition':
         case 'div':
-          walk(b.children)
+          walk(b.children, inPanel)
           break
         case 'list':
-          for (const it of b.items) walk(it.children)
+          for (const it of b.items) walk(it.children, inPanel)
           break
         case 'definition_list':
-          for (const it of b.items) for (const d of it.definitions) walk(d)
+          for (const it of b.items) for (const d of it.definitions) walk(d, inPanel)
           break
         case 'figure':
           // A figure wraps an image / blockquote / table; descend into a
           // blockquote or table target so a nested captioned element is
           // numbered too (mirrors walkBlock's figure-target descent).
-          if (b.target.type === 'block_quote') walk(b.target.children)
-          else if (b.target.type === 'table' && b.target.caption)
+          if (b.target.type === 'block_quote') walk(b.target.children, inPanel)
+          else if (b.target.type === 'table' && b.target.caption && !inPanel) {
             numberCaption(b.target.caption, b.target.attrs)
+          }
           break
+        case 'figure_group': {
+          // The group is ONE numbering unit (§4c): only its own caption draws
+          // from the sequence, and its draw also registers the panel ids with
+          // letters - so `</#panel-id>` resolves as "Figure 2a". A group with
+          // no numbered caption registers nothing for its panels either.
+          const panels = figureGroupPanels(b)
+          if (!inPanel && b.caption) {
+            const labelIdx = numberCaption(b.caption, b.attrs)
+            if (labelIdx !== undefined && onNumbered) {
+              const labelNodes = b.caption.slice(0, labelIdx)
+              const n = (b.caption[labelIdx] as CaptionNumber).n!
+              panels.forEach((panel, k) => {
+                onNumbered(labelNodes, n, panel.attrs, panelLetter(k))
+              })
+            }
+          }
+          // Children walk: panels are not sequence units, and everything a
+          // panel CONTAINS is suppressed with it; non-panel stray content
+          // numbers normally, exactly as it would outside the group.
+          for (const c of b.children) {
+            const isPanel = c.type === 'figure' || c.type === 'table'
+            walk([c], inPanel || isPanel)
+          }
+          break
+        }
         default:
           break
       }
     }
   }
 
-  walk(blocks)
+  walk(blocks, false)
 }

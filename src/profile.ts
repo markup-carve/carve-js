@@ -47,6 +47,7 @@ export const CANONICAL_BLOCK_TYPES = [
   'line_block',
   'comment',
   'figure',
+  'figure_group',
   'caption',
   // A DEFINITION LINE IS CONTENT, so both definition types are deniable
   // (carve#826, the ruling on carve#771). They render nothing in HTML and are
@@ -178,6 +179,8 @@ export function canonicalType(type: string): string {
       return 'definition_list'
     case 'figure':
       return 'figure'
+    case 'figure_group':
+      return 'figure_group'
     case 'comment':
       return 'comment'
     // ----- inline -----

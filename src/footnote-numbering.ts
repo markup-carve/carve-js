@@ -101,6 +101,10 @@ function walkBlockInlines(
       if (node.target.type === 'block_quote' || node.target.type === 'table')
         walkBlockInlines(node.target, visit, depth + 1)
       break
+    case 'figure_group':
+      if (node.caption) visit(node.caption)
+      node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
+      break
     default:
       break
   }

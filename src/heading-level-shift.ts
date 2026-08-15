@@ -21,6 +21,7 @@ function shiftBlock(node: BlockNode, shift: number): void {
     case 'block_quote':
     case 'div':
     case 'admonition':
+    case 'figure_group':
       node.children.forEach((c) => shiftBlock(c, shift))
       break
     case 'list':

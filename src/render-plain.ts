@@ -165,6 +165,19 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
+    case 'figure_group': {
+      // PART 11 degradation (D8): the GROUP caption line first, a blank line,
+      // then each child in source order - a panel as its caption line over its
+      // host degradation, stray content as usual - with a blank line between.
+      let out = ''
+      if (node.caption !== undefined) {
+        out += `${trimNonNbsp(renderInlines(node.caption, ctx))}\n\n`
+      }
+      for (const child of node.children) {
+        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      }
+      return out
+    }
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
@@ -257,6 +270,22 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
   // carve-php).
   const sep = node.target.type === 'block_quote' ? '\n\n' : '\n'
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
+}
+
+/**
+ * A composite figure's PANEL on this target: caption line first, then the host
+ * degradation (D8) - the inverse of the standalone figure, because with the
+ * group caption leading the whole block, a caption under its host would read
+ * as belonging to the NEXT panel.
+ */
+function renderPanelFigure(node: Figure, ctx: PlainContext): string {
+  const target =
+    node.target.type === 'image'
+      ? stripControls(node.target.alt)
+      : node.target.type === 'table'
+        ? trimNonNbsp(renderTable(node.target, ctx))
+        : trimNonNbsp(renderBlock(node.target, ctx))
+  return `${trimNonNbsp(renderInlines(node.caption, ctx))}\n${target}\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {

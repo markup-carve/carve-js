@@ -14,6 +14,7 @@ import type {
   BlockQuote,
   Document,
   Figure,
+  FigureGroup,
   Heading,
   Image,
   InlineNode,
@@ -1128,6 +1129,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
     case 'figure':
       return renderFigure(node, opts, level)
+    case 'figure_group':
+      return renderFigureGroup(node, opts, level)
     case 'abbreviation_def':
       return ''
     case 'raw_block':
@@ -1523,7 +1526,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   return `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}>\n${titleLine}${labelLine}${body}\n${pad}</${tag}>`
 }
 
-function renderFigure(node: Figure, opts: RenderOptions, level: number): string {
+function renderFigure(node: Figure, opts: RenderOptions, level: number, leadClass?: string): string {
   const pad = indent(level)
   let inner: string
   if (node.target.type === 'image') {
@@ -1536,10 +1539,73 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   } else {
     inner = renderTable(node.target, opts, level + 1)
   }
-  return `${pad}<figure${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${inner}\n${pad}  <figcaption>${renderInlines(
+  // A composite figure's PANEL leads its classes with the panel marker, the
+  // way the group's own wrapper leads with `carve-figure-group` - the
+  // class-first injection renderAdmonition uses (PART 9 §4c).
+  const open =
+    leadClass === undefined
+      ? `${pad}<figure${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      : `${pad}<figure${sourceLineAttr(opts, node.pos?.startLine, node.attrs)} class="${[
+          ...new Set([leadClass, ...(node.attrs?.classes ?? [])]),
+        ]
+          .map(escapeAttr)
+          .join(' ')}"${renderAttrs(withoutClassSlot(node.attrs))}>`
+  return `${open}\n${inner}\n${pad}  <figcaption>${renderInlines(
     node.caption,
     opts,
   )}</figcaption>\n${pad}</figure>`
+}
+
+/** A copy of `attrs` with the class slot removed (the caller renders it). */
+function withoutClassSlot(attrs: Attrs | undefined): Attrs {
+  const rest: Attrs = {}
+  if (attrs?.id !== undefined) rest.id = attrs.id
+  if (attrs?.keyValues) rest.keyValues = attrs.keyValues
+  // The class is structurally first; the id/key attrs after it keep their
+  // source order (order minus the class slot) - same rule as renderAdmonition.
+  if (attrs?.order) rest.order = attrs.order.filter((s) => s !== '.class')
+  return rest
+}
+
+function renderFigureGroup(node: FigureGroup, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  // Class-first injection like renderAdmonition: `carve-figure-group` leads,
+  // attribute-line classes merge after it, id and the rest keep source order.
+  // DEDUPED, first occurrence kept - the oracle's renderBlockAttrs rule - so
+  // an authored `.carve-figure-group` does not double the marker.
+  const classValue = [...new Set(['carve-figure-group', ...(node.attrs?.classes ?? [])])]
+    .map(escapeAttr)
+    .join(' ')
+  const rest = withoutClassSlot(node.attrs)
+  const lines = [
+    `${pad}<figure${sourceLineAttr(opts, node.pos?.startLine, rest)} class="${classValue}"${renderAttrs(rest)}>`,
+  ]
+  // The panels div is UNCONDITIONAL (§4c): zero panels still wrap the
+  // preserved content, and an empty group holds an empty div.
+  lines.push(`${pad}  <div class="carve-figure-panels">`)
+  const inner = node.children
+    .map((c) => {
+      // §4c panels: the `figure` and `table` children, in source order. A
+      // captioned host already renders as a <figure> and takes the panel
+      // class; a table does not render as a figure on its own, so its panel
+      // wrapper is explicit and the table keeps its own attrs and <caption>.
+      if (c.type === 'figure') return renderFigure(c, opts, level + 2, 'carve-figure-panel')
+      if (c.type === 'table') {
+        const t = renderTable(c, opts, level + 3)
+        return `${pad}    <figure class="carve-figure-panel">\n${t}\n${pad}    </figure>`
+      }
+      // Non-panel stray content is preserved in place.
+      return renderBlock(c, opts, level + 2)
+    })
+    .filter((s) => s !== '')
+    .join('\n')
+  if (inner !== '') lines.push(inner)
+  lines.push(`${pad}  </div>`)
+  if (node.caption !== undefined) {
+    lines.push(`${pad}  <figcaption>${renderInlines(node.caption, opts)}</figcaption>`)
+  }
+  lines.push(`${pad}</figure>`)
+  return lines.join('\n')
 }
 
 function renderImage(img: Image, opts: RenderOptions): string {
@@ -1892,8 +1958,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // Unresolved: literal source, the same as an unresolved reference link.
       return `&lt;/#${escapeHtml(node.target)}&gt;`
     case 'caption_number':
-      // Filled by resolve(); an unresolved placeholder renders empty.
-      return node.n === undefined ? '' : String(node.n)
+      // Filled by resolve(); an unresolved placeholder renders its authored
+      // spelling - the unresolved-reference precedent (PART 12 §3a), the
+      // visible failure this language prefers to a silent one, and what the
+      // Markdown/plain/ANSI arms already do. A composite figure's PANEL
+      // caption keeps its placeholder un-numbered by design (PART 9 §4c), so
+      // this arm is what makes it render as the literal `#` the author wrote.
+      return node.n === undefined ? '#' : String(node.n)
     case 'citation_group': {
       // Extension-produced node: per-extension resolution in registration order
       // (mirrors the block path). For each extension, static mode tries its

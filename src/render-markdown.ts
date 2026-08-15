@@ -231,6 +231,21 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
+    case 'figure_group': {
+      // PART 11 degradation (D8): the panels in source order, each host
+      // degraded as usual with its caption as an EMPHASIZED paragraph after
+      // it; stray content in place; the group caption as a BOLD paragraph at
+      // the end. A table panel's caption is the table's own and stays where
+      // that renderer puts it.
+      let out = ''
+      for (const child of node.children) {
+        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      }
+      if (node.caption !== undefined) {
+        out += `**${trimNonNbsp(renderInlines(node.caption, ctx))}**\n\n`
+      }
+      return out
+    }
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
@@ -416,6 +431,25 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
   // End with the block separator so a following block is not glued to the
   // caption (matching every other block renderer and carve-php).
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
+}
+
+/**
+ * A composite figure's PANEL: the host degraded exactly as `renderFigure`
+ * degrades it, with the caption emphasized rather than plain - the D8 shape
+ * that keeps a panel caption visually subordinate to the group's bold one.
+ */
+function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
+  const target =
+    node.target.type === 'image'
+      ? renderImage(node.target)
+      : node.target.type === 'table'
+        ? trimNonNbsp(renderTable(node.target, ctx))
+        : trimNonNbsp(renderBlock(node.target, ctx))
+  // A BLANK line before the caption, for every host: the emphasized caption is
+  // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
+  // example). The single-newline glue is the standalone figure's shape, not
+  // the panel's.
+  return `${target}\n\n*${trimNonNbsp(renderInlines(node.caption, ctx))}*\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
@@ -1176,6 +1210,13 @@ function walkBlocks(
         visit(block, block.caption)
         if (block.target.type === 'block_quote') walkBlocks(block.target.children, visit, depth + 1)
         else if (block.target.type === 'table') walkBlocks([block.target], visit, depth + 1)
+        break
+      case 'figure_group':
+        // The prepass feeds the heading-id index and the reference scan; a
+        // heading inside a composite figure is a crossref target like any
+        // other, and the group caption carries references of its own.
+        if (block.caption) visit(block, block.caption)
+        walkBlocks(block.children, visit, depth + 1)
         break
       default:
         break
