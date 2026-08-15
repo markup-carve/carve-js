@@ -178,6 +178,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`LIB_VERSION` reports the released version.** The constant stayed at
+  `0.1.0` through the 0.1.1-0.1.3 releases, so the `carve fmt --stamp`
+  provenance stamp and every embedder reading the export named a release that
+  was not the one running. Set to the current version, and a test now pins it
+  to `package.json` so a release bump cannot miss it again.
 - **`fmt` writes a code fence with no space before its info string.** The
   canonical writer emitted the Djot spelling, so `carve fmt` rewrote the
   authored ` ```js ` to ` ``` js ` and `carve migrate --from html` produced the
