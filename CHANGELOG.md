@@ -9,6 +9,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A browser IIFE bundle.** `dist/carve.iife.min.js` exposes the whole public
+  API as a `carve` global, for consumers that load classic scripts rather than
+  ESM: CDN script tags, sandboxed iframes, userscript hosts. The `unpkg` and
+  `jsdelivr` fields point at it, so those hosts serve it from the bare package
+  URL and embedders no longer hand-bundle the package to load it outside a
+  module context. The bundle carries no Node builtins and does not embed
+  `@djot/djot`, which stays dependency-injected. It is built at release time
+  and ships in the npm tarball; a git-dependency install of the repository
+  still builds the ESM output only.
 - **`semanticSpan()` extension.** The four semantic span names core does not
   reserve - `samp`, `var`, `cite`, `dfn` - plus the `:name[…]` spelling for all
   seven as a SOFT-DEPRECATED compatibility form, scheduled for removal in 0.2

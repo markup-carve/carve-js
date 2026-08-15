@@ -69,6 +69,35 @@ jobs:
       - name: Scaling guards
         run: npm run test:perf
 
+  browser-bundle:
+    name: browser bundle parity
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive # the parity check renders the spec corpus
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Builds dist/carve.iife.min.js and asserts it renders identically to
+      # the ESM build. esbuild is fetched by npx at the version pinned in
+      # scripts/build-browser.mjs, so it stays out of devDependencies and off
+      # every git-dependency install. Roughly two seconds, hence per-PR.
+      - name: Bundle parity
+        run: npm run test:browser
+
   mxss:
     name: browser mutation-XSS (svg fence)
     runs-on: ubuntu-latest
