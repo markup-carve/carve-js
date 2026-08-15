@@ -716,7 +716,12 @@ class Importer {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path)
       return []
     }
-    if (tag === 'q') return this.quotation(node, path, depth)
+    // Not in `roundtrip`, which raw-preserves what Carve CANNOT express. The
+    // seven semantic elements are mapped in every mode because their spelling
+    // renders back as the element itself; the marks do not - a `<q>` becomes
+    // text and its `cite` goes with it - so this mapping is the safe/semantic
+    // answer and the raw fallback is the round-tripping one.
+    if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]

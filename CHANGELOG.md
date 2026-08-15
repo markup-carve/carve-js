@@ -19,7 +19,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **HTML import reads `<q>` as quotation marks.** The element unwrapped, so the
   content arrived without the marks that made it a quotation. It now writes the
   typographic pair a browser draws, alternating double and single by nesting
-  depth, and reports the mapping at `info` rather than claiming an unwrap.
+  depth, and reports the mapping at `info` rather than claiming an unwrap. In
+  `roundtrip` mode the element is raw-preserved instead, since the marks are
+  text and do not render back as a `<q>`.
 
 - **HTML import keeps an edit as an edit.** `<ins>` unwrapped to its text, so
   the insertion vanished and only its words stayed; it maps to the `insert`

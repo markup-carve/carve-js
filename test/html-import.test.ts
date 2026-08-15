@@ -707,6 +707,18 @@ describe('disclosures and quotations on import', () => {
     expect(carveToHtml(written)).toBe('<p>“hi”</p>')
   })
 
+  it('preserves <q> raw in roundtrip mode, where the marks are not enough', () => {
+    // `roundtrip` raw-preserves what Carve cannot express. The seven semantic
+    // elements are mapped in every mode because their spelling renders back as
+    // the element; the marks do not - the `<q>` becomes text and its `cite`
+    // goes with it - so this one belongs to the raw fallback there.
+    const result = htmlToAst('<p><q cite="/x">hi</q></p>', { mode: 'roundtrip' })
+    expect(result.value.children[0]).toMatchObject({
+      children: [{ type: 'raw_inline', format: 'html', content: '<q cite="/x">hi</q>' }],
+    })
+    expect(result.report.diagnostics.map((d) => d.code)).toContain('raw-preserved')
+  })
+
   it('keeps what a quotation carried, on a span', () => {
     expect(carve('<p><q id="cited" class="key">hi</q></p>')).toBe('[“hi”]{#cited .key}')
   })
