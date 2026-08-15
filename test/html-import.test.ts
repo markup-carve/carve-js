@@ -1001,3 +1001,90 @@ describe('table spans on import', () => {
     expect(htmlToCarve('<table><tr><td>a</td></tr><caption>Late</caption></table>').report.diagnostics).toEqual([])
   })
 })
+
+/*
+ * `markup-carve/carve#1210` P10's two carve-js rows: behavior that is CLOSED as
+ * policy rather than waiting for a mapping. Both were verified against the
+ * importer before being written down - a documented loss is honest, and a
+ * documented ACCIDENT launders a bug - and both are pinned here so the docs
+ * line stays true.
+ */
+describe('the import decisions that are policy', () => {
+  const EMBEDS = ['video', 'audio', 'iframe', 'svg', 'object', 'canvas']
+
+  it('unwraps an embed to its fallback content in safe and semantic mode', () => {
+    for (const tag of EMBEDS) {
+      const html = `<${tag} src="clip.mp4">Your reader cannot play this.</${tag}>`
+      for (const mode of ['safe', 'semantic'] as const) {
+        const result = htmlToCarve(html, { mode })
+        expect(result.value).toBe('Your reader cannot play this.\n')
+        expect(result.report.diagnostics).toEqual([
+          expect.objectContaining({ code: 'attribute-dropped', message: `Dropped unsupported attribute src on <${tag}>` }),
+          expect.objectContaining({ code: 'element-unwrapped', message: `Unwrapped unsupported <${tag}> element` }),
+        ])
+      }
+    }
+  })
+
+  it('reports what an unwrapped element takes with it, not only its src', () => {
+    /*
+     * `attrs()` reports the attributes it cannot represent and KEEPS the rest -
+     * an id an anchor points at, a class a stylesheet selects on. When the
+     * element is then unwrapped there is nothing left to hang them on, and they
+     * went in silence, so the docs line promising every attribute is accounted
+     * for was false for all but `src`.
+     *
+     * Not only embeds: the same arms unwrap `<section>`, `<form>` and any
+     * unmapped inline element.
+     */
+    expect(htmlToCarve('<video id="player" class="wide" data-x="1">fallback</video>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'element-unwrapped' }),
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped id, class, data-x with the unwrapped <video>: there is no element left to carry them',
+      }),
+    ])
+    for (const html of [
+      '<section id="s">x</section>',
+      '<form id="f">x</form>',
+      '<p><ruby id="r">x</ruby></p>',
+      // The figure that has no representable target is a fourth unwrap arm,
+      // and it kept the same silence.
+      '<figure id="f"><ul><li>a</li></ul><figcaption>c</figcaption></figure>',
+    ]) {
+      expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
+    }
+  })
+
+  it('CONTROL: a div KEEPS its attributes, so nothing is reported there', () => {
+    // It becomes a `div` node, which has an attribute slot. A rule that fired
+    // on every unwrap arm would report a loss that does not happen here.
+    expect(htmlToCarve('<div id="d">x</div>', { mode: 'semantic' }).report.diagnostics).toEqual([])
+  })
+
+  it('keeps an embed verbatim in roundtrip mode, whose contract is Carve-produced HTML', () => {
+    for (const tag of EMBEDS) {
+      const html = `<${tag} src="clip.mp4">fallback</${tag}>`
+      const result = htmlToCarve(html, { mode: 'roundtrip' })
+      expect(result.value).toContain(`<${tag} src="clip.mp4">fallback</${tag}>`)
+      expect(result.report.diagnostics.map((d) => d.code)).toContain('raw-preserved')
+    }
+  })
+
+  it('and a void embed too, which has no fallback content to unwrap to', () => {
+    expect(htmlToCarve('<p>a</p><embed src="x">').value).toBe('a\n')
+    expect(htmlToCarve('<p>a</p><embed src="x">', { mode: 'roundtrip' }).value).toContain('<embed src="x">')
+  })
+
+  it('gives mark and code their own syntax, not a second spelling as a span', () => {
+    // The seven PART 9 spells as a span attribute import as `[text]{kbd}`.
+    // These two are not among them: each already has a syntax, and importing
+    // them here as well would give one input two spellings.
+    expect(htmlToCarve('<p><mark>m</mark></p>').value).toBe('=m=\n')
+    expect(htmlToCarve('<p><code>c</code></p>').value).toBe('`c`\n')
+    expect(htmlToCarve('<p><mark>m</mark><code>c</code></p>').report.diagnostics).toEqual([])
+    // The contrast, in the same assertion style: one of the seven.
+    expect(htmlToCarve('<p><kbd>Tab</kbd></p>').value).toBe('[Tab]{kbd}\n')
+  })
+})
