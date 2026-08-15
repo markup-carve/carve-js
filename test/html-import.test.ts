@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, semanticSpan } from '../src/index.js'
+import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, parse, semanticSpan } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -449,5 +449,194 @@ describe('definition lists on import', () => {
       severity: 'warning',
       message: expect.stringContaining('Moved <p> content out of the <dl>'),
     }))
+  })
+})
+
+/*
+ * The two one-line mappings of `markup-carve/carve#1210` P7, and one the row's
+ * parenthetical assumed was already there.
+ */
+describe('change tracking and ordered-list alphabets on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('keeps an edit as an edit, in both directions of the pair', () => {
+    // `<ins>` unwrapped to its text: the insertion vanished and only its words
+    // stayed. `<del>` reached `strike`, which renders `<s>` - a deletion
+    // imported as "no longer accurate", a different statement.
+    const html = '<p><del>gone</del> <ins>added</ins> <s>old</s></p>'
+    expect(carve(html)).toBe('{-gone-} {+added+} ~old~')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html))).toBe('<p><del>gone</del> <ins>added</ins> <s>old</s></p>')
+  })
+
+  it('spells <strike> the way it spells <s>', () => {
+    expect(carve('<p><strike>old</strike></p>')).toBe('~old~')
+  })
+
+  it('counts an ordered list in the alphabet the HTML asked for', () => {
+    // The attribute was exempt from the unsupported-attribute report and then
+    // unread, so the list came back counting 1. 2. 3. and nothing said so.
+    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a. x\n\nb. y')
+    expect(carve('<ol type="I"><li>x</li></ol>')).toBe('I. x')
+    expect(carveToHtml(carve('<ol type="a"><li>x</li></ol>'))).toContain('<ol type="a">')
+  })
+
+  it('keeps the start together with the alphabet', () => {
+    expect(carve('<ol type="a" start="3"><li>x</li></ol>')).toBe('c. x')
+    expect(carveToHtml(carve('<ol type="a" start="3"><li>x</li></ol>'))).toContain('<ol type="a" start="3">')
+  })
+
+  it('treats type="1" as the default it is, with no diagnostic', () => {
+    expect(carve('<ol type="1"><li>x</li></ol>')).toBe('1. x')
+    expect(codes('<ol type="1"><li>x</li></ol>')).toEqual([])
+  })
+
+  it('reports a type HTML does not define, rather than exempting it into silence', () => {
+    expect(htmlToCarve('<ol type="q"><li>x</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped type="q" on <ol>: an ordered list counts in 1, a, A, i or I',
+        path: '/ol[1]',
+      }),
+    ])
+  })
+
+  it('reports the marker the writer cannot spell, on exactly the lists where it cannot', () => {
+    /*
+     * The FIELD survives every combination; the written MARKER does not. Two
+     * shapes lose it, and the check is the parser's rather than a table's: every
+     * start from 1 to 60 in each of the four alphabets, at one, two and three
+     * items, is imported, written, read back, and the diagnostic is compared
+     * against whether the list actually changed.
+     *
+     * 720 combinations, 212 of which do not survive the round trip. A rule that
+     * over-reports passes a "warns on the bad case" test and fails this one.
+     */
+    let broken = 0
+    let mismatched = 0
+    for (const items of [1, 2, 3]) {
+      for (const type of ['a', 'A', 'i', 'I'] as const) {
+        for (let start = 1; start <= 60; start++) {
+          const html = `<ol type="${type}"${start === 1 ? '' : ` start="${start}"`}>${'<li>x</li>'.repeat(items)}</ol>`
+          const result = htmlToCarve(html)
+          const reread = parse(result.value).children[0] as { olType?: string; start?: number } | undefined
+          const changed = (reread?.olType ?? undefined) !== type || (reread?.start ?? 1) !== start
+          const reported = result.report.diagnostics.some((d) => d.code === 'structure-unspellable')
+          if (changed) broken++
+          if (changed !== reported) mismatched++
+        }
+      }
+    }
+
+    expect(broken).toBe(212)
+    expect(mismatched).toBe(0)
+  })
+
+  it('names the two shapes, so the message says what happened', () => {
+    // No multi-letter alphabetic marker exists: `aa. x` is a paragraph, so the
+    // writer's marker wraps and the list restarts at the first letter.
+    expect(htmlToCarve('<ol type="a" start="27"><li>x</li></ol>').report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'structure-unspellable',
+        severity: 'warning',
+        message: expect.stringContaining('alphabetic list starting at 27'),
+      }),
+    )
+    // A lone `v.` reads as the 22nd letter; `v.` `vi.` reads as roman 5.
+    expect(htmlToCarve('<ol type="i" start="5"><li>x</li></ol>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'structure-unspellable', message: expect.stringContaining('one-item roman list starting at 5') }),
+    )
+    expect(htmlToCarve('<ol type="i" start="5"><li>x</li><li>y</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('reports it as a writer loss, so the AST keeps the alphabet either way', () => {
+    const html = '<ol type="a" start="27"><li>x</li></ol>'
+    expect(htmlToAst(html).value.children).toMatchObject([{ type: 'list', ordered: true, olType: 'a', start: 27 }])
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+  })
+
+  it('claims no alphabet before its first letter', () => {
+    // `start="0"` and a negative start are valid HTML and no alphabet has a
+    // letter there. Keeping the type would be worse than the loss it reports:
+    // the writer derives its letter arithmetically, so zero came out as a
+    // BACKTICK and -3 as `]` - characters that can pair with a later one.
+    const zero = htmlToCarve('<ol type="a" start="0"><li>x</li><li>y</li></ol>')
+    expect(zero.value).toBe('0. x\n\n1. y\n')
+    expect(zero.report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped type="a" on <ol> with start="0": an alphabet has no letter before the first',
+      }),
+    ])
+    expect(htmlToCarve('<ol type="i" start="-3"><li>x</li></ol>').value).not.toContain('`')
+  })
+
+  it('CONTROL: a decimal list with the same start is untouched by that rule', () => {
+    // What a negative start does to a list is the existing decimal behavior and
+    // no part of this change: `type="1"` takes the same path it always did.
+    expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').value).toBe('-3. x\n')
+    expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('refuses a roman start no roman numeral spells', () => {
+    // Past 3999 the writer has no numeral and repeats the thousands letter, so
+    // a 40-byte input asks for a million characters PER ITEM. The list keeps
+    // its decimal counting, which spells any start in its own digits.
+    const huge = htmlToCarve('<ol type="i" start="1000000000"><li>x</li></ol>')
+    expect(huge.value).toBe('1000000000. x\n')
+    expect(huge.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('no numeral above 3999') }),
+    ])
+    // The boundary itself is spellable and keeps the alphabet.
+    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li></ol>').value).toBe('mmmcmxcix. x\n')
+    // And the LAST item is the one asked about: a list opened below the
+    // boundary crosses it from inside, where the output grows as the square of
+    // the list's length.
+    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li><li>y</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('reaching 4000') }),
+    ])
+  })
+
+  it('CONTROL: an alphabetic list crossing the 26th letter loses nothing', () => {
+    // Carve derives a list's numbering from where it STARTS, exactly as a
+    // decimal list does, so the marker the writer puts on a later item is not
+    // an authored fact to preserve. `<ol type="a" start="26">` with two items
+    // is written `z.` `a.` and renders back as the same two-item list starting
+    // at 26 - no diagnostic is owed, and reporting one would name a loss that
+    // does not happen.
+    const html = '<ol type="a" start="26"><li>x</li><li>y</li></ol>'
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(carveToHtml(htmlToCarve(html).value)).toContain('<ol type="a" start="26">')
+  })
+
+  it('reads the start by HTML integer rules, not by Number()', () => {
+    // `Number()` accepted what the attribute does not. `foo` became NaN, which
+    // the writer spelled `NaN. x` in a decimal list and, once a type could be
+    // kept, as a NUL byte in an alphabetic one; `2.9` opened a list at 2.9 and
+    // `1e3` at 1000. None of it was reported.
+    // The minimum signed 32-bit value is IN range, not out of it.
+    expect(htmlToCarve('<ol start="-2147483648"><li>x</li></ol>').report.diagnostics).toEqual([])
+    expect(htmlToCarve('<ol start="-2147483649"><li>x</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('not an integer HTML defines') }),
+    ])
+    for (const bad of ['foo', '2.9', '1e3', '']) {
+      expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).value).toBe('1. x\n')
+      expect(htmlToCarve(`<ol type="a" start="${bad}"><li>x</li></ol>`).value).toBe('a. x\n')
+      expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).report.diagnostics).toEqual([
+        expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('not an integer HTML defines') }),
+      ])
+    }
+    // A well-formed one still counts from where it says.
+    expect(htmlToCarve('<ol start="7"><li>x</li></ol>').value).toBe('7. x\n')
+    expect(htmlToCarve('<ol start="7"><li>x</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {
+    expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
+    ])
   })
 })

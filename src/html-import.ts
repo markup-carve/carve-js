@@ -295,8 +295,8 @@ class Importer {
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
     })
-    const start = ordered ? Number(this.attr(node, 'start') ?? '1') : undefined
-    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...(attrs ? { attrs } : {}) }
+    const start = this.listStart(node, path, ordered)
+    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
   }
 
   /**
@@ -442,6 +442,98 @@ class Importer {
         (block.type === 'paragraph' && !this.visible(block.children)) ||
         (block.type === 'list' && block.items.length === 0),
     )
+  }
+
+  /**
+   * `<ol type>` -> `olType`, the marker alphabet the list counts in.
+   *
+   * The attribute was already exempt from the unsupported-attribute report, so
+   * `<ol type="a">` looked like something the importer handled - and nothing
+   * read it, so the list came back counting `1.` `2.` `3.` with no diagnostic
+   * anywhere. HTML's five values map exactly onto Carve's four plus the
+   * default: `1` IS the default and carries no field, so it is not a loss.
+   *
+   * A value that is none of the five is not HTML's, so nothing can be derived
+   * from it and it is reported here rather than exempted into silence.
+   *
+   * The FIELD survives every time; the written MARKER does not, and the two
+   * shapes where it does not are reported as serialization losses (§16) rather
+   * than traded for a silently different list. Both were measured against the
+   * writer and the parser over every start from 1 to 60 in each alphabet:
+   *
+   * - an alphabetic list starting past the 26th letter. Carve's grammar has no
+   *   multi-letter alphabetic marker at all - `aa. x` is a paragraph - so the
+   *   writer's marker wraps and the list restarts at `a`.
+   * - a ONE-ITEM list whose only marker is a letter the other alphabet claims.
+   *   A single `i` reads as the roman numeral and every other single letter as
+   *   the alphabetic one, so alphabetic 9 and roman 5, 10, 50, 100, 500 and
+   *   1000 come back as the other kind. A second item settles it - `v.` `vi.`
+   *   is roman 5 - which is why the count is part of the question.
+   */
+  /**
+   * `<ol start>` under HTML's own rules for parsing integers: optional sign,
+   * then digits, within a signed 32-bit range. Anything else is not a number
+   * the attribute defines and the default stands, which is what a browser does
+   * with it too.
+   *
+   * `Number()` stood here and accepts what HTML does not: `2.9` opened a list
+   * at 2.9 and `1e3` at 1000, both written back as their own marker, and `foo`
+   * became NaN, which the writer spelled `NaN. x`. None of it was reported.
+   */
+  private listStart(node: P5Node, path: string, ordered: boolean): number | undefined {
+    if (!ordered) return undefined
+    const raw = this.attr(node, 'start')
+    if (raw === undefined) return 1
+    const value = Number(raw.trim())
+    if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647) return value
+    this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path)
+    return 1
+  }
+
+  private olType(node: P5Node, path: string, ordered: boolean, items: number, start: number): Record<string, never> | { olType: NonNullable<List['olType']> } {
+    const value = ordered ? this.attr(node, 'type') : undefined
+    if (value === undefined || value === '1') return {}
+    if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
+      return {}
+    }
+    const alphabetic = value === 'a' || value === 'A'
+    // An alphabet counts from ONE. `start="0"` and a negative start are valid
+    // HTML and there is no letter at those positions, so this is not a marker
+    // the writer loses - it is a value the mapping has no image for, and the
+    // list stays the decimal one it already was. Keeping the alphabet here
+    // would be worse than the loss it reports: the writer derives its letter
+    // arithmetically, so zero comes out as a BACKTICK and -3 as `]`, putting
+    // characters in the document that can pair with a later one.
+    if (start < 1) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path)
+      return {}
+    }
+    // Roman notation ends at 3999. Past it the writer has no numeral and
+    // repeats the thousands letter instead, so `start="1000000000"` is a
+    // 40-byte input asking for a million characters PER ITEM - the kind of
+    // amplification `maxNodes` and `maxDepth` are here to refuse. The LAST
+    // item is the one to ask about, not the first: a list opened at 3999 and
+    // run long crosses the same boundary from inside, and its output then
+    // grows as the square of its length. The list keeps its decimal counting,
+    // which spells any position in its own digits.
+    const last = start + Math.max(items, 1) - 1
+    if (!alphabetic && last > 3999) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path)
+      return {}
+    }
+    if (alphabetic && start > 26) {
+      this.unspellable.push({
+        path,
+        message: `An alphabetic list starting at ${start} has no Carve spelling; there is no multi-letter marker, so the written list restarts at the first letter`,
+      })
+    } else if (items === 1 && (alphabetic ? start === 9 : [5, 10, 50, 100, 500, 1000].includes(start))) {
+      this.unspellable.push({
+        path,
+        message: `A one-item ${alphabetic ? 'alphabetic' : 'roman'} list starting at ${start} has no Carve spelling; its only marker is a letter the other alphabet claims, and nothing follows it to settle which`,
+      })
+    }
+    return { olType: value }
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
@@ -593,7 +685,20 @@ class Importer {
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'strong' || tag === 'b') return [{ type: 'strong', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'del' || tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
+    /*
+     * `<del>` and `<ins>` are HTML's change-tracking PAIR and Carve spells that
+     * pair `{-x-}` / `{+x+}`, which render back as `<del>` and `<ins>`.
+     * `<s>` and `<strike>` are the other thing - content no longer accurate,
+     * with no edit implied - and that is `~x~`, which renders `<s>`.
+     *
+     * `<del>` used to import as `strike`, so a tracked deletion came back as
+     * `<s>` while `<ins>` was unwrapped to its text outright. Importing `<ins>`
+     * without moving `<del>` would have made that asymmetry worse: the
+     * insertion of an edit surviving as an edit and the deletion beside it not.
+     */
+    if (tag === 'del') return [{ type: 'delete', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 'ins') return [{ type: 'insert', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'u') return [{ type: 'underline', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'mark') return [{ type: 'highlight', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]

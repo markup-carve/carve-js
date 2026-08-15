@@ -9,6 +9,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import keeps an edit as an edit.** `<ins>` unwrapped to its text, so
+  the insertion vanished and only its words stayed; it maps to the `insert`
+  node now. `<del>` moves with it, from `strike` to `delete`: `<del>`/`<ins>`
+  are HTML's change-tracking pair and Carve spells that pair `{-x-}` / `{+x+}`,
+  while `<s>` and `<strike>` - content no longer accurate, no edit implied -
+  keep `~x~`. All three now render back as the tag they came from.
+- **HTML import reads `<ol type>`.** The attribute was exempt from the
+  unsupported-attribute report and then never read, so `<ol type="a">` came back
+  counting `1.` `2.` `3.` with no diagnostic anywhere. `a`, `A`, `i` and `I` map
+  to `olType`, `1` is the default and carries no field, and any other value is
+  reported rather than exempted into silence. Two shapes keep the field and lose
+  the written MARKER - an alphabetic list starting past the 26th letter, and a
+  one-item list whose only marker is a letter the other alphabet claims - and
+  both are reported as serialization losses instead of being traded for a
+  silently different list. A zero or negative `start` claims no alphabet at all,
+  since none has a letter there, and a roman start above 3999 claims none
+  either, because past it the writer has no numeral and repeats the thousands
+  letter - a 40-byte input asking for a million characters per item.
+
 - **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
   `dt`/`dd` are not block tags, so every term and every definition landed in one
   inline buffer and the list came out as a single paragraph with the texts run
@@ -210,6 +229,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already a no-op and still accepts its value, so no caller breaks.
 
 ### Fixed
+
+- **`<ol start>` is read by HTML's integer rules on import.** `Number()` stood
+  there and accepted what the attribute does not: `start="2.9"` opened a list at
+  2.9 and `start="1e3"` at 1000, both written back as their own marker, and
+  `start="foo"` became `NaN`, which the writer spelled `NaN. x`. Such a value is
+  now reported and the list starts where it would without the attribute.
 
 - **The canonical writer no longer over-escapes a definition list it did not
   parse.** Its escape decision compares the two renders as trees and skips
