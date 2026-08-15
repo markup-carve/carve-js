@@ -451,3 +451,61 @@ describe('definition lists on import', () => {
     }))
   })
 })
+
+/*
+ * The two one-line mappings of `markup-carve/carve#1210` P7, and one the row's
+ * parenthetical assumed was already there.
+ */
+describe('change tracking and ordered-list alphabets on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('keeps an edit as an edit, in both directions of the pair', () => {
+    // `<ins>` unwrapped to its text: the insertion vanished and only its words
+    // stayed. `<del>` reached `strike`, which renders `<s>` - a deletion
+    // imported as "no longer accurate", a different statement.
+    const html = '<p><del>gone</del> <ins>added</ins> <s>old</s></p>'
+    expect(carve(html)).toBe('{-gone-} {+added+} ~old~')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html))).toBe('<p><del>gone</del> <ins>added</ins> <s>old</s></p>')
+  })
+
+  it('spells <strike> the way it spells <s>', () => {
+    expect(carve('<p><strike>old</strike></p>')).toBe('~old~')
+  })
+
+  it('counts an ordered list in the alphabet the HTML asked for', () => {
+    // The attribute was exempt from the unsupported-attribute report and then
+    // unread, so the list came back counting 1. 2. 3. and nothing said so.
+    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a. x\n\nb. y')
+    expect(carve('<ol type="I"><li>x</li></ol>')).toBe('I. x')
+    expect(carveToHtml(carve('<ol type="a"><li>x</li></ol>'))).toContain('<ol type="a">')
+  })
+
+  it('keeps the start together with the alphabet', () => {
+    expect(carve('<ol type="a" start="3"><li>x</li></ol>')).toBe('c. x')
+    expect(carveToHtml(carve('<ol type="a" start="3"><li>x</li></ol>'))).toContain('<ol type="a" start="3">')
+  })
+
+  it('treats type="1" as the default it is, with no diagnostic', () => {
+    expect(carve('<ol type="1"><li>x</li></ol>')).toBe('1. x')
+    expect(codes('<ol type="1"><li>x</li></ol>')).toEqual([])
+  })
+
+  it('reports a type HTML does not define, rather than exempting it into silence', () => {
+    expect(htmlToCarve('<ol type="q"><li>x</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped type="q" on <ol>: an ordered list counts in 1, a, A, i or I',
+        path: '/ol[1]',
+      }),
+    ])
+  })
+
+  it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {
+    expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
+    ])
+  })
+})

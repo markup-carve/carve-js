@@ -296,7 +296,7 @@ class Importer {
       }
     })
     const start = ordered ? Number(this.attr(node, 'start') ?? '1') : undefined
-    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...(attrs ? { attrs } : {}) }
+    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered), ...(attrs ? { attrs } : {}) }
   }
 
   /**
@@ -442,6 +442,26 @@ class Importer {
         (block.type === 'paragraph' && !this.visible(block.children)) ||
         (block.type === 'list' && block.items.length === 0),
     )
+  }
+
+  /**
+   * `<ol type>` -> `olType`, the marker alphabet the list counts in.
+   *
+   * The attribute was already exempt from the unsupported-attribute report, so
+   * `<ol type="a">` looked like something the importer handled - and nothing
+   * read it, so the list came back counting `1.` `2.` `3.` with no diagnostic
+   * anywhere. HTML's five values map exactly onto Carve's four plus the
+   * default: `1` IS the default and carries no field, so it is not a loss.
+   *
+   * A value that is none of the five is not HTML's, so nothing can be derived
+   * from it and it is reported here rather than exempted into silence.
+   */
+  private olType(node: P5Node, path: string, ordered: boolean): { olType?: List['olType'] } {
+    const value = ordered ? this.attr(node, 'type') : undefined
+    if (value === undefined || value === '1') return {}
+    if (value === 'a' || value === 'A' || value === 'i' || value === 'I') return { olType: value }
+    this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
+    return {}
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
@@ -593,7 +613,20 @@ class Importer {
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'strong' || tag === 'b') return [{ type: 'strong', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'del' || tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
+    /*
+     * `<del>` and `<ins>` are HTML's change-tracking PAIR and Carve spells that
+     * pair `{-x-}` / `{+x+}`, which render back as `<del>` and `<ins>`.
+     * `<s>` and `<strike>` are the other thing - content no longer accurate,
+     * with no edit implied - and that is `~x~`, which renders `<s>`.
+     *
+     * `<del>` used to import as `strike`, so a tracked deletion came back as
+     * `<s>` while `<ins>` was unwrapped to its text outright. Importing `<ins>`
+     * without moving `<del>` would have made that asymmetry worse: the
+     * insertion of an edit surviving as an edit and the deletion beside it not.
+     */
+    if (tag === 'del') return [{ type: 'delete', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 'ins') return [{ type: 'insert', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'u') return [{ type: 'underline', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'mark') return [{ type: 'highlight', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]

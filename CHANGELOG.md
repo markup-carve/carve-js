@@ -9,6 +9,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import keeps an edit as an edit.** `<ins>` unwrapped to its text, so
+  the insertion vanished and only its words stayed; it maps to the `insert`
+  node now. `<del>` moves with it, from `strike` to `delete`: `<del>`/`<ins>`
+  are HTML's change-tracking pair and Carve spells that pair `{-x-}` / `{+x+}`,
+  while `<s>` and `<strike>` - content no longer accurate, no edit implied -
+  keep `~x~`. All three now render back as the tag they came from.
+- **HTML import reads `<ol type>`.** The attribute was exempt from the
+  unsupported-attribute report and then never read, so `<ol type="a">` came back
+  counting `1.` `2.` `3.` with no diagnostic anywhere. `a`, `A`, `i` and `I` map
+  to `olType`, `1` is the default and carries no field, and any other value is
+  reported rather than exempted into silence.
+
 - **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
   `dt`/`dd` are not block tags, so every term and every definition landed in one
   inline buffer and the list came out as a single paragraph with the texts run
