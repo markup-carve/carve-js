@@ -6379,27 +6379,6 @@ function parseCellMarkers(src: string): {
   attrs?: Attrs
   content: string
 } {
-  // A `{...}` attribute block GLUED to the opening pipe (index 0, no space)
-  // supplies the cell's attributes; the rest, after optional whitespace, is the
-  // cell content. A SPACE before the brace (`| {.x}`) is ordinary content, not
-  // attributes. A cell that carries an attribute block is never a bare span
-  // marker, so its content is literal even if it is just `<`/`^`. An invalid
-  // attribute payload leaves the `{` as ordinary content.
-  if (src[0] === '{') {
-    // Reuse the quote-aware inline-attribute matcher so a quoted `}` inside a
-    // value (`{key="{y}"}`) is handled, not truncated at the first brace. The
-    // WHOLE payload must then be valid attribute syntax (same as inline / block
-    // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
-    // attribute block, so the `{` stays ordinary content.
-    const m = RE_INLINE_ATTR.exec(src)
-    if (m && isValidInlineAttrPayload(m[1]!)) {
-      const attrs = parseAttrs(m[1]!)
-      if (!isEmptyAttrs(attrs)) {
-        return { header: false, attrs, content: trimCellPadding(src.slice(m[0].length)) }
-      }
-    }
-  }
-
   // A lone `<` is a colspan marker even when it is glued to the pipes (`|<|`).
   // It may fail to merge later (for example in column 0), but it must still
   // render as an empty structural marker cell rather than an empty left-aligned
@@ -6420,10 +6399,47 @@ function parseCellMarkers(src: string): {
   const align = TABLE_ALIGNMENT_MARKERS.get(src[i] ?? '')
   if (align !== undefined) i++
 
+  // A `{...}` attribute block supplies the cell's attributes. It binds LAST -
+  // after the kind marker and after the alignment marker, in every cell - and
+  // is GLUED to whatever precedes it: to the marker run where the cell has one
+  // (`|=<{.x} …`), to the opening `|` where it has none (`|{.x} …`). The rest,
+  // after optional whitespace, is the cell content. A SPACE before the brace
+  // (`| {.x}`) is ordinary content, not attributes. A cell that carries an
+  // attribute block is never a bare span marker, so its content is literal
+  // even if it is just `<`/`^`. An invalid payload leaves the `{` as content.
+  //
+  // The order is what makes an attributed HEADER cell expressible at all. With
+  // the block bound ahead of the `=`, the only available shape is `|{#x}=R|`,
+  // and that is ambiguous by construction: an attributed header cell, or a data
+  // cell whose content starts with `=`. This grammar reads it the second way,
+  // so the shape the writer produced for an attributed header cell came back as
+  // `<td id="x">=R</td>` and the round-trip invariant failed on it. Once `=`
+  // has committed the cell to header, everything after it is unambiguous
+  // (spec §5 T10, corpus 319).
+  let attrs: Attrs | undefined
+  if (src[i] === '{') {
+    // Reuse the quote-aware inline-attribute matcher so a quoted `}` inside a
+    // value (`{key="{y}"}`) is handled, not truncated at the first brace. The
+    // WHOLE payload must then be valid attribute syntax (same as inline / block
+    // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
+    // attribute block, so the `{` stays ordinary content.
+    const m = RE_INLINE_ATTR.exec(src.slice(i))
+    if (m && isValidInlineAttrPayload(m[1]!)) {
+      const parsed = parseAttrs(m[1]!)
+      if (!isEmptyAttrs(parsed)) {
+        attrs = parsed
+        i += m[0].length
+      }
+    }
+  }
+
   if (i > 0) {
-    // A tight marker prefix was consumed; the rest is content.
+    // A tight prefix was consumed; the rest is content.
     const content = trimCellPadding(src.slice(i))
-    return align ? { header, align, content } : { header, content }
+    if (align !== undefined && attrs !== undefined) return { header, align, attrs, content }
+    if (align !== undefined) return { header, align, content }
+    if (attrs !== undefined) return { header, attrs, content }
+    return { header, content }
   }
 
   // No tight prefix: a lone `^`/`<` (always spaced) is a span marker;

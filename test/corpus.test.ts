@@ -392,6 +392,17 @@ const IMPLEMENTED = new Set([
   // renderer sweep here.
   'an-image-s-alt-text-closes-where-a-link-s-text-closes',
   'an-editorial-comment-s-bracket-is-content-not-the-close',
+  // Category 319, the six documents that separate the cell-attribute orders.
+  // Four of them (the attributed header cell, the header cell with an alignment
+  // marker, the data cell with one, and the row composing cell blocks with a row
+  // block) were rendered against this engine before the parser changed and did
+  // not match; the other two (the retired order, and the ambiguous `|{#x}=R|`)
+  // matched then and still do. All six match now.
+  'cell-attributes-bind-after-the-kind-and-alignment-markers',
+  // Category 320 arrives with the same submodule bump and needed no code: both
+  // documents were rendered against this engine's HTML and `.fmt` outputs
+  // before anything here changed, and both already matched.
+  'the-canonical-writer-glues-a-code-fence-to-its-info-string',
 ])
 
 /**
