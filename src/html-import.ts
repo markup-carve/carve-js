@@ -334,6 +334,7 @@ class Importer {
         if (child.nodeName === '#text' && !(child.value ?? '').trim()) return
         if (child.tagName === 'div') {
           this.enter(level)
+          this.entryAttributes(child, childPath, 'div')
           visit(child.childNodes ?? [], childPath, level + 1)
           return
         }
@@ -386,16 +387,18 @@ class Importer {
   }
 
   /**
-   * A `<dt>`/`<dd>` carries attributes and the model has nowhere to put them:
-   * PART 12 gives `definition_list` an `attrs` slot and its ENTRIES none, so an
-   * `id` an anchor points at, a class a stylesheet selects on and a `data-`
-   * pair an editor round-trips all end here.
+   * A `<dt>`, `<dd>` or group `<div>` carries attributes and the model has
+   * nowhere to put them: PART 12 gives `definition_list` an `attrs` slot and
+   * its ENTRIES none, so an `id` an anchor points at, a class a stylesheet
+   * selects on and a `data-` pair an editor round-trips all end here. An
+   * ordinary `<div>` keeps its attributes by becoming a `div` node; the wrapper
+   * inside a `<dl>` cannot, because it is walked through.
    *
    * `attrs()` is still called for its diagnostics: it is where an event-handler
-   * attribute is reported, and skipping the call made `<dd onclick="...">` the
-   * one place in the importer where active markup was dropped in silence.
+   * attribute is reported, and skipping the call made these three the only
+   * places in the importer where active markup was dropped in silence.
    */
-  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd'): void {
+  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div'): void {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
     const names = [
@@ -403,7 +406,8 @@ class Importer {
       ...(attrs.classes ? ['class'] : []),
       ...Object.keys(attrs.keyValues ?? {}),
     ]
-    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${tag === 'dt' ? 'term' : 'description'} has no attribute slot`, 'warning', path)
+    const noun = tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'
+    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${noun} has no attribute slot`, 'warning', path)
   }
 
   /**

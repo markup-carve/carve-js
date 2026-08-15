@@ -21,8 +21,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   content inside a `<dl>` that is neither a term nor a definition is kept after
   the list rather than dropped, and reported. An empty `<dt>`, a `<dd>` whose
   blocks write nothing, and the attributes a `<dt>`/`<dd>` has no slot for are
-  reported too - including an event-handler attribute on a `<dd>`, which was the
-  one place in the importer where active markup was dropped in silence.
+  reported too - including an event-handler attribute on a `<dt>`, `<dd>` or
+  group `<div>`, which were the only places in the importer where active markup
+  was dropped in silence.
 - **A browser IIFE bundle.** `dist/carve.iife.min.js` exposes the whole public
   API as a `carve` global, for consumers that load classic scripts rather than
   ESM: CDN script tags, sandboxed iframes, userscript hosts. The `unpkg` and

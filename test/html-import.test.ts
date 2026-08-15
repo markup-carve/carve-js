@@ -295,9 +295,19 @@ describe('definition lists on import', () => {
   })
 
   it('walks through the HTML5 <div> wrapper around a name-value group', () => {
-    const html = '<dl><div class="row"><dt>Carve</dt><dd>A markup language.</dd></div><div class="row"><dt>Djot</dt><dd>Its closest relative.</dd></div></dl>'
+    const html = '<dl><div><dt>Carve</dt><dd>A markup language.</dd></div><div><dt>Djot</dt><dd>Its closest relative.</dd></div></dl>'
     expect(carve(html)).toBe(':: Carve\n:  A markup language.\n:: Djot\n:  Its closest relative.')
     expect(codes(html)).toEqual([])
+  })
+
+  it('reports what the group wrapper carried, since walking through it drops that too', () => {
+    // An ordinary `<div>` keeps its attributes by becoming a `div` node. This
+    // one cannot, and an `onclick` on it was the same silence: reported
+    // everywhere else in the importer, nowhere here.
+    expect(htmlToCarve('<dl><div id="g" onclick="evil()"><dt>T</dt><dd>D</dd></div></dl>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped event-handler attribute onclick on <div>' }),
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped id on <div>: a definition group has no attribute slot' }),
+    ])
   })
 
   it('keeps block content in a definition', () => {
