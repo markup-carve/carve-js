@@ -633,8 +633,15 @@ export function lintCarve(
   // per line replaces a per-line scan over a growing range list (was O(n^2),
   // and was computed twice).
   const verbatimLines = collectVerbatimLines(doc)
+  // The source-line rules skip a COMMENT body as well as a verbatim one. A
+  // comment is discarded text - it reaches no output at all - so a report that
+  // some construct inside it silently degraded is describing something that was
+  // never going to render. Raised by codex review against the new table-cell
+  // rule; `fence-delimiter-indentation` beside it had the same false positive.
+  const unrendered = new Set(verbatimLines)
+  for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
-  collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
+  collectSilentFailures(source, doc, unrendered, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never

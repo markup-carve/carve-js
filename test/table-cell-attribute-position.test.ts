@@ -175,6 +175,13 @@ describe('the lint rule for the retired order', () => {
     expect(rules('```\n|{#x}< content |\n```')).toEqual([])
   })
 
+  // A comment body is discarded text - it reaches no output at all - so there
+  // is nothing there for a silent degradation to happen to.
+  it('does not fire inside a comment, and still fires below one', () => {
+    expect(rules('%%%\n|{#x}< content |\n%%%')).toEqual([])
+    expect(rules('%%%\n|{#x}< content |\n%%%\n\n|{#x}< content |')[0]?.line).toBe(5)
+  })
+
   // A leading `|` with no closing one is a paragraph, so there is no cell for
   // the block to be misplaced in.
   it('does not fire on a pipe-leading line that is not a row', () => {
