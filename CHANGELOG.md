@@ -178,6 +178,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`fmt` writes a code fence with no space before its info string.** The
+  canonical writer emitted the Djot spelling, so `carve fmt` rewrote the
+  authored ` ```js ` to ` ``` js ` and `carve migrate --from html` produced the
+  same. `fenced_code_block` names the no-space form canonical while leaving the
+  reader lenient, and the leniency is why nothing caught this: both spellings
+  parse to the same tree, so the writer's own invariants held either way. The
+  separators INSIDE the info string are a different slot and are unchanged - a
+  header or label still takes exactly one space, since ` ```js"t" ` is not a
+  fence opener at all. Reading ` ``` js ` keeps working. `raw_block`, whose
+  slot is spelled the same way, was already writing the tight ` ```=html ` and
+  is unaffected.
 - **`fmt` no longer escapes into a run whose content is raw.** An image's alt
   text, a colon-fence or code-fence `[label]` and a footnote's `[^id]` are all
   read verbatim, so a backslash the writer emitted to neutralize a bracket
