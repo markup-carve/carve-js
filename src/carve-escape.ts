@@ -31,6 +31,116 @@ function bracedClass(handled: string): string {
     .join('')
 }
 
+/**
+ * Is the character at that offset already escaped?
+ *
+ * An ODD run of backslashes before it escapes it; an even run is literal
+ * backslashes and the character still counts.
+ *
+ * Counted rather than tested with a lookbehind, because "an odd number of
+ * backslashes" is not something a fixed-width lookbehind can ask. That matters
+ * once a source language without backslash escapes has had its backslashes
+ * doubled by `escapeLiteralBackslashes`: in `\\{^x^}` the brace is real and the
+ * two backslashes are one literal one, which a single-character lookbehind read
+ * as an escaped brace.
+ */
+function isEscapedAt(subject: string, offset: number): boolean {
+  let backslashes = 0
+  for (let i = offset - 1; i >= 0 && subject[i] === '\\'; i--) {
+    backslashes++
+  }
+
+  return backslashes % 2 === 1
+}
+
+/**
+ * Escape every match of the pattern that is not escaped ALREADY.
+ *
+ * Escaping an escaped delimiter a second time is worse than leaving it: the
+ * doubled backslash renders as a literal backslash and frees the delimiter to
+ * open the construct the first escape was suppressing, so the output gains a
+ * character the author never wrote AND the markup they escaped away.
+ *
+ * Matched with offsets rather than replaced in place, so the parity question
+ * above can be asked at all. Applied back to front, because inserting a
+ * backslash shifts every offset after it and those were measured against the
+ * original string.
+ *
+ * The pattern must carry the `g` flag.
+ */
+function escapeUnlessAlreadyEscaped(pattern: RegExp, subject: string): string {
+  const matches = [...subject.matchAll(pattern)]
+  let out = subject
+
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i]
+    const text = match[0]
+    const offset = match.index
+    if (isEscapedAt(subject, offset)) {
+      continue
+    }
+
+    out = `${out.slice(0, offset)}\\${text}${out.slice(offset + text.length)}`
+  }
+
+  return out
+}
+
+/**
+ * Double every backslash, for a source language that has no backslash escape of
+ * its own.
+ *
+ * HTML and BBCode do not: a backslash in their text is a character the author
+ * typed, so it has to survive into Carve, where a backslash IS an escape. Left
+ * alone it is read as one and eats the character after it - `a \ b` rendered as
+ * `a &nbsp;b`, the backslash gone and a non-breaking space where it stood.
+ *
+ * Runs FIRST, before any delimiter escaping, which is also what keeps the
+ * already-escaped guard honest: after doubling, every backslash run coming from
+ * source text is EVEN, so a delimiter behind one is correctly seen as unescaped
+ * and still gets its own escape.
+ *
+ * Djot and Markdown do not call this. A backslash there is an escape the author
+ * wrote, and doubling it would render the backslash they meant to disappear.
+ */
+export function escapeLiteralBackslashes(text: string): string {
+  return text.replace(/\\/g, '\\\\')
+}
+
+/**
+ * Escape a brace that opens what Carve would read as an ATTRIBUTE BLOCK, for a
+ * source language that has no such construct.
+ *
+ * `{#id}` is an attribute block in Carve and in Djot, so a Djot converter must
+ * leave it alone - a pinned id is deliberate there. In HTML and BBCode text the
+ * same characters are literal, and left bare the `#` rule below declines to
+ * escape them (it defers to the brace rule, which only matches a complete
+ * pair), so `a {#id} b` came back with a tag span inside literal braces.
+ */
+export function escapeAttributeBlockOpener(text: string): string {
+  return escapeUnlessAlreadyEscaped(/\{(?=#)/g, text)
+}
+
+/**
+ * Escape the verbatim delimiter, for a source language that has no code span of
+ * its own to convert.
+ *
+ * A backtick in HTML or BBCode text is a character. Carried across bare it
+ * opens a Carve code span, so plain text turned into markup: `a ``b`` c` came
+ * back as a code span. A lone backtick is worse - it has no pair at all and
+ * still produced one.
+ *
+ * Only the TEXT path calls this. A code or pre element takes its own route and
+ * emits its own fence, and BBCode's code tags are stashed before any escaping
+ * runs, so neither is reached from here.
+ *
+ * Djot and Markdown do not call it: a backtick there already means a code span,
+ * and their converters carry it over as one.
+ */
+export function escapeVerbatimDelimiter(text: string): string {
+  return escapeUnlessAlreadyEscaped(/`/g, text)
+}
+
 /** Delimiters whose constructs the CALLER's source language owns and rewrites. */
 export interface HandledDelimiters {
   /** Braced forms, e.g. `*_` when the caller rewrites `{*x*}` and `{_x_}`. */
@@ -57,28 +167,44 @@ export function escapePlainCarveInlineSyntax(
 
   // Braced forms first, so the bare rules below see an escaped `{` and leave
   // the delimiter inside it alone instead of escaping it twice.
-  //
-  // Repeated until stable, because one pass escapes only the outermost brace of
-  // a nested `{^a{,b,}c^}` — the match consumes the inner pair, which would then
-  // render as a subscript inside literal text. The `(?<!\\)` guard is what makes
-  // this terminate: an escaped brace is never re-matched.
   const bracedDelimiters = bracedClass(handled.braced ?? '')
   if (bracedDelimiters !== '') {
-    const braced = new RegExp(
-      `(?<!\\\\)\\{([${bracedDelimiters}])(?!\\s)[^\\n]+?(?<!\\s)\\1\\}`,
-      'g',
-    )
-    let previous: string
-    do {
-      previous = out
-      out = out.replace(braced, escapeFirst)
-    } while (out !== previous)
+    out = escapeBracedPairs(out, bracedDelimiters)
+
+    // A brace that LOOKS like a pair opener but never closes is escaped too.
+    // The bare rules below decline to escape a delimiter sitting behind an
+    // unescaped `{`, on the assumption that the rule above already handled the
+    // pair - and when there is no pair, nothing did.
+    //
+    // Leaving it bare costs more than the missing pair, because the escaper is
+    // LINE-oriented and a braced run is not: `a {^x` on one line and `y^} b` on
+    // the next is one superscript spanning the soft break, so two lines of
+    // literal text became markup. Escaping the opener costs nothing when
+    // nothing closes the run, since `a \{^x b` and `a {^x b` render alike.
+    //
+    // `#` is excluded: `{#id}` is an ATTRIBUTE BLOCK, not a pair opener, and
+    // escaping its brace destroys an id a Djot source pinned deliberately. A
+    // source language that means literal text by it says so by calling
+    // `escapeAttributeBlockOpener`.
+    const unpairedOpeners = bracedDelimiters.replace(/#/g, '')
+    if (unpairedOpeners !== '') {
+      out = escapeUnlessAlreadyEscaped(new RegExp(`\\{(?=[${unpairedOpeners}])`, 'g'), out)
+    }
   }
 
-  // These run INSIDE an already-escaped brace too, unlike the php port: `=`, `~`
-  // and `/` are bare constructs in their own right here, so `\{=x=}` still
-  // renders `{<mark>x</mark>}` — the literal brace does not suppress the run.
-  // Escaping the inner delimiter as well is what makes the whole thing literal.
+  // These run INSIDE an already-escaped brace, unlike the php port for `/`:
+  // `=`, `~` and `/` are bare constructs in their own right here, so `\{=x=}`
+  // still renders `{<mark>x</mark>}` — the literal brace does not suppress the
+  // run. Escaping the inner delimiter as well is what makes the whole thing
+  // literal.
+  //
+  // That reasoning holds only when the brace WAS escaped, which is why `=` and
+  // `~` carry the same `(?<!(?<!\\)\{)` guard as `*` and `_` below. A brace
+  // left bare here is one the caller declared handled: `{=x=}` is a highlight
+  // in Djot as well as in Carve, so a Djot converter passes `=` as braced and
+  // the run has to survive untouched. Escaping the inner `=` there lands on
+  // markup that was meant to live, and `{=x=}` came back as literal text
+  // instead of a mark.
   //
   // The `/` in the slash rule's lookbehind is load-bearing, not symmetry:
   // without it the SECOND slash of `ftp://x/` matched, and escaping it freed the
@@ -89,10 +215,10 @@ export function escapePlainCarveInlineSyntax(
     out = out.replace(/(?<![A-Za-z0-9/])\/(?!\s)([^/]+?)(?<!\s)\/(?![A-Za-z0-9])/g, escapeFirst)
   }
   if (!bareHandled.includes('=')) {
-    out = out.replace(/(?<![A-Za-z0-9=])=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, escapeFirst)
+    out = out.replace(/(?<![A-Za-z0-9=])(?<!(?<!\\)\{)=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, escapeFirst)
   }
   if (!bareHandled.includes('~')) {
-    out = out.replace(/(?<![A-Za-z0-9~])~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, escapeFirst)
+    out = out.replace(/(?<![A-Za-z0-9~])(?<!(?<!\\)\{)~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, escapeFirst)
   }
 
   // `*` is a strong and `_` an underline, and both are word-bounded: the
@@ -128,6 +254,52 @@ export function escapePlainCarveInlineSyntax(
   // instead of becoming an em dash.
   if (!bareHandled.includes('#')) {
     out = out.replace(/(?<![A-Za-z0-9&])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, escapeFirst)
+  }
+
+  return out
+}
+
+/**
+ * Escape the opening brace of every braced pair that is not escaped already.
+ *
+ * Scans with an explicit offset instead of one sweeping replace, for two
+ * reasons a plain replace gets wrong:
+ *
+ *  - a nested `{^a{,b,}c^}` has its inner pair swallowed by the outer match, so
+ *    resuming AFTER each match never reaches it, and the inner pair would then
+ *    render as a subscript inside literal text. Resuming just inside the match
+ *    does reach it.
+ *  - whether a brace is escaped is a question about the PARITY of the backslash
+ *    run before it, which a fixed-width lookbehind cannot ask.
+ *
+ * Terminates because the offset strictly increases on every iteration.
+ *
+ * @param delimiters A regex character class body.
+ */
+function escapeBracedPairs(line: string, delimiters: string): string {
+  const pattern = new RegExp(`\\{([${delimiters}])(?!\\s)[^\\n]+?(?<!\\s)\\1\\}`, 'g')
+  let out = line
+  let offset = 0
+
+  while (offset < out.length) {
+    pattern.lastIndex = offset
+    const match = pattern.exec(out)
+    if (match === null) {
+      break
+    }
+
+    const text = match[0]
+    const at = match.index
+    if (isEscapedAt(out, at)) {
+      offset = at + 1
+
+      continue
+    }
+
+    out = `${out.slice(0, at)}\\${text}${out.slice(at + text.length)}`
+    // Past the backslash just inserted and the brace it escapes, so a pair
+    // nested inside this one is the next thing considered.
+    offset = at + 2
   }
 
   return out

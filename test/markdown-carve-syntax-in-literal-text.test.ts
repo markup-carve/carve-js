@@ -211,9 +211,17 @@ describe('markdownToCarve — shapes that must stay bare', () => {
   })
 
   it('escapes an inline footnote a brace happens to precede', () => {
-    // Carve reads the note in `a {^[body] b` as readily as in `a ^[body] b`,
-    // so a rule that excluded a preceding brace left this one converting.
-    expect(conv('a {^[note] b')).toBe('a {\\^[note] b')
+    // Two escapes, for two constructs that both open here and neither of which
+    // the other suppresses.
+    //
+    // The caret: Carve reads the note in `a {^[body] b` as readily as in
+    // `a ^[body] b`, so a rule that excluded a preceding brace left this one
+    // converting - `a \{^[note] b` still renders a footnote.
+    //
+    // The brace: `{^` is also a superscript opener, and a braced run crosses a
+    // soft break, so the line below could close it. The escaper is
+    // line-oriented and cannot see that line, so it escapes the opener.
+    expect(conv('a {^[note] b')).toBe('a \\{\\^[note] b')
     expect(html('a {^[note] b')).toBe('<p>a {^[note] b</p>')
   })
 

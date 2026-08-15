@@ -4,6 +4,7 @@ import {
   BbcodeInputTooLargeError,
   BBCODE_MAX_INPUT_LENGTH,
 } from '../src/bbcode-migrate.js'
+import { carveToHtml } from '../src/index.js'
 
 describe('bbcodeToCarve — formatting', () => {
   it('maps the four basic tags to their Carve spelling', () => {
@@ -99,6 +100,51 @@ describe('bbcodeToCarve — text that is literal in BBCode', () => {
     // Two `[*]` on a line read as a `*…*` pair to the escaper unless the tag
     // is protected first.
     expect(bbcodeToCarve('[list]\n[*]a\n[*]b\n[/list]')).toBe('- a\n- b\n')
+  })
+})
+
+describe('bbcodeToCarve — text a forum post means literally', () => {
+  const tick = '`'
+  const render = (bbcode: string) =>
+    carveToHtml(bbcodeToCarve(bbcode)).replace(/\s+/g, ' ').trim()
+
+  // BBCode has no backslash escape, so a backslash in a post is a character the
+  // author typed. Carried across bare it is read as a Carve escape and eats the
+  // character after it.
+  it('keeps a backslash the author typed', () => {
+    expect(bbcodeToCarve('a \\ b')).toBe('a \\\\ b\n')
+    expect(render('a \\ b')).toBe('<p>a \\ b</p>')
+  })
+
+  it('keeps a backslash in front of a delimiter, and escapes the delimiter too', () => {
+    expect(bbcodeToCarve('a \\*b\\* c')).toBe('a \\\\\\*b\\\\* c\n')
+    expect(render('a \\*b\\* c')).toBe('<p>a \\*b\\* c</p>')
+  })
+
+  // BBCode has no attribute block, so these braces are text. Left bare the
+  // brace opened one and the hash inside it became a tag span.
+  it('keeps a literal attribute block', () => {
+    expect(bbcodeToCarve('a {#id} c')).toBe('a \\{\\#id} c\n')
+    expect(render('a {#id} c')).toBe('<p>a {#id} c</p>')
+  })
+
+  // BBCode spells a code span with a tag, so a backtick is text. Left bare it
+  // opened a Carve code span - and a LONE backtick, which has no pair at all,
+  // still produced one.
+  it('keeps a literal backtick, paired or not', () => {
+    expect(bbcodeToCarve(`a ${tick}code${tick} b`)).toBe(`a \\${tick}code\\${tick} b\n`)
+    expect(render(`a ${tick}code${tick} b`)).toBe(`<p>a ${tick}code${tick} b</p>`)
+    expect(render(`x ${tick} y`)).toBe(`<p>x ${tick} y</p>`)
+  })
+
+  it('still converts the tags around that text', () => {
+    expect(render('[b]bold[/b] and \\ back')).toBe('<p><strong>bold</strong> and \\ back</p>')
+  })
+
+  // The code tag is stashed before any escaping runs, so its body reaches the
+  // fence untouched.
+  it('leaves a code tag body alone', () => {
+    expect(bbcodeToCarve('[code]a \\ b[/code]')).toContain('a \\ b')
   })
 })
 
