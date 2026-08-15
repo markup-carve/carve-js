@@ -9,6 +9,71 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import states a table's row grouping, where it says something.**
+  `<thead>`, `<tbody>` and `<tfoot>` map to `table.rowGroups` - a foot, a second
+  body, a body with its own header rows or with row-head columns, and a
+  `<thead>` whose rows are not header cells (what Word and pandoc emit). A plain
+  `<thead>` over a `<tbody>` still emits nothing: that IS the structure every
+  renderer derives from the rows, and carrying the field for it would put
+  unspellable structure in every imported table (decision D1, ruled as (b)).
+  Carve source cannot spell the field, so `htmlToAst` keeps it and `htmlToCarve`
+  reports the loss.
+- **`AstJsonPartitionError`.** `fromAstJson` refuses a `table.rowGroups` whose
+  counts do not consume the table's rows. PART 12 section 15 makes the sum a
+  MUST and JSON Schema cannot express it - there is no way to relate one field's
+  value to another's length - so `headRows: 5` on a two-row table validated
+  cleanly, decoded, and reached a consumer that then read rows the table does
+  not have.
+
+- **HTML import keeps a table's spans.** `colspan` and `rowspan` were thrown
+  away, so a spanning cell was written as an ordinary one and its row came up
+  short: `<td colspan="2">` under a two-column header produced a one-column row,
+  with `table-degraded` as the only trace. They map to the continuation cells
+  the model already had (`^` continues the cell above, `<` the one to its left),
+  so the imported grid re-reads as the grid that came in. `rowspan="0"` is
+  resolved against the row group, as HTML defines it; both spans are clamped to
+  HTML's maxima and every generated cell is charged to `maxNodes`; a span that
+  would leave the head the renderer derives is clipped and reported, because a
+  rowspan across row groups is one browsers clip anyway. A second
+  `<caption>` is reported instead of dropped in silence, mirroring the parser's
+  first-caption-wins rule.
+
+- **HTML import reads `<details>/<summary>` as the `details` admonition.** It
+  became a generic `div` carrying a `details` class, and `<summary>` was not
+  recognized at all: the label unwrapped into the body, so it re-rendered inside
+  the box rather than on it and nothing could get back to a disclosure element.
+  It now writes `::: details "Summary"`, which the `details()` extension renders
+  as a real `<details>/<summary>` and a core render marks as the admonition
+  title. `<details open>` keeps its state as the bare `{open}` attribute. A
+  label the title slot cannot spell - it is delimited by `"` and has no escape -
+  stays the body's first paragraph and is reported, and the attributes a
+  `<summary>` carried are reported rather than dropped in silence.
+- **HTML import reads `<q>` as quotation marks.** The element unwrapped, so the
+  content arrived without the marks that made it a quotation. It now writes the
+  typographic pair a browser draws, alternating double and single by nesting
+  depth, and reports the mapping at `info` rather than claiming an unwrap. In
+  `roundtrip` mode the element is raw-preserved instead, since the marks are
+  text and do not render back as a `<q>`.
+
+- **HTML import keeps an edit as an edit.** `<ins>` unwrapped to its text, so
+  the insertion vanished and only its words stayed; it maps to the `insert`
+  node now. `<del>` moves with it, from `strike` to `delete`: `<del>`/`<ins>`
+  are HTML's change-tracking pair and Carve spells that pair `{-x-}` / `{+x+}`,
+  while `<s>` and `<strike>` - content no longer accurate, no edit implied -
+  keep `~x~`. All three now render back as the tag they came from.
+- **HTML import reads `<ol type>`.** The attribute was exempt from the
+  unsupported-attribute report and then never read, so `<ol type="a">` came back
+  counting `1.` `2.` `3.` with no diagnostic anywhere. `a`, `A`, `i` and `I` map
+  to `olType`, `1` is the default and carries no field, and any other value is
+  reported rather than exempted into silence. Two shapes keep the field and lose
+  the written MARKER - an alphabetic list starting past the 26th letter, and a
+  one-item list whose only marker is a letter the other alphabet claims - and
+  both are reported as serialization losses instead of being traded for a
+  silently different list. A zero or negative `start` claims no alphabet at all,
+  since none has a letter there, and a roman start above 3999 claims none
+  either, because past it the writer has no numeral and repeats the thousands
+  letter - a 40-byte input asking for a million characters per item.
+
 - **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
   `dt`/`dd` are not block tags, so every term and every definition landed in one
   inline buffer and the list came out as a single paragraph with the texts run
@@ -210,6 +275,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already a no-op and still accepts its value, so no caller breaks.
 
 ### Fixed
+
+- **An unwrapped element reports the attributes it takes with it.** The importer
+  keeps an `id`, a `class` and `data-` pairs while it reads an element, and when
+  the element itself is unwrapped there is nothing left to hang them on - so
+  they went in silence. `<video id="player">` said the element had been
+  unwrapped and never that the id had gone with it. Applies to every unwrap arm:
+  embeds, `<section>` and friends, and any unmapped inline element.
+
+- **A `details` block carrying `{open}` renders it once in a static render.**
+  The static renderer adds `open` so the body is expanded for print and did not
+  check whether the block already carried it, so a hand-written `::: details
+  {open}` came out as `<details open open="">`.
+
+- **`<ol start>` is read by HTML's integer rules on import.** `Number()` stood
+  there and accepted what the attribute does not: `start="2.9"` opened a list at
+  2.9 and `start="1e3"` at 1000, both written back as their own marker, and
+  `start="foo"` became `NaN`, which the writer spelled `NaN. x`. Such a value is
+  now reported and the list starts where it would without the attribute.
 
 - **The canonical writer no longer over-escapes a definition list it did not
   parse.** Its escape decision compares the two renders as trees and skips

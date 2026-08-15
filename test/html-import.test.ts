@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, semanticSpan } from '../src/index.js'
+import { parseFragment } from 'parse5'
+import { AstJsonPartitionError, HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, fromAstJson, parse, renderHtml, semanticSpan, toAstJson } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -449,5 +450,826 @@ describe('definition lists on import', () => {
       severity: 'warning',
       message: expect.stringContaining('Moved <p> content out of the <dl>'),
     }))
+  })
+})
+
+/*
+ * The two one-line mappings of `markup-carve/carve#1210` P7, and one the row's
+ * parenthetical assumed was already there.
+ */
+describe('change tracking and ordered-list alphabets on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('keeps an edit as an edit, in both directions of the pair', () => {
+    // `<ins>` unwrapped to its text: the insertion vanished and only its words
+    // stayed. `<del>` reached `strike`, which renders `<s>` - a deletion
+    // imported as "no longer accurate", a different statement.
+    const html = '<p><del>gone</del> <ins>added</ins> <s>old</s></p>'
+    expect(carve(html)).toBe('{-gone-} {+added+} ~old~')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html))).toBe('<p><del>gone</del> <ins>added</ins> <s>old</s></p>')
+  })
+
+  it('spells <strike> the way it spells <s>', () => {
+    expect(carve('<p><strike>old</strike></p>')).toBe('~old~')
+  })
+
+  it('counts an ordered list in the alphabet the HTML asked for', () => {
+    // The attribute was exempt from the unsupported-attribute report and then
+    // unread, so the list came back counting 1. 2. 3. and nothing said so.
+    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a. x\n\nb. y')
+    expect(carve('<ol type="I"><li>x</li></ol>')).toBe('I. x')
+    expect(carveToHtml(carve('<ol type="a"><li>x</li></ol>'))).toContain('<ol type="a">')
+  })
+
+  it('keeps the start together with the alphabet', () => {
+    expect(carve('<ol type="a" start="3"><li>x</li></ol>')).toBe('c. x')
+    expect(carveToHtml(carve('<ol type="a" start="3"><li>x</li></ol>'))).toContain('<ol type="a" start="3">')
+  })
+
+  it('treats type="1" as the default it is, with no diagnostic', () => {
+    expect(carve('<ol type="1"><li>x</li></ol>')).toBe('1. x')
+    expect(codes('<ol type="1"><li>x</li></ol>')).toEqual([])
+  })
+
+  it('reports a type HTML does not define, rather than exempting it into silence', () => {
+    expect(htmlToCarve('<ol type="q"><li>x</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped type="q" on <ol>: an ordered list counts in 1, a, A, i or I',
+        path: '/ol[1]',
+      }),
+    ])
+  })
+
+  it('reports the marker the writer cannot spell, on exactly the lists where it cannot', () => {
+    /*
+     * The FIELD survives every combination; the written MARKER does not. Two
+     * shapes lose it, and the check is the parser's rather than a table's: every
+     * start from 1 to 60 in each of the four alphabets, at one, two and three
+     * items, is imported, written, read back, and the diagnostic is compared
+     * against whether the list actually changed.
+     *
+     * 720 combinations, 212 of which do not survive the round trip. A rule that
+     * over-reports passes a "warns on the bad case" test and fails this one.
+     */
+    let broken = 0
+    let mismatched = 0
+    for (const items of [1, 2, 3]) {
+      for (const type of ['a', 'A', 'i', 'I'] as const) {
+        for (let start = 1; start <= 60; start++) {
+          const html = `<ol type="${type}"${start === 1 ? '' : ` start="${start}"`}>${'<li>x</li>'.repeat(items)}</ol>`
+          const result = htmlToCarve(html)
+          const reread = parse(result.value).children[0] as { olType?: string; start?: number } | undefined
+          const changed = (reread?.olType ?? undefined) !== type || (reread?.start ?? 1) !== start
+          const reported = result.report.diagnostics.some((d) => d.code === 'structure-unspellable')
+          if (changed) broken++
+          if (changed !== reported) mismatched++
+        }
+      }
+    }
+
+    expect(broken).toBe(212)
+    expect(mismatched).toBe(0)
+  })
+
+  it('names the two shapes, so the message says what happened', () => {
+    // No multi-letter alphabetic marker exists: `aa. x` is a paragraph, so the
+    // writer's marker wraps and the list restarts at the first letter.
+    expect(htmlToCarve('<ol type="a" start="27"><li>x</li></ol>').report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'structure-unspellable',
+        severity: 'warning',
+        message: expect.stringContaining('alphabetic list starting at 27'),
+      }),
+    )
+    // A lone `v.` reads as the 22nd letter; `v.` `vi.` reads as roman 5.
+    expect(htmlToCarve('<ol type="i" start="5"><li>x</li></ol>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'structure-unspellable', message: expect.stringContaining('one-item roman list starting at 5') }),
+    )
+    expect(htmlToCarve('<ol type="i" start="5"><li>x</li><li>y</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('reports it as a writer loss, so the AST keeps the alphabet either way', () => {
+    const html = '<ol type="a" start="27"><li>x</li></ol>'
+    expect(htmlToAst(html).value.children).toMatchObject([{ type: 'list', ordered: true, olType: 'a', start: 27 }])
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+  })
+
+  it('claims no alphabet before its first letter', () => {
+    // `start="0"` and a negative start are valid HTML and no alphabet has a
+    // letter there. Keeping the type would be worse than the loss it reports:
+    // the writer derives its letter arithmetically, so zero came out as a
+    // BACKTICK and -3 as `]` - characters that can pair with a later one.
+    const zero = htmlToCarve('<ol type="a" start="0"><li>x</li><li>y</li></ol>')
+    expect(zero.value).toBe('0. x\n\n1. y\n')
+    expect(zero.report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped type="a" on <ol> with start="0": an alphabet has no letter before the first',
+      }),
+    ])
+    expect(htmlToCarve('<ol type="i" start="-3"><li>x</li></ol>').value).not.toContain('`')
+  })
+
+  it('CONTROL: a decimal list with the same start is untouched by that rule', () => {
+    // What a negative start does to a list is the existing decimal behavior and
+    // no part of this change: `type="1"` takes the same path it always did.
+    expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').value).toBe('-3. x\n')
+    expect(htmlToCarve('<ol type="1" start="-3"><li>x</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('refuses a roman start no roman numeral spells', () => {
+    // Past 3999 the writer has no numeral and repeats the thousands letter, so
+    // a 40-byte input asks for a million characters PER ITEM. The list keeps
+    // its decimal counting, which spells any start in its own digits.
+    const huge = htmlToCarve('<ol type="i" start="1000000000"><li>x</li></ol>')
+    expect(huge.value).toBe('1000000000. x\n')
+    expect(huge.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('no numeral above 3999') }),
+    ])
+    // The boundary itself is spellable and keeps the alphabet.
+    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li></ol>').value).toBe('mmmcmxcix. x\n')
+    // And the LAST item is the one asked about: a list opened below the
+    // boundary crosses it from inside, where the output grows as the square of
+    // the list's length.
+    expect(htmlToCarve('<ol type="i" start="3999"><li>x</li><li>y</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('reaching 4000') }),
+    ])
+  })
+
+  it('CONTROL: an alphabetic list crossing the 26th letter loses nothing', () => {
+    // Carve derives a list's numbering from where it STARTS, exactly as a
+    // decimal list does, so the marker the writer puts on a later item is not
+    // an authored fact to preserve. `<ol type="a" start="26">` with two items
+    // is written `z.` `a.` and renders back as the same two-item list starting
+    // at 26 - no diagnostic is owed, and reporting one would name a loss that
+    // does not happen.
+    const html = '<ol type="a" start="26"><li>x</li><li>y</li></ol>'
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(carveToHtml(htmlToCarve(html).value)).toContain('<ol type="a" start="26">')
+  })
+
+  it('reads the start by HTML integer rules, not by Number()', () => {
+    // `Number()` accepted what the attribute does not. `foo` became NaN, which
+    // the writer spelled `NaN. x` in a decimal list and, once a type could be
+    // kept, as a NUL byte in an alphabetic one; `2.9` opened a list at 2.9 and
+    // `1e3` at 1000. None of it was reported.
+    // The minimum signed 32-bit value is IN range, not out of it.
+    expect(htmlToCarve('<ol start="-2147483648"><li>x</li></ol>').report.diagnostics).toEqual([])
+    expect(htmlToCarve('<ol start="-2147483649"><li>x</li></ol>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('not an integer HTML defines') }),
+    ])
+    for (const bad of ['foo', '2.9', '1e3', '']) {
+      expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).value).toBe('1. x\n')
+      expect(htmlToCarve(`<ol type="a" start="${bad}"><li>x</li></ol>`).value).toBe('a. x\n')
+      expect(htmlToCarve(`<ol start="${bad}"><li>x</li></ol>`).report.diagnostics).toEqual([
+        expect.objectContaining({ code: 'attribute-dropped', message: expect.stringContaining('not an integer HTML defines') }),
+      ])
+    }
+    // A well-formed one still counts from where it says.
+    expect(htmlToCarve('<ol start="7"><li>x</li></ol>').value).toBe('7. x\n')
+    expect(htmlToCarve('<ol start="7"><li>x</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {
+    expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
+    ])
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P9's two recognition upgrades for carve-js.
+ */
+describe('disclosures and quotations on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('reads a disclosure as the details admonition, summary and all', () => {
+    // It became a generic `div` with a `details` CLASS, and `<summary>` was not
+    // recognized at all: the label unwrapped into the body, so it re-rendered
+    // inside the box rather than on it.
+    const html = '<details><summary>More info</summary><p>The body.</p></details>'
+    expect(carve(html)).toBe('::: details "More info"\nThe body.\n:::')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toBe(
+      '<details>\n  <summary>More info</summary>\n  <p>The body.</p>\n</details>',
+    )
+  })
+
+  it('keeps the label on the box even without the extension', () => {
+    // A core render has no `<details>`, but the summary is the admonition TITLE
+    // now rather than an anonymous first paragraph.
+    expect(carveToHtml(carve('<details><summary>More info</summary><p>b</p></details>'))).toContain(
+      '<p class="admonition-title">More info</p>',
+    )
+  })
+
+  it('keeps the disclosure open when the HTML says it is', () => {
+    const html = '<details open><summary>T</summary><p>b</p></details>'
+    expect(carve(html)).toBe('{open}\n::: details "T"\nb\n:::')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toContain('<details open="">')
+  })
+
+  it('leaves a summary-less disclosure to the default label, as the element does', () => {
+    expect(carve('<details><p>b</p></details>')).toBe('::: details\nb\n:::')
+    expect(carveToHtml(carve('<details><p>b</p></details>'), { extensions: [details()] })).toContain('<summary>Details</summary>')
+  })
+
+  it('keeps the disclosure when its label cannot be a title', () => {
+    /*
+     * The title slot is delimited by `"` and has no escape, so a quote in the
+     * summary ends it early and the opening line stops being an opener: the
+     * whole block - body included - re-reads as ONE paragraph. Recording that
+     * as a writer loss would leave the destroyed document in place, so this is
+     * the one place the import degrades the TREE instead: the label becomes the
+     * body's first paragraph, which is where it landed before this mapping
+     * existed anyway.
+     */
+    const html = '<details><summary>Say "hi"</summary><p>The body.</p></details>'
+    expect(carve(html)).toBe('::: details\nSay \\"hi\\"\n\nThe body.\n:::')
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toBe(
+      '<details>\n  <summary>Details</summary>\n  <p>Say "hi"</p>\n  <p>The body.</p>\n</details>',
+    )
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'element-unwrapped',
+      severity: 'warning',
+      message: expect.stringContaining('cannot spell a double quote or a line break'),
+      path: '/details[1]/summary[1]',
+    }))
+  })
+
+  it('and does the same for a label broken across lines', () => {
+    expect(carveToHtml(carve('<details><summary>a<br>b</summary><p>x</p></details>'), { extensions: [details()] })).toContain('<details>')
+  })
+
+  it('asks the writer, so a quote inside an attribute value counts too', () => {
+    // A quote reaches the title through more than its own text: an attribute
+    // VALUE is written quoted, and a code span carries its content verbatim.
+    // Enumerating the spellings that can produce one would be a second copy of
+    // the grammar, so the check renders the inlines and looks at the result.
+    for (const label of ['<span title="a&quot;b">hi</span>', '<code>a"b</code>']) {
+      const html = `<details><summary>${label}</summary><p>body</p></details>`
+      expect(htmlToCarve(html).value.startsWith('::: details "')).toBe(false)
+      expect(carveToHtml(htmlToCarve(html).value, { extensions: [details()] })).toContain('<details>')
+    }
+  })
+
+  it('CONTROL: a quote in a LINK DESTINATION does not cost the title', () => {
+    // Percent-encoded in the href, so the written form carries no quote and the
+    // title slot is still available. A rule that looked for the character in
+    // the input rather than in the output would give this one up.
+    expect(htmlToCarve('<details><summary><a href="/x?q=%22">link</a></summary><p>b</p></details>').value)
+      .toBe('::: details "[link](/x?q=%22)"\nb\n:::\n')
+  })
+
+  it('CONTROL: the titles that ARE spellable keep the slot', () => {
+    // Measured against the parser, not assumed: emphasis, an apostrophe and the
+    // typographic quotes all survive the title slot.
+    for (const label of ['a <em>b</em>', "it's", 'He said \u201chi\u201d']) {
+      const written = carve(`<details><summary>${label}</summary><p>x</p></details>`)
+      expect(written.startsWith('::: details "')).toBe(true)
+      expect(carveToHtml(written, { extensions: [details()] })).toContain('<summary>')
+    }
+  })
+
+  it('reports what the label carried, since the title slot holds no attributes', () => {
+    expect(htmlToCarve('<details><summary id="sum" class="k">T</summary><p>b</p></details>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped id, class on <summary>: a disclosure label has no attribute slot',
+        path: '/details[1]/summary[1]',
+      }),
+    ])
+  })
+
+  it('does not write the open state twice in a static render', () => {
+    // The static renderer adds `open` for print; an imported `<details open>`
+    // already carries it in the attributes, and adding it again wrote
+    // `<details open open="">`. A hand-written `{open}` reached it too.
+    const src = htmlToCarve('<details open><summary>T</summary><p>b</p></details>').value
+    expect(renderHtml(parse(src), { extensions: [details()], mode: 'static' })).toBe(
+      '<details open="">\n  <summary>T</summary>\n  <p>b</p>\n</details>',
+    )
+    expect(renderHtml(parse('::: details "T"\nb\n:::\n'), { extensions: [details()], mode: 'static' })).toContain('<details open>')
+  })
+
+  it('reports a disclosure body under the path it came in on', () => {
+    // Filtering the summary out of the child list renumbers everything after
+    // it, and a summary that is not first is not `summary[1]` either.
+    expect(htmlToCarve('<details><p>a</p><summary id="s">S</summary></details>').report.diagnostics).toEqual([
+      expect.objectContaining({ path: '/details[1]/summary[2]' }),
+    ])
+    expect(htmlToCarve('<details><summary>S</summary><blockquote onclick="x()">b</blockquote></details>').report.diagnostics).toEqual([
+      expect.objectContaining({ path: '/details[1]/blockquote[2]' }),
+    ])
+  })
+
+  it('counts the summary against the node budget', () => {
+    // An empty `<summary>` is a DOM node the caller's limit is counting;
+    // reading straight past it let a document process more nodes than allowed.
+    expect(() => htmlToAst('<details><summary></summary></details>', { maxNodes: 2 })).not.toThrow()
+    expect(() => htmlToAst('<details><summary></summary></details>', { maxNodes: 1 })).toThrow(HtmlImportLimitError)
+  })
+
+  it('reads <q> as the marks a browser draws for it', () => {
+    // The content reached the document before this; the marks that made it a
+    // quotation did not.
+    expect(carve('<p>He said <q>hi</q>.</p>')).toBe('He said “hi”.')
+    expect(htmlToCarve('<p>He said <q>hi</q>.</p>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'element-unwrapped',
+        severity: 'info',
+        message: 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping',
+        path: '/p[1]/q[2]',
+      }),
+    ])
+  })
+
+  it('alternates the marks by nesting depth', () => {
+    expect(carve('<p><q>nested <q>inner</q></q></p>')).toBe('“nested ‘inner’”')
+  })
+
+  it('writes the typographic marks, which survive being written', () => {
+    // A straight `"` is escaped back to a straight quote by the writer (PART 11
+    // section 5 keeps a quote that reached it as TEXT), so the curly pair is
+    // both what the element renders as and what round-trips.
+    const written = carve('<p><q>hi</q></p>')
+    expect(written).not.toContain('\\"')
+    expect(carveToHtml(written)).toBe('<p>“hi”</p>')
+  })
+
+  it('preserves <q> raw in roundtrip mode, where the marks are not enough', () => {
+    // `roundtrip` raw-preserves what Carve cannot express. The seven semantic
+    // elements are mapped in every mode because their spelling renders back as
+    // the element; the marks do not - the `<q>` becomes text and its `cite`
+    // goes with it - so this one belongs to the raw fallback there.
+    const result = htmlToAst('<p><q cite="/x">hi</q></p>', { mode: 'roundtrip' })
+    expect(result.value.children[0]).toMatchObject({
+      children: [{ type: 'raw_inline', format: 'html', content: '<q cite="/x">hi</q>' }],
+    })
+    expect(result.report.diagnostics.map((d) => d.code)).toContain('raw-preserved')
+  })
+
+  it('keeps what a quotation carried, on a span', () => {
+    expect(carve('<p><q id="cited" class="key">hi</q></p>')).toBe('[“hi”]{#cited .key}')
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P1's span row for carve-js.
+ *
+ * The model already carried the continuation cells - `table_cell.span` is in
+ * PART 12, and the HTML renderer derives `rowspan`/`colspan` from a run of them
+ * - and the import threw them away. A spanning cell was written as an ordinary
+ * one and its row came up short, so `<td colspan="2">` under a two-column
+ * header produced a one-cell row, with `table-degraded` as the only trace.
+ *
+ * The assertion is on the GRID rather than on the source or the HTML string:
+ * both sides are expanded into the matrix of cells a browser lays out, so a
+ * different but equivalent spelling passes and a lost span cannot.
+ */
+describe('table spans on import', () => {
+  const cellsOf = (row: { childNodes?: Array<{ tagName?: string }> }) =>
+    (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+
+  const gridOf = (html: string): string[][] => {
+    const fragment = parseFragment(html) as unknown as { childNodes?: unknown[] }
+    const rows: Array<{ childNodes?: Array<{ tagName?: string }> }> = []
+    const collect = (node: { tagName?: string; childNodes?: unknown[] }): void => {
+      if (node.tagName === 'tr') rows.push(node as never)
+      else (node.childNodes ?? []).forEach((child) => collect(child as never))
+    }
+    collect(fragment as never)
+    const text = (node: { nodeName?: string; value?: string; childNodes?: unknown[] }): string =>
+      node.nodeName === '#text' ? (node.value ?? '') : (node.childNodes ?? []).map((c) => text(c as never)).join('')
+    const attr = (node: { attrs?: Array<{ name: string; value: string }> }, name: string) =>
+      node.attrs?.find((a) => a.name === name)?.value
+    const grid: string[][] = rows.map(() => [])
+    rows.forEach((row, r) => {
+      let c = 0
+      for (const cell of cellsOf(row)) {
+        while (grid[r]![c] !== undefined) c++
+        const colspan = Math.max(1, Number(attr(cell as never, 'colspan') ?? '1') || 1)
+        const rowspan = Math.max(1, Number(attr(cell as never, 'rowspan') ?? '1') || 1)
+        const value = `${cell.tagName}:${text(cell as never).trim()}`
+        for (let dr = 0; dr < rowspan && r + dr < rows.length; dr++) {
+          for (let dc = 0; dc < colspan; dc++) grid[r + dr]![c + dc] = value
+        }
+        c += colspan
+      }
+    })
+    return grid
+  }
+
+  const fixtures: Array<[string, string]> = [
+    ['a header-wide column', '<table><tr><th>a</th><th>b</th></tr><tr><td colspan="2">wide</td></tr></table>'],
+    ['a cell held over a row', '<table><tr><th>a</th><th>b</th></tr><tr><td rowspan="2">tall</td><td>x</td></tr><tr><td>y</td></tr></table>'],
+    ['a two-by-two merge', '<table><tr><td colspan="2" rowspan="2">X</td><td>c</td></tr><tr><td>f</td></tr></table>'],
+    ['a span in the last column', '<table><tr><td>a</td><td rowspan="2">b</td></tr><tr><td>c</td></tr></table>'],
+    ['two spans in one row', '<table><tr><td colspan="2">A</td><td colspan="2">B</td></tr><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></table>'],
+    ['a header cell spanning columns', '<table><tr><th colspan="2">Group</th></tr><tr><th>a</th><th>b</th></tr><tr><td>1</td><td>2</td></tr></table>'],
+    ['a span three rows deep', '<table><tr><td rowspan="3">tall</td><td>1</td></tr><tr><td>2</td></tr><tr><td>3</td></tr></table>'],
+    ['a Word-shaped merge', '<table><tbody><tr><td rowspan="2">Name</td><td colspan="2">Contact</td></tr><tr><td>Phone</td><td>Email</td></tr><tr><td>Ada</td><td>1</td><td>a@x</td></tr></tbody></table>'],
+  ]
+
+  for (const [name, html] of fixtures) {
+    it(`keeps the grid of ${name}`, () => {
+      const written = htmlToCarve(html).value
+      expect(gridOf(carveToHtml(written))).toEqual(gridOf(html))
+      expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    })
+  }
+
+  it('resolves rowspan="0" against the row group, as HTML does', () => {
+    // "To the end of this row GROUP", so a `<tfoot>` below the body is not
+    // swallowed by a cell HTML stops at the body's last row.
+    const html = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td rowspan="0">b</td><td>x</td></tr><tr><td>y</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
+    expect(htmlToCarve(html).value).toBe('|=h|\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
+    // The `<tfoot>` is a grouping the written source cannot spell, which is its
+    // own row's business; no span is reported here.
+    expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
+  })
+
+  it('stops a rowspan at its row group, whatever the number says', () => {
+    // HTML clips a rowspan at the group boundary, so a `rowspan="5"` on the
+    // last body row does not reach into the `<tfoot>` below it. Only the `0`
+    // form was resolved against the group at first, and a positive one walked
+    // straight through.
+    const html = '<table><tbody><tr><td rowspan="5">b</td><td>x</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
+    expect(htmlToCarve(html).value).toBe('| b | x |\n| f |\n| g |\n')
+  })
+
+  it('reads a tall table in time proportional to its rows', () => {
+    /*
+     * Asking each cell for its group's size meant scanning the whole table per
+     * cell. The rows are the same shape, so the RATIO across two sizes is the
+     * measurement and no stopwatch reading is asserted: at four times the rows,
+     * the linear form measured 2.4x and the quadratic one 14.7x.
+     *
+     * Four times rather than two, and a bound of 8 rather than 4, because a
+     * doubling puts quadratic work at about 4x - the same number a slow machine
+     * can produce from linear work, which is a threshold no mutation has to
+     * cross.
+     */
+    const table = (rows: number) => `<table>${Array.from({ length: rows }, (_, i) => `<tr><td>${i}</td></tr>`).join('')}</table>`
+    // Warm the parser so the first-call cost is not what is being compared.
+    htmlToCarve(table(200))
+    const time = (rows: number) => {
+      const started = performance.now()
+      htmlToCarve(table(rows))
+      return performance.now() - started
+    }
+    const small = time(2000)
+    const large = time(8000)
+
+    expect(large).toBeLessThan(small * 8)
+  })
+
+  it('clips a rowspan that would leave the head the renderer synthesizes', () => {
+    /*
+     * Carve derives the head from the LEADING RUN of all-header rows, so a span
+     * reaching out of that run is written into a `<thead>` with its other rows
+     * in the `<tbody>`. Browsers clip a rowspan across row groups, so keeping
+     * the number would produce a document claiming a grid it does not render.
+     *
+     * The grid fixtures cannot catch this one: their expander is the layout
+     * algorithm without the group rule, which is exactly the rule that bites.
+     */
+    const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><td>B</td></tr></table>'
+    expect(htmlToCarve(html).value).toBe('|=H|=A|\n| B |\n')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'table-degraded',
+        severity: 'warning',
+        message: expect.stringContaining('Clipped a rowspan at the header rows'),
+        path: '/table[1]/tr[1]/th[1]',
+      }),
+    ])
+    // The written table renders no rowspan at all, which is what a browser
+    // shows for the clipped one.
+    expect(carveToHtml(htmlToCarve(html).value)).not.toContain('rowspan')
+  })
+
+  it('CONTROL: a span WITHIN the header rows is untouched', () => {
+    const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>'
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(carveToHtml(htmlToCarve(html).value)).toContain('rowspan="2"')
+  })
+
+  it('reports the empty cell a short row needs, and only when it invents one', () => {
+    // A row shorter than the spans reaching into it needs the index kept. The
+    // continuation itself costs nothing - the span already owns that cell - so
+    // only an invented EMPTY cell is reported.
+    expect(htmlToCarve('<table><tr><td>a</td><td rowspan="2">b</td></tr><tr><td>c</td></tr></table>').report.diagnostics).toEqual([])
+    expect(htmlToCarve('<table><tr><td>a</td><td>b</td><td rowspan="2">c</td></tr><tr></tr></table>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('a cell the source did not have') }),
+    )
+  })
+
+  it('clamps a span to what HTML allows, so a value cannot ask for a billion cells', () => {
+    // Each unit of a span becomes a CELL, so an unclamped `colspan` is a
+    // 30-byte input asking for a billion of them.
+    const wide = htmlToCarve('<table><tr><td colspan="1000000000">x</td></tr></table>')
+    expect(wide.value.split('|').length - 1).toBe(1001)
+    // And the generated cells are charged to the node budget on top of that.
+    expect(() => htmlToAst('<table><tr><td colspan="1000">x</td></tr></table>', { maxNodes: 100 })).toThrow(HtmlImportLimitError)
+  })
+
+  it('keeps the first caption and reports the second, as the parser does', () => {
+    // `| a |` + two `^ ` lines reads the first as the caption and the second as
+    // a paragraph, so the import follows the same rule and says which one went.
+    const html = '<table><caption>One</caption><tr><td>a</td></tr><caption>Two</caption></table>'
+    expect(htmlToAst(html).value.children).toMatchObject([{ type: 'table', caption: [{ value: 'One' }] }])
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'table-degraded',
+        severity: 'warning',
+        message: 'Dropped a second <caption>: a table has one caption, and the first one wins',
+        path: '/table[1]/caption[3]',
+      }),
+    ])
+  })
+
+  it('CONTROL: one caption after the rows is not a degradation', () => {
+    // It is where Carve writes it, so nothing is lost and nothing is reported.
+    expect(htmlToCarve('<table><tr><td>a</td></tr><caption>Late</caption></table>').value).toBe('| a |\n^ Late\n')
+    expect(htmlToCarve('<table><tr><td>a</td></tr><caption>Late</caption></table>').report.diagnostics).toEqual([])
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P10's two carve-js rows: behavior that is CLOSED as
+ * policy rather than waiting for a mapping. Both were verified against the
+ * importer before being written down - a documented loss is honest, and a
+ * documented ACCIDENT launders a bug - and both are pinned here so the docs
+ * line stays true.
+ */
+describe('the import decisions that are policy', () => {
+  const EMBEDS = ['video', 'audio', 'iframe', 'svg', 'object', 'canvas']
+
+  it('unwraps an embed to its fallback content in safe and semantic mode', () => {
+    for (const tag of EMBEDS) {
+      const html = `<${tag} src="clip.mp4">Your reader cannot play this.</${tag}>`
+      for (const mode of ['safe', 'semantic'] as const) {
+        const result = htmlToCarve(html, { mode })
+        expect(result.value).toBe('Your reader cannot play this.\n')
+        expect(result.report.diagnostics).toEqual([
+          expect.objectContaining({ code: 'attribute-dropped', message: `Dropped unsupported attribute src on <${tag}>` }),
+          expect.objectContaining({ code: 'element-unwrapped', message: `Unwrapped unsupported <${tag}> element` }),
+        ])
+      }
+    }
+  })
+
+  it('reports what an unwrapped element takes with it, not only its src', () => {
+    /*
+     * `attrs()` reports the attributes it cannot represent and KEEPS the rest -
+     * an id an anchor points at, a class a stylesheet selects on. When the
+     * element is then unwrapped there is nothing left to hang them on, and they
+     * went in silence, so the docs line promising every attribute is accounted
+     * for was false for all but `src`.
+     *
+     * Not only embeds: the same arms unwrap `<section>`, `<form>` and any
+     * unmapped inline element.
+     */
+    expect(htmlToCarve('<video id="player" class="wide" data-x="1">fallback</video>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'element-unwrapped' }),
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped id, class, data-x with the unwrapped <video>: there is no element left to carry them',
+      }),
+    ])
+    for (const html of [
+      '<section id="s">x</section>',
+      '<form id="f">x</form>',
+      '<p><ruby id="r">x</ruby></p>',
+      // The figure that has no representable target is a fourth unwrap arm,
+      // and it kept the same silence.
+      '<figure id="f"><ul><li>a</li></ul><figcaption>c</figcaption></figure>',
+    ]) {
+      expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-unwrapped', 'attribute-dropped'])
+    }
+  })
+
+  it('CONTROL: a div KEEPS its attributes, so nothing is reported there', () => {
+    // It becomes a `div` node, which has an attribute slot. A rule that fired
+    // on every unwrap arm would report a loss that does not happen here.
+    expect(htmlToCarve('<div id="d">x</div>', { mode: 'semantic' }).report.diagnostics).toEqual([])
+  })
+
+  it('keeps an embed verbatim in roundtrip mode, whose contract is Carve-produced HTML', () => {
+    for (const tag of EMBEDS) {
+      const html = `<${tag} src="clip.mp4">fallback</${tag}>`
+      const result = htmlToCarve(html, { mode: 'roundtrip' })
+      expect(result.value).toContain(`<${tag} src="clip.mp4">fallback</${tag}>`)
+      expect(result.report.diagnostics.map((d) => d.code)).toContain('raw-preserved')
+    }
+  })
+
+  it('and a void embed too, which has no fallback content to unwrap to', () => {
+    expect(htmlToCarve('<p>a</p><embed src="x">').value).toBe('a\n')
+    expect(htmlToCarve('<p>a</p><embed src="x">', { mode: 'roundtrip' }).value).toContain('<embed src="x">')
+  })
+
+  it('gives mark and code their own syntax, not a second spelling as a span', () => {
+    // The seven PART 9 spells as a span attribute import as `[text]{kbd}`.
+    // These two are not among them: each already has a syntax, and importing
+    // them here as well would give one input two spellings.
+    expect(htmlToCarve('<p><mark>m</mark></p>').value).toBe('=m=\n')
+    expect(htmlToCarve('<p><code>c</code></p>').value).toBe('`c`\n')
+    expect(htmlToCarve('<p><mark>m</mark><code>c</code></p>').report.diagnostics).toEqual([])
+    // The contrast, in the same assertion style: one of the seven.
+    expect(htmlToCarve('<p><kbd>Tab</kbd></p>').value).toBe('[Tab]{kbd}\n')
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P1's row-group row for carve-js, under decision D1
+ * as ruled: (b), emit only where the partition says something a reader cannot
+ * derive from the rows alone.
+ */
+describe('table row groups on import', () => {
+  const groupsOf = (html: string) =>
+    (htmlToAst(html).value.children[0] as { rowGroups?: unknown }).rowGroups
+
+  it('says nothing for the tables every renderer already derives', () => {
+    // The derivation is: the leading run of all-header rows is the head,
+    // everything after it is one body, no foot, no row-head columns. A
+    // `<thead>` over a `<tbody>` IS that, and so is a bare header row - the
+    // HTML parser wraps it in an implicit `<tbody>`, which is not a statement
+    // about the table.
+    expect(groupsOf('<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody></table>')).toBeUndefined()
+    expect(groupsOf('<table><tr><th>h</th></tr><tr><td>b</td></tr></table>')).toBeUndefined()
+    expect(groupsOf('<table><tbody><tr><th>h</th></tr><tr><td>b</td></tr></tbody></table>')).toBeUndefined()
+    expect(groupsOf('<table><tr><td>a</td></tr><tr><td>b</td></tr></table>')).toBeUndefined()
+  })
+
+  const nonTrivial: Array<[string, string, unknown]> = [
+    [
+      'a foot',
+      '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 },
+    ],
+    [
+      'a second body',
+      '<table><tbody><tr><td>a</td></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>',
+      { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }, { headRows: 0, bodyRows: 1 }], footRows: 0 },
+    ],
+    [
+      'row-head columns',
+      '<table><thead><tr><th>h</th><th>x</th></tr></thead><tbody><tr><th>r</th><td>1</td></tr><tr><th>s</th><td>2</td></tr></tbody></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 },
+    ],
+    [
+      'a head that is not header cells',
+      // What Word and pandoc emit. The derived head is EMPTY here and the
+      // stated one is not, so the two disagree and the field is the difference.
+      '<table><thead><tr><td>h</td></tr></thead><tbody><tr><td>b</td></tr></tbody></table>',
+      { headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 },
+    ],
+    [
+      'a body with its own header rows under a head',
+      '<table><thead><tr><th>h</th></tr></thead><tbody><tr><th>g</th></tr><tr><td>a</td></tr></tbody></table>',
+      { headRows: 1, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 },
+    ],
+  ]
+
+  for (const [name, html, expected] of nonTrivial) {
+    it(`states the partition for ${name}`, () => {
+      expect(groupsOf(html)).toEqual(expected)
+    })
+  }
+
+  it('keeps a header-only first body as a body, since a second one follows it', () => {
+    // Absorbing it into the head left ONE ordinary body, which the derivation
+    // reproduces exactly - so the two bodies went silently, the opposite of
+    // what the field is for. The absorption is for a single body group.
+    expect(groupsOf('<table><tbody><tr><th>h</th></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>')).toEqual({
+      headRows: 0,
+      bodies: [{ headRows: 1, bodyRows: 0 }, { headRows: 0, bodyRows: 1 }],
+      footRows: 0,
+    })
+  })
+
+  it('counts row-head COLUMNS, which spans make different from cells', () => {
+    // `<th colspan="2">` is one element and two columns; a `<th rowspan="2">`
+    // leaves the row below it starting with a data ELEMENT while a header still
+    // occupies the column. Counting elements got both wrong.
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th colspan="2">r</th><td>1</td></tr><tr><th colspan="2">s</th><td>2</td></tr></tbody></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><th rowspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 })
+    // Both dimensions at once. A carried `^` occupies ONE slot however many
+    // columns its origin covers - that is the array-index model the renderer
+    // resolves - so the row below a `<th rowspan="2" colspan="2">` has a single
+    // slot standing for two columns, and counting slots reported one.
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th rowspan="2" colspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
+  })
+
+  it('partitions the rows it was built from, in every shape that emits one', () => {
+    // PART 12 section 15's MUST, asserted where it CAN fail: over the produced
+    // field against the produced rows. The producer itself does not check it -
+    // both come from the same row list there, so such a check could not fail.
+    for (const [, html] of nonTrivial) {
+      const table = htmlToAst(html).value.children[0] as { rows: unknown[]; rowGroups: { headRows: number; footRows: number; bodies: Array<{ headRows: number; bodyRows: number }> } }
+      const counted = table.rowGroups.headRows + table.rowGroups.footRows +
+        table.rowGroups.bodies.reduce((total, body) => total + body.headRows + body.bodyRows, 0)
+
+      expect(counted).toBe(table.rows.length)
+    }
+  })
+
+  it('keeps it in the AST and reports it when a writer has to spell it', () => {
+    // Carve source has no spelling for the field, so `htmlToAst` loses nothing
+    // and `htmlToCarve` is where the loss happens - the split PART 12 section
+    // 16 draws, and the same one the figure-wrapping-a-table loss uses.
+    const html = '<table><tbody><tr><td>a</td></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>'
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'structure-unspellable',
+        severity: 'warning',
+        message: expect.stringContaining('explicit head/body/foot grouping'),
+        path: '/table[1]',
+      }),
+    ])
+  })
+
+  it('refuses to describe a head or foot that is not at the edge of the rows', () => {
+    // The field can only say "the first N rows" and "the last N rows". A
+    // `<thead>` after a `<tbody>` is a table it cannot describe, so the
+    // grouping goes and is reported rather than being stated wrongly.
+    const html = '<table><tbody><tr><td>b</td></tr></tbody><thead><tr><th>h</th></tr></thead></table>'
+    expect(groupsOf(html)).toBeUndefined()
+    expect(htmlToAst(html).report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('not at the edge of its rows') }),
+    ])
+  })
+
+  it('survives the wire in both directions', () => {
+    const doc = htmlToAst('<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>b</td></tr></tbody><tfoot><tr><td>f</td></tr></tfoot></table>').value
+    const wire = toAstJson(doc)
+    expect((wire.children[0] as { rowGroups?: unknown }).rowGroups).toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 })
+    expect((fromAstJson(JSON.parse(JSON.stringify(wire))).children[0] as { rowGroups?: unknown }).rowGroups)
+      .toEqual((doc.children[0] as { rowGroups?: unknown }).rowGroups)
+  })
+})
+
+describe('a row-group partition arriving from outside', () => {
+  const payload = (rowGroups: unknown) => ({
+    type: 'document',
+    srcByteLength: 0,
+    children: [
+      {
+        type: 'table',
+        rows: [
+          { type: 'table_row', cells: [{ type: 'table_cell', header: true, children: [{ type: 'text', value: 'h' }] }] },
+          { type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [{ type: 'text', value: 'b' }] }] },
+        ],
+        rowGroups,
+      },
+    ],
+  })
+
+  it('is refused when the counts do not consume the rows', () => {
+    /*
+     * PART 12 section 15 makes it a MUST, and JSON SCHEMA CANNOT SAY SO: there
+     * is no way to relate one field's value to the length of another's, so
+     * `headRows: 5` on a two-row table validates cleanly. A green validator is
+     * not evidence, which is why this is checked here.
+     */
+    expect(() => fromAstJson(payload({ headRows: 5, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never))
+      .toThrow(AstJsonPartitionError)
+    expect(() => fromAstJson(payload({ headRows: 0, bodies: [], footRows: 0 }) as never)).toThrow(AstJsonPartitionError)
+    expect(() => fromAstJson(payload({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 }) as never))
+      .toThrow(AstJsonPartitionError)
+  })
+
+  it('names both numbers, so the payload can be fixed', () => {
+    try {
+      fromAstJson(payload({ headRows: 5, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never)
+      expect.unreachable('the partition should have been refused')
+    } catch (error) {
+      expect(error).toBeInstanceOf(AstJsonPartitionError)
+      expect((error as AstJsonPartitionError).counted).toBe(6)
+      expect((error as AstJsonPartitionError).rows).toBe(2)
+      expect((error as Error).message).toContain('account for 6 rows of 2')
+    }
+  })
+
+  it('CONTROL: a partition that does consume them is accepted', () => {
+    expect(() => fromAstJson(payload({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 0 }) as never)).not.toThrow()
+    expect(() => fromAstJson(payload({ headRows: 0, bodies: [{ headRows: 1, bodyRows: 1 }], footRows: 0 }) as never)).not.toThrow()
+    // And a table with no grouping at all is not asked the question.
+    expect(() => fromAstJson(payload(undefined) as never)).not.toThrow()
   })
 })

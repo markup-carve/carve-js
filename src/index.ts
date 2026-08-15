@@ -99,6 +99,7 @@ export {
   AstJsonUnknownFieldError,
   AstJsonUnknownNodeTypeError,
   AstJsonNodeTypeError,
+  AstJsonPartitionError,
   AstJsonSchemaError,
   MAX_AST_JSON_DEPTH,
   type AstJsonDocument,

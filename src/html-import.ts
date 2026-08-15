@@ -7,8 +7,10 @@ import type {
   FigureGroup,
   InlineNode,
   List,
+  TableBodyGroup,
   TableCell,
   TableRow,
+  TableRowGroups,
 } from './ast.js'
 import { renderCarve } from './render-carve.js'
 
@@ -88,10 +90,17 @@ const ADAPTERS = new Set<HtmlImportAdapter>([
  * The elements PART 9 §9 and §10 spell as an attribute on a span, so the
  * importer writes `[Tab]{kbd}` rather than unwrapping to `Tab` (carve#1140).
  *
- * Mirrors EXTENDED_SEMANTIC_SPAN_ORDER in render-html.ts. `mark` and `code` are
- * NOT here: the tier split retired them from the registry and each already has
- * its own syntax (`=m=`, a code span), so importing them here would give one
- * input two spellings.
+ * Mirrors EXTENDED_SEMANTIC_SPAN_ORDER in render-html.ts.
+ *
+ * `mark` and `code` are not here, and their ABSENCE is not what keeps them out:
+ * `inline()` maps each of them a few lines before it consults this set, so
+ * adding either name changes no output at all. The rule they follow - the tier
+ * split retired them from the registry and each already has its own syntax
+ * (`=m=`, a code span), so importing them here as well would give one input two
+ * spellings - is enforced by those earlier branches, and that is what a test
+ * has to move to fail. Stated here because the comment that used to sit in this
+ * spot claimed the membership was the guarantee, and a mutation that added both
+ * names passed every test.
  *
  * A Set rather than an object literal, because `constructor` and `toString` are
  * tag names a fragment may carry.
@@ -112,6 +121,8 @@ class Importer {
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ path: string; message: string }> = []
   private nodes = 0
+  /** How many `<q>` elements enclose the one being read, for the mark pair. */
+  private quoteDepth = 0
   private readonly maxDepth: number
   private readonly maxNodes: number
   private readonly maxDiagnostics: number
@@ -159,6 +170,11 @@ class Importer {
         keyValues[name] = attr.value
       } else if (name === 'title' && node.tagName !== 'a' && node.tagName !== 'img') {
         keyValues.title = attr.value
+      } else if (name === 'open' && node.tagName === 'details') {
+        // The disclosure's own state, and the one attribute of a `<details>`
+        // that means something after the import: `{open}` is PART 11 §6c's
+        // bare boolean, which the details extension renders back onto the tag.
+        keyValues.open = ''
       } else if (name === 'scope' && node.tagName === 'th') {
         // Kept here, and dropped again in `table()` when it matches the value
         // the renderer derives from position. `colgroup` and `rowgroup` have no
@@ -269,17 +285,25 @@ class Importer {
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
-    if (tag === 'details') return [{ type: 'div', children: this.blocks(node.childNodes ?? [], path, depth + 1), attrs: this.mergeClass(attrs, 'details') }]
+    if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
-      if (tag !== 'div') this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+      if (tag !== 'div') {
+        this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+        this.reportUnwrappedAttributes(attrs, tag, path)
+      }
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
       return tag === 'div' && attrs ? [{ type: 'div', children, attrs }] : children
     }
+    // The four block tags with no mapping: `address`, `fieldset`, `form` and
+    // `hgroup`. The EMBEDS do not reach here - none of them is in `BLOCK`, so
+    // they take the inline arm of this same pair of answers, where the policy
+    // that covers them is written down.
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+    this.reportUnwrappedAttributes(attrs, tag, path)
     return this.blocks(node.childNodes ?? [], path, depth + 1)
   }
 
@@ -295,8 +319,8 @@ class Importer {
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
     })
-    const start = ordered ? Number(this.attr(node, 'start') ?? '1') : undefined
-    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...(attrs ? { attrs } : {}) }
+    const start = this.listStart(node, path, ordered)
+    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
   }
 
   /**
@@ -414,16 +438,34 @@ class Importer {
    * attribute is reported, and skipping the call made these three the only
    * places in the importer where active markup was dropped in silence.
    */
-  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div'): void {
+  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div' | 'summary', noun?: string): void {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
-    const names = [
+    const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
+    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
+  }
+
+  private attrNames(attrs: Attrs): string[] {
+    return [
       ...(attrs.id ? ['id'] : []),
       ...(attrs.classes ? ['class'] : []),
       ...Object.keys(attrs.keyValues ?? {}),
     ]
-    const noun = tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'
-    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${noun} has no attribute slot`, 'warning', path)
+  }
+
+  /**
+   * The attributes an UNWRAPPED element takes with it.
+   *
+   * `attrs()` reports the ones it cannot represent, and keeps the rest - an id
+   * an anchor points at, a class a stylesheet selects on, a `data-` pair an
+   * editor round-trips. When the element itself is then unwrapped there is
+   * nothing left to hang them on, and they went in silence: a
+   * `<video id="player">` reported that the element was unwrapped and never
+   * that the id had gone with it.
+   */
+  private reportUnwrappedAttributes(attrs: Attrs | undefined, tag: string, path: string): void {
+    if (attrs === undefined) return
+    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} with the unwrapped <${tag}>: there is no element left to carry them`, 'warning', path)
   }
 
   /**
@@ -444,6 +486,270 @@ class Importer {
     )
   }
 
+  /**
+   * `<ol type>` -> `olType`, the marker alphabet the list counts in.
+   *
+   * The attribute was already exempt from the unsupported-attribute report, so
+   * `<ol type="a">` looked like something the importer handled - and nothing
+   * read it, so the list came back counting `1.` `2.` `3.` with no diagnostic
+   * anywhere. HTML's five values map exactly onto Carve's four plus the
+   * default: `1` IS the default and carries no field, so it is not a loss.
+   *
+   * A value that is none of the five is not HTML's, so nothing can be derived
+   * from it and it is reported here rather than exempted into silence.
+   *
+   * The FIELD survives every time; the written MARKER does not, and the two
+   * shapes where it does not are reported as serialization losses (§16) rather
+   * than traded for a silently different list. Both were measured against the
+   * writer and the parser over every start from 1 to 60 in each alphabet:
+   *
+   * - an alphabetic list starting past the 26th letter. Carve's grammar has no
+   *   multi-letter alphabetic marker at all - `aa. x` is a paragraph - so the
+   *   writer's marker wraps and the list restarts at `a`.
+   * - a ONE-ITEM list whose only marker is a letter the other alphabet claims.
+   *   A single `i` reads as the roman numeral and every other single letter as
+   *   the alphabetic one, so alphabetic 9 and roman 5, 10, 50, 100, 500 and
+   *   1000 come back as the other kind. A second item settles it - `v.` `vi.`
+   *   is roman 5 - which is why the count is part of the question.
+   */
+  /**
+   * `<ol start>` under HTML's own rules for parsing integers: optional sign,
+   * then digits, within a signed 32-bit range. Anything else is not a number
+   * the attribute defines and the default stands, which is what a browser does
+   * with it too.
+   *
+   * `Number()` stood here and accepts what HTML does not: `2.9` opened a list
+   * at 2.9 and `1e3` at 1000, both written back as their own marker, and `foo`
+   * became NaN, which the writer spelled `NaN. x`. None of it was reported.
+   */
+  private listStart(node: P5Node, path: string, ordered: boolean): number | undefined {
+    if (!ordered) return undefined
+    const raw = this.attr(node, 'start')
+    if (raw === undefined) return 1
+    const value = Number(raw.trim())
+    if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647) return value
+    this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path)
+    return 1
+  }
+
+  private olType(node: P5Node, path: string, ordered: boolean, items: number, start: number): Record<string, never> | { olType: NonNullable<List['olType']> } {
+    const value = ordered ? this.attr(node, 'type') : undefined
+    if (value === undefined || value === '1') return {}
+    if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
+      return {}
+    }
+    const alphabetic = value === 'a' || value === 'A'
+    // An alphabet counts from ONE. `start="0"` and a negative start are valid
+    // HTML and there is no letter at those positions, so this is not a marker
+    // the writer loses - it is a value the mapping has no image for, and the
+    // list stays the decimal one it already was. Keeping the alphabet here
+    // would be worse than the loss it reports: the writer derives its letter
+    // arithmetically, so zero comes out as a BACKTICK and -3 as `]`, putting
+    // characters in the document that can pair with a later one.
+    if (start < 1) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path)
+      return {}
+    }
+    // Roman notation ends at 3999. Past it the writer has no numeral and
+    // repeats the thousands letter instead, so `start="1000000000"` is a
+    // 40-byte input asking for a million characters PER ITEM - the kind of
+    // amplification `maxNodes` and `maxDepth` are here to refuse. The LAST
+    // item is the one to ask about, not the first: a list opened at 3999 and
+    // run long crosses the same boundary from inside, and its output then
+    // grows as the square of its length. The list keeps its decimal counting,
+    // which spells any position in its own digits.
+    const last = start + Math.max(items, 1) - 1
+    if (!alphabetic && last > 3999) {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path)
+      return {}
+    }
+    if (alphabetic && start > 26) {
+      this.unspellable.push({
+        path,
+        message: `An alphabetic list starting at ${start} has no Carve spelling; there is no multi-letter marker, so the written list restarts at the first letter`,
+      })
+    } else if (items === 1 && (alphabetic ? start === 9 : [5, 10, 50, 100, 500, 1000].includes(start))) {
+      this.unspellable.push({
+        path,
+        message: `A one-item ${alphabetic ? 'alphabetic' : 'roman'} list starting at ${start} has no Carve spelling; its only marker is a letter the other alphabet claims, and nothing follows it to settle which`,
+      })
+    }
+    return { olType: value }
+  }
+
+  /**
+   * `<details>/<summary>` -> the `details` admonition (`::: details "Summary"`).
+   *
+   * It used to become a generic `div` carrying a `details` CLASS, and the
+   * `<summary>` was not recognized at all: it unwrapped into the body, so the
+   * label of the disclosure became its first paragraph and re-rendered inside
+   * the box rather than on it. Nothing round-tripped - `<div class="details">`
+   * is not a disclosure element, and a reader had no way back to one.
+   *
+   * The admonition is what the `details()` extension renders as a real
+   * `<details>`, with the title as the `<summary>`, so the import lands on the
+   * form Carve already has for this rather than on a container that resembles
+   * it. A `<details>` with no `<summary>` keeps the extension's default label,
+   * which is what the element itself does in a browser.
+   */
+  private disclosure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
+    const children0 = node.childNodes ?? []
+    const summaryIndex = children0.findIndex((n) => n.tagName === 'summary')
+    const summary = summaryIndex < 0 ? undefined : children0[summaryIndex]
+    // The paths stay the ones the elements arrived under. Filtering the summary
+    // out renumbers everything after it, so a `<script>` at `/details[1]/
+    // script[2]` would be reported at `script[1]` - and a summary that is not
+    // first is not `summary[1]` either.
+    const summaryPath = summary ? this.childPath(path, summary, summaryIndex) : ''
+    const body: P5Node[] = []
+    const bodyPaths: string[] = []
+    children0.forEach((child, index) => {
+      if (child === summary) return
+      body.push(child)
+      bodyPaths.push(this.childPath(path, child, index))
+    })
+    let title: InlineNode[] | undefined
+    if (summary) {
+      // The element itself, not only its children: an empty `<summary>` is a
+      // DOM node the caller's `maxNodes` is counting, and reading straight past
+      // it let a document process more nodes than the limit allows.
+      this.enter(depth + 1)
+      this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
+      title = this.inlines(summary.childNodes ?? [], summaryPath, depth + 2)
+    }
+    const children = this.blocks(body, path, depth + 1, bodyPaths)
+    if (title && this.visible(title) && !this.spellableTitle(title)) {
+      // Kept as the body's first paragraph rather than as the title. This is
+      // the one place the import degrades the TREE instead of recording a
+      // writer loss, because the written form here is not a degraded document
+      // but a destroyed one: an unspellable title makes the opening line
+      // ordinary text, and the whole disclosure - body included - re-reads as
+      // one paragraph. The label survives as a paragraph instead, which is
+      // where it landed before this mapping existed anyway.
+      this.add(
+        'element-unwrapped',
+        'Unwrapped a <summary> into the body: a disclosure title cannot spell a double quote or a line break, and writing one makes the whole block a paragraph',
+        'warning',
+        summaryPath,
+      )
+      return { type: 'admonition', kind: 'details', children: [{ type: 'paragraph', children: title }, ...children], ...(attrs ? { attrs } : {}) }
+    }
+    return {
+      type: 'admonition',
+      kind: 'details',
+      ...(title && this.visible(title) ? { title } : {}),
+      children,
+      ...(attrs ? { attrs } : {}),
+    }
+  }
+
+  /**
+   * Whether the writer can put these inlines in the quoted title slot.
+   *
+   * The slot is delimited by `"` and the grammar gives it no escape, so a
+   * double quote ends the title early and the opener stops being one. A line
+   * break does the same thing for the same reason: the opener is a LINE.
+   *
+   * The question is asked of the WRITTEN form, not of the text nodes. A quote
+   * reaches the title through more than its own text - an attribute VALUE is
+   * written quoted, so `<span title='a"b'>hi</span>` is spelled
+   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
+   * spellings that can produce one is the kind of second copy of the grammar
+   * that goes stale the next time a spelling is added. Rendering the inlines
+   * asks the writer itself.
+   */
+  private spellableTitle(title: InlineNode[]): boolean {
+    const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: title }] })
+    return !written.includes('"') && !written.trimEnd().includes('\n')
+  }
+
+  /**
+   * A `colspan`/`rowspan` value, by HTML's rules: a non-negative integer,
+   * clamped to the attribute's own maximum, defaulting when it is not one.
+   *
+   * The clamp is not decoration. Each unit of a span becomes a CELL below, so
+   * an unclamped `colspan="1000000000"` is a 30-byte input asking for a billion
+   * of them; the generated cells are charged to `maxNodes` on top of this, so
+   * the two together bound what a table can cost.
+   */
+  private spanCount(cell: P5Node, name: 'colspan' | 'rowspan', max: number, min: number): number {
+    const raw = this.attr(cell, name)
+    if (raw === undefined) return 1
+    const value = Number(raw.trim())
+    if (!/^\d+$/.test(raw.trim()) || !Number.isSafeInteger(value)) return 1
+    return Math.min(Math.max(value, min), max)
+  }
+
+  /**
+   * The imported cells, laid out with the continuation cells Carve spells `^`
+   * (this cell continues the one above) and `<` (it continues the one to its
+   * left).
+   *
+   * The model already carried both - `table_cell.span` is in PART 12 and the
+   * HTML renderer derives `rowspan`/`colspan` from a run of them - and the
+   * import simply threw them away: a spanning cell was written as an ordinary
+   * one and the row came up short, so `<td colspan="2">` produced a 1-cell row
+   * under a 2-column header, with `table-degraded` as the only trace.
+   *
+   * The renderer resolves a continuation by POSITION IN THE ROW'S CELL ARRAY,
+   * not by grid column - `^` attaches to the nearest row above whose cell at
+   * the same index is not itself a continuation - so a carried span occupies
+   * ONE array slot however many columns it covers, and the cells after it in
+   * the row shift left by the rest. Placing the carried marks first and filling
+   * the row's own cells around them is what keeps those indexes aligned.
+   */
+  private spanGrid(
+    built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
+    path: string,
+    depth: number,
+  ): TableRow[] {
+    let carried: Array<{ index: number; rows: number }> = []
+    const rows: TableRow[] = []
+    built.forEach((sourceCells, r) => {
+      const marks = new Set(carried.map((entry) => entry.index))
+      const cells: TableCell[] = []
+      const opened: Array<{ index: number; rows: number }> = []
+      const continuation = (span: 'rowspan' | 'colspan', header: boolean): TableCell => {
+        this.enter(depth)
+        return { type: 'table_cell', header, span, children: [] }
+      }
+      const fillMarks = (): void => {
+        while (marks.has(cells.length)) cells.push(continuation('rowspan', false))
+      }
+      for (const { cell, colspan, rowspan } of sourceCells) {
+        fillMarks()
+        const originIndex = cells.length
+        cells.push(cell)
+        for (let k = 1; k < colspan; k++) {
+          fillMarks()
+          cells.push(continuation('colspan', cell.header))
+        }
+        if (rowspan > 1) opened.push({ index: originIndex, rows: rowspan - 1 })
+      }
+      // A mark past the end of this row's own cells. Placing it still costs
+      // nothing - it is a cell the span already owns - but a GAP before it does:
+      // the index has to be kept, and an empty cell there is one the source did
+      // not have. Only that invention is reported.
+      const furthest = marks.size === 0 ? -1 : Math.max(...marks)
+      let invented = false
+      while (cells.length <= furthest) {
+        if (marks.has(cells.length)) cells.push(continuation('rowspan', false))
+        else {
+          this.enter(depth)
+          cells.push({ type: 'table_cell', header: false, children: [] })
+          invented = true
+        }
+      }
+      if (invented) {
+        this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`)
+      }
+      rows.push({ type: 'table_row', cells })
+      carried = [...carried.map((entry) => ({ ...entry, rows: entry.rows - 1 })).filter((entry) => entry.rows > 0), ...opened]
+    })
+    return rows
+  }
+
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
     /*
      * `<caption>` is a DIRECT child of the table and holds the table's own
@@ -452,11 +758,30 @@ class Importer {
      * the element was skipped and the caption left the document silently -
      * pandoc emits exactly this shape for every captioned table.
      */
-    const captionNode = (node.childNodes ?? []).find((n) => n.tagName === 'caption')
+    const captions = (node.childNodes ?? []).filter((n) => n.tagName === 'caption')
+    const captionNode = captions[0]
+    // The PARSER keeps the first `^ ` line and reads the second as a paragraph,
+    // so a table that arrives with two captions loses one either way. Reported
+    // rather than dropped in silence, and the same rule as the parser's, so the
+    // import and a re-read of its own output agree on which one survives.
+    for (const extra of captions.slice(1)) {
+      this.add(
+        'table-degraded',
+        'Dropped a second <caption>: a table has one caption, and the first one wins',
+        'warning',
+        this.childPath(path, extra, (node.childNodes ?? []).indexOf(extra)),
+      )
+    }
     const tr: P5Node[] = []
-    const walk = (n: P5Node): void => {
-      if (n.tagName === 'tr') tr.push(n)
-      else for (const child of n.childNodes ?? []) walk(child)
+    const group = new Map<P5Node, P5Node>()
+    const walk = (n: P5Node, section?: P5Node): void => {
+      if (n.tagName === 'tr') {
+        tr.push(n)
+        if (section) group.set(n, section)
+        return
+      }
+      const own = ['thead', 'tbody', 'tfoot'].includes(n.tagName ?? '') ? n : section
+      for (const child of n.childNodes ?? []) walk(child, own)
     }
     walk(node)
     // The leading run of all-header rows is what PART 10 §T9 gives `scope="col"`;
@@ -472,12 +797,48 @@ class Importer {
       leadingHeaderRows += 1
     }
 
-    const rows: TableRow[] = tr.map((row, r) => ({
-      type: 'table_row',
-      cells: (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c): TableCell => {
+    // How many rows are left in each row's own group, INCLUDING it. Computed
+    // once: asking per cell meant scanning the whole table for each one, which
+    // is quadratic in the row count and showed as 3000 rows in 299 ms against
+    // 6000 in 852 ms.
+    const remainingInGroup = new Map<P5Node, number>()
+    const groupTotals = new Map<P5Node | undefined, number>()
+    for (const row of tr) groupTotals.set(group.get(row), (groupTotals.get(group.get(row)) ?? 0) + 1)
+    const groupSeen = new Map<P5Node | undefined, number>()
+    for (const row of tr) {
+      const section = group.get(row)
+      const index = groupSeen.get(section) ?? 0
+      groupSeen.set(section, index + 1)
+      remainingInGroup.set(row, (groupTotals.get(section) ?? 1) - index)
+    }
+
+    const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
+      (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c) => {
         const cellPath = `${path}/tr[${r + 1}]/${cell.tagName}[${c + 1}]`
-        if (Number(this.attr(cell, 'rowspan') ?? '1') > 1 || Number(this.attr(cell, 'colspan') ?? '1') > 1) {
-          this.add('table-degraded', 'Table spans were flattened by this importer', 'warning', cellPath)
+        const colspan = this.spanCount(cell, 'colspan', 1000, 1)
+        // A rowspan stops at its ROW GROUP in HTML, and `rowspan="0"` means
+        // exactly "to the end of it". Both are resolved against the group the
+        // row is actually in, so a `<tfoot>` below the body is not swallowed by
+        // a cell the layout stops at the body's last row - not only the `0`
+        // form, which was the half this handled first.
+        const declaredRowspan = this.spanCount(cell, 'rowspan', 65534, 0)
+        const left = remainingInGroup.get(row) ?? 1
+        let rowspan = declaredRowspan === 0 ? left : Math.min(declaredRowspan, left)
+        // And it stops at the head the RENDERER will synthesize. Carve derives
+        // the head from the leading run of all-header rows, so a span reaching
+        // out of that run lands in a `<thead>` with its other rows in the
+        // `<tbody>` - which browsers clip, making the written table say
+        // something the source table did not. Clipped here instead, where it
+        // can be reported: the alternative is a document that claims a grid it
+        // does not render.
+        if (r < leadingHeaderRows && r + rowspan > leadingHeaderRows) {
+          this.add(
+            'table-degraded',
+            'Clipped a rowspan at the header rows: Carve derives the head from the leading header rows, and a span leaving them crosses a boundary browsers clip anyway',
+            'warning',
+            cellPath,
+          )
+          rowspan = leadingHeaderRows - r
         }
         const cellAttrs = this.attrs(cell, cellPath)
         // A `scope` the renderer would regenerate from position is the
@@ -508,13 +869,185 @@ class Importer {
           }
         }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
-        return { type: 'table_cell', header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) }
+        return {
+          cell: { type: 'table_cell' as const, header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) },
+          colspan,
+          rowspan,
+        }
       }),
-    }))
+    )
+    const rows = this.spanGrid(built, path, depth)
+    const rowGroups = this.rowGroups(tr, rows, group, leadingHeaderRows, path)
     const caption = captionNode
       ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
       : undefined
-    return { type: 'table', rows, ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+    return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * `<thead>/<tbody>/<tfoot>` -> `table.rowGroups`, when the partition says
+   * something a reader cannot derive (carve#1210 D1, ruled as (b)).
+   *
+   * Every renderer already derives a structure from the rows alone: the leading
+   * run of all-header rows is the head, everything after it is one body, there
+   * is no foot and there are no row-head columns. A `<thead>` over a `<tbody>`
+   * is exactly that, so emitting the field for it would put structure into
+   * every imported table that the source form cannot spell and hand-written
+   * Carve never carries - which is what (a) was and what (b) rejects.
+   *
+   * So it is emitted only where the two DISAGREE: a `<tfoot>`, a second
+   * `<tbody>`, a body with its own intermediate header rows, a body with
+   * row-head columns, or a `<thead>` whose rows are not all header cells (Word
+   * and pandoc both emit `<thead><tr><td>`), where the derived head is empty
+   * and the stated one is not.
+   *
+   * The counts are not checked against `rows.length` here. They are built from
+   * the same row list the rows are built from, so a check at this point cannot
+   * fail; PART 12 §15's MUST is enforced where a payload arrives from
+   * elsewhere, in `fromAstJson`.
+   */
+  private rowGroups(
+    tr: P5Node[],
+    rows: TableRow[],
+    group: Map<P5Node, P5Node>,
+    leadingHeaderRows: number,
+    path: string,
+  ): TableRowGroups | undefined {
+    if (tr.length === 0) return undefined
+    const sectionOf = (row: P5Node): string => group.get(row)?.tagName ?? 'tbody'
+    const isHeaderRow = (row: P5Node): boolean => {
+      const cells = (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+      return cells.length > 0 && cells.every((n) => n.tagName === 'th')
+    }
+    // The head is a PREFIX of `rows` and the foot a SUFFIX, which is what the
+    // field can express. A `<thead>` that is not first, or a `<tfoot>` with
+    // rows after it, is a table this cannot describe.
+    const sections = tr.map(sectionOf)
+    const headRows = sections.findIndex((name) => name !== 'thead') === -1 ? tr.length : sections.findIndex((name) => name !== 'thead')
+    let footRows = 0
+    while (footRows < tr.length - headRows && sections[tr.length - 1 - footRows] === 'tfoot') footRows += 1
+    const middle = tr.slice(headRows, tr.length - footRows)
+    if (middle.some((row) => sectionOf(row) === 'thead' || sectionOf(row) === 'tfoot')) {
+      this.add(
+        'table-degraded',
+        'Dropped the row grouping of a table whose <thead> or <tfoot> is not at the edge of its rows: the head is a prefix of the rows and the foot a suffix',
+        'warning',
+        path,
+      )
+      return undefined
+    }
+
+    const bodies: TableBodyGroup[] = []
+    let index = 0
+    while (index < middle.length) {
+      const section = group.get(middle[index]!)
+      const groupRows: P5Node[] = []
+      while (index < middle.length && group.get(middle[index]!) === section) groupRows.push(middle[index++]!)
+      let groupHead = 0
+      while (groupHead < groupRows.length && isHeaderRow(groupRows[groupHead]!)) groupHead += 1
+      // A group whose rows are ALL header rows is an intermediate header with
+      // nothing under it, which is what the counts say and not something to
+      // reinterpret.
+      const first = tr.indexOf(groupRows[groupHead] ?? groupRows[0]!)
+      const rowHeadColumns = groupHead < groupRows.length
+        ? this.rowHeadColumns(rows.slice(first, first + groupRows.length - groupHead), rows, first)
+        : 0
+      bodies.push({ headRows: groupHead, bodyRows: groupRows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}) })
+    }
+
+    // No `<thead>` at all: the leading run of header rows is what every renderer
+    // reads as the head, so it is counted as one here too. Without this, the
+    // ORDINARY table - a header row and some data rows, with only the implicit
+    // `<tbody>` the HTML parser inserts - came out with an intermediate header
+    // and no head, which is a different statement about the same table and puts
+    // the field on nearly every document. That is exactly what (b) rejects.
+    let headRows2 = headRows
+    // ONE body only. With a second one, the header-only first body is a
+    // BOUNDARY the field exists to record, and absorbing it away left a single
+    // ordinary body that the derivation reproduces - so the two bodies went
+    // silently, which is the opposite of the point.
+    if (headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0) {
+      const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
+      headRows2 = absorbed
+      bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
+      if (bodies[0]!.headRows === 0 && bodies[0]!.bodyRows === 0 && bodies[0]!.rowHeadColumns === undefined) bodies.shift()
+    }
+
+    const derivable =
+      headRows2 === leadingHeaderRows &&
+      footRows === 0 &&
+      bodies.length <= 1 &&
+      bodies.every((body) => body.headRows === 0 && (body.rowHeadColumns ?? 0) === 0)
+    if (derivable) return undefined
+    // Carve SOURCE has no spelling for the field, so a writer loses it. The
+    // AST keeps it and `htmlToCarve` reports it, which is the split §16 draws.
+    this.unspellable.push({
+      path,
+      message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
+    })
+    return { headRows: headRows2, bodies, footRows }
+  }
+
+  /**
+   * Leading COLUMNS that are header cells in every row of the group.
+   *
+   * Counted over the expanded grid rather than over the source cells, because
+   * columns and cells are not the same thing: `<th colspan="2">` is one element
+   * and two columns, and a `<th rowspan="2">` leaves the row below it starting
+   * with a data ELEMENT while a header still occupies the column. Both made the
+   * count wrong in a table that carries them.
+   *
+   * A continuation resolves the way the renderer resolves it: `<` to the
+   * nearest cell to its left that is not one, `^` to the nearest row above with
+   * a non-continuation at the same index.
+   */
+  private rowHeadColumns(groupRows: TableRow[], allRows: TableRow[], firstIndex: number): number {
+    if (groupRows.length === 0) return 0
+    const headerAt = (r: number, c: number): boolean => {
+      const cell = allRows[r]?.cells[c]
+      if (cell === undefined) return false
+      // A `<` needs no resolution: `spanGrid` builds a colspan continuation
+      // carrying its ORIGIN's header flag, so reading the flag off the
+      // continuation gives the same answer as walking left to the origin. A
+      // branch for it was here and no mutation of it could change an output.
+      // A `^` is different - it is built with the flag cleared, because the
+      // cell it continues is in another row - so that one is resolved.
+      if (cell.span === 'rowspan') {
+        let up = r - 1
+        while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
+        return up >= 0 ? headerAt(up, c) : false
+      }
+      return cell.header
+    }
+    // How many COLUMNS an origin covers: itself plus the `<` run after it.
+    const widthAt = (r: number, c: number): number => {
+      let width = 1
+      while (allRows[r]?.cells[c + width]?.span === 'colspan') width += 1
+      return width
+    }
+    const originRow = (r: number, c: number): number => {
+      let up = r - 1
+      while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
+      return up
+    }
+    const leading = (row: TableRow, r: number): number => {
+      let columns = 0
+      let slot = 0
+      while (slot < row.cells.length && headerAt(r, slot)) {
+        const cell = row.cells[slot]!
+        // A carried `^` occupies ONE slot however many columns its origin
+        // covers - that is the array-index model the renderer resolves - so a
+        // `<th rowspan="2" colspan="2">` leaves the row below it with a single
+        // slot standing for two columns. Counting slots reported one.
+        const up = cell.span === 'rowspan' ? originRow(r, slot) : -1
+        columns += up >= 0 ? widthAt(up, slot) : 1
+        slot += 1
+      }
+      // An all-header row would say every column is a row head, which is what
+      // an intermediate HEADER row is, not a row-head column.
+      return slot === row.cells.length ? 0 : columns
+    }
+    return Math.min(...groupRows.map((row, offset) => leading(row, firstIndex + offset)))
   }
 
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
@@ -565,6 +1098,7 @@ class Importer {
       return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], `${path}/figcaption[1]`, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)
+    this.reportUnwrappedAttributes(attrs, 'figure', path)
     return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.inlines(captionNode.childNodes ?? [], path, depth + 1) }] : [])]
   }
 
@@ -589,11 +1123,30 @@ class Importer {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path)
       return []
     }
+    // Not in `roundtrip`, which raw-preserves what Carve CANNOT express. The
+    // seven semantic elements are mapped in every mode because their spelling
+    // renders back as the element itself; the marks do not - a `<q>` becomes
+    // text and its `cite` goes with it - so this mapping is the safe/semantic
+    // answer and the raw fallback is the round-tripping one.
+    if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'strong' || tag === 'b') return [{ type: 'strong', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'del' || tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
+    /*
+     * `<del>` and `<ins>` are HTML's change-tracking PAIR and Carve spells that
+     * pair `{-x-}` / `{+x+}`, which render back as `<del>` and `<ins>`.
+     * `<s>` and `<strike>` are the other thing - content no longer accurate,
+     * with no edit implied - and that is `~x~`, which renders `<s>`.
+     *
+     * `<del>` used to import as `strike`, so a tracked deletion came back as
+     * `<s>` while `<ins>` was unwrapped to its text outright. Importing `<ins>`
+     * without moving `<del>` would have made that asymmetry worse: the
+     * insertion of an edit surviving as an edit and the deletion beside it not.
+     */
+    if (tag === 'del') return [{ type: 'delete', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 'ins') return [{ type: 'insert', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'u') return [{ type: 'underline', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'mark') return [{ type: 'highlight', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]
@@ -610,12 +1163,63 @@ class Importer {
     if (tag === 'br') return [{ type: 'hard_break' }]
     if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
+    /*
+     * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
+     *
+     * `video`, `audio`, `iframe`, `svg`, `object`, `embed` and `canvas` are
+     * none of them in `BLOCK`, so they arrive at THIS arm and take its two
+     * answers: unwrapped to their fallback content in `safe` and `semantic`,
+     * raw-preserved in `roundtrip`. Their `src`, and every other attribute, is
+     * reported dropped on the way past.
+     *
+     * Not an oversight and not a to-do. Carve has no embed node, and giving it
+     * one is a SPEC question - which media types, which attributes, what a
+     * non-HTML renderer does with them, what a `src` means for a document that
+     * has to be safe to render from an untrusted source - decided in the spec
+     * repo rather than by whichever importer needed it first. Until then the
+     * honest import is the one that keeps the fallback content the author wrote
+     * for exactly this case, says what it dropped, and keeps the markup
+     * verbatim in the mode whose contract is Carve-produced HTML.
+     */
     if (this.mode === 'roundtrip') {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+    this.reportUnwrappedAttributes(attrs, tag, path)
     return children
+  }
+
+  /**
+   * `<q>` -> the quotation marks a browser draws for it.
+   *
+   * Carve has no quotation element and needs none: the element's whole rendered
+   * effect is the pair of marks, which are ordinary text. So this is a MAPPING
+   * rather than the unwrap it used to be - the same content reached the
+   * document before, without the marks that made it a quotation.
+   *
+   * The marks alternate by nesting depth, as a browser's do: double outside,
+   * single inside. They are the typographic characters rather than `"`, which
+   * the writer escapes back to a straight quote (PART 11 §5 keeps a quote that
+   * reached it as TEXT), so the curly pair is both what the element renders as
+   * and what survives being written.
+   *
+   * Still reported, at `info`: the ELEMENT does not come back, and a converter
+   * going the other way sees text where a `<q>` was. The message says the
+   * mapping was deliberate rather than claiming something was unwrapped.
+   */
+  private quotation(node: P5Node, path: string, depth: number): InlineNode[] {
+    const [open, close] = this.quoteDepth % 2 === 0 ? ['\u201c', '\u201d'] : ['\u2018', '\u2019']
+    this.quoteDepth += 1
+    try {
+      const children = this.inlines(node.childNodes ?? [], path, depth + 1)
+      const attrs = this.attrs(node, path)
+      const quoted: InlineNode[] = [{ type: 'text', value: open! }, ...children, { type: 'text', value: close! }]
+      this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path)
+      return attrs ? [{ type: 'span', children: quoted, attrs }] : quoted
+    } finally {
+      this.quoteDepth -= 1
+    }
   }
 
   /**
@@ -656,10 +1260,6 @@ class Importer {
 
   private visible(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || node.value.trim() !== '')
-  }
-
-  private mergeClass(attrs: Attrs | undefined, className: string): Attrs {
-    return { ...attrs, classes: [...(attrs?.classes ?? []), className] }
   }
 
   /**

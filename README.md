@@ -27,6 +27,27 @@ to the canonical writer. `report.diagnostics` records every lossy decision.
 Use `semantic` for trusted editor HTML and `roundtrip` only for Carve-produced
 HTML. The CLI equivalent is `carve migrate --from html --report report.json`.
 
+### What the importer does not model
+
+Two decisions are deliberate, so a diagnostic naming them is the whole answer
+rather than a placeholder for a mapping still to come:
+
+- **Embedded media** - `<video>`, `<audio>`, `<iframe>`, `<svg>`, `<object>`,
+  `<embed>`, `<canvas>` - is unwrapped to the fallback content the author wrote
+  for it in `safe` and `semantic` mode, and kept verbatim in `roundtrip`. Every
+  attribute it carried is reported dropped: the ones Carve cannot represent as
+  it reads them, and the ones it can - an `id`, a `class`, a `data-` pair - when
+  the element they belonged to is unwrapped out from under them. Carve has no embed
+  node, and giving it one is a spec question (which media, which attributes,
+  what a non-HTML renderer does with them, what a `src` means in a document that
+  must be safe to render from an untrusted source), so it is settled in the spec
+  rather than by an importer.
+- **`<mark>` and `<code>` are not semantic-span imports.** The seven elements
+  PART 9 spells as a span attribute - `abbr`, `time`, `samp`, `var`, `kbd`,
+  `cite`, `dfn` - import as `[text]{kbd}` and friends. These two are not among
+  them: each already has its own syntax (`=text=` and a code span), so importing
+  them as span attributes as well would give one input two spellings.
+
 `migrate` reaches the other importers too - `--from markdown` (or `md`) and
 `--from bbcode` - which need no report because they parse their source whole
 and drop nothing. See
