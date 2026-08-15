@@ -342,6 +342,7 @@ class Importer {
           // A term after a definition starts the next entry; a term after a
           // term joins the one being opened.
           if (current === undefined || current.definitions.length > 0) current = openEntry()
+          this.entryAttributes(child, childPath, 'dt')
           const term = this.inlines(child.childNodes ?? [], childPath, level + 1)
           if (!this.visible(term)) {
             this.unspellable.push({
@@ -364,11 +365,12 @@ class Importer {
               message: 'A <dd> with no <dt> before it has no Carve spelling; the definition line re-reads as a paragraph',
             })
           }
+          this.entryAttributes(child, childPath, 'dd')
           const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
-          if (definition.length === 0) {
+          if (this.writesNothing(definition)) {
             this.unspellable.push({
               path: childPath,
-              message: 'An empty <dd> has no Carve spelling; the bare `:` line is read as more of the term above it',
+              message: 'A <dd> that writes nothing has no Carve spelling; the bare `:` line is read as more of the term above it',
             })
           }
           current.definitions.push(definition)
@@ -381,6 +383,45 @@ class Importer {
     visit(node.childNodes ?? [], path, depth + 1)
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
     return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1)]
+  }
+
+  /**
+   * A `<dt>`/`<dd>` carries attributes and the model has nowhere to put them:
+   * PART 12 gives `definition_list` an `attrs` slot and its ENTRIES none, so an
+   * `id` an anchor points at, a class a stylesheet selects on and a `data-`
+   * pair an editor round-trips all end here.
+   *
+   * `attrs()` is still called for its diagnostics: it is where an event-handler
+   * attribute is reported, and skipping the call made `<dd onclick="...">` the
+   * one place in the importer where active markup was dropped in silence.
+   */
+  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd'): void {
+    const attrs = this.attrs(node, path)
+    if (attrs === undefined) return
+    const names = [
+      ...(attrs.id ? ['id'] : []),
+      ...(attrs.classes ? ['class'] : []),
+      ...Object.keys(attrs.keyValues ?? {}),
+    ]
+    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${tag === 'dt' ? 'term' : 'description'} has no attribute slot`, 'warning', path)
+  }
+
+  /**
+   * Whether a description's blocks reach the written source at all.
+   *
+   * An empty ARRAY is the obvious case, and it is not the only one: the two
+   * further shapes measured against the writer are a paragraph with no visible
+   * text (`<dd><p></p></dd>`) and a list with no items (`<dd><ul></ul></dd>`).
+   * Both write a bare `:` line that the term above absorbs. Everything else
+   * writes something the reparse keeps - an empty `<li>` comes back as `:  - +`
+   * and an empty `<blockquote>` as `:  >`, which are descriptions, not losses.
+   */
+  private writesNothing(blocks: BlockNode[]): boolean {
+    return blocks.every(
+      (block) =>
+        (block.type === 'paragraph' && !this.visible(block.children)) ||
+        (block.type === 'list' && block.items.length === 0),
+    )
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {

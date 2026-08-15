@@ -346,10 +346,51 @@ describe('definition lists on import', () => {
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
       severity: 'warning',
-      message: expect.stringContaining('empty <dd>'),
+      message: expect.stringContaining('<dd> that writes nothing'),
       path: '/dl[1]/dd[2]',
     }))
     expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+  })
+
+  it('reports a description whose blocks write nothing, not only an empty one', () => {
+    // `<dd><p></p></dd>` is a NON-empty block list holding a block that writes
+    // nothing, so an array-length check reports no loss while the writer still
+    // emits the bare `:` the term above absorbs.
+    const html = '<dl><dt>Term</dt><dd><p></p></dd></dl>'
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      message: expect.stringContaining('<dd> that writes nothing'),
+    }))
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+  })
+
+  it('leaves a description that writes SOMETHING alone', () => {
+    // CONTROL for the row above: an empty `<li>` writes `:  - +` and an empty
+    // `<blockquote>` writes `:  >`. Both are descriptions on the reparse, so
+    // reporting them would be a diagnostic for a loss that does not happen.
+    for (const inner of ['<ul><li></li></ul>', '<blockquote></blockquote>', '<hr>']) {
+      const html = `<dl><dt>Term</dt><dd>${inner}</dd></dl>`
+      expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).not.toContain('structure-unspellable')
+      expect(carveToHtml(carve(html))).toContain('<dd>')
+    }
+  })
+
+  it('reports the attributes a term or a description has nowhere to keep', () => {
+    // The entries have no `attrs` slot in the model, so an id an anchor points
+    // at and a class a stylesheet selects on both end here.
+    expect(htmlToCarve('<dl><dt id="term" class="key">T</dt><dd data-note="x">D</dd></dl>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', severity: 'warning', message: 'Dropped id, class on <dt>: a definition term has no attribute slot', path: '/dl[1]/dt[1]' }),
+      expect.objectContaining({ code: 'attribute-dropped', severity: 'warning', message: 'Dropped data-note on <dd>: a definition description has no attribute slot', path: '/dl[1]/dd[2]' }),
+    ])
+  })
+
+  it('reports an event-handler attribute on a description like it does everywhere else', () => {
+    // The one that made this a security asymmetry rather than a fidelity one:
+    // skipping `attrs()` made a `<dd>` the only element whose active markup was
+    // dropped in silence.
+    expect(htmlToCarve('<dl><dt>T</dt><dd onclick="evil()">D</dd></dl>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped event-handler attribute onclick on <dd>' }),
+    )
   })
 
   it('counts a <dl> against the node budget once, like any other element', () => {

@@ -19,7 +19,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   before it is kept in the AST and reported as `structure-unspellable` when a
   writer has to spell it, because `:  text` on its own re-reads as a paragraph;
   content inside a `<dl>` that is neither a term nor a definition is kept after
-  the list rather than dropped, and reported.
+  the list rather than dropped, and reported. An empty `<dt>`, a `<dd>` whose
+  blocks write nothing, and the attributes a `<dt>`/`<dd>` has no slot for are
+  reported too - including an event-handler attribute on a `<dd>`, which was the
+  one place in the importer where active markup was dropped in silence.
 - **A browser IIFE bundle.** `dist/carve.iife.min.js` exposes the whole public
   API as a `carve` global, for consumers that load classic scripts rather than
   ESM: CDN script tags, sandboxed iframes, userscript hosts. The `unpkg` and
