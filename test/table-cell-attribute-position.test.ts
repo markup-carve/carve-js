@@ -175,6 +175,13 @@ describe('the lint rule for the retired order', () => {
     expect(rules('```\n|{#x}< content |\n```')).toEqual([])
   })
 
+  // A leading `|` with no closing one is a paragraph, so there is no cell for
+  // the block to be misplaced in.
+  it('does not fire on a pipe-leading line that is not a row', () => {
+    expect(html('|{#x}< content')).toContain('<p>')
+    expect(rules('|{#x}< content')).toEqual([])
+  })
+
   // NOT a rewrite. Turning `|{#x}< content |` into `|<{#x} content |` ADDS
   // `text-align: left` and REMOVES a literal `<` from the content, so a
   // formatter doing it in its default path would break the round-trip invariant

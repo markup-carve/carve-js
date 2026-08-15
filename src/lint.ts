@@ -27,6 +27,7 @@
  */
 import {
   parse,
+  isTableRow,
   readCellAttributeBlock,
   rowAttrsFromLine,
   splitTableRowSpans,
@@ -1112,8 +1113,15 @@ function collectSilentFailures(
     const stripped = stripContainerPrefixesKeepIndent(line)
     const prefixWidth = line.length - stripped.length
     const indent = stripped.length - stripped.trimStart().length
-    if (stripped[indent] !== '|') continue
-    const { body } = rowAttrsFromLine(stripped.slice(indent))
+    const row = stripped.slice(indent)
+    // A COMPLETE row, gated by the parser's own predicate. A leading `|` with
+    // no closing one is a paragraph (`|{#x}< content` renders as text), and
+    // reporting cell syntax there would be reporting a cell that does not
+    // exist. A `+` continuation row is out of scope for the same reason the
+    // parser only reads one inside an open table: whether it is a row at all is
+    // a question about the lines above it.
+    if (!isTableRow(row)) continue
+    const { body } = rowAttrsFromLine(row)
     for (const { text, start } of splitTableRowSpans(body)) {
       const block = readCellAttributeBlock(text)
       if (!block) continue

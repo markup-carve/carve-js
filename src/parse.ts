@@ -988,7 +988,12 @@ const RE_TABLE_ROW = /^\|/
 // trailing pipe, not just a leading one. A row may carry an attribute block
 // GLUED to its closing pipe (`| a |{.x}` -> <tr class="x">); rowAttrsFromLine
 // validates and strips it, so the gate allows an optional trailing `{...}`.
-const isTableRow = (line: string): boolean => {
+/**
+ * Exported so the linter gates on a COMPLETE row the same way the parser does.
+ * A leading `|` alone is a paragraph, and a rule that reported cell syntax in
+ * one would be reporting text that has no cells.
+ */
+export const isTableRow = (line: string): boolean => {
   if (!RE_TABLE_ROW.test(line)) return false
   if (!/\|[ \t]*$/.test(line) && rowAttrsFromLine(line).attrs === undefined) return false
   const cells = splitTableRow(rowAttrsFromLine(line).body)
