@@ -9,6 +9,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import keeps a table's spans.** `colspan` and `rowspan` were thrown
+  away, so a spanning cell was written as an ordinary one and its row came up
+  short: `<td colspan="2">` under a two-column header produced a one-column row,
+  with `table-degraded` as the only trace. They map to the continuation cells
+  the model already had (`^` continues the cell above, `<` the one to its left),
+  so the imported grid re-reads as the grid that came in. `rowspan="0"` is
+  resolved against the row group, as HTML defines it; both spans are clamped to
+  HTML's maxima and every generated cell is charged to `maxNodes`. A second
+  `<caption>` is reported instead of dropped in silence, mirroring the parser's
+  first-caption-wins rule.
+
 - **HTML import reads `<details>/<summary>` as the `details` admonition.** It
   became a generic `div` carrying a `details` class, and `<summary>` was not
   recognized at all: the label unwrapped into the body, so it re-rendered inside
