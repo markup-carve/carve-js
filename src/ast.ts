@@ -380,6 +380,27 @@ export interface Figure extends BaseNode {
   shortCaption?: InlineNode[]
 }
 
+/**
+ * A composite figure: a bare `::: figure` fence (PART 9 §4c).
+ *
+ * `children` are ordinary blocks in source order; the PANELS are the `figure`
+ * and `table` nodes among them, derived by type rather than repeated under a
+ * second key, so the two can never disagree. `caption` is the group caption
+ * (the `^ ` line after the CLOSING fence); absent means uncaptioned, not empty.
+ *
+ * Discriminated by `type`, deliberately: every `figure` carries a `target`,
+ * the group does not, and a consumer probing for the missing field instead of
+ * reading the type string would break silently the day either shape grows a
+ * field. No `title`, no `label`, no `shortCaption` - that design space belongs
+ * to markup-carve/carve#1118 and markup-carve/carve#1121 and is not claimed
+ * here.
+ */
+export interface FigureGroup extends BaseNode {
+  type: 'figure_group'
+  children: BlockNode[]
+  caption?: InlineNode[]
+}
+
 export interface AbbreviationDef extends BaseNode {
   type: 'abbreviation_def'
   abbr: string
@@ -436,6 +457,7 @@ export type BlockNode =
   | LineBlock
   | DefinitionList
   | Figure
+  | FigureGroup
   | Image
   | AbbreviationDef
   | LinkReferenceDefinition

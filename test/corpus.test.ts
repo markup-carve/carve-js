@@ -91,6 +91,7 @@ const IMPLEMENTED = new Set([
   'lists',
   'task-lists',
   'blockquote-with-attribution',
+  'composite-figures',
   'image-with-caption',
   'tables',
   'tables-with-rowspan-and-colspan',

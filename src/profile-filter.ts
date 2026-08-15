@@ -131,6 +131,10 @@ function childArrays(node: NodeLike): ChildArray[] {
     case 'figure':
       if (node['caption']) push(node['caption'], false)
       break
+    case 'figure_group':
+      if (node['caption']) push(node['caption'], false)
+      push(node['children'], true)
+      break
     case 'footnote_ref':
     case 'inline_footnote':
       // Inline footnote content is inline.
@@ -189,6 +193,7 @@ const BLOCK_CANONICAL = new Set([
   'line_block',
   'comment',
   'figure',
+  'figure_group',
   'caption',
 ])
 
@@ -204,6 +209,7 @@ const BLOCK_JS_TYPES = new Set([
   'div',
   'definition_list',
   'figure',
+  'figure_group',
   'image',
   'abbreviation_def',
   'raw_block',

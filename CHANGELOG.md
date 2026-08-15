@@ -9,6 +9,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
+  `dt`/`dd` are not block tags, so every term and every definition landed in one
+  inline buffer and the list came out as a single paragraph with the texts run
+  together: `<dl><dt>Term</dt><dd>Definition</dd></dl>` imported as
+  `TermDefinition`. It now maps to `definition_list`, a run of `<dt>` shares the
+  `<dd>` entries that follow it, and the HTML5 `<div>` wrapper around a
+  name-value group is walked through transparently. A `<dd>` with no `<dt>`
+  before it is kept in the AST and reported as `structure-unspellable` when a
+  writer has to spell it, because `:  text` on its own re-reads as a paragraph;
+  content inside a `<dl>` that is neither a term nor a definition is kept after
+  the list rather than dropped, and reported. An empty `<dt>`, a `<dd>` whose
+  blocks write nothing, and the attributes a `<dt>`/`<dd>` has no slot for are
+  reported too - including an event-handler attribute on a `<dt>`, `<dd>` or
+  group `<div>`, which were the only places in the importer where active markup
+  was dropped in silence.
 - **A browser IIFE bundle.** `dist/carve.iife.min.js` exposes the whole public
   API as a `carve` global, for consumers that load classic scripts rather than
   ESM: CDN script tags, sandboxed iframes, userscript hosts. The `unpkg` and
@@ -196,6 +211,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer no longer over-escapes a definition list it did not
+  parse.** Its escape decision compares the two renders as trees and skips
+  position fields BY NAME; `termSpans` was missing from that list, so an escape
+  candidate anywhere before the last term shifted an offset the comparison saw
+  and escalated the whole document to conservative escaping. Only a tree built
+  without positions reached it - what the HTML importer and `--from-json` hand
+  the writer - so an imported two-entry list came back as `x language\.` where
+  the parsed same document came back as `x language.`.
 - **`LIB_VERSION` reports the version that is running.** On 0.1.3 the exported
   constant read `0.1.0`, so the `carve fmt --stamp` provenance stamp and every
   embedder reading the export named a release other than the installed one. The

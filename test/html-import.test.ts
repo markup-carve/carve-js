@@ -251,3 +251,203 @@ describe('table caption on import', () => {
     expect(carveToHtml(carve(html))).not.toContain('<p>^')
   })
 })
+
+/*
+ * `<dl>` had no branch at all, and `dt`/`dd` are not block tags, so a
+ * definition list did not degrade - it was destroyed. Every term and every
+ * definition landed in one inline buffer and came out as a single paragraph
+ * with the texts run together:
+ *
+ * ```
+ * <dl><dt>Term</dt><dd>Definition</dd></dl>
+ * ```
+ *
+ * imported as `TermDefinition`, and the only diagnostic said an unsupported
+ * element had been unwrapped.
+ *
+ * The assertions are on the emitted source and on the HTML it re-reads to,
+ * because a mapping that builds the right nodes and writes them unspellably
+ * would pass an AST-shape check and still lose the list.
+ */
+describe('definition lists on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('reads terms and definitions as a definition list, not as one paragraph', () => {
+    const html = '<dl><dt>Carve</dt><dd>A markup language.</dd></dl>'
+    expect(carve(html)).toBe(':: Carve\n:  A markup language.')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Carve</dt>\n  <dd>A markup language.</dd>\n</dl>')
+  })
+
+  it('groups a run of terms with the definitions that follow it', () => {
+    const html = '<dl><dt>HTML</dt><dt>HyperText Markup Language</dt><dd>The web page format.</dd><dd>Also a Carve import source.</dd><dt>CSS</dt><dd>Styling.</dd></dl>'
+    expect(htmlToAst(html).value.children).toMatchObject([
+      {
+        type: 'definition_list',
+        items: [
+          { terms: [[{ value: 'HTML' }], [{ value: 'HyperText Markup Language' }]], definitions: [[{ type: 'paragraph' }], [{ type: 'paragraph' }]] },
+          { terms: [[{ value: 'CSS' }]], definitions: [[{ type: 'paragraph' }]] },
+        ],
+      },
+    ])
+    expect(carve(html)).toBe(':: HTML\n:: HyperText Markup Language\n:  The web page format.\n:  Also a Carve import source.\n:: CSS\n:  Styling.')
+  })
+
+  it('walks through the HTML5 <div> wrapper around a name-value group', () => {
+    const html = '<dl><div><dt>Carve</dt><dd>A markup language.</dd></div><div><dt>Djot</dt><dd>Its closest relative.</dd></div></dl>'
+    expect(carve(html)).toBe(':: Carve\n:  A markup language.\n:: Djot\n:  Its closest relative.')
+    expect(codes(html)).toEqual([])
+  })
+
+  it('reports what the group wrapper carried, since walking through it drops that too', () => {
+    // An ordinary `<div>` keeps its attributes by becoming a `div` node. This
+    // one cannot, and an `onclick` on it was the same silence: reported
+    // everywhere else in the importer, nowhere here.
+    expect(htmlToCarve('<dl><div id="g" onclick="evil()"><dt>T</dt><dd>D</dd></div></dl>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped event-handler attribute onclick on <div>' }),
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped id on <div>: a definition group has no attribute slot' }),
+    ])
+  })
+
+  it('does not carry an entry across a group wrapper boundary', () => {
+    // The wrapper IS the group (HTML 5.2). A `<dd>` opening the second one is a
+    // description with no term of its own, not a second description of the
+    // first group's term.
+    const html = '<dl><div><dt>A</dt><dd>One</dd></div><div><dd>Orphan</dd></div></dl>'
+    expect(htmlToAst(html).value.children).toMatchObject([
+      {
+        type: 'definition_list',
+        items: [
+          { terms: [[{ value: 'A' }]], definitions: [[{ type: 'paragraph' }]] },
+          { terms: [], definitions: [[{ type: 'paragraph' }]] },
+        ],
+      },
+    ])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      message: expect.stringContaining('<dd> with no <dt>'),
+      path: '/dl[1]/div[2]/dd[1]',
+    }))
+  })
+
+  it('reports displaced content under the path it came in on', () => {
+    // The strays are converted AFTER the list, from a filtered array. Rebuilding
+    // their paths from that array renumbers them, so one element would report
+    // its own losses under a different name than the message that displaced it.
+    const html = '<dl><dt>T</dt><dd>D</dd><p onclick="evil()">stray</p></dl>'
+    const paths = htmlToCarve(html).report.diagnostics.map((d) => d.path)
+    expect(paths).toEqual(['/dl[1]/p[3]', '/dl[1]/p[3]'])
+  })
+
+  it('keeps block content in a definition', () => {
+    const html = '<dl><dt>Modes</dt><dd><p>Three of them:</p><ul><li>safe</li><li>semantic</li></ul></dd></dl>'
+    expect(carve(html)).toBe(':: Modes\n:  Three of them:\n\n   - safe\n\n   - semantic')
+    expect(carveToHtml(carve(html))).toContain('<ul>')
+  })
+
+  it('carries the list attributes onto the node', () => {
+    expect(carve('<dl id="glossary" class="compact"><dt>T</dt><dd>D</dd></dl>')).toBe('{#glossary .compact}\n:: T\n:  D')
+  })
+
+  it('reports a definition with no term only when a writer has to spell it', () => {
+    const html = '<dl><dd>A description of nothing.</dd></dl>'
+    expect(htmlToAst(html).value.children).toMatchObject([
+      { type: 'definition_list', items: [{ terms: [], definitions: [[{ type: 'paragraph' }]] }] },
+    ])
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('<dd> with no <dt>'),
+      path: '/dl[1]/dd[1]',
+    }))
+    // The diagnostic states what actually happens to the written source.
+    expect(carveToHtml(carve(html))).toBe('<p>:  A description of nothing.</p>')
+  })
+
+  it('reports an empty term, which the writer spells as a line that is not one', () => {
+    const html = '<dl><dt></dt><dd>A description whose term was deleted.</dd></dl>'
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('empty <dt>'),
+      path: '/dl[1]/dt[1]',
+    }))
+    // What the emitted source actually reads as: the whole list becomes a
+    // paragraph, so the diagnostic is not decoration.
+    expect(carveToHtml(carve(html))).toBe('<p>::\n:  A description whose term was deleted.</p>')
+  })
+
+  it('reports an empty description, which the term above it swallows', () => {
+    const html = '<dl><dt>Term</dt><dd></dd></dl>'
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('<dd> that writes nothing'),
+      path: '/dl[1]/dd[2]',
+    }))
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+  })
+
+  it('reports a description whose blocks write nothing, not only an empty one', () => {
+    // `<dd><p></p></dd>` is a NON-empty block list holding a block that writes
+    // nothing, so an array-length check reports no loss while the writer still
+    // emits the bare `:` the term above absorbs.
+    const html = '<dl><dt>Term</dt><dd><p></p></dd></dl>'
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      message: expect.stringContaining('<dd> that writes nothing'),
+    }))
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+  })
+
+  it('leaves a description that writes SOMETHING alone', () => {
+    // CONTROL for the row above: an empty `<li>` writes `:  - +` and an empty
+    // `<blockquote>` writes `:  >`. Both are descriptions on the reparse, so
+    // reporting them would be a diagnostic for a loss that does not happen.
+    for (const inner of ['<ul><li></li></ul>', '<blockquote></blockquote>', '<hr>']) {
+      const html = `<dl><dt>Term</dt><dd>${inner}</dd></dl>`
+      expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).not.toContain('structure-unspellable')
+      expect(carveToHtml(carve(html))).toContain('<dd>')
+    }
+  })
+
+  it('reports the attributes a term or a description has nowhere to keep', () => {
+    // The entries have no `attrs` slot in the model, so an id an anchor points
+    // at and a class a stylesheet selects on both end here.
+    expect(htmlToCarve('<dl><dt id="term" class="key">T</dt><dd data-note="x">D</dd></dl>').report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', severity: 'warning', message: 'Dropped id, class on <dt>: a definition term has no attribute slot', path: '/dl[1]/dt[1]' }),
+      expect.objectContaining({ code: 'attribute-dropped', severity: 'warning', message: 'Dropped data-note on <dd>: a definition description has no attribute slot', path: '/dl[1]/dd[2]' }),
+    ])
+  })
+
+  it('reports an event-handler attribute on a description like it does everywhere else', () => {
+    // The one that made this a security asymmetry rather than a fidelity one:
+    // skipping `attrs()` made a `<dd>` the only element whose active markup was
+    // dropped in silence.
+    expect(htmlToCarve('<dl><dt>T</dt><dd onclick="evil()">D</dd></dl>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped event-handler attribute onclick on <dd>' }),
+    )
+  })
+
+  it('counts a <dl> against the node budget once, like any other element', () => {
+    // `block()` already entered the node before handing it here. A second
+    // `enter` charged one DOM node twice, so a caller-set limit rejected a
+    // definition list earlier than the same-sized markup in any other tag.
+    expect(() => htmlToAst('<dl><dt>T</dt><dd>D</dd></dl>', { maxNodes: 5 })).not.toThrow()
+    expect(() => htmlToAst('<dl><dt>T</dt><dd>D</dd></dl>', { maxNodes: 4 })).toThrow(HtmlImportLimitError)
+  })
+
+  it('keeps content the model has no slot for, after the list, and says so', () => {
+    const html = '<dl><dt>T</dt><dd>D</dd><p>An editor stray.</p></dl>'
+    expect(carve(html)).toBe(':: T\n:  D\n\nAn editor stray.')
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'element-unwrapped',
+      severity: 'warning',
+      message: expect.stringContaining('Moved <p> content out of the <dl>'),
+    }))
+  })
+})
