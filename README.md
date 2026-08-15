@@ -92,8 +92,14 @@ it):
 </script>
 ```
 
-The bundle contains no Node builtins (the CLI is a separate entry) and does
-not embed `@djot/djot`, which stays dependency-injected as in the ESM build.
+Embedders that display carve content but never author it can load
+`dist/carve.render.iife.min.js` instead — the render core only (`parse`,
+`resolve`, `renderHtml`, `carveToHtml` and the version constants), at roughly
+a quarter of the full bundle's size; the linter, formatter and migrators
+treeshake away.
+
+Neither bundle contains Node builtins (the CLI is a separate entry) or embeds
+`@djot/djot`, which stays dependency-injected as in the ESM build.
 
 ### Renderers refuse a tree that nests too deeply
 
