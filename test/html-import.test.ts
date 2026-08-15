@@ -905,9 +905,17 @@ describe('table spans on import', () => {
   })
 
   it('reads a tall table in time proportional to its rows', () => {
-    // Asking each cell for its group's size meant scanning the whole table per
-    // cell. The rows here are the same shape, so the ratio is the measurement:
-    // quadratic work doubles it, linear work does not.
+    /*
+     * Asking each cell for its group's size meant scanning the whole table per
+     * cell. The rows are the same shape, so the RATIO across two sizes is the
+     * measurement and no stopwatch reading is asserted: at four times the rows,
+     * the linear form measured 2.4x and the quadratic one 14.7x.
+     *
+     * Four times rather than two, and a bound of 8 rather than 4, because a
+     * doubling puts quadratic work at about 4x - the same number a slow machine
+     * can produce from linear work, which is a threshold no mutation has to
+     * cross.
+     */
     const table = (rows: number) => `<table>${Array.from({ length: rows }, (_, i) => `<tr><td>${i}</td></tr>`).join('')}</table>`
     // Warm the parser so the first-call cost is not what is being compared.
     htmlToCarve(table(200))
@@ -916,10 +924,10 @@ describe('table spans on import', () => {
       htmlToCarve(table(rows))
       return performance.now() - started
     }
-    const small = time(1500)
-    const large = time(3000)
+    const small = time(2000)
+    const large = time(8000)
 
-    expect(large).toBeLessThan(small * 4)
+    expect(large).toBeLessThan(small * 8)
   })
 
   it('reports the empty cell a short row needs, and only when it invents one', () => {
