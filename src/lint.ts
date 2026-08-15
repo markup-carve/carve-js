@@ -1105,9 +1105,15 @@ function collectSilentFailures(
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
-    const indent = line.length - line.trimStart().length
-    if (line[indent] !== '|') continue
-    const { body } = rowAttrsFromLine(line.slice(indent))
+    // A table opens inside a blockquote and inside a list item too, so the row
+    // is found through the container prefixes rather than only at the top
+    // level. Every strip is anchored at the start, so what it removed is a
+    // prefix and its WIDTH maps the column back onto the source line.
+    const stripped = stripContainerPrefixesKeepIndent(line)
+    const prefixWidth = line.length - stripped.length
+    const indent = stripped.length - stripped.trimStart().length
+    if (stripped[indent] !== '|') continue
+    const { body } = rowAttrsFromLine(stripped.slice(indent))
     for (const { text, start } of splitTableRowSpans(body)) {
       const block = readCellAttributeBlock(text)
       if (!block) continue
@@ -1116,7 +1122,7 @@ function collectSilentFailures(
       const spelling = text.slice(0, block.length + 1)
       push(
         i + 1,
-        indent + start + 1,
+        prefixWidth + indent + start + 1,
         block.length + 1,
         'table-cell-attribute-before-marker',
         `"${spelling}" writes a cell's attribute block before its alignment marker, ` +

@@ -161,6 +161,16 @@ describe('the lint rule for the retired order', () => {
     expect(rules('|{#x}< a |{.r}')).toHaveLength(1)
   })
 
+  // A table opens inside a blockquote and inside a list item too, and the
+  // column has to survive the prefix that got it there.
+  it('finds a row inside a container, and keeps the column pointing at the block', () => {
+    expect(html('> |{#x}< a |')).toContain('<blockquote>')
+    expect(rules('> |{#x}< a |')[0]?.column).toBe(4)
+    expect(rules('- |{#x}< a |')[0]?.column).toBe(4)
+    expect(rules('> > |{#x}< a |')[0]?.column).toBe(6)
+    expect(rules('> |<{#x} a |')).toEqual([])
+  })
+
   it('does not fire inside a verbatim region', () => {
     expect(rules('```\n|{#x}< content |\n```')).toEqual([])
   })
