@@ -148,6 +148,19 @@ describe('the lint rule for the retired order', () => {
     expect(rules('a |{#x}< b')).toEqual([])
   })
 
+  // Split with the parser's own splitter, not a pipe regex. A pipe behind a
+  // backslash or inside a code span does not open a cell, so there is no cell
+  // for the block to be misplaced in.
+  it('does not read an escaped pipe or a code-span pipe as a cell boundary', () => {
+    expect(rules('| a \\|{#x}< b |')).toEqual([])
+    expect(rules('| `x |{#x}< y` |')).toEqual([])
+  })
+
+  it('points at the block on an indented row, and past a row attribute block', () => {
+    expect(rules('  |{#x}< content |')[0]?.column).toBe(4)
+    expect(rules('|{#x}< a |{.r}')).toHaveLength(1)
+  })
+
   it('does not fire inside a verbatim region', () => {
     expect(rules('```\n|{#x}< content |\n```')).toEqual([])
   })

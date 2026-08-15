@@ -27,8 +27,12 @@
  */
 import {
   parse,
+  readCellAttributeBlock,
+  rowAttrsFromLine,
+  splitTableRowSpans,
   stripContainerPrefixesKeepIndent,
   RE_AFTER_TERM,
+  TABLE_ALIGNMENT_MARKERS,
   type UnclosedContainer,
 } from './parse.js'
 import {
@@ -656,15 +660,6 @@ const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
 /** A fenced block whose info string is the legacy `raw FORMAT` form. */
 const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
 
-/**
- * A cell attribute block glued to the opening `|` and immediately followed by
- * an alignment marker - the order §5 T10 retired.
- *
- * The `|` is captured so the column points at the block rather than at the
- * pipe, and the payload excludes braces so a run of prose cannot be swallowed
- * into one enormous "block".
- */
-const CELL_ATTRS_BEFORE_MARKER = /(\|)(\{[^{}\n]*\})([<>~])/g
 /** A line that looks like the old tight blockquote spelling. */
 const BLOCKQUOTE_WITHOUT_SPACE = /^(>)([^ ].*)$/
 /** A line that opens like a block construct (`:::`, `{#`, `{.`). */
@@ -1102,26 +1097,32 @@ function collectSilentFailures(
   //    Every engine measured renders this source as attributes plus a literal
   //    `<` today, which is exactly why the author has to be the one to choose.
   //    The message therefore names both spellings.
+  //
+  //    SPLIT WITH THE PARSER'S OWN SPLITTER, not with a pipe regex. A pipe
+  //    inside a code span or behind a backslash does not open a cell, so a
+  //    regex over the raw line reported `| a \|{#x}< b |` - where the block is
+  //    ordinary content and there is no cell to align.
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
-    // A table row, not prose that happens to hold braces. The cheap test is the
-    // one the parser uses to find rows at all: the line's first non-space
-    // character is a pipe.
-    if (!/^\s*\|/.test(line)) continue
-    for (const m of line.matchAll(CELL_ATTRS_BEFORE_MARKER)) {
-      const block = m[2]!
-      const marker = m[3]!
-      const col = m.index + m[1]!.length + 1
+    const indent = line.length - line.trimStart().length
+    if (line[indent] !== '|') continue
+    const { body } = rowAttrsFromLine(line.slice(indent))
+    for (const { text, start } of splitTableRowSpans(body)) {
+      const block = readCellAttributeBlock(text)
+      if (!block) continue
+      const marker = text[block.length]
+      if (marker === undefined || !TABLE_ALIGNMENT_MARKERS.has(marker)) continue
+      const spelling = text.slice(0, block.length + 1)
       push(
         i + 1,
-        col,
-        block.length + marker.length,
+        indent + start + 1,
+        block.length + 1,
         'table-cell-attribute-before-marker',
-        `"${block}${marker}" writes a cell's attribute block before its alignment marker, ` +
+        `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
           `which Carve no longer reads as one: the "${marker}" is literal content and the ` +
-          `cell is not aligned. Write "${marker}${block}" to align it, or put a space after ` +
-          `the block to keep the "${marker}" as content deliberately.`,
+          `cell is not aligned. Write "${marker}${text.slice(0, block.length)}" to align it, ` +
+          `or put a space after the block to keep the "${marker}" as content deliberately.`,
       )
     }
   }

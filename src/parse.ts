@@ -6372,6 +6372,32 @@ export const TABLE_ALIGNMENT_MARKERS: ReadonlyMap<string, 'left' | 'right' | 'ce
   ['~', 'center'],
 ])
 
+/**
+ * Read a table cell's attribute block at `from`, if there is one there.
+ *
+ * Uses the quote-aware inline-attribute matcher so a quoted `}` inside a value
+ * (`{key="{y}"}`) is handled rather than truncated at the first brace. The WHOLE
+ * payload must then be valid attribute syntax (same as inline and block
+ * attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
+ * attribute block, so the `{` stays ordinary content.
+ *
+ * Exported so the linter asks this question the same way the parser answers it.
+ * A rule spelled twice drifts, and the rule this one serves - the block binds
+ * after the markers - already had four spellings across the engines to unify.
+ */
+export function readCellAttributeBlock(
+  src: string,
+  from = 0,
+): { attrs: Attrs; length: number } | undefined {
+  if (src[from] !== '{') return undefined
+  const m = RE_INLINE_ATTR.exec(src.slice(from))
+  if (!m || !isValidInlineAttrPayload(m[1]!)) return undefined
+  const attrs = parseAttrs(m[1]!)
+  if (isEmptyAttrs(attrs)) return undefined
+
+  return { attrs, length: m[0].length }
+}
+
 function parseCellMarkers(src: string): {
   header: boolean
   span?: 'rowspan' | 'colspan'
@@ -6416,22 +6442,9 @@ function parseCellMarkers(src: string): {
   // `<td id="x">=R</td>` and the round-trip invariant failed on it. Once `=`
   // has committed the cell to header, everything after it is unambiguous
   // (spec §5 T10, corpus 319).
-  let attrs: Attrs | undefined
-  if (src[i] === '{') {
-    // Reuse the quote-aware inline-attribute matcher so a quoted `}` inside a
-    // value (`{key="{y}"}`) is handled, not truncated at the first brace. The
-    // WHOLE payload must then be valid attribute syntax (same as inline / block
-    // attribute blocks); a partially-invalid payload like `{.x 1bad}` is not an
-    // attribute block, so the `{` stays ordinary content.
-    const m = RE_INLINE_ATTR.exec(src.slice(i))
-    if (m && isValidInlineAttrPayload(m[1]!)) {
-      const parsed = parseAttrs(m[1]!)
-      if (!isEmptyAttrs(parsed)) {
-        attrs = parsed
-        i += m[0].length
-      }
-    }
-  }
+  const block = readCellAttributeBlock(src, i)
+  const attrs = block?.attrs
+  if (block) i += block.length
 
   if (i > 0) {
     // A tight prefix was consumed; the rest is content.
@@ -6487,7 +6500,7 @@ const isGfmDelimiterRow = (row: RawCell[]): boolean =>
 // opening-pipe attribute block. It sets the `<tr>` attributes. The whole
 // payload must be valid attribute syntax (same gate as cell / inline / block
 // attributes); otherwise the `{` is ordinary content and there is no row attr.
-function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } {
+export function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } {
   const stripped = line.replace(/[ \t]+$/, '')
   const lastPipe = stripped.lastIndexOf('|')
   if (lastPipe < 0 || stripped[lastPipe + 1] !== '{') return { body: line }
@@ -6764,7 +6777,7 @@ function parseTable(lexer: Lexer): Table | Figure {
  * `\|` is two source characters for one content character - so the text is not
  * always a verbatim slice even though its start always is.
  */
-function splitTableRowSpans(line: string): Array<{ text: string; start: number }> {
+export function splitTableRowSpans(line: string): Array<{ text: string; start: number }> {
   const cells: Array<{ text: string; start: number }> = []
   let buf = ''
   let inCode = false
