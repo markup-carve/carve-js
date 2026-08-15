@@ -296,7 +296,7 @@ class Importer {
       }
     })
     const start = ordered ? Number(this.attr(node, 'start') ?? '1') : undefined
-    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered), ...(attrs ? { attrs } : {}) }
+    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length), ...(attrs ? { attrs } : {}) }
   }
 
   /**
@@ -455,13 +455,43 @@ class Importer {
    *
    * A value that is none of the five is not HTML's, so nothing can be derived
    * from it and it is reported here rather than exempted into silence.
+   *
+   * The FIELD survives every time; the written MARKER does not, and the two
+   * shapes where it does not are reported as serialization losses (§16) rather
+   * than traded for a silently different list. Both were measured against the
+   * writer and the parser over every start from 1 to 60 in each alphabet:
+   *
+   * - an alphabetic list starting past the 26th letter. Carve's grammar has no
+   *   multi-letter alphabetic marker at all - `aa. x` is a paragraph - so the
+   *   writer's marker wraps and the list restarts at `a`.
+   * - a ONE-ITEM list whose only marker is a letter the other alphabet claims.
+   *   A single `i` reads as the roman numeral and every other single letter as
+   *   the alphabetic one, so alphabetic 9 and roman 5, 10, 50, 100, 500 and
+   *   1000 come back as the other kind. A second item settles it - `v.` `vi.`
+   *   is roman 5 - which is why the count is part of the question.
    */
-  private olType(node: P5Node, path: string, ordered: boolean): { olType?: List['olType'] } {
+  private olType(node: P5Node, path: string, ordered: boolean, items: number): { olType?: List['olType'] } {
     const value = ordered ? this.attr(node, 'type') : undefined
     if (value === undefined || value === '1') return {}
-    if (value === 'a' || value === 'A' || value === 'i' || value === 'I') return { olType: value }
-    this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
-    return {}
+    if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
+      return {}
+    }
+    const parsed = Number(this.attr(node, 'start') ?? '1')
+    const start = Number.isFinite(parsed) ? parsed : 1
+    const alphabetic = value === 'a' || value === 'A'
+    if (alphabetic && start > 26) {
+      this.unspellable.push({
+        path,
+        message: `An alphabetic list starting at ${start} has no Carve spelling; there is no multi-letter marker, so the written list restarts at the first letter`,
+      })
+    } else if (items === 1 && (alphabetic ? start === 9 : [5, 10, 50, 100, 500, 1000].includes(start))) {
+      this.unspellable.push({
+        path,
+        message: `A one-item ${alphabetic ? 'alphabetic' : 'roman'} list starting at ${start} has no Carve spelling; its only marker is a letter the other alphabet claims, and nothing follows it to settle which`,
+      })
+    }
+    return { olType: value }
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {

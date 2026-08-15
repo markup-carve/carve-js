@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, semanticSpan } from '../src/index.js'
+import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, parse, semanticSpan } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -501,6 +501,60 @@ describe('change tracking and ordered-list alphabets on import', () => {
         path: '/ol[1]',
       }),
     ])
+  })
+
+  it('reports the marker the writer cannot spell, on exactly the lists where it cannot', () => {
+    /*
+     * The FIELD survives every combination; the written MARKER does not. Two
+     * shapes lose it, and the check is the parser's rather than a table's: every
+     * start from 1 to 60 in each of the four alphabets, at one, two and three
+     * items, is imported, written, read back, and the diagnostic is compared
+     * against whether the list actually changed.
+     *
+     * 720 combinations, 212 of which do not survive the round trip. A rule that
+     * over-reports passes a "warns on the bad case" test and fails this one.
+     */
+    let broken = 0
+    let mismatched = 0
+    for (const items of [1, 2, 3]) {
+      for (const type of ['a', 'A', 'i', 'I'] as const) {
+        for (let start = 1; start <= 60; start++) {
+          const html = `<ol type="${type}"${start === 1 ? '' : ` start="${start}"`}>${'<li>x</li>'.repeat(items)}</ol>`
+          const result = htmlToCarve(html)
+          const reread = parse(result.value).children[0] as { olType?: string; start?: number } | undefined
+          const changed = (reread?.olType ?? undefined) !== type || (reread?.start ?? 1) !== start
+          const reported = result.report.diagnostics.some((d) => d.code === 'structure-unspellable')
+          if (changed) broken++
+          if (changed !== reported) mismatched++
+        }
+      }
+    }
+
+    expect(broken).toBe(212)
+    expect(mismatched).toBe(0)
+  })
+
+  it('names the two shapes, so the message says what happened', () => {
+    // No multi-letter alphabetic marker exists: `aa. x` is a paragraph, so the
+    // writer's marker wraps and the list restarts at the first letter.
+    expect(htmlToCarve('<ol type="a" start="27"><li>x</li></ol>').report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'structure-unspellable',
+        severity: 'warning',
+        message: expect.stringContaining('alphabetic list starting at 27'),
+      }),
+    )
+    // A lone `v.` reads as the 22nd letter; `v.` `vi.` reads as roman 5.
+    expect(htmlToCarve('<ol type="i" start="5"><li>x</li></ol>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'structure-unspellable', message: expect.stringContaining('one-item roman list starting at 5') }),
+    )
+    expect(htmlToCarve('<ol type="i" start="5"><li>x</li><li>y</li></ol>').report.diagnostics).toEqual([])
+  })
+
+  it('reports it as a writer loss, so the AST keeps the alphabet either way', () => {
+    const html = '<ol type="a" start="27"><li>x</li></ol>'
+    expect(htmlToAst(html).value.children).toMatchObject([{ type: 'list', ordered: true, olType: 'a', start: 27 }])
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
   })
 
   it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {

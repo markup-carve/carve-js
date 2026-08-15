@@ -19,7 +19,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unsupported-attribute report and then never read, so `<ol type="a">` came back
   counting `1.` `2.` `3.` with no diagnostic anywhere. `a`, `A`, `i` and `I` map
   to `olType`, `1` is the default and carries no field, and any other value is
-  reported rather than exempted into silence.
+  reported rather than exempted into silence. Two shapes keep the field and lose
+  the written MARKER - an alphabetic list starting past the 26th letter, and a
+  one-item list whose only marker is a letter the other alphabet claims - and
+  both are reported as serialization losses instead of being traded for a
+  silently different list.
 
 - **HTML import reads `<dl>` as a definition list.** The tag had no branch, and
   `dt`/`dd` are not block tags, so every term and every definition landed in one
