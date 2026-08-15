@@ -629,6 +629,92 @@ class Importer {
     return !written.includes('"') && !written.trimEnd().includes('\n')
   }
 
+  /**
+   * A `colspan`/`rowspan` value, by HTML's rules: a non-negative integer,
+   * clamped to the attribute's own maximum, defaulting when it is not one.
+   *
+   * The clamp is not decoration. Each unit of a span becomes a CELL below, so
+   * an unclamped `colspan="1000000000"` is a 30-byte input asking for a billion
+   * of them; the generated cells are charged to `maxNodes` on top of this, so
+   * the two together bound what a table can cost.
+   */
+  private spanCount(cell: P5Node, name: 'colspan' | 'rowspan', max: number, min: number): number {
+    const raw = this.attr(cell, name)
+    if (raw === undefined) return 1
+    const value = Number(raw.trim())
+    if (!/^\d+$/.test(raw.trim()) || !Number.isSafeInteger(value)) return 1
+    return Math.min(Math.max(value, min), max)
+  }
+
+  /**
+   * The imported cells, laid out with the continuation cells Carve spells `^`
+   * (this cell continues the one above) and `<` (it continues the one to its
+   * left).
+   *
+   * The model already carried both - `table_cell.span` is in PART 12 and the
+   * HTML renderer derives `rowspan`/`colspan` from a run of them - and the
+   * import simply threw them away: a spanning cell was written as an ordinary
+   * one and the row came up short, so `<td colspan="2">` produced a 1-cell row
+   * under a 2-column header, with `table-degraded` as the only trace.
+   *
+   * The renderer resolves a continuation by POSITION IN THE ROW'S CELL ARRAY,
+   * not by grid column - `^` attaches to the nearest row above whose cell at
+   * the same index is not itself a continuation - so a carried span occupies
+   * ONE array slot however many columns it covers, and the cells after it in
+   * the row shift left by the rest. Placing the carried marks first and filling
+   * the row's own cells around them is what keeps those indexes aligned.
+   */
+  private spanGrid(
+    built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
+    path: string,
+    depth: number,
+  ): TableRow[] {
+    let carried: Array<{ index: number; rows: number }> = []
+    const rows: TableRow[] = []
+    built.forEach((sourceCells, r) => {
+      const marks = new Set(carried.map((entry) => entry.index))
+      const cells: TableCell[] = []
+      const opened: Array<{ index: number; rows: number }> = []
+      const continuation = (span: 'rowspan' | 'colspan', header: boolean): TableCell => {
+        this.enter(depth)
+        return { type: 'table_cell', header, span, children: [] }
+      }
+      const fillMarks = (): void => {
+        while (marks.has(cells.length)) cells.push(continuation('rowspan', false))
+      }
+      for (const { cell, colspan, rowspan } of sourceCells) {
+        fillMarks()
+        const originIndex = cells.length
+        cells.push(cell)
+        for (let k = 1; k < colspan; k++) {
+          fillMarks()
+          cells.push(continuation('colspan', cell.header))
+        }
+        if (rowspan > 1) opened.push({ index: originIndex, rows: rowspan - 1 })
+      }
+      // A mark past the end of this row's own cells. Placing it still costs
+      // nothing - it is a cell the span already owns - but a GAP before it does:
+      // the index has to be kept, and an empty cell there is one the source did
+      // not have. Only that invention is reported.
+      const furthest = marks.size === 0 ? -1 : Math.max(...marks)
+      let invented = false
+      while (cells.length <= furthest) {
+        if (marks.has(cells.length)) cells.push(continuation('rowspan', false))
+        else {
+          this.enter(depth)
+          cells.push({ type: 'table_cell', header: false, children: [] })
+          invented = true
+        }
+      }
+      if (invented) {
+        this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`)
+      }
+      rows.push({ type: 'table_row', cells })
+      carried = [...carried.map((entry) => ({ ...entry, rows: entry.rows - 1 })).filter((entry) => entry.rows > 0), ...opened]
+    })
+    return rows
+  }
+
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
     /*
      * `<caption>` is a DIRECT child of the table and holds the table's own
@@ -637,11 +723,30 @@ class Importer {
      * the element was skipped and the caption left the document silently -
      * pandoc emits exactly this shape for every captioned table.
      */
-    const captionNode = (node.childNodes ?? []).find((n) => n.tagName === 'caption')
+    const captions = (node.childNodes ?? []).filter((n) => n.tagName === 'caption')
+    const captionNode = captions[0]
+    // The PARSER keeps the first `^ ` line and reads the second as a paragraph,
+    // so a table that arrives with two captions loses one either way. Reported
+    // rather than dropped in silence, and the same rule as the parser's, so the
+    // import and a re-read of its own output agree on which one survives.
+    for (const extra of captions.slice(1)) {
+      this.add(
+        'table-degraded',
+        'Dropped a second <caption>: a table has one caption, and the first one wins',
+        'warning',
+        this.childPath(path, extra, (node.childNodes ?? []).indexOf(extra)),
+      )
+    }
     const tr: P5Node[] = []
-    const walk = (n: P5Node): void => {
-      if (n.tagName === 'tr') tr.push(n)
-      else for (const child of n.childNodes ?? []) walk(child)
+    const group = new Map<P5Node, P5Node>()
+    const walk = (n: P5Node, section?: P5Node): void => {
+      if (n.tagName === 'tr') {
+        tr.push(n)
+        if (section) group.set(n, section)
+        return
+      }
+      const own = ['thead', 'tbody', 'tfoot'].includes(n.tagName ?? '') ? n : section
+      for (const child of n.childNodes ?? []) walk(child, own)
     }
     walk(node)
     // The leading run of all-header rows is what PART 10 §T9 gives `scope="col"`;
@@ -657,12 +762,48 @@ class Importer {
       leadingHeaderRows += 1
     }
 
-    const rows: TableRow[] = tr.map((row, r) => ({
-      type: 'table_row',
-      cells: (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c): TableCell => {
+    // How many rows are left in each row's own group, INCLUDING it. Computed
+    // once: asking per cell meant scanning the whole table for each one, which
+    // is quadratic in the row count and showed as 3000 rows in 299 ms against
+    // 6000 in 852 ms.
+    const remainingInGroup = new Map<P5Node, number>()
+    const groupTotals = new Map<P5Node | undefined, number>()
+    for (const row of tr) groupTotals.set(group.get(row), (groupTotals.get(group.get(row)) ?? 0) + 1)
+    const groupSeen = new Map<P5Node | undefined, number>()
+    for (const row of tr) {
+      const section = group.get(row)
+      const index = groupSeen.get(section) ?? 0
+      groupSeen.set(section, index + 1)
+      remainingInGroup.set(row, (groupTotals.get(section) ?? 1) - index)
+    }
+
+    const built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>> = tr.map((row, r) =>
+      (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th').map((cell, c) => {
         const cellPath = `${path}/tr[${r + 1}]/${cell.tagName}[${c + 1}]`
-        if (Number(this.attr(cell, 'rowspan') ?? '1') > 1 || Number(this.attr(cell, 'colspan') ?? '1') > 1) {
-          this.add('table-degraded', 'Table spans were flattened by this importer', 'warning', cellPath)
+        const colspan = this.spanCount(cell, 'colspan', 1000, 1)
+        // A rowspan stops at its ROW GROUP in HTML, and `rowspan="0"` means
+        // exactly "to the end of it". Both are resolved against the group the
+        // row is actually in, so a `<tfoot>` below the body is not swallowed by
+        // a cell the layout stops at the body's last row - not only the `0`
+        // form, which was the half this handled first.
+        const declaredRowspan = this.spanCount(cell, 'rowspan', 65534, 0)
+        const left = remainingInGroup.get(row) ?? 1
+        let rowspan = declaredRowspan === 0 ? left : Math.min(declaredRowspan, left)
+        // And it stops at the head the RENDERER will synthesize. Carve derives
+        // the head from the leading run of all-header rows, so a span reaching
+        // out of that run lands in a `<thead>` with its other rows in the
+        // `<tbody>` - which browsers clip, making the written table say
+        // something the source table did not. Clipped here instead, where it
+        // can be reported: the alternative is a document that claims a grid it
+        // does not render.
+        if (r < leadingHeaderRows && r + rowspan > leadingHeaderRows) {
+          this.add(
+            'table-degraded',
+            'Clipped a rowspan at the header rows: Carve derives the head from the leading header rows, and a span leaving them crosses a boundary browsers clip anyway',
+            'warning',
+            cellPath,
+          )
+          rowspan = leadingHeaderRows - r
         }
         const cellAttrs = this.attrs(cell, cellPath)
         // A `scope` the renderer would regenerate from position is the
@@ -693,9 +834,14 @@ class Importer {
           }
         }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
-        return { type: 'table_cell', header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) }
+        return {
+          cell: { type: 'table_cell' as const, header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) },
+          colspan,
+          rowspan,
+        }
       }),
-    }))
+    )
+    const rows = this.spanGrid(built, path, depth)
     const caption = captionNode
       ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
       : undefined

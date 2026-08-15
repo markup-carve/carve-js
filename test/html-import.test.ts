@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseFragment } from 'parse5'
 import { HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, parse, renderHtml, semanticSpan } from '../src/index.js'
 
 describe('HTML import', () => {
@@ -818,5 +819,185 @@ describe('disclosures and quotations on import', () => {
 
   it('keeps what a quotation carried, on a span', () => {
     expect(carve('<p><q id="cited" class="key">hi</q></p>')).toBe('[“hi”]{#cited .key}')
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P1's span row for carve-js.
+ *
+ * The model already carried the continuation cells - `table_cell.span` is in
+ * PART 12, and the HTML renderer derives `rowspan`/`colspan` from a run of them
+ * - and the import threw them away. A spanning cell was written as an ordinary
+ * one and its row came up short, so `<td colspan="2">` under a two-column
+ * header produced a one-cell row, with `table-degraded` as the only trace.
+ *
+ * The assertion is on the GRID rather than on the source or the HTML string:
+ * both sides are expanded into the matrix of cells a browser lays out, so a
+ * different but equivalent spelling passes and a lost span cannot.
+ */
+describe('table spans on import', () => {
+  const cellsOf = (row: { childNodes?: Array<{ tagName?: string }> }) =>
+    (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+
+  const gridOf = (html: string): string[][] => {
+    const fragment = parseFragment(html) as unknown as { childNodes?: unknown[] }
+    const rows: Array<{ childNodes?: Array<{ tagName?: string }> }> = []
+    const collect = (node: { tagName?: string; childNodes?: unknown[] }): void => {
+      if (node.tagName === 'tr') rows.push(node as never)
+      else (node.childNodes ?? []).forEach((child) => collect(child as never))
+    }
+    collect(fragment as never)
+    const text = (node: { nodeName?: string; value?: string; childNodes?: unknown[] }): string =>
+      node.nodeName === '#text' ? (node.value ?? '') : (node.childNodes ?? []).map((c) => text(c as never)).join('')
+    const attr = (node: { attrs?: Array<{ name: string; value: string }> }, name: string) =>
+      node.attrs?.find((a) => a.name === name)?.value
+    const grid: string[][] = rows.map(() => [])
+    rows.forEach((row, r) => {
+      let c = 0
+      for (const cell of cellsOf(row)) {
+        while (grid[r]![c] !== undefined) c++
+        const colspan = Math.max(1, Number(attr(cell as never, 'colspan') ?? '1') || 1)
+        const rowspan = Math.max(1, Number(attr(cell as never, 'rowspan') ?? '1') || 1)
+        const value = `${cell.tagName}:${text(cell as never).trim()}`
+        for (let dr = 0; dr < rowspan && r + dr < rows.length; dr++) {
+          for (let dc = 0; dc < colspan; dc++) grid[r + dr]![c + dc] = value
+        }
+        c += colspan
+      }
+    })
+    return grid
+  }
+
+  const fixtures: Array<[string, string]> = [
+    ['a header-wide column', '<table><tr><th>a</th><th>b</th></tr><tr><td colspan="2">wide</td></tr></table>'],
+    ['a cell held over a row', '<table><tr><th>a</th><th>b</th></tr><tr><td rowspan="2">tall</td><td>x</td></tr><tr><td>y</td></tr></table>'],
+    ['a two-by-two merge', '<table><tr><td colspan="2" rowspan="2">X</td><td>c</td></tr><tr><td>f</td></tr></table>'],
+    ['a span in the last column', '<table><tr><td>a</td><td rowspan="2">b</td></tr><tr><td>c</td></tr></table>'],
+    ['two spans in one row', '<table><tr><td colspan="2">A</td><td colspan="2">B</td></tr><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></table>'],
+    ['a header cell spanning columns', '<table><tr><th colspan="2">Group</th></tr><tr><th>a</th><th>b</th></tr><tr><td>1</td><td>2</td></tr></table>'],
+    ['a span three rows deep', '<table><tr><td rowspan="3">tall</td><td>1</td></tr><tr><td>2</td></tr><tr><td>3</td></tr></table>'],
+    ['a Word-shaped merge', '<table><tbody><tr><td rowspan="2">Name</td><td colspan="2">Contact</td></tr><tr><td>Phone</td><td>Email</td></tr><tr><td>Ada</td><td>1</td><td>a@x</td></tr></tbody></table>'],
+  ]
+
+  for (const [name, html] of fixtures) {
+    it(`keeps the grid of ${name}`, () => {
+      const written = htmlToCarve(html).value
+      expect(gridOf(carveToHtml(written))).toEqual(gridOf(html))
+      expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    })
+  }
+
+  it('resolves rowspan="0" against the row group, as HTML does', () => {
+    // "To the end of this row GROUP", so a `<tfoot>` below the body is not
+    // swallowed by a cell HTML stops at the body's last row.
+    const html = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td rowspan="0">b</td><td>x</td></tr><tr><td>y</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
+    expect(htmlToCarve(html).value).toBe('|=h|\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+  })
+
+  it('stops a rowspan at its row group, whatever the number says', () => {
+    // HTML clips a rowspan at the group boundary, so a `rowspan="5"` on the
+    // last body row does not reach into the `<tfoot>` below it. Only the `0`
+    // form was resolved against the group at first, and a positive one walked
+    // straight through.
+    const html = '<table><tbody><tr><td rowspan="5">b</td><td>x</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
+    expect(htmlToCarve(html).value).toBe('| b | x |\n| f |\n| g |\n')
+  })
+
+  it('reads a tall table in time proportional to its rows', () => {
+    /*
+     * Asking each cell for its group's size meant scanning the whole table per
+     * cell. The rows are the same shape, so the RATIO across two sizes is the
+     * measurement and no stopwatch reading is asserted: at four times the rows,
+     * the linear form measured 2.4x and the quadratic one 14.7x.
+     *
+     * Four times rather than two, and a bound of 8 rather than 4, because a
+     * doubling puts quadratic work at about 4x - the same number a slow machine
+     * can produce from linear work, which is a threshold no mutation has to
+     * cross.
+     */
+    const table = (rows: number) => `<table>${Array.from({ length: rows }, (_, i) => `<tr><td>${i}</td></tr>`).join('')}</table>`
+    // Warm the parser so the first-call cost is not what is being compared.
+    htmlToCarve(table(200))
+    const time = (rows: number) => {
+      const started = performance.now()
+      htmlToCarve(table(rows))
+      return performance.now() - started
+    }
+    const small = time(2000)
+    const large = time(8000)
+
+    expect(large).toBeLessThan(small * 8)
+  })
+
+  it('clips a rowspan that would leave the head the renderer synthesizes', () => {
+    /*
+     * Carve derives the head from the LEADING RUN of all-header rows, so a span
+     * reaching out of that run is written into a `<thead>` with its other rows
+     * in the `<tbody>`. Browsers clip a rowspan across row groups, so keeping
+     * the number would produce a document claiming a grid it does not render.
+     *
+     * The grid fixtures cannot catch this one: their expander is the layout
+     * algorithm without the group rule, which is exactly the rule that bites.
+     */
+    const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><td>B</td></tr></table>'
+    expect(htmlToCarve(html).value).toBe('|=H|=A|\n| B |\n')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'table-degraded',
+        severity: 'warning',
+        message: expect.stringContaining('Clipped a rowspan at the header rows'),
+        path: '/table[1]/tr[1]/th[1]',
+      }),
+    ])
+    // The written table renders no rowspan at all, which is what a browser
+    // shows for the clipped one.
+    expect(carveToHtml(htmlToCarve(html).value)).not.toContain('rowspan')
+  })
+
+  it('CONTROL: a span WITHIN the header rows is untouched', () => {
+    const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>'
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(carveToHtml(htmlToCarve(html).value)).toContain('rowspan="2"')
+  })
+
+  it('reports the empty cell a short row needs, and only when it invents one', () => {
+    // A row shorter than the spans reaching into it needs the index kept. The
+    // continuation itself costs nothing - the span already owns that cell - so
+    // only an invented EMPTY cell is reported.
+    expect(htmlToCarve('<table><tr><td>a</td><td rowspan="2">b</td></tr><tr><td>c</td></tr></table>').report.diagnostics).toEqual([])
+    expect(htmlToCarve('<table><tr><td>a</td><td>b</td><td rowspan="2">c</td></tr><tr></tr></table>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'table-degraded', message: expect.stringContaining('a cell the source did not have') }),
+    )
+  })
+
+  it('clamps a span to what HTML allows, so a value cannot ask for a billion cells', () => {
+    // Each unit of a span becomes a CELL, so an unclamped `colspan` is a
+    // 30-byte input asking for a billion of them.
+    const wide = htmlToCarve('<table><tr><td colspan="1000000000">x</td></tr></table>')
+    expect(wide.value.split('|').length - 1).toBe(1001)
+    // And the generated cells are charged to the node budget on top of that.
+    expect(() => htmlToAst('<table><tr><td colspan="1000">x</td></tr></table>', { maxNodes: 100 })).toThrow(HtmlImportLimitError)
+  })
+
+  it('keeps the first caption and reports the second, as the parser does', () => {
+    // `| a |` + two `^ ` lines reads the first as the caption and the second as
+    // a paragraph, so the import follows the same rule and says which one went.
+    const html = '<table><caption>One</caption><tr><td>a</td></tr><caption>Two</caption></table>'
+    expect(htmlToAst(html).value.children).toMatchObject([{ type: 'table', caption: [{ value: 'One' }] }])
+    expect(htmlToCarve(html).report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'table-degraded',
+        severity: 'warning',
+        message: 'Dropped a second <caption>: a table has one caption, and the first one wins',
+        path: '/table[1]/caption[3]',
+      }),
+    ])
+  })
+
+  it('CONTROL: one caption after the rows is not a degradation', () => {
+    // It is where Carve writes it, so nothing is lost and nothing is reported.
+    expect(htmlToCarve('<table><tr><td>a</td></tr><caption>Late</caption></table>').value).toBe('| a |\n^ Late\n')
+    expect(htmlToCarve('<table><tr><td>a</td></tr><caption>Late</caption></table>').report.diagnostics).toEqual([])
   })
 })
