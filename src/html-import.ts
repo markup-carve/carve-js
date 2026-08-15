@@ -1006,11 +1006,12 @@ class Importer {
     const headerAt = (r: number, c: number): boolean => {
       const cell = allRows[r]?.cells[c]
       if (cell === undefined) return false
-      if (cell.span === 'colspan') {
-        let left = c - 1
-        while (left >= 0 && allRows[r]!.cells[left]?.span !== undefined) left -= 1
-        return left >= 0 ? headerAt(r, left) : false
-      }
+      // A `<` needs no resolution: `spanGrid` builds a colspan continuation
+      // carrying its ORIGIN's header flag, so reading the flag off the
+      // continuation gives the same answer as walking left to the origin. A
+      // branch for it was here and no mutation of it could change an output.
+      // A `^` is different - it is built with the flag cleared, because the
+      // cell it continues is in another row - so that one is resolved.
       if (cell.span === 'rowspan') {
         let up = r - 1
         while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
