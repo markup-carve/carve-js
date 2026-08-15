@@ -309,9 +309,17 @@ class Importer {
    * Anything else directly inside the `<dl>` has no slot in the model. It is
    * kept, as blocks AFTER the list rather than dropped, and reported: moving it
    * changes the document order, which is a smaller loss than deleting it.
+   *
+   * Three shapes are valid HTML that Carve SOURCE cannot spell, so they are
+   * built into the AST and reported by whoever writes (§16): a `<dd>` with no
+   * `<dt>` before it, an EMPTY `<dt>` and an EMPTY `<dd>`. Each one writes a
+   * line the parser reads as something else, and the tests assert what it
+   * reads as rather than only that a diagnostic appeared.
+   *
+   * `block()` has already counted this node against `maxNodes`, so this walk
+   * counts only the elements it visits itself.
    */
   private definitionList(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
-    this.enter(depth)
     const items: DefinitionItem[] = []
     const trailing: P5Node[] = []
     let current: DefinitionItem | undefined
@@ -334,7 +342,14 @@ class Importer {
           // A term after a definition starts the next entry; a term after a
           // term joins the one being opened.
           if (current === undefined || current.definitions.length > 0) current = openEntry()
-          current.terms.push(this.inlines(child.childNodes ?? [], childPath, level + 1))
+          const term = this.inlines(child.childNodes ?? [], childPath, level + 1)
+          if (!this.visible(term)) {
+            this.unspellable.push({
+              path: childPath,
+              message: 'An empty <dt> has no Carve spelling; the bare `::` line re-reads as a paragraph',
+            })
+          }
+          current.terms.push(term)
           return
         }
         if (child.tagName === 'dd') {
@@ -349,7 +364,14 @@ class Importer {
               message: 'A <dd> with no <dt> before it has no Carve spelling; the definition line re-reads as a paragraph',
             })
           }
-          current.definitions.push(this.blocks(child.childNodes ?? [], childPath, level + 1))
+          const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
+          if (definition.length === 0) {
+            this.unspellable.push({
+              path: childPath,
+              message: 'An empty <dd> has no Carve spelling; the bare `:` line is read as more of the term above it',
+            })
+          }
+          current.definitions.push(definition)
           return
         }
         this.add('element-unwrapped', `Moved <${child.tagName ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath)

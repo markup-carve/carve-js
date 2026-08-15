@@ -326,6 +326,40 @@ describe('definition lists on import', () => {
     expect(carveToHtml(carve(html))).toBe('<p>:  A description of nothing.</p>')
   })
 
+  it('reports an empty term, which the writer spells as a line that is not one', () => {
+    const html = '<dl><dt></dt><dd>A description whose term was deleted.</dd></dl>'
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('empty <dt>'),
+      path: '/dl[1]/dt[1]',
+    }))
+    // What the emitted source actually reads as: the whole list becomes a
+    // paragraph, so the diagnostic is not decoration.
+    expect(carveToHtml(carve(html))).toBe('<p>::\n:  A description whose term was deleted.</p>')
+  })
+
+  it('reports an empty description, which the term above it swallows', () => {
+    const html = '<dl><dt>Term</dt><dd></dd></dl>'
+    expect(htmlToAst(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      severity: 'warning',
+      message: expect.stringContaining('empty <dd>'),
+      path: '/dl[1]/dd[2]',
+    }))
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+  })
+
+  it('counts a <dl> against the node budget once, like any other element', () => {
+    // `block()` already entered the node before handing it here. A second
+    // `enter` charged one DOM node twice, so a caller-set limit rejected a
+    // definition list earlier than the same-sized markup in any other tag.
+    expect(() => htmlToAst('<dl><dt>T</dt><dd>D</dd></dl>', { maxNodes: 5 })).not.toThrow()
+    expect(() => htmlToAst('<dl><dt>T</dt><dd>D</dd></dl>', { maxNodes: 4 })).toThrow(HtmlImportLimitError)
+  })
+
   it('keeps content the model has no slot for, after the list, and says so', () => {
     const html = '<dl><dt>T</dt><dd>D</dd><p>An editor stray.</p></dl>'
     expect(carve(html)).toBe(':: T\n:  D\n\nAn editor stray.')
