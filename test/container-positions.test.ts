@@ -168,18 +168,14 @@ describe('a figure gives its target a span too', () => {
     expect(codepoints.slice(figure.pos.startOffset, figure.pos.endOffset).join('')).toContain('^ Caption')
   })
 
-  it('spans a captioned quote from the marker to the end of its attribution', () => {
-    // PART 9 §4a: no figure wraps the quote any more, so there is no inner
-    // target needing a span of its own - the quote IS the node the block loop
-    // spans, and it covers its attribution line too (carve#1159).
+  it('ends the quoted block where the caption begins', () => {
     const src = '> Stay hungry, stay foolish.\n^ Steve Jobs\n'
     const codepoints = [...src]
-    const quote = parse(src).children[0] as Record<string, any>
+    const figure = parse(src).children[0] as Record<string, any>
 
-    expect(quote.type).toBe('block_quote')
-    expect(quote.attribution).toBeDefined()
-    expect(codepoints.slice(quote.pos.startOffset, quote.pos.endOffset).join('')).toBe(
-      '> Stay hungry, stay foolish.\n^ Steve Jobs',
+    expect(figure.target.type).toBe('block_quote')
+    expect(codepoints.slice(figure.target.pos.startOffset, figure.target.pos.endOffset).join('')).toBe(
+      '> Stay hungry, stay foolish.',
     )
   })
 

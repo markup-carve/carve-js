@@ -156,7 +156,6 @@ export interface Paragraph extends BaseNode {
 export interface BlockQuote extends BaseNode {
   type: 'block_quote'
   children: BlockNode[]
-  attribution?: InlineNode[]
 }
 
 export interface List extends BaseNode {

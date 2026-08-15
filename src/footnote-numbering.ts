@@ -74,7 +74,6 @@ function walkBlockInlines(
       visit(node.children)
       break
     case 'block_quote':
-      if (node.attribution) visit(node.attribution)
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'list':
