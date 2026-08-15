@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HtmlImportLimitError, carveToHtml, htmlToAst, htmlToCarve, parse, semanticSpan } from '../src/index.js'
+import { HtmlImportLimitError, carveToHtml, details, htmlToAst, htmlToCarve, parse, renderHtml, semanticSpan } from '../src/index.js'
 
 describe('HTML import', () => {
   it('builds the AST and delegates source generation to the canonical writer', () => {
@@ -638,5 +638,185 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
       expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
     ])
+  })
+})
+
+/*
+ * `markup-carve/carve#1210` P9's two recognition upgrades for carve-js.
+ */
+describe('disclosures and quotations on import', () => {
+  const carve = (html: string) => htmlToCarve(html).value.trim()
+  const codes = (html: string) => htmlToCarve(html).report.diagnostics.map((d) => d.code)
+
+  it('reads a disclosure as the details admonition, summary and all', () => {
+    // It became a generic `div` with a `details` CLASS, and `<summary>` was not
+    // recognized at all: the label unwrapped into the body, so it re-rendered
+    // inside the box rather than on it.
+    const html = '<details><summary>More info</summary><p>The body.</p></details>'
+    expect(carve(html)).toBe('::: details "More info"\nThe body.\n:::')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toBe(
+      '<details>\n  <summary>More info</summary>\n  <p>The body.</p>\n</details>',
+    )
+  })
+
+  it('keeps the label on the box even without the extension', () => {
+    // A core render has no `<details>`, but the summary is the admonition TITLE
+    // now rather than an anonymous first paragraph.
+    expect(carveToHtml(carve('<details><summary>More info</summary><p>b</p></details>'))).toContain(
+      '<p class="admonition-title">More info</p>',
+    )
+  })
+
+  it('keeps the disclosure open when the HTML says it is', () => {
+    const html = '<details open><summary>T</summary><p>b</p></details>'
+    expect(carve(html)).toBe('{open}\n::: details "T"\nb\n:::')
+    expect(codes(html)).toEqual([])
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toContain('<details open="">')
+  })
+
+  it('leaves a summary-less disclosure to the default label, as the element does', () => {
+    expect(carve('<details><p>b</p></details>')).toBe('::: details\nb\n:::')
+    expect(carveToHtml(carve('<details><p>b</p></details>'), { extensions: [details()] })).toContain('<summary>Details</summary>')
+  })
+
+  it('keeps the disclosure when its label cannot be a title', () => {
+    /*
+     * The title slot is delimited by `"` and has no escape, so a quote in the
+     * summary ends it early and the opening line stops being an opener: the
+     * whole block - body included - re-reads as ONE paragraph. Recording that
+     * as a writer loss would leave the destroyed document in place, so this is
+     * the one place the import degrades the TREE instead: the label becomes the
+     * body's first paragraph, which is where it landed before this mapping
+     * existed anyway.
+     */
+    const html = '<details><summary>Say "hi"</summary><p>The body.</p></details>'
+    expect(carve(html)).toBe('::: details\nSay \\"hi\\"\n\nThe body.\n:::')
+    expect(carveToHtml(carve(html), { extensions: [details()] })).toBe(
+      '<details>\n  <summary>Details</summary>\n  <p>Say "hi"</p>\n  <p>The body.</p>\n</details>',
+    )
+    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'element-unwrapped',
+      severity: 'warning',
+      message: expect.stringContaining('cannot spell a double quote or a line break'),
+      path: '/details[1]/summary[1]',
+    }))
+  })
+
+  it('and does the same for a label broken across lines', () => {
+    expect(carveToHtml(carve('<details><summary>a<br>b</summary><p>x</p></details>'), { extensions: [details()] })).toContain('<details>')
+  })
+
+  it('asks the writer, so a quote inside an attribute value counts too', () => {
+    // A quote reaches the title through more than its own text: an attribute
+    // VALUE is written quoted, and a code span carries its content verbatim.
+    // Enumerating the spellings that can produce one would be a second copy of
+    // the grammar, so the check renders the inlines and looks at the result.
+    for (const label of ['<span title="a&quot;b">hi</span>', '<code>a"b</code>']) {
+      const html = `<details><summary>${label}</summary><p>body</p></details>`
+      expect(htmlToCarve(html).value.startsWith('::: details "')).toBe(false)
+      expect(carveToHtml(htmlToCarve(html).value, { extensions: [details()] })).toContain('<details>')
+    }
+  })
+
+  it('CONTROL: a quote in a LINK DESTINATION does not cost the title', () => {
+    // Percent-encoded in the href, so the written form carries no quote and the
+    // title slot is still available. A rule that looked for the character in
+    // the input rather than in the output would give this one up.
+    expect(htmlToCarve('<details><summary><a href="/x?q=%22">link</a></summary><p>b</p></details>').value)
+      .toBe('::: details "[link](/x?q=%22)"\nb\n:::\n')
+  })
+
+  it('CONTROL: the titles that ARE spellable keep the slot', () => {
+    // Measured against the parser, not assumed: emphasis, an apostrophe and the
+    // typographic quotes all survive the title slot.
+    for (const label of ['a <em>b</em>', "it's", 'He said \u201chi\u201d']) {
+      const written = carve(`<details><summary>${label}</summary><p>x</p></details>`)
+      expect(written.startsWith('::: details "')).toBe(true)
+      expect(carveToHtml(written, { extensions: [details()] })).toContain('<summary>')
+    }
+  })
+
+  it('reports what the label carried, since the title slot holds no attributes', () => {
+    expect(htmlToCarve('<details><summary id="sum" class="k">T</summary><p>b</p></details>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'warning',
+        message: 'Dropped id, class on <summary>: a disclosure label has no attribute slot',
+        path: '/details[1]/summary[1]',
+      }),
+    ])
+  })
+
+  it('does not write the open state twice in a static render', () => {
+    // The static renderer adds `open` for print; an imported `<details open>`
+    // already carries it in the attributes, and adding it again wrote
+    // `<details open open="">`. A hand-written `{open}` reached it too.
+    const src = htmlToCarve('<details open><summary>T</summary><p>b</p></details>').value
+    expect(renderHtml(parse(src), { extensions: [details()], mode: 'static' })).toBe(
+      '<details open="">\n  <summary>T</summary>\n  <p>b</p>\n</details>',
+    )
+    expect(renderHtml(parse('::: details "T"\nb\n:::\n'), { extensions: [details()], mode: 'static' })).toContain('<details open>')
+  })
+
+  it('reports a disclosure body under the path it came in on', () => {
+    // Filtering the summary out of the child list renumbers everything after
+    // it, and a summary that is not first is not `summary[1]` either.
+    expect(htmlToCarve('<details><p>a</p><summary id="s">S</summary></details>').report.diagnostics).toEqual([
+      expect.objectContaining({ path: '/details[1]/summary[2]' }),
+    ])
+    expect(htmlToCarve('<details><summary>S</summary><blockquote onclick="x()">b</blockquote></details>').report.diagnostics).toEqual([
+      expect.objectContaining({ path: '/details[1]/blockquote[2]' }),
+    ])
+  })
+
+  it('counts the summary against the node budget', () => {
+    // An empty `<summary>` is a DOM node the caller's limit is counting;
+    // reading straight past it let a document process more nodes than allowed.
+    expect(() => htmlToAst('<details><summary></summary></details>', { maxNodes: 2 })).not.toThrow()
+    expect(() => htmlToAst('<details><summary></summary></details>', { maxNodes: 1 })).toThrow(HtmlImportLimitError)
+  })
+
+  it('reads <q> as the marks a browser draws for it', () => {
+    // The content reached the document before this; the marks that made it a
+    // quotation did not.
+    expect(carve('<p>He said <q>hi</q>.</p>')).toBe('He said “hi”.')
+    expect(htmlToCarve('<p>He said <q>hi</q>.</p>').report.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'element-unwrapped',
+        severity: 'info',
+        message: 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping',
+        path: '/p[1]/q[2]',
+      }),
+    ])
+  })
+
+  it('alternates the marks by nesting depth', () => {
+    expect(carve('<p><q>nested <q>inner</q></q></p>')).toBe('“nested ‘inner’”')
+  })
+
+  it('writes the typographic marks, which survive being written', () => {
+    // A straight `"` is escaped back to a straight quote by the writer (PART 11
+    // section 5 keeps a quote that reached it as TEXT), so the curly pair is
+    // both what the element renders as and what round-trips.
+    const written = carve('<p><q>hi</q></p>')
+    expect(written).not.toContain('\\"')
+    expect(carveToHtml(written)).toBe('<p>“hi”</p>')
+  })
+
+  it('preserves <q> raw in roundtrip mode, where the marks are not enough', () => {
+    // `roundtrip` raw-preserves what Carve cannot express. The seven semantic
+    // elements are mapped in every mode because their spelling renders back as
+    // the element; the marks do not - the `<q>` becomes text and its `cite`
+    // goes with it - so this one belongs to the raw fallback there.
+    const result = htmlToAst('<p><q cite="/x">hi</q></p>', { mode: 'roundtrip' })
+    expect(result.value.children[0]).toMatchObject({
+      children: [{ type: 'raw_inline', format: 'html', content: '<q cite="/x">hi</q>' }],
+    })
+    expect(result.report.diagnostics.map((d) => d.code)).toContain('raw-preserved')
+  })
+
+  it('keeps what a quotation carried, on a span', () => {
+    expect(carve('<p><q id="cited" class="key">hi</q></p>')).toBe('[“hi”]{#cited .key}')
   })
 })

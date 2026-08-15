@@ -112,6 +112,8 @@ class Importer {
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ path: string; message: string }> = []
   private nodes = 0
+  /** How many `<q>` elements enclose the one being read, for the mark pair. */
+  private quoteDepth = 0
   private readonly maxDepth: number
   private readonly maxNodes: number
   private readonly maxDiagnostics: number
@@ -159,6 +161,11 @@ class Importer {
         keyValues[name] = attr.value
       } else if (name === 'title' && node.tagName !== 'a' && node.tagName !== 'img') {
         keyValues.title = attr.value
+      } else if (name === 'open' && node.tagName === 'details') {
+        // The disclosure's own state, and the one attribute of a `<details>`
+        // that means something after the import: `{open}` is PART 11 §6c's
+        // bare boolean, which the details extension renders back onto the tag.
+        keyValues.open = ''
       } else if (name === 'scope' && node.tagName === 'th') {
         // Kept here, and dropped again in `table()` when it matches the value
         // the renderer derives from position. `colgroup` and `rowgroup` have no
@@ -269,7 +276,7 @@ class Importer {
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
-    if (tag === 'details') return [{ type: 'div', children: this.blocks(node.childNodes ?? [], path, depth + 1), attrs: this.mergeClass(attrs, 'details') }]
+    if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
       if (tag !== 'div') this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
@@ -414,7 +421,7 @@ class Importer {
    * attribute is reported, and skipping the call made these three the only
    * places in the importer where active markup was dropped in silence.
    */
-  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div'): void {
+  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div' | 'summary', noun?: string): void {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
     const names = [
@@ -422,8 +429,8 @@ class Importer {
       ...(attrs.classes ? ['class'] : []),
       ...Object.keys(attrs.keyValues ?? {}),
     ]
-    const noun = tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'
-    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${noun} has no attribute slot`, 'warning', path)
+    const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
+    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
   }
 
   /**
@@ -534,6 +541,92 @@ class Importer {
       })
     }
     return { olType: value }
+  }
+
+  /**
+   * `<details>/<summary>` -> the `details` admonition (`::: details "Summary"`).
+   *
+   * It used to become a generic `div` carrying a `details` CLASS, and the
+   * `<summary>` was not recognized at all: it unwrapped into the body, so the
+   * label of the disclosure became its first paragraph and re-rendered inside
+   * the box rather than on it. Nothing round-tripped - `<div class="details">`
+   * is not a disclosure element, and a reader had no way back to one.
+   *
+   * The admonition is what the `details()` extension renders as a real
+   * `<details>`, with the title as the `<summary>`, so the import lands on the
+   * form Carve already has for this rather than on a container that resembles
+   * it. A `<details>` with no `<summary>` keeps the extension's default label,
+   * which is what the element itself does in a browser.
+   */
+  private disclosure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
+    const children0 = node.childNodes ?? []
+    const summaryIndex = children0.findIndex((n) => n.tagName === 'summary')
+    const summary = summaryIndex < 0 ? undefined : children0[summaryIndex]
+    // The paths stay the ones the elements arrived under. Filtering the summary
+    // out renumbers everything after it, so a `<script>` at `/details[1]/
+    // script[2]` would be reported at `script[1]` - and a summary that is not
+    // first is not `summary[1]` either.
+    const summaryPath = summary ? this.childPath(path, summary, summaryIndex) : ''
+    const body: P5Node[] = []
+    const bodyPaths: string[] = []
+    children0.forEach((child, index) => {
+      if (child === summary) return
+      body.push(child)
+      bodyPaths.push(this.childPath(path, child, index))
+    })
+    let title: InlineNode[] | undefined
+    if (summary) {
+      // The element itself, not only its children: an empty `<summary>` is a
+      // DOM node the caller's `maxNodes` is counting, and reading straight past
+      // it let a document process more nodes than the limit allows.
+      this.enter(depth + 1)
+      this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
+      title = this.inlines(summary.childNodes ?? [], summaryPath, depth + 2)
+    }
+    const children = this.blocks(body, path, depth + 1, bodyPaths)
+    if (title && this.visible(title) && !this.spellableTitle(title)) {
+      // Kept as the body's first paragraph rather than as the title. This is
+      // the one place the import degrades the TREE instead of recording a
+      // writer loss, because the written form here is not a degraded document
+      // but a destroyed one: an unspellable title makes the opening line
+      // ordinary text, and the whole disclosure - body included - re-reads as
+      // one paragraph. The label survives as a paragraph instead, which is
+      // where it landed before this mapping existed anyway.
+      this.add(
+        'element-unwrapped',
+        'Unwrapped a <summary> into the body: a disclosure title cannot spell a double quote or a line break, and writing one makes the whole block a paragraph',
+        'warning',
+        summaryPath,
+      )
+      return { type: 'admonition', kind: 'details', children: [{ type: 'paragraph', children: title }, ...children], ...(attrs ? { attrs } : {}) }
+    }
+    return {
+      type: 'admonition',
+      kind: 'details',
+      ...(title && this.visible(title) ? { title } : {}),
+      children,
+      ...(attrs ? { attrs } : {}),
+    }
+  }
+
+  /**
+   * Whether the writer can put these inlines in the quoted title slot.
+   *
+   * The slot is delimited by `"` and the grammar gives it no escape, so a
+   * double quote ends the title early and the opener stops being one. A line
+   * break does the same thing for the same reason: the opener is a LINE.
+   *
+   * The question is asked of the WRITTEN form, not of the text nodes. A quote
+   * reaches the title through more than its own text - an attribute VALUE is
+   * written quoted, so `<span title='a"b'>hi</span>` is spelled
+   * `[hi]{title="a\"b"}` and carries three of them - and enumerating the
+   * spellings that can produce one is the kind of second copy of the grammar
+   * that goes stale the next time a spelling is added. Rendering the inlines
+   * asks the writer itself.
+   */
+  private spellableTitle(title: InlineNode[]): boolean {
+    const written = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: title }] })
+    return !written.includes('"') && !written.trimEnd().includes('\n')
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
@@ -681,6 +774,12 @@ class Importer {
       this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path)
       return []
     }
+    // Not in `roundtrip`, which raw-preserves what Carve CANNOT express. The
+    // seven semantic elements are mapped in every mode because their spelling
+    // renders back as the element itself; the marks do not - a `<q>` becomes
+    // text and its `cite` goes with it - so this mapping is the safe/semantic
+    // answer and the raw fallback is the round-tripping one.
+    if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
@@ -724,6 +823,38 @@ class Importer {
   }
 
   /**
+   * `<q>` -> the quotation marks a browser draws for it.
+   *
+   * Carve has no quotation element and needs none: the element's whole rendered
+   * effect is the pair of marks, which are ordinary text. So this is a MAPPING
+   * rather than the unwrap it used to be - the same content reached the
+   * document before, without the marks that made it a quotation.
+   *
+   * The marks alternate by nesting depth, as a browser's do: double outside,
+   * single inside. They are the typographic characters rather than `"`, which
+   * the writer escapes back to a straight quote (PART 11 §5 keeps a quote that
+   * reached it as TEXT), so the curly pair is both what the element renders as
+   * and what survives being written.
+   *
+   * Still reported, at `info`: the ELEMENT does not come back, and a converter
+   * going the other way sees text where a `<q>` was. The message says the
+   * mapping was deliberate rather than claiming something was unwrapped.
+   */
+  private quotation(node: P5Node, path: string, depth: number): InlineNode[] {
+    const [open, close] = this.quoteDepth % 2 === 0 ? ['\u201c', '\u201d'] : ['\u2018', '\u2019']
+    this.quoteDepth += 1
+    try {
+      const children = this.inlines(node.childNodes ?? [], path, depth + 1)
+      const attrs = this.attrs(node, path)
+      const quoted: InlineNode[] = [{ type: 'text', value: open! }, ...children, { type: 'text', value: close! }]
+      this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path)
+      return attrs ? [{ type: 'span', children: quoted, attrs }] : quoted
+    } finally {
+      this.quoteDepth -= 1
+    }
+  }
+
+  /**
    * One of the seven semantic elements, as the span attribute that spells it.
    *
    * `<kbd>Tab</kbd>` -> `[Tab]{kbd}`, `<abbr title="X">c</abbr>` -> `[c]{abbr="X"}`,
@@ -761,10 +892,6 @@ class Importer {
 
   private visible(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || node.value.trim() !== '')
-  }
-
-  private mergeClass(attrs: Attrs | undefined, className: string): Attrs {
-    return { ...attrs, classes: [...(attrs?.classes ?? []), className] }
   }
 
   /**
