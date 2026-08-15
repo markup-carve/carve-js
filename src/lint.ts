@@ -38,6 +38,7 @@ import {
   normalizeHeadingRefLabel,
   headingRefKeyFromLabel,
   isCollapsedRef,
+  figureGroupPanels,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
@@ -434,6 +435,7 @@ export function lintCarve(
           break
         case 'admonition':
         case 'div':
+        case 'figure_group':
           indexHeadings(block.children, inBlockquote)
           break
         case 'list':
@@ -462,6 +464,92 @@ export function lintCarve(
     if (node.type === 'table' && captionHasNumber(node.caption)) used.add(attrs.id)
     if (node.type === 'figure' && captionHasNumber(node.caption)) used.add(attrs.id)
   })
+
+  // Composite figures (PART 9 §4c): register the crossref targets a NUMBERED
+  // group creates - its own id and its panels' ids (resolved as "Figure Na") -
+  // and report the shapes that silently do less than they look like they do.
+  const checkFigureGroups = (blocks: BlockNode[]): void => {
+    for (const b of blocks) {
+      switch (b.type) {
+        case 'admonition':
+          // A bare `::: figure` only parses as an admonition when an OPEN
+          // group's body demoted it (groups do not nest); one carrying a
+          // title or [label] never matched the figure production at all.
+          if (b.kind === 'figure') {
+            if (b.title !== undefined || b.label !== undefined) {
+              out.push({
+                ...locate(b, toUtf16),
+                rule: 'figure-group-opener-metadata',
+                message:
+                  'A "::: figure" opener carrying a quoted title or [label] is not a composite figure; it renders as a generic container. Drop the title/label to open a figure group.',
+              })
+            } else {
+              out.push({
+                ...locate(b, toUtf16),
+                rule: 'figure-group-nested',
+                message:
+                  'A "::: figure" inside a composite figure does not nest; it renders as a generic container. Move it out of the enclosing group.',
+              })
+            }
+          }
+          checkFigureGroups(b.children)
+          break
+        case 'figure_group': {
+          // The panel predicate has ONE spelling (figureGroupPanels), shared
+          // with the numbering pass, so the lint cannot drift from what the
+          // resolver registers.
+          const panels = figureGroupPanels(b)
+          if (panels.length === 0) {
+            out.push({
+              ...locate(b, toUtf16),
+              rule: 'figure-group-empty',
+              message:
+                'This "::: figure" group holds no captionable panel; the panels wrapper renders around the preserved content only.',
+            })
+          } else if (panels.length === 1) {
+            out.push({
+              ...locate(b, toUtf16),
+              rule: 'figure-group-single-panel',
+              message:
+                'This "::: figure" group holds a single panel; a plain captioned figure renders the same content without the group wrapper.',
+            })
+          }
+          const numbered = captionHasNumber(b.caption)
+          if (numbered && b.attrs?.id !== undefined) used.add(b.attrs.id)
+          for (const panel of panels) {
+            if (captionHasNumber(panel.caption)) {
+              out.push({
+                ...locate(panel, toUtf16),
+                rule: 'figure-group-panel-number',
+                message:
+                  'A "#" placeholder in a panel caption stays literal: panels are not numbering units, the group caption carries the number (and panel ids resolve with its letter).',
+              })
+            }
+            if (numbered && panel.attrs?.id !== undefined) used.add(panel.attrs.id)
+          }
+          checkFigureGroups(b.children)
+          break
+        }
+        case 'block_quote':
+        case 'div':
+          checkFigureGroups(b.children)
+          break
+        case 'list':
+          for (const it of b.items) checkFigureGroups(it.children)
+          break
+        case 'definition_list':
+          for (const it of b.items) for (const d of it.definitions) checkFigureGroups(d)
+          break
+        case 'figure':
+          if (b.target.type === 'block_quote') checkFigureGroups(b.target.children)
+          break
+        default:
+          break
+      }
+    }
+  }
+  checkFigureGroups(doc.children)
+  for (const body of Object.values(doc.footnoteDefs ?? {})) checkFigureGroups(body)
 
   // `used` now holds every valid id. A crossref to anything else degrades to
   // literal text in resolveHeadingIds.

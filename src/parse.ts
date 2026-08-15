@@ -31,6 +31,7 @@ import type {
   Emphasis,
   Extension,
   Figure,
+  FigureGroup,
   Heading,
   HeadingLevel,
   Image,
@@ -1227,6 +1228,15 @@ class Lexer {
   // (top and nested) — startsInterruptingBlock no longer branches on this —
   // but sub-lexers still set it to mark their context.
   nested = false
+  /**
+   * True while this lexer reads the body of an open `::: figure` group, at any
+   * depth (PART 9 §4c: groups do not nest). `parseAdmonition` sets it on the
+   * group's body sub-lexer and `nestedSubLexer` carries it into every deeper
+   * container, so a bare `::: figure` ANYWHERE inside an open group's body is
+   * demoted to a generic container. A sibling after the group parses from the
+   * parent lexer, where the flag was never set.
+   */
+  inFigureGroup = false
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead), the same entry the container-local scans keep: per fence
@@ -1461,6 +1471,7 @@ function nestedSubLexer(
   sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
   sub.depth = parent.depth + 1
+  sub.inFigureGroup = parent.inFigureGroup
   attachDocumentOffsets(sub, parent, startLineIndex)
   return sub
 }
@@ -3494,12 +3505,21 @@ function parseFootnoteDef(lexer: Lexer): null {
   return null
 }
 
-function parseAdmonition(lexer: Lexer): Admonition {
+function parseAdmonition(lexer: Lexer): Admonition | FigureGroup {
   const openLineIndex = lexer.pos
   const open = lexer.consume()
   const m = RE_ADMONITION_OPEN.exec(open)!
   const fence = m[1]!.length
   const kind = m[2]!
+  // PART 9 §4c: a BARE `::: figure` opener - kind only, no quoted title, no
+  // `[label]` - is a composite figure group, not an admonition. An opener
+  // carrying either piece of metadata does not match the figure production and
+  // stays a generic container (the group node has no title/label fields by
+  // design). A bare opener inside an OPEN group's body is demoted the same way:
+  // groups do not nest, which is what `inFigureGroup` carries through the
+  // recursion.
+  const isFigureGroup =
+    kind === 'figure' && m[3] === undefined && m[4] === undefined && !lexer.inFigureGroup
   // The opener carries an optional quoted title only (grammar
   // quoted_title; PART 9 §12). The quotes delimit the title and are
   // stripped (not part of the rendered text); an explicitly empty `""`
@@ -3515,7 +3535,32 @@ function parseAdmonition(lexer: Lexer): Admonition {
     fenceWidth: fence,
   })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+  if (isFigureGroup) subLexer.inFigureGroup = true
   const children = parseBlocks(subLexer, 0)
+  if (isFigureGroup) {
+    const group: FigureGroup = { type: 'figure_group', children }
+    // The group's CLOSING fence is §4's sixth caption host: a `^ …` line
+    // directly after it (or across at most one blank line) attaches as the
+    // GROUP caption - the same slot idiom the five parse-time hosts use.
+    // A group auto-closed at EOF has no closer line to host the slot, and in
+    // that case the lexer is already exhausted, so the lookahead finds nothing.
+    let lookahead = 0
+    while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+    const next = lexer.peek(lookahead)
+    if (next) {
+      const cap = RE_CAPTION.exec(next)
+      // §4: a caption attaches only when it immediately follows the block
+      // or is separated by at most ONE blank line.
+      if (cap && lookahead <= 1) {
+        for (let i = 0; i <= lookahead; i++) lexer.consume()
+        group.caption = parseCaptionInline(lexer, cap[1]!)
+      }
+    }
+    // A preceding block-attribute line is the only way to attribute the group
+    // (same as the admonition below); parseBlocks applies it to the returned
+    // node.
+    return group
+  }
   const node: Admonition = { type: 'admonition', kind, children }
   // `!== undefined` (not truthiness): an explicitly empty quoted title
   // `""` still emits a (empty) <p class="admonition-title"> per §12.

@@ -536,11 +536,15 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
 }
 
 function hostsCaption(block: BlockNode): boolean {
+  // A figure group's CLOSING fence hosts a caption (PART 9 §4c), so a literal
+  // `^ …` paragraph written after one must have its caret escaped or it would
+  // re-attach as the group caption on the way back (the F6 detached shape).
   if (
     block.type === 'table' ||
     block.type === 'code_block' ||
     block.type === 'block_quote' ||
-    block.type === 'image'
+    block.type === 'image' ||
+    block.type === 'figure_group'
   )
     return true
   if (block.type !== 'paragraph' || block.children.length !== 1) return false
@@ -693,6 +697,17 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(renderDefinitionList(node.items, ctx))
     case 'figure':
       return withAttrs(renderFigure(node, ctx))
+    case 'figure_group': {
+      // The canonical spelling is the authored form (PART 9 §4c): a bare
+      // `::: figure` fence, the children as an ordinary fence body, and the
+      // group caption as a `^ ` line after the CLOSING fence - unescaped,
+      // because the writer knows the closer hosts it. The `#` placeholder is
+      // written back by the caption_number arm like every numbered caption.
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
+      const caption = node.caption !== undefined ? `\n^ ${renderInlines(node.caption, ctx)}` : ''
+      return withAttrs(`${fence} figure\n${body}\n${fence}${caption}`)
+    }
     case 'image':
       return renderImage(node)
     case 'raw_block': {
@@ -2209,7 +2224,7 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
 function escapeText(text: string, captionCanOpen = false): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
-  const out = text
+  let out = text
     .replace(UNWRITABLE_CONTROLS, '')
     .replace(escapes, (char, offset: number) => {
       if (char !== '^') return `\\${char}`
@@ -2219,6 +2234,21 @@ function escapeText(text: string, captionCanOpen = false): string {
       const opensInline = next === '[' || (text[offset - 1] ?? '') === '{' || next === '}'
       return opensCaption || opensInline ? '\\^' : '^'
     })
+  // The caption-opening caret is escaped in EVERY mode, not only when `^` is
+  // in the candidate class: after a caption host (a figure group, an image, a
+  // table...) an unescaped `^ ` line re-attaches as the caption on re-parse,
+  // so the minimal form always failed the redundancy check and the WHOLE
+  // document escalated to conservative escaping - `\(a\)` and `\#` where
+  // carve-php and carve-rs write the characters bare. One structural escape
+  // keeps the minimal pass winnable (cross-engine fmt parity, PART 11 §4).
+  if (
+    escapeMode === 'minimal' &&
+    captionCanOpen &&
+    out.startsWith('^') &&
+    (out[1] === ' ' || out[1] === '\t')
+  ) {
+    out = '\\' + out
+  }
   if (escapeMode === 'minimal') return out
   // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
   // single character: `:::` needs only its first colon neutralized to stop

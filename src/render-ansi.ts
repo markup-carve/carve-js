@@ -202,6 +202,18 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
+    case 'figure_group': {
+      // PART 11 degradation (D8), matching the plain-text shape: the GROUP
+      // caption line first (styled like every caption on this target), a blank
+      // line, then each child in source order - a panel as its caption line
+      // over its host degradation, stray content as usual.
+      let out = ''
+      if (node.caption !== undefined) out += renderCaption(node.caption, ctx)
+      for (const child of node.children) {
+        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      }
+      return out
+    }
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
@@ -379,6 +391,20 @@ function renderFigure(node: Figure, ctx: AnsiContext): string {
 
 function renderCaption(nodes: InlineNode[], ctx: AnsiContext): string {
   return `${style(trimNonNbsp(renderInlines(nodes, ctx)), ITALIC + DIM)}\n\n`
+}
+
+/**
+ * A composite figure's PANEL on this target: caption line first, then the host
+ * degradation (D8) - see the plain-text twin for why the order inverts.
+ */
+function renderPanelFigure(node: Figure, ctx: AnsiContext): string {
+  const target =
+    node.target.type === 'image'
+      ? renderImage(node.target)
+      : node.target.type === 'table'
+        ? trimEndNonNbsp(renderTable(node.target, ctx))
+        : trimEndNonNbsp(renderBlock(node.target, ctx))
+  return `${style(trimNonNbsp(renderInlines(node.caption, ctx)), ITALIC + DIM)}\n${target}\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {

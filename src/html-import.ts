@@ -3,6 +3,7 @@ import type {
   Attrs,
   BlockNode,
   Document,
+  FigureGroup,
   InlineNode,
   List,
   TableCell,
@@ -362,6 +363,12 @@ class Importer {
   }
 
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
+    // Our own composite-figure shape (PART 9 §4c): the group class marks the
+    // wrapper, the panels div holds the children. Own-output round trip only;
+    // a foreign nested figure without the class keeps the unwrap below.
+    if ((this.attr(node, 'class') ?? '').split(/\s+/).includes('carve-figure-group')) {
+      return this.figureGroup(node, path, depth, attrs)
+    }
     const captionNode = node.childNodes?.find((n) => n.tagName === 'figcaption')
     const body = (node.childNodes ?? []).filter((n) => n !== captionNode)
     const targets = this.blocks(body, path, depth + 1)
@@ -514,6 +521,57 @@ class Importer {
         path,
       )
     }
+  }
+
+  /** A copy of `attrs` without one class, `undefined` when nothing remains. */
+  private stripClass(attrs: Attrs | undefined, className: string): Attrs | undefined {
+    if (!attrs?.classes) return attrs
+    const classes = attrs.classes.filter((c) => c !== className)
+    const next: Attrs = { ...attrs }
+    if (classes.length) next.classes = classes
+    else delete next.classes
+    if (next.id === undefined && next.classes === undefined && next.keyValues === undefined) {
+      return undefined
+    }
+    return next
+  }
+
+  /**
+   * Our own `carve-figure-group` output back to a `figure_group` node (PART 9
+   * §4c). The panels div unwraps; a `carve-figure-panel` figure comes back as
+   * the panel it rendered from - a bare `<figure><table/></figure>` wrapper
+   * (the table panel, which carries no figcaption) unwraps to the table so the
+   * table's own caption and attrs stay its own.
+   */
+  private figureGroup(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
+    const captionNode = node.childNodes?.find((n) => n.tagName === 'figcaption')
+    const panelsDiv = node.childNodes?.find(
+      (n) => n.tagName === 'div' && (this.attr(n, 'class') ?? '').split(/\s+/).includes('carve-figure-panels'),
+    )
+    const bodyNodes = panelsDiv
+      ? panelsDiv.childNodes ?? []
+      : (node.childNodes ?? []).filter((n) => n !== captionNode)
+    const children = this.blocks(bodyNodes, path, depth + 1)
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i]!
+      if (child.type !== 'figure' || !child.attrs?.classes?.includes('carve-figure-panel')) continue
+      const stripped = this.stripClass(child.attrs, 'carve-figure-panel')
+      if (stripped) child.attrs = stripped
+      else delete child.attrs
+      // The explicit table-panel wrapper renders with no figcaption; the
+      // generic figure import gave it an empty caption, which is not a shape
+      // the parser produces - unwrap back to the table itself.
+      if (child.target.type === 'table' && child.caption.length === 0 && child.attrs === undefined) {
+        children[i] = child.target
+      }
+    }
+    const group: FigureGroup = { type: 'figure_group', children }
+    if (captionNode) {
+      group.caption = this.inlines(captionNode.childNodes ?? [], `${path}/figcaption[1]`, depth + 1)
+    }
+    const groupAttrs = this.stripClass(attrs, 'carve-figure-group')
+    if (groupAttrs) group.attrs = groupAttrs
+    return [group]
   }
 }
 
