@@ -2,6 +2,7 @@ import { parseFragment, serializeOuter } from 'parse5'
 import type {
   Attrs,
   BlockNode,
+  DefinitionItem,
   Document,
   FigureGroup,
   InlineNode,
@@ -109,7 +110,7 @@ class Importer {
   readonly adapter: HtmlImportAdapter
   readonly diagnostics: HtmlImportDiagnostic[] = []
   /** Where the import built a structure only a serializer loses (§16). */
-  private readonly unspellable: string[] = []
+  private readonly unspellable: Array<{ path: string; message: string }> = []
   private nodes = 0
   private readonly maxDepth: number
   private readonly maxNodes: number
@@ -212,7 +213,15 @@ class Importer {
     return `${parent}/${name}[${index + 1}]`
   }
 
-  private blocks(nodes: P5Node[], parentPath: string, depth: number): BlockNode[] {
+  /**
+   * `paths` overrides the path a node is reported under, index-parallel to
+   * `nodes`. One caller needs it: a `<dl>` collects the children that are
+   * neither a term nor a definition and converts them AFTER the list, and
+   * rebuilding their paths from the filtered array would renumber them - a
+   * `<p>` reported as `/dl[1]/p[3]` on its way out would report its own
+   * attribute losses under `/dl[1]/p[1]`, so one element spoke under two names.
+   */
+  private blocks(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): BlockNode[] {
     const out: BlockNode[] = []
     let inlineBuffer: P5Node[] = []
     const flush = (): void => {
@@ -221,7 +230,7 @@ class Importer {
       if (this.visible(children)) out.push({ type: 'paragraph', children })
     }
     nodes.forEach((node, index) => {
-      const path = this.childPath(parentPath, node, index)
+      const path = paths?.[index] ?? this.childPath(parentPath, node, index)
       if (node.nodeName === '#text' && !(node.value ?? '').trim()) {
         if (inlineBuffer.length) inlineBuffer.push(node)
         return
@@ -249,6 +258,7 @@ class Importer {
     if (tag === 'p') return [{ type: 'paragraph', children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return [this.list(node, path, depth, tag === 'ol', attrs)]
+    if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
     if (tag === 'pre') {
       const code = node.childNodes?.find((n) => n.tagName === 'code')
       const source = code ?? node
@@ -287,6 +297,151 @@ class Importer {
     })
     const start = ordered ? Number(this.attr(node, 'start') ?? '1') : undefined
     return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * `<dl>` -> `definition_list` (PART 9 §4.5).
+   *
+   * Without this branch the tag fell through to the unwrap arm, and `dt`/`dd`
+   * are not block tags, so every term and every definition landed in the SAME
+   * inline buffer: `<dl><dt>Term<dd>Definition</dl>` imported as the single
+   * paragraph `TermDefinition`. Not a degraded list - no list at all, and not
+   * even a space between the two texts.
+   *
+   * A run of `<dt>` opens an entry and the `<dd>` run after it belongs to that
+   * entry, so `<dt>a<dt>b<dd>c` is one entry with two terms, exactly the shape
+   * `:: a` / `:: b` / `:  c` parses to. The HTML5 `<div>` wrapper (allowed
+   * around a name-value group since HTML 5.2, and what several editors emit)
+   * carries no meaning of its own and is walked through transparently.
+   *
+   * Anything else directly inside the `<dl>` has no slot in the model. It is
+   * kept, as blocks AFTER the list rather than dropped, and reported: moving it
+   * changes the document order, which is a smaller loss than deleting it.
+   *
+   * Three shapes are valid HTML that Carve SOURCE cannot spell, so they are
+   * built into the AST and reported by whoever writes (§16): a `<dd>` with no
+   * `<dt>` before it, an EMPTY `<dt>` and an EMPTY `<dd>`. Each one writes a
+   * line the parser reads as something else, and the tests assert what it
+   * reads as rather than only that a diagnostic appeared.
+   *
+   * `block()` has already counted this node against `maxNodes`, so this walk
+   * counts only the elements it visits itself.
+   */
+  private definitionList(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
+    const items: DefinitionItem[] = []
+    const trailing: P5Node[] = []
+    const trailingPaths: string[] = []
+    let current: DefinitionItem | undefined
+    const openEntry = (): DefinitionItem => {
+      const entry: DefinitionItem = { terms: [], definitions: [] }
+      items.push(entry)
+      return entry
+    }
+    const visit = (children: P5Node[], parentPath: string, level: number): void => {
+      children.forEach((child, index) => {
+        const childPath = this.childPath(parentPath, child, index)
+        if (child.nodeName === '#text' && !(child.value ?? '').trim()) return
+        if (child.tagName === 'div') {
+          this.enter(level)
+          this.entryAttributes(child, childPath, 'div')
+          // The wrapper IS the group boundary (HTML 5.2), so an entry never
+          // spans two of them: without the reset a `<dd>` opening the second
+          // wrapper attached to the first wrapper's term, which both merges two
+          // groups and suppresses the no-term diagnostic it is owed.
+          current = undefined
+          visit(child.childNodes ?? [], childPath, level + 1)
+          current = undefined
+          return
+        }
+        if (child.tagName === 'dt') {
+          this.enter(level)
+          // A term after a definition starts the next entry; a term after a
+          // term joins the one being opened.
+          if (current === undefined || current.definitions.length > 0) current = openEntry()
+          this.entryAttributes(child, childPath, 'dt')
+          const term = this.inlines(child.childNodes ?? [], childPath, level + 1)
+          if (!this.visible(term)) {
+            this.unspellable.push({
+              path: childPath,
+              message: 'An empty <dt> has no Carve spelling; the bare `::` line re-reads as a paragraph',
+            })
+          }
+          current.terms.push(term)
+          return
+        }
+        if (child.tagName === 'dd') {
+          this.enter(level)
+          // A description with no term before it: kept in the AST, where it is
+          // a description of nothing, and reported when a WRITER has to spell
+          // it, because `:  text` alone re-reads as a paragraph.
+          if (current === undefined) {
+            current = openEntry()
+            this.unspellable.push({
+              path: childPath,
+              message: 'A <dd> with no <dt> before it has no Carve spelling; the definition line re-reads as a paragraph',
+            })
+          }
+          this.entryAttributes(child, childPath, 'dd')
+          const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
+          if (this.writesNothing(definition)) {
+            this.unspellable.push({
+              path: childPath,
+              message: 'A <dd> that writes nothing has no Carve spelling; the bare `:` line is read as more of the term above it',
+            })
+          }
+          current.definitions.push(definition)
+          return
+        }
+        this.add('element-unwrapped', `Moved <${child.tagName ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath)
+        trailing.push(child)
+        trailingPaths.push(childPath)
+      })
+    }
+    visit(node.childNodes ?? [], path, depth + 1)
+    const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
+    return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
+  }
+
+  /**
+   * A `<dt>`, `<dd>` or group `<div>` carries attributes and the model has
+   * nowhere to put them: PART 12 gives `definition_list` an `attrs` slot and
+   * its ENTRIES none, so an `id` an anchor points at, a class a stylesheet
+   * selects on and a `data-` pair an editor round-trips all end here. An
+   * ordinary `<div>` keeps its attributes by becoming a `div` node; the wrapper
+   * inside a `<dl>` cannot, because it is walked through.
+   *
+   * `attrs()` is still called for its diagnostics: it is where an event-handler
+   * attribute is reported, and skipping the call made these three the only
+   * places in the importer where active markup was dropped in silence.
+   */
+  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div'): void {
+    const attrs = this.attrs(node, path)
+    if (attrs === undefined) return
+    const names = [
+      ...(attrs.id ? ['id'] : []),
+      ...(attrs.classes ? ['class'] : []),
+      ...Object.keys(attrs.keyValues ?? {}),
+    ]
+    const noun = tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'
+    this.add('attribute-dropped', `Dropped ${names.join(', ')} on <${tag}>: a definition ${noun} has no attribute slot`, 'warning', path)
+  }
+
+  /**
+   * Whether a description's blocks reach the written source at all.
+   *
+   * An empty ARRAY is the obvious case, and it is not the only one: the two
+   * further shapes measured against the writer are a paragraph with no visible
+   * text (`<dd><p></p></dd>`) and a list with no items (`<dd><ul></ul></dd>`).
+   * Both write a bare `:` line that the term above absorbs. Everything else
+   * writes something the reparse keeps - an empty `<li>` comes back as `:  - +`
+   * and an empty `<blockquote>` as `:  >`, which are descriptions, not losses.
+   */
+  private writesNothing(blocks: BlockNode[]): boolean {
+    return blocks.every(
+      (block) =>
+        (block.type === 'paragraph' && !this.visible(block.children)) ||
+        (block.type === 'list' && block.items.length === 0),
+    )
   }
 
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
@@ -401,7 +556,12 @@ class Importer {
        * the table itself when it already carries a caption, and no wrapper
        * exists to lose in that case.
        */
-      if (target.type === 'table') this.unspellable.push(path)
+      if (target.type === 'table') {
+        this.unspellable.push({
+          path,
+          message: 'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
+        })
+      }
       return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], `${path}/figcaption[1]`, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)
@@ -508,18 +668,14 @@ class Importer {
    * A canonical Carve writer has no spelling for a figure wrapping a table, so
    * it emits the table and a `^ ` caption line, and that re-reads as the
    * table's own caption - `<caption>` inside the table rather than a
-   * `<figcaption>` beside it. The rendering changes, so the severity is
-   * `warning`, and the limit is the importer's own: these diagnostics are not
-   * a second budget.
+   * `<figcaption>` beside it. A description with no term before it is the same
+   * kind of loss: `:  text` on its own is a paragraph, not a definition list.
+   * The rendering changes in both cases, so the severity is `warning`, and the
+   * limit is the importer's own: these diagnostics are not a second budget.
    */
   reportSerializationLosses(): void {
-    for (const path of this.unspellable) {
-      this.add(
-        'structure-unspellable',
-        'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
-        'warning',
-        path,
-      )
+    for (const { path, message } of this.unspellable) {
+      this.add('structure-unspellable', message, 'warning', path)
     }
   }
 

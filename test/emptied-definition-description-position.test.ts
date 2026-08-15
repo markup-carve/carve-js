@@ -144,6 +144,32 @@ describe('the recorded extent does not reach the writer', () => {
     )
   })
 
+  it('and not when the tree was BUILT rather than parsed, where the term spans are the field compared', () => {
+    /*
+     * The row above cannot fail for `termSpans`, and neither can any fixture
+     * that starts from `parse`. A parsed document takes the fast path in
+     * `renderCarve`: the minimal form re-parses to the tree it was given, so
+     * the minimal form wins before the key-name comparison runs at all.
+     *
+     * Only a tree built WITHOUT positions - what the HTML importer and
+     * `--from-json` hand the writer - reaches that comparison, and there
+     * `termSpans` was the third positions field skipped by name and missed.
+     * Two entries are the minimum: the escape has to shift an offset that a
+     * LATER term still records, so a one-entry list passes either way.
+     */
+    const list = {
+      type: 'definition_list' as const,
+      items: [
+        { terms: [[{ type: 'text' as const, value: 'A' }]], definitions: [[{ type: 'paragraph' as const, children: [{ type: 'text' as const, value: 'A markup language.' }] }]] },
+        { terms: [[{ type: 'text' as const, value: 'B' }]], definitions: [[{ type: 'paragraph' as const, children: [{ type: 'text' as const, value: 'Its closest relative.' }] }]] },
+      ],
+    }
+
+    expect(renderCarve({ type: 'document', children: [list] })).toBe(
+      ':: A\n:  A markup language.\n:: B\n:  Its closest relative.\n',
+    )
+  })
+
   it('and still does not, when the description is the emptied kind', () => {
     // The emptied description is written back with its definition on it
     // (markup-carve/carve#805), so this is the path that reads the new field

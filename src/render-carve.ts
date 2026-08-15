@@ -398,9 +398,19 @@ function stableJson(value: unknown): string {
  * document carrying a definition list escalated to conservative escaping and two
  * corpus round-trips came back with escapes the formatter would not have written.
  *
- * The rule, since this is now twice: a NAME-based skip is the whole hazard here.
- * Any field holding offsets belongs on this list whatever it is called, and the
- * test that catches a missing one is the corpus round-trip, not this comment.
+ * `termSpans` is the THIRD, sitting on the same entry as `definitionSpans` and
+ * missed when that one was added. It hid behind the fast path above this
+ * comparison: a document that was PARSED re-parses to the tree it came from, so
+ * the minimal form wins before the comparison runs, and only a tree BUILT
+ * without positions - what the HTML importer and `--from-json` hand the writer -
+ * reaches it. Such a document escalated whenever an escape candidate stood
+ * anywhere before its last term, which is why `<dl><dt>A<dd>x language.<dt>B`
+ * came out of the importer as `x language\.`.
+ *
+ * The rule, since this is now three times: a NAME-based skip is the whole hazard
+ * here. Any field holding offsets belongs on this list whatever it is called,
+ * and the test that catches a missing one is the corpus round-trip, not this
+ * comment.
  */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
@@ -411,6 +421,7 @@ function canonical(value: unknown): unknown {
         key === 'pos' ||
         key === 'footnoteDefPos' ||
         key === 'definitionSpans' ||
+        key === 'termSpans' ||
         key === 'srcByteLength'
       )
         continue
