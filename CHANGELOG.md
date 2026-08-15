@@ -178,6 +178,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown target writes no marker line ending in a space.** A blank line
+  inside a block quote came out as `>` followed by a space where carve-php and
+  carve-rs wrote a bare `>`, which is what a cross-engine comparison of all
+  render targets surfaced (markup-carve/carve#1147). Seven further sites spelled
+  the same defect and that comparison did not reach them: an emptied list item
+  (`-`, `1.`, `- [ ]`), an emptied definition description (`:`), a heading with
+  no text (`##`), a footnote definition with an empty body (`[^a]:`) and an
+  abbreviation definition with an empty expansion (`*[X]:`). Trailing whitespace
+  is what editors strip on save and what `git apply --whitespace=fix` and CI
+  whitespace checks rewrite, so output carrying it is output ordinary tooling
+  changes behind the renderer - the reason PART 11 section 9 already gives on
+  this target for spelling a hard break as a backslash. Both spellings parse to
+  the same document, so no rendered output moves: over the conformance corpus
+  the change moves 21 documents' bytes and no document's HTML under commonmark
+  0.31.2. Verbatim payload is untouched, deliberately - a fenced code body line
+  of `abc` plus a space keeps its bytes, including inside a quote, because a
+  code body is the block's payload rather than a content line.
 - **`fmt` writes a code fence with no space before its info string.** The
   canonical writer emitted the Djot spelling, so `carve fmt` rewrote the
   authored ` ```js ` to ` ``` js ` and `carve migrate --from html` produced the
