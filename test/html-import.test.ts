@@ -1148,6 +1148,27 @@ describe('table row groups on import', () => {
     })
   }
 
+  it('keeps a header-only first body as a body, since a second one follows it', () => {
+    // Absorbing it into the head left ONE ordinary body, which the derivation
+    // reproduces exactly - so the two bodies went silently, the opposite of
+    // what the field is for. The absorption is for a single body group.
+    expect(groupsOf('<table><tbody><tr><th>h</th></tr></tbody><tbody><tr><td>b</td></tr></tbody></table>')).toEqual({
+      headRows: 0,
+      bodies: [{ headRows: 1, bodyRows: 0 }, { headRows: 0, bodyRows: 1 }],
+      footRows: 0,
+    })
+  })
+
+  it('counts row-head COLUMNS, which spans make different from cells', () => {
+    // `<th colspan="2">` is one element and two columns; a `<th rowspan="2">`
+    // leaves the row below it starting with a data ELEMENT while a header still
+    // occupies the column. Counting elements got both wrong.
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th><th>c</th></tr></thead><tbody><tr><th colspan="2">r</th><td>1</td></tr><tr><th colspan="2">s</th><td>2</td></tr></tbody></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 2 }], footRows: 0 })
+    expect(groupsOf('<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><th rowspan="2">r</th><td>1</td></tr><tr><td>2</td></tr></tbody></table>'))
+      .toEqual({ headRows: 1, bodies: [{ headRows: 0, bodyRows: 2, rowHeadColumns: 1 }], footRows: 0 })
+  })
+
   it('partitions the rows it was built from, in every shape that emits one', () => {
     // PART 12 section 15's MUST, asserted where it CAN fail: over the produced
     // field against the produced rows. The producer itself does not check it -

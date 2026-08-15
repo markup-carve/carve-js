@@ -877,7 +877,7 @@ class Importer {
       }),
     )
     const rows = this.spanGrid(built, path, depth)
-    const rowGroups = this.rowGroups(tr, group, leadingHeaderRows, path)
+    const rowGroups = this.rowGroups(tr, rows, group, leadingHeaderRows, path)
     const caption = captionNode
       ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
       : undefined
@@ -908,6 +908,7 @@ class Importer {
    */
   private rowGroups(
     tr: P5Node[],
+    rows: TableRow[],
     group: Map<P5Node, P5Node>,
     leadingHeaderRows: number,
     path: string,
@@ -940,15 +941,18 @@ class Importer {
     let index = 0
     while (index < middle.length) {
       const section = group.get(middle[index]!)
-      const rows: P5Node[] = []
-      while (index < middle.length && group.get(middle[index]!) === section) rows.push(middle[index++]!)
+      const groupRows: P5Node[] = []
+      while (index < middle.length && group.get(middle[index]!) === section) groupRows.push(middle[index++]!)
       let groupHead = 0
-      while (groupHead < rows.length && isHeaderRow(rows[groupHead]!)) groupHead += 1
+      while (groupHead < groupRows.length && isHeaderRow(groupRows[groupHead]!)) groupHead += 1
       // A group whose rows are ALL header rows is an intermediate header with
       // nothing under it, which is what the counts say and not something to
       // reinterpret.
-      const rowHeadColumns = this.rowHeadColumns(rows.slice(groupHead))
-      bodies.push({ headRows: groupHead, bodyRows: rows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}) })
+      const first = tr.indexOf(groupRows[groupHead] ?? groupRows[0]!)
+      const rowHeadColumns = groupHead < groupRows.length
+        ? this.rowHeadColumns(rows.slice(first, first + groupRows.length - groupHead), rows, first)
+        : 0
+      bodies.push({ headRows: groupHead, bodyRows: groupRows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}) })
     }
 
     // No `<thead>` at all: the leading run of header rows is what every renderer
@@ -958,7 +962,11 @@ class Importer {
     // and no head, which is a different statement about the same table and puts
     // the field on nearly every document. That is exactly what (b) rejects.
     let headRows2 = headRows
-    if (headRows2 === 0 && bodies.length > 0 && leadingHeaderRows > 0) {
+    // ONE body only. With a second one, the header-only first body is a
+    // BOUNDARY the field exists to record, and absorbing it away left a single
+    // ordinary body that the derivation reproduces - so the two bodies went
+    // silently, which is the opposite of the point.
+    if (headRows2 === 0 && bodies.length === 1 && leadingHeaderRows > 0) {
       const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
       headRows2 = absorbed
       bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
@@ -980,18 +988,44 @@ class Importer {
     return { headRows: headRows2, bodies, footRows }
   }
 
-  /** Leading columns that are header cells in EVERY row of the group. */
-  private rowHeadColumns(rows: P5Node[]): number {
-    if (rows.length === 0) return 0
-    const leading = (row: P5Node): number => {
-      const cells = (row.childNodes ?? []).filter((n) => n.tagName === 'td' || n.tagName === 'th')
+  /**
+   * Leading COLUMNS that are header cells in every row of the group.
+   *
+   * Counted over the expanded grid rather than over the source cells, because
+   * columns and cells are not the same thing: `<th colspan="2">` is one element
+   * and two columns, and a `<th rowspan="2">` leaves the row below it starting
+   * with a data ELEMENT while a header still occupies the column. Both made the
+   * count wrong in a table that carries them.
+   *
+   * A continuation resolves the way the renderer resolves it: `<` to the
+   * nearest cell to its left that is not one, `^` to the nearest row above with
+   * a non-continuation at the same index.
+   */
+  private rowHeadColumns(groupRows: TableRow[], allRows: TableRow[], firstIndex: number): number {
+    if (groupRows.length === 0) return 0
+    const headerAt = (r: number, c: number): boolean => {
+      const cell = allRows[r]?.cells[c]
+      if (cell === undefined) return false
+      if (cell.span === 'colspan') {
+        let left = c - 1
+        while (left >= 0 && allRows[r]!.cells[left]?.span !== undefined) left -= 1
+        return left >= 0 ? headerAt(r, left) : false
+      }
+      if (cell.span === 'rowspan') {
+        let up = r - 1
+        while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
+        return up >= 0 ? headerAt(up, c) : false
+      }
+      return cell.header
+    }
+    const leading = (row: TableRow, r: number): number => {
       let count = 0
-      while (count < cells.length && cells[count]!.tagName === 'th') count += 1
+      while (count < row.cells.length && headerAt(r, count)) count += 1
       // An all-header row would say every column is a row head, which is what
       // an intermediate HEADER row is, not a row-head column.
-      return count === cells.length ? 0 : count
+      return count === row.cells.length ? 0 : count
     }
-    return Math.min(...rows.map(leading))
+    return Math.min(...groupRows.map((row, offset) => leading(row, firstIndex + offset)))
   }
 
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
