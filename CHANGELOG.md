@@ -187,6 +187,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`LIB_VERSION` reports the version that is running.** On 0.1.3 the exported
+  constant read `0.1.0`, so the `carve fmt --stamp` provenance stamp and every
+  embedder reading the export named a release other than the installed one. The
+  constant is hand-maintained and its only guard was a comment asking for a
+  release to keep it in step with `package.json`, which no CI step could check;
+  a test now pins it to `package.json`, so a release bump cannot miss it.
 - **The Markdown target writes no marker line ending in a space.** A blank line
   inside a block quote came out as `>` followed by a space where carve-php and
   carve-rs wrote a bare `>`, which is what a cross-engine comparison of all
