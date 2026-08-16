@@ -488,6 +488,8 @@ export interface RawBlock extends BaseNode {
 export interface Comment extends BaseNode {
   type: 'comment'
   block: boolean
+  /** Present only for the explicitly closed `{% … %}` inline form. */
+  delimited?: boolean
   content: string
 }
 

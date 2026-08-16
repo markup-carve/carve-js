@@ -7452,6 +7452,16 @@ function buildBracketMap(s: string): Record<number, number> {
       j = verbatimSpanEnd(s, j).end - 1
       continue
     }
+    // A delimited comment is opaque to inline structure: brackets in its
+    // discarded content cannot close a link label around it. An unclosed `{%`
+    // is literal, so only skip when the first `%}` really exists.
+    if (ch === '{' && s[j + 1] === '%') {
+      const close = s.indexOf('%}', j + 2)
+      if (close !== -1) {
+        j = close + 1
+        continue
+      }
+    }
     // Likewise an editorial comment: its content is LITERAL (PART 9
     // editorial_comment), so a `]` inside is text and no escape can spell it
     // otherwise. Without this, `[{#a]b#}](u)` ended the label at the comment's
@@ -8068,6 +8078,29 @@ function scanInlineInner(
       )
       i = end
       continue
+    }
+
+    // Explicitly delimited inline comment (PART 9 §21a). The first `%}` wins;
+    // an opener in the content is ordinary text, and an opener with no closer
+    // stays literal. Unlike `%%`, surrounding whitespace is ordinary visible
+    // text and scanning resumes after the closer.
+    if (c === '{' && text[i + 1] === '%') {
+      const close = text.indexOf('%}', i + 2)
+      if (close !== -1) {
+        flush()
+        const content = text.slice(i + 2, close).replace(/^ /, '').replace(/ $/, '')
+        out.push(
+          withPos(
+            { type: 'comment', block: false, delimited: true, content } as Comment,
+            source,
+            text,
+            i,
+            close + 2,
+          ),
+        )
+        i = close + 2
+        continue
+      }
     }
 
     // Inline verbatim (code span). The opening run is the MAXIMAL run of
@@ -8852,6 +8885,15 @@ function findEmphasisClose(text: string, from: number, delim: string): number {
       if (!span.closed) return -1
       j = span.end - 1
       continue
+    }
+    // Comment contents are transparent to the surrounding emphasis structure.
+    // Only a closed form is a comment; an unterminated opener remains literal.
+    if (ch === '{' && text[j + 1] === '%') {
+      const close = text.indexOf('%}', j + 2)
+      if (close !== -1) {
+        j = close + 1
+        continue
+      }
     }
     if (ch === delim) {
       // Closer must not be preceded by whitespace

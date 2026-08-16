@@ -740,7 +740,11 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return `[${node.label}]: ${node.href}${title}${attrs === '' ? '' : ` ${attrs}`}`
     }
     case 'comment':
-      return node.block ? renderBlockComment(node.content) : `%% ${node.content}`
+      return node.block
+        ? renderBlockComment(node.content)
+        : node.delimited
+          ? `{% ${node.content} %}`
+          : `%% ${node.content}`
     default: {
       const t: never = node
       throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
@@ -1546,6 +1550,7 @@ function renderInline(
     case 'citation_group':
       return node.raw
     case 'comment':
+      if (node.delimited) return `{% ${node.content} %}`
       // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
       // joins the opener rather than being separated from it by a space: a
       // comment whose content is `%` is written ` %%%`, not ` %% %`, which
