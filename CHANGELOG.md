@@ -203,6 +203,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Every HTML import adapter, `generic` included, reads the DPUB-ARIA
+  footnote roles** (markup-carve/carve-js#1105). An anchor with
+  `role="doc-noteref"` and the `role="doc-endnotes"` section feed the same
+  footnote pass the word-processor adapters run, so Pandoc 2.11+ HTML - and
+  this engine's own rendered footnotes - import as real `[^N]` references and
+  definitions without naming an adapter. This is a deliberate `generic`-mode
+  behavior change, matching carve-php's core policy; the roles are AUTHORED
+  semantics where the adapters' anchor-pair heuristic is an inference, so the
+  heuristic (and the vendor class names) stays adapter-gated. A role-less
+  document imports exactly as before, and an unmarked anchor addressing a
+  note stays the content link the author wrote.
+
 - **Every table cell pads its content in the canonical form** (PART 11 §6e). A
   cell carrying a prefix - the kind marker `=`, an alignment marker, an
   attribute block - was written with its content glued to it: `|=Heading|`,

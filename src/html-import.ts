@@ -218,12 +218,20 @@ class Importer {
 
   import(html: string): Document {
     const fragment = parseFragment(html, { sourceCodeLocationInfo: true }) as unknown as P5Node
-    // Rewrite an editor's footnote-shaped HTML before the core policy reads
-    // the tree, exactly as the adapter contract allows ("Adapters may
-    // normalize editor-specific markup before the core policy").
-    const footnoteDefs = FOOTNOTE_SHAPED_ADAPTERS.has(this.adapter)
-      ? this.adapterFootnotes(fragment)
-      : undefined
+    // Rewrite footnote-shaped HTML before the core policy reads the tree.
+    // Under the word-processor adapters the full anchor-pair heuristic runs
+    // ("Adapters may normalize editor-specific markup before the core
+    // policy"); under EVERY adapter, `generic` included, the pass reads the
+    // DPUB-ARIA roles a producer authored - `role="doc-noteref"` on the
+    // reference, `role="doc-endnotes"` on the section - which is what
+    // carve-php's core policy reads, and what makes Pandoc 2.11+ HTML import
+    // footnotes without naming an adapter. Roles are authored semantics, an
+    // EXPLICIT signal; the anchor-pair heuristic stays the adapter-gated
+    // fallback for the role-less exports.
+    const footnoteDefs = this.adapterFootnotes(
+      fragment,
+      FOOTNOTE_SHAPED_ADAPTERS.has(this.adapter),
+    )
     const children = this.blocks(fragment.childNodes ?? [], '', 0)
     const doc: Document = { type: 'document', children }
     if (footnoteDefs && Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
@@ -1704,15 +1712,22 @@ class Importer {
    * parsed out of the ids: an id is generated navigation an engine
    * regenerates, and `_ftn1` or `sdfootnote1sym` is not a label any Carve
    * source could carry anyway.
+   *
+   * `heuristic` is the word-processor adapters' license: with it the mutual
+   * anchor pair alone binds. Without it (`generic` and the editor adapters)
+   * only an anchor the producer MARKED with `role="doc-noteref"` opens a
+   * pair - authored DPUB-ARIA semantics, which is what carve-php's core
+   * policy reads under every adapter - so a role-less document imports
+   * exactly as before.
    */
-  private adapterFootnotes(root: P5Node): Record<string, BlockNode[]> | undefined {
+  private adapterFootnotes(root: P5Node, heuristic: boolean): Record<string, BlockNode[]> | undefined {
     const elements = this.footnoteDocumentElements(root)
     const order = new Map<P5Node, number>()
     elements.forEach((element, index) => order.set(element, index))
 
     const targets = this.footnoteFragmentTargets(elements)
     const candidates = this.resolveFootnotePairDirection(
-      this.footnotePairCandidates(elements, targets),
+      this.footnotePairCandidates(elements, targets, heuristic),
       order,
     )
     if (candidates.length === 0) return undefined
@@ -1720,6 +1735,7 @@ class Importer {
     const definitions = this.attachRemainingFootnoteReferences(
       elements,
       this.groupFootnoteDefinitions(candidates, order),
+      heuristic,
     )
 
     const defs: Record<string, BlockNode[]> = {}
@@ -1760,18 +1776,25 @@ class Importer {
     return defs
   }
 
-  /** Every element in the subtree, in document order. */
+  /**
+   * Every element in the subtree, in document order.
+   *
+   * ITERATIVE, like every walk in this pass: it runs on EVERY import now
+   * (the role reading is not adapter-gated), so a document nested past the
+   * JS stack has to reach the depth counter's typed refusal rather than a
+   * `RangeError` here - the same §25 rule the renderers follow.
+   */
   private footnoteDocumentElements(root: P5Node): P5Node[] {
     const elements: P5Node[] = []
-    const walk = (node: P5Node): void => {
-      for (const child of node.childNodes ?? []) {
-        if (child.tagName !== undefined) {
-          elements.push(child)
-          walk(child)
-        }
+    const stack: P5Node[] = [root]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (node !== root) elements.push(node)
+      const children = node.childNodes ?? []
+      for (let i = children.length - 1; i >= 0; i--) {
+        if (children[i]!.tagName !== undefined) stack.push(children[i]!)
       }
     }
-    walk(root)
     return elements
   }
 
@@ -1797,10 +1820,17 @@ class Importer {
 
   /**
    * Every anchor that could be a footnote reference, with the block it would
-   * bind to. A candidate needs the mutual back-link or an explicit reference
-   * marker; an anchor inside its own would-be note is never one.
+   * bind to. Under the heuristic a candidate needs the mutual back-link or an
+   * explicit reference marker; outside it, ONLY the authored
+   * `role="doc-noteref"` opens one - the vendor classes belong to the
+   * heuristic, since a class is a styling hook where the role is a statement.
+   * An anchor inside its own would-be note is never a candidate.
    */
-  private footnotePairCandidates(elements: P5Node[], targets: Map<string, P5Node>): FootnoteCandidate[] {
+  private footnotePairCandidates(
+    elements: P5Node[],
+    targets: Map<string, P5Node>,
+    heuristic: boolean,
+  ): FootnoteCandidate[] {
     const anchors: Array<{ anchor: P5Node; fragment: string }> = []
     const used = new Set<string>()
     for (const element of elements) {
@@ -1815,11 +1845,15 @@ class Importer {
 
     const candidates: FootnoteCandidate[] = []
     for (const { anchor, fragment } of anchors) {
+      if (!heuristic && this.attr(anchor, 'role') !== 'doc-noteref') continue
       const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, used)
       if (block === null || this.p5Contains(block, anchor)) continue
 
       const identity = this.footnoteAnchorIdentity(anchor)
       const mutual = identity !== '' && this.footnoteBlockLinksTo(block, identity)
+      // A role-carrying anchor is marked, so outside the heuristic the role
+      // is both the filter above and the confirmation here: the candidate
+      // stands with or without a spelled back-link.
       if (!mutual && !this.isFootnoteReferenceMarked(anchor)) continue
 
       candidates.push({ ref: anchor, block, fragment, mutual })
@@ -1864,9 +1898,14 @@ class Importer {
 
   /** How many referenced fragment targets this element holds, itself included. */
   private countFootnoteTargets(node: P5Node, used: Set<string>): number {
-    let count = this.isFootnoteFragmentTarget(node, used) ? 1 : 0
-    for (const child of node.childNodes ?? []) {
-      if (child.tagName !== undefined) count += this.countFootnoteTargets(child, used)
+    let count = 0
+    const stack: P5Node[] = [node]
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      if (this.isFootnoteFragmentTarget(current, used)) count++
+      for (const child of current.childNodes ?? []) {
+        if (child.tagName !== undefined) stack.push(child)
+      }
     }
     return count
   }
@@ -1988,6 +2027,7 @@ class Importer {
   private attachRemainingFootnoteReferences(
     elements: P5Node[],
     definitions: FootnoteDefinitionGroup[],
+    heuristic: boolean,
   ): FootnoteDefinitionGroup[] {
     const byFragment = new Map<string, FootnoteDefinitionGroup>()
     for (const definition of definitions) {
@@ -1998,14 +2038,21 @@ class Importer {
     // whether it is inside any note walked the tree once per anchor and per
     // note, which is quadratic on a document that is mostly notes.
     const inside = new Set<P5Node>()
-    const markInside = (node: P5Node): void => {
+    const stack: P5Node[] = definitions.map((definition) => definition.block)
+    while (stack.length > 0) {
+      const node = stack.pop()!
       inside.add(node)
-      for (const child of node.childNodes ?? []) markInside(child)
+      for (const child of node.childNodes ?? []) stack.push(child)
     }
-    for (const definition of definitions) markInside(definition.block)
 
     for (const element of elements) {
       if (element.tagName !== 'a') continue
+      // Outside the heuristic an unmarked anchor addressing a note is a LINK,
+      // not a reference: the role is the whole signal, and a content link to
+      // `#fn1` in a role-marked document keeps the author's shape. (The
+      // marked candidates already sit in their groups; this loop exists for
+      // the unmarked second reference the heuristic binds.)
+      if (!heuristic && this.attr(element, 'role') !== 'doc-noteref') continue
       const href = this.attr(element, 'href') ?? ''
       if (!href.startsWith('#')) continue
       const definition = byFragment.get(href.slice(1))
@@ -2030,13 +2077,16 @@ class Importer {
 
   private footnoteAnchorsUnder(node: P5Node): P5Node[] {
     const anchors: P5Node[] = []
-    const walk = (current: P5Node): void => {
-      for (const child of current.childNodes ?? []) {
+    const stack: P5Node[] = [node]
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      const children = current.childNodes ?? []
+      for (let i = children.length - 1; i >= 0; i--) {
+        const child = children[i]!
         if (child.tagName === 'a') anchors.push(child)
-        if (child.tagName !== undefined) walk(child)
+        if (child.tagName !== undefined) stack.push(child)
       }
     }
-    walk(node)
     return anchors
   }
 
