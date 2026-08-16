@@ -897,6 +897,33 @@ function definitionInGap(
  */
 const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image', 'figure'])
 
+/** A written block-attributes line: `{` … `}` alone on its line (PART 2). */
+const A_BLOCK_ATTRIBUTES_LINE = /^\{.*\}$/
+
+/**
+ * Does the written form of a block OPEN with a block-attributes line?
+ *
+ * The three kinds above fold into an open paragraph one column in because their
+ * canonical source is a bare inline run. That stops being true the moment the
+ * writer has to put the block's attributes on a line of their own ahead of it:
+ * `block_attributes` is one of PART 9 §10's INVISIBLE CONSTRUCTS, so it
+ * INTERRUPTS the open paragraph, and the block below it opens its own.
+ *
+ * So this is not a preference between two spellings. Where the attribute line is
+ * written, the fold this rule exists to prevent cannot happen, and the `+` costs
+ * a construct the document did not have. `- a` / `{.x}` / `para` and
+ * `- a` / `  {.x}` / `  para` render the same document in carve-js, carve-php
+ * and carve-rs alike - and the indented one is what the corpus source and
+ * carve-rs write, so writing the marker was this engine disagreeing with the
+ * other two (markup-carve/carve#1275).
+ *
+ * A paragraph whose own text is `{…}` does not reach this: the writer escapes
+ * that leading brace (`\{.c\}`), precisely so it cannot come back as attributes.
+ */
+function opensWithAnAttributeLine(rendered: string): boolean {
+  return A_BLOCK_ATTRIBUTES_LINE.test(rendered.split('\n', 1)[0])
+}
+
 function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
   if (left.type === 'list' && right.type === 'list') {
@@ -1001,7 +1028,10 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       if (
         previousAtMarkerColumn ||
         (next !== undefined && adjacentBlocksMerge(b, next)) ||
-        (!separated && previous?.type === 'paragraph' && FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type))
+        (!separated &&
+          previous?.type === 'paragraph' &&
+          FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
+          !opensWithAnAttributeLine(rendered))
       ) {
         parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
         previousAtMarkerColumn = true
