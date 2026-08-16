@@ -227,10 +227,9 @@ describe('a word processor footnote imports as a footnote', () => {
       '</li></ol></section>'
     const rendered = carveToHtml(importAs(html))
     expect(rendered).toContain('<p>First para.</p>')
-    // `<li><p>one</p></li>`, not php's `<li>one</li>`: this importer reads
-    // every HTML list as loose, which is a pre-existing list-import
-    // difference, not a footnote one.
-    expect(rendered).toContain('<li><p>one</p></li>')
+    // `<li>one</li>`, matching carve-php: a bare-text `<li>` imports as a
+    // TIGHT item (the ruled tight-li import, corpus-convert 27/28).
+    expect(rendered).toContain('<li>one</li>')
     expect(rendered).toContain('<p>Last para.')
     expect(rendered.split('<li id="fn1">').length - 1).toBe(1)
     expect(rendered.slice(rendered.indexOf('<li id="fn1">'))).toContain('</ul>')

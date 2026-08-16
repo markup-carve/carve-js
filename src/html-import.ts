@@ -402,7 +402,8 @@ class Importer {
   }
 
   private list(node: P5Node, path: string, depth: number, ordered: boolean, attrs?: Attrs): List {
-    const items = (node.childNodes ?? []).filter((n) => n.tagName === 'li').map((li, i) => {
+    const listItems = (node.childNodes ?? []).filter((n) => n.tagName === 'li')
+    const items = listItems.map((li, i) => {
       const liPath = `${path}/li[${i + 1}]`
       const input = li.childNodes?.find((n) => n.tagName === 'input' && this.attr(n, 'type') === 'checkbox')
       const liAttrs = this.attrs(li, liPath)
@@ -413,8 +414,24 @@ class Importer {
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
     })
+    // Tightness is decided by the ITEM SHAPE (ruled; corpus-convert 27/28): a
+    // bare-text `<li>one</li>` is a tight item, a block-wrapped
+    // `<li><p>one</p></li>` a loose one. Tight/loose is a property of the
+    // LIST, so a mixed list has to pick a side, and it normalizes TIGHT: one
+    // bare item is the author's word that the list is tight, while `<p>` is
+    // what serializers wrap EVERYTHING in. Every list imported loose before
+    // this, whatever the source spelled.
+    const tight = listItems.some((li) =>
+      (li.childNodes ?? []).some(
+        (child) =>
+          (child.tagName !== undefined &&
+            !BLOCK.has(child.tagName) &&
+            !(child.tagName === 'input' && this.attr(child, 'type') === 'checkbox')) ||
+          (child.nodeName === '#text' && (child.value ?? '').trim() !== ''),
+      ),
+    )
     const start = this.listStart(node, path, ordered)
-    return { type: 'list', ordered, tight: false, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
+    return { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
   }
 
   /**
