@@ -2169,8 +2169,29 @@ export function stripContainerPrefixes(raw: string, afterTerm = false): string {
  */
 // The list marker the definition pre-pass tracks content columns with. Applied
 // REPEATEDLY along a line, so `- - a` contributes both of its columns.
+//
+// THE BARE-DOT BRANCH IS PART OF THE MARKER (carve-js#1120). `RE_ORDERED` spells
+// the ordered value `[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.)`, the last
+// alternative being the Carve-only bare dot (carve#315) - a value-less `. ` that
+// counts from 1. `RE_ITEM_ATTR` carries it too. This pattern and `afterMarker`
+// below are the two spellings of the same marker that did NOT, so a `. x` line
+// opened an item the block lexer could see and this pass could not.
+//
+// What that costs is not a column: it is the DOCUMENT-LEVEL test. PART 12 §7 is
+// normative that `*[TERM]: expansion` "is an `abbreviation_definition` only as a
+// direct child of the document. Written inside a block quote, a list item or a
+// div, the line is not a definition at all: it is ordinary paragraph text, it
+// defines nothing, and it is preserved as the text the author typed." With the
+// item invisible here, `listCols` stayed empty under a bare-dot item, the
+// abbreviation branch below read document level, and the line was BOTH kept as
+// lazy item text AND registered - so it expanded inside its own definition and
+// again in every later paragraph. `1. x` and `- x` never did, at the same
+// content column, which is how the marker rather than the column was isolated.
+//
+// The lookahead is zero-width and fires only before a `.`, exactly as in
+// `RE_ORDERED`: a bare `)` is never a marker. Capture numbering is unchanged.
 const RE_PREPASS_MARKER =
-  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +/
+  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{[^}]*\})? +/
 
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number; contentCol: number; quoted: boolean } | null = null
@@ -2324,8 +2345,12 @@ function collectLinkDefs(lexer: Lexer) {
     // A fence is quoted if a blockquote prefix leads the line, possibly behind a
     // single list marker (`- > ```), so its closer is blockquote-stripped. Deeper
     // list/quote mixing is a documented residual.
+    //
+    // The SECOND spelling of `RE_PREPASS_MARKER`, and it carries the bare-dot
+    // branch for the same reason (carve-js#1120): without it `. > ``` ` did not
+    // read as quoted while `1. > ``` ` did.
     const afterMarker = raw.replace(
-      /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +(?:\[[ xX\-_>?]\] +)?/,
+      /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{[^}]*\})? +(?:\[[ xX\-_>?]\] +)?/,
       '',
     )
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
