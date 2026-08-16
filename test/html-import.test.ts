@@ -14,6 +14,27 @@ describe('HTML import', () => {
     expect(result.value).toBe('> To be\n>\n> Hamlet\n')
   })
 
+  it('keeps a blockquote cite, and round-trips it back onto the tag', () => {
+    const result = htmlToCarve('<blockquote cite="u"><p>q</p></blockquote>')
+    expect(result.value).toBe('{cite=u}\n> q\n')
+    expect(result.report.diagnostics).toEqual([])
+    expect(carveToHtml(result.value)).toBe('<blockquote cite="u"><p>q</p></blockquote>')
+  })
+
+  it('leaves a blockquote without a cite unattributed', () => {
+    const result = htmlToCarve('<blockquote><p>q</p></blockquote>')
+    expect(result.value).toBe('> q\n')
+    expect(result.report.diagnostics).toEqual([])
+  })
+
+  it('keeps a cite only on a blockquote, and still reports it elsewhere', () => {
+    const result = htmlToCarve('<p cite="u">q</p>')
+    expect(result.value).toBe('q\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute cite on <p>' }),
+    ])
+  })
+
   it('reads a figure wrapping a quote as a captioned figure', () => {
     const result = htmlToAst('<figure><blockquote><p>To be</p></blockquote><figcaption>Hamlet</figcaption></figure>')
     expect(result.value.children).toMatchObject([

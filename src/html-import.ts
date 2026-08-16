@@ -271,6 +271,13 @@ class Importer {
         // that means something after the import: `{open}` is PART 11 §6c's
         // bare boolean, which the details extension renders back onto the tag.
         keyValues.open = ''
+      } else if (name === 'cite' && node.tagName === 'blockquote') {
+        // The source the quote is attributed to. `{cite=u}` on a block quote is
+        // authorable Carve that the HTML renderer writes back onto the tag, so
+        // the import round-trips and there is nothing to report as dropped
+        // (markup-carve/carve#1286). The renderer is what sanitizes the value -
+        // a `javascript:` destination is blanked there, not admitted here.
+        keyValues.cite = attr.value
       } else if (name === 'scope' && node.tagName === 'th') {
         // Kept here, and dropped again in `table()` when it matches the value
         // the renderer derives from position. `colgroup` and `rowgroup` have no
