@@ -8540,8 +8540,28 @@ function scanInlineInner(
         // it; refusing it here instead made the two engines' ASTs differ on a
         // document whose HTML matched, and left `[][]{.c}` an inline span in
         // this engine alone.
+        //
+        // A LABEL CANNOT OPEN WITH `@`, which the old text guard was
+        // shielding by accident at the empty-text spelling. The grammar spells
+        // the first character apart for exactly this reason:
+        //
+        //   reference_label = (character - ']' - '@'), {character - ']'} ;
+        //
+        // `@` opens a citation key, so `[][@a]` is a literal `[]` followed by
+        // the citation `[@a]`. Widening the branch without this would swallow
+        // it: with the citations extension enabled the citation loses its
+        // number and its bibliography entry, and the reader gets `[][@a]` as
+        // text. The subtraction is on the FIRST character only, so `[][a@b]`
+        // is an ordinary label, and the empty label has no first character to
+        // test - `[][]` is `collapsed_reference_link`, a production of its own.
+        //
+        // THE TEST IS SCOPED TO THE SPELLING THIS CHANGE OPENS, deliberately.
+        // `[t][@a]` violates the same production and is taken as a reference
+        // here, in carve-rs and in carve-php alike; correcting that is a
+        // cross-engine ruling and not this fix's to make, so the non-empty-text
+        // path keeps the behavior all three engines share.
         const mref = RE_REF_TAIL.exec(tail)
-        if (mref) {
+        if (mref && (innerText !== '' || !mref[1]!.startsWith('@'))) {
           flush()
           let len = close + 1 + mref[0].length
           let attrs: Attrs | undefined
