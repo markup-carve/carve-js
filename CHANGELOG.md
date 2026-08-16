@@ -328,6 +328,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer escapes only where the channel actually opens.** Two
+  escapes were written for constructs the character cannot open there, and they
+  were the only cells and captions where this engine's `carve` output differed
+  from carve-php and carve-rs. An attribute block ends the alignment scan by
+  itself (PART 9 section 319 binds attributes after the markers), so
+  `|{#x}< content |` is written `|{#x}< content|` rather than with a guard
+  space; and a caret before a TAB leaves its line as prose, so `^<TAB>Figure 1`
+  keeps the caret bare instead of writing `\^`. A caret before a SPACE after a
+  caption host still opens a caption and stays escaped.
+
 - **BBCode keeps the backslash, the brace and the backtick a post typed.**
   `bbcodeToCarve` ran one of the four escaping stages a language without a
   backslash escape of its own needs, so three characters that are literal text
