@@ -114,6 +114,17 @@ const SEMANTIC_SPAN_TAGS = new Set(['abbr', 'time', 'samp', 'var', 'kbd', 'cite'
  */
 const SEMANTIC_SPAN_VALUE_SOURCE = new Map([['abbr', 'title'], ['dfn', 'title'], ['time', 'datetime']])
 
+/**
+ * The `<annotation>` encodings that DECLARE their payload to be TeX.
+ *
+ * Matched case-insensitively against the whole attribute value, never as a
+ * substring: `MathType-MTEF` and `application/mathml-content` both contain
+ * neither of these as a prefix, but a substring test for `tex` accepts the
+ * first of them and hands a binary blob to the math node as if it were an
+ * equation.
+ */
+const TEX_ANNOTATION_ENCODINGS = new Set(['application/x-tex', 'text/x-tex', 'latex'])
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -202,6 +213,12 @@ class Importer {
     // so reporting it dropped here would be a diagnostic for a loss that no
     // longer happens. `title` needs no entry - `attrs()` already keeps it.
     if (tag === 'time') return name === 'datetime'
+    // `alttext` and `display` are READ by `mathml()` and reach the math node,
+    // so reporting them dropped would name a loss that does not happen.
+    // `xmlns` is the MathML namespace declaration, which is what makes the
+    // element MathML in the first place - it is consumed by having been
+    // recognized, not discarded.
+    if (tag === 'math') return name === 'alttext' || name === 'display' || name === 'xmlns'
     return false
   }
 
@@ -1122,6 +1139,50 @@ class Importer {
     // text and its `cite` goes with it - so this mapping is the safe/semantic
     // answer and the raw fallback is the round-tripping one.
     if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
+    /*
+     * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
+     * TeX that is already in the source, and no MathML-to-TeX converter.
+     *
+     * THE DECISION IS THE THIRD TIER, and it is a drop rather than a degrade.
+     * MathML's children are a token stream, so concatenating them is not a
+     * lossy rendering of the equation but a different value: the children of
+     * `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>` concatenate to `12`,
+     * which is what this importer wrote before this branch existed. One half
+     * arriving as twelve is a plausible wrong value, and a plausible wrong
+     * value survives review, where a missing equation and a warning naming it
+     * do not. This is the line between math and the EMBEDS below: a `<video>`'s
+     * children are fallback content the author wrote for exactly this case.
+     *
+     * `roundtrip` keeps the whole element instead, through the raw arm at the
+     * end of this method, which is where a `<math>` already went - Carve's own
+     * HTML spells math as `<span class="math">`, so a `<math>` in that mode's
+     * input is foreign markup by definition and the mode's contract is to
+     * preserve it verbatim.
+     */
+    if (tag === 'math') {
+      /*
+       * Charged once, before anything reads the subtree: every arm below
+       * returns without walking the children, so `inlines()` never counts a
+       * descendant, and `maxNodes`/`maxDepth` must not depend on which branch
+       * an element takes. Before the counter, so a limit is reached by the
+       * counter rather than by the read - and once, because charging in the
+       * tier lookup as well counted an empty-annotation element's descendants
+       * twice.
+       */
+      this.budget(node, depth)
+      const math = this.mathml(node, path)
+      if (math) return [math]
+      if (this.mode === 'roundtrip') {
+        // The same answer the generic arm below gave a `<math>` before this
+        // branch existed, and byte for byte the same output. Reported once for
+        // the element rather than once per descendant, because the descendants
+        // are not preserved separately - they are inside this one raw span.
+        this.add('raw-preserved', 'Preserved unsupported <math> element as raw HTML', 'warning', path)
+        return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
+      }
+      this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path)
+      return []
+    }
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
@@ -1181,6 +1242,114 @@ class Importer {
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
     this.reportUnwrappedAttributes(attrs, tag, path)
     return children
+  }
+
+  /**
+   * Tiers 1 and 2 of D6: the TeX the producer already put in the element.
+   *
+   * 1. an `<annotation>` whose encoding DECLARES TeX, taken verbatim;
+   * 2. else the `alttext` attribute, plus an `info` recording that its
+   *    encoding was assumed - MathML does not declare what `alttext` holds,
+   *    and `<math alttext="x squared">` is as valid as one holding TeX.
+   *
+   * Annotation first, and the order carries a ruling: where the two disagree,
+   * a declared encoding beats an undeclared attribute. carve-php's own
+   * docblock documents the reverse order and is corrected to this one.
+   *
+   * The content keeps the TeX byte for byte, `{\displaystyle …}` wrapper and
+   * all: Carve's math content is opaque TeX and unwrapping it would be a
+   * second decision. Only the surrounding whitespace goes, which is the
+   * pretty-printer's and not the equation's - and carve-php, which shipped
+   * this ruling first, trims it too, so the two engines write one byte
+   * sequence for one input.
+   *
+   * Whitespace-only content is treated as absent, because it is: an empty
+   * `alttext` or a pretty-printed empty annotation says nothing about the
+   * equation, and falling to the next tier reports the loss instead of
+   * writing an empty math node.
+   *
+   * Returns `undefined` for tier 3, whose two answers are the caller's.
+   */
+  private mathml(node: P5Node, path: string): InlineNode | undefined {
+    const annotated = this.texAnnotation(node)
+    const content = (annotated ?? this.attr(node, 'alttext') ?? '').trim()
+    if (content === '') return undefined
+    // After the tier is settled, so a dropped element does not also report
+    // attributes on its way out: the `element-dropped` warning covers it.
+    const attrs = this.attrs(node, path)
+    // On which tier SUPPLIED the content, not on which one was available: an
+    // annotation that held only whitespace falls through to `alttext`, and
+    // reading the presence of the element would make that fall-through the one
+    // tier-2 read that says nothing.
+    if (annotated === undefined) {
+      this.add('element-unwrapped', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
+    }
+    return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * The `<annotation>` a `<semantics>` carries, if it declares TeX.
+   *
+   * Both hops are DIRECT children - `<semantics>` of the `<math>`, the
+   * annotation of that `<semantics>`. A recursive search reaches the
+   * `<annotation>` nested inside an `<annotation-xml>` payload, which is
+   * markup describing the equation in some other language and not a
+   * presentation of the outer element at all.
+   *
+   * An annotation that declares TeX and then holds nothing does not settle the
+   * tier: the search continues, because a later sibling may hold the equation
+   * and stopping at the empty one would answer with the wrong tier.
+   */
+  private texAnnotation(node: P5Node): string | undefined {
+    for (const semantics of node.childNodes ?? []) {
+      if (semantics.tagName !== 'semantics') continue
+      for (const child of semantics.childNodes ?? []) {
+        if (child.tagName !== 'annotation') continue
+        const encoding = this.attr(child, 'encoding')
+        if (encoding === undefined || !TEX_ANNOTATION_ENCODINGS.has(encoding.trim().toLowerCase())) continue
+        const text = this.flatText(child).trim()
+        if (text !== '') return text
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Charge a subtree the import will not walk against the budgets one it walks
+   * would pay, and check its depth while doing so.
+   *
+   * Explicit stack rather than recursion: this runs on input the DOM parser
+   * accepted at any depth, and its whole point is to reach `maxDepth` before
+   * something that recurses does.
+   */
+  /**
+   * `text()` without its recursion, for the annotation - which is read to
+   * settle the tier, so it is read before any depth counter has seen it. At a
+   * caller-raised `maxDepth` a recursive read is the thing that fails first,
+   * and a `RangeError` is not the typed error the API promises. Document order
+   * is kept by pushing the children in reverse.
+   */
+  private flatText(node: P5Node): string {
+    let text = ''
+    const pending: P5Node[] = [node]
+    while (pending.length) {
+      const current = pending.pop()!
+      if (current.nodeName === '#text') text += current.value ?? ''
+      const children = current.childNodes ?? []
+      for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]!)
+    }
+    return text
+  }
+
+  private budget(node: P5Node, depth: number): void {
+    const pending: Array<[P5Node, number]> = [[node, depth]]
+    while (pending.length) {
+      const [current, currentDepth] = pending.pop()!
+      for (const child of current.childNodes ?? []) {
+        this.enter(currentDepth + 1)
+        pending.push([child, currentDepth + 1])
+      }
+    }
   }
 
   /**

@@ -29,8 +29,18 @@ HTML. The CLI equivalent is `carve migrate --from html --report report.json`.
 
 ### What the importer does not model
 
-Two decisions are deliberate, so a diagnostic naming them is the whole answer
+Three decisions are deliberate, so a diagnostic naming them is the whole answer
 rather than a placeholder for a mapping still to come:
+
+- **MathML is read for the TeX it already carries, never converted.** A
+  `<math>` becomes a `math` node from an `<annotation>` whose encoding declares
+  TeX (`application/x-tex`, `text/x-tex`, `LaTeX`) on the element's own
+  `<semantics>`, else from its `alttext` with an `info` recording that the
+  encoding was assumed. An element with neither carries no TeX, so it is
+  dropped with a `warning` naming it in `safe` and `semantic` mode and kept
+  verbatim in `roundtrip`. Its children are not concatenated into content:
+  they are a token stream, and `<mfrac><mn>1</mn><mn>2</mn></mfrac>` reads out
+  as `12`, which is a wrong value rather than a degraded one.
 
 - **Embedded media** - `<video>`, `<audio>`, `<iframe>`, `<svg>`, `<object>`,
   `<embed>`, `<canvas>` - is unwrapped to the fallback content the author wrote

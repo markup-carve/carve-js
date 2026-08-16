@@ -9,6 +9,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **HTML import reads MathML as math.** A `<math>` element becomes a `math`
+  node whose content is the TeX the producer already put in the source: an
+  `<annotation>` on the element's own `<semantics>` whose encoding declares TeX
+  (`application/x-tex`, `text/x-tex`, `LaTeX`, matched on the whole value), else
+  the `alttext` attribute with an `info` recording that its encoding was
+  assumed. `display="block"` is display math and the TeX is written byte for
+  byte, `{\displaystyle …}` wrapper included. An element carrying neither is
+  dropped with a `warning` naming it in `safe` and `semantic` mode, and kept
+  verbatim in `roundtrip`, where the output is byte for byte what it was and
+  the preservation is now reported once for the element instead of once per
+  descendant. There was no `math` branch at all until
+  now, so every `<math>` unwrapped to its children and
+  `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>` imported as `12` - one half
+  arriving as twelve, with nothing in the report naming `<math>` as the thing
+  lost. MathML is not converted to TeX (decision D6, ruled as (a)+(b)). The
+  element's subtree is charged against `maxNodes` and `maxDepth` even though
+  the mapping does not walk it, so a structural limit still surfaces as
+  `HtmlImportLimitError` rather than as a stack overflow.
+
 - **HTML import states a table's row grouping, where it says something.**
   `<thead>`, `<tbody>` and `<tfoot>` map to `table.rowGroups` - a foot, a second
   body, a body with its own header rows or with row-head columns, and a
