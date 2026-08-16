@@ -479,6 +479,36 @@ export interface LinkReferenceDefinition extends BaseNode {
   title?: string
 }
 
+/**
+ * The `[@key]: {author= year=} entry` bibliography line (Tier-2, citations).
+ *
+ * PART 12 §18 (NORMATIVE): a citation definition is a NODE, shaped after §10's
+ * link reference definition rather than after the footnote. A footnote body
+ * holds BLOCKS; this holds a metadata run plus one line of rendered text, so
+ * the entry is `children` of INLINE nodes and the metadata lands in `attrs` -
+ * the same two slots §10 spends on a definition line's tail. `key` rather than
+ * `label` because `citation.key` already names the same string at the use site.
+ *
+ * Of the four definition kinds this was the only one with no node, and both
+ * behaviors on record lost a different half of what §10 keeps: carve-php
+ * consumed the line at parse time, discarding `pos` so nothing could put the
+ * line back, and carve-js left it a paragraph whose first child is a
+ * `citation_group` followed by the literal text `: {author=` - the parser's
+ * failure to recognize the line, published (markup-carve/carve#1276).
+ *
+ * Renders nothing where it sits, on every target: the entry's text renders in
+ * the references list the citations extension builds, exactly as before.
+ */
+export interface CitationDefinition extends BaseNode {
+  type: 'citation_definition'
+  /** The citation key as the author wrote it, WITHOUT the `@`. */
+  key: string
+  /** The entry's inline content: what follows the `]: ` separator and the
+   *  optional metadata block. Required, and may be empty - which source lines
+   *  carry no entry is a question §18 leaves open. */
+  children: InlineNode[]
+}
+
 export interface RawBlock extends BaseNode {
   type: 'raw_block'
   format: string
@@ -510,6 +540,7 @@ export type BlockNode =
   | Image
   | AbbreviationDef
   | LinkReferenceDefinition
+  | CitationDefinition
   | RawBlock
   | Comment
 

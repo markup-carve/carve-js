@@ -231,7 +231,9 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'comment':
       return ''
     case 'link_reference_definition':
-      // Renders nothing: a definition line is not prose.
+    case 'citation_definition':
+      // Renders nothing: a definition line is not prose. PART 12 §18 gave the
+      // citation line a node without moving output on any target.
       return ''
     default: {
       const t: never = node

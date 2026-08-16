@@ -272,6 +272,11 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // destination already reached every link that resolved it, and Markdown's
       // own reference form is not what this writer emits.
       return ''
+    case 'citation_definition':
+      // Renders nothing, which is what the line has always produced here: the
+      // entry belongs to the references list, and PART 12 §18 gave the line a
+      // node without moving output on any target.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown block ${(t as { type: string }).type}`)
