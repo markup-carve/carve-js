@@ -176,6 +176,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Every table cell pads its content in the canonical form** (PART 11 §6e). A
+  cell carrying a prefix - the kind marker `=`, an alignment marker, an
+  attribute block - was written with its content glued to it: `|=Heading|`,
+  `|={.total}Total|=99|`. It now writes `|= Heading |` and
+  `|={.total} Total |= 99 |`. The prefix still touches the opening pipe,
+  because a space in front of it makes it literal content; only the content is
+  padded, the way an unprefixed cell always was. An empty cell takes a single
+  space. This also removes the guard that inserted a space only for content
+  beginning with `<`, `>` or `~`: those characters are read glued off the
+  untrimmed cell, and padding every cell covers the class without listing it.
+
 - **BREAKING: a table cell's attribute block binds after its kind and alignment
   markers** (markup-carve/carve#1226, spec §5 T10). `header_cell` had no
   attributes slot, so an attributed header cell had no spelling at all: the only
@@ -327,6 +338,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already a no-op and still accepts its value, so no caller breaks.
 
 ### Fixed
+
+- **A caret before a TAB is written bare.** The canonical writer escaped it as
+  `\^`, but a tab after the marker leaves the line as prose (corpus 231), so the
+  caret opens no caption there. A caret before a SPACE after a caption host
+  still re-attaches on re-parse and stays escaped. Corpus 304 states the rule
+  both follow: a character is escaped only where it opens markup.
 
 - **BBCode keeps the backslash, the brace and the backtick a post typed.**
   `bbcodeToCarve` ran one of the four escaping stages a language without a

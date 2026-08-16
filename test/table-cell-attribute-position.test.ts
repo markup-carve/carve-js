@@ -83,7 +83,7 @@ describe('the canonical writer emits the markers first', () => {
   // delimiter row instead - syntax the AST never asked for.
   it('writes an attributed header cell natively', () => {
     expect(fmt('|={.total} Total |= 99 |\n| a | b |')).toBe(
-      '|={.total}Total|=99|\n| a | b |\n',
+      '|={.total} Total |= 99 |\n| a | b |\n',
     )
   })
 
@@ -193,8 +193,10 @@ describe('the lint rule for the retired order', () => {
   // `text-align: left` and REMOVES a literal `<` from the content, so a
   // formatter doing it in its default path would break the round-trip invariant
   // on a document that is currently correct.
-  it('leaves the source alone through fmt', () => {
-    expect(fmt('|{#x}< content |')).toBe('|{#x} < content|\n')
+  // An attribute block ends the alignment scan by itself, so the `<` remains
+  // content; canonical padding is applied without promoting it to a marker.
+  it('applies canonical padding without changing the cell meaning', () => {
+    expect(fmt('|{#x}< content |')).toBe('|{#x} < content |\n')
     expect(html(fmt('|{#x}< content |'))).toBe(html('|{#x}< content |'))
   })
 })
