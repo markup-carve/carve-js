@@ -403,6 +403,19 @@ const IMPLEMENTED = new Set([
   // documents were rendered against this engine's HTML and `.fmt` outputs
   // before anything here changed, and both already matched.
   'the-canonical-writer-glues-a-code-fence-to-its-info-string',
+  // Categories 321 to 324, the twenty-eight documents this pin bump brings in.
+  // None of them needed engine work: the rules behind the first two already
+  // landed here (delimited inline comments in `#1104`, the attribute block
+  // reaching the nested list it precedes in `#1107`), and the other two are
+  // documents about behavior this engine already had. Every one of the
+  // twenty-eight was rendered through this engine and compared with its `.html`
+  // fixture BEFORE its name was added - 28 of 28 byte-for-byte, so each entry
+  // names a case that was already passing rather than one this list forces
+  // green.
+  'delimited-comments',
+  'an-attribute-block-reaches-the-nested-list-it-precedes',
+  'a-block-attached-after-an-invisible-line-leaves-the-item-tight',
+  'an-abbreviation-definition-in-an-item-body-is-paragraph-text',
 ])
 
 /**
