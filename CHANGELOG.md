@@ -13,8 +13,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   node whose content is the TeX the producer already put in the source: an
   `<annotation>` on the element's own `<semantics>` whose encoding declares TeX
   (`application/x-tex`, `text/x-tex`, `LaTeX`, matched on the whole value), else
-  the `alttext` attribute with an `info` recording that its encoding was
-  assumed. `display="block"` is display math and the TeX is written byte for
+  the `alttext` attribute with an `encoding-assumed` `info` recording that its
+  encoding was guessed - MathML never states what `alttext` holds, so the math
+  node is only correct while the guess does. `encoding-assumed` joins
+  `HtmlImportDiagnosticCode`, which a consumer switching over the codes
+  exhaustively has to answer for. It is deliberately not filed under
+  `element-unwrapped`: unwrapping describes the input's structure and loses no
+  meaning, while an assumed encoding is a claim about the output, and a
+  consumer told only that an element is gone cannot separate the two.
+  `display="block"` is display math and the TeX is written byte for
   byte, `{\displaystyle …}` wrapper included. An element carrying neither is
   dropped with a `warning` naming it in `safe` and `semantic` mode, and kept
   verbatim in `roundtrip`, where the output is byte for byte what it was and
