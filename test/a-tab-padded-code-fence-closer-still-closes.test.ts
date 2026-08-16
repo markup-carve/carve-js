@@ -41,8 +41,12 @@ import { carveToHtml, parse } from '../src/index.js'
  * correct. Every row was verified against carve-php `8a9dc5c`, built from
  * `origin/main`.
  *
- * THE OPENER IS NOT TOUCHED. `` ```<TAB>php `` is a separator and still refuses
- * to open, which is the half of the ruling that stands, and it has a control.
+ * THE SEPARATOR ROW IS THE ONE THAT REFUSES, and it is the only one.
+ * `` ```<TAB>php `` has content after the tab, so the tab stands between marker
+ * and info and cannot be `space`. Every other row - a trailing tab on an
+ * opener, on an opener's info string, or on a closer - is trailing whitespace
+ * and the fence works normally. All four rows of carve#1295's table are
+ * asserted here.
  */
 
 const F = '```'
@@ -161,15 +165,25 @@ describe('a tab-padded code fence closer still closes', () => {
     expect(carveToHtml(src)).not.toContain('<pre>')
   })
 
-  it('an opener with a tab and NOTHING after it is a KNOWN divergence, left alone', () => {
-    // carve#1295 rules this trailing, so it should open, and carve-php does.
-    // This engine refuses. That is the third row of the ruling's table and it
-    // is deliberately NOT addressed here - the ticket assigned is the closer,
-    // and sweeping both ends toward one answer is the mistake that produced
-    // this defect in the first place.
-    //
-    // Pinned so the day it is fixed this row moves with it instead of being
-    // discovered, and so the fix above is shown NOT to have changed it.
-    expect(codeContent(`${F}${T}\nx\n${F}\n`)).toBe(null)
+  it('an opener with a tab and NOTHING after it OPENS, the third row of the table', () => {
+    // Nothing follows the tab, so it is trailing rather than a separator and
+    // the fence opens as an ordinary one. This row was pinned as a known
+    // divergence when only the closer had moved; the opener's trailing case is
+    // now narrowed too, so it is a real assertion.
+    expect(codeContent(`${F}${T}\nx\n${F}\n`)).toBe('x')
+    expect(carveToHtml(`${F}${T}\nx\n${F}\n`)).toBe('<pre><code>x\n</code></pre>')
+    // The tilde spelling, and a trailing run of tab-then-space.
+    expect(codeContent(`~~~${T}\nx\n~~~\n`)).toBe('x')
+    expect(codeContent(`${F}${T} \nx\n${F}\n`)).toBe('x')
+  })
+
+  it('an opener whose tab TRAILS an info string opens, and keeps the info', () => {
+    // Content precedes the tab, so it is trailing on that side too - and the
+    // info string still has to be read rather than dropped with the tab.
+    expect(carveToHtml(`${F}php${T}\nx\n${F}\n`)).toBe(
+      '<pre><code class="language-php">x\n</code></pre>',
+    )
+    // The raw fence takes the same shape through its own opener pattern.
+    expect(carveToHtml(`${F}=html${T}\n<b>x</b>\n${F}\n`)).toBe('<b>x</b>')
   })
 })

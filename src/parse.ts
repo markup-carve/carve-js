@@ -165,52 +165,47 @@ const RE_HR = /^([-*_])\1{2,}[ \t]*$/
 // and after `%%%`, and this engine already agrees with it on all three.
 const TRAILING_WS = '[ \\t]*$'
 
-// THE CODE FENCE'S TRAILING RUN IS `space`, NOT `whitespace` (carve#1285,
-// carve-js#1121). The grammar's DEFINITION MARKER SEPARATOR clause is
-// NORMATIVE that a marker-to-content separator is the `space` terminal
-// (U+0020) only and that "a tab does NOT satisfy `space` (`space = ' '`)",
-// mirroring the heading, list and task markers - and it names carve-rs as the
-// reference. The fence line is the one member of that family the sentence does
-// not enumerate, which is why it drifted: a ` ``` ` line ending in a tab
-// opened a code block here while carve-rs read the run as prose.
+// POSITION DECIDES, NOT THE CONSTRUCT (carve#1295). The grammar's DEFINITION
+// MARKER SEPARATOR clause is NORMATIVE that a marker-to-content separator is
+// the `space` terminal (U+0020) only and that "a tab does NOT satisfy `space`
+// (`space = ' '`)", mirroring the heading, list and task markers. carve#1285
+// added the fence line to that family.
 //
-// POSITION DECIDES, NOT THE CONSTRUCT (carve#1295). This was first read as "one
-// run seen from two ends" (carve-js#805) and narrowed at BOTH ends together.
-// That is half right. What the DEFINITION MARKER SEPARATOR clause governs is a
-// SEPARATOR - whitespace standing between a marker and content on the same
-// line. It says nothing about a line ENDING, and PART 2 drops trailing
-// whitespace before any of this is asked. So the tab's meaning depends on where
-// it sits:
+// WHAT THE CLAUSE GOVERNS IS A SEPARATOR - whitespace standing BETWEEN a marker
+// and content on the same line. It says nothing about a line ENDING, and PART 2
+// drops trailing whitespace before any of this is asked. So the same tab after
+// the same marker reads two ways, decided purely by what FOLLOWS it:
 //
-//   opener + tab + info   ->  separator  ->  does NOT open   (` *$` below)
-//   closer + tab          ->  trailing   ->  DOES close      (the closer run)
+//   ```<TAB>php   content follows  ->  separator  ->  does NOT open
+//   ```<TAB>       nothing follows  ->  trailing   ->  opens, ordinary fence
+//   ```php<TAB>    content precedes ->  trailing   ->  opens, ordinary fence
+//   ```<TAB>       as a CLOSER      ->  trailing   ->  closes
 //
-// A CLOSER TAKES NO CONTENT AFTER ITS MARKER, so a tab there can only ever be
-// trailing and the fence closes normally. Narrowing it left ```` ```<TAB> ````
-// swallowed as content of the block it should have ended - the delimiter line
-// rendered inside the `<pre>`, which is not a spelling of anything
-// (markup-carve/carve#1295, markup-carve/carve-js#1132). carve-php is the
-// reference here.
+// WHICH IS WHY THE SEPARATOR, NOT THE TRAILING RUN, CARRIES THE RULE. This was
+// first read as "one run seen from two ends" (carve-js#805) and narrowed at
+// both ends together, spelling the trailing run ` *$` everywhere. That refused
+// three of the four rows above: ```` ```<TAB> ```` opened nothing, a closer
+// padded with a tab was swallowed as content of the block it should have ended,
+// and an info string followed by a tab was prose. The separator slot is a
+// single literal space (the `' ?'` in `RE_FENCE` / `RE_RAW_FENCE`), which a tab
+// can never satisfy, so it already refuses the one row that must be refused -
+// and the trailing run is free to be `whitespace` at BOTH ends, which is what
+// PART 2 says it is. carve-php is the reference (markup-carve/carve#1295,
+// markup-carve/carve-js#1132).
 //
-// SCOPE IS THE BACKTICK/TILDE FAMILY. `RE_FENCE` and `RE_RAW_FENCE` are OPENERS
-// and keep the narrow ` *$`; `fenceCloseRe`, the two bare closers and
-// `RE_ANY_FENCE_CLOSER` are CLOSERS and take the run below. The colon fence
-// (`RE_ADMONITION_CLOSE`), the continuation marker (`RE_CONTINUATION_MARKER`)
-// and the comment fence (`RE_COMMENT_BLOCK_ANY`, which takes any tail at all)
-// keep `TRAILING_WS`, because carve-rs accepts a tab on each and no clause has
-// moved them.
-const FENCE_TRAILING_WS = ' *$'
-
-// The trailing run on a CLOSER line. Held apart from the opener's ` *$` on
-// purpose: the two are no longer the same question, and collapsing them again
-// in either direction reintroduces one of the two defects above.
+// THE CLOSER INDEX MUST WIDEN WITH THE MATCHER. `RE_ANY_FENCE_CLOSER` is
+// deliberately a SUPERSET because it only ever REFUTES ("no closer ahead"). A
+// superset that rejects a line the real matcher accepts does not merely cost a
+// scan, it answers WRONG - an opener is told no closer exists and runs past one
+// that is really there.
 //
-// THE CLOSER INDEX MUST WIDEN WITH IT. `RE_ANY_FENCE_CLOSER` is deliberately a
-// SUPERSET of the real matcher because it only ever REFUTES ("no closer ahead").
-// A superset that rejects a line the real matcher accepts does not merely cost
-// a scan, it answers WRONG - the opener would be told no closer exists and
-// would run to end of document past a closer that is really there.
-const FENCE_CLOSER_TRAILING_WS = '[ \\t]*$'
+// SCOPE IS THE BACKTICK/TILDE FAMILY, all six spellings in this file: `RE_FENCE`
+// and `RE_RAW_FENCE` (openers), `fenceCloseRe`, the two bare closers and
+// `RE_ANY_FENCE_CLOSER` (closers). The colon fence (`RE_ADMONITION_CLOSE`), the
+// continuation marker (`RE_CONTINUATION_MARKER`) and the comment fence
+// (`RE_COMMENT_BLOCK_ANY`, which takes any tail at all) use `TRAILING_WS`
+// above, and no clause has moved them.
+const FENCE_TRAILING_WS = '[ \\t]*$'
 
 /**
  * The closer for a code fence opened with `marker`: the same character, at
@@ -223,11 +218,11 @@ const FENCE_CLOSER_TRAILING_WS = '[ \\t]*$'
  * The CODE fence is the only caller: the comment fence matches its closer on
  * EXACT length through `commentFenceRun`, and the colon fence has
  * `RE_ADMONITION_CLOSE`. This is a CLOSER, so it takes
- * `FENCE_CLOSER_TRAILING_WS` - a tab after the run is trailing, never a
+ * `FENCE_TRAILING_WS` - a tab after the run is trailing, never a
  * separator, because no content follows a closer's marker.
  */
 function fenceCloseRe(marker: string): RegExp {
-  return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_CLOSER_TRAILING_WS}`)
+  return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
 // Info string is a single language token, optionally followed by a bracketed
@@ -1185,10 +1180,10 @@ const commentFenceRun = (line: string): number | undefined => {
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
-const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_CLOSER_TRAILING_WS)
+const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
 // The same line seen by the definition prepass, which has already re-based it to
 // the fence's content column and so matches the run alone.
-const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + FENCE_CLOSER_TRAILING_WS)
+const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + FENCE_TRAILING_WS)
 
 // Maximum block-container nesting depth, applied UNIFORMLY to blockquote, list,
 // fenced-div / admonition (and footnote) nesting. Each level recurses
@@ -3214,7 +3209,7 @@ function parseRawBlock(lexer: Lexer): RawBlock {
 // A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run
 // is tolerated where the real closers anchor at column 0. See `CloserIndex`.
 const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
-// The CODE closer's trailing run matches `FENCE_CLOSER_TRAILING_WS` above: a
+// The CODE closer's trailing run matches `FENCE_TRAILING_WS` above: a
 // tab after a closer's marker is trailing, so the line IS a closer
 // (carve#1295). The leading run stays permissive - that is the dedent this
 // index is a superset for.
@@ -3235,7 +3230,7 @@ const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
 // document past a closer that is really there. So this constant follows the
 // real matcher whenever the real matcher WIDENS, and may lag it only when it
 // narrows.
-const RE_ANY_FENCE_CLOSER = new RegExp('^[ \\t]*([`~]{3,})' + FENCE_CLOSER_TRAILING_WS)
+const RE_ANY_FENCE_CLOSER = new RegExp('^[ \\t]*([`~]{3,})' + FENCE_TRAILING_WS)
 
 /**
  * Where a closer of each fence shape LAST occurs in a lexer's lines.
