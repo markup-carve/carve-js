@@ -9,6 +9,33 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Composite figures: a bare `::: figure` fence is ONE figure of ordered
+  panels** (markup-carve/carve#1122, PART 9 §4c). An opener carrying the fence
+  and the kind word and nothing else - no quoted title, no `[label]` - parses
+  as the new `figure_group` node, whose captionable direct children are its
+  PANELS in source order: a captioned image, quote, code listing or display
+  math, a promoted reference image, or a table. Everything else in the body
+  stays ordinary group content, preserved in place. The `^ ` line after the
+  CLOSING fence captions the group, with §4's slot idiom (adjacent or across
+  one blank line attaches, two detach). An opener that carries a title or a
+  label stays a generic container, and a bare opener inside an open group stays
+  one too, so groups do not nest.
+
+  The group is one sequence unit: its caption's `#` draws one number from the
+  label's own sequence, the group id registers as `Label N`, and - only when
+  the group drew a number - each panel id registers with a letter by panel
+  order, so a crossref reaches the group or a single panel. A `#` in a panel
+  caption stays the authored character and draws no number of its own. In HTML
+  the panels nest DIRECTLY inside `<figure class="carve-figure-group">`, each
+  as `<figure class="carve-figure-panel">`, with the group's `<figcaption>`
+  last; Markdown degrades the panels in place and the plain-text and ANSI
+  targets lead with the group caption. The canonical writer emits the authored
+  form back, the HTML importer reads the rendered group shape back to the node,
+  and five lint rules - `figure-group-nested`,
+  `figure-group-opener-metadata`, `figure-group-panel-number`,
+  `figure-group-empty` and `figure-group-single-panel` - name the shapes that
+  parse fine and do less than they look like they do.
+
 - **The `word` and `google-docs` HTML import adapters read footnote-shaped
   HTML as footnotes** (markup-carve/carve#1210, porting
   markup-carve/carve-php#1303). Word, Google Docs, LibreOffice and pre-3.x
@@ -253,12 +280,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   did not exist; it now writes `|={.x} a |` and keeps the delimiter row only for
   the one shape that still has no native spelling, a span marker promoted to a
   header cell.
-- **HTML import keeps a `scope` below the header rows.** A `<th scope="rowgroup">`
-  in a body row had its scope dropped and reported, because writing it produced
-  `|{scope=rowgroup}=A|` - a data cell whose content is the literal `=A`, which
-  would have traded the header cell for an attribute. The cell has an attributes
-  slot now, so the value is kept and the cell re-reads as the header cell it was.
-  A scope the renderer derives from position is still dropped.
 - **HTML-to-Carve conversion reports the figure wrapper it cannot spell**
   (markup-carve/carve#1211, PART 12 §16). A `<figure>` wrapping a table imports
   as a figure whose target is the table, which Carve source has no spelling for,
@@ -762,13 +783,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an expansion that `*HTML*`, `[HTML](/u)` and `[HTML]{.x}` all got.
 - **`htmlToCarve` keeps an authored table-cell `scope` position cannot explain**
   (markup-carve/carve-js#1032). `<th scope="colgroup">` imports as
-  `|{scope=colgroup}A|`; `scope="col"` in the leading header run and
-  `scope="row"` below it are still dropped, because the renderer derives those
-  from position and importing them would write the generator's own output back
-  as if the author had typed it. A `scope` on a header cell BELOW the header
-  rows is dropped with a diagnostic rather than kept: `header_cell` has no
-  attribute slot in the grammar, so writing it produces `|{scope=…}=A|`, which
-  re-parses as a data cell whose content is the literal `=A`.
+  `|={scope=colgroup} A |`, and a `<th scope="rowgroup">` in a body row keeps
+  its value the same way, in the attributes slot a header cell has under the
+  binding order described in Changed above; the cell re-reads as the header
+  cell it was. `scope="col"` in the leading header run and `scope="row"` below
+  it are still dropped, because the renderer derives those from position and
+  importing them would write the generator's own output back as if the author
+  had typed it.
 - **`lintCarve` reports the semantic-attribute rules against the render the
   caller configured** (markup-carve/carve#1167). PART 9 §9 splits the reserved
   names by tier, so `samp`, `var`, `cite` and `dfn` become elements only once
