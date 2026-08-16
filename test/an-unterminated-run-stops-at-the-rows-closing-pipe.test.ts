@@ -64,6 +64,16 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
     )
   })
 
+  it('an escaped pipe is still content and still does not split the cell', () => {
+    // The pipe that comes off ahead of the scan is the row's LAST one, and the
+    // escape that protects a pipe sits one character before it - so removing
+    // the terminator must not reach past the escape handling. carve-rs and
+    // carve-php produce this too.
+    expect(html('| a \\| b |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a | b</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
   it('an ordinary headered table is unchanged', () => {
     expect(html('| a | b |\n|---|---|\n| x | y |')).toBe(
       '<table>\n  <thead><tr><th scope="col">a</th><th scope="col">b</th></tr></thead>\n' +
