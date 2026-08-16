@@ -6866,7 +6866,21 @@ export function splitTableRowSpans(line: string): Array<{ text: string; start: n
   // Skip the leading row marker: `|` (standard) or `+` (continuation)
   if (line[0] === '|' || line[0] === '+') i = 1
   let cellStart = i
-  for (; i < line.length; i++) {
+  // The row's CLOSING `|` is a delimiter, and cells are cut out of the row at
+  // BLOCK level - before any inline parsing. So it comes off here, ahead of the
+  // scan, instead of being left for the loop to meet: an UNTERMINATED run
+  // reaches the end of the line, and `inCode` would then hand the closing pipe
+  // to the run as content while the row still ended at it. That made the
+  // character vanish into a `<code>` and still terminate the row, which is the
+  // tell (markup-carve/carve#1284, ruled: the row is a table and the run stops
+  // at the pipe).
+  //
+  // On a row whose runs all close, nothing moves: the loop met this same pipe
+  // outside a run and split there anyway, and the empty tail it left behind was
+  // dropped by the padding test below.
+  const bodyEnd = line.replace(/[ \t]+$/, '').length
+  const scanEnd = bodyEnd > i && line[bodyEnd - 1] === '|' ? bodyEnd - 1 : line.length
+  for (; i < scanEnd; i++) {
     const ch = line[i]!
     if (ch === '`') inCode = !inCode
     if (ch === '\\' && line[i + 1] === '|') {
@@ -6887,8 +6901,11 @@ export function splitTableRowSpans(line: string): Array<{ text: string; start: n
     }
     buf += ch
   }
-  // Trailing content after last pipe
-  if (trimStructural(buf) !== '') cells.push({ text: buf, start: cellStart })
+  // The last cell. When the closing `|` was removed above, this cell is real
+  // however empty it looks - `|||` is two empty cells. Otherwise there was no
+  // closing pipe to end it, so a padding-only tail is line padding, not a cell.
+  if (scanEnd < line.length || trimStructural(buf) !== '')
+    cells.push({ text: buf, start: cellStart })
   return cells
 }
 
