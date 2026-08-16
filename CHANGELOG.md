@@ -21,7 +21,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now, so every `<math>` unwrapped to its children and
   `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>` imported as `12` - one half
   arriving as twelve, with nothing in the report naming `<math>` as the thing
-  lost. MathML is not converted to TeX (decision D6, ruled as (a)+(b)).
+  lost. MathML is not converted to TeX (decision D6, ruled as (a)+(b)). The
+  element's subtree is charged against `maxNodes` and `maxDepth` even though
+  the mapping does not walk it, so a structural limit still surfaces as
+  `HtmlImportLimitError` rather than as a stack overflow.
 
 - **HTML import states a table's row grouping, where it says something.**
   `<thead>`, `<tbody>` and `<tfoot>` map to `table.rowGroups` - a foot, a second
