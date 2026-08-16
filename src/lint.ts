@@ -390,24 +390,21 @@ export function lintCarve(
   // Template hosts normally run first, but `{% raw %}` hands the converter bare
   // tags; once parsed, those tags are indistinguishable from comments. Report
   // the collision and leave the source untouched.
-  let firstDelimitedComment: Positioned | undefined
-  let hasTemplateTagShape = false
+  // ONE WARNING PER TAG-SHAPED COMMENT, not one per document and not one for
+  // every braced comment in a document that has one. The report points at the
+  // constructs that vanish; an ordinary note in the same file is not one of
+  // them, and the file's second `{% endif %}` is (carve validation.md).
   const templateTag = /^(?:raw|endraw|endif|endfor|endblock|if\s+.+|for\s+.+|block\s+.+)$/s
   walkDocument(doc, (node) => {
     if (node.type !== 'comment' || node.delimited !== true) return
-    firstDelimitedComment ??= node as Positioned
-    if (typeof node.content === 'string' && templateTag.test(node.content)) {
-      hasTemplateTagShape = true
-    }
-  })
-  if (firstDelimitedComment && hasTemplateTagShape) {
+    if (typeof node.content !== 'string' || !templateTag.test(node.content.trim())) return
     out.push({
-      ...locate(firstDelimitedComment, toUtf16),
+      ...locate(node as Positioned, toUtf16),
       rule: 'braced-comment-in-a-template-source',
       message:
-        'This document contains a braced comment and a template-tag shape. Liquid, Nunjucks, or Twig source may have reached Carve as text; the tag is parsed as an invisible comment.',
+        'This braced comment is a template tag. Liquid, Nunjucks, or Twig source may have reached Carve as text; the tag is parsed as an invisible comment.',
     })
-  }
+  })
 
   // Build the final heading-id set exactly as resolveHeadingIds does
   // (explicit ids win; colliding slugs get a `-2`, `-3`, … suffix), and warn

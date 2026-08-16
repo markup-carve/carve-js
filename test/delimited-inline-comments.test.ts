@@ -104,4 +104,15 @@ describe('braced-comment-in-a-template-source lint', () => {
   it('does not report an ordinary braced comment alone', () => {
     expect(lintCarve('text {% note %}')).toEqual([])
   })
+
+  it('reports EVERY tag-shaped comment and no other', () => {
+    // The report points at the constructs that vanish. An ordinary note in the
+    // same document is not one of them, and the second tag is.
+    const source = '{% raw %}\ntext {% note %}\n{% endraw %}'
+    const reported = lintCarve(source).filter(
+      (warning) => warning.rule === 'braced-comment-in-a-template-source',
+    )
+    expect(reported).toHaveLength(2)
+    expect(reported.map((warning) => warning.line)).toEqual([1, 3])
+  })
 })
