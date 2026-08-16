@@ -417,11 +417,13 @@ class Importer {
     // Tightness is decided by the ITEM SHAPE (ruled; corpus-convert 27/28): a
     // bare-text `<li>one</li>` is a tight item, a block-wrapped
     // `<li><p>one</p></li>` a loose one. Tight/loose is a property of the
-    // LIST, so a mixed list has to pick a side, and it normalizes TIGHT: one
-    // bare item is the author's word that the list is tight, while `<p>` is
-    // what serializers wrap EVERYTHING in. Every list imported loose before
-    // this, whatever the source spelled.
-    const tight = listItems.some((li) =>
+    // LIST, so a mixed list has to pick a side, and it is LOOSE - the ruling
+    // on markup-carve/carve#1210 is that `<li><p>...</p></li>` stays loose and
+    // that import preserves source structure rather than normalizing, so one
+    // block-wrapped item is enough. This read `.some` and normalized a mixed
+    // list tight, which is the one shape that sentence refuses
+    // (markup-carve/carve#1260); carve-php and carve-rs both import it loose.
+    const tight = listItems.every((li) =>
       (li.childNodes ?? []).some(
         (child) =>
           (child.tagName !== undefined &&

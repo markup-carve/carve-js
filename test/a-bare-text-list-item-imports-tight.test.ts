@@ -1,11 +1,15 @@
 /*
- * Tight-list import, as ruled (spec corpus-convert 27/28; clears the js
- * entries in the spec repo's resources/converter-drift.txt): a bare-text
+ * Tight-list import, as ruled (spec corpus-convert 27/28): a bare-text
  * `<li>one</li>` is a TIGHT list item, a block-wrapped `<li><p>one</p></li>`
  * a loose one. Tightness is a property of the LIST, so a mixed list has to
- * pick a side, and it normalizes TIGHT - one bare item is the author's word
- * that the list is tight, while `<p>` is what serializers wrap everything
- * in. Every list imported loose before this, whatever the source spelled.
+ * pick a side, and it is LOOSE: markup-carve/carve#1210 ruled that
+ * `<li><p>...</p></li>` stays loose and that import preserves source
+ * structure rather than normalizing, so one block-wrapped item decides it.
+ *
+ * This engine normalized a mixed list TIGHT, which is the one shape that
+ * ruling refuses (markup-carve/carve#1260), and it was alone in doing so -
+ * carve-php and carve-rs both import that list loose. Every list imported
+ * loose before the tight-item rule, whatever the source spelled.
  */
 import { describe, it, expect } from 'vitest'
 import { htmlToCarve, carveToHtml } from '../src/index.js'
@@ -20,11 +24,19 @@ describe('a bare-text list item imports tight', () => {
     )
   })
 
-  it('a mixed list normalizes tight (corpus-convert 28)', () => {
-    expect(imp('<ul><li>one</li><li><p>two</p></li></ul>')).toBe('- one\n- two\n')
+  it('a mixed list stays loose (corpus-convert 28)', () => {
+    // One block-wrapped item is enough: the ruling preserves what the source
+    // spelled, and tight/loose belongs to the list rather than the item.
+    expect(imp('<ul><li>one</li><li><p>two</p></li></ul>')).toBe('- one\n\n- two\n')
     expect(carveToHtml(imp('<ul><li>one</li><li><p>two</p></li></ul>'))).toBe(
-      '<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>',
+      '<ul>\n  <li><p>one</p></li>\n  <li><p>two</p></li>\n</ul>',
     )
+  })
+
+  it('the block-wrapped item decides it wherever it sits', () => {
+    // FIRST item wrapped, not the last: a rule reading only one end of the
+    // list would pass the case above and still normalize this one.
+    expect(imp('<ul><li><p>one</p></li><li>two</li></ul>')).toBe('- one\n\n- two\n')
   })
 
   it('an all-paragraph list stays loose', () => {
