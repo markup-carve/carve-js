@@ -1415,6 +1415,19 @@ describe('MathML on import', () => {
     expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-dropped'])
   })
 
+  it('TIER 2: an annotation that holds only whitespace falls through, and says so', () => {
+    // The diagnostic follows which tier SUPPLIED the content. Reading the
+    // presence of the annotation ELEMENT instead makes this the one tier-2
+    // read that assumes an encoding in silence.
+    const html = '<p><math alttext="a^2"><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation encoding="application/x-tex">\n  \n</annotation></semantics></math></p>'
+    const result = htmlToCarve(html)
+    expect(result.value).toBe('$`a^2`\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'element-unwrapped', severity: 'info', message: expect.stringContaining('alttext') }),
+    ])
+  })
+
   it('TIER 3: an empty annotation and an empty alttext say nothing, so they are not content', () => {
     const empty = '<p><math alttext="  "><semantics><mrow><mi>a</mi></mrow>'
       + '<annotation encoding="application/x-tex">\n  \n</annotation></semantics></math></p>'
@@ -1470,6 +1483,12 @@ describe('MathML on import', () => {
     const nest = (n: number): string => '<mrow>'.repeat(n) + '<mi>a</mi>' + '</mrow>'.repeat(n)
     const result = htmlToAst(`<p><math alttext="x">${nest(20_000)}</math></p>`, { maxDepth: 100_000, maxNodes: 5_000_000 })
     expect(result.value.children).toMatchObject([{ type: 'paragraph', children: [{ type: 'math', content: 'x' }] }])
+    // Reading the annotation is the same walk once the budget has accepted it.
+    const annotated = htmlToAst(
+      `<p><math><semantics><annotation encoding="application/x-tex">a${nest(20_000)}b</annotation></semantics></math></p>`,
+      { maxDepth: 100_000, maxNodes: 5_000_000 },
+    )
+    expect(annotated.value.children).toMatchObject([{ type: 'paragraph', children: [{ type: 'math', content: 'aab' }] }])
   })
 
   it('CONTROL: a document with no math is not touched by any of it', () => {

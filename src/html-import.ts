@@ -1274,13 +1274,18 @@ class Importer {
      * limit is reached by the counter rather than by the stack.
      */
     this.budget(node, depth)
-    const annotated = annotation === undefined ? undefined : this.text(annotation)
-    const content = annotated !== undefined && annotated.trim() !== '' ? annotated : alttext
+    const annotated = annotation === undefined ? undefined : this.flatText(annotation)
+    const fromAnnotation = annotated !== undefined && annotated.trim() !== ''
+    const content = fromAnnotation ? annotated : alttext
     if (content === undefined || content.trim() === '') return undefined
     // After the tier is settled, so a dropped element does not also report
     // attributes on its way out: the `element-dropped` warning covers it.
     const attrs = this.attrs(node, path)
-    if (annotation === undefined) {
+    // On which tier SUPPLIED the content, not on which one was available: an
+    // annotation that held only whitespace falls through to `alttext`, and
+    // reading the presence of the element would make that fall-through the one
+    // tier-2 read that says nothing.
+    if (!fromAnnotation) {
       this.add('element-unwrapped', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
     }
     return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
@@ -1316,6 +1321,24 @@ class Importer {
    * accepted at any depth, and its whole point is to reach `maxDepth` before
    * something that recurses does.
    */
+  /**
+   * `text()` without its recursion, for the one subtree read after `budget()`
+   * has already accepted it: at a caller-raised `maxDepth` the counter passes
+   * a tree the stack does not, and a `RangeError` is not the typed error the
+   * API promises. Document order is kept by pushing the children in reverse.
+   */
+  private flatText(node: P5Node): string {
+    let text = ''
+    const pending: P5Node[] = [node]
+    while (pending.length) {
+      const current = pending.pop()!
+      if (current.nodeName === '#text') text += current.value ?? ''
+      const children = current.childNodes ?? []
+      for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]!)
+    }
+    return text
+  }
+
   private budget(node: P5Node, depth: number): void {
     const pending: Array<[P5Node, number]> = [[node, depth]]
     while (pending.length) {
