@@ -36,8 +36,16 @@ describe('differential audit regressions', () => {
     expect(carveToHtml('H``` x\n* ```\n')).toBe('<p>H<code>x\n*</code></p>')
   })
 
-  it('does not let an unclosed line-block code span consume the next verse line', () => {
-    expect(carveToHtml('::: |\n`\n}\n')).toContain('<p><code></code><br>\n}</p>')
+  it('lets an unclosed line-block code span reach the end of the stanza', () => {
+    // markup-carve/carve#1282 (carve-js#1116) ruled the other way round from
+    // what this row pinned: `edge-cases.md:2205` says an unclosed verbatim run
+    // renders to the end of the BLOCK, and a line block is a block. The run
+    // therefore swallows the newline - literally, as a newline - and no `<br>`
+    // is left to render. carve-rs `9b0bc779` produces exactly this, including
+    // for an UNTERMINATED line block as here.
+    expect(carveToHtml('::: |\n`\n}\n')).toBe(
+      '<div class="line-block">\n  <p><code>\n}</code></p>\n</div>',
+    )
   })
 
   it('absorbs a bare colon run after an indented malformed opener', () => {
