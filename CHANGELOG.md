@@ -7,6 +7,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **HTML import reads a bare-text `<li>` as a tight list item.** Every list
+  imported loose, whatever the source spelled, so `<ul><li>one</li></ul>`
+  came back as `- one` with a blank line to its sibling and re-rendered as
+  `<li><p>one</p></li>`. As ruled (spec corpus-convert 27/28): a bare-text
+  item is tight, a block-wrapped `<li><p>...</p></li>` stays loose, and a
+  mixed list normalizes tight - tightness is a property of the list, one bare
+  item is the author's word that it is tight, and `<p>` is what serializers
+  wrap everything in. A nested sublist and the consumed task-list checkbox do
+  not decide tightness; only real content votes.
+
 ### Added
 
 - **The `word` and `google-docs` HTML import adapters read footnote-shaped

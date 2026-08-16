@@ -345,7 +345,8 @@ describe('definition lists on import', () => {
 
   it('keeps block content in a definition', () => {
     const html = '<dl><dt>Modes</dt><dd><p>Three of them:</p><ul><li>safe</li><li>semantic</li></ul></dd></dl>'
-    expect(carve(html)).toBe(':: Modes\n:  Three of them:\n\n   - safe\n\n   - semantic')
+    // Bare-text `<li>`s import TIGHT (the ruled tight-li import).
+    expect(carve(html)).toBe(':: Modes\n:  Three of them:\n\n   - safe\n   - semantic')
     expect(carveToHtml(carve(html))).toContain('<ul>')
   })
 
@@ -480,7 +481,7 @@ describe('change tracking and ordered-list alphabets on import', () => {
   it('counts an ordered list in the alphabet the HTML asked for', () => {
     // The attribute was exempt from the unsupported-attribute report and then
     // unread, so the list came back counting 1. 2. 3. and nothing said so.
-    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a. x\n\nb. y')
+    expect(carve('<ol type="a"><li>x</li><li>y</li></ol>')).toBe('a. x\nb. y')
     expect(carve('<ol type="I"><li>x</li></ol>')).toBe('I. x')
     expect(carveToHtml(carve('<ol type="a"><li>x</li></ol>'))).toContain('<ol type="a">')
   })
@@ -566,7 +567,7 @@ describe('change tracking and ordered-list alphabets on import', () => {
     // the writer derives its letter arithmetically, so zero came out as a
     // BACKTICK and -3 as `]` - characters that can pair with a later one.
     const zero = htmlToCarve('<ol type="a" start="0"><li>x</li><li>y</li></ol>')
-    expect(zero.value).toBe('0. x\n\n1. y\n')
+    expect(zero.value).toBe('0. x\n1. y\n')
     expect(zero.report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'attribute-dropped',
