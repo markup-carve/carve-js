@@ -50,16 +50,20 @@ describe('a code fence line ending in a tab is not a fence', () => {
     )
   })
 
-  it('refuses the closer: the delimiter line stays in the block as content', () => {
-    expect(carveToHtml('```\nx\n```' + TAB + '\n')).toBe(
-      '<pre><code>x\n```' + TAB + '\n</code></pre>',
-    )
+  // THE CLOSER WENT THE OTHER WAY (markup-carve/carve#1295). These two rows
+  // asserted that a tab-padded closer is refused and its delimiter line stays
+  // in the block as content. That followed from reading the opener and closer
+  // as ONE RUN SEEN FROM TWO ENDS, and the ruling has since split them by
+  // POSITION: a tab before content is a separator, a tab at end of line is
+  // trailing, and a CLOSER HAS NO CONTENT AFTER ITS MARKER, so its tab is
+  // always trailing and the fence closes. carve-php was the only engine that
+  // had this right; carve-js#1132 brought this one over.
+  it('closes the closer: a tab after the marker is trailing, not a separator', () => {
+    expect(carveToHtml('```\nx\n```' + TAB + '\n')).toBe('<pre><code>x\n</code></pre>')
   })
 
-  it('refuses a tilde closer ending in a tab', () => {
-    expect(carveToHtml('~~~\nx\n~~~' + TAB + '\n')).toBe(
-      '<pre><code>x\n~~~' + TAB + '\n</code></pre>',
-    )
+  it('closes a tilde closer ending in a tab', () => {
+    expect(carveToHtml('~~~\nx\n~~~' + TAB + '\n')).toBe('<pre><code>x\n</code></pre>')
   })
 
   // The controls. A SPACE satisfies the same run at both ends, so the fix is
