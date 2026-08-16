@@ -362,23 +362,27 @@ function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
     })),
   )
 
-  // Per source column, the last row index (above the current one) whose cell is
-  // not skipped - the nearest source a `^` can extend. Maintained incrementally
-  // so an all-`^` column resolves in O(1) (carve-js parity).
-  const lastNonSkip: number[] = []
+  // Per source column, the last row index (above the current one) a `^`
+  // resolves against. Maintained incrementally so an all-`^` column resolves in
+  // O(1) (pipe-table parity).
+  const base: number[] = []
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
       const entry = grid[r]![c]!
       if (entry.skip) continue
 
       if (entry.marker === '^' && r > 0) {
-        const up = lastNonSkip[c]
+        const up = base[c]
         const src = up !== undefined ? grid[up]?.[c] : undefined
         // Clamp at the header/body boundary: a `^` in a body row must not extend
         // a cell that originated in the header rows. Leave it unmerged (it then
         // renders as an empty cell) so no <th rowspan> crosses into <tbody>.
         const crossesHeader = up !== undefined && up < headerRows && r >= headerRows
         if (src && !crossesHeader) {
+          // A `^` under a merged `<` is absorbed and renders nothing: the
+          // origin's rowspan is grown by the mark at its own index, and the
+          // count this one adds lands on the merged `<`, which renders nothing
+          // either (pipe-table parity).
           src.rowspan++
           entry.skip = true
         }
@@ -392,9 +396,10 @@ function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
         }
       }
 
-      // A cell that ends up non-skipped becomes the nearest source for the cells
-      // below it in this column.
-      if (!entry.skip) lastNonSkip[c] = r
+      // Any cell that is not a RESOLVED `^` is what the cells below it in this
+      // column resolve against - a merged `<` included, because the column it
+      // covers is still a column of the grid.
+      if (!entry.skip || entry.marker === '<') base[c] = r
     }
   }
 

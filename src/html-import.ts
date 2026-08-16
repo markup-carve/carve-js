@@ -736,13 +736,20 @@ class Importer {
       }
       for (const { cell, colspan, rowspan } of sourceCells) {
         fillMarks()
-        const originIndex = cells.length
+        const columns: number[] = [cells.length]
         cells.push(cell)
         for (let k = 1; k < colspan; k++) {
           fillMarks()
+          columns.push(cells.length)
           cells.push(continuation('colspan', cell.header))
         }
-        if (rowspan > 1) opened.push({ index: originIndex, rows: rowspan - 1 })
+        // A cell spanning BOTH ways carries a mark into EACH column it covers,
+        // not one for its origin. The renderer resolves a `^` against the cell
+        // at the same index above it, so a single mark left the next rowspan in
+        // the row resolving against a column it does not own: the gap between
+        // them was filled with a cell the source did not have, reported as an
+        // invention, and rendered as a `<td>` the table does not have.
+        if (rowspan > 1) for (const index of columns) opened.push({ index, rows: rowspan - 1 })
       }
       // A mark past the end of this row's own cells. Placing it still costs
       // nothing - it is a cell the span already owns - but a GAP before it does:
@@ -1008,8 +1015,8 @@ class Importer {
    * count wrong in a table that carries them.
    *
    * A continuation resolves the way the renderer resolves it: `<` to the
-   * nearest cell to its left that is not one, `^` to the nearest row above with
-   * a non-continuation at the same index.
+   * nearest cell to its left that is not one, `^` to the nearest row above
+   * whose cell at the same index is not itself a `^`.
    */
   private rowHeadColumns(groupRows: TableRow[], allRows: TableRow[], firstIndex: number): number {
     if (groupRows.length === 0) return 0
@@ -1023,39 +1030,27 @@ class Importer {
       // A `^` is different - it is built with the flag cleared, because the
       // cell it continues is in another row - so that one is resolved.
       if (cell.span === 'rowspan') {
+        // Only a `^` is walked past. The cell above may be a `<`, and that one
+        // ALREADY carries its origin's header flag, so reading the flag off it
+        // is the answer; walking past it reached the cell two rows up, which
+        // says nothing about this column and reported a header column short
+        // under a `<th rowspan colspan>`.
         let up = r - 1
-        while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
+        while (up >= 0 && allRows[up]!.cells[c]?.span === 'rowspan') up -= 1
         return up >= 0 ? headerAt(up, c) : false
       }
       return cell.header
     }
-    // How many COLUMNS an origin covers: itself plus the `<` run after it.
-    const widthAt = (r: number, c: number): number => {
-      let width = 1
-      while (allRows[r]?.cells[c + width]?.span === 'colspan') width += 1
-      return width
-    }
-    const originRow = (r: number, c: number): number => {
-      let up = r - 1
-      while (up >= 0 && allRows[up]!.cells[c]?.span !== undefined) up -= 1
-      return up
-    }
+    // Every slot is exactly one COLUMN: a source cell contributes its origin
+    // plus a `<` per further column, and a carried span contributes a `^` per
+    // column it covers, so the array index a continuation resolves by IS the
+    // grid column here.
     const leading = (row: TableRow, r: number): number => {
-      let columns = 0
       let slot = 0
-      while (slot < row.cells.length && headerAt(r, slot)) {
-        const cell = row.cells[slot]!
-        // A carried `^` occupies ONE slot however many columns its origin
-        // covers - that is the array-index model the renderer resolves - so a
-        // `<th rowspan="2" colspan="2">` leaves the row below it with a single
-        // slot standing for two columns. Counting slots reported one.
-        const up = cell.span === 'rowspan' ? originRow(r, slot) : -1
-        columns += up >= 0 ? widthAt(up, slot) : 1
-        slot += 1
-      }
+      while (slot < row.cells.length && headerAt(r, slot)) slot += 1
       // An all-header row would say every column is a row head, which is what
       // an intermediate HEADER row is, not a row-head column.
-      return slot === row.cells.length ? 0 : columns
+      return slot === row.cells.length ? 0 : slot
     }
     return Math.min(...groupRows.map((row, offset) => leading(row, firstIndex + offset)))
   }

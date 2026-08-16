@@ -339,6 +339,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A cell spanning both ways keeps the grid it came with.** A `^` is resolved
+  against the cell at the same INDEX above it, so a
+  `<td colspan="2" rowspan="2">` written with one mark for its origin left the
+  next rowspan in the row resolving against a column it does not own: the gap
+  between the two marks was filled with a cell the source did not have,
+  reported as an invention, and rendered as a `<td>` the table does not have.
+  The import writes a mark into each column the cell covers, and the renderer
+  absorbs a `^` standing under a merged `<` instead of finding no source and
+  rendering an empty cell - so `| A | < |` over `| ^ | ^ |` renders the covered
+  row empty whether it was imported or typed. `::: list-table` resolves the
+  same shape the same way. A `<th colspan rowspan>` also reported one row-head
+  column too few, because the column below the merged `<` read the cell two
+  rows up rather than the `<` that already carries its origin's header flag.
+
 - **A caret before a TAB is written bare.** The canonical writer escaped it as
   `\^`, but a tab after the marker leaves the line as prose (corpus 231), so the
   caret opens no caption there. A caret before a SPACE after a caption host

@@ -1325,19 +1325,27 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     }
     grid.push(gridRow)
   }
-  // Per column, the last row index (above the current one) whose cell is not
-  // skipped. This is exactly what the previous `while (grid[up][c].skip) up--`
-  // scan found, but maintained incrementally so a '^' resolves in O(1) instead
-  // of walking up every prior row (an all-'^' table was O(rows^2)).
-  const lastNonSkip: number[] = []
+  // Per column, the last row index (above the current one) a '^' resolves
+  // against. Maintained incrementally so a '^' resolves in O(1) instead of
+  // walking up every prior row (an all-'^' table was O(rows^2)).
+  const base: number[] = []
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
       const entry = grid[r]![c]!
       if (entry.skip) continue
       if (entry.cell.span === 'rowspan' && r > 0) {
-        const up = lastNonSkip[c]
+        const up = base[c]
         const src = up !== undefined ? grid[up]?.[c] : undefined
         if (src) {
+          // A '^' standing under a merged '<' is ABSORBED: it renders nothing.
+          // A cell spanning both ways carries a mark into each column it
+          // covers, and the origin's rowspan is grown by the mark at the
+          // origin's own index; the count this one adds lands on the merged
+          // '<', which renders nothing either, so it is discarded with it. (A
+          // branch skipping the increment was here and no mutation of it could
+          // change an output.) Before this, such a mark found no source at all
+          // and rendered an empty cell, putting a `<td>` in a row the spans
+          // above it already cover.
           src.rowspan++
           entry.skip = true
         }
@@ -1350,9 +1358,10 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
           entry.skip = true
         }
       }
-      // A cell that ends up non-skipped becomes the nearest source for the
-      // cells below it in this column.
-      if (!entry.skip) lastNonSkip[c] = r
+      // Any cell that is not a RESOLVED '^' is what the cells below it in this
+      // column resolve against - a merged '<' included, because the column it
+      // covers is still a column of the grid.
+      if (!entry.skip || entry.cell.span === 'colspan') base[c] = r
     }
   }
 
