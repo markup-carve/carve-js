@@ -386,6 +386,29 @@ export function lintCarve(
 
   checkDeclaredVersion(source, doc, (w) => out.push(w))
 
+  // A template tag and PART 9 §21a deliberately have the same surface shape.
+  // Template hosts normally run first, but `{% raw %}` hands the converter bare
+  // tags; once parsed, those tags are indistinguishable from comments. Report
+  // the collision and leave the source untouched.
+  let firstDelimitedComment: Positioned | undefined
+  let hasTemplateTagShape = false
+  const templateTag = /^(?:raw|endraw|endif|endfor|endblock|if\s+.+|for\s+.+|block\s+.+)$/s
+  walkDocument(doc, (node) => {
+    if (node.type !== 'comment' || node.delimited !== true) return
+    firstDelimitedComment ??= node as Positioned
+    if (typeof node.content === 'string' && templateTag.test(node.content)) {
+      hasTemplateTagShape = true
+    }
+  })
+  if (firstDelimitedComment && hasTemplateTagShape) {
+    out.push({
+      ...locate(firstDelimitedComment, toUtf16),
+      rule: 'braced-comment-in-a-template-source',
+      message:
+        'This document contains a braced comment and a template-tag shape. Liquid, Nunjucks, or Twig source may have reached Carve as text; the tag is parsed as an invisible comment.',
+    })
+  }
+
   // Build the final heading-id set exactly as resolveHeadingIds does
   // (explicit ids win; colliding slugs get a `-2`, `-3`, … suffix), and warn
   // on every collision along the way.

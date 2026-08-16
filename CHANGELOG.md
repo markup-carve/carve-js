@@ -36,6 +36,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   link the HTML spelled, and a definition nothing references stays ordinary
   visible content. `generic` is unchanged.
 
+- **Behavior change: `{% … %}` is now a delimited inline comment.**
+  `foo {% bar %} baz` used to render its braces and now hides the middle. The
+  new `braced-comment-in-a-template-source` lint rule reports the likely
+  collision when Liquid, Nunjucks or Twig source reaches the parser as text.
+
 - **HTML import reads MathML as math.** A `<math>` element becomes a `math`
   node whose content is the TeX the producer already put in the source: an
   `<annotation>` on the element's own `<semantics>` whose encoding declares TeX

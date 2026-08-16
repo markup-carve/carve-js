@@ -19,6 +19,18 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function wireFieldsSource(schema) {
+  // PART 9 §21a is implemented ahead of the spec-corpus pin by design: its
+  // corpus cases are not merged yet, and this change must not move the
+  // submodule. Mirror only the already-normative optional wire field so the
+  // generated validator can accept trees produced by this engine. Delete this
+  // compatibility overlay once the pinned schema contains the property.
+  schema = structuredClone(schema);
+  const commentDef = Object.values(schema.$defs ?? {}).find(
+    (def) => def?.properties?.type?.const === "comment",
+  );
+  if (commentDef && commentDef.properties.delimited === undefined) {
+    commentDef.properties.delimited = { type: "boolean" };
+  }
   const defs = schema.$defs ?? {};
   /** type name -> sorted property names */
   const byType = new Map();
