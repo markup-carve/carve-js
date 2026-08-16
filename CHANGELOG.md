@@ -383,15 +383,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   move: PART 9 §17 L2 leaves the item tight when a sub-block is attached after
   a blank line, attributed or not.
 
-- **HTML import reads a bare-text `<li>` as a tight list item.** Every list
-  imported loose, whatever the source spelled, so `<ul><li>one</li></ul>`
-  came back as `- one` with a blank line to its sibling and re-rendered as
-  `<li><p>one</p></li>`. As ruled (spec corpus-convert 27/28): a bare-text
-  item is tight, a block-wrapped `<li><p>...</p></li>` stays loose, and a
-  mixed list normalizes tight - tightness is a property of the list, one bare
-  item is the author's word that it is tight, and `<p>` is what serializers
-  wrap everything in. A nested sublist and the consumed task-list checkbox do
-  not decide tightness; only real content votes.
+- **HTML import keeps the tightness the source spelled** (markup-carve/carve#1210,
+  spec corpus-convert 27/28). Every list imported loose, whatever the source
+  spelled, so `<ul><li>one</li><li>two</li></ul>` came back with a blank line
+  between its items and re-rendered as `<li><p>one</p></li>`. A bare-text
+  `<li>` now imports as a tight list item and a paragraph-wrapped
+  `<li><p>...</p></li>` as a loose one. Carve spells tightness per LIST rather
+  than per item, so a mixed list resolves the way CommonMark resolves it: one
+  paragraph item loosens the whole list, because resolving it tight would drop
+  the paragraph that item actually spelled. Looseness is decided per level, so
+  a paragraph item in a sublist does not loosen its bare-text parent. A nested
+  sublist beside bare text is structure rather than a paragraph wrapper and
+  leaves its host item tight, and the task-list checkbox `<input>` is consumed
+  into the `[x]` marker rather than imported, so it does not vote either.
 
 - **HTML import names the `<colgroup>` it drops.** The element went in
   complete silence: the table walk looks for `tr`, descends through the

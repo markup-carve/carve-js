@@ -414,24 +414,24 @@ class Importer {
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
     })
-    // Tightness is decided by the ITEM SHAPE (ruled; corpus-convert 27/28): a
-    // bare-text `<li>one</li>` is a tight item, a block-wrapped
-    // `<li><p>one</p></li>` a loose one. Tight/loose is a property of the
-    // LIST, so a mixed list has to pick a side, and it is LOOSE - the ruling
-    // on markup-carve/carve#1210 is that `<li><p>...</p></li>` stays loose and
-    // that import preserves source structure rather than normalizing, so one
-    // block-wrapped item is enough. This read `.some` and normalized a mixed
-    // list tight, which is the one shape that sentence refuses
-    // (markup-carve/carve#1260); carve-php and carve-rs both import it loose.
-    const tight = listItems.every((li) =>
-      (li.childNodes ?? []).some(
-        (child) =>
-          (child.tagName !== undefined &&
-            !BLOCK.has(child.tagName) &&
-            !(child.tagName === 'input' && this.attr(child, 'type') === 'checkbox')) ||
-          (child.nodeName === '#text' && (child.value ?? '').trim() !== ''),
-      ),
-    )
+    // Tightness is decided by the ITEM SHAPE (ruled, spec docs/html-import.md
+    // "Lists keep the source's tightness"; corpus-convert 27/28): a bare-text
+    // `<li>one</li>` is a tight item, a paragraph-wrapped `<li><p>one</p></li>`
+    // a loose one, and import preserves what the source spelled rather than
+    // normalizing it.
+    //
+    // Carve spells tightness per LIST, not per item, so a MIXED list has to
+    // resolve one way, and it resolves the way CommonMark resolves it: ONE
+    // paragraph item loosens the whole list. Resolving tight instead would
+    // drop the paragraph that item actually spelled - the loss this rule
+    // exists to prevent.
+    //
+    // Only a direct `<p>` votes. A nested `<ul>` beside bare text is
+    // structure, not a paragraph wrapper, so `<li>one<ul>...</ul></li>` is the
+    // HTML of a tight item with a sublist; the task-list checkbox `<input>` is
+    // consumed into the `[x]` marker rather than imported, so it does not vote
+    // either.
+    const tight = !listItems.some((li) => (li.childNodes ?? []).some((child) => child.tagName === 'p'))
     const start = this.listStart(node, path, ordered)
     return { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
   }
