@@ -1462,6 +1462,16 @@ describe('MathML on import', () => {
     expect(htmlToCarve(withTex(nest(2))).value).toBe('$`x`\n')
   })
 
+  it('and reaches the counter rather than the stack, where a caller raised the depth limit', () => {
+    // `maxDepth` is the caller's, and above the interpreter's stack a walk that
+    // recurses stops being a guard and becomes the thing being guarded against:
+    // it raises a RangeError instead of counting. At the default limit the two
+    // shapes are indistinguishable, which is why this test sets its own.
+    const nest = (n: number): string => '<mrow>'.repeat(n) + '<mi>a</mi>' + '</mrow>'.repeat(n)
+    const result = htmlToAst(`<p><math alttext="x">${nest(20_000)}</math></p>`, { maxDepth: 100_000, maxNodes: 5_000_000 })
+    expect(result.value.children).toMatchObject([{ type: 'paragraph', children: [{ type: 'math', content: 'x' }] }])
+  })
+
   it('CONTROL: a document with no math is not touched by any of it', () => {
     const html = '<p>A <em>plain</em> paragraph with an <a href="https://example.com">link</a>.</p>'
     const result = htmlToCarve(html)
