@@ -2169,8 +2169,62 @@ export function stripContainerPrefixes(raw: string, afterTerm = false): string {
  */
 // The list marker the definition pre-pass tracks content columns with. Applied
 // REPEATEDLY along a line, so `- - a` contributes both of its columns.
+//
+// THE BARE-DOT BRANCH IS PART OF THE MARKER (carve-js#1120). `RE_ORDERED` spells
+// the ordered value `[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.)`, the last
+// alternative being the Carve-only bare dot (carve#315) - a value-less `. ` that
+// counts from 1. `RE_ITEM_ATTR` carries it too. This pattern and `afterMarker`
+// below are the two spellings of the same marker that did NOT, so a `. x` line
+// opened an item the block lexer could see and this pass could not.
+//
+// What that costs is not a column: it is the DOCUMENT-LEVEL test. PART 12 §7 is
+// normative that `*[TERM]: expansion` "is an `abbreviation_definition` only as a
+// direct child of the document. Written inside a block quote, a list item or a
+// div, the line is not a definition at all: it is ordinary paragraph text, it
+// defines nothing, and it is preserved as the text the author typed." With the
+// item invisible here, `listCols` stayed empty under a bare-dot item, the
+// abbreviation branch below read document level, and the line was BOTH kept as
+// lazy item text AND registered - so it expanded inside its own definition and
+// again in every later paragraph. `1. x` and `- x` never did, at the same
+// content column, which is how the marker rather than the column was isolated.
+//
+// The lookahead is zero-width and fires only before a `.`, exactly as in
+// `RE_ORDERED`: a bare `)` is never a marker. Group 1 stays the indent.
+//
+// AND THE ABUTTING BRACE HAS TO BE VALID ATTRIBUTES (group 2, read by
+// `prepassMarker` below). `extractItemAttr` is normative for the block lexer:
+// when the payload is not a valid attribute payload, `-{...}` "is not a marker
+// and the line stays ordinary text, mirroring the inline-span disambiguation,
+// grammar §14". This pattern took ANY brace contents, so `.{#} x` / `1.{#} x` /
+// `-{#} x` were paragraphs to the block lexer and open list items to this pass,
+// and a column-0 `*[A]: d` under one of them was read as item content and never
+// registered - a definition rendered as prose that also defines nothing, which
+// is the outcome carve-js#657 and #613 are both about.
+//
+// The bare-dot row is the reason it surfaced here: `1.` and `-` had this defect
+// already, and adding the bare dot to the marker without the validity test would
+// have moved `. ` from accidentally agreeing with carve-rs to consistently
+// diverging with its siblings. carve-rs registers under all three.
 const RE_PREPASS_MARKER =
-  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +/
+  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{([^}]*)\})? +/
+// The same marker with a task box after it, for the `afterMarker` strip below.
+const RE_PREPASS_MARKER_STRIP =
+  /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z]|(?=\.))[.)])(?:\{([^}]*)\})? +(?:\[[ xX\-_>?]\] +)?/
+
+/**
+ * The prepass marker at the head of `text`, or null when there is none.
+ *
+ * ONE producer, for the reason `fenceCloseRe` is one: an abutting brace has to
+ * be tested for validity at every site that reads this marker, or the two sites
+ * disagree about whether a line opened an item.
+ */
+function prepassMarker(text: string, re: RegExp = RE_PREPASS_MARKER): RegExpMatchArray | null {
+  const m = re.exec(text)
+  if (!m) return null
+  if (m[2] !== undefined && !isValidInlineAttrPayload(m[2])) return null
+
+  return m
+}
 
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number; contentCol: number; quoted: boolean } | null = null
@@ -2265,7 +2319,7 @@ function collectLinkDefs(lexer: Lexer) {
       // bullets are `-`/`*` (not `+`, the continuation marker); ordered markers
       // cover every dialect the parser accepts (decimal, roman, single-letter);
       // an optional abutting `{…}` attribute block is part of the marker width
-      const marker = unquoted.match(RE_PREPASS_MARKER)
+      const marker = prepassMarker(unquoted)
       const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
       // Test the RAW line for a block starter: a blockquote `>` is stripped by
       // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
@@ -2292,7 +2346,7 @@ function collectLinkDefs(lexer: Lexer) {
           base += m2[0].length
           listCols.push(base)
           rest = rest.slice(m2[0].length)
-          m2 = rest.match(RE_PREPASS_MARKER)
+          m2 = prepassMarker(rest)
         }
       } else if (
         !isBlankLine(raw) &&
@@ -2324,10 +2378,12 @@ function collectLinkDefs(lexer: Lexer) {
     // A fence is quoted if a blockquote prefix leads the line, possibly behind a
     // single list marker (`- > ```), so its closer is blockquote-stripped. Deeper
     // list/quote mixing is a documented residual.
-    const afterMarker = raw.replace(
-      /^([ \t]*)(?:[-*]|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)])(?:\{[^}]*\})? +(?:\[[ xX\-_>?]\] +)?/,
-      '',
-    )
+    //
+    // The SECOND spelling of `RE_PREPASS_MARKER`, and it carries the bare-dot
+    // branch for the same reason (carve-js#1120): without it `. > ``` ` did not
+    // read as quoted while `1. > ``` ` did.
+    const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
+    const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
