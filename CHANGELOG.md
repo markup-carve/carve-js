@@ -14,10 +14,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `<annotation>` on the element's own `<semantics>` whose encoding declares TeX
   (`application/x-tex`, `text/x-tex`, `LaTeX`, matched on the whole value), else
   the `alttext` attribute with an `info` recording that its encoding was
-  assumed. `display="block"` is display math and the content is written byte for
+  assumed. `display="block"` is display math and the TeX is written byte for
   byte, `{\displaystyle …}` wrapper included. An element carrying neither is
   dropped with a `warning` naming it in `safe` and `semantic` mode, and kept
-  verbatim in `roundtrip` as before. There was no `math` branch at all until
+  verbatim in `roundtrip`, where the output is byte for byte what it was and
+  the preservation is now reported once for the element instead of once per
+  descendant. There was no `math` branch at all until
   now, so every `<math>` unwrapped to its children and
   `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>` imported as `12` - one half
   arriving as twelve, with nothing in the report naming `<math>` as the thing

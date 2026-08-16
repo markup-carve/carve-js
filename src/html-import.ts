@@ -1160,23 +1160,28 @@ class Importer {
      * preserve it verbatim.
      */
     if (tag === 'math') {
-      const math = this.mathml(node, path)
-      const dropped = math === undefined && this.mode !== 'roundtrip'
       /*
-       * Charged once, here, on the two arms that return without walking the
-       * children - the mapped element, whose subtree the mapping discards, and
-       * the dropped one. `maxNodes` and `maxDepth` must not depend on which
-       * branch an element takes, and this is the only place that knows the
-       * branch is taken. `roundtrip`'s tier-3 fall-through walks the children
-       * below and is charged there, so charging inside `mathml()` instead
-       * would count part of the subtree twice.
+       * Charged once, before anything reads the subtree: every arm below
+       * returns without walking the children, so `inlines()` never counts a
+       * descendant, and `maxNodes`/`maxDepth` must not depend on which branch
+       * an element takes. Before the counter, so a limit is reached by the
+       * counter rather than by the read - and once, because charging in the
+       * tier lookup as well counted an empty-annotation element's descendants
+       * twice.
        */
-      if (math !== undefined || dropped) this.budget(node, depth)
+      this.budget(node, depth)
+      const math = this.mathml(node, path)
       if (math) return [math]
-      if (dropped) {
-        this.add('element-dropped', 'Dropped <math> element: it carries no TeX annotation and no alttext, and MathML children are not an equation when concatenated', 'warning', path)
-        return []
+      if (this.mode === 'roundtrip') {
+        // The same answer the generic arm below gave a `<math>` before this
+        // branch existed, and byte for byte the same output. Reported once for
+        // the element rather than once per descendant, because the descendants
+        // are not preserved separately - they are inside this one raw span.
+        this.add('raw-preserved', 'Preserved unsupported <math> element as raw HTML', 'warning', path)
+        return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
       }
+      this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path)
+      return []
     }
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
@@ -1251,10 +1256,12 @@ class Importer {
    * a declared encoding beats an undeclared attribute. carve-php's own
    * docblock documents the reverse order and is corrected to this one.
    *
-   * The content is written byte for byte, `{\displaystyle …}` wrapper and all.
-   * Carve's math content is opaque TeX; unwrapping it would be a second
-   * decision, and the writer already pads a span whose content has an outer
-   * space so even that survives the round trip.
+   * The content keeps the TeX byte for byte, `{\displaystyle …}` wrapper and
+   * all: Carve's math content is opaque TeX and unwrapping it would be a
+   * second decision. Only the surrounding whitespace goes, which is the
+   * pretty-printer's and not the equation's - and carve-php, which shipped
+   * this ruling first, trims it too, so the two engines write one byte
+   * sequence for one input.
    *
    * Whitespace-only content is treated as absent, because it is: an empty
    * `alttext` or a pretty-printed empty annotation says nothing about the
@@ -1265,8 +1272,8 @@ class Importer {
    */
   private mathml(node: P5Node, path: string): InlineNode | undefined {
     const annotated = this.texAnnotation(node)
-    const content = annotated ?? this.attr(node, 'alttext')
-    if (content === undefined || content.trim() === '') return undefined
+    const content = (annotated ?? this.attr(node, 'alttext') ?? '').trim()
+    if (content === '') return undefined
     // After the tier is settled, so a dropped element does not also report
     // attributes on its way out: the `element-dropped` warning covers it.
     const attrs = this.attrs(node, path)
@@ -1300,8 +1307,8 @@ class Importer {
         if (child.tagName !== 'annotation') continue
         const encoding = this.attr(child, 'encoding')
         if (encoding === undefined || !TEX_ANNOTATION_ENCODINGS.has(encoding.trim().toLowerCase())) continue
-        const text = this.flatText(child)
-        if (text.trim() !== '') return text
+        const text = this.flatText(child).trim()
+        if (text !== '') return text
       }
     }
     return undefined

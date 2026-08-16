@@ -1372,7 +1372,7 @@ describe('MathML on import', () => {
         {
           code: 'element-dropped',
           severity: 'warning',
-          message: 'Dropped <math> element: it carries no TeX annotation and no alttext, and MathML children are not an equation when concatenated',
+          message: 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation',
           path: '/p[1]/math[2]',
         },
       ])
@@ -1388,11 +1388,25 @@ describe('MathML on import', () => {
     ])
   })
 
+  it('TIER 3: text/plain is not TeX, though a substring test for tex says it is', () => {
+    /*
+     * The case that proves the whole-value match, which the MathType fixture
+     * cannot: `MathType-MTEF` does not contain `tex` and so never exercises a
+     * loose comparison, while `text/plain` does. carve-php read this one as an
+     * equation until the same ruling landed there.
+     */
+    const html = '<p><math><semantics><mrow><mn>1</mn></mrow>'
+      + '<annotation encoding="text/plain">one over two</annotation></semantics></math></p>'
+    const result = htmlToCarve(html)
+    expect(result.value).not.toContain('one over two')
+    expect(result.report.diagnostics.map((d) => d.code)).toEqual(['element-dropped'])
+  })
+
   it('TIER 3: an encoding that only LOOKS like one of the three is not one of the three', () => {
     // The match is on the whole value, case-insensitively. A substring test for
     // `tex` accepts every line here, and each would hand a math node content
     // that is not TeX or not the element's own presentation.
-    for (const encoding of ['application/x-tex;charset=utf-8', 'application/mathml-content', 'TeX-and-more', 'StarMath 5.0']) {
+    for (const encoding of ['application/x-tex;charset=utf-8', 'application/mathml-content', 'TeX-and-more', 'StarMath 5.0', 'text/plain']) {
       const html = `<p><math><semantics><mrow><mi>a</mi></mrow><annotation encoding="${encoding}">PAYLOAD</annotation></semantics></math></p>`
       expect(htmlToCarve(html).value).toBe('\n')
     }
@@ -1459,6 +1473,25 @@ describe('MathML on import', () => {
     expect(htmlToCarve(empty).report.diagnostics.map((d) => d.code)).toEqual(['element-dropped'])
   })
 
+  it('reports what a mapped element still loses, so a handler does not vanish with it', () => {
+    /*
+     * The tier lookup returns before the generic arm reads the attributes, so
+     * the element's own attribute walk has to happen inside it. Without that,
+     * `<math onclick>` with a usable annotation imports as a LOSSLESS document
+     * and the handler leaves no trace at all.
+     */
+    const html = '<p><math onclick="evil()" data-src="x"><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation encoding="application/x-tex">a</annotation></semantics></math></p>'
+    const result = htmlToCarve(html, { mode: 'semantic' })
+    expect(result.value).toBe('$`a`{data-src=x}\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'attribute-dropped', severity: 'warning', message: 'Dropped event-handler attribute onclick on <math>' }),
+    ])
+    // And the three the mapping CONSUMES are not reported as losses.
+    expect(htmlToCarve('<p><math xmlns="http://www.w3.org/1998/Math/MathML" display="block" alttext="x"></math></p>').report.diagnostics.map((d) => d.code))
+      .toEqual(['element-unwrapped'])
+  })
+
   it('CONTROL: roundtrip keeps the whole element, exactly as it did before this mapping', () => {
     /*
      * That mode's contract is Carve-produced HTML, which spells math as a
@@ -1470,8 +1503,12 @@ describe('MathML on import', () => {
       const result = htmlToCarve(html, { mode: 'roundtrip' })
       expect(result.value).toContain('<math>')
       expect(result.value).toContain('</math>')
-      expect(result.report.diagnostics.some((d) => d.code === 'raw-preserved' && d.message.includes('<math>'))).toBe(true)
-      expect(result.report.diagnostics.some((d) => d.code === 'element-dropped')).toBe(false)
+      // One entry for the element, where the generic arm reported one per
+      // descendant on the way past. The descendants are not preserved
+      // separately - they are inside this one raw span.
+      expect(result.report.diagnostics).toEqual([
+        { code: 'raw-preserved', severity: 'warning', message: 'Preserved unsupported <math> element as raw HTML', path: '/p[1]/math[2]' },
+      ])
     }
     expect(htmlToCarve(HAND_WRITTEN, { mode: 'roundtrip' }).value)
       .toBe('Bare `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>`{=html} here.\n')
