@@ -90,6 +90,14 @@ function walkBlockInlines(
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'div':
+    // A LINE BLOCK HOLDS ORDINARY BLOCKS and differs from a div only in that
+    // its newlines are hard breaks (§4.4), so its inlines are numbered like any
+    // other. Falling to `default` here did not degrade the note, it deleted it:
+    // an inline footnote carries no `id`, so an unnumbered one renders as the
+    // literal `[^]` and its body reaches no endnotes section - the content is
+    // gone from the document rather than merely unlinked
+    // (markup-carve/carve-js#1117).
+    case 'line_block':
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'definition_list':

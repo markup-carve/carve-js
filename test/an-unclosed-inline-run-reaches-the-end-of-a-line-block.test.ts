@@ -50,14 +50,32 @@ describe('an unclosed inline run reaches the end of a line block', () => {
     // the next line, so under per-line parsing the construct was invisible and
     // the source stayed on the page as `a ^[note<br> more] b`.
     //
-    // Asserted as "the boundary no longer blocks resolution" rather than against
-    // a fixed string, because a single-line inline footnote inside a line block
-    // renders as `[^]` and loses its body in this engine - a SEPARATE defect,
-    // filed separately, present before this change and unaffected by it. Pinning
-    // its HTML here would pin that defect as correct.
+    // This was asserted as "the boundary no longer blocks resolution", against
+    // the single-line rendering rather than a fixed string, because a footnote
+    // inside a line block used to render as `[^]` and lose its body - the
+    // SEPARATE defect this deferred to, markup-carve/carve-js#1117. That is
+    // fixed, so the equality is no longer the right shape: it only held while
+    // BOTH sides were broken and dropped their bodies. The body is now kept,
+    // and the two-line note keeps a two-line one, so the real output can be
+    // pinned. Byte-identical to carve-rs and carve-php.
     const twoLine = carveToHtml('::: |\na ^[note\nmore] b\n:::\n')
     expect(twoLine).not.toContain('^[')
-    expect(twoLine).toBe(carveToHtml('::: |\na ^[note] b\n:::\n'))
+    expect(twoLine).toBe(
+      '<div class="line-block">\n' +
+        '  <p>a <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> b</p>\n' +
+        '</div>\n' +
+        '<section role="doc-endnotes">\n' +
+        '  <hr>\n' +
+        '  <ol>\n' +
+        '    <li id="fn1">\n' +
+        '      <p>note\nmore<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        '    </li>\n' +
+        '  </ol>\n' +
+        '</section>',
+    )
+    // The two spellings now DIFFER, and that is the point: the single-line note
+    // carries a single-line body.
+    expect(twoLine).not.toBe(carveToHtml('::: |\na ^[note] b\n:::\n'))
   })
 
   // The paragraph controls. Unanimous across all three engines today and they
