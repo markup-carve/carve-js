@@ -27,6 +27,24 @@ to the canonical writer. `report.diagnostics` records every lossy decision.
 Use `semantic` for trusted editor HTML and `roundtrip` only for Carve-produced
 HTML. The CLI equivalent is `carve migrate --from html --report report.json`.
 
+`adapter: 'word'` and `adapter: 'google-docs'` (CLI: `--adapter`) add one
+recognition the `generic` default does not risk: footnote-shaped HTML. A word
+processor writes a note as a body anchor and a definition block that link to
+each other, and none of them uses the `doc-noteref` / `doc-endnotes` roles a
+Carve engine writes, so under `generic` a note arrives as a literal link beside
+an orphaned list. Under those two adapters the pair is matched through the
+fragment each anchor addresses and written back as `[^1]` and `[^1]: `,
+whatever the ids are called - Word's `_ftnref1`/`_ftn1`, Google Docs'
+`ftnt_ref1`/`ftnt1`, LibreOffice's `sdfootnote1anc`/`sdfootnote1sym` and
+Pandoc's `fnref1`/`fn1` all pair by the same rule. Back-links, the marker
+anchors they sit on, and the rule separating the notes from the body are
+generated navigation and are dropped. A reference whose target is missing
+stays a link, and a definition nothing references stays ordinary content
+rather than becoming a definition that renders as nothing. Name the adapter
+only for input you know came from that editor: on arbitrary HTML a mutually
+linked anchor pair is not proof of a footnote, which is why `generic` stays
+out.
+
 ### What the importer does not model
 
 Three decisions are deliberate, so a diagnostic naming them is the whole answer

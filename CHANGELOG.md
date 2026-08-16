@@ -9,6 +9,21 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `word` and `google-docs` HTML import adapters read footnote-shaped
+  HTML as footnotes** (markup-carve/carve#1210, porting
+  markup-carve/carve-php#1303). Word, Google Docs, LibreOffice and pre-3.x
+  Pandoc each spell a footnote differently and none of them with the DPUB-ARIA
+  roles, so their notes arrived as a literal link beside an orphaned list.
+  Passing `adapter: 'word'` or `adapter: 'google-docs'` (CLI: `--adapter`) now
+  binds each reference to its note and writes real `[^N]` references and
+  definitions. The pair is matched through the fragment each anchor addresses
+  and the back-link the note carries, so nothing depends on a vendor class
+  name or on the `fn1`/`fnref1` id convention; back-links and the marker
+  anchors they sit on are dropped as generated navigation, as is the rule
+  separating the notes from the body. A reference with no target stays the
+  link the HTML spelled, and a definition nothing references stays ordinary
+  visible content. `generic` is unchanged.
+
 - **HTML import reads MathML as math.** A `<math>` element becomes a `math`
   node whose content is the TeX the producer already put in the source: an
   `<annotation>` on the element's own `<semantics>` whose encoding declares TeX

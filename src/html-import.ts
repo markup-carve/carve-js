@@ -105,6 +105,57 @@ const ADAPTERS = new Set<HtmlImportAdapter>([
 ])
 
 /**
+ * The import adapters whose input can carry footnote-shaped HTML.
+ *
+ * Word and Google Docs are the two the portable adapter list names for
+ * word-processor exports, and the recognition below is shape-driven, so the
+ * same pass reads LibreOffice's and pre-3.x Pandoc's spellings too. `generic`
+ * deliberately stays out: it takes arbitrary HTML, where a mutually linked
+ * anchor pair is not proof of a footnote, and the caller naming an adapter is
+ * the declaration of provenance that makes the recognition safe.
+ */
+const FOOTNOTE_SHAPED_ADAPTERS = new Set<HtmlImportAdapter>(['word', 'google-docs'])
+
+/** The elements a footnote definition body can be spelled as. */
+const FOOTNOTE_DEFINITION_BLOCKS = new Set(['li', 'div', 'section', 'aside', 'p', 'td', 'blockquote'])
+
+/**
+ * The elements a per-footnote wrapper can be spelled as.
+ *
+ * Word wraps each definition in `<div style='mso-element:footnote' id=ftn1>`
+ * and LibreOffice in `<div id="sdfootnote1">`, so the block holding the body
+ * is one level above the paragraph the back-anchor sits in.
+ */
+const FOOTNOTE_WRAPPER_BLOCKS = new Set(['div', 'li', 'section', 'aside'])
+
+/**
+ * Word's downlevel-revealed conditionals, `<![if !supportFootnotes]>` and the
+ * matching `<![endif]>`. They are NOT comments in the HTML grammar - a parser
+ * following the spec reads `<!` without `--` as a bogus comment, and one
+ * following libxml's lead hands them back as TEXT - so both spellings are
+ * recognized as the separator's packaging (see isFootnoteChromeNode).
+ */
+const RE_DOWNLEVEL_CONDITIONAL = /^(<!\[if[^\]]*\]>|<!\[endif\]>)+$/i
+
+/**
+ * A footnote-reference candidate: the anchor, the definition block its
+ * fragment resolves to, the fragment itself, and whether the pair is mutual.
+ */
+interface FootnoteCandidate {
+  ref: P5Node
+  block: P5Node
+  fragment: string
+  mutual: boolean
+}
+
+/** One recognized note: its block and every reference bound to it. */
+interface FootnoteDefinitionGroup {
+  block: P5Node
+  refs: P5Node[]
+  fragments: string[]
+}
+
+/**
  * The elements PART 9 §9 and §10 spell as an attribute on a span, so the
  * importer writes `[Tab]{kbd}` rather than unwrapping to `Tab` (carve#1140).
  *
@@ -167,8 +218,16 @@ class Importer {
 
   import(html: string): Document {
     const fragment = parseFragment(html, { sourceCodeLocationInfo: true }) as unknown as P5Node
+    // Rewrite an editor's footnote-shaped HTML before the core policy reads
+    // the tree, exactly as the adapter contract allows ("Adapters may
+    // normalize editor-specific markup before the core policy").
+    const footnoteDefs = FOOTNOTE_SHAPED_ADAPTERS.has(this.adapter)
+      ? this.adapterFootnotes(fragment)
+      : undefined
     const children = this.blocks(fragment.childNodes ?? [], '', 0)
-    return { type: 'document', children }
+    const doc: Document = { type: 'document', children }
+    if (footnoteDefs && Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
+    return doc
   }
 
   private enter(depth: number): void {
@@ -1309,6 +1368,11 @@ class Importer {
       return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title ? { title } : {}), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'br') return [{ type: 'hard_break' }]
+    // The synthetic element the adapter footnote pass leaves at each
+    // reference site (adapterFootnotes); never present in real HTML input.
+    if (tag === 'carve-footnote-ref') {
+      return [{ type: 'footnote_ref', id: this.attr(node, 'label') ?? '' }]
+    }
     if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
     /*
@@ -1590,6 +1654,535 @@ class Importer {
     const groupAttrs = this.stripClass(attrs, 'carve-figure-group')
     if (groupAttrs) group.attrs = groupAttrs
     return [group]
+  }
+
+  // --------------------------------------------------------------------------
+  // Adapter footnotes: word-processor footnote-shaped HTML to footnote nodes.
+  //
+  // Ports markup-carve/carve-php#1303 (and the branch pins of #1307). The
+  // shapes were measured, not recalled - Word's two saves, Google Docs,
+  // LibreOffice and Pandoc 1.x agree on almost nothing, and what all of them
+  // do have is a MUTUALLY LINKED ANCHOR PAIR: the body reference addresses
+  // the note and the note addresses the reference back. That pair, not a
+  // vendor class name and not the `fn1`/`fnref1` id convention, is the
+  // signature this matches.
+  //
+  // The spec permits this shape of work - "Adapters may normalize
+  // editor-specific markup before the core policy" (docs/html-import.md,
+  // "Required API surface") - but it does not rule on footnote import, so
+  // every decision below is this importer's, written down rather than left
+  // silent. No diagnostics on the edge cases, deliberately: in each of them
+  // the Carve source keeps what the HTML said, so there is nothing lossy to
+  // report.
+  // --------------------------------------------------------------------------
+
+  /**
+   * Recognize footnote pairs, rewrite each reference site to a synthetic
+   * reference element `inline()` reads as a `footnote_ref`, detach the note
+   * blocks, and return their bodies keyed 1..N by document order.
+   *
+   * Labels are assigned 1..N over the notes in document order rather than
+   * parsed out of the ids: an id is generated navigation an engine
+   * regenerates, and `_ftn1` or `sdfootnote1sym` is not a label any Carve
+   * source could carry anyway.
+   */
+  private adapterFootnotes(root: P5Node): Record<string, BlockNode[]> | undefined {
+    const elements = this.footnoteDocumentElements(root)
+    const order = new Map<P5Node, number>()
+    elements.forEach((element, index) => order.set(element, index))
+
+    const targets = this.footnoteFragmentTargets(elements)
+    const candidates = this.resolveFootnotePairDirection(
+      this.footnotePairCandidates(elements, targets),
+      order,
+    )
+    if (candidates.length === 0) return undefined
+
+    const definitions = this.attachRemainingFootnoteReferences(
+      elements,
+      this.groupFootnoteDefinitions(candidates, order),
+    )
+
+    const defs: Record<string, BlockNode[]> = {}
+    const containers = new Set<P5Node>()
+    definitions.forEach((definition, index) => {
+      const label = String(index + 1)
+      const block = definition.block
+      if (index === 0) this.removeFootnoteSeparator(block)
+
+      const identities = definition.refs
+        .map((reference) => this.footnoteAnchorIdentity(reference))
+        .filter((identity) => identity !== '')
+      this.stripFootnoteBacklinks(block, identities, definition.fragments)
+
+      defs[label] = this.blocks(block.childNodes ?? [], `footnote[${label}]`, 1)
+
+      for (const reference of definition.refs) {
+        const site = this.footnoteReferenceSite(reference)
+        const replacement: P5Node = {
+          nodeName: 'carve-footnote-ref',
+          tagName: 'carve-footnote-ref',
+          attrs: [{ name: 'label', value: label }],
+          childNodes: [],
+        }
+        if (site.parentNode !== undefined) replacement.parentNode = site.parentNode
+        this.replaceP5Node(site, replacement)
+      }
+
+      if (block.parentNode) containers.add(block.parentNode)
+      this.detachP5Node(block)
+    })
+
+    // Keyed by identity, because every note in one list names the SAME
+    // container: pruning it once per note walked that list's children once
+    // per note, which is quadratic on a document that is mostly notes.
+    for (const container of containers) this.pruneEmptyFootnoteContainer(container)
+
+    return defs
+  }
+
+  /** Every element in the subtree, in document order. */
+  private footnoteDocumentElements(root: P5Node): P5Node[] {
+    const elements: P5Node[] = []
+    const walk = (node: P5Node): void => {
+      for (const child of node.childNodes ?? []) {
+        if (child.tagName !== undefined) {
+          elements.push(child)
+          walk(child)
+        }
+      }
+    }
+    walk(root)
+    return elements
+  }
+
+  /**
+   * Map every same-document fragment name to the element it addresses.
+   *
+   * `id` first and `name` second, in two passes rather than one, so an `id`
+   * always wins over the legacy `<a name>` form when both spell one fragment.
+   */
+  private footnoteFragmentTargets(elements: P5Node[]): Map<string, P5Node> {
+    const targets = new Map<string, P5Node>()
+    for (const element of elements) {
+      const id = this.attr(element, 'id')
+      if (id && !targets.has(id)) targets.set(id, element)
+    }
+    for (const element of elements) {
+      if (element.tagName !== 'a') continue
+      const name = this.attr(element, 'name')
+      if (name && !targets.has(name)) targets.set(name, element)
+    }
+    return targets
+  }
+
+  /**
+   * Every anchor that could be a footnote reference, with the block it would
+   * bind to. A candidate needs the mutual back-link or an explicit reference
+   * marker; an anchor inside its own would-be note is never one.
+   */
+  private footnotePairCandidates(elements: P5Node[], targets: Map<string, P5Node>): FootnoteCandidate[] {
+    const anchors: Array<{ anchor: P5Node; fragment: string }> = []
+    const used = new Set<string>()
+    for (const element of elements) {
+      if (element.tagName !== 'a') continue
+      const href = this.attr(element, 'href') ?? ''
+      if (!href.startsWith('#')) continue
+      const fragment = href.slice(1)
+      if (fragment === '' || !targets.has(fragment)) continue
+      anchors.push({ anchor: element, fragment })
+      used.add(fragment)
+    }
+
+    const candidates: FootnoteCandidate[] = []
+    for (const { anchor, fragment } of anchors) {
+      const block = this.resolveFootnoteDefinitionBlock(targets.get(fragment)!, used)
+      if (block === null || this.p5Contains(block, anchor)) continue
+
+      const identity = this.footnoteAnchorIdentity(anchor)
+      const mutual = identity !== '' && this.footnoteBlockLinksTo(block, identity)
+      if (!mutual && !this.isFootnoteReferenceMarked(anchor)) continue
+
+      candidates.push({ ref: anchor, block, fragment, mutual })
+    }
+    return candidates
+  }
+
+  /**
+   * The block a reference's target belongs to.
+   *
+   * The target itself when it is already a block (Pandoc's `<li id="fn1">`),
+   * otherwise the nearest block ancestor of the anchor the fragment names.
+   * Then ONE guarded climb, because Word and LibreOffice wrap each note in a
+   * dedicated `<div id=...>` and the body can be several paragraphs inside
+   * it: the climb only happens into a wrapper that carries an id and holds
+   * exactly one referenced target, which is what keeps a shared container
+   * (Google Docs' one trailing `<div>` around every note) from swallowing
+   * its siblings. A fragment whose nearest block is the document root itself
+   * is refused - taking it would move every block in the document into one
+   * note - which here is the climb running off the fragment root.
+   */
+  private resolveFootnoteDefinitionBlock(target: P5Node, used: Set<string>): P5Node | null {
+    let block = target
+    while (block.tagName === undefined || !FOOTNOTE_DEFINITION_BLOCKS.has(block.tagName)) {
+      const parent = block.parentNode
+      if (parent === undefined || parent.tagName === undefined) return null
+      block = parent
+    }
+
+    const parent = block.parentNode
+    if (
+      parent !== undefined &&
+      parent.tagName !== undefined &&
+      FOOTNOTE_WRAPPER_BLOCKS.has(parent.tagName) &&
+      (this.attr(parent, 'id') ?? '') !== '' &&
+      this.countFootnoteTargets(parent, used) === 1
+    ) {
+      block = parent
+    }
+    return block
+  }
+
+  /** How many referenced fragment targets this element holds, itself included. */
+  private countFootnoteTargets(node: P5Node, used: Set<string>): number {
+    let count = this.isFootnoteFragmentTarget(node, used) ? 1 : 0
+    for (const child of node.childNodes ?? []) {
+      if (child.tagName !== undefined) count += this.countFootnoteTargets(child, used)
+    }
+    return count
+  }
+
+  private isFootnoteFragmentTarget(node: P5Node, used: Set<string>): boolean {
+    const id = this.attr(node, 'id')
+    if (id && used.has(id)) return true
+    if (node.tagName !== 'a') return false
+    const name = this.attr(node, 'name')
+    return name !== undefined && name !== '' && used.has(name)
+  }
+
+  /**
+   * Keep one side of every mutually linked anchor pair.
+   *
+   * The pair is symmetric, so both directions produce a candidate and one of
+   * them is the back-link reading as a reference. An explicit marker decides
+   * where there is one; otherwise document order does, because a footnote
+   * reference precedes the note it opens in every export shape measured.
+   */
+  private resolveFootnotePairDirection(
+    candidates: FootnoteCandidate[],
+    order: Map<P5Node, number>,
+  ): FootnoteCandidate[] {
+    const byReference = new Map<P5Node, FootnoteCandidate>()
+    for (const candidate of candidates) byReference.set(candidate.ref, candidate)
+
+    return candidates.filter((candidate) => {
+      const inverse = this.inverseFootnoteCandidate(byReference, candidate)
+      return !(inverse !== null && this.footnoteReferenceSideWins(inverse, candidate, order))
+    })
+  }
+
+  /**
+   * The candidate that reads the same mutual pair from the other end.
+   *
+   * Found through the back anchor the candidate's own block holds rather than
+   * by comparing every candidate with every other: a document with a thousand
+   * notes made that scan a thousand times a thousand containment walks, and
+   * the anchor names the inverse directly.
+   */
+  private inverseFootnoteCandidate(
+    byReference: Map<P5Node, FootnoteCandidate>,
+    candidate: FootnoteCandidate,
+  ): FootnoteCandidate | null {
+    const identity = this.footnoteAnchorIdentity(candidate.ref)
+    if (identity === '') return null
+
+    for (const anchor of this.footnoteAnchorsUnder(candidate.block)) {
+      if (this.attr(anchor, 'href') !== `#${identity}`) continue
+      const inverse = byReference.get(anchor)
+      if (inverse === undefined) continue
+      if (this.p5Contains(inverse.block, candidate.ref)) return inverse
+    }
+    return null
+  }
+
+  private footnoteReferenceSideWins(
+    first: FootnoteCandidate,
+    second: FootnoteCandidate,
+    order: Map<P5Node, number>,
+  ): boolean {
+    const firstMarked = this.isFootnoteReferenceMarked(first.ref)
+    const secondMarked = this.isFootnoteReferenceMarked(second.ref)
+    if (firstMarked !== secondMarked) return firstMarked
+
+    const firstBack = this.isFootnoteBacklinkMarked(first.ref)
+    const secondBack = this.isFootnoteBacklinkMarked(second.ref)
+    if (firstBack !== secondBack) return secondBack
+
+    return (order.get(first.ref) ?? 0) < (order.get(second.ref) ?? 0)
+  }
+
+  /**
+   * One entry per definition block, carrying every reference bound to it. A
+   * block that contains another definition block is a container, not a note:
+   * keeping both would move a subtree into two places at once. The containers
+   * are found by climbing from each block, one walk per note rather than one
+   * per PAIR of notes.
+   */
+  private groupFootnoteDefinitions(
+    candidates: FootnoteCandidate[],
+    order: Map<P5Node, number>,
+  ): FootnoteDefinitionGroup[] {
+    const groups = new Map<P5Node, FootnoteDefinitionGroup>()
+    for (const candidate of candidates) {
+      let group = groups.get(candidate.block)
+      if (group === undefined) {
+        group = { block: candidate.block, refs: [], fragments: [] }
+        groups.set(candidate.block, group)
+      }
+      group.refs.push(candidate.ref)
+      if (!group.fragments.includes(candidate.fragment)) group.fragments.push(candidate.fragment)
+    }
+
+    for (const group of [...groups.values()]) {
+      let ancestor = group.block.parentNode
+      while (ancestor !== undefined) {
+        if (groups.has(ancestor)) groups.delete(ancestor)
+        ancestor = ancestor.parentNode
+      }
+    }
+
+    return [...groups.values()].sort(
+      (first, second) => (order.get(first.block) ?? 0) - (order.get(second.block) ?? 0),
+    )
+  }
+
+  /**
+   * Bind every remaining anchor that addresses a confirmed note.
+   *
+   * Once a block IS a footnote definition, an anchor pointing at it is a
+   * reference to it whatever it looks like. This matters for the second and
+   * later reference to one note: only one of them can be the back-link's
+   * target, so the mutual pair that confirmed the note cannot confirm them,
+   * and without this they stayed literal links beside a `[^1]`. An anchor
+   * inside a note stays a link - a note's body may address another note.
+   */
+  private attachRemainingFootnoteReferences(
+    elements: P5Node[],
+    definitions: FootnoteDefinitionGroup[],
+  ): FootnoteDefinitionGroup[] {
+    const byFragment = new Map<string, FootnoteDefinitionGroup>()
+    for (const definition of definitions) {
+      for (const fragment of definition.fragments) byFragment.set(fragment, definition)
+    }
+
+    // Which elements sit inside a note, computed once: asking each anchor
+    // whether it is inside any note walked the tree once per anchor and per
+    // note, which is quadratic on a document that is mostly notes.
+    const inside = new Set<P5Node>()
+    const markInside = (node: P5Node): void => {
+      inside.add(node)
+      for (const child of node.childNodes ?? []) markInside(child)
+    }
+    for (const definition of definitions) markInside(definition.block)
+
+    for (const element of elements) {
+      if (element.tagName !== 'a') continue
+      const href = this.attr(element, 'href') ?? ''
+      if (!href.startsWith('#')) continue
+      const definition = byFragment.get(href.slice(1))
+      if (definition === undefined || inside.has(element)) continue
+      if (!definition.refs.includes(element)) definition.refs.push(element)
+    }
+
+    return definitions
+  }
+
+  private footnoteAnchorIdentity(anchor: P5Node): string {
+    const id = this.attr(anchor, 'id')
+    return id !== undefined && id !== '' ? id : this.attr(anchor, 'name') ?? ''
+  }
+
+  private footnoteBlockLinksTo(block: P5Node, fragment: string): boolean {
+    for (const anchor of this.footnoteAnchorsUnder(block)) {
+      if (this.attr(anchor, 'href') === `#${fragment}`) return true
+    }
+    return false
+  }
+
+  private footnoteAnchorsUnder(node: P5Node): P5Node[] {
+    const anchors: P5Node[] = []
+    const walk = (current: P5Node): void => {
+      for (const child of current.childNodes ?? []) {
+        if (child.tagName === 'a') anchors.push(child)
+        if (child.tagName !== undefined) walk(child)
+      }
+    }
+    walk(node)
+    return anchors
+  }
+
+  /**
+   * `footnoteRef` is Pandoc 1.x's spelling of `footnote-ref`, which it used
+   * together with a back-link carrying no attributes at all.
+   */
+  private isFootnoteReferenceMarked(anchor: P5Node): boolean {
+    if (this.attr(anchor, 'role') === 'doc-noteref') return true
+    const classes = (this.attr(anchor, 'class') ?? '').split(/\s+/)
+    return classes.includes('footnote-ref') || classes.includes('footnoteRef')
+  }
+
+  private isFootnoteBacklinkMarked(anchor: P5Node): boolean {
+    if (this.attr(anchor, 'role') === 'doc-backlink') return true
+    return (this.attr(anchor, 'class') ?? '').split(/\s+/).includes('footnote-back')
+  }
+
+  private p5Contains(ancestor: P5Node, node: P5Node): boolean {
+    let current = node.parentNode
+    while (current !== undefined) {
+      if (current === ancestor) return true
+      current = current.parentNode
+    }
+    return false
+  }
+
+  private detachP5Node(node: P5Node): void {
+    const siblings = node.parentNode?.childNodes
+    if (siblings === undefined) return
+    const index = siblings.indexOf(node)
+    if (index !== -1) siblings.splice(index, 1)
+  }
+
+  private replaceP5Node(node: P5Node, replacement: P5Node): void {
+    const siblings = node.parentNode?.childNodes
+    if (siblings === undefined) return
+    const index = siblings.indexOf(node)
+    if (index !== -1) siblings[index] = replacement
+  }
+
+  /**
+   * Remove the rule that separates the notes from the body.
+   *
+   * Every producer measured emits one, and it is chrome rather than content:
+   * Pandoc puts `<hr />` inside the section, Word `<br clear=all><hr ...>`
+   * inside the footnote-list div, Google Docs a bare `<hr class="cN">` as a
+   * sibling of the notes. Only the first two would be swept up by pruning an
+   * emptied container, so the separator is looked for explicitly - at the
+   * first note, and at each of its ancestors, taking only what immediately
+   * precedes it.
+   */
+  private removeFootnoteSeparator(first: P5Node): void {
+    let node = first
+    while (true) {
+      let previous = this.p5PreviousSibling(node)
+      while (previous !== undefined && this.isFootnoteChromeNode(previous)) {
+        previous = this.p5PreviousSibling(previous)
+      }
+
+      if (previous !== undefined && (previous.tagName === 'hr' || previous.tagName === 'br')) {
+        this.detachP5Node(previous)
+        continue
+      }
+      if (previous !== undefined) return
+
+      const parent = node.parentNode
+      if (parent === undefined || parent.tagName === undefined) return
+      node = parent
+    }
+  }
+
+  private p5PreviousSibling(node: P5Node): P5Node | undefined {
+    const siblings = node.parentNode?.childNodes
+    if (siblings === undefined) return undefined
+    const index = siblings.indexOf(node)
+    return index > 0 ? siblings[index - 1] : undefined
+  }
+
+  /**
+   * Whether a node is part of the separator's packaging rather than content.
+   *
+   * Word's downlevel-revealed conditionals bracket the `<br clear=all><hr>`
+   * inside the footnote-list div. `<![if ...]>` is not a comment: a parser
+   * following the HTML grammar (parse5 here) reads it as a BOGUS COMMENT
+   * node, and libxml hands it back as TEXT, so both spellings are recognized
+   * - without this the emptied container keeps content, survives pruning, and
+   * imports as a paragraph that spells the conditional out.
+   */
+  private isFootnoteChromeNode(node: P5Node): boolean {
+    if (node.nodeName === '#comment') return true
+    if (node.nodeName !== '#text') return false
+    const text = (node.value ?? '').trim()
+    return text === '' || RE_DOWNLEVEL_CONDITIONAL.test(text)
+  }
+
+  /**
+   * Remove the navigation an engine regenerates: the back-link, and the
+   * marker anchor Word, Google Docs and LibreOffice put it on.
+   *
+   * Carried into the note body it would render as a stray link to a fragment
+   * that no longer exists, and the visible marker it wraps (`[1]`, `1`, the
+   * return arrow) would be written into the note's own text. The third clause
+   * - an anchor that IS the fragment target the reference points at, with a
+   * fragment href - is what removes the marker anchor that is the note's
+   * anchor and its back-link and its visible marker in one element.
+   */
+  private stripFootnoteBacklinks(block: P5Node, identities: string[], fragments: string[]): void {
+    for (const anchor of this.footnoteAnchorsUnder(block)) {
+      const href = this.attr(anchor, 'href') ?? ''
+      const pointsBack = href.startsWith('#') && identities.includes(href.slice(1))
+      const isMarker = href.startsWith('#') && fragments.includes(this.footnoteAnchorIdentity(anchor))
+      if (!this.isFootnoteBacklinkMarked(anchor) && !pointsBack && !isMarker) continue
+
+      const parent = anchor.parentNode
+      this.detachP5Node(anchor)
+      if (
+        parent !== undefined &&
+        (parent.tagName === 'sup' || parent.tagName === 'span') &&
+        !(parent.childNodes ?? []).some(
+          (child) => child.tagName !== undefined || (child.nodeName === '#text' && (child.value ?? '').trim() !== ''),
+        )
+      ) {
+        this.detachP5Node(parent)
+      }
+    }
+  }
+
+  /**
+   * The node a reference occupies: the anchor, or the `<sup>` that holds
+   * nothing but the anchor.
+   *
+   * Google Docs and Pandoc put the `<sup>` outside the anchor, so replacing
+   * only the anchor would leave `{^...^}` wrapped around the reference. One
+   * carrying anything else - an element or non-blank text - keeps its
+   * content, and the reference binds inside it.
+   */
+  private footnoteReferenceSite(reference: P5Node): P5Node {
+    const parent = reference.parentNode
+    if (parent === undefined || parent.tagName !== 'sup') return reference
+    for (const child of parent.childNodes ?? []) {
+      if (child.tagName !== undefined && child !== reference) return reference
+      if (child.nodeName === '#text' && (child.value ?? '').trim() !== '') return reference
+    }
+    return parent
+  }
+
+  /**
+   * Drop a container the notes left empty, so the `<hr>` and the `<ol>` that
+   * held them do not import as a thematic break beside an empty list. A
+   * separator written AFTER the notes survives the explicit search and is
+   * swept up here instead.
+   */
+  private pruneEmptyFootnoteContainer(node: P5Node | undefined): void {
+    while (node !== undefined && node.tagName !== undefined) {
+      if (node.tagName === 'body' || node.tagName === 'html') return
+      for (const child of node.childNodes ?? []) {
+        if (this.isFootnoteChromeNode(child)) continue
+        if (child.tagName === 'hr' || child.tagName === 'br') continue
+        return
+      }
+      const parent = node.parentNode
+      this.detachP5Node(node)
+      node = parent
+    }
   }
 }
 
