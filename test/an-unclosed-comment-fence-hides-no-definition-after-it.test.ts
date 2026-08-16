@@ -145,6 +145,32 @@ describe('an unclosed comment fence hides no definition after it', () => {
     expect(out).toBe('<p>see [x][d] and <a href="v">y</a></p>')
   })
 
+  it('a comment inside a QUOTE is judged from the opener too', () => {
+    // Raised by codex review at high effort as a regression, and it is the
+    // opposite: these are the rows where carve-js used to answer alone.
+    //
+    // The closer index is built over RAW lines, so a `> %%%` closer is not in
+    // it, while the prepass matches its opener AFTER stripping the container
+    // prefix. Measuring from line 0 let a quoted opener borrow an unrelated
+    // TOP-LEVEL closer that happened to share its width and sit earlier in the
+    // document - an opener cannot be closed by a line above it, and that is
+    // what the old cursor allowed. Measuring from the opener ends it.
+    //
+    // Each of these changed with this fix, and each moved carve-js FROM
+    // disagreeing with carve-rs and carve-php TO agreeing with them.
+    const quotedAfterPair = '%%%\nx\n%%%\n\n> %%%\n> [d]: u\n> %%%\n\nsee [x][d]\n'
+    expect(resolved(quotedAfterPair)).toBe(true)
+    expect(resolved('%%%\nx\n%%%\n\n> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('> %%%\n> x\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('%%%\na\n%%%\n\n> %%%\n> b\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
+    // CONTROL: the quoted shapes that did NOT depend on a stray earlier closer
+    // are unchanged, so the fix did not simply stop opening quoted regions.
+    expect(resolved('> %%%\n> [d]: u\n> %%%\n\nsee [x][d]\n')).toBe(true)
+    expect(resolved('> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(true)
+    // CONTROL: width still nests inside a quote.
+    expect(resolved('> %%%%\n> %%%\n> [d]: u\n> %%%%\n\nsee [x][d]\n')).toBe(true)
+  })
+
   it('three `%%%` lines leave the third one degrading on its own', () => {
     // The pair above plus a genuinely unclosed opener. Only the definition
     // under the THIRD fence survives, and it survives from any start position -
