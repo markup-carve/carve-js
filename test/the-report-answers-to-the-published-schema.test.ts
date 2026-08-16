@@ -97,6 +97,16 @@ describe('the HTML import report answers to the published schema', () => {
     expect(violations(result.report, schema)).toEqual([])
   })
 
+  it('validates the report a dropped `<colgroup>` produces', () => {
+    // `element-dropped` was already in the enum, so this arm is not what could
+    // have broken the contract - but a diagnostic nobody walks through the
+    // schema is a diagnostic whose `path` and `severity` are unchecked against
+    // it, and the walk is three lines.
+    const result = htmlToCarve('<table><colgroup><col></colgroup><tr><td>a</td></tr></table>', { mode: 'semantic' })
+    expect(result.report.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['element-dropped'])
+    expect(violations(result.report, schema)).toEqual([])
+  })
+
   it('validates a report that exercises several arms at once', () => {
     const html = '<p onclick="evil()">safe<script>alert(1)</script></p>'
       + '<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>C</td></tr></tbody></table>'
