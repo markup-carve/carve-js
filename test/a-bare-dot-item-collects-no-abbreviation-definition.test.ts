@@ -55,6 +55,40 @@ describe('a bare-dot ordered item collects no abbreviation definition', () => {
     )
   })
 
+  it('an INVALID abutting brace is no marker at all, under any of the three', () => {
+    // Raised in review on the bare-dot row and true of all three markers.
+    // `extractItemAttr` is normative for the block lexer: when the payload is
+    // not valid attributes, the marker "is not a marker and the line stays
+    // ordinary text". The prepass pattern took any brace contents, so `.{#} x`
+    // was a paragraph to the lexer and an open item to the prepass, and the
+    // column-0 definition under it was read as item content and never
+    // registered - rendered as prose AND defining nothing.
+    //
+    // `1.` and `-` had this already; the bare dot only agreed with carve-rs
+    // because the prepass could not see it at all, so adding it to the marker
+    // without the validity test would have moved it from an accidental
+    // agreement to a consistent divergence. carve-rs registers under all three.
+    for (const marker of ['.', '1.', '-']) {
+      expect(carveToHtml(marker + '{#} x\n*[A]: d\n\nA here\n')).toBe(
+        '<p>' + marker + '{#} x</p>\n<p>' + ABBR + ' here</p>',
+      )
+    }
+  })
+
+  it('CONTROL: a VALID abutting brace still opens the item, under all three', () => {
+    // The other side of the same test. Over-rejecting here would put the
+    // definition back at document level under a real list item.
+    expect(carveToHtml('.{#i} x\n*[A]: d\n\nA here\n')).toBe(
+      '<ol>\n  <li id="i">x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+    )
+    expect(carveToHtml('1.{#i} x\n*[A]: d\n\nA here\n')).toBe(
+      '<ol>\n  <li id="i">x\n*[A]: d</li>\n</ol>\n<p>A here</p>',
+    )
+    expect(carveToHtml('-{#i} x\n*[A]: d\n\nA here\n')).toBe(
+      '<ul>\n  <li id="i">x\n*[A]: d</li>\n</ul>\n<p>A here</p>',
+    )
+  })
+
   it('is the same inside a nested list', () => {
     expect(carveToHtml('- a\n  . x\n  *[A]: d\n\nA here\n')).toBe(
       '<ul>\n  <li>a\n    <ol>\n      <li>x\n*[A]: d</li>\n    </ol>\n  </li>\n</ul>\n<p>A here</p>',
