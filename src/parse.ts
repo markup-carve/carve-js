@@ -2530,12 +2530,27 @@ function collectLinkDefs(lexer: Lexer) {
   }
 }
 
-function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
+/**
+ * A block-attribute run handed BETWEEN two consecutive `parseBlocks` calls over
+ * what the author wrote as one stream. `attrs` goes in as the starting `pending`
+ * and comes back out as whatever was still pending when the stream ended.
+ *
+ * Only a caller that SPLIT one author-visible stream into two lexers passes one;
+ * everywhere else a dangling run is still dropped (§15 A4). See the split at
+ * `firstBlockIdx` in `parseList`, which is the whole reason this exists.
+ */
+interface PendingAttrCarry {
+  attrs: Attrs | null
+}
+
+function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry): BlockNode[] {
   const out: BlockNode[] = []
   // Leading block-attribute lines (grammar PART 9 §15) accumulate here
   // and attach to the next block. They float across blank lines; a
-  // dangling run with no following block is dropped.
-  let pending: Attrs | null = null
+  // dangling run with no following block is dropped -- unless a `carry` says
+  // this stream is only HALF of one the caller split, in which case the run
+  // travels to the other half instead of dying at the seam.
+  let pending: Attrs | null = carry?.attrs ?? null
   while (!lexer.eof()) {
     const line = lexer.peek()!
     if (isBlankLine(line)) {
@@ -2609,7 +2624,9 @@ function parseBlocks(lexer: Lexer, baseIndent: number): BlockNode[] {
     // pending for the next block (A2a, above).
     if (!invisible) pending = null
   }
-  // A dangling pending run (no following block) is dropped.
+  // A dangling pending run (no following block) is dropped -- or, when the
+  // caller split one stream in two, handed on to the next half.
+  if (carry) carry.attrs = pending
   return out
 }
 
@@ -6294,12 +6311,41 @@ function parseList(lexer: Lexer): List {
     ): Lexer => {
       return nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
     }
+    // AN ATTRIBUTE BLOCK MUST SURVIVE THE SPLIT (markup-carve/carve#1238,
+    // carve-js#1100). The two `parseBlocks` calls below are one stream to the
+    // author: the item's lead, then the sub-list the `firstBlockIdx` split hands
+    // to its own lexer so the list parser owns its looseness bookkeeping. Each
+    // call kept its own pending-attribute slot, so a `{...}` line written
+    // immediately before the sub-list ended the FIRST stream with a dangling run
+    // and was dropped, while the sub-list opened the second one with an empty
+    // slot:
+    //
+    //     - a
+    //
+    //       {.x}
+    //       - b
+    //
+    // A paragraph, quote or fence in that position is not a marker, so the
+    // collector never split there and those cases always attached -- which is
+    // why the nested list was the ONE block type in an item that lost its
+    // attributes, blank line or no blank line. `carry` reunites the halves.
+    //
+    // Deliberately NOT a "was the whole chunk an attribute block" test on the
+    // lines: `parseBlocks` is what decides whether a `{...}` line IS an
+    // attribute run, and only it knows the answers that matter here -- the
+    // strict column-0 rule (a brace one column in is paragraph text, so
+    // `- a` / blank / `   {.c}` keeps its literal paragraph), an open fence
+    // (whose body is verbatim), and §15 A2a's float past an invisible
+    // construct. Reading the lines a second time here would be a second
+    // spelling of that rule, free to drift from the first.
+    const carry: PendingAttrCarry = { attrs: null }
     const children = parseBlocks(
       mkSub([itemLead, ...leadLines], itemStartLineIndex, [
         lexer.lineNumber(itemStartLineIndex),
         ...nestedLineNumbers.slice(0, leadLines.length),
       ]),
       0,
+      blockLines.length > 0 ? carry : undefined,
     )
     if (blockLines.length > 0) {
       children.push(
@@ -6310,6 +6356,7 @@ function parseList(lexer: Lexer): List {
             nestedLineNumbers.slice(firstBlockIdx),
           ),
           0,
+          carry,
         ),
       )
     }
