@@ -1160,12 +1160,20 @@ class Importer {
      * preserve it verbatim.
      */
     if (tag === 'math') {
-      const math = this.mathml(node, path, depth)
+      const math = this.mathml(node, path)
+      const dropped = math === undefined && this.mode !== 'roundtrip'
+      /*
+       * Charged once, here, on the two arms that return without walking the
+       * children - the mapped element, whose subtree the mapping discards, and
+       * the dropped one. `maxNodes` and `maxDepth` must not depend on which
+       * branch an element takes, and this is the only place that knows the
+       * branch is taken. `roundtrip`'s tier-3 fall-through walks the children
+       * below and is charged there, so charging inside `mathml()` instead
+       * would count part of the subtree twice.
+       */
+      if (math !== undefined || dropped) this.budget(node, depth)
       if (math) return [math]
-      if (this.mode !== 'roundtrip') {
-        // Charged for the same reason the accepted element is: this arm
-        // returns without walking the children either.
-        this.budget(node, depth)
+      if (dropped) {
         this.add('element-dropped', 'Dropped <math> element: it carries no TeX annotation and no alttext, and MathML children are not an equation when concatenated', 'warning', path)
         return []
       }
@@ -1255,28 +1263,9 @@ class Importer {
    *
    * Returns `undefined` for tier 3, whose two answers are the caller's.
    */
-  private mathml(node: P5Node, path: string, depth: number): InlineNode | undefined {
-    const annotation = this.texAnnotation(node)
-    const alttext = this.attr(node, 'alttext')
-    if (annotation === undefined && (alttext === undefined || alttext.trim() === '')) return undefined
-    /*
-     * The subtree is charged HERE, because from this point nothing else walks
-     * it: tiers 1 and 2 take their content from one node of it and the rest is
-     * discarded, so `inlines()` never counts a single descendant. Not a
-     * resource-exhaustion fix - skipping a subtree is cheaper than walking one,
-     * and the DOM was built before the importer saw it - but the limits are the
-     * contract: `maxNodes` and `maxDepth` must not depend on which branch an
-     * element takes, and PART 11's resource section wants a structural limit to
-     * surface as the typed error. Before this walk, `text()` recursed into a
-     * deep annotation and raised a RangeError instead.
-     *
-     * Iterative for that same reason, and BEFORE the text is read, so the depth
-     * limit is reached by the counter rather than by the stack.
-     */
-    this.budget(node, depth)
-    const annotated = annotation === undefined ? undefined : this.flatText(annotation)
-    const fromAnnotation = annotated !== undefined && annotated.trim() !== ''
-    const content = fromAnnotation ? annotated : alttext
+  private mathml(node: P5Node, path: string): InlineNode | undefined {
+    const annotated = this.texAnnotation(node)
+    const content = annotated ?? this.attr(node, 'alttext')
     if (content === undefined || content.trim() === '') return undefined
     // After the tier is settled, so a dropped element does not also report
     // attributes on its way out: the `element-dropped` warning covers it.
@@ -1285,7 +1274,7 @@ class Importer {
     // annotation that held only whitespace falls through to `alttext`, and
     // reading the presence of the element would make that fall-through the one
     // tier-2 read that says nothing.
-    if (!fromAnnotation) {
+    if (annotated === undefined) {
       this.add('element-unwrapped', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
     }
     return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
@@ -1299,15 +1288,20 @@ class Importer {
    * `<annotation>` nested inside an `<annotation-xml>` payload, which is
    * markup describing the equation in some other language and not a
    * presentation of the outer element at all.
+   *
+   * An annotation that declares TeX and then holds nothing does not settle the
+   * tier: the search continues, because a later sibling may hold the equation
+   * and stopping at the empty one would answer with the wrong tier.
    */
-  private texAnnotation(node: P5Node): P5Node | undefined {
+  private texAnnotation(node: P5Node): string | undefined {
     for (const semantics of node.childNodes ?? []) {
       if (semantics.tagName !== 'semantics') continue
       for (const child of semantics.childNodes ?? []) {
         if (child.tagName !== 'annotation') continue
         const encoding = this.attr(child, 'encoding')
         if (encoding === undefined || !TEX_ANNOTATION_ENCODINGS.has(encoding.trim().toLowerCase())) continue
-        return child
+        const text = this.flatText(child)
+        if (text.trim() !== '') return text
       }
     }
     return undefined
@@ -1322,10 +1316,11 @@ class Importer {
    * something that recurses does.
    */
   /**
-   * `text()` without its recursion, for the one subtree read after `budget()`
-   * has already accepted it: at a caller-raised `maxDepth` the counter passes
-   * a tree the stack does not, and a `RangeError` is not the typed error the
-   * API promises. Document order is kept by pushing the children in reverse.
+   * `text()` without its recursion, for the annotation - which is read to
+   * settle the tier, so it is read before any depth counter has seen it. At a
+   * caller-raised `maxDepth` a recursive read is the thing that fails first,
+   * and a `RangeError` is not the typed error the API promises. Document order
+   * is kept by pushing the children in reverse.
    */
   private flatText(node: P5Node): string {
     let text = ''

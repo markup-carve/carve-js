@@ -1428,6 +1428,31 @@ describe('MathML on import', () => {
     ])
   })
 
+  it('TIER 1: an empty annotation does not settle the tier for a sibling that is not', () => {
+    // A `<semantics>` may carry several annotations. Stopping at the first
+    // whose ENCODING matches answers tier 2 or tier 3 for a document that has
+    // its TeX one sibling further along.
+    const html = '<p><math alttext="FROM_ALTTEXT"><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation encoding="application/x-tex"> </annotation>'
+      + '<annotation encoding="text/x-tex">FROM_SECOND</annotation></semantics></math></p>'
+    const result = htmlToCarve(html)
+    expect(result.value).toBe('$`FROM_SECOND`\n')
+    expect(result.report.diagnostics).toEqual([])
+  })
+
+  it('charges the subtree once, not once per arm that decided to skip it', () => {
+    // The dropped element is charged by the caller, which is the only place
+    // that knows the branch was taken. Charging inside the tier lookup as well
+    // counted every descendant of an empty-annotation element twice, and a
+    // document could fail `maxNodes` on nodes it has only one of.
+    const html = '<p><math><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation encoding="application/x-tex"> </annotation></semantics></math></p>'
+    // 8 nodes: the paragraph, the `<math>`, and its six descendants -
+    // semantics, mrow, mi, its text, annotation, its text.
+    expect(() => htmlToAst(html, { maxNodes: 8 })).not.toThrow()
+    expect(() => htmlToAst(html, { maxNodes: 7 })).toThrow(HtmlImportLimitError)
+  })
+
   it('TIER 3: an empty annotation and an empty alttext say nothing, so they are not content', () => {
     const empty = '<p><math alttext="  "><semantics><mrow><mi>a</mi></mrow>'
       + '<annotation encoding="application/x-tex">\n  \n</annotation></semantics></math></p>'
