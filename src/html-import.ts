@@ -1535,19 +1535,17 @@ class Importer {
 
   /**
    * Our own `carve-figure-group` output back to a `figure_group` node (PART 9
-   * §4c). The panels div unwraps; a `carve-figure-panel` figure comes back as
-   * the panel it rendered from - a bare `<figure><table/></figure>` wrapper
-   * (the table panel, which carries no figcaption) unwraps to the table so the
-   * table's own caption and attrs stay its own.
+   * §4c). The FLAT shape: panels and stray content are direct children of the
+   * group figure, with the group's own figcaption LAST - a panel figure's
+   * figcaption is nested a level down and never read as the group's. A
+   * `carve-figure-panel` figure comes back as the panel it rendered from; a
+   * bare `<figure><table/></figure>` wrapper (the table panel, which carries
+   * no figcaption) unwraps to the table so the table's own caption and attrs
+   * stay its own.
    */
   private figureGroup(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
-    const captionNode = node.childNodes?.find((n) => n.tagName === 'figcaption')
-    const panelsDiv = node.childNodes?.find(
-      (n) => n.tagName === 'div' && (this.attr(n, 'class') ?? '').split(/\s+/).includes('carve-figure-panels'),
-    )
-    const bodyNodes = panelsDiv
-      ? panelsDiv.childNodes ?? []
-      : (node.childNodes ?? []).filter((n) => n !== captionNode)
+    const captionNode = node.childNodes?.filter((n) => n.tagName === 'figcaption').pop()
+    const bodyNodes = (node.childNodes ?? []).filter((n) => n !== captionNode)
     const children = this.blocks(bodyNodes, path, depth + 1)
     for (let i = 0; i < children.length; i++) {
       const child = children[i]!

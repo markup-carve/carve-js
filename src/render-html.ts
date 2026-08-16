@@ -1589,27 +1589,28 @@ function renderFigureGroup(node: FigureGroup, opts: RenderOptions, level: number
   const lines = [
     `${pad}<figure${sourceLineAttr(opts, node.pos?.startLine, rest)} class="${classValue}"${renderAttrs(rest)}>`,
   ]
-  // The panels div is UNCONDITIONAL (§4c): zero panels still wrap the
-  // preserved content, and an empty group holds an empty div.
-  lines.push(`${pad}  <div class="carve-figure-panels">`)
+  // FLAT: panels and stray content nest DIRECTLY in the group figure, no
+  // wrapper div. HTML's figure content model is one figcaption first-or-last
+  // plus flow content, and figure is itself flow content, so the panel
+  // figures are legal direct children - the shape Pandoc's subfigure HTML
+  // takes as well. The group figcaption stays last.
   const inner = node.children
     .map((c) => {
       // §4c panels: the `figure` and `table` children, in source order. A
       // captioned host already renders as a <figure> and takes the panel
       // class; a table does not render as a figure on its own, so its panel
       // wrapper is explicit and the table keeps its own attrs and <caption>.
-      if (c.type === 'figure') return renderFigure(c, opts, level + 2, 'carve-figure-panel')
+      if (c.type === 'figure') return renderFigure(c, opts, level + 1, 'carve-figure-panel')
       if (c.type === 'table') {
-        const t = renderTable(c, opts, level + 3)
-        return `${pad}    <figure class="carve-figure-panel">\n${t}\n${pad}    </figure>`
+        const t = renderTable(c, opts, level + 2)
+        return `${pad}  <figure class="carve-figure-panel">\n${t}\n${pad}  </figure>`
       }
       // Non-panel stray content is preserved in place.
-      return renderBlock(c, opts, level + 2)
+      return renderBlock(c, opts, level + 1)
     })
     .filter((s) => s !== '')
     .join('\n')
   if (inner !== '') lines.push(inner)
-  lines.push(`${pad}  </div>`)
   if (node.caption !== undefined) {
     lines.push(`${pad}  <figcaption>${renderInlines(node.caption, opts)}</figcaption>`)
   }
