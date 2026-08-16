@@ -23,15 +23,15 @@ describe('fmt keeps a lone span marker padded', () => {
 
   it('a rowspan marker is not glued either', () => {
     const src = '| a | b |\n|---|---|\n| ^ | d |\n'
-    // A header row's canonical form is `|=a|=b|`, which needs no delimiter row.
-    expect(carveToCarve(src)).toBe('|=a|=b|\n| ^ | d |\n')
+    // A header row's canonical form is `|= a |= b |`, which needs no delimiter row.
+    expect(carveToCarve(src)).toBe('|= a |= b |\n| ^ | d |\n')
   })
 
   it('a glued marker in the SOURCE is written back padded', () => {
     // This engine reads the glued form as a span, so the document is a span
     // table either way - fmt canonicalizes it to the portable spelling.
     const src = '| a | b |\n|---|---|\n|<| d |\n'
-    expect(carveToCarve(src)).toBe('|=a|=b|\n| < | d |\n')
+    expect(carveToCarve(src)).toBe('|= a |= b |\n| < | d |\n')
   })
 
   it('the table still says the same thing after formatting', () => {

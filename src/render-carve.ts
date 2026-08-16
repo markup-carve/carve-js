@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { opensFrontmatter, parse, rawBracketRunCloses, TABLE_ALIGNMENT_MARKERS } from './parse.js'
+import { opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -1174,7 +1174,7 @@ function renderTable(node: Table, ctx: CarveContext): string {
   const needsDelimiter = headerRow && first.cells.some((c) => c.span !== undefined)
 
   node.rows.forEach((row, rowIndex) => {
-    const cells: RenderedCell[] = []
+    const cells: string[] = []
     for (const cell of row.cells) {
       // In the delimiter form the promoted row is written as ordinary data
       // cells - the row after it is what makes them headers.
@@ -1190,16 +1190,30 @@ function renderTable(node: Table, ctx: CarveContext): string {
   return rows.join('\n')
 }
 
-interface RenderedCell {
-  text: string
-  tight: boolean
+/**
+ * A cell's written form: its PREFIX glued to the opening pipe, then one space,
+ * then the content, then one space before the closing pipe.
+ *
+ * The prefix has to touch the pipe - a space in front of `=` or of an
+ * attribute block makes it literal content - but the CONTENT does not, and the
+ * padded form is the readable one. It is also the safe one: the parser's
+ * alignment scan runs at the position right after `|` or `|=` and consumes one
+ * `<`, `>` or `~`, so a glued content sigil was read as a marker the author
+ * never wrote (markup-carve/carve-js#903, corpus 319-4). A space stops that
+ * scan for every cell rather than for the shapes someone enumerated.
+ *
+ * An EMPTY cell takes a single space, not two, so a column does not grow a
+ * space each time the document is formatted.
+ */
+function padCell(prefix: string, content: string): string {
+  return content === '' ? `${prefix} ` : `${prefix} ${content} `
 }
 
-function renderTableRow(cells: RenderedCell[], attrs: string): string {
-  return `|${cells.map((cell) => (cell.tight ? cell.text : ` ${cell.text} `)).join('|')}|${attrs}`
+function renderTableRow(cells: string[], attrs: string): string {
+  return `|${cells.join('|')}|${attrs}`
 }
 
-function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): RenderedCell {
+function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): string {
   const attrs = renderAttrs(cell.attrs)
   // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
   // is also the left-alignment sigil, and the two readings differ: the
@@ -1214,9 +1228,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // grammar puts it, and the space goes between it and the marker.
   const spanMarker = cell.span === 'rowspan' ? '^' : '<'
   if (cell.span === 'rowspan' || cell.span === 'colspan') {
-    return attrs === ''
-      ? { text: spanMarker, tight: false }
-      : { text: `${attrs} ${spanMarker}`, tight: true }
+    return padCell(attrs, spanMarker)
   }
   const align = alignMarker(cell.align)
   // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
@@ -1227,37 +1239,14 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
   const prefix = `${cell.header && markHeader ? '=' : ''}${align}${attrs}`
-  const rendered = renderInlines(cell.children, ctx)
-  // A PREFIXED CELL IS TIGHT, so the first character of the content is the
-  // character the parser's alignment scan reads. That scan runs at the position
-  // right after `|` or `|=` and consumes exactly one `<`, `>` or `~`, so a
-  // header cell whose content opens with one lost it: `| ~x~ |` was written
-  // `|=~x~|`, which reads back as CENTER alignment with the text `x~` - the
-  // strikethrough gone, and every cell in the column centered by a marker the
-  // author never wrote. `| <https://e.example> |` lost its anchor the same way
-  // through the LEFT marker (markup-carve/carve-js#903).
-  //
-  // ONE SPACE is the whole fix, and it costs nothing: the scan only fires on a
-  // GLUED sigil, and the content is trimmed after the prefix is consumed, so
-  // `|= ~x~ |` is a header cell holding `~x~` again.
-  //
-  // The set comes from the parser rather than from a list here. Measured, `>`
-  // does not currently reach this: the escape pass writes it `\>` because it
-  // also opens a blockquote. That is a different rule's decision, and a guard
-  // that relied on it would break the day that rule narrowed - so all three
-  // sigils are guarded and only two of them were ever observed failing.
-  //
-  // An ATTRIBUTE BLOCK ends the scan by itself, so a cell that wrote one needs
-  // no space: PART 9 §319 binds attributes AFTER the kind and alignment
-  // markers, so nothing past `}` can still be read as one. Measured on all
-  // three engines, `|{#x}< content|`, `|{#x}>b|` and `|={#x}~x~|` parse the
-  // sigil as text. The space was written anyway, which is the one place this
-  // writer disagreed with carve-rs on a cell (corpus 319-4).
-  const separator =
-    prefix !== '' && align === '' && attrs === '' && TABLE_ALIGNMENT_MARKERS.has(rendered[0] ?? '')
-      ? ' '
-      : ''
-  return { text: `${prefix}${separator}${rendered}`, tight: prefix !== '' }
+  // The space `padCell` writes after the prefix is what keeps a content sigil
+  // content: the alignment scan runs right after `|` or `|=` and consumes one
+  // `<`, `>` or `~`, so `| ~x~ |` written glued came back as CENTER alignment
+  // holding `x~` - the strikethrough gone and the column centered by a marker
+  // nobody wrote (markup-carve/carve-js#903). This used to be a guard that
+  // fired only on those three characters and only where the prefix was a bare
+  // `=`; padding every cell covers it without enumerating anything.
+  return padCell(prefix, renderInlines(cell.children, ctx))
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {

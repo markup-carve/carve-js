@@ -200,13 +200,13 @@ describe('table cell scope on import', () => {
 
   it('drops a scope the renderer derives from position', () => {
     expect(carve('<table><thead><tr><th scope="col">A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>'))
-      .toBe('|=A|\n| 1 |')
-    expect(carve('<table><tbody><tr><th scope="row">A</th><td>1</td></tr></tbody></table>')).toBe('|=A| 1 |')
+      .toBe('|= A |\n| 1 |')
+    expect(carve('<table><tbody><tr><th scope="row">A</th><td>1</td></tr></tbody></table>')).toBe('|= A | 1 |')
   })
 
   it('keeps a scope position cannot explain, and it round-trips', () => {
     const source = carve('<table><thead><tr><th scope="colgroup">A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>')
-    expect(source).toBe('|={scope=colgroup}A|\n| 1 |')
+    expect(source).toBe('|={scope=colgroup} A |\n| 1 |')
     expect(carveToHtml(source)).toContain('<th scope="colgroup">A</th>')
   })
 
@@ -217,7 +217,7 @@ describe('table cell scope on import', () => {
     // cell whose content is the literal `=A`, so keeping the value there traded
     // a header cell for an attribute.
     const html = '<table><tbody><tr><th scope="rowgroup">A</th><td>1</td></tr></tbody></table>'
-    expect(carve(html)).toBe('|={scope=rowgroup}A| 1 |')
+    expect(carve(html)).toBe('|={scope=rowgroup} A | 1 |')
     expect(codes(html)).not.toContain('attribute-dropped')
     expect(carveToHtml(carve(html))).toContain('<th scope="rowgroup">A</th>')
   })
@@ -233,7 +233,7 @@ describe('table caption on import', () => {
     const source = carve(
       '<table><caption>Fruit prices</caption><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>',
     )
-    expect(source).toBe('|=A|\n| 1 |\n^ Fruit prices')
+    expect(source).toBe('|= A |\n| 1 |\n^ Fruit prices')
     expect(carveToHtml(source)).toContain('<caption>Fruit prices</caption>')
     expect(codes('<table><caption>C</caption><tbody><tr><td>1</td></tr></tbody></table>')).toEqual([])
   })
@@ -893,7 +893,7 @@ describe('table spans on import', () => {
     // "To the end of this row GROUP", so a `<tfoot>` below the body is not
     // swallowed by a cell HTML stops at the body's last row.
     const html = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td rowspan="0">b</td><td>x</td></tr><tr><td>y</td></tr></tbody><tfoot><tr><td>f</td></tr><tr><td>g</td></tr></tfoot></table>'
-    expect(htmlToCarve(html).value).toBe('|=h|\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
+    expect(htmlToCarve(html).value).toBe('|= h |\n| b | x |\n| ^ | y |\n| f |\n| g |\n')
     // The `<tfoot>` is a grouping the written source cannot spell, which is its
     // own row's business; no span is reported here.
     expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
@@ -945,7 +945,7 @@ describe('table spans on import', () => {
      * algorithm without the group rule, which is exactly the rule that bites.
      */
     const html = '<table><tr><th rowspan="2">H</th><th>A</th></tr><tr><td>B</td></tr></table>'
-    expect(htmlToCarve(html).value).toBe('|=H|=A|\n| B |\n')
+    expect(htmlToCarve(html).value).toBe('|= H |= A |\n| B |\n')
     expect(htmlToCarve(html).report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'table-degraded',
