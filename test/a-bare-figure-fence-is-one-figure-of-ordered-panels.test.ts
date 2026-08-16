@@ -18,11 +18,18 @@ describe('a bare figure fence is one figure of ordered panels', () => {
     expect(doc.children[0]).not.toHaveProperty('target')
   })
 
-  it('an empty group still renders the panels wrapper', () => {
-    expect(h('::: figure\n:::')).toBe(
+  it('an empty group is an empty group figure', () => {
+    // FLAT shape: no wrapper div - panels and content nest directly in the
+    // group figure (HTML's figure content model; Pandoc subfigure symmetry).
+    // An EMPTY uncaptioned group keeps the bare-container empty-body line,
+    // the oracle's exact bytes for this shape.
+    expect(h('::: figure\n:::')).toBe('<figure class="carve-figure-group">\n</figure>')
+  })
+
+  it('an empty group with a caption holds only its figcaption', () => {
+    expect(h('::: figure\n:::\n^ Figure #: Cap')).toBe(
       '<figure class="carve-figure-group">\n' +
-        '  <div class="carve-figure-panels">\n' +
-        '  </div>\n' +
+        '  <figcaption>Figure 1: Cap</figcaption>\n' +
         '</figure>',
     )
   })
@@ -32,12 +39,10 @@ describe('a bare figure fence is one figure of ordered panels', () => {
     // input has no closer line to host the slot - and no lines after it either.
     expect(h('::: figure\n![a](x.png)\n^ (a) c')).toBe(
       '<figure class="carve-figure-group">\n' +
-        '  <div class="carve-figure-panels">\n' +
-        '    <figure class="carve-figure-panel">\n' +
-        '      <img src="x.png" alt="a">\n' +
-        '      <figcaption>(a) c</figcaption>\n' +
-        '    </figure>\n' +
-        '  </div>\n' +
+        '  <figure class="carve-figure-panel">\n' +
+        '    <img src="x.png" alt="a">\n' +
+        '    <figcaption>(a) c</figcaption>\n' +
+        '  </figure>\n' +
         '</figure>',
     )
   })
@@ -46,12 +51,10 @@ describe('a bare figure fence is one figure of ordered panels', () => {
     expect(h('> ::: figure\n> ![a](x.png)\n> ^ (a) c\n> :::')).toBe(
       '<blockquote>\n' +
         '  <figure class="carve-figure-group">\n' +
-        '    <div class="carve-figure-panels">\n' +
-        '      <figure class="carve-figure-panel">\n' +
-        '        <img src="x.png" alt="a">\n' +
-        '        <figcaption>(a) c</figcaption>\n' +
-        '      </figure>\n' +
-        '    </div>\n' +
+        '    <figure class="carve-figure-panel">\n' +
+        '      <img src="x.png" alt="a">\n' +
+        '      <figcaption>(a) c</figcaption>\n' +
+        '    </figure>\n' +
         '  </figure>\n' +
         '</blockquote>',
     )
@@ -104,12 +107,10 @@ describe('a bare figure fence is one figure of ordered panels', () => {
     // descends into group children.
     expect(h('::: figure\n![a][r]\n^ (a) c\n:::\n\n[r]: /u.png')).toBe(
       '<figure class="carve-figure-group">\n' +
-        '  <div class="carve-figure-panels">\n' +
-        '    <figure class="carve-figure-panel">\n' +
-        '      <img src="/u.png" alt="a">\n' +
-        '      <figcaption>(a) c</figcaption>\n' +
-        '    </figure>\n' +
-        '  </div>\n' +
+        '  <figure class="carve-figure-panel">\n' +
+        '    <img src="/u.png" alt="a">\n' +
+        '    <figcaption>(a) c</figcaption>\n' +
+        '  </figure>\n' +
         '</figure>',
     )
   })
@@ -129,12 +130,10 @@ describe('a bare figure fence is one figure of ordered panels', () => {
 
   it('an uncaptioned image is group content, not a panel', () => {
     // §4c: the panels are the figure and table children. A bare image never
-    // became a figure, so it sits in the wrapper as preserved content.
+    // became a figure, so it sits in the group as preserved content.
     expect(h('::: figure\n![a](x.png)\n:::')).toBe(
       '<figure class="carve-figure-group">\n' +
-        '  <div class="carve-figure-panels">\n' +
-        '    <img src="x.png" alt="a">\n' +
-        '  </div>\n' +
+        '  <img src="x.png" alt="a">\n' +
         '</figure>',
     )
   })
