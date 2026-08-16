@@ -193,8 +193,12 @@ describe('the lint rule for the retired order', () => {
   // `text-align: left` and REMOVES a literal `<` from the content, so a
   // formatter doing it in its default path would break the round-trip invariant
   // on a document that is currently correct.
+  // The separator space this used to pin is gone: an attribute block ends the
+  // alignment scan by itself, so the sigil stays content without it, and
+  // carve-php and carve-rs both write the glued form. What the case is about -
+  // the `<` is NOT promoted to a marker - is unchanged.
   it('leaves the source alone through fmt', () => {
-    expect(fmt('|{#x}< content |')).toBe('|{#x} < content|\n')
+    expect(fmt('|{#x}< content |')).toBe('|{#x}< content|\n')
     expect(html(fmt('|{#x}< content |'))).toBe(html('|{#x}< content |'))
   })
 })

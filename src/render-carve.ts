@@ -1246,8 +1246,17 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // also opens a blockquote. That is a different rule's decision, and a guard
   // that relied on it would break the day that rule narrowed - so all three
   // sigils are guarded and only two of them were ever observed failing.
+  //
+  // An ATTRIBUTE BLOCK ends the scan by itself, so a cell that wrote one needs
+  // no space: PART 9 §319 binds attributes AFTER the kind and alignment
+  // markers, so nothing past `}` can still be read as one. Measured on all
+  // three engines, `|{#x}< content|`, `|{#x}>b|` and `|={#x}~x~|` parse the
+  // sigil as text. The space was written anyway, which is the one place this
+  // writer disagreed with carve-rs on a cell (corpus 319-4).
   const separator =
-    prefix !== '' && align === '' && TABLE_ALIGNMENT_MARKERS.has(rendered[0] ?? '') ? ' ' : ''
+    prefix !== '' && align === '' && attrs === '' && TABLE_ALIGNMENT_MARKERS.has(rendered[0] ?? '')
+      ? ' '
+      : ''
   return { text: `${prefix}${separator}${rendered}`, tight: prefix !== '' }
 }
 
@@ -2252,8 +2261,12 @@ function escapeText(text: string, captionCanOpen = false): string {
     .replace(escapes, (char, offset: number) => {
       if (char !== '^') return `\\${char}`
       const next = text[offset + 1] ?? ''
-      const opensCaption =
-        captionCanOpen && offset === 0 && (next === ' ' || next === '\t')
+      // A TAB after the marker is not a caption opener: PART 10 §231 leaves
+      // that line as prose, which is why the corpus renders `^<TAB>Figure 1`
+      // as a paragraph. Escaping it wrote `\^` where carve-php and carve-rs
+      // write the caret bare, and an escape that guards a channel the
+      // character cannot open is exactly what corpus 304 refuses.
+      const opensCaption = captionCanOpen && offset === 0 && next === ' '
       const opensInline = next === '[' || (text[offset - 1] ?? '') === '{' || next === '}'
       return opensCaption || opensInline ? '\\^' : '^'
     })
@@ -2268,7 +2281,7 @@ function escapeText(text: string, captionCanOpen = false): string {
     escapeMode === 'minimal' &&
     captionCanOpen &&
     out.startsWith('^') &&
-    (out[1] === ' ' || out[1] === '\t')
+    out[1] === ' '
   ) {
     out = '\\' + out
   }
