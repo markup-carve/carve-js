@@ -155,26 +155,54 @@ const RE_HR = /^([-*_])\1{2,}[ \t]*$/
 // prose while `:::<BOM>` closed the block it never opened. The opener's
 // spelling is the one that stays.
 //
-// THE TAB ROW IS DELIBERATELY UNCHANGED. Whether this run is `whitespace` or
-// the narrower `space` is the same question PART 7 answers for NAMED slots
-// ("a tab is syntax ONLY in a line's LEADING INDENTATION RUN") and that carve
-// #886 / #894 / #905 have been settling one construct at a time -- but no
-// clause names this run, so there is nothing to apply it to yet. carve-rs
-// accepts a tab after `:::` and after `+` and rejects one after ` ``` `;
-// carve-php accepts it in all three. Narrowing the class to `whitespace` fixes
-// every row all three tickets name without deciding that one.
+// THE TAB ROW IS DECIDED FOR THE CODE FENCE ONLY, and `FENCE_TRAILING_WS`
+// below carries it. Whether this run is `whitespace` or the narrower `space`
+// is the same question PART 7 answers for NAMED slots ("a tab is syntax ONLY
+// in a line's LEADING INDENTATION RUN") and that carve#886 / #894 / #905 have
+// been settling one construct at a time. carve#1285 settles the code fence's
+// row and no other, so this class stays as it is for every construct that is
+// not a ` ``` ` / `~~~` line: carve-rs accepts a tab after `:::`, after `+`
+// and after `%%%`, and this engine already agrees with it on all three.
 const TRAILING_WS = '[ \\t]*$'
 
+// THE CODE FENCE'S TRAILING RUN IS `space`, NOT `whitespace` (carve#1285,
+// carve-js#1121). The grammar's DEFINITION MARKER SEPARATOR clause is
+// NORMATIVE that a marker-to-content separator is the `space` terminal
+// (U+0020) only and that "a tab does NOT satisfy `space` (`space = ' '`)",
+// mirroring the heading, list and task markers - and it names carve-rs as the
+// reference. The fence line is the one member of that family the sentence does
+// not enumerate, which is why it drifted: a ` ``` ` line ending in a tab
+// opened a code block here while carve-rs read the run as prose.
+//
+// THE RUN IS ONE RUN SEEN FROM TWO ENDS (carve-js#805), so this narrowing
+// reaches the OPENER and the CLOSER together. Narrowing only the opener would
+// leave ```` ```<TAB> ```` closing a block it can no longer open, which is the
+// exact half-swept shape that ticket was filed about. carve-rs holds both ends:
+// a tab after the run refuses the opener AND refuses the closer, leaving the
+// delimiter line as content of the block it failed to close.
+//
+// SCOPE IS THE BACKTICK/TILDE FAMILY, all four spellings of it in this file:
+// `fenceCloseRe`, `RE_FENCE`, `RE_RAW_FENCE` and the two bare closers. The
+// colon fence (`RE_ADMONITION_CLOSE`), the continuation marker
+// (`RE_CONTINUATION_MARKER`) and the comment fence (`RE_COMMENT_BLOCK_ANY`,
+// which takes any tail at all) keep `TRAILING_WS`, because carve-rs accepts a
+// tab on each of those and no clause has moved them.
+const FENCE_TRAILING_WS = ' *$'
+
 /**
- * The closer for a fence opened with `marker`: the same character, at least as
- * long, and nothing after it but the trailing run above.
+ * The closer for a code fence opened with `marker`: the same character, at
+ * least as long, and nothing after it but the trailing run above.
  *
  * ONE producer on purpose. This regex was built at eight call sites and spelled
  * out at four more, and a narrowing pass that reaches twelve of thirteen leaves
  * exactly the drift carve-js#805 reports.
+ *
+ * The CODE fence is the only caller: the comment fence matches its closer on
+ * EXACT length through `commentFenceRun`, and the colon fence has
+ * `RE_ADMONITION_CLOSE`. So this takes `FENCE_TRAILING_WS`.
  */
 function fenceCloseRe(marker: string): RegExp {
-  return new RegExp(`^${marker[0]}{${marker.length},}${TRAILING_WS}`)
+  return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
 // Info string is a single language token, optionally followed by a bracketed
@@ -227,15 +255,16 @@ function fenceCloseRe(marker: string): RegExp {
 // separator keeps its run for the same reason (carve#892).
 //
 // The TRAILING run before end-of-line is not a slot in `fenced_code_block`
-// either, and carries `TRAILING_WS` above: it was left at `\s` when the slots
-// were narrowed, so ```` ```<BOM> ```` opened a fence in this engine while
+// either, and carries `FENCE_TRAILING_WS` above: it was left at `\s` when the
+// slots were narrowed, so ```` ```<BOM> ```` opened a fence in this engine while
 // carve-rs and carve-php both read the line as prose. Opener and closer are
-// one run seen from two ends (carve-js#805).
+// one run seen from two ends (carve-js#805), and carve#1285 took the tab out of
+// this run too.
 // Groups: 3 lang, 4|6 header (quoted, incl. quotes), 5|7|8 label (incl. brackets).
 const RE_FENCE = new RegExp(
   '^()(`{3,}|~{3,}) ?(?:([a-zA-Z0-9_+#/.-]+)(?: +("[^"]*"))?(?: +(\\[[^\\]]*\\]))?' +
     '|("[^"]*")(?: +(\\[[^\\]]*\\]))?|(\\[[^\\]]*\\]))?' +
-    TRAILING_WS,
+    FENCE_TRAILING_WS,
 )
 // Bullets are `-` and `*` only. Unlike Markdown/djot, `+` is not a Carve bullet
 // -- it is reserved as the list-continuation marker (PART 9 §17), so a lone `+`
@@ -1081,7 +1110,7 @@ const RE_FRONTMATTER_CLOSE = new RegExp('^---' + TRAILING_WS)
 // it as a paragraph - a divergence created by the fix for the other spelling.
 // The ticket named neither: it named the four PRODUCTIONS, and this engine
 // spells one of them twice.
-const RE_RAW_FENCE = new RegExp('^(`{3,}|~{3,}) ?=([a-zA-Z][\\w-]*)' + TRAILING_WS)
+const RE_RAW_FENCE = new RegExp('^(`{3,}|~{3,}) ?=([a-zA-Z][\\w-]*)' + FENCE_TRAILING_WS)
 // Comments (§4.13): a `%%%`+ line opens/closes a block comment (matched
 // by length); a `%%` line is a line comment. Neither is rendered. A line
 // comment may be indented: leading whitespace before `%%` does not matter, so an
@@ -1131,10 +1160,10 @@ const commentFenceRun = (line: string): number | undefined => {
 const RE_COMMENT_LINE = /^[ \t]*%%/
 // A bare fence-closer line (` ``` ` / `~~~`, no info), used only by the
 // paragraph-interruption closer lookahead's negative cache (§10).
-const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + TRAILING_WS)
+const RE_FENCE_CLOSER = new RegExp('^(`{3,}|~{3,})' + FENCE_TRAILING_WS)
 // The same line seen by the definition prepass, which has already re-based it to
 // the fence's content column and so matches the run alone.
-const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + TRAILING_WS)
+const RE_FENCE_CLOSER_PREPASS = new RegExp('^([`~]{3,})' + FENCE_TRAILING_WS)
 
 // Maximum block-container nesting depth, applied UNIFORMLY to blockquote, list,
 // fenced-div / admonition (and footnote) nesting. Each level recurses
