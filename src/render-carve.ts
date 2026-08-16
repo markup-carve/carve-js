@@ -523,6 +523,7 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
     // second and third at the same column, where they merge with each other.
     let previousList: List | null = null
     let listOffset = 0
+    let previousBlock: BlockNode | null = null
     for (const block of blocks) {
       ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
       const rendered = renderBlock(block, ctx)
@@ -535,7 +536,20 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
         listOffset = 0
       }
       if (rendered.length > 0) {
-        parts.push(listOffset > 0 ? indentLines(rendered, listOffset) : rendered)
+        const text = listOffset > 0 ? indentLines(rendered, listOffset) : rendered
+        // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
+        // lines are one paragraph in the source and N nodes in the tree since
+        // PART 12 §18, so the default block separator would open a blank line
+        // between lines the author wrote adjacent - and PART 11 §6 binds the
+        // writer to the author's layout. Adjacency is read from `pos`, so a
+        // blank line the author DID write survives, and a tree with no
+        // positions falls back to the separator every other block gets.
+        if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
+          parts[parts.length - 1] += `\n${text}`
+        } else {
+          parts.push(text)
+        }
+        previousBlock = block
       }
     }
     return parts.join('\n\n')
@@ -544,6 +558,17 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
     ctx.paragraphStartsAfterCaptionHost = previousParagraphStart
     ctx.blockDepth--
   }
+}
+
+/** Whether two adjacent blocks were written on consecutive source lines, with
+ *  no blank line between them - true only for the bibliography definition,
+ *  whose line-per-node shape is the one the parser splits out of a paragraph. */
+function writtenAsOneRun(previous: BlockNode, block: BlockNode): boolean {
+  if (previous.type !== 'citation_definition' || block.type !== 'citation_definition') return false
+  const before = previous.pos
+  const after = block.pos
+  if (!before || !after) return false
+  return after.startLine === before.endLine + 1
 }
 
 function hostsCaption(block: BlockNode): boolean {
@@ -738,6 +763,15 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
       const attrs = renderAttrs(node.attrs)
       return `[${node.label}]: ${node.href}${title}${attrs === '' ? '' : ` ${attrs}`}`
+    }
+    case 'citation_definition': {
+      // PART 12 §18 gave the bibliography line a node for the same reason §10
+      // gave one to the reference definition: so the writer can put the line
+      // back. The metadata block leads the entry, where the author wrote it.
+      const metadata = renderCitationMetadata(node.attrs)
+      const entry = renderInlines(node.children, ctx)
+      const tail = [metadata, entry].filter((part) => part !== '').join(' ')
+      return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
     }
     case 'comment':
       return node.block
@@ -1836,6 +1870,24 @@ function quoteAttrValue(value: string): string {
   // tripped to the shorter spelling the parser accepts.
   if (/^[^ \t\n\r"'{}]+$/.test(value)) return value
   return `"${value.replace(/[\\"]/g, '\\$&')}"`
+}
+
+/**
+ * The `{author="Smith" year="2020"}` block leading a bibliography entry.
+ *
+ * ALWAYS QUOTED, which is why this is not `renderAttrs`: that writer drops the
+ * quotes a value does not strictly need, and the citations extension reads the
+ * block back with a QUOTED-value pattern. `{author=Smith}` therefore reparses
+ * as an attribute the entry no longer feeds to author-date mode, and the
+ * formatter would have silently emptied the reference list's labels.
+ */
+function renderCitationMetadata(attrs: Attrs | undefined): string {
+  const keyValues = attrs?.keyValues
+  if (!keyValues) return ''
+  const parts = Object.entries(keyValues).map(
+    ([key, value]) => `${escapeAttrKey(key)}="${value.replace(/[\\"]/g, '\\$&')}"`,
+  )
+  return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
 
 function alignMarker(align: TableCell['align']): string {

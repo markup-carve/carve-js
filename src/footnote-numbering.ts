@@ -71,6 +71,12 @@ function walkBlockInlines(
   switch (node.type) {
     case 'heading':
     case 'paragraph':
+    // A bibliography entry's inlines are rendered - in the references list -
+    // so a footnote reference in one is numbered like any other. It reached
+    // this walk as a paragraph before PART 12 §18 made the line its own node,
+    // and skipping it here would have unnumbered the reference and left it
+    // rendering as its own source text.
+    case 'citation_definition':
       visit(node.children)
       break
     case 'block_quote':

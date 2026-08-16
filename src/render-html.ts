@@ -1159,6 +1159,11 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // link or image that resolves the label (PART 9R R1). carve-php emits nothing
       // for it on this target too, which is what keeps the two in agreement.
       return ''
+    case 'citation_definition':
+      // PART 12 §18, and the same argument: the definition renders nothing
+      // where it sits. Its entry renders in the references list the citations
+      // extension builds, which is why giving the line a node moved no HTML.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderHtml: unknown block ${(t as { type: string }).type}`)

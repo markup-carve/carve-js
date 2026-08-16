@@ -965,6 +965,12 @@ export function resolveHeadingIds(
     switch (b.type) {
       case 'heading':
       case 'paragraph':
+      // A bibliography entry's inlines are rendered - in the references list -
+      // so a `</#id>` crossref or a `[Heading][]` reference in one resolves
+      // like any other. The line reached this walk as a paragraph before PART
+      // 12 §18 made it its own node, and skipping it here would leave the
+      // reference rendering as its own source text.
+      case 'citation_definition':
         fn(b.children)
         break
       case 'block_quote':

@@ -1,4 +1,14 @@
-import type { BlockNode, Citation, CitationGroup, Div, InlineNode, Text } from './ast.js'
+import type {
+  BlockNode,
+  Citation,
+  CitationDefinition,
+  CitationGroup,
+  Div,
+  InlineNode,
+  Paragraph,
+  Position,
+  Text,
+} from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type {
   BlockExtensionRenderContext,
@@ -181,7 +191,7 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
       citeIds.clear()
       refIds.clear()
       idsReserved = false
-      doc.children = collectDefs(doc.children, defs)
+      collectDefs(doc.children, defs)
       // Seed the CSL-JSON pool: in-document defs win on collision (§6.2).
       for (const e of pool) {
         if (e && typeof e.id === 'string' && !defs.has(e.id)) defs.set(e.id, cslToDef(e))
@@ -202,7 +212,15 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
         ...doc.children,
         ...Object.values(doc.footnoteDefs ?? {}).flat(),
       ]
-      for (const block of numberingTargets)
+      for (const block of numberingTargets) {
+        // A citation inside a bibliography ENTRY is not a use site. The entry
+        // renders in the references list, which is built from `defs` and not
+        // walked here, and before the definition line was a node of its own
+        // (PART 12 §18) this pass could not reach one: the line had been
+        // removed from the tree by `afterParse`. Whether a citation inside an
+        // entry cites anything is a question §18 does not open, so the walk
+        // keeps the answer it always gave.
+        if (block.type === 'citation_definition') continue
         walkCitationGroups(block, (g) => {
           // A group with any unresolved key renders verbatim (§6.4): its keys are
           // literal text, not citations, so they are neither numbered, listed,
@@ -221,6 +239,7 @@ export function citations(opts: CitationsOptions = {}): CarveExtension {
             }
           }
         })
+      }
       if (order.length === 0) return doc
       // Place the references list via a marked carrier div the block renderer
       // turns into the list: inside an explicit `::: references` container
@@ -330,12 +349,18 @@ const matchCitation = (text: string, pos: number, ctx: MatcherContext): InlineMa
   return { node: node as InlineNode, end: close + 1 }
 }
 
-// ----- afterParse: collect [@key]: definitions ------------------------------
+// ----- parse: promote [@key]: definition lines to nodes ---------------------
 
 const ATTR_RE = /^\{([^}]*)\}\s*/
 // The `{author= year=}` block sits in the entry prose, so the core typographic
 // pass may have turned its straight quotes into curly ones (#196). Accept both.
-const KV_RE = (k: string) => new RegExp(`${k}\\s*=\\s*["“”]([^"“”]*)["“”]`)
+//
+// QUOTED VALUES ONLY, which is the extraction the extension has always done:
+// `{author=Smith}` fed nothing to author-date mode before this pass existed and
+// still does not, so admitting the bare form here would move rendered output on
+// a line PART 12 §18 says renders the same either way. What the unquoted form
+// means is left to the clause that opens it.
+const KV_PAIR_RE = /([A-Za-z_][\w.:-]*)\s*=\s*["“”]([^"“”]*)["“”]/g
 
 /** Visible text of one inline node, for the leading-run scan below. */
 function runPieceText(n: InlineNode): string | null {
@@ -383,6 +408,7 @@ function takeLeadingAttrBlock(rest: InlineNode[]): string | null {
     const node = rest[index]!
     if (node.type !== 'text') break
     ;(node as Text).value = piece.slice(remaining)
+    advanceStart(node, piece.slice(0, remaining))
     remaining = 0
   }
   rest.splice(0, index)
@@ -390,32 +416,109 @@ function takeLeadingAttrBlock(rest: InlineNode[]): string | null {
   return am[1]!
 }
 
-/** Return a new block list with definition lines removed, populating `defs`.
- *  Consecutive `[@key]: entry` lines parse as one paragraph (soft-break
- *  separated), so split each paragraph into lines and collect per line. */
-function collectDefs(blocks: BlockNode[], defs: Map<string, Def>): BlockNode[] {
+/**
+ * PART 12 §18: turn every top-level `[@key]: entry` line into a
+ * `citation_definition` node.
+ *
+ * A PARSE-STAGE pass, and that is the point of it. The definition used to be
+ * recognized in the extension's `afterParse` hook, which `parse` does not call:
+ * the published tree - the one `toAstJson` serializes, which §3a makes the
+ * PRE-RESOLVE one - therefore carried the parser's failure to recognize the
+ * line, a paragraph whose first child is a `citation_group` followed by the
+ * literal text `: {author=`. A ProseMirror bridge reading that tree received
+ * citation-shaped prose and round-tripped it as prose (carve#1276).
+ *
+ * WHAT IT RECOGNIZES IS UNCHANGED, deliberately: the same line shape the
+ * collect pass took, in the same place. Consecutive definitions parse as ONE
+ * paragraph separated by soft breaks, so a paragraph is split per line; the
+ * lines that are not definitions are rejoined into one paragraph sitting where
+ * its first surviving line was, which is what keeps `a`/`[@k]: e`/`b` one
+ * paragraph rather than two. Only the DOCUMENT's own children are offered:
+ * measured on carve-js `45efe0ab`, a definition line inside a block quote or a
+ * list item is paragraph text and defines nothing, and §18 rules on the node's
+ * shape rather than on where a definition is recognized.
+ *
+ * Tier-2 without a flag to say so: a `citation_group` is produced by the
+ * citations extension's matcher and by nothing else, so with the extension off
+ * there is no line here to promote.
+ */
+export function promoteCitationDefinitions(blocks: BlockNode[]): BlockNode[] {
+  let out: BlockNode[] | null = null
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!
+    const promoted = block.type === 'paragraph' ? promoteParagraph(block) : null
+    if (promoted === null) {
+      out?.push(block)
+      continue
+    }
+    if (!out) out = blocks.slice(0, i)
+    for (const node of promoted) out.push(node)
+  }
+  return out ?? blocks
+}
+
+/** The blocks one paragraph becomes, or null when it holds no definition. */
+function promoteParagraph(paragraph: Paragraph): BlockNode[] | null {
+  // Cheap gate before splitting: only a paragraph holding a citation group can
+  // hold a definition line.
+  if (!paragraph.children.some((n) => n.type === 'citation_group')) return null
+
+  const lines = splitOnSoftBreaks(paragraph.children)
   const out: BlockNode[] = []
-  for (const b of blocks) {
-    if (b.type !== 'paragraph') {
-      out.push(b)
+  const kept: InlineNode[][] = []
+  let paragraphSlot = -1
+  for (const line of lines) {
+    const def = definitionNode(line)
+    if (def) {
+      out.push(def)
       continue
     }
-    const lines = splitOnSoftBreaks(b.children)
-    const kept: InlineNode[][] = []
-    for (const line of lines) {
-      const def = asDefinition(line)
-      if (def) defs.set(def.key, def.value)
-      else kept.push(line)
-    }
-    if (kept.length === 0) continue // whole paragraph was definitions
-    if (kept.length === lines.length) {
-      out.push(b) // nothing removed
-      continue
-    }
-    b.children = joinWithSoftBreaks(kept)
-    out.push(b)
+    if (kept.length === 0) paragraphSlot = out.length
+    kept.push(line)
+  }
+  if (out.length === 0) return null
+  if (kept.length > 0) {
+    paragraph.children = joinWithSoftBreaks(kept)
+    repositionParagraph(paragraph)
+    out.splice(paragraphSlot, 0, paragraph)
   }
   return out
+}
+
+/**
+ * Re-span a paragraph that lost lines to the definitions taken out of it.
+ *
+ * Its recorded span still covers the definition line, and a node claiming
+ * source it no longer holds is what PART 12 §4 forbids. Mirrors the parser's
+ * own paragraph rule: the extent is its first and last owned inline, and only
+ * when every child is placed.
+ */
+function repositionParagraph(paragraph: Paragraph): void {
+  if (!paragraph.pos) return
+  const kids = paragraph.children
+  if (!kids.every((child) => child.pos !== undefined)) return
+  const first = kids[0]?.pos
+  const last = kids[kids.length - 1]?.pos
+  if (!first || !last) return
+  paragraph.pos.startLine = first.startLine
+  paragraph.pos.endLine = last.endLine
+  if (first.startColumn !== undefined) paragraph.pos.startColumn = first.startColumn
+  if (first.startOffset !== undefined) paragraph.pos.startOffset = first.startOffset
+  if (last.endColumn !== undefined) paragraph.pos.endColumn = last.endColumn
+  if (last.endOffset !== undefined) paragraph.pos.endOffset = last.endOffset
+}
+
+/** Populate `defs` from the definition nodes the parse-stage pass built. */
+function collectDefs(blocks: readonly BlockNode[], defs: Map<string, Def>): void {
+  for (const block of blocks) {
+    if (block.type !== 'citation_definition') continue
+    const value: Def = { entry: block.children }
+    const kv = block.attrs?.keyValues
+    if (kv?.author !== undefined) value.author = kv.author
+    if (kv?.year !== undefined) value.year = kv.year
+    // Last definition of a duplicate key wins, as it always has.
+    defs.set(block.key, value)
+  }
 }
 
 /** Split an inline run into segments at each soft-break (the breaks dropped). */
@@ -439,7 +542,20 @@ function joinWithSoftBreaks(lines: InlineNode[][]): InlineNode[] {
   return out
 }
 
-function asDefinition(kids: InlineNode[]): { key: string; value: Def } | null {
+/**
+ * The `citation_definition` one soft-break-delimited line makes, or null.
+ *
+ * The `attrs` slot holds the leading `{author= year=}` block and `children` the
+ * entry after it - the two slots PART 12 §10 spends on a link reference
+ * definition's tail, which is the analogue §18 picks: a footnote body holds
+ * BLOCKS, an entry holds a metadata run plus one line of rendered text.
+ *
+ * A block written directly against the bracket - `[@k]{author="X"}: e` - is not
+ * read here, because there is no citation to read it from: the matcher declines
+ * a `[…]` followed by `{`, so that line is a span holding a mention and never
+ * reaches this pass at all (measured on carve-js `45efe0ab`).
+ */
+function definitionNode(kids: InlineNode[]): CitationDefinition | null {
   const g = kids[0]
   if (!g || g.type !== 'citation_group') return null
   const cg = g as CitationGroup
@@ -449,34 +565,63 @@ function asDefinition(kids: InlineNode[]): { key: string; value: Def } | null {
   const second = kids[1]
   if (!second || second.type !== 'text' || !(second as Text).value.startsWith(':')) return null
 
+  // The span of the whole line, taken BEFORE the entry is trimmed: the node
+  // stands for the line the author wrote, `[@key]` and separator included.
+  const span = lineSpan(kids)
+
   // Entry = inline content after the leading `: `, with the second text node's
   // leading colon stripped.
-  const rest: InlineNode[] = [...kids.slice(1)]
-  rest[0] = { type: 'text', value: (second as Text).value.replace(/^:\s*/, '') } as Text
+  const entry: InlineNode[] = [...kids.slice(1)]
+  const separator = /^:\s*/.exec((second as Text).value)![0]
+  const head: Text = { type: 'text', value: (second as Text).value.slice(separator.length) }
+  if (second.pos) head.pos = { ...second.pos }
+  advanceStart(head, separator)
+  entry[0] = head
 
-  const value: Def = { entry: rest }
-  // `{author= year=}` after the `:` attaches to the citation-group node (the
-  // preceding non-text node), so read it from there first.
-  const cgAttrs = (cg as { attrs?: { keyValues?: Record<string, string> } }).attrs?.keyValues
-  if (cgAttrs?.author !== undefined) value.author = cgAttrs.author
-  if (cgAttrs?.year !== undefined) value.year = cgAttrs.year
-  // Fallback: a leading `{…}` left in the entry text (when it did not attach).
-  if (value.author === undefined) {
-    const inside = takeLeadingAttrBlock(rest)
-    if (inside !== null) {
-      const author = KV_RE('author').exec(inside)?.[1]
-      const year = KV_RE('year').exec(inside)?.[1]
-      if (author !== undefined) value.author = author
-      if (year !== undefined) value.year = year
-    }
+  const node: CitationDefinition = { type: 'citation_definition', key: it.key, children: entry }
+  const inside = takeLeadingAttrBlock(entry)
+  if (inside !== null) {
+    const keyValues: Record<string, string> = {}
+    for (const pair of inside.matchAll(KV_PAIR_RE)) keyValues[pair[1]!] = pair[2]!
+    if (Object.keys(keyValues).length > 0) node.attrs = { keyValues }
   }
   // Strip a leading space left behind by a consumed attr block.
-  const head = rest[0] as Text | undefined
-  if (head?.type === 'text') {
-    head.value = head.value.replace(/^\s+/, '')
-    if (head.value === '') rest.shift()
+  const first = entry[0] as Text | undefined
+  if (first?.type === 'text') {
+    const lead = /^\s*/.exec(first.value)![0]
+    if (lead !== '') {
+      first.value = first.value.slice(lead.length)
+      advanceStart(first, lead)
+    }
+    if (first.value === '') entry.shift()
   }
-  return { key: it.key, value }
+  if (span) node.pos = span
+  return node
+}
+
+/** The span from the first inline of a line to its last, or undefined when
+ *  either end is unplaced - PART 12 §4 forbids inventing one. */
+function lineSpan(kids: InlineNode[]): Position | undefined {
+  const first = kids[0]?.pos
+  const last = kids[kids.length - 1]?.pos
+  if (!first || !last) return undefined
+  const span: Position = { startLine: first.startLine, endLine: last.endLine }
+  if (first.startColumn !== undefined) span.startColumn = first.startColumn
+  if (last.endColumn !== undefined) span.endColumn = last.endColumn
+  if (first.startOffset !== undefined) span.startOffset = first.startOffset
+  if (last.endOffset !== undefined) span.endOffset = last.endOffset
+  return span
+}
+
+/** Advance a node's start past `removed`, text taken off its front. Columns and
+ *  offsets are CODEPOINTS (PART 12 §4), which is what a value holding an astral
+ *  character makes visible. */
+function advanceStart(node: InlineNode, removed: string): void {
+  const pos = node.pos
+  if (!pos || removed === '') return
+  const delta = [...removed].length
+  if (pos.startColumn !== undefined) pos.startColumn += delta
+  if (pos.startOffset !== undefined) pos.startOffset += delta
 }
 
 // ----- render ---------------------------------------------------------------

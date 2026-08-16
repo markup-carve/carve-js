@@ -230,6 +230,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A `[@key]: entry` bibliography line is a `citation_definition` node**
+  (markup-carve/carve#1276, PART 12 §18). The line used to reach the published
+  tree as a paragraph whose first child is a `citation_group` followed by the
+  literal text `: {author=` and the rest of the entry - the parser's failure to
+  recognize it, published, which anything reading the AST received as
+  citation-shaped prose and round-tripped as prose. It is now a block node
+  carrying `key` (the key without the `@`), `children` (the entry's inline
+  content), `attrs` (the leading `{author= year=}` metadata block, when the
+  definition carries one) and its `pos`, and it is built in the PARSE stage -
+  the tree `toAstJson` serializes - rather than in the citations extension's
+  `afterParse` hook, which `parse` does not call. Tier-2: with the extension
+  off the line stays ordinary paragraph text, and a definition inside a block
+  quote or list item is paragraph text as before.
+
+  No rendered output moves on any target: the definition renders nothing where
+  it sits and its entry renders in the references list, exactly as before. The
+  canonical writer now writes the line back from the node, keeping a run of
+  definition lines a run and always quoting the metadata values.
+
 - **Every HTML import adapter, `generic` included, reads the DPUB-ARIA
   footnote roles** (markup-carve/carve-js#1105). An anchor with
   `role="doc-noteref"` and the `role="doc-endnotes"` section feed the same
