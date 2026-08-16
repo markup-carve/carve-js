@@ -3189,7 +3189,19 @@ function parseRawBlock(lexer: Lexer): RawBlock {
 // A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run
 // is tolerated where the real closers anchor at column 0. See `CloserIndex`.
 const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
-const RE_ANY_FENCE_CLOSER = /^[ \t]*([`~]{3,})[ \t]*$/
+// The CODE closer's trailing run is `space`, matching `FENCE_TRAILING_WS`
+// above (carve#1285). The leading run stays permissive - that is the dedent
+// this index is a superset for - but the TRAILING run is not, because dedenting
+// only ever strips leading whitespace, so no view can make a tab-terminated
+// line a code closer.
+//
+// Leaving it wide did not make the index wrong, only useless: `codeCloserPossible`
+// only ever REFUTES, so a line the real matcher rejects turns "no closer ahead"
+// into "go and scan", and the scan runs to end of document every time. That is
+// the quadratic path the index exists to close - a document of ` ```js ` openers
+// under a single ` ```<TAB> ` went from 11ms to 270ms at 4000 lines when the
+// real matcher was narrowed and this one was not (carve-js#1121).
+const RE_ANY_FENCE_CLOSER = new RegExp('^[ \\t]*([`~]{3,})' + FENCE_TRAILING_WS)
 
 /**
  * Where a closer of each fence shape LAST occurs in a lexer's lines.
