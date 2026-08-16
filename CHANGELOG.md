@@ -339,6 +339,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A table's sections and rows keep the attributes they have a slot for.** A
+  `<tbody id="totals">` and a `<tr class="warn">` fell into the empty `attrs`
+  slot with no diagnostic at all, though the model has a place for both:
+  `table_row.attrs`, which the writer spells on the closing pipe and every
+  renderer emits on the `<tr>`, and the body group's `attrs` in
+  `table.rowGroups`. A `<tbody>` carrying attributes is now a table whose
+  grouping says something the rows cannot, so the field is emitted to hold
+  them; the head and the foot are stated as row COUNTS and have no slot, so a
+  `<thead>` or `<tfoot>` that carries any is reported by name, as is a
+  `<tbody>` whose grouping was dropped for another reason. An unsupported
+  attribute on one of these elements reports the way it does everywhere else,
+  where nothing was said about them at all before. A section with no rows is
+  read too - it is one of the table's sections, and reading them back off the
+  rows had missed it - and reported, because a body group is the run of rows it
+  consumes and one with none is not a group.
+
 - **A cell spanning both ways keeps the grid it came with.** A `^` is resolved
   against the cell at the same INDEX above it, so a
   `<td colspan="2" rowspan="2">` written with one mark for its origin left the
