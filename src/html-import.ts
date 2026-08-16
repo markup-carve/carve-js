@@ -718,6 +718,7 @@ class Importer {
    */
   private spanGrid(
     built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
+    rowAttrs: Array<Attrs | undefined>,
     path: string,
     depth: number,
   ): TableRow[] {
@@ -768,7 +769,7 @@ class Importer {
       if (invented) {
         this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`)
       }
-      rows.push({ type: 'table_row', cells })
+      rows.push({ type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) })
       carried = [...carried.map((entry) => ({ ...entry, rows: entry.rows - 1 })).filter((entry) => entry.rows > 0), ...opened]
     })
     return rows
@@ -798,16 +799,33 @@ class Importer {
     }
     const tr: P5Node[] = []
     const group = new Map<P5Node, P5Node>()
+    // The sections in document order, collected on the way through rather than
+    // read back off the rows: a section with NO rows is one of the table's
+    // sections too, and deriving the list from the rows left its attributes
+    // unread and unreported.
+    const sectionNodes: P5Node[] = []
     const walk = (n: P5Node, section?: P5Node): void => {
       if (n.tagName === 'tr') {
         tr.push(n)
         if (section) group.set(n, section)
         return
       }
-      const own = ['thead', 'tbody', 'tfoot'].includes(n.tagName ?? '') ? n : section
-      for (const child of n.childNodes ?? []) walk(child, own)
+      const isSection = ['thead', 'tbody', 'tfoot'].includes(n.tagName ?? '')
+      if (isSection) sectionNodes.push(n)
+      for (const child of n.childNodes ?? []) walk(child, isSection ? n : section)
     }
     walk(node)
+    // The attributes of the SECTIONS, read once and in document order. Only a
+    // `<tbody>` has a slot for them - the body group `rowGroups` states - so
+    // `rowGroups` takes what it places out of this map and whatever is left is
+    // reported. Nothing read them before: a `<tbody id="totals">` fell into the
+    // empty `attrs` slot with no diagnostic at all (carve#1210).
+    const sectionAttrs = new Map<P5Node, { attrs: Attrs; path: string }>()
+    for (const section of sectionNodes) {
+      const sectionPath = this.childPath(path, section, (node.childNodes ?? []).indexOf(section))
+      const sectionOwn = this.attrs(section, sectionPath)
+      if (sectionOwn) sectionAttrs.set(section, { attrs: sectionOwn, path: sectionPath })
+    }
     // The leading run of all-header rows is what PART 10 §T9 gives `scope="col"`;
     // a header cell below it gets `scope="row"`. Computed over the rows rather
     // than per cell, because the run ENDS at the first row carrying a `td` and
@@ -893,8 +911,28 @@ class Importer {
         }
       }),
     )
-    const rows = this.spanGrid(built, path, depth)
-    const rowGroups = this.rowGroups(tr, rows, group, leadingHeaderRows, path)
+    // A `<tr>`'s own attributes have a slot - `table_row.attrs`, which the
+    // writer spells on the closing pipe and every renderer emits on the `<tr>`
+    // - and went in silence before this.
+    const rowAttrs = tr.map((row, r) => this.attrs(row, `${path}/tr[${r + 1}]`))
+    const rows = this.spanGrid(built, rowAttrs, path, depth)
+    const rowGroups = this.rowGroups(tr, rows, group, leadingHeaderRows, path, sectionAttrs)
+    // Whatever `rowGroups` did not place. A `<thead>` and a `<tfoot>` have no
+    // slot at all - the field states the head and foot as COUNTS - and a
+    // `<tbody>`'s attributes reach nothing when the field itself is not kept.
+    const sectionsWithRows = new Set(tr.map((row) => group.get(row)))
+    for (const [section, own] of sectionAttrs) {
+      const tag = section.tagName ?? 'tbody'
+      // A body group IS the run of rows it consumes, so a section with none is
+      // not a group and has nowhere to put them. Stating it as a zero-count
+      // group would put a body in the partition that describes no rows.
+      const reason = tag !== 'tbody'
+        ? `a table's ${tag === 'thead' ? 'head' : 'foot'} is stated as a row count and has no attribute slot`
+        : sectionsWithRows.has(section)
+          ? 'the row grouping this body belongs to was not kept, and nothing else holds it'
+          : 'a body group is the rows it consumes, and this one has none'
+      this.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path)
+    }
     const caption = captionNode
       ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
       : undefined
@@ -918,6 +956,13 @@ class Importer {
    * and pandoc both emit `<thead><tr><td>`), where the derived head is empty
    * and the stated one is not.
    *
+   * A `<tbody>`'s own attributes are one of those disagreements: the derived
+   * structure has no way to say them, so a body carrying any is not derivable
+   * and the field is emitted to hold them in the body group's `attrs`. Only a
+   * BODY has that slot - the head and the foot are stated as counts - so a
+   * `<thead>` or `<tfoot>` that carries attributes is reported by the caller,
+   * along with a `<tbody>` whose group was dropped for another reason.
+   *
    * The counts are not checked against `rows.length` here. They are built from
    * the same row list the rows are built from, so a check at this point cannot
    * fail; PART 12 §15's MUST is enforced where a payload arrives from
@@ -929,6 +974,7 @@ class Importer {
     group: Map<P5Node, P5Node>,
     leadingHeaderRows: number,
     path: string,
+    sectionAttrs: Map<P5Node, { attrs: Attrs; path: string }>,
   ): TableRowGroups | undefined {
     if (tr.length === 0) return undefined
     const sectionOf = (row: P5Node): string => group.get(row)?.tagName ?? 'tbody'
@@ -969,7 +1015,17 @@ class Importer {
       const rowHeadColumns = groupHead < groupRows.length
         ? this.rowHeadColumns(rows.slice(first, first + groupRows.length - groupHead), rows, first)
         : 0
-      bodies.push({ headRows: groupHead, bodyRows: groupRows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}) })
+      // The `<tbody>`'s own attributes: the body group is where the exchanged
+      // model puts them, and it is the only section with a slot.
+      const own = section ? sectionAttrs.get(section) : undefined
+      bodies.push({ headRows: groupHead, bodyRows: groupRows.length - groupHead, ...(rowHeadColumns > 0 ? { rowHeadColumns } : {}), ...(own ? { attrs: own.attrs } : {}) })
+      // Claimed here rather than after the return below, because a body
+      // carrying attributes is never DERIVABLE - that is what the clause on
+      // `derivable` says - so the field is returned whenever one was claimed,
+      // and the only return that skips this point is the one before the loop.
+      // A deferral for it was here and no mutation of it could change an
+      // output.
+      if (section && own) sectionAttrs.delete(section)
     }
 
     // No `<thead>` at all: the leading run of header rows is what every renderer
@@ -987,14 +1043,16 @@ class Importer {
       const absorbed = Math.min(leadingHeaderRows, bodies[0]!.headRows)
       headRows2 = absorbed
       bodies[0] = { ...bodies[0]!, headRows: bodies[0]!.headRows - absorbed }
-      if (bodies[0]!.headRows === 0 && bodies[0]!.bodyRows === 0 && bodies[0]!.rowHeadColumns === undefined) bodies.shift()
+      // A group carrying attributes is not empty, whatever its counts say:
+      // dropping it here would drop them with it.
+      if (bodies[0]!.headRows === 0 && bodies[0]!.bodyRows === 0 && bodies[0]!.rowHeadColumns === undefined && bodies[0]!.attrs === undefined) bodies.shift()
     }
 
     const derivable =
       headRows2 === leadingHeaderRows &&
       footRows === 0 &&
       bodies.length <= 1 &&
-      bodies.every((body) => body.headRows === 0 && (body.rowHeadColumns ?? 0) === 0)
+      bodies.every((body) => body.headRows === 0 && (body.rowHeadColumns ?? 0) === 0 && body.attrs === undefined)
     if (derivable) return undefined
     // Carve SOURCE has no spelling for the field, so a writer loses it. The
     // AST keeps it and `htmlToCarve` reports it, which is the split §16 draws.
