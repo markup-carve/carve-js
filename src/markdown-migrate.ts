@@ -70,7 +70,7 @@
  *    Carve. An EMPTY fence pair carries no metadata and stays two rules.
  */
 
-import { escapePlainCarveInlineSyntax } from './carve-escape.js'
+import { escapePlainCarveInlineSyntax, HANDLED_MARKDOWN } from './carve-escape.js'
 
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
 
@@ -1052,7 +1052,7 @@ function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM)
   // so `~b~` is struck, and Carve spells strikethrough the same way. Escaping
   // it here froze it as literal text, and the doubled form's rule below could
   // then never see it.
-  line = escapePlainCarveInlineSyntax(line, { braced: '*_', bare: '*_~' })
+  line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
 
   // Converted strong / bold-italic are stashed behind placeholders so their
