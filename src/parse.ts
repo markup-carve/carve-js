@@ -3945,48 +3945,92 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // everything after it - so a stanza containing one stays unanchored, which
     // is what PART 12 §4 asks for when a position cannot be produced.
     const anchorable = lexer.hasDocumentOffsets && lines.every((l) => l.aligned)
-    const inline: InlineNode[] = []
-    lines.forEach((line, index) => {
-      inline.push(
-        ...parseInline(
-          line.text,
-          lexer.abbrDefs,
-          lexer.linkDefs,
-          anchorable
-            ? inlineSource({
-                baseOffset: lexer.lineOffset(line.lineIndex),
-                startLine: lexer.lineNumber(line.lineIndex),
-                startColumn: lexer.lineStartColumn(line.lineIndex),
-              })
-            : inlineSource({ anchored: false }),
-        ),
-      )
-      if (index + 1 < lines.length) {
-        const hardBreak = { type: 'hard_break' } as InlineNode
-        if (lexer.hasDocumentOffsets) {
-        // The line-block text may have expanded tabs. Its display width is
-        // useful for the column below, but it is not a source byte length.
-        // Keep the usual start after the parsed text, so a dropped trailing
-        // source space remains part of the break span, but clamp it to the end
-        // of the original line: expanded tabs must not put startOffset past
-        // the following line's offset.
-        const lineOffset = lexer.lineOffset(line.lineIndex)
-        const sourceLineEnd = lineOffset + (lexer.lines[line.lineIndex]?.length ?? 0)
-        const end = Math.min(lineOffset + line.text.length, sourceLineEnd)
-        const nextLineOffset = lexer.lineOffset(lines[index + 1]!.lineIndex)
-        const column = lexer.lineStartColumn(line.lineIndex) +
-          (lexer.lines[line.lineIndex]?.length ?? 0)
-        hardBreak.pos = {
-          startLine: lexer.lineNumber(line.lineIndex),
-          endLine: lexer.lineNumber(lines[index + 1]!.lineIndex),
-          startColumn: column,
-          endColumn: lexer.lineStartColumn(lines[index + 1]!.lineIndex),
-          startOffset: end,
-          endOffset: nextLineOffset,
-        }
-        }
-        inline.push(hardBreak)
+
+    // THE STANZA IS PARSED AS ONE INLINE RUN (carve-js#1116, ruled on
+    // markup-carve/carve#1282). `edge-cases.md:2205` is normative that an
+    // unclosed inline verbatim run "renders as a `<code>` span to the end of the
+    // block", and a line block is a block like any other. This parsed each LINE
+    // on its own and stitched the results with a hard break, so a run could not
+    // physically reach past the newline: the engine closed it at the `<br>` and
+    // the rest of the stanza came out as prose. The same shape in an ordinary
+    // paragraph, which is the control, always carried the run across.
+    //
+    // The line break is therefore the inline parser's SOFT BREAK, rewritten to a
+    // hard break afterwards - exactly what `parseHardBreaksBlock` does for
+    // `::: hardbreaks`, its sibling container, which is why that one already
+    // agreed with carve-rs on this shape. A newline swallowed by an open run
+    // emits no soft break at all and so produces no `<br>`, which is the whole
+    // point: the run keeps a LITERAL NEWLINE and the break is gone.
+    //
+    // Positions are unchanged. Each surviving break is re-posed from LINE
+    // GEOMETRY, as before, rather than from the joined text - a line block's
+    // text may hold expanded tabs, whose display width is not a source byte
+    // length. `lineAnchors` gives every line its own origin so the inline nodes
+    // in a continuation line are measured from where that line actually starts,
+    // and the break's own `startLine` is what names which boundary it is once
+    // some boundaries no longer produce one.
+    const joined = lines.map((line) => line.text).join('\n')
+    const firstLineNumber = lexer.lineNumber(lines[0]!.lineIndex)
+    // The break BETWEEN line `index` and the one after it, from line geometry.
+    // Unchanged from when each break was built during the per-line walk, down to
+    // the clamp: keep the usual start after the parsed text, so a dropped
+    // trailing source space remains part of the break span, but do not let an
+    // expanded tab put `startOffset` past the following line's offset.
+    const breakPos = (index: number): Position | undefined => {
+      if (!lexer.hasDocumentOffsets) return undefined
+      const line = lines[index]!
+      const next = lines[index + 1]
+      if (!next) return undefined
+      const lineOffset = lexer.lineOffset(line.lineIndex)
+      const sourceLineEnd = lineOffset + (lexer.lines[line.lineIndex]?.length ?? 0)
+      return {
+        startLine: lexer.lineNumber(line.lineIndex),
+        endLine: lexer.lineNumber(next.lineIndex),
+        startColumn:
+          lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0),
+        endColumn: lexer.lineStartColumn(next.lineIndex),
+        startOffset: Math.min(lineOffset + line.text.length, sourceLineEnd),
+        endOffset: lexer.lineOffset(next.lineIndex),
       }
+    }
+    // ANCHORS EVEN WHEN THE STANZA IS NOT ANCHORABLE, then stripped below. A
+    // stanza holding a tab places none of its inlines (PART 12 §4), but its
+    // breaks were always placed from line geometry and still are - and the only
+    // way to know WHICH boundary a surviving break sits on is the line the
+    // inline parser put it on.
+    const parsed = parseInline(
+      joined,
+      lexer.abbrDefs,
+      lexer.linkDefs,
+      lexer.hasDocumentOffsets
+        ? inlineSource({
+            baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
+            startLine: firstLineNumber,
+            startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
+            lineAnchors: lines.map((line) => ({
+              offset: lexer.lineOffset(line.lineIndex),
+              column: lexer.lineStartColumn(line.lineIndex),
+            })),
+          })
+        : inlineSource({ anchored: false }),
+    )
+    // Read the boundary each break belongs to BEFORE any stripping takes the
+    // position that says so.
+    const breakIndex = new Map<InlineNode, number>()
+    for (const node of parsed) {
+      if (node.type !== 'soft_break') continue
+      const startLine = node.pos?.startLine
+      if (startLine !== undefined) breakIndex.set(node, startLine - firstLineNumber)
+    }
+    if (!anchorable) stripPositions(parsed)
+    const inline: InlineNode[] = parsed.map((node) => {
+      if (node.type !== 'soft_break') return node
+      const hardBreak = { type: 'hard_break' } as InlineNode
+      const index = breakIndex.get(node)
+      const pos = index === undefined ? undefined : breakPos(index)
+      if (pos) hardBreak.pos = pos
+
+      return hardBreak
     })
 
     const paragraph: Paragraph = { type: 'paragraph', children: inline }
