@@ -9,6 +9,23 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An attribute block before a nested list attaches to that list**
+  (markup-carve/carve#1238, markup-carve/carve-js#1100). A `{.x}` line written
+  inside a list item, directly above an indented sub-list, was dropped without
+  a warning and without leaving its text on the page; the class or id reached
+  neither the sub-`<ul>`/`<ol>` nor anything else. It now lands on the nested
+  list, with or without a blank line above it, at any nesting depth, and
+  whether the attribute line stands alone in the item or follows the item's own
+  prose. A nested list was the only block type in that position that lost its
+  attributes - a paragraph, block quote or fenced code there always kept them -
+  because the item's collected lines are split at the first sub-list marker and
+  each half carried its own pending-attribute slot. The abutting marker form
+  `-{.x} item`, which attributes the `<li>` itself, is a separate mechanism and
+  is unchanged, as is the strict column-0 rule that keeps a brace one column
+  past the content column ordinary paragraph text. List tightness does not
+  move: PART 9 §17 L2 leaves the item tight when a sub-block is attached after
+  a blank line, attributed or not.
+
 - **HTML import reads a bare-text `<li>` as a tight list item.** Every list
   imported loose, whatever the source spelled, so `<ul><li>one</li></ul>`
   came back as `- one` with a blank line to its sibling and re-rendered as
