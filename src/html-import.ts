@@ -815,6 +815,29 @@ class Importer {
         this.childPath(path, extra, (node.childNodes ?? []).indexOf(extra)),
       )
     }
+    /*
+     * `<colgroup>` has nowhere to land at all. Carve has no column model, and
+     * whether it should get one is a language question (carve#1092) rather than
+     * this importer's to answer - but the drop can say so meanwhile, and the
+     * walk below said nothing: it looks for `tr`, descends through the element
+     * and finds none.
+     *
+     * Only `<colgroup>` is scanned for. "In table" insertion mode answers a
+     * `col` start tag by inserting an implied `<colgroup>` first, so
+     * `<table><col span="2"><col>` arrives as one wrapper holding both and a
+     * `<col>` is never a direct child of a `<table>` after parsing. A `col` arm
+     * here could match nothing on any input - the check that cannot fail
+     * (carve#755) - so the shape is pinned by a test instead.
+     */
+    ;(node.childNodes ?? []).forEach((child, index) => {
+      if (child.tagName !== 'colgroup') return
+      this.add(
+        'element-dropped',
+        "Dropped <colgroup>: Carve has no column model, and a table's columns are only the cells its rows carry",
+        'warning',
+        this.childPath(path, child, index),
+      )
+    })
     const tr: P5Node[] = []
     const group = new Map<P5Node, P5Node>()
     // The sections in document order, collected on the way through rather than

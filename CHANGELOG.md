@@ -346,6 +346,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **HTML import names the `<colgroup>` it drops.** The element went in
+  complete silence: the table walk looks for `tr`, descends through the
+  `<colgroup>` and finds none, so a table's column description left the
+  document with nothing in the report to say it had. Carve has no column model
+  - a table's columns are only the cells its rows carry - and whether it should
+  get one is a language question (`markup-carve/carve#1092`), so the drop
+  stands; what it gets is a `warning` naming the element under the
+  `<colgroup>`'s own path. The wording is verbatim from `carve-rs`, so the
+  engines report the drop in the same words. Only `<colgroup>` is scanned for:
+  an HTML parser answers a `col` start tag inside a table by inserting an
+  implied `<colgroup>` first, so `<table><col span="2"><col>` arrives as one
+  wrapper holding both and a bare `<col>` reports through it.
+
 - **A table's sections and rows keep the attributes they have a slot for.** A
   `<tbody id="totals">` and a `<tr class="warn">` fell into the empty `attrs`
   slot with no diagnostic at all, though the model has a place for both:
