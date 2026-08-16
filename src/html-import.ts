@@ -24,15 +24,33 @@ export type HtmlImportAdapter =
   | 'word'
   | 'google-docs'
 
-export type HtmlImportDiagnosticCode =
-  | 'element-dropped'
-  | 'element-unwrapped'
-  | 'attribute-dropped'
-  | 'style-unmapped'
-  | 'table-degraded'
-  | 'structure-unspellable'
-  | 'raw-preserved'
-  | 'diagnostics-truncated'
+/**
+ * The diagnostic codes, as the `code` enum of the published report schema
+ * (`spec/resources/html-import-schema.json`) lists them.
+ *
+ * A runtime list rather than a hand-written union, because the union alone is
+ * a constraint nothing can check: types are gone by the time a test runs, so
+ * a code added here and not to the schema - or to the schema and not here -
+ * diverged in silence. Deriving `HtmlImportDiagnosticCode` from this array
+ * makes the two one thing, and a test then holds this array against the
+ * schema's own enum.
+ *
+ * Not re-exported from `index.ts`: the package publishes the TYPE, and this
+ * is the machinery the type is built from.
+ */
+export const HTML_IMPORT_DIAGNOSTIC_CODES = [
+  'element-dropped',
+  'element-unwrapped',
+  'attribute-dropped',
+  'style-unmapped',
+  'table-degraded',
+  'structure-unspellable',
+  'raw-preserved',
+  'encoding-assumed',
+  'diagnostics-truncated',
+] as const
+
+export type HtmlImportDiagnosticCode = (typeof HTML_IMPORT_DIAGNOSTIC_CODES)[number]
 
 export interface HtmlImportDiagnostic {
   code: HtmlImportDiagnosticCode
@@ -1301,9 +1319,17 @@ class Importer {
    * Tiers 1 and 2 of D6: the TeX the producer already put in the element.
    *
    * 1. an `<annotation>` whose encoding DECLARES TeX, taken verbatim;
-   * 2. else the `alttext` attribute, plus an `info` recording that its
-   *    encoding was assumed - MathML does not declare what `alttext` holds,
-   *    and `<math alttext="x squared">` is as valid as one holding TeX.
+   * 2. else the `alttext` attribute, plus an `encoding-assumed` recording
+   *    that its encoding was guessed - MathML does not declare what `alttext`
+   *    holds, and `<math alttext="x squared">` is as valid as one holding TeX.
+   *
+   * Tier 2 reports `encoding-assumed` and not `element-unwrapped` because the
+   * two say different things. Unwrapping describes the INPUT's structure and
+   * loses no meaning; an assumed encoding is a claim about the OUTPUT, which
+   * is only correct while the guess holds. A consumer told that an element is
+   * gone cannot separate a harmless structural event from a math node whose
+   * content may not be TeX at all, and that second one is the signal it could
+   * act on.
    *
    * Annotation first, and the order carries a ruling: where the two disagree,
    * a declared encoding beats an undeclared attribute. carve-php's own
@@ -1335,7 +1361,7 @@ class Importer {
     // reading the presence of the element would make that fall-through the one
     // tier-2 read that says nothing.
     if (annotated === undefined) {
-      this.add('element-unwrapped', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
+      this.add('encoding-assumed', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
     }
     return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
   }

@@ -1349,7 +1349,10 @@ describe('MathML on import', () => {
     expect(result.value).toBe('Alt $`a^2`.\n')
     expect(result.report.diagnostics).toEqual([
       {
-        code: 'element-unwrapped',
+        // `encoding-assumed`, not `element-unwrapped`: the loss being reported
+        // is about the OUTPUT, whose content is only TeX while the guess
+        // holds, and not about an element the input structured differently.
+        code: 'encoding-assumed',
         severity: 'info',
         message: 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed',
         path: '/p[1]/math[2]',
@@ -1438,7 +1441,12 @@ describe('MathML on import', () => {
     const result = htmlToCarve(html)
     expect(result.value).toBe('$`a^2`\n')
     expect(result.report.diagnostics).toEqual([
-      expect.objectContaining({ code: 'element-unwrapped', severity: 'info', message: expect.stringContaining('alttext') }),
+      {
+        code: 'encoding-assumed',
+        severity: 'info',
+        message: 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed',
+        path: '/p[1]/math[1]',
+      },
     ])
   })
 
@@ -1489,7 +1497,7 @@ describe('MathML on import', () => {
     ])
     // And the three the mapping CONSUMES are not reported as losses.
     expect(htmlToCarve('<p><math xmlns="http://www.w3.org/1998/Math/MathML" display="block" alttext="x"></math></p>').report.diagnostics.map((d) => d.code))
-      .toEqual(['element-unwrapped'])
+      .toEqual(['encoding-assumed'])
   })
 
   it('CONTROL: roundtrip keeps the whole element, exactly as it did before this mapping', () => {
