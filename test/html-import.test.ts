@@ -1439,6 +1439,29 @@ describe('MathML on import', () => {
       .toBe('Bare `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>`{=html} here.\n')
   })
 
+  it('charges the subtree it does not walk, so an accepted element keeps the limits', () => {
+    /*
+     * Tiers 1 and 2 read one node of the subtree and discard the rest, so
+     * `inlines()` never counts a descendant. Left uncharged, an accepted
+     * `<math>` was the one element whose children answered to neither
+     * `maxNodes` nor `maxDepth`, and a deep annotation reached `text()` and
+     * raised a RangeError where the API contract is a typed error.
+     */
+    const nest = (n: number): string => '<mrow>'.repeat(n) + '<mi>a</mi>' + '</mrow>'.repeat(n)
+    const withTex = (body: string): string =>
+      `<p><math><semantics>${body}<annotation encoding="application/x-tex">x</annotation></semantics></math></p>`
+
+    expect(() => htmlToAst(withTex(nest(400)))).toThrow(HtmlImportLimitError)
+    expect(() => htmlToAst(withTex(nest(2)), { maxNodes: 4 })).toThrow(HtmlImportLimitError)
+    // Inside the annotation itself, which is the subtree `text()` recurses into.
+    expect(() => htmlToAst(`<p><math><semantics><annotation encoding="application/x-tex">${nest(400)}</annotation></semantics></math></p>`))
+      .toThrow(HtmlImportLimitError)
+    // And the tier-3 drop returns without walking them too.
+    expect(() => htmlToAst(`<p><math>${nest(400)}</math></p>`)).toThrow(HtmlImportLimitError)
+    // CONTROL: the ordinary element passes both budgets and is still read.
+    expect(htmlToCarve(withTex(nest(2))).value).toBe('$`x`\n')
+  })
+
   it('CONTROL: a document with no math is not touched by any of it', () => {
     const html = '<p>A <em>plain</em> paragraph with an <a href="https://example.com">link</a>.</p>'
     const result = htmlToCarve(html)

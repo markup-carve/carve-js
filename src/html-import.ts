@@ -1160,9 +1160,12 @@ class Importer {
      * preserve it verbatim.
      */
     if (tag === 'math') {
-      const math = this.mathml(node, path)
+      const math = this.mathml(node, path, depth)
       if (math) return [math]
       if (this.mode !== 'roundtrip') {
+        // Charged for the same reason the accepted element is: this arm
+        // returns without walking the children either.
+        this.budget(node, depth)
         this.add('element-dropped', 'Dropped <math> element: it carries no TeX annotation and no alttext, and MathML children are not an equation when concatenated', 'warning', path)
         return []
       }
@@ -1252,9 +1255,27 @@ class Importer {
    *
    * Returns `undefined` for tier 3, whose two answers are the caller's.
    */
-  private mathml(node: P5Node, path: string): InlineNode | undefined {
+  private mathml(node: P5Node, path: string, depth: number): InlineNode | undefined {
     const annotation = this.texAnnotation(node)
-    const content = annotation ?? this.attr(node, 'alttext')
+    const alttext = this.attr(node, 'alttext')
+    if (annotation === undefined && (alttext === undefined || alttext.trim() === '')) return undefined
+    /*
+     * The subtree is charged HERE, because from this point nothing else walks
+     * it: tiers 1 and 2 take their content from one node of it and the rest is
+     * discarded, so `inlines()` never counts a single descendant. Not a
+     * resource-exhaustion fix - skipping a subtree is cheaper than walking one,
+     * and the DOM was built before the importer saw it - but the limits are the
+     * contract: `maxNodes` and `maxDepth` must not depend on which branch an
+     * element takes, and PART 11's resource section wants a structural limit to
+     * surface as the typed error. Before this walk, `text()` recursed into a
+     * deep annotation and raised a RangeError instead.
+     *
+     * Iterative for that same reason, and BEFORE the text is read, so the depth
+     * limit is reached by the counter rather than by the stack.
+     */
+    this.budget(node, depth)
+    const annotated = annotation === undefined ? undefined : this.text(annotation)
+    const content = annotated !== undefined && annotated.trim() !== '' ? annotated : alttext
     if (content === undefined || content.trim() === '') return undefined
     // After the tier is settled, so a dropped element does not also report
     // attributes on its way out: the `element-dropped` warning covers it.
@@ -1274,18 +1295,36 @@ class Importer {
    * markup describing the equation in some other language and not a
    * presentation of the outer element at all.
    */
-  private texAnnotation(node: P5Node): string | undefined {
+  private texAnnotation(node: P5Node): P5Node | undefined {
     for (const semantics of node.childNodes ?? []) {
       if (semantics.tagName !== 'semantics') continue
       for (const child of semantics.childNodes ?? []) {
         if (child.tagName !== 'annotation') continue
         const encoding = this.attr(child, 'encoding')
         if (encoding === undefined || !TEX_ANNOTATION_ENCODINGS.has(encoding.trim().toLowerCase())) continue
-        const text = this.text(child)
-        if (text.trim() !== '') return text
+        return child
       }
     }
     return undefined
+  }
+
+  /**
+   * Charge a subtree the import will not walk against the budgets one it walks
+   * would pay, and check its depth while doing so.
+   *
+   * Explicit stack rather than recursion: this runs on input the DOM parser
+   * accepted at any depth, and its whole point is to reach `maxDepth` before
+   * something that recurses does.
+   */
+  private budget(node: P5Node, depth: number): void {
+    const pending: Array<[P5Node, number]> = [[node, depth]]
+    while (pending.length) {
+      const [current, currentDepth] = pending.pop()!
+      for (const child of current.childNodes ?? []) {
+        this.enter(currentDepth + 1)
+        pending.push([child, currentDepth + 1])
+      }
+    }
   }
 
   /**
