@@ -114,6 +114,17 @@ const SEMANTIC_SPAN_TAGS = new Set(['abbr', 'time', 'samp', 'var', 'kbd', 'cite'
  */
 const SEMANTIC_SPAN_VALUE_SOURCE = new Map([['abbr', 'title'], ['dfn', 'title'], ['time', 'datetime']])
 
+/**
+ * The `<annotation>` encodings that DECLARE their payload to be TeX.
+ *
+ * Matched case-insensitively against the whole attribute value, never as a
+ * substring: `MathType-MTEF` and `application/mathml-content` both contain
+ * neither of these as a prefix, but a substring test for `tex` accepts the
+ * first of them and hands a binary blob to the math node as if it were an
+ * equation.
+ */
+const TEX_ANNOTATION_ENCODINGS = new Set(['application/x-tex', 'text/x-tex', 'latex'])
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -202,6 +213,12 @@ class Importer {
     // so reporting it dropped here would be a diagnostic for a loss that no
     // longer happens. `title` needs no entry - `attrs()` already keeps it.
     if (tag === 'time') return name === 'datetime'
+    // `alttext` and `display` are READ by `mathml()` and reach the math node,
+    // so reporting them dropped would name a loss that does not happen.
+    // `xmlns` is the MathML namespace declaration, which is what makes the
+    // element MathML in the first place - it is consumed by having been
+    // recognized, not discarded.
+    if (tag === 'math') return name === 'alttext' || name === 'display' || name === 'xmlns'
     return false
   }
 
@@ -1122,6 +1139,34 @@ class Importer {
     // text and its `cite` goes with it - so this mapping is the safe/semantic
     // answer and the raw fallback is the round-tripping one.
     if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
+    /*
+     * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
+     * TeX that is already in the source, and no MathML-to-TeX converter.
+     *
+     * THE DECISION IS THE THIRD TIER, and it is a drop rather than a degrade.
+     * MathML's children are a token stream, so concatenating them is not a
+     * lossy rendering of the equation but a different value: the children of
+     * `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>` concatenate to `12`,
+     * which is what this importer wrote before this branch existed. One half
+     * arriving as twelve is a plausible wrong value, and a plausible wrong
+     * value survives review, where a missing equation and a warning naming it
+     * do not. This is the line between math and the EMBEDS below: a `<video>`'s
+     * children are fallback content the author wrote for exactly this case.
+     *
+     * `roundtrip` keeps the whole element instead, through the raw arm at the
+     * end of this method, which is where a `<math>` already went - Carve's own
+     * HTML spells math as `<span class="math">`, so a `<math>` in that mode's
+     * input is foreign markup by definition and the mode's contract is to
+     * preserve it verbatim.
+     */
+    if (tag === 'math') {
+      const math = this.mathml(node, path)
+      if (math) return [math]
+      if (this.mode !== 'roundtrip') {
+        this.add('element-dropped', 'Dropped <math> element: it carries no TeX annotation and no alttext, and MathML children are not an equation when concatenated', 'warning', path)
+        return []
+      }
+    }
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
     if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
@@ -1181,6 +1226,66 @@ class Importer {
     this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
     this.reportUnwrappedAttributes(attrs, tag, path)
     return children
+  }
+
+  /**
+   * Tiers 1 and 2 of D6: the TeX the producer already put in the element.
+   *
+   * 1. an `<annotation>` whose encoding DECLARES TeX, taken verbatim;
+   * 2. else the `alttext` attribute, plus an `info` recording that its
+   *    encoding was assumed - MathML does not declare what `alttext` holds,
+   *    and `<math alttext="x squared">` is as valid as one holding TeX.
+   *
+   * Annotation first, and the order carries a ruling: where the two disagree,
+   * a declared encoding beats an undeclared attribute. carve-php's own
+   * docblock documents the reverse order and is corrected to this one.
+   *
+   * The content is written byte for byte, `{\displaystyle …}` wrapper and all.
+   * Carve's math content is opaque TeX; unwrapping it would be a second
+   * decision, and the writer already pads a span whose content has an outer
+   * space so even that survives the round trip.
+   *
+   * Whitespace-only content is treated as absent, because it is: an empty
+   * `alttext` or a pretty-printed empty annotation says nothing about the
+   * equation, and falling to the next tier reports the loss instead of
+   * writing an empty math node.
+   *
+   * Returns `undefined` for tier 3, whose two answers are the caller's.
+   */
+  private mathml(node: P5Node, path: string): InlineNode | undefined {
+    const annotation = this.texAnnotation(node)
+    const content = annotation ?? this.attr(node, 'alttext')
+    if (content === undefined || content.trim() === '') return undefined
+    // After the tier is settled, so a dropped element does not also report
+    // attributes on its way out: the `element-dropped` warning covers it.
+    const attrs = this.attrs(node, path)
+    if (annotation === undefined) {
+      this.add('element-unwrapped', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
+    }
+    return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
+  }
+
+  /**
+   * The `<annotation>` a `<semantics>` carries, if it declares TeX.
+   *
+   * Both hops are DIRECT children - `<semantics>` of the `<math>`, the
+   * annotation of that `<semantics>`. A recursive search reaches the
+   * `<annotation>` nested inside an `<annotation-xml>` payload, which is
+   * markup describing the equation in some other language and not a
+   * presentation of the outer element at all.
+   */
+  private texAnnotation(node: P5Node): string | undefined {
+    for (const semantics of node.childNodes ?? []) {
+      if (semantics.tagName !== 'semantics') continue
+      for (const child of semantics.childNodes ?? []) {
+        if (child.tagName !== 'annotation') continue
+        const encoding = this.attr(child, 'encoding')
+        if (encoding === undefined || !TEX_ANNOTATION_ENCODINGS.has(encoding.trim().toLowerCase())) continue
+        const text = this.text(child)
+        if (text.trim() !== '') return text
+      }
+    }
+    return undefined
   }
 
   /**

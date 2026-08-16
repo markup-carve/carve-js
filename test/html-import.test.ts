@@ -1275,3 +1275,174 @@ describe('a row-group partition arriving from outside', () => {
     expect(() => fromAstJson(payload(undefined) as never)).not.toThrow()
   })
 })
+
+/*
+ * `markup-carve/carve#1210` P9's MathML row for carve-js, under decision D6 as
+ * ruled: (a)+(b), a three-tier lookup for TeX already present in the source,
+ * and no MathML-to-TeX converter.
+ *
+ * The fixtures are the four the ruling names, in the shapes their producers
+ * actually emit.
+ */
+describe('MathML on import', () => {
+  // en.wikipedia.org, Mathoid output: alttext and annotation both present and
+  // equal, the `{\displaystyle …}` wrapper included in both.
+  const WIKIPEDIA = '<p>Then <math xmlns="http://www.w3.org/1998/Math/MathML" alttext="{\\displaystyle E=mc^{2}}">'
+    + '<semantics><mrow class="MJX-TeXAtom-ORD"><mstyle displaystyle="true" scriptlevel="0">'
+    + '<mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mstyle></mrow>'
+    + '<annotation encoding="application/x-tex">{\\displaystyle E=mc^{2}}</annotation></semantics></math> holds.</p>'
+
+  // ar5iv/LaTeXML output: `display="block"`, `class="ltx_Math"`, a paragraph-scoped id.
+  const AR5IV = '<p>See <math xmlns="http://www.w3.org/1998/Math/MathML" id="S1.p1.m1" class="ltx_Math" display="block"'
+    + ' alttext="\\int_{0}^{1}x^{2}\\,dx=\\frac{1}{3}"><semantics><mrow><mi>x</mi></mrow>'
+    + '<annotation encoding="application/x-tex">\\int_{0}^{1}x^{2}\\,dx=\\frac{1}{3}</annotation></semantics></math> above.</p>'
+
+  // Hand-written presentation MathML: no annotation, no alttext, no TeX anywhere.
+  const HAND_WRITTEN = '<p>Bare <math><mfrac><mn>1</mn><mn>2</mn></mfrac></math> here.</p>'
+
+  // MathType's own binary encoding, base64 in the annotation. Not TeX, and a
+  // substring test for `tex` is what would let a payload like it through.
+  const MATHTYPE = '<p>MT <math><semantics><mrow><mi>a</mi></mrow>'
+    + '<annotation encoding="MathType-MTEF">MTEFY9gaeaaaaaaa</annotation></semantics></math> end.</p>'
+
+  it('TIER 1: reads the TeX from an annotation that declares it, byte for byte', () => {
+    // Including the `{\displaystyle …}` wrapper: Carve's math content is opaque
+    // TeX, so unwrapping it would be a second decision nobody asked for.
+    const result = htmlToCarve(WIKIPEDIA)
+    expect(result.value).toBe('Then $`{\\displaystyle E=mc^{2}}` holds.\n')
+    // Tier 1 assumes nothing, so it reports nothing.
+    expect(result.report.diagnostics).toEqual([])
+  })
+
+  it('TIER 1: display="block" is display math, and the element keeps its own attributes', () => {
+    const result = htmlToAst(AR5IV)
+    expect(result.value.children).toMatchObject([
+      {
+        type: 'paragraph',
+        children: [
+          { type: 'text', value: 'See ' },
+          {
+            type: 'math',
+            display: true,
+            content: '\\int_{0}^{1}x^{2}\\,dx=\\frac{1}{3}',
+            attrs: { id: 'S1.p1.m1', classes: ['ltx_Math'] },
+          },
+          { type: 'text', value: ' above.' },
+        ],
+      },
+    ])
+    expect(result.report.diagnostics).toEqual([])
+    expect(htmlToCarve(AR5IV).value).toBe('See $$`\\int_{0}^{1}x^{2}\\,dx=\\frac{1}{3}`{id=S1.p1.m1 .ltx_Math} above.\n')
+  })
+
+  it('TIER 1 beats TIER 2 where the two disagree', () => {
+    // A declared encoding beats an undeclared attribute. carve-php's docblock
+    // documents the reverse order, and this is the correction D6 rules.
+    const html = '<p><math alttext="FROM_ALTTEXT"><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation encoding="application/x-tex">FROM_ANNOTATION</annotation></semantics></math></p>'
+    expect(htmlToCarve(html).value).toBe('$`FROM_ANNOTATION`\n')
+  })
+
+  it('TIER 2: falls back to alttext and says the encoding was assumed', () => {
+    const html = '<p>Alt <math alttext="a^2"><mrow><mi>a</mi></mrow></math>.</p>'
+    const result = htmlToCarve(html)
+    expect(result.value).toBe('Alt $`a^2`.\n')
+    expect(result.report.diagnostics).toEqual([
+      {
+        code: 'element-unwrapped',
+        severity: 'info',
+        message: 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed',
+        path: '/p[1]/math[2]',
+      },
+    ])
+  })
+
+  it('TIER 3: drops a hand-written element and names it, rather than reading 1/2 as 12', () => {
+    /*
+     * The measurement that settled D6. Before this branch existed the children
+     * concatenated, and the paragraph read `Bare 12 here.` - one half arriving
+     * as twelve, a plausible wrong value that survives review where a missing
+     * equation and a warning naming it do not.
+     */
+    for (const mode of ['safe', 'semantic'] as const) {
+      const result = htmlToCarve(HAND_WRITTEN, { mode })
+      expect(result.value).not.toContain('12')
+      expect(result.value).toBe('Bare  here.\n')
+      expect(result.report.diagnostics).toEqual([
+        {
+          code: 'element-dropped',
+          severity: 'warning',
+          message: 'Dropped <math> element: it carries no TeX annotation and no alttext, and MathML children are not an equation when concatenated',
+          path: '/p[1]/math[2]',
+        },
+      ])
+    }
+  })
+
+  it('TIER 3: a MathType payload is not TeX, and is never read as any', () => {
+    const result = htmlToCarve(MATHTYPE)
+    expect(result.value).not.toContain('MTEF')
+    expect(result.value).toBe('MT  end.\n')
+    expect(result.report.diagnostics).toEqual([
+      expect.objectContaining({ code: 'element-dropped', severity: 'warning' }),
+    ])
+  })
+
+  it('TIER 3: an encoding that only LOOKS like one of the three is not one of the three', () => {
+    // The match is on the whole value, case-insensitively. A substring test for
+    // `tex` accepts every line here, and each would hand a math node content
+    // that is not TeX or not the element's own presentation.
+    for (const encoding of ['application/x-tex;charset=utf-8', 'application/mathml-content', 'TeX-and-more', 'StarMath 5.0']) {
+      const html = `<p><math><semantics><mrow><mi>a</mi></mrow><annotation encoding="${encoding}">PAYLOAD</annotation></semantics></math></p>`
+      expect(htmlToCarve(html).value).toBe('\n')
+    }
+    // And the three themselves are matched whatever their case.
+    for (const encoding of ['application/x-tex', 'TEXT/X-TEX', 'LaTeX', ' latex ']) {
+      const html = `<p><math><semantics><mrow><mi>a</mi></mrow><annotation encoding="${encoding}">x</annotation></semantics></math></p>`
+      expect(htmlToCarve(html).value).toBe('$`x`\n')
+    }
+  })
+
+  it('TIER 3: a nested annotation-xml payload does not leak into the match', () => {
+    // Both hops are direct children - `<semantics>` of the `<math>`, the
+    // annotation of that `<semantics>`. A recursive lookup by tag name reaches
+    // an annotation describing some OTHER expression and reports nothing.
+    const html = '<p><math><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation-xml encoding="application/mathml-content">'
+      + '<annotation encoding="application/x-tex">LEAK</annotation>'
+      + '</annotation-xml></semantics></math></p>'
+    expect(htmlToCarve(html).value).toBe('\n')
+    expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['element-dropped'])
+  })
+
+  it('TIER 3: an empty annotation and an empty alttext say nothing, so they are not content', () => {
+    const empty = '<p><math alttext="  "><semantics><mrow><mi>a</mi></mrow>'
+      + '<annotation encoding="application/x-tex">\n  \n</annotation></semantics></math></p>'
+    expect(htmlToCarve(empty).report.diagnostics.map((d) => d.code)).toEqual(['element-dropped'])
+  })
+
+  it('CONTROL: roundtrip keeps the whole element, exactly as it did before this mapping', () => {
+    /*
+     * That mode's contract is Carve-produced HTML, which spells math as a
+     * `<span class="math">` and never as a `<math>`, so a `<math>` arriving
+     * there is foreign markup and preserving it verbatim is the answer. This
+     * arm is not the one D6 changed.
+     */
+    for (const html of [HAND_WRITTEN, MATHTYPE]) {
+      const result = htmlToCarve(html, { mode: 'roundtrip' })
+      expect(result.value).toContain('<math>')
+      expect(result.value).toContain('</math>')
+      expect(result.report.diagnostics.some((d) => d.code === 'raw-preserved' && d.message.includes('<math>'))).toBe(true)
+      expect(result.report.diagnostics.some((d) => d.code === 'element-dropped')).toBe(false)
+    }
+    expect(htmlToCarve(HAND_WRITTEN, { mode: 'roundtrip' }).value)
+      .toBe('Bare `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>`{=html} here.\n')
+  })
+
+  it('CONTROL: a document with no math is not touched by any of it', () => {
+    const html = '<p>A <em>plain</em> paragraph with an <a href="https://example.com">link</a>.</p>'
+    const result = htmlToCarve(html)
+    expect(result.value).toBe('A /plain/ paragraph with an [link](https://example.com).\n')
+    expect(result.report.diagnostics).toEqual([])
+  })
+})
