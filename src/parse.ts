@@ -2397,7 +2397,7 @@ function collectLinkDefs(lexer: Lexer) {
       // Only a fence that CLOSES opens the opaque region. An unterminated
       // `%%%` degrades to a single-line comment, and treating it as open would
       // suppress every definition in the rest of the document.
-      if (open && commentBlockHasCloser(lexer, open[1]!.length)) {
+      if (open && commentBlockHasCloser(lexer, open[1]!.length, idx)) {
         commentFence = open[1]!.length
         continue
       }
@@ -3294,14 +3294,25 @@ function exactCloserPossible(last: Map<number, number>, len: number, after: numb
 }
 
 /**
- * From a `%%%` opener at peek(0), is there a matching closer ahead? A comment
- * closer matches on EXACT delimiter length (longer fences nest), so ANY later
- * line whose delimiter run has that length is a valid closer. Used to reject an
- * unclosed `%%%` as a block opener (PART 9 §28): without this an unclosed opener
- * swallows the rest of the document, silently dropping every following block.
+ * From a `%%%` opener at line `after`, is there a matching closer ahead? A
+ * comment closer matches on EXACT delimiter length (longer fences nest), so ANY
+ * later line whose delimiter run has that length is a valid closer. Used to
+ * reject an unclosed `%%%` as a block opener (PART 9 §28): without this an
+ * unclosed opener swallows the rest of the document, silently dropping every
+ * following block.
+ *
+ * `after` DEFAULTS TO THE CURSOR AND IS PASSED EXPLICITLY BY THE PREPASS. Every
+ * block-parsing caller asks about the opener it is standing on, so `lexer.pos`
+ * is that opener's line for them. The definition prepass is not a cursor: it
+ * sweeps the document with an index of its own while `lexer.pos` stays parked
+ * at the end of the frontmatter, which is line 0 for a document without any.
+ * Asking "is there a closer after line 0" on behalf of an opener on line 7 let
+ * the opener match ITSELF - the index stores the LAST line carrying a run of
+ * that length, which for an unclosed fence is the opener - so the check could
+ * only ever fail for an opener on line 0 (markup-carve/carve-js#1118).
  */
-function commentBlockHasCloser(lexer: Lexer, fence: number): boolean {
-  return exactCloserPossible(closerIndex(lexer).comment, fence, lexer.pos)
+function commentBlockHasCloser(lexer: Lexer, fence: number, after: number = lexer.pos): boolean {
+  return exactCloserPossible(closerIndex(lexer).comment, fence, after)
 }
 
 /**
