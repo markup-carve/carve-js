@@ -167,6 +167,38 @@ export interface HandledDelimiters {
 }
 
 /**
+ * A language that owns none of these delimiters, so every one of them in its
+ * text is the author's own character: HTML and BBCode.
+ *
+ * Named rather than spelled as `{}` at the call site so the shared escaper
+ * corpus can be held against the set a converter ACTUALLY passes. The corpus
+ * measures the escaper under named profiles, and a profile whose set is only
+ * restated in a test file proves nothing about the converter - the call site
+ * could drift out from under it and every case would still pass.
+ */
+export const HANDLED_PLAIN: HandledDelimiters = {}
+
+/**
+ * Markdown: `*` and `_` are its emphasis delimiters bare and braced alike, and
+ * `~` is GFM strikethrough. The Markdown converter rewrites all three into
+ * Carve, so freezing them here would freeze the markup instead of the text.
+ */
+export const HANDLED_MARKDOWN: HandledDelimiters = { braced: '*_', bare: '*_~' }
+
+/**
+ * Djot. NO CALLER IN THIS PACKAGE: `djotToCarve` walks the Djot AST and never
+ * escapes a line of text, so nothing here passes this set today.
+ *
+ * It is still named, and still measured against the corpus, because the handled
+ * set is a parameter: the profile is a statement this implementation can be
+ * held to whether or not a converter reaches it yet, and it is what a
+ * text-level Djot path would pass on the day one appears. carve-rs keeps the
+ * same three for the same reason, with the callers the other way round - Djot
+ * is its only text-level converter.
+ */
+export const HANDLED_DJOT: HandledDelimiters = { braced: '=+-*_^~', bare: '~*_' }
+
+/**
  * Escape the Carve inline constructs that are literal text in the source.
  *
  * Escaping the first delimiter is enough to keep the run literal. Doing nothing

@@ -22,6 +22,7 @@ import {
   escapeLiteralBackslashes,
   escapePlainCarveInlineSyntax,
   escapeVerbatimDelimiter,
+  HANDLED_PLAIN,
 } from './carve-escape.js'
 
 /**
@@ -76,6 +77,7 @@ function escapePlainBbcodeText(bbcode: string): string {
   // stages after it tell a delimiter the author escaped from one they did not.
   text = escapePlainCarveInlineSyntax(
     escapeAttributeBlockOpener(escapeVerbatimDelimiter(escapeLiteralBackslashes(text))),
+    HANDLED_PLAIN,
   )
 
   return text.replace(
