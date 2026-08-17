@@ -27,12 +27,13 @@ describe('HTML import', () => {
     expect(result.report.diagnostics).toEqual([])
   })
 
-  it('keeps a cite only on a blockquote, and still reports it elsewhere', () => {
+  it('keeps a cite on an element HTML does not define it for', () => {
+    // `cite` on a `<p>` means nothing to HTML, and that is not the importer's
+    // call to make: the language can hold the pair, so the pair survives
+    // (markup-carve/carve-js#1156).
     const result = htmlToCarve('<p cite="u">q</p>')
-    expect(result.value).toBe('q\n')
-    expect(result.report.diagnostics).toEqual([
-      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute cite on <p>' }),
-    ])
+    expect(result.value).toBe('{cite=u}\nq\n')
+    expect(result.report.diagnostics).toEqual([])
   })
 
   it('reads a figure wrapping a quote as a captioned figure', () => {
@@ -659,10 +660,12 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToCarve('<ol start="7"><li>x</li></ol>').report.diagnostics).toEqual([])
   })
 
-  it('CONTROL: an unordered list has no alphabet, so its type is still unsupported', () => {
-    expect(htmlToCarve('<ul type="disc"><li>x</li></ul>').report.diagnostics).toEqual([
-      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped unsupported attribute type on <ul>' }),
-    ])
+  it('CONTROL: an unordered list has no alphabet, so its type is a plain attribute', () => {
+    // The alphabet reader is `<ol>`-only. On a `<ul>` the same name is just an
+    // attribute, so it rides along as one instead of steering the marker.
+    const result = htmlToCarve('<ul type="disc"><li>x</li></ul>')
+    expect(result.value).toBe('{type=disc}\n- x\n')
+    expect(result.report.diagnostics).toEqual([])
   })
 })
 
@@ -1044,9 +1047,11 @@ describe('the import decisions that are policy', () => {
       for (const mode of ['safe', 'semantic'] as const) {
         const result = htmlToCarve(html, { mode })
         expect(result.value).toBe('Your reader cannot play this.\n')
+        // `src` is now KEPT by `attrs()` - and then lost with the element that
+        // would have carried it, which is what the unwrap report names.
         expect(result.report.diagnostics).toEqual([
-          expect.objectContaining({ code: 'attribute-dropped', message: `Dropped unsupported attribute src on <${tag}>` }),
           expect.objectContaining({ code: 'element-unwrapped', message: `Unwrapped unsupported <${tag}> element` }),
+          expect.objectContaining({ code: 'attribute-dropped', message: `Dropped src with the unwrapped <${tag}>: there is no element left to carry them` }),
         ])
       }
     }

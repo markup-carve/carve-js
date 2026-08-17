@@ -2529,7 +2529,18 @@ function escapeAttrNameValue(text: string): string {
   return text.replace(/[^\w-]/g, '-')
 }
 
-function isAttrIdentifier(text: string): boolean {
+/**
+ * Whether a name is a grammar `identifier` - `(letter | '_'), {letter | digit |
+ * '_' | '-'}` - and so survives `escapeAttrKey` unchanged.
+ *
+ * Exported because `html-import.ts` has to know which attribute names this
+ * writer can spell BACK: `escapeAttrKey` silently deletes the characters an
+ * identifier may not hold, so a kept `~onclick` would be written as `onclick`
+ * and a kept `xlink:href` as `xlinkhref` - a different attribute than the one
+ * the source carried. The importer refuses those names rather than owning a
+ * second copy of the rule (markup-carve/carve-js#1156).
+ */
+export function isAttrIdentifier(text: string): boolean {
   return /^[A-Za-z_][\w-]*$/.test(text)
 }
 

@@ -294,7 +294,15 @@ function sanitizeUrl(url: string, opts: RenderOptions): string {
  *  handlers (`on*`) and these are stripped from ALL rendered attributes, always
  *  - there is no legitimate use in a content-markup document. */
 const DANGEROUS_ATTR_NAMES = new Set(['srcdoc', 'formaction'])
-function isDangerousAttrName(name: string): boolean {
+/**
+ * The PART 9 §25 attribute-NAME defense, exported for the same reason
+ * `renderedAttrValue` is: a caller outside the renderer must not answer "is
+ * this name refused?" from a second copy of the rules. `html-import.ts` keeps
+ * every attribute it has no reason to drop, so this IS its refusal set - two
+ * hand-maintained lists would drift, and the drift would be an importer that
+ * admits a sink the renderer knows about (markup-carve/carve-js#1156).
+ */
+export function isDangerousAttrName(name: string): boolean {
   const n = name.toLowerCase()
   return n.startsWith('on') || DANGEROUS_ATTR_NAMES.has(n)
 }

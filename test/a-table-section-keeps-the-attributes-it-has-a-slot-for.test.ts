@@ -163,9 +163,12 @@ describe('the tables this does not change', () => {
     expect((rows[0]!.cells as Array<Record<string, unknown>>)[0]!.attrs).toEqual({ id: 'c' })
   })
 
-  it('reports an attribute no row can carry, as an ordinary unsupported one', () => {
-    expect(report('<table><tr bogus="1"><td>a</td></tr></table>')).toEqual([
-      'attribute-dropped: Dropped unsupported attribute bogus on <tr>',
-    ])
+  it('puts an unrecognized row attribute in the slot the row already has', () => {
+    // A row's attribute block rides on the closing pipe, and a name nothing in
+    // the importer reads is still a name that block can hold - so it is carried
+    // rather than reported gone (markup-carve/carve-js#1156).
+    const html = '<table><tr bogus="1"><td>a</td></tr></table>'
+    expect(report(html)).toEqual([])
+    expect(htmlToCarve(html, { mode: 'semantic' }).value).toBe('| a |{bogus=1}\n')
   })
 })
