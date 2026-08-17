@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml } from '../src/index.js'
 
 describe('differential audit regressions', () => {
-  it('keeps an empty marker separator when it is term continuation content', () => {
-    expect(carveToHtml(':: t\n* \n')).toContain('<dt>t\n* </dt>')
-    expect(carveToHtml(':: t\n- \n')).toContain('<dt>t\n- </dt>')
-    expect(carveToHtml(':: t\n. \n')).toContain('<dt>t\n. </dt>')
-    expect(carveToHtml(':: t\n] \n')).toContain('<dt>t\n] </dt>')
+  it('keeps a content-less marker line as term continuation content', () => {
+    // The marker is content because nothing follows it - a `* ` with a payload
+    // opens a list and ends the term instead. Its separator space is trailing
+    // whitespace like any other, dropped on a folded line as on the marker line
+    // (markup-carve/carve-js#1145).
+    expect(carveToHtml(':: t\n* \n')).toContain('<dt>t\n*</dt>')
+    expect(carveToHtml(':: t\n- \n')).toContain('<dt>t\n-</dt>')
+    expect(carveToHtml(':: t\n. \n')).toContain('<dt>t\n.</dt>')
+    expect(carveToHtml(':: t\n] \n')).toContain('<dt>t\n]</dt>')
     expect(carveToHtml(':: . \n')).toContain('<dt>.</dt>')
+    // The marker still has to be content-less to fold in at all.
+    expect(carveToHtml(':: t\n* x\n')).toContain('<li>x</li>')
   })
 
   it('does not promote a one-cell whitespace row to a table', () => {

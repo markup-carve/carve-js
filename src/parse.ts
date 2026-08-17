@@ -5346,10 +5346,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // it with a soft break, instead of ending the list and stranding the
       // definition. A blank line, a new marker (`::` / `:  `), or a block
       // opener ends the term.
-      // The term's marker line drops its own trailing layout, but a folded
-      // continuation is appended verbatim. In particular, the separator on a
-      // content-less marker-shaped continuation (`* `, `. `) is content here.
-      let termText = t[1]!.replace(/[ \t]+$/, '')
+      // Each line drops its own trailing layout below, once the fold is
+      // complete. In particular, the separator on a content-less marker-shaped
+      // continuation (`* `, `. `) is content here.
+      let termText = t[1]!
       let continuationLines = 0
       while (!lexer.eof()) {
         const next = lexer.peek()!
@@ -5365,18 +5365,33 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         continuationLines++
         lexer.consume()
       }
-      // Trailing whitespace on the last line is not content, and every other
-      // block drops it - a paragraph, a heading, a quoted paragraph. The term
-      // kept it, so `:: t ` published `<dt>t </dt>` where carve-rs and
-      // carve-php publish `<dt>t</dt>` (carve#510, found by the fuzzer).
-      // Trimming the END only: interior runs are the author's, and the start is
-      // where the term's own offsets are anchored.
+      // Trailing whitespace is not content, and every other block drops it - a
+      // paragraph, a heading, a quoted paragraph. The term kept it, so `:: t `
+      // published `<dt>t </dt>` where carve-rs and carve-php publish
+      // `<dt>t</dt>` (carve#510, found by the fuzzer).
       // NO TRAILING WHITESPACE (PART 2; carve#926). This was `[^\S\n]+$` - the
       // whole Unicode class minus the newline - so a term dropped a trailing
       // NBSP, byte-order mark, ideographic space, vertical tab and every
       // Unicode space, all of which are CONTENT and survive at every other
-      // content line in this file. It also reached only the LAST line, where a
-      // term folds a following plain line into itself just as a paragraph does.
+      // content line in this file.
+      //
+      // EVERY LINE, NOT ONLY THE MARKER LINE (markup-carve/carve-js#1145). The
+      // narrowing above moved the strip onto the marker line's own capture, so
+      // a FOLDED continuation - which ends in a soft break exactly as a
+      // paragraph's does - kept its run. The term is the second of the two
+      // blocks `dropTrailingWhitespace` is written for, and it was the one that
+      // never called it. Three things followed, all carve-js alone:
+      //   - `:: a` + `b ` published `<dt>a\nb </dt>`;
+      //   - `b \` in the last column was an escaped space (a no-break space)
+      //     where carve-rs and carve-php read a hard break, because the run the
+      //     strip leaves behind is what decides (see carve#1027);
+      //   - an unclosed verbatim run folding into the term spanned one
+      //     codepoint past its own value, since the value strips the run the
+      //     line kept. That last one is invisible to every renderer and shows
+      //     only in a position comparison.
+      // Trimming line ENDS only: interior runs are the author's, and the start
+      // is where the term's own offsets are anchored.
+      termText = dropTrailingWhitespace(termText)
       const termStart = lexer.lines[termLineIndex]!.indexOf(t[1]!)
       // A continuation line folds in whole, indent included, and the scanner
       // strips that indent when it builds the text node - so a single base
