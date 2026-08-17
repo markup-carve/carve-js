@@ -5035,13 +5035,24 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // as much a surviving line end - and the comment reinsertion asks that
     // question, not the conversion's.
     const boundaryLines = new Set<number>()
-    for (const node of parsed) {
-      if (node.type !== 'soft_break' && node.type !== 'hard_break') continue
-      const startLine = node.pos?.startLine
-      if (startLine === undefined) continue
-      boundaryLines.add(startLine - firstLineNumber)
-      if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
+    // AT EVERY DEPTH. An inline container that opens on one body line and
+    // closes on a later one holds the boundaries between them as its OWN
+    // children, so a walk over the stanza's top-level nodes never sees them
+    // (carve-js#1174).
+    const readBoundaries = (nodes: InlineNode[]): void => {
+      for (const node of nodes) {
+        if (node.type === 'soft_break' || node.type === 'hard_break') {
+          const startLine = node.pos?.startLine
+          if (startLine === undefined) continue
+          boundaryLines.add(startLine - firstLineNumber)
+          if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
+          continue
+        }
+        const children = (node as { children?: InlineNode[] }).children
+        if (Array.isArray(children)) readBoundaries(children)
+      }
     }
+    readBoundaries(parsed)
     if (!anchorable) stripPositions(parsed)
     // REMOVED FROM THE RENDER, NOT FROM THE TREE (PART 9 §23). Every line the
     // block layer emptied above goes back in as the `comment` node it is, at
@@ -5053,28 +5064,59 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       if (!anchorable) stripPositions([line.comment])
       pendingComments.set(index, line.comment)
     })
-    const inline: InlineNode[] = []
-    for (const node of parsed) {
-      if (node.type !== 'soft_break') {
-        inline.push(node)
-        continue
-      }
-      const index = breakIndex.get(node)
-      // The comment sits BEFORE the break that ends its line: the line is empty
-      // now, so there is nothing else on it.
-      if (index !== undefined) {
-        const comment = pendingComments.get(index)
-        if (comment) {
-          inline.push(comment)
-          pendingComments.delete(index)
+    // THE REINSERTION DESCENDS; THE CONVERSION DOES NOT (carve-js#1174).
+    //
+    // Both passes used to walk the stanza's TOP-LEVEL nodes only, so an emptied
+    // comment line whose boundary ended up under an inline container - `*` that
+    // opened on an earlier body line - found nowhere to sit and was dropped
+    // from the tree. `carve fmt` then wrote the line back as a bare `%%` and
+    // the author's own text was gone from a document that renders identically
+    // either way, which is why no render check could see it.
+    //
+    // The boundary is the same boundary at either depth, so the node goes back
+    // at it at either depth. What does NOT follow is the SOFT-TO-HARD
+    // conversion: a break inside a closed inline construct keeps its soft
+    // spelling, which is what carve-js#1127 ruled and what carve-php and
+    // carve-rs both produce. Whether §23 reaches that break is open on
+    // markup-carve/carve#1351; either answer keeps this pass, because the comment
+    // belongs at the boundary whichever way the boundary is spelled.
+    //
+    // Depth-first in source order, so `pendingComments` is still consumed in
+    // the order the author wrote the lines.
+    const place = (nodes: InlineNode[], top: boolean): InlineNode[] => {
+      const out: InlineNode[] = []
+      for (const node of nodes) {
+        if (node.type !== 'soft_break') {
+          const children = (node as { children?: InlineNode[] }).children
+          if (Array.isArray(children)) {
+            ;(node as { children: InlineNode[] }).children = place(children, false)
+          }
+          out.push(node)
+          continue
         }
-      }
-      const hardBreak = { type: 'hard_break' } as InlineNode
-      const pos = index === undefined ? undefined : breakPos(index)
-      if (pos) hardBreak.pos = pos
+        const index = breakIndex.get(node)
+        // The comment sits BEFORE the break that ends its line: the line is empty
+        // now, so there is nothing else on it.
+        if (index !== undefined) {
+          const comment = pendingComments.get(index)
+          if (comment) {
+            out.push(comment)
+            pendingComments.delete(index)
+          }
+        }
+        if (!top) {
+          out.push(node)
+          continue
+        }
+        const hardBreak = { type: 'hard_break' } as InlineNode
+        const pos = index === undefined ? undefined : breakPos(index)
+        if (pos) hardBreak.pos = pos
 
-      inline.push(hardBreak)
+        out.push(hardBreak)
+      }
+      return out
     }
+    const inline: InlineNode[] = place(parsed, true)
     // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
     // so it goes at the end - the boundary that opens its line is still there,
     // which is what says the line is still there.
