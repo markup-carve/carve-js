@@ -63,13 +63,21 @@ describe('a fence delimiter line', () => {
     expect(closes('   ')).toBe(true)
   })
 
-  it('is not closed by a run holding a tab', () => {
-    // markup-carve/carve#1285 ruled the code fence's row, which this file left
-    // open: the trailing run is `space`, so a tab in it is not padding and the
-    // line is not a closer. The colon fence and the continuation marker keep
-    // their tab - see the header and their own describes below.
-    expect(closes('\t')).toBe(false)
-    expect(closes(' \t ')).toBe(false)
+  it('IS closed by a run holding a tab', () => {
+    // markup-carve/carve#1285 ruled the code fence's row and this asserted the
+    // narrow reading: the trailing run is `space`, so a tab in it is not
+    // padding and the line is not a closer.
+    //
+    // markup-carve/carve#1295 then split that by POSITION. What the separator
+    // clause governs is whitespace standing BETWEEN a marker and content; a
+    // CLOSER HAS NO CONTENT after its marker, so a tab there is trailing, PART
+    // 2 drops it, and the line closes. carve-php was the only engine already
+    // right; carve-js#1132 brought this one over.
+    //
+    // The tab remains excluded where it really is a separator - `` ```<TAB>php ``
+    // does not OPEN a fence - which is a different line and has its own file.
+    expect(closes('\t')).toBe(true)
+    expect(closes(' \t ')).toBe(true)
   })
 
   it('is not closed by a byte order mark', () => {

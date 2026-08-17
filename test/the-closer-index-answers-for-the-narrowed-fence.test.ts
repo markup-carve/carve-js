@@ -5,47 +5,52 @@ import { expectBuiltInputScansLinearly, perfIt } from './helpers/scaling.js'
 /*
  * THE CLOSER INDEX HAS TO ANSWER FOR THE SAME FENCE THE MATCHER DOES.
  *
- * carve-js#1121 narrowed the code fence's trailing run to `space`, so a
- * ` ```<TAB> ` line is no longer a closer. `RE_ANY_FENCE_CLOSER`, the pattern
- * that builds the lookahead index, kept `[ \t]*$` and went on recording those
- * lines as candidate closers.
+ * That is the invariant this file exists for, and it has now been broken in
+ * BOTH directions, which is why the rows below moved once already.
  *
- * The index is documented as a SUPERSET, which is true of its LEADING run: a
- * caller may read a dedented view of the same lines, so tolerating leading
- * whitespace keeps "no closer ahead" valid for every view. The TRAILING run is
- * not that. Dedenting only ever strips leading whitespace, so no view can turn
- * a tab-terminated line into a code closer, and recording it as one is simply
- * an answer that is wrong in the one direction the callers act on.
+ * carve-js#1121 narrowed the code fence's trailing run to `space` at both ends
+ * and `RE_ANY_FENCE_CLOSER` kept `[ \t]*$`, so the index recorded closers the
+ * matcher rejected. carve#1295 then split the rule by POSITION - a tab before
+ * content is a separator, a tab at end of line is trailing - and a CLOSER TAKES
+ * NO CONTENT AFTER ITS MARKER, so its tab is always trailing and the fence
+ * closes. carve-js#1132 widened the matcher back at the closer only, and this
+ * index with it.
  *
- * It cost both halves.
+ * WHICH DIRECTION THE INDEX ERRS IN IS NOT SYMMETRIC, because
+ * `codeCloserPossible` only ever REFUTES:
  *
- *  - CORRECTNESS. An item's tight/loose decision skips the blanks inside a
- *    fence. With the index claiming a closer might be ahead, the scan behaved
- *    as though the fence could still close and the blank counted, so the item
- *    came out LOOSE where carve-rs reads it TIGHT. 48 documents over a small
- *    generated set of fence/tail/wrapper combinations differed, and carve-rs
- *    agreed with the narrowed index on all 48 and with the wide one on none.
+ *   index WIDER than the matcher   ->  a wasted scan. Slow, still correct.
+ *   index NARROWER than it         ->  a WRONG answer.
  *
- *  - COST. `codeCloserPossible` exists so an unterminated opener does not
- *    re-read the whole suffix. A candidate the real matcher rejects turns
- *    "no closer ahead" into "go and scan", and the scan then runs to the end
- *    of the document every time - the quadratic path the index was built to
- *    close.
+ * Too wide cost the quadratic path this index was built to close: a candidate
+ * the real matcher rejects turns "no closer ahead" into "go and scan", and the
+ * scan runs to the end of the document every time.
  *
- * Expected output measured byte-exact against carve-rs.
+ * Too narrow is worse than slow. An opener is told no closer exists and
+ * swallows the rest of the document past a closer that is really there - and
+ * an item's tight/loose decision, which skips the blanks inside a fence, counts
+ * a blank that is really code.
+ *
+ * So this pattern follows the matcher whenever the matcher WIDENS, and may lag
+ * it only when it narrows. Expected output measured byte-exact against
+ * carve-php.
  */
 
 describe('a fence line ending in a tab is not a closer candidate either', () => {
-  it('leaves the item TIGHT, because the blank is inside an unterminated fence', () => {
-    // The shape the divergence was found on. The only blank sits inside the
-    // ``` fence, and the ```<TAB> below it does not close it - so the blank is
-    // fence content, not a separator, and the item is tight.
+  it('the tab-padded closer CLOSES, and the item is still tight', () => {
+    // The shape the original divergence was found on, now read under
+    // carve#1295. The only blank sits inside the ``` fence and the ```<TAB>
+    // below it DOES close it, so the blank is fence content either way and the
+    // item stays tight - but the delimiter line is no longer part of the code.
+    //
+    // The index has to record that line as a candidate for this to hold: were
+    // it narrow, the pass would be told no closer is ahead and would count the
+    // blank as an item separator.
     expect(carveToHtml('- a\n+\n::: note\n```\n\n```\t\n:::\n- b\n')).toBe(
       '<ul>\n' +
         '  <li>a\n' +
         '    <aside class="admonition note">\n' +
         '      <pre><code>\n' +
-        '```\t\n' +
         '</code></pre>\n' +
         '    </aside>\n' +
         '  </li>\n' +
@@ -62,7 +67,6 @@ describe('a fence line ending in a tab is not a closer candidate either', () => 
         '  <li>a\n' +
         '    <aside class="admonition note">\n' +
         '      <pre><code>\n' +
-        '~~~ \t\n' +
         '</code></pre>\n' +
         '    </aside>\n' +
         '  </li>\n' +
@@ -117,10 +121,12 @@ describe('a fence line ending in a tab is not a closer candidate either', () => 
   })
 
   perfIt('does not send every opener on a scan to end of document', () => {
-    // The units must DIFFER in the general case for this shape to be quadratic,
-    // but here they need not: none of them can close, so each one scans the
-    // whole suffix. Pre-fix this read ~4x per byte at a 4x size multiple; the
-    // narrowed index puts it back at ~1x.
+    // Kept from when the tail could not close, and it still guards the same
+    // path from the other side. Under carve#1295 the ```<TAB> line DOES close,
+    // so the first opener consumes the rest as its content and the run is read
+    // once - linear. Were the index to disagree with the matcher again in
+    // either direction, this shape is where the cost shows: pre-fix it read
+    // ~4x per byte at a 4x size multiple, against ~1x here.
     expectBuiltInputScansLinearly(
       (input) => void carveToHtml(input),
       (repeats) => '- a\n+\n::: note\n' + '```js\n'.repeat(repeats) + '```\t\n:::\n- b\n',
