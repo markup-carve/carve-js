@@ -2268,6 +2268,85 @@ function quoteRunDepth(text: string): number {
 }
 
 /**
+ * WHERE A PREPASS TRACKER WAS OPENED, so a later line can be asked whether it
+ * still reaches that container.
+ *
+ * The pass models containers per line and had no notion of one ENDING, so every
+ * tracker it opens - a code fence, a `:::` depth entry, a verse region - stayed
+ * open for the rest of the document once its container was gone. The block
+ * parser leaves the container and reads the following lines afresh; this pass
+ * kept reading them as the container's interior, and each tracker turned that
+ * into its own silent failure (carve-js#1135 for the fence, carve-js#1139 for
+ * the depth stack).
+ *
+ * ONE RECORD AND ONE TEST for all three, rather than three ad-hoc tests: the
+ * question is the same each time, and it is the spelling-it-N-times that let the
+ * fence acquire a container test while the other two never got one.
+ */
+interface PrepassScope {
+  quoteDepth: number
+  contentCol: number
+}
+
+/**
+ * Is `line` a colon fence the BLOCK PARSER really opens?
+ *
+ * The prepass's own depth tracker is deliberately looser - it takes any run of
+ * three or more colons, so `:::note` pushes a level even though the parser
+ * renders that line as a paragraph. That looseness predates this pass's
+ * container scopes and is left alone; what it may NOT do is decide anything a
+ * malformed line has no business deciding. Two such decisions are gated on this
+ * instead (both raised by codex review):
+ *
+ *   - which width a fence takes as its ENCLOSING div's closer, where a phantom
+ *     level let a `:::` inside a code sample end the fence and publish the
+ *     sample's definitions;
+ *   - whether a flush colon line ends an open list item, where a phantom
+ *     opener popped a column the parser keeps, and the definition below it was
+ *     rejected as top-level indentation.
+ *
+ * The four arms are the block dispatcher's own, in its order.
+ */
+function isColonFenceOpener(line: string): boolean {
+  return (
+    RE_DIV_OPEN.test(line) ||
+    (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
+    RE_LINE_BLOCK_OPEN.test(line) ||
+    RE_HARDBREAKS_OPEN.test(line)
+  )
+}
+
+/**
+ * Does `raw` still reach the container a tracker was opened in?
+ *
+ * `quoteDepth` and `indent` are the line measured the way the tracker's own
+ * closer reads it - counted quote markers, and the indent INSIDE the quote,
+ * because a content column inside a quote is measured inside it (carve#658).
+ *
+ * A BLANK LINE holds a column but not a quote depth, and both halves are the
+ * block parser's: a blank line is transparent inside a list item, and it ends a
+ * block quote.
+ */
+function scopeHoldsLine(
+  scope: PrepassScope,
+  raw: string,
+  quoteDepth: number,
+  view: string,
+): boolean {
+  return (
+    quoteDepth >= scope.quoteDepth &&
+    (scope.contentCol === 0 ||
+      isBlankLine(raw) ||
+      // VISUAL COLUMNS, the way the parser measures reach: a tab is worth up to
+      // four. Counting characters read a tab-indented body line as column one
+      // against a column of three, ended the fence on it, and published the
+      // definitions in the sample below (raised by codex review). The cap keeps
+      // it O(the column) rather than O(the indentation run).
+      indentColumns(view, scope.contentCol) >= scope.contentCol)
+  )
+}
+
+/**
  * Does the prepass's view of a line START A BLOCK, so that no paragraph is left
  * open below it?
  *
@@ -2344,11 +2423,27 @@ function prepassOpensBlock(line: string): boolean {
 }
 
 function collectLinkDefs(lexer: Lexer) {
-  let fence: { ch: string; len: number; contentCol: number; quoted: boolean; quoteDepth: number } | null = null
+  // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
+  // opened, or null when there was none. A fence inside a div ends at that div's
+  // closer, exactly as it ends at the end of a quote or a list item - and the
+  // block parser agrees: `:::` / ``` ``` `` / `x` / `:::` renders the code and
+  // then leaves the div, while a run of a different width, or one with trailing
+  // text, is ordinary fence content.
+  let fence:
+    | {
+        ch: string
+        len: number
+        contentCol: number
+        quoted: boolean
+        scope: PrepassScope
+        divWidth: number | null
+        hasCloser: boolean
+      }
+    | null = null
   // A LINE BLOCK is verse: a definition written inside one is text the author
   // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
   // closed on its own width so a wider `:::: |` is not closed by a narrower run.
-  let verse: number | null = null
+  let verse: { width: number; scope: PrepassScope } | null = null
   // A comment's body is OPAQUE. This pass did not know it, so a `[r]: /u`
   // written inside `%%%` registered and a reference elsewhere resolved against
   // text the author commented out - invisible in the output AND active in the
@@ -2359,7 +2454,13 @@ function collectLinkDefs(lexer: Lexer) {
   // container that adds NO per-line prefix, so `raw` alone cannot tell a
   // document-level definition from one written inside `:::`. Colon fences close
   // on an exact length match (carve#455), which is what the stack records.
-  const divs: number[] = []
+  //
+  // EACH ENTRY CARRIES THE CONTAINER IT WAS OPENED IN. The stack was
+  // document-wide, so a quoted `> :::` pushed onto it and nothing popped when
+  // the quote ended - leaving it non-empty for the rest of the document, and
+  // the abbreviation branch requires document level, so every abbreviation
+  // below a one-line quoted div stopped registering (carve-js#1139).
+  const divs: { width: number; opens: boolean; scope: PrepassScope }[] = []
   // Track the enclosing list item's content column so a fenced-code delimiter
   // is tested at its container's content column (PART 2), not blindly at
   // column 0. Without this the prepass cannot tell a real fence nested at a
@@ -2403,7 +2504,18 @@ function collectLinkDefs(lexer: Lexer) {
   //
   // The state is "is a paragraph open", not "was the previous line blank": a
   // fence after a heading opens normally, and a blank-line test would reject it.
-  let paraOpen = false
+  //
+  // Three-valued, to defer the expensive half: 'no' - nothing continues from
+  // the line above; 'yes' - that line is paragraph text for certain; 'ask' - it
+  // depends on whether that line started a block, which is the question worth
+  // deferring and is asked only where the answer is read.
+  //
+  // `prepassOpensBlock` runs the block parser's whole opener battery, and
+  // asking it per line cost 5-13% of parse time on prose-heavy documents for an
+  // answer that only a fence-shaped line ever consumes. Deferred, an ordinary
+  // line costs one blank test and one assignment.
+  let paraState: 'no' | 'yes' | 'ask' = 'no'
+  let paraLine = ''
   // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
   // is invisible. `prepassOpensBlock` sees only the leading brace, so the
   // continuation lines read as prose and reopened a paragraph over a run the
@@ -2458,70 +2570,6 @@ function collectLinkDefs(lexer: Lexer) {
     // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
     // two answers drift.
     prevBlank = isBlankLine(raw)
-    if (!fence) {
-      // maintain the content-column stack (same rule as the migrator): a
-      // marker opens an item at its marker width; a blank is transparent; a
-      // dedented line leaves an item when a blank precedes it or it starts a
-      // block; code content (inside a fence) never changes it.
-      // bullets are `-`/`*` (not `+`, the continuation marker); ordered markers
-      // cover every dialect the parser accepts (decimal, roman, single-letter);
-      // an optional abutting `{…}` attribute block is part of the marker width
-      const marker = prepassMarker(unquoted)
-      const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
-      // Test the RAW line for a block starter: a blockquote `>` is stripped by
-      // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
-      // interrupting a list item would not pop the stack.
-      const rawTrimmed = raw.trim()
-      const startsBlock =
-        /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
-        RE_BLOCKQUOTE.test(rawTrimmed) ||
-        /^(`{3,}|~{3,})/.test(rawTrimmed) ||
-        /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
-      if (marker && /\S/.test(raw.slice(marker[0].length))) {
-        // Every marker on the line, not just the first: `- - see` opens TWO
-        // items and its content column is 4, not 2. Tracking only the first
-        // understated the column, and a definition written at the real one
-        // then read as "past the column" (carve-js#613's guard) or as a fence
-        // at the wrong base. Each marker pops the stack against its own indent
-        // and pushes its cumulative content column.
-        let rest = unquoted
-        let base = 0
-        for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
-          while (listCols.length && listCols[listCols.length - 1]! > base + m2[1]!.length) {
-            listCols.pop()
-          }
-          base += m2[0].length
-          listCols.push(base)
-          rest = rest.slice(m2[0].length)
-          m2 = prepassMarker(rest)
-        }
-      } else if (
-        !isBlankLine(raw) &&
-        // A LINK REFERENCE DEFINITION at column 0 ends the item too, so it has
-        // to pop the stack like any other block start. It is not in
-        // `startsBlock` because it is invisible, and being left out meant the
-        // stack still held the item's content column: the definition read as
-        // BELOW that column and was skipped, while the block lexer ended the
-        // list at it anyway. The line was rendered nowhere and defined nothing
-        // (carve-js#657) - the one outcome a definition may never have.
-        //
-        // At the content column this changes nothing: the `> indent` test pops
-        // only what sits DEEPER than the line, so a definition written at the
-        // column it belongs to still keeps its item open.
-        //
-        // The footnote form is already handled - its own prepass reads the line
-        // independently - and an ABBREVIATION definition deliberately does not
-        // qualify: all four implementations fold `- x` / `*[A]: b` as item text,
-        // because PART 12 §7 recognizes one only as a direct child of the
-        // document.
-        (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
-      ) {
-        while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
-      }
-    }
-    // strip the enclosing content column so a fence delimiter at that column
-    // is recognized (kept-indent view keeps residual indent after markers)
-    const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
     // A fence is quoted if a blockquote prefix leads the line, possibly behind a
     // single list marker (`- > ```), so its closer is blockquote-stripped. Deeper
     // list/quote mixing is a documented residual.
@@ -2561,7 +2609,7 @@ function collectLinkDefs(lexer: Lexer) {
     if (fence) {
       // A line under an open fence is VERBATIM CONTENT, not prose, so no
       // paragraph is open on the line below it - including the closer's own.
-      paraOpen = false
+      paraState = 'no'
       // CLOSER: strip a blockquote prefix only when the fence is quoted, and
       // NEVER a list marker -- a fence delimiter is a continuation line of pure
       // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
@@ -2578,46 +2626,166 @@ function collectLinkDefs(lexer: Lexer) {
         fence = null
         continue
       }
-      // The early exit is for a line the fence really holds. A fence opened
-      // inside a quote or a list item does NOT hold a line that no longer
-      // reaches that container: the block parser has left the container and
-      // reads the line afresh, so a `:::` closer out there is real structure
-      // and still has to move the depth stack. Skipping the trackers past the
-      // container was the one regression this reordering introduced - a div
-      // closer that lost its pop leaves every abbreviation below it
-      // suppressed, which is the reported bug with its sign flipped.
+      // THE FENCE ENDS WITH ITS CONTAINER. A fence opened inside a quote, a
+      // list item or a div does not hold a line that no longer reaches that
+      // container: the block parser has left the container and reads the line
+      // afresh, so the fence is over. This pass used to leave it open forever,
+      // and an unterminated fence has no closer - so every definition after the
+      // container was read as fence body and skipped (carve-js#1135).
       //
       // Asked AFTER the closer, never before: a closer written at column 0 for
       // a fence opened at an item's content column is dedented out of its
       // container by construction, and testing the container first would read
       // that very line as a new opener.
       //
-      // Such a line is still no definition site - this pass leaves the fence
-      // open, exactly as it did before, and the guard below the trackers stops
-      // it short of collecting. That a fence can outlive its container at all
-      // is a separate defect of this pass, filed on its own; nothing here
-      // changes it.
       // EVERY container the fence sits in has to hold the line, not whichever
       // one is easiest to ask about. A quoted fence can also sit at a list
       // item's content column (`> - ``` `), and a following `> :::` keeps the
-      // quote while leaving the item - so a quote-only test called it held and
-      // the div closer lost its pop again, one container further in.
+      // quote while leaving the item.
       //
       // The column is measured on `k`, the same quote-stripped view the closer
       // above reads, because a content column inside a quote is measured
       // inside the quote (carve#658). Reading the raw indent there would
       // compare a column against a line that still carries its `> ` prefix.
-      const containerHoldsLine =
-        rawQuoteDepth >= fence.quoteDepth &&
-        (fence.contentCol === 0 || isBlankLine(raw) || ki >= fence.contentCol)
-      if (containerHoldsLine) continue // definitions inside fenced code are literal samples
+      //
+      // THE DIV IS THE CONTAINER `scope` CANNOT SEE, because a div adds no
+      // per-line prefix and no column - so a fence inside one is held by every
+      // test above and outlived the div too. Its closer is the enclosing div's
+      // own: a BARE colon run of exactly the width that was open when the fence
+      // opened (carve#455's exact-length rule, which is what the depth stack
+      // records). A different width, or a run with trailing text, is fence
+      // content, and the block parser reads all three the same way.
+      //
+      // AND ONLY FOR A FENCE THAT NEVER CLOSES. A fence with a closer ahead is
+      // opaque all the way to it, so a same-width `:::` written inside such a
+      // sample is CODE and the block parser renders it - only an unterminated
+      // fence degrades at its container's boundary. Ending the fence there
+      // anyway collected the definitions below it out of a visible `<pre>`,
+      // which is the worst outcome this pass has (raised by codex review).
+      //
+      // Matched with the block parser's OWN colon closer, on `d` - the same
+      // re-based view the fence's closer above reads. That settles three things
+      // at once that a hand-rolled test got wrong: the pattern is anchored, so
+      // an INDENTED `:::` inside the body is content rather than the div's
+      // closer; it carries the structural trailing-whitespace class, where
+      // `trim()` also ate a no-break space the parser keeps as content; and it
+      // compares RUN LENGTHS rather than building a `:::` string per body line,
+      // which was quadratic in the div's width times the sample's length.
+      const divCloser =
+        fence.divWidth !== null && !fence.hasCloser ? RE_ADMONITION_CLOSE.exec(d) : null
+      const enclosingDivCloses = divCloser !== null && divCloser[1]!.length === fence.divWidth
+      // THE INDENT IS MEASURED ON `unquoted`, NOT ON `k`, because the recorded
+      // column was. The quote-prefix pattern `k` uses admits a LEADING
+      // INDENTATION RUN before the marker, so `k` loses the item's indentation
+      // along with the `> ` - and a fence opened behind both (`- > ``` `)
+      // records the ITEM's column while its body lines score zero against it.
+      // Every body line then looked out of the item, the fence ended on its
+      // own first one, and the code sample's definitions went live (raised by
+      // codex review). `unquoted` strips only a COLUMN-0 quote marker, so it
+      // keeps exactly the indentation the column was measured against - and it
+      // is never the SHALLOWER of the two, since `k` removes a superset of what
+      // `unquoted` does wherever the fence is quoted at all.
+      if (
+        scopeHoldsLine(fence.scope, raw, rawQuoteDepth, unquoted) &&
+        !enclosingDivCloses
+      ) {
+        continue // definitions inside fenced code are literal samples
+      }
+      // Out of its container. The fence is over and this line is read fresh -
+      // it may be a boundary the trackers below have to see, a new opener, or a
+      // definition site.
+      fence = null
     }
+    // THE CONTENT-COLUMN STACK IS MAINTAINED HERE, below the fence, and not
+    // above it. It used to run first under an `if (!fence)` guard, so the line
+    // that ENDS a fence - which the fence no longer holds, and which the block
+    // parser reads as ordinary structure - was skipped and left the stack
+    // holding the container's column. A definition on that very line then read
+    // as below the column and was rejected, which is carve-js#1135 surviving
+    // its own repair on the marker-line spelling (`- ```).
+    //
+    // Every line under an OPEN fence has already been consumed above, so the
+    // guard would now be a check that cannot fail.
+    // maintain the content-column stack (same rule as the migrator): a
+    // marker opens an item at its marker width; a blank is transparent; a
+    // dedented line leaves an item when a blank precedes it or it starts a
+    // block; code content (inside a fence) never changes it.
+    // bullets are `-`/`*` (not `+`, the continuation marker); ordered markers
+    // cover every dialect the parser accepts (decimal, roman, single-letter);
+    // an optional abutting `{…}` attribute block is part of the marker width
+    const marker = prepassMarker(unquoted)
+    const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
+    // Test the RAW line for a block starter: a blockquote `>` is stripped by
+    // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
+    // interrupting a list item would not pop the stack.
+    const rawTrimmed = raw.trim()
+    const startsBlock =
+      /^#{1,6}([ \t]|$)/.test(rawTrimmed) ||
+      RE_BLOCKQUOTE.test(rawTrimmed) ||
+      /^(`{3,}|~{3,})/.test(rawTrimmed) ||
+      // A COLON FENCE ENDS THE ITEM TOO, and was the one block opener missing
+      // from this list. A flush `:::` under an unblanked item opens a SIBLING
+      // container - the parser renders the div next to the list, not inside it
+      // - so the item's content column is gone. Left here, the column stayed
+      // live and the div recorded it as the container it was opened in, which
+      // then released at the next blank line and let an abbreviation written
+      // INSIDE a visibly rendered div register (raised by codex review).
+      //
+      // Only a fence the parser REALLY opens: `:::note` is prose, and the
+      // parser folds it into the item lazily, so popping the column there
+      // rejected the definition below it as top-level indentation.
+      isColonFenceOpener(rawTrimmed) ||
+      /^(-{3,}|\*{3,}|_{3,})$/.test(rawTrimmed)
+    if (marker && /\S/.test(raw.slice(marker[0].length))) {
+      // Every marker on the line, not just the first: `- - see` opens TWO
+      // items and its content column is 4, not 2. Tracking only the first
+      // understated the column, and a definition written at the real one
+      // then read as "past the column" (carve-js#613's guard) or as a fence
+      // at the wrong base. Each marker pops the stack against its own indent
+      // and pushes its cumulative content column.
+      let rest = unquoted
+      let base = 0
+      for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
+        while (listCols.length && listCols[listCols.length - 1]! > base + m2[1]!.length) {
+          listCols.pop()
+        }
+        base += m2[0].length
+        listCols.push(base)
+        rest = rest.slice(m2[0].length)
+        m2 = prepassMarker(rest)
+      }
+    } else if (
+      !isBlankLine(raw) &&
+      // A LINK REFERENCE DEFINITION at column 0 ends the item too, so it has
+      // to pop the stack like any other block start. It is not in
+      // `startsBlock` because it is invisible, and being left out meant the
+      // stack still held the item's content column: the definition read as
+      // BELOW that column and was skipped, while the block lexer ended the
+      // list at it anyway. The line was rendered nowhere and defined nothing
+      // (carve-js#657) - the one outcome a definition may never have.
+      //
+      // At the content column this changes nothing: the `> indent` test pops
+      // only what sits DEEPER than the line, so a definition written at the
+      // column it belongs to still keeps its item open.
+      //
+      // The footnote form is already handled - its own prepass reads the line
+      // independently - and an ABBREVIATION definition deliberately does not
+      // qualify: all four implementations fold `- x` / `*[A]: b` as item text,
+      // because PART 12 §7 recognizes one only as a direct child of the
+      // document.
+      (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
+    ) {
+      while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
+    }
+    // strip the enclosing content column so a fence delimiter at that column
+    // is recognized (kept-indent view keeps residual indent after markers)
+    const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
     if (commentFence !== null) {
       const close = RE_COMMENT_BLOCK_ANY.exec(line)
       if (close && close[1]!.length === commentFence) commentFence = null
-      paraOpen = false
+      paraState = 'no'
       continue
     }
     {
@@ -2627,34 +2795,62 @@ function collectLinkDefs(lexer: Lexer) {
       // suppress every definition in the rest of the document.
       if (open && commentBlockHasCloser(lexer, open[1]!.length, idx)) {
         commentFence = open[1]!.length
-        paraOpen = false
+        paraState = 'no'
         continue
       }
     }
+    // THE VERSE REGION AND THE DEPTH STACK END WITH THEIR CONTAINER TOO, on the
+    // same rule the fence above uses. Both were document-wide: a `> ::: |` or a
+    // `> :::` was pushed and never dropped, so one quoted line silenced every
+    // definition below it for the rest of the document (carve-js#1139).
+    //
+    // The COLUMN each is recorded at is the enclosing content column, not the
+    // line's own indent: both open on a MARKER LINE too (`- :::`), where the
+    // marker is stripped before the opener is matched and the raw indent is
+    // zero - so recording the indent put a quoted-or-nested opener back at
+    // document level and it held every line again.
+    //
+    // The line's own reach is measured on `unquoted` - the quote markers gone,
+    // the indentation kept - which is the view these two trackers already read
+    // their own closers through.
+    if (verse !== null && !scopeHoldsLine(verse.scope, raw, rawQuoteDepth, unquoted)) {
+      verse = null
+    }
     if (verse !== null) {
       const close = line.trim().match(/^(:{3,})$/)
-      if (close && close[1]!.length >= verse) verse = null
-      paraOpen = false
+      if (close && close[1]!.length >= verse.width) verse = null
+      paraState = 'no'
       continue
     }
     const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
     if (verseOpen) {
-      verse = verseOpen[1]!.length
-      paraOpen = false
+      verse = {
+        width: verseOpen[1]!.length,
+        scope: { quoteDepth: rawQuoteDepth, contentCol },
+      }
+      paraState = 'no'
       continue
+    }
+    while (
+      divs.length &&
+      !scopeHoldsLine(divs[divs.length - 1]!.scope, raw, rawQuoteDepth, unquoted)
+    ) {
+      divs.pop()
     }
     // Track `:::` nesting so the abbreviation branch can require document
     // level. Only the depth matters here, not what kind of div it is.
     const colon = line.trim().match(/^(:{3,})[ \t]*(.*)$/)
     if (colon) {
       const width = colon[1]!.length
-      if (colon[2] === '' && divs.length && divs[divs.length - 1] === width) divs.pop()
-      else divs.push(width)
+      if (colon[2] === '' && divs.length && divs[divs.length - 1]!.width === width) divs.pop()
+      else {
+        divs.push({
+          width,
+          opens: isColonFenceOpener(line),
+          scope: { quoteDepth: rawQuoteDepth, contentCol },
+        })
+      }
     }
-    // Only a line the fence's container no longer holds reaches here with a
-    // fence still open (see above). It was allowed past the trackers so a
-    // boundary out there is seen; it collects nothing.
-    if (fence) continue
     // WHETHER A PARAGRAPH IS OPEN ON THE NEXT LINE, decided here because every
     // line that carries verbatim or opaque content has already been consumed
     // above with the flag cleared.
@@ -2674,11 +2870,17 @@ function collectLinkDefs(lexer: Lexer) {
     // note - unlike a list item, whose paragraph a flush line really does
     // continue. `line` has the body's indentation stripped, so without this the
     // two are indistinguishable here (raised by codex review).
+    // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0 - see the note on
+    // `paraState`. Read here, where `inFootnoteBody` still describes the line
+    // above; the expensive half is deferred to the opener below.
     const paraWasOpen =
-      paraOpen && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
+      paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
+    const paraAsk = paraState === 'ask'
+    const paraLineAbove = paraLine
     const inAttrRun = attrRun
     attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
-    paraOpen = !isBlankLine(raw) && !inAttrRun && !prepassOpensBlock(line)
+    paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
+    paraLine = line
     // OPENER: strip container prefixes (blockquote AND list marker) and re-base
     // to the content column, so a fence on a list item marker line (`- ```) or a
     // continuation line at the content column both open. RESIDUAL (line-based
@@ -2710,6 +2912,20 @@ function collectLinkDefs(lexer: Lexer) {
     // The opener's own indent is the column to re-base on; the closer check below
     // already re-bases to whatever `fence.contentCol` says.
     const openerCol = inFootnoteBody && contentCol === 0 ? keptIndent : contentCol
+    // A DESCRIPTION HAS A CONTENT COLUMN TOO, and it is neither a list column
+    // nor a footnote body's. `:  ` is stripped out of `kept` before the opener
+    // is matched, so a fence opened on a description line recorded column 0 -
+    // which every following line reaches, so the fence outlived the description
+    // and swallowed every definition below the list (carve-js#1135's deflist
+    // spelling). Only the tracker's CONTAINER records it: the closer keeps
+    // re-basing on `contentCol`, unchanged, since a closer written at the
+    // description's own column already matches there.
+    // The column is §16's own FIXED body column, not the separator's width: a
+    // wider `:   ` still puts the body at three, so measuring the marker made a
+    // canonical body line look dedented and ended the fence on it (raised by
+    // codex review).
+    const onDescriptionLine = afterTerm && RE_DESCRIPTION_PREFIX.test(unquoted)
+    const scopeCol = Math.max(openerCol, onDescriptionLine ? DEFLIST_CONTENT_COL : 0)
     const deIndented = keptIndent >= openerCol ? kept.slice(openerCol) : kept
     // BOTH fence spellings, not just the code one. `RE_FENCE`'s language slot
     // excludes `=`, so a raw block's ```` ```=FORMAT ```` opener matched nothing
@@ -2725,6 +2941,16 @@ function collectLinkDefs(lexer: Lexer) {
     const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
     const run = open ? open[2]! : rawOpen?.[1]
     if (run) {
+      // The innermost depth entry the block parser really opened - a phantom
+      // one from a malformed `:::note` decides nothing here. Written as a loop
+      // rather than `findLast`, which the compile target does not carry.
+      let enclosingDiv: { width: number; opens: boolean; scope: PrepassScope } | undefined
+      for (let i = divs.length - 1; i >= 0; i--) {
+        if (divs[i]!.opens) {
+          enclosingDiv = divs[i]
+          break
+        }
+      }
       // A FENCE INTERRUPTS AN OPEN PARAGRAPH ONLY WITH A CLOSER AHEAD (§10 I4,
       // and `startsInterruptingBlock`'s backtick arm is the block parser's own
       // spelling of it). Without a closer the delimiter is not a fence at all -
@@ -2741,6 +2967,7 @@ function collectLinkDefs(lexer: Lexer) {
       // document from paying for it.
       if (
         !paraWasOpen ||
+        (paraAsk && prepassOpensBlock(paraLineAbove)) ||
         hasBlockMatchers ||
         codeCloserPossibleIn(
           (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
@@ -2753,14 +2980,35 @@ function collectLinkDefs(lexer: Lexer) {
           len: run.length,
           contentCol: openerCol,
           quoted: rawIsQuoted,
-          quoteDepth: rawQuoteDepth,
+          scope: { quoteDepth: rawQuoteDepth, contentCol: scopeCol },
+          divWidth: enclosingDiv ? enclosingDiv.width : null,
+          // Asked only for a fence INSIDE a div, which is the one place the
+          // answer is read - so an ordinary document never builds the index.
+          //
+          // THE INDEX IS PERMISSIVE, and that is deliberate here. A merely
+          // closer-SHAPED line - indented, or inside another container - counts
+          // as "a closer may be ahead", so the div boundary declines to end the
+          // fence and a definition after it stays uncollected. That direction
+          // is a definition this pass does not reach, which is what it did
+          // before this change; the other direction ends a live fence early and
+          // publishes a definition out of a visible code sample. An exact
+          // answer wants a container-bounded scan per opener, which is the
+          // quadratic shape this index exists to avoid (raised by codex review,
+          // and unchanged from `origin/main` on the document it names).
+          hasCloser:
+            enclosingDiv !== undefined &&
+            codeCloserPossibleIn(
+              (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
+              run,
+              idx,
+            ),
         }
-        paraOpen = false
+        paraState = 'no'
         continue
       }
       // Not a fence: the line is the paragraph's own text and the paragraph is
-      // still open below it.
-      paraOpen = true
+      // still open below it. Known outright, so the line below never has to ask.
+      paraState = 'yes'
     }
     // Maintain footnote-body context (see `inFootnoteBody` above): a flush
     // footnote opener enters the body; a non-blank line at column 0 leaves it.

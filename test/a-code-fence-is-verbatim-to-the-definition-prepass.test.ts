@@ -171,7 +171,10 @@ describe('a fence holds only the lines its container still reaches', () => {
    * in fact already closed.
    *
    * So the early exit is conditional on the container still holding the line.
-   * A line it does not hold falls through to the trackers and collects nothing.
+   * A line it does not hold ENDS the fence and is read afresh - it may be a
+   * boundary the trackers have to see, a new opener, or a definition site
+   * (markup-carve/carve-js#1135; it was pinned here as collecting nothing while
+   * that ticket was open).
    */
 
   it('a div closer outside the fence container still pops the depth', () => {
@@ -229,44 +232,43 @@ describe('a fence holds only the lines its container still reaches', () => {
     expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
   })
 
-  it('a quote behind a list marker counts toward the depth, as before', () => {
+  it('a quote behind a list marker counts toward the depth', () => {
     // The depth reads the marker-stripped view too, for the same reason the
     // boolean it replaces did: `- > ``` ` opens a QUOTED fence, and reading
     // only the raw line would score it zero and hold every later line.
     //
-    // A RESIDUAL again, and a larger one - 55 documents turn on this term, and
-    // on every one of them the oracle, carve-rs and carve-php resolve the
-    // definition where carve-js does not. Dropping the term repairs all 55,
-    // which is exactly why it is written down: this fix is scoped to what a
-    // code sample's interior may decide, and those 55 diverge identically
-    // before and after it. They belong to the container-lifetime defect filed
-    // separately, not here.
+    // This was pinned as a RESIDUAL - 55 documents turned on the term, and on
+    // every one of them the oracle, carve-rs and carve-php resolved the
+    // definition where carve-js did not. The residual was the container
+    // lifetime, filed as markup-carve/carve-js#1135 and now fixed: the fence
+    // ends with the quote that holds it, so the abbreviation below is at
+    // document level and expands. All four implementations now agree here
+    // byte for byte.
     const source = '- > ```\n  :::\n  ```\n\n*[A]: expansion\n\nA here\n'
 
     expect(html(source)).toBe(
       '<ul> <li> <blockquote> <pre><code> </code></pre> </blockquote> ' +
-        '<div> <pre><code> </code></pre> </div> </li> </ul> <p>A here</p>',
+        '<div> <pre><code> </code></pre> </div> </li> </ul> ' +
+        '<p><abbr title="expansion">A</abbr> here</p>',
     )
   })
 
-  it('a line past the container defines nothing either, as before', () => {
-    // The other half of the same branch, and the row that keeps it honest. A
-    // line the container no longer holds is allowed past the trackers so a
-    // boundary out there is seen - it is NOT thereby a definition site, and
-    // this pass still leaves the fence open across it.
+  it('a line past the container IS a definition site', () => {
+    // The other half of the same branch. A line the container no longer holds
+    // is read afresh - the fence ended with the quote that held it, so this is
+    // an ordinary definition at document level.
     //
-    // A RESIDUAL, pinned as it stands rather than as it should be: the oracle
-    // and carve-php resolve this reference, because the fence really did end
-    // with the quote that held it. carve-js has never done so and does not
-    // start here - making the fence end with its container also makes the pass
-    // re-read the line, which walks into a different pre-existing defect (a
-    // fence opener is taken to interrupt an open paragraph, which the parser
-    // does not do). Both are filed separately; this fix changes neither.
+    // It was pinned the other way, as a residual: carve-js left the fence open
+    // forever and the reference stayed literal. Making the fence end with its
+    // container also makes the pass re-read the line, which walked into
+    // markup-carve/carve-js#1136 - a fence opener taken to interrupt an open
+    // paragraph - so the two had to land in that order, and they have.
     //
-    // Dropping the guard silently repairs this row, which is exactly why it is
-    // written down: the branch would otherwise look like dead code.
+    // The oracle and carve-php 4610ef8 agree. carve-rs 1ad93f0 is wrong here in
+    // its own way, rendering the definition as a visible paragraph instead of
+    // collecting it, so this is not two engines against one.
     expect(html('> ```\n\n[r]: /url\n\n[r][]\n')).toBe(
-      '<blockquote> <pre><code> </code></pre> </blockquote> <p>[r][]</p>',
+      '<blockquote> <pre><code> </code></pre> </blockquote> <p><a href="/url">r</a></p>',
     )
   })
 
