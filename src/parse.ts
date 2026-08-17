@@ -7866,16 +7866,19 @@ interface RawCell {
    */
   pos?: Position
   /**
-   * Anchor for the cell's INLINE content, set only when `raw` was VERIFIED to
-   * appear verbatim at that point in the row line.
+   * Where each FRAGMENT of `raw` came from, one range per source region, set
+   * only for a fragment VERIFIED to appear verbatim at that point in its line -
+   * a fragment whose source cannot be confirmed contributes no range, so the
+   * nodes over it go unplaced rather than landing on a wrong offset.
    *
-   * Not every cell qualifies: `\|` is two source characters for one content
-   * character, so a cell containing an escaped pipe drifts after it. Rather than
-   * detect that syntactically, the anchor is kept only when the document text at
-   * the computed offset equals the content - a check that cannot pass for a case
-   * this does not handle.
+   * A cell with no `+` continuation has exactly one range covering all of `raw`,
+   * which maps the same way a single base offset did. A CONTINUED cell has one
+   * per row, with the joining space between them mapping to nothing: the
+   * fragments each sit verbatim in the document even though their concatenation
+   * does not, so the inlines inside one fragment are placeable and only the ones
+   * reaching across a row boundary are not (markup-carve/carve-js#1153).
    */
-  inlineAnchor?: InlineSource
+  anchors?: AnchorRange[]
 }
 
 const isGfmDelimiterCell = (c: RawCell): boolean =>
@@ -7983,7 +7986,11 @@ function parseTable(lexer: Lexer): Table | Figure {
         column: lexer.lineStartColumn(lineIndex) + line.length,
         offset: lexer.lineOffset(lineIndex) + line.length,
       }
-      splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src }, idx) => {
+      const contOffset = lexer.lineOffset(lineIndex)
+      const contLine = lexer.lineNumber(lineIndex)
+      const contColumn = lexer.lineStartColumn(lineIndex)
+      const contCanPosition = lexer.hasDocumentOffsets
+      splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src, start }, idx) => {
         const frag = trimCellPadding(src)
         const target = lastRaw![idx]
         // A fragment on a span (`^`/`<`) column is skipped: the spec's
@@ -7991,6 +7998,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         // rows *before* the `^` row, so they extend the real origin cell
         // (verified). A `+` after the span row is not a spec'd ordering.
         if (!frag || !target || target.span) return
+        const fragStart = target.raw ? target.raw.length + 1 : 0
         target.raw = target.raw ? `${target.raw} ${frag}` : frag
         // Only the NEW fragment is read; the joining space is not a run
         // character, so resuming from the cell's own state is exact.
@@ -8000,12 +8008,41 @@ function parseTable(lexer: Lexer): Table | Figure {
         // neighbouring column's content on the lines between - so cell 1 would
         // CONTAIN cell 0, and an offset would map to two sibling cells at once.
         // A construct that is not one contiguous range cannot honestly be one.
-        //
-        // Its inline content goes with it: joined from lines that are not
-        // adjacent, so no single anchor locates it and a span covering it could
-        // not select its own text.
         delete target.pos
-        delete target.inlineAnchor
+        // The INLINE content does not go with it. Each fragment still sits
+        // verbatim on its own line, so it gets its own range and the inlines
+        // inside it keep real spans; only a node reaching across the row
+        // boundary - and the joining space that stands in for it - has no span
+        // to state (markup-carve/carve-js#1153).
+        //
+        // The same verbatim check as the base row, and DOMINATED the same way:
+        // `splitTableRowSpans` builds each piece as a contiguous slice of the
+        // line and `trimCellPadding` removes only spaces from its ends, so the
+        // compare held on all 1131 corpus documents and on 200k random table
+        // shapes. It is kept because its failure mode is the useful one - a
+        // fragment that is not a slice of its line contributes no range, and the
+        // nodes over it go unplaced rather than landing on a wrong offset, which
+        // is what the base row's check was added for when `\|` was still
+        // resolved here and left the text shorter than its source (#462).
+        const within = contCanPosition ? src.indexOf(frag) : -1
+        if (within >= 0 && line.slice(start + within, start + within + frag.length) === frag) {
+          const range: AnchorRange = {
+            from: fragStart,
+            to: fragStart + frag.length,
+            offset: contOffset + start + within,
+            line: contLine,
+            column: contColumn + start + within,
+          }
+          if (target.anchors) target.anchors.push(range)
+          else target.anchors = [range]
+        }
+        // NO CLAMP ON THE RANGE BEFORE when this fragment is unplaceable. A
+        // range's `to` is the length `raw` had when it was appended, and the
+        // next fragment starts one past that, so the joining space is already
+        // the only offset between them and an unplaced fragment simply leaves a
+        // wider gap. `to` is inclusive so an exclusive span end may land on it;
+        // the space itself belongs to no range, which is what makes a node
+        // reaching across the boundary unplaceable.
       })
       continue
     }
@@ -8039,11 +8076,15 @@ function parseTable(lexer: Lexer): Table | Figure {
       // an escaped pipe is not a verbatim slice and gets no anchor.
       const within = content === '' || !canPosition ? -1 : src.indexOf(content)
       if (within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
-        c.inlineAnchor = inlineSource({
-          baseOffset: lineOffset + start + within,
-          startLine: lineNo,
-          startColumn: lineCol + start + within,
-        })
+        c.anchors = [
+          {
+            from: 0,
+            to: content.length,
+            offset: lineOffset + start + within,
+            line: lineNo,
+            column: lineCol + start + within,
+          },
+        ]
       }
       return c
     })
@@ -8120,8 +8161,18 @@ function parseTable(lexer: Lexer): Table | Figure {
           header: c.header,
           children: c.span
             ? []
-            : c.inlineAnchor
-              ? parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs, c.inlineAnchor)
+            : c.anchors?.length
+              ? parseInline(
+                  c.raw,
+                  lexer.abbrDefs,
+                  lexer.linkDefs,
+                  inlineSource({
+                    baseOffset: c.anchors[0]!.offset,
+                    startLine: c.anchors[0]!.line,
+                    startColumn: c.anchors[0]!.column,
+                    anchoredRanges: c.anchors,
+                  }),
+                )
               : stripPositions(parseInline(c.raw, lexer.abbrDefs, lexer.linkDefs)),
         }
         if (c.span) cell.span = c.span
@@ -9329,6 +9380,55 @@ interface InlineSource {
    * is what produced spans like "> quot" for the text "quoted".
    */
   anchored?: boolean
+  /**
+   * The local ranges of this text that DO map to the document, for text
+   * assembled from more than one source region.
+   *
+   * `lineAnchors` handles text whose regions are separated by the newlines the
+   * scanner can see. A table cell extended by a `+` continuation row has no such
+   * marker: its fragments are joined with a SPACE that stands in for the row
+   * boundary, so a single base offset drifts by four characters or more from the
+   * join onward, and nothing in the text says where that happens.
+   *
+   * Each fragment that was VERIFIED to appear verbatim on its own source line
+   * contributes one range. Everything else - the joining space, a fragment whose
+   * source could not be verified - is outside every range and has no document
+   * offset, so a node that starts or ends there, or that straddles two ranges,
+   * is published with no `pos` at all (PART 12 section 4). A node that sits
+   * inside ONE range is a run of source it owns end to end, and section 4's
+   * escape does not reach it (markup-carve/carve-js#1153).
+   *
+   * Sorted by `from`, non-overlapping, and `to` is INCLUSIVE so a span's
+   * exclusive end may land on a range's last boundary.
+   */
+  anchoredRanges?: readonly AnchorRange[]
+  /**
+   * How far into `anchoredRanges`' own coordinates this text starts.
+   *
+   * A nested scan (a link label, an emphasis body) re-bases its text on its own
+   * offset 0, and the ranges belong to the WHOLE cell. Carrying a delta rather
+   * than re-basing the array is what keeps this linear: a cell accumulates one
+   * range per continuation row and a nested scan per inline construct, so
+   * copying the array on every `shiftSource` is quadratic in a tall cell that
+   * also carries markup - measured at 3.0x per byte over a 4x input before this
+   * was a delta.
+   */
+  rangeShift?: number
+}
+
+/**
+ * One local range of an inline text that maps exactly to a document region.
+ *
+ * Local offset `o` with `from <= o <= to` sits at document offset
+ * `offset + (o - from)`, on `line`, at column `column + (o - from)`. A range
+ * never spans a newline, which is what lets `line` be a single number.
+ */
+interface AnchorRange {
+  from: number
+  to: number
+  offset: number
+  line: number
+  column: number
 }
 
 function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
@@ -9338,8 +9438,35 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
     startColumn: overrides.startColumn ?? 1,
   }
   if (overrides.lineAnchors) source.lineAnchors = overrides.lineAnchors
+  if (overrides.anchoredRanges) source.anchoredRanges = overrides.anchoredRanges
+  if (overrides.rangeShift) source.rangeShift = overrides.rangeShift
   if (overrides.anchored === false) source.anchored = false
   return source
+}
+
+/**
+ * The range holding `offset`, or undefined when no range does.
+ *
+ * BINARY SEARCH, not a scan. A cell accumulates one range per continuation row
+ * and the scanner asks per token, so a linear lookup is quadratic in a tall
+ * multi-line cell - the same shape `openVerbatimRun` is resumed rather than
+ * recomputed to avoid.
+ */
+function anchorRangeAt(ranges: readonly AnchorRange[], offset: number): AnchorRange | undefined {
+  let lo = 0
+  let hi = ranges.length - 1
+  let found: AnchorRange | undefined
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const r = ranges[mid]!
+    if (r.from <= offset) {
+      found = r
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  return found && offset <= found.to ? found : undefined
 }
 
 
@@ -9903,12 +10030,19 @@ function scanInlineInner(
             : null
         if (ms && isValidInlineAttrPayload(ms[1]!)) {
           flush()
-          out.push({
-            type: 'span',
-            children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
-            attrs: parseAttrs(ms[1]!),
-            pos: sourcePos(source, text, i, i + close + 1 + ms[0].length),
-          } as Span)
+          out.push(
+            withPos(
+              {
+                type: 'span',
+                children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
+                attrs: parseAttrs(ms[1]!),
+              } as Span,
+              source,
+              text,
+              i,
+              i + close + 1 + ms[0].length,
+            ),
+          )
           i += close + 1 + ms[0].length
           continue
         }
@@ -9958,8 +10092,7 @@ function scanInlineInner(
       if (cr) {
         flush()
         const cref: CrossRef = { type: 'heading_ref', target: cr[1]! }
-        if (source.anchored !== false) cref.pos = sourcePos(source, text, i, i + cr[0].length)
-        out.push(cref)
+        out.push(withPos(cref, source, text, i, i + cr[0].length))
         i += cr[0].length
         continue
       }
@@ -10011,12 +10144,15 @@ function scanInlineInner(
       const sub = hasBrace ? RE_CRITIC_SUB.exec(rest) : null
       if (sub) {
         flush()
-        out.push({
-          type: 'substitution',
-          oldText: sub[1]!,
-          newText: sub[2]!,
-          pos: sourcePos(source, text, i, i + sub[0].length),
-        } as CriticSubstitute)
+        out.push(
+          withPos(
+            { type: 'substitution', oldText: sub[1]!, newText: sub[2]! } as CriticSubstitute,
+            source,
+            text,
+            i,
+            i + sub[0].length,
+          ),
+        )
         i += sub[0].length
         continue
       }
@@ -10282,7 +10418,8 @@ function withPos<T extends InlineNode>(
   end: number,
 ): T {
   if (source.anchored === false) return node
-  node.pos = sourcePos(source, text, start, end)
+  const pos = sourcePos(source, text, start, end)
+  if (pos) node.pos = pos
   return node
 }
 
@@ -10297,6 +10434,13 @@ function extendPosTo(node: InlineNode, source: InlineSource, text: string, end: 
   const pos = (node as { pos?: Position }).pos
   if (!pos) return
   const point = pointAt(source, text, end)
+  // The markup read after the node is outside every anchored range, so the
+  // extended span would end somewhere the text does not map. A span that cannot
+  // state its own end is not a span; the node keeps none.
+  if (!point) {
+    delete (node as { pos?: Position }).pos
+    return
+  }
   pos.endLine = point.line
   pos.endColumn = point.column
   pos.endOffset = point.offset
@@ -10307,9 +10451,15 @@ function sourcePos(
   text: string,
   start: number,
   end: number,
-): Position {
+): Position | undefined {
   const startPoint = pointAt(source, text, start)
   const endPoint = pointAt(source, text, end)
+  if (!startPoint || !endPoint) return undefined
+  // BOTH ENDS IN THE SAME RANGE. Two ends that each map is not enough when the
+  // text is assembled: a node reaching from one fragment into the next covers
+  // source it does not own - the row boundary between them - and one span for
+  // two non-adjacent regions is the invented value PART 12 section 4 forbids.
+  if (source.anchoredRanges && startPoint.range !== endPoint.range) return undefined
   return {
     startLine: startPoint.line,
     endLine: endPoint.line,
@@ -10322,11 +10472,16 @@ function sourcePos(
 
 function shiftSource(source: InlineSource, text: string, by: number): InlineSource {
   const point = pointAt(source, text, by)
-  return {
+  const shifted: InlineSource = {
     baseOffset: source.baseOffset + by,
-    startLine: point.line,
-    startColumn: point.column,
+    startLine: point?.line ?? source.startLine,
+    startColumn: point?.column ?? source.startColumn,
   }
+  if (source.anchoredRanges) {
+    shifted.anchoredRanges = source.anchoredRanges
+    shifted.rangeShift = (source.rangeShift ?? 0) + by
+  }
+  return shifted
 }
 
 // Per-document cache of newline offsets for each inline text. pointAt() used to
@@ -10356,12 +10511,30 @@ function newlineIndices(text: string): number[] {
  * With `lineAnchors` each line carries its own origin, so a continuation line is
  * measured from where that line actually starts in the document rather than by
  * adding a single base offset to a local one.
+ *
+ * With `anchoredRanges` the text was assembled from regions the scanner cannot
+ * see the boundaries of, and an offset OUTSIDE every range has no document
+ * position at all - undefined, rather than a number computed from the wrong
+ * origin. The range is reported alongside so a caller can require both ends of a
+ * span to come from the same one.
  */
 function pointAt(
   source: InlineSource,
   text: string,
   offset: number,
-): { line: number; column: number; offset: number } {
+): { line: number; column: number; offset: number; range?: AnchorRange } | undefined {
+  if (source.anchoredRanges) {
+    const cellOffset = offset + (source.rangeShift ?? 0)
+    const range = anchorRangeAt(source.anchoredRanges, cellOffset)
+    if (!range) return undefined
+    const within = cellOffset - range.from
+    return {
+      line: range.line,
+      column: range.column + within,
+      offset: range.offset + within,
+      range,
+    }
+  }
   const indices = newlineIndices(text)
   // Count newlines strictly before `offset` (binary search for the insertion
   // point of `offset` in the sorted indices).
