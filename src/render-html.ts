@@ -316,19 +316,89 @@ const HTML_ATTR_NAME_RE = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/
 const DANGEROUS_VALUE_SCHEMES = new Set(DANGEROUS_URL_SCHEMES)
 
 /**
+ * ASCII whitespace, HTML's own class: TAB, LF, FF, CR and SPACE. The token
+ * boundary for `URL_LIST_SEPARATORS` below, and deliberately NARROWER than
+ * `SCHEME_PROBE_STRIP_RE`: the strip class removes every Unicode space, but
+ * the split breaks only where the attribute grammars put their boundaries. So
+ * `a<U+202F>javascript:x` is ONE token to a consumer and resolves as a
+ * relative URL, while `<U+202F>javascript:x` is a token whose scheme the strip
+ * uncovers.
+ */
+const ASCII_WHITESPACE = '\\t\\n\\f\\r '
+
+/**
+ * PART 9 §25: the four attributes whose value is a LIST of URLs a consumer
+ * resolves or fetches, mapped to the separator that attribute's own grammar
+ * uses. Probed at every candidate rather than at the value's head, because the
+ * leading-scheme probe vouches for the whole value only where the whole value
+ * is one URL (markup-carve/carve#1320).
+ *
+ * THE TWO HALVES SPLIT DIFFERENTLY AND THAT IS THE RULE, NOT AN OVERSIGHT.
+ * `ping` (on `a`/`area`) and `attributionsrc` (on `a`/`img`/`script`) are
+ * space-separated sets whose grammars hold no comma, so splitting them on one
+ * would blank a lone legitimate URL that merely carries a comma in its path.
+ * `srcset` (on `img`/`source`) and `imagesrcset` (on `link`) are comma-separated
+ * candidate strings, and there the comma really does end a candidate: a
+ * whitespace-only split misses `safe.png 1x,javascript:alert(1) 2x` outright,
+ * one absent space hiding the second candidate inside the first's descriptor.
+ *
+ * The comma split over-blanks `srcset="https://example.com/a,data:x 1x"`, which
+ * is ONE candidate to a consumer. The spec pins that shape blanked and its
+ * `ping` counterpart kept, so the engines cannot each pick a tokenization;
+ * reading it exactly would take the HTML candidate-list algorithm, descriptor
+ * scan included, from three engines that must agree byte for byte.
+ */
+const URL_LIST_SEPARATORS = new Map<string, RegExp>([
+  ['srcset', new RegExp(`[,${ASCII_WHITESPACE}]+`)],
+  ['imagesrcset', new RegExp(`[,${ASCII_WHITESPACE}]+`)],
+  ['ping', new RegExp(`[${ASCII_WHITESPACE}]+`)],
+  ['attributionsrc', new RegExp(`[${ASCII_WHITESPACE}]+`)],
+])
+
+/**
+ * Whether the LEADING scheme of `value` is denylisted. Control characters and
+ * Unicode whitespace are stripped from the scheme before comparison, because a
+ * reader may ignore any of them when it decides what the scheme is - so
+ * `java\tscript:` does not evade the check that `javascript:` fails.
+ */
+function hasDeniedValueScheme(value: string): boolean {
+  const colon = value.indexOf(':')
+  if (colon === -1) return false
+  const scheme = value.slice(0, colon).replace(SCHEME_PROBE_STRIP_RE, '').toLowerCase()
+  return DANGEROUS_VALUE_SCHEMES.has(scheme)
+}
+
+/**
  * Blank an attribute value that carries a dangerous URL scheme or a CSS
  * `expression(...)`, so an author cannot smuggle script through an attribute
- * the name filter allows (e.g. `background`, `style`). The scheme is
- * normalized (C0 controls + spaces stripped) before comparison to defeat
- * `java\tscript:` style evasion, matching the link/image URL sanitizer.
+ * the name filter allows (e.g. `background`, `style`).
+ *
+ * A URL-list attribute is probed at EVERY candidate and the ENTIRE value is
+ * blanked on any hit, so the same value cannot be refused in position one and
+ * emitted verbatim in position two. Blanking the whole value rather than
+ * excising the candidate follows the `Cf` case in this clause (carve#782):
+ * rewriting would make the rendered attribute differ from the author's bytes.
+ *
+ * THE VALUE-WIDE PROBE STILL RUNS FOR THOSE FOUR NAMES, on top of the per-token
+ * one. The clause adds a MUST about where the probe runs, and says the rule
+ * "changes WHERE the probe runs, not WHAT it denies" - so the token pass may
+ * only ever deny more. Dropping the value-wide pass would deny LESS, because
+ * the strip class is wider than the split class in the other direction too:
+ * `ping="java script:alert(1)"` is two clean tokens whose scheme only appears
+ * once the value-wide strip closes the gap, and that spelling is blanked today.
+ *
+ * PROSE ATTRIBUTES ARE NOT TOKENIZED. `title`, `alt` and `aria-label` carry
+ * colons routinely, and a blanket "any token that looks like a scheme" test
+ * would refuse ordinary text - which is the constraint that decided this shape.
  */
 function sanitizeAttrValue(name: string, value: string): string {
-  const colon = value.indexOf(':')
-  if (colon !== -1) {
-    const scheme = value.slice(0, colon).replace(SCHEME_PROBE_STRIP_RE, '').toLowerCase()
-    if (DANGEROUS_VALUE_SCHEMES.has(scheme)) return ''
+  const n = name.toLowerCase()
+  if (hasDeniedValueScheme(value)) return ''
+  const separator = URL_LIST_SEPARATORS.get(n)
+  if (separator && value.split(separator).some((token) => token !== '' && hasDeniedValueScheme(token))) {
+    return ''
   }
-  if (name.toLowerCase() === 'style' && hasDangerousCss(value)) return ''
+  if (n === 'style' && hasDangerousCss(value)) return ''
   return value
 }
 

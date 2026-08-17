@@ -455,6 +455,19 @@ const IMPLEMENTED = new Set([
   'a-wider-comment-fence-inside-an-item-hides-its-body-the-same-way',
   'an-abbreviation-inside-a-comment-defines-nothing',
   'a-comment-fence-inside-a-colon-container-registers-nothing',
+  // The pin bump to carve 483bcea adds ONE category of TEN documents -
+  // markup-carve/carve#1320, the token-wise probe for the four URL-list
+  // attributes. This one is NOT bookkeeping: the renderer read only the value's
+  // leading scheme, so `srcset="safe.png 1x, javascript:alert(1) 2x"` rendered
+  // verbatim while the same value with the payload first was blanked. SEVEN of
+  // the ten documents were red before `sanitizeAttrValue` learned to tokenize;
+  // the other three are the leading-position value the old rule already blanked
+  // and the two that must be KEPT (a `ping` carrying a comma in its path, and a
+  // `title` carrying prose colons).
+  // All ten were then rendered through this engine and compared with their
+  // `.html` fixtures BEFORE this name went in - 10 of 10 byte-for-byte, and the
+  // whole corpus at this pin measured 1141 of 1141 in the same run.
+  'url-list-attributes-are-probed-token-wise',
 ])
 
 /**
