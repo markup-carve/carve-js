@@ -152,3 +152,129 @@ describe('the stages a source language without escapes of its own needs', () => 
     expect(escapeAttributeBlockOpener('a \\{#id} c')).toBe('a \\{#id} c')
   })
 })
+
+describe('a bare delimiter rule leaves the escape the source already wrote', () => {
+  const render = (src: string) => carveToHtml(src).replace(/\s+/g, ' ').trim()
+
+  interface BareRule {
+    /** The construct the rule suppresses. */
+    readonly rule: string
+    /** The source with the delimiter bare. */
+    readonly bare: string
+    /** The same source with the escape the author wrote themselves. */
+    readonly escaped: string
+    /** What that escape buys: the delimiter as literal text. */
+    readonly literal: string
+    /**
+     * The escape after `escapeLiteralBackslashes` has doubled it, which makes
+     * the run EVEN - one literal backslash, and a delimiter still bare behind
+     * it, so this rule owes it an escape of its own.
+     */
+    readonly evenRun: string
+  }
+
+  // A row per bare delimiter rule in `escapePlainCarveInlineSyntax`, in the
+  // order the rules run. There is no other gate on these: the shared escaper
+  // corpus carries no backslash-bearing input by design, since a literal
+  // backslash is a separate stage there.
+  const rules: readonly BareRule[] = [
+    {
+      rule: 'a comment',
+      bare: 'a %%c%% b',
+      escaped: 'a \\%%c%% b',
+      literal: '<p>a %%c%% b</p>',
+      evenRun: 'a \\\\%%c%% b',
+    },
+    {
+      rule: 'emphasis',
+      bare: 'a /x/ b',
+      escaped: 'a \\/x/ b',
+      literal: '<p>a /x/ b</p>',
+      evenRun: 'a \\\\\\/x/ b',
+    },
+    {
+      rule: 'a highlight',
+      bare: 'a =x= b',
+      escaped: 'a \\=x= b',
+      literal: '<p>a =x= b</p>',
+      evenRun: 'a \\\\\\=x= b',
+    },
+    {
+      rule: 'a strike',
+      bare: 'a ~x~ b',
+      escaped: 'a \\~x~ b',
+      literal: '<p>a ~x~ b</p>',
+      evenRun: 'a \\\\\\~x~ b',
+    },
+    {
+      rule: 'a strong',
+      bare: 'a *x* b',
+      escaped: 'a \\*x* b',
+      literal: '<p>a *x* b</p>',
+      evenRun: 'a \\\\\\*x* b',
+    },
+    {
+      rule: 'an underline',
+      bare: 'a _x_ b',
+      escaped: 'a \\_x_ b',
+      literal: '<p>a _x_ b</p>',
+      evenRun: 'a \\\\\\_x_ b',
+    },
+    {
+      rule: 'a tag',
+      bare: 'a #y b',
+      escaped: 'a \\#y b',
+      literal: '<p>a #y b</p>',
+      evenRun: 'a \\\\\\#y b',
+    },
+    {
+      rule: 'a mention',
+      bare: 'a @y b',
+      escaped: 'a \\@y b',
+      literal: '<p>a @y b</p>',
+      evenRun: 'a \\\\\\@y b',
+    },
+  ]
+
+  // The half that proves the fix: an escape already in the source survives the
+  // pass unchanged. Six of these rules used a plain replace and doubled it.
+  it.each(rules)('does not escape $rule the source escaped already', ({ escaped, literal }) => {
+    expect(escapePlainCarveInlineSyntax(escaped)).toBe(escaped)
+    expect(render(escaped)).toBe(literal)
+  })
+
+  // The other half, which is what stops the guard being bought by escaping
+  // nothing at all: a bare delimiter still gets its escape.
+  it.each(rules)('still escapes $rule the source left bare', ({ bare, escaped }) => {
+    expect(escapePlainCarveInlineSyntax(bare)).toBe(escaped)
+  })
+
+  // Parity, not the one character before the delimiter. A source language with
+  // no escapes of its own has had its backslashes doubled first, so the run in
+  // front of a delimiter is EVEN and the delimiter is bare however long the run
+  // is.
+  it.each(rules)('escapes $rule behind an even backslash run', ({ escaped, evenRun }) => {
+    expect(escapePlainCarveInlineSyntax(escapeLiteralBackslashes(escaped))).toBe(evenRun)
+  })
+
+  // Why the doubling is a defect rather than a cosmetic one, and why leaving
+  // the delimiter bare would have been the lesser bug: the second backslash
+  // escapes the first, so the pair renders as a literal backslash the author
+  // never typed AND the construct the author escaped away opens anyway.
+  it('a doubled escape prints a backslash and frees the construct', () => {
+    expect(render('a \\\\*x* b')).toBe('<p>a \\<strong>x</strong> b</p>')
+    expect(render('a \\\\#y b')).toBe(
+      '<p>a \\<span class="tag"><strong>#y</strong></span> b</p>',
+    )
+  })
+
+  // The comment rule is the one that keeps a plain replace, because its match
+  // begins at the character BEFORE the `%%` and requires a space, a tab or the
+  // start of the line there. A backslash fails that, so the escaped form is
+  // never matched and cannot be doubled - and the parser draws the same line,
+  // so declining to escape behind a literal backslash is right rather than a
+  // gap: `a \\%%c%% b` renders no comment either.
+  it('mirrors the parser in declining a comment behind a backslash', () => {
+    expect(render('a \\\\%%c%% b')).toBe('<p>a \\%%c%% b</p>')
+  })
+})
