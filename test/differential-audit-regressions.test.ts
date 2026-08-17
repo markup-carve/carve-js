@@ -28,8 +28,12 @@ describe('differential audit regressions', () => {
     expect(carveToHtml('- \tb\n')).toContain('<li>b</li>')
   })
 
-  it('keeps a marker-line attribute with the block it floats onto', () => {
-    expect(carveToHtml('* {i}\n|\n')).toContain('<li><p i="">|</p></li>')
+  it('ends the item on a marker-line attribute, which floats onto nothing', () => {
+    // Was `<li><p i="">|</p></li>`. markup-carve/carve#1280 ruled the other way:
+    // an attribute block leaves no open paragraph, so PART 1 S4 ends the item at
+    // the column-0 line and the attribute reaches no block at all (corpus
+    // 326-…-no-paragraph-open-9). carve-rs `b6ff319c` produces this.
+    expect(carveToHtml('* {i}\n|\n')).toBe('<ul>\n  <li></li>\n</ul>\n<p>|</p>')
   })
 
   it('strips closed verbatim padding across physical lines', () => {
