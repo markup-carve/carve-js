@@ -4774,6 +4774,14 @@ function parseLineBlock(lexer: Lexer): LineBlock {
      * (corpus 268-trailing-whitespace-on-a-content-line-is-dropped-12).
      */
     aligned: boolean
+    /**
+     * The comment this line WAS, for a line the block layer emptied.
+     *
+     * Kept because §23 removes the line from the RENDER and not from the tree:
+     * it stays a `comment` node like any other, so the canonical writer can put
+     * the author's line back at the column they wrote it at.
+     */
+    comment?: Comment
   }
   const stanzas: StanzaLine[][] = []
   let stanza: StanzaLine[] = []
@@ -4787,6 +4795,53 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         stanzas.push(stanza)
         stanza = []
       }
+      continue
+    }
+    // A COMMENT-ONLY BODY LINE IS REMOVED HERE, AT THE BLOCK LAYER (PART 9
+    // §23, NORMATIVE). `comment_line` is a block - PART 1 lists it among the
+    // invisible blocks and §10 I5 rules on it - so the line is decided with
+    // the other block-layer decisions, BEFORE any inline content exists.
+    //
+    // Doing it in the inline pass instead, which is where this engine did it,
+    // let an unclosed verbatim run opened on an EARLIER line claim the line
+    // under §21's verbatim exclusion and PUBLISH the comment's own text - the
+    // one outcome a comment may never have, on a document whose only defect is
+    // a stray backtick somewhere above (markup-carve/carve#1333). No inline run
+    // can reach a decision taken before it exists.
+    //
+    // It leaves an EMPTY VERSE LINE rather than dropping the row: the stanza
+    // split above has already run, so emptying the line keeps the stanza's
+    // shape, which is the layout a line block exists to preserve. The empty
+    // line then carries a NEWLINE into an open run like every other break that
+    // run swallows (carve#1282).
+    //
+    // ONLY A LINE WHOSE FIRST CHARACTER IS `%` QUALIFIES. In verse the leading
+    // run is CONTENT, so `comment_line`'s optional `[whitespace]` prefix has
+    // nothing to consume and an indented `%%` line is ordinary verse text.
+    // `%%%` is included: §28 degrades a fence opener with no closer to a
+    // comment line, and §23 makes a fence opener ordinary text here anyway.
+    //
+    // A TRAILING `%%` after content is a DIFFERENT construct - `inline_comment`
+    // (PART 3, §21) - and this does not reach it. Inside a verbatim run there
+    // is no comment there at all, only two percent characters in content, and
+    // an engine may never delete author bytes out of one.
+    if (ln.startsWith('%%')) {
+      const comment: Comment = {
+        type: 'comment',
+        block: false,
+        content: ln.slice(2).replace(/^[ \t]/, ''),
+      }
+      if (lexer.hasDocumentOffsets) {
+        comment.pos = {
+          startLine: lexer.lineNumber(lineIndex),
+          endLine: lexer.lineNumber(lineIndex),
+          startColumn: lexer.lineStartColumn(lineIndex),
+          endColumn: lexer.lineStartColumn(lineIndex) + ln.length,
+          startOffset: lexer.lineOffset(lineIndex),
+          endOffset: lexer.lineOffset(lineIndex) + ln.length,
+        }
+      }
+      stanza.push({ text: '', lineIndex, aligned: true, comment })
       continue
     }
     const expanded = expandLineBlockWhitespace(ln)
@@ -4854,7 +4909,15 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         startColumn:
           lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0),
         endColumn: lexer.lineStartColumn(next.lineIndex),
-        startOffset: Math.min(lineOffset + line.text.length, sourceLineEnd),
+        // A COMMENT LINE IS MEASURED FROM ITS SOURCE, not from the empty text
+        // the block layer left behind. The clamp above reads the parsed text's
+        // length, which is zero here, so the break would start at the line's
+        // FIRST column while its `startColumn` is derived from the source line
+        // and reports the last - one span with two answers, overlapping the
+        // `comment` node that occupies those same bytes.
+        startOffset: line.comment
+          ? sourceLineEnd
+          : Math.min(lineOffset + line.text.length, sourceLineEnd),
         endOffset: lexer.lineOffset(next.lineIndex),
       }
     }
@@ -4882,21 +4945,70 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // Read the boundary each break belongs to BEFORE any stripping takes the
     // position that says so.
     const breakIndex = new Map<InlineNode, number>()
+    // WHICH LINES STILL END AT A BOUNDARY, counting the boundaries the author
+    // spelled with a `\` as well as the ones the container hardens. A `\` is
+    // not a soft break and never reaches the conversion below, but it is just
+    // as much a surviving line end - and the comment reinsertion asks that
+    // question, not the conversion's.
+    const boundaryLines = new Set<number>()
     for (const node of parsed) {
-      if (node.type !== 'soft_break') continue
+      if (node.type !== 'soft_break' && node.type !== 'hard_break') continue
       const startLine = node.pos?.startLine
-      if (startLine !== undefined) breakIndex.set(node, startLine - firstLineNumber)
+      if (startLine === undefined) continue
+      boundaryLines.add(startLine - firstLineNumber)
+      if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
     }
     if (!anchorable) stripPositions(parsed)
-    const inline: InlineNode[] = parsed.map((node) => {
-      if (node.type !== 'soft_break') return node
-      const hardBreak = { type: 'hard_break' } as InlineNode
+    // REMOVED FROM THE RENDER, NOT FROM THE TREE (PART 9 §23). Every line the
+    // block layer emptied above goes back in as the `comment` node it is, at
+    // the boundary that ends it, so the canonical writer emits the author's own
+    // line back at the column they wrote it at.
+    const pendingComments = new Map<number, Comment>()
+    lines.forEach((line, index) => {
+      if (!line.comment) return
+      if (!anchorable) stripPositions([line.comment])
+      pendingComments.set(index, line.comment)
+    })
+    const inline: InlineNode[] = []
+    for (const node of parsed) {
+      if (node.type !== 'soft_break') {
+        inline.push(node)
+        continue
+      }
       const index = breakIndex.get(node)
+      // The comment sits BEFORE the break that ends its line: the line is empty
+      // now, so there is nothing else on it.
+      if (index !== undefined) {
+        const comment = pendingComments.get(index)
+        if (comment) {
+          inline.push(comment)
+          pendingComments.delete(index)
+        }
+      }
+      const hardBreak = { type: 'hard_break' } as InlineNode
       const pos = index === undefined ? undefined : breakPos(index)
       if (pos) hardBreak.pos = pos
 
-      return hardBreak
-    })
+      inline.push(hardBreak)
+    }
+    // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
+    // so it goes at the end - the boundary that opens its line is still there,
+    // which is what says the line is still there.
+    //
+    // A COMMENT AN OPEN RUN SWALLOWED does not survive, and that is §23's own
+    // account of the shape rather than a loss: what the run carries across the
+    // emptied line is a NEWLINE, the same thing it carries across every other
+    // boundary it swallows. There is no boundary left in the tree to host the
+    // node, and appending one anyway put a span BEFORE the run that contains it
+    // and after the node that follows it, which PART 12 containment refuses.
+    // The writer keeps the LINE - an empty verse line has exactly one spelling
+    // inside an open run, and it is a comment line.
+    for (const index of [...pendingComments.keys()].sort((a, b) => a - b)) {
+      const isLastLine = index === lines.length - 1
+      if (isLastLine && (index === 0 || boundaryLines.has(index - 1))) {
+        inline.push(pendingComments.get(index)!)
+      }
+    }
 
     const paragraph: Paragraph = { type: 'paragraph', children: inline }
     if (lexer.hasDocumentOffsets) {

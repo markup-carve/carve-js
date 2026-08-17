@@ -649,12 +649,41 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
 
       return withAttrs(headingBody)
     }
-    case 'paragraph':
-      return withAttrs(
-        guardThematicBreakLines(
-          renderInlines(node.children, ctx, attrs === '' && ctx.paragraphStartsAfterCaptionHost),
+    case 'paragraph': {
+      const text = guardThematicBreakLines(
+        renderInlines(
+          node.children,
+          ctx,
+          attrs === '' && ctx.paragraphStartsAfterCaptionHost,
+          ctx.lineBlockDepth > 0,
         ),
       )
+      // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
+      // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
+      // return one stanza as two; a comment-only line is the one construct that
+      // leaves an empty verse line instead of rewriting it, and the block layer
+      // removes it before the inline run exists - so `%%` re-reads to exactly
+      // the empty line it was written for.
+      //
+      // It reaches here from a verbatim run that swallowed such a line: the run
+      // keeps the emptied line as a NEWLINE in its value, and that newline has
+      // to come back out as an empty line. §7c already spells the OTHER source
+      // of one, the empty-content `hard_break`, with a backslash, so no line
+      // arriving here is a break.
+      //
+      // A line block's children are its stanzas, so the guard is the whole
+      // scope: every empty line in this string is interior to one stanza.
+      //
+      // The lookahead is what keeps the LAST newline out of it. §7c writes the
+      // trailing `hard_break` of a last body line as `\` plus the newline it
+      // consumes, so the stanza ends in one - and the position after it is the
+      // closing fence, not an empty verse line.
+      if (ctx.lineBlockDepth > 0) {
+        return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
+      }
+
+      return withAttrs(text)
+    }
     case 'code_block': {
       const fence = safeFence(node.content, 3)
       const info = codeFenceInfo(node.lang, node.header, node.label)
@@ -715,7 +744,14 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
         ctx.colonFenceDepth--
         ctx.lineBlockDepth--
       }
-      return withAttrs(fence + ' |\n' + lineBlockLayoutWhitespace(body) + '\n' + fence)
+      // A BODY THAT ALREADY ENDS ITS LINE DOES NOT GET A SECOND NEWLINE. The
+      // last body line can end in a `hard_break`, which under §7c is written
+      // `\` plus the newline it consumes (PART 3); adding the closer's newline
+      // on top of that leaves a BLANK line before the fence, which ends the
+      // stanza and takes the trailing `<br>` - and the space it was holding -
+      // with it (markup-carve/carve#1334).
+      const layout = lineBlockLayoutWhitespace(body)
+      return withAttrs(fence + ' |\n' + layout + (layout.endsWith('\n') ? '' : '\n') + fence)
     }
     case 'div': {
       // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
@@ -1476,7 +1512,18 @@ function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
   }
 }
 
-function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = false): string {
+function renderInlines(
+  nodes: InlineNode[],
+  ctx: CarveContext,
+  captionCanOpen = false,
+  /**
+   * These nodes are a line block's STANZA, so the newline after the last of
+   * them ends the stanza rather than a line inside it (PART 11 §7c). Set only
+   * by the paragraph arm: a nested inline container inside a line block is not
+   * a stanza, and its last node is not at a stanza boundary.
+   */
+  isStanza = false,
+): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
@@ -1484,14 +1531,101 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
     let firstLine = true
     let lineNodeCount = 0
     let lineHostsCaption = false
+    // THE CURRENT OUTPUT LINE, CARRIED FORWARD instead of read back off `out`.
+    // The two decisions below are properties of the line written so far, and
+    // `out` is the wrong place to ask: it grows with every node, and probing a
+    // growing accumulator per node is the quadratic shape this engine's scaling
+    // guards exist to keep out. Two counters answer both questions in O(piece).
+    let lineLength = 0
+    /** The last up-to-two characters of the current output line. */
+    let lineTail = ''
     nodes.forEach((node, idx) => {
-      out += renderInline(
+      let piece = renderInline(
         node,
         ctx,
         lastBoundary(nodes[idx - 1]),
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
       )
+      // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
+      // live here and not in `renderInline`: the answer is a property of the
+      // output line, not of the neighbouring nodes. `lastBoundary` cannot stand
+      // in for it - after a code span it reports the span's last CONTENT
+      // character, not the backtick that actually ends the line.
+      const atLineStart = lineLength === 0
+
+      // THE SEPARATOR SPACE IS ONLY A SEPARATOR (PART 11 §1; §21). `%%` is
+      // recognized after whitespace OR at the start of its line, so a comment
+      // that already STARTS its line has nothing to separate from and must not
+      // be given a space it did not have.
+      //
+      // Everywhere else the space was cosmetic - leading whitespace is stripped
+      // on the way back in - which is why it went unnoticed. A LINE BLOCK is
+      // the one place it is not: there leading whitespace is preserved CONTENT
+      // (PART 9 §23), so the space pushed the marker off column 0, the reparse
+      // read `%%` as ordinary verse, and `carve fmt` PUBLISHED the text the
+      // author hid (carve-js#1170; carve-php fixed the same defect in
+      // markup-carve/carve-php#1394, carve-rs never had it).
+      if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
+
+      // A LINE BLOCK'S HARD BREAK KEEPS ITS BACKSLASH WHERE THE BARE NEWLINE
+      // WOULD BE RE-READ (PART 11 §7c, NORMATIVE). The container hardens every
+      // line boundary of its own accord, so the bare newline is right for most
+      // lines and wrong for exactly two - the two where §7's precondition
+      // fails, because the parser does NOT discard the trailing run when a
+      // backslash follows it (PART 7 makes that run INTERIOR).
+      //
+      //   - the line's content is EMPTY. A bare newline is a BLANK line, which
+      //     ends the stanza, so one stanza comes back as two.
+      //   - the line's content ends in a LONE space. A bare newline makes that
+      //     space line-trailing, where PART 2 drops it. A run of TWO OR MORE
+      //     columns is already NBSP content (§23 MEDIAL GAPS) and needs none -
+      //     it reaches here sentinel-encoded, so it is not a space to this
+      //     test either.
+      //   - the break ENDS THE STANZA. §7c's third sentence excuses a line with
+      //     no trailing whitespace because its "tree is identical either way",
+      //     and on a line INSIDE a stanza it is: the boundary hardens whether or
+      //     not a backslash spells it. At the stanza's end there is no boundary
+      //     to harden - the next newline belongs to the blank line or the
+      //     closing fence - so the bare spelling drops the break outright. The
+      //     ruling measured this as "a last body line loses a trailing `<br>`
+      //     WITH ITS SPACE"; the space is incidental, the loss is the break, and
+      //     `a\` and `a  \` lose it with no space involved.
+      //
+      // This is PART 11 §1a, not an exemption from it: the per-construct
+      // spelling emits bytes that do not re-parse to the tree they came from,
+      // so §1 wins and the spelling yields to another spelling of the SAME
+      // construct - which for a `hard_break` is its own PART 3 form
+      // (markup-carve/carve#1334).
+      //
+      // A LINE THAT ENDS IN A COMMENT IS EXEMPT. `%%` runs to end of line, so a
+      // trailing space there is INSIDE the comment, not content the parser is
+      // about to lose - stripping it leaves the same node. Protecting it with a
+      // backslash does not: the `\` lands inside the comment's own content, and
+      // the block layer, which takes the whole line before the inline parser
+      // sees it, reads the note back as `\`. A comment is always the last thing
+      // on its line, so the node before the break is the whole test.
+      if (
+        ctx.lineBlockDepth > 0 &&
+        node.type === 'hard_break' &&
+        piece === '\n' &&
+        nodes[idx - 1]?.type !== 'comment' &&
+        (atLineStart ||
+          /(?:^|[^ \t]) $/.test(lineTail) ||
+          (isStanza && idx === nodes.length - 1))
+      ) {
+        piece = '\\\n'
+      }
+
+      out += piece
+      const lastNewline = piece.lastIndexOf('\n')
+      if (lastNewline === -1) {
+        lineLength += piece.length
+        lineTail = (lineTail + piece).slice(-2)
+      } else {
+        lineLength = piece.length - lastNewline - 1
+        lineTail = piece.slice(lastNewline + 1).slice(-2)
+      }
       if (node.type === 'soft_break') {
         captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
         firstLine = false

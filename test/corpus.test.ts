@@ -433,6 +433,8 @@ const IMPLEMENTED = new Set([
   'a-tab-after-a-fence-or-a-frontmatter-opener-depends-on-where-it-sits',
   'an-attribute-line-after-a-continuation-marker-attributes-the-attached-block',
   'an-unclosed-inline-run-in-a-line-block-reaches-the-end-of-the-block',
+  'a-comment-only-line-in-a-line-block-is-removed-before-any-inline-run',
+  'a-line-block-s-hard-break-keeps-its-backslash',
   'which-inline-content-a-heading-id-is-derived-from',
   'a-column-0-line-after-a-container-s-last-block-when-that-block-left-no-paragraph-open',
   'a-continuation-marker-attaches-one-block-and-the-boundary-is-that-block-s-extent',
