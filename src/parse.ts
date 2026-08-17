@@ -1309,6 +1309,12 @@ class Lexer {
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
 
+  // EVERY line carrying a `%` run, keyed by run length and ascending, built
+  // once by `commentRunLines`. `fenceCloserIndex` keeps only the LAST line of
+  // each width, which answers "is there one ahead" and cannot answer "is there
+  // one before the container ends" - the question `commentCloserInScope` asks.
+  commentRunLines: Map<number, number[]> | undefined = undefined
+
   // Document line number -> every index of THIS lexer's lines carrying it,
   // built once by attachDocumentOffsets when the first child asks for it.
   //
@@ -2450,6 +2456,9 @@ function collectLinkDefs(lexer: Lexer) {
   // link table (carve-js#634). The footnote path already treats a comment as
   // opaque; this one did not.
   let commentFence: number | null = null
+  // The boundary scan `commentCloserInScope` shares between the openers of one
+  // container. See `CommentScopeMemo`.
+  const commentScopeMemo: CommentScopeMemo = new Map()
   // Div nesting depth, for the abbreviation branch below. A div is the one
   // container that adds NO per-line prefix, so `raw` alone cannot tell a
   // document-level definition from one written inside `:::`. Colon fences close
@@ -2793,7 +2802,74 @@ function collectLinkDefs(lexer: Lexer) {
       // Only a fence that CLOSES opens the opaque region. An unterminated
       // `%%%` degrades to a single-line comment, and treating it as open would
       // suppress every definition in the rest of the document.
-      if (open && commentBlockHasCloser(lexer, open[1]!.length, idx)) {
+      //
+      // AND THE CLOSER HAS TO ARRIVE INSIDE THE CONTAINER THE OPENER SITS IN.
+      // `commentBlockHasCloser` is a document-wide index of the LAST line
+      // carrying a run of each width, which is the right question only for an
+      // opener at document level - nothing bounds that body but the end of
+      // input. For an opener inside a list item or a quote the container bounds
+      // it, and asking the document-wide question got both directions wrong at
+      // once (carve-js#1146):
+      //
+      //   - a `%%%` written back at column 0 two blocks below counted as the
+      //     closer for an item-scoped fence, so the region opened and swallowed
+      //     the definition between them. That definition neither registered nor
+      //     rendered - it was gone, which is the worse of the two failure modes,
+      //     and the `hidden` line above it still rendered, so the two halves of
+      //     the answer did not even agree with each other;
+      //   - and the index reads RAW lines, where a `> %%%` closer carries its
+      //     quote marker and matches nothing. A quoted fence that closes inside
+      //     its own quote therefore read as unterminated, the region never
+      //     opened, and a definition the author commented out went live in the
+      //     link table - carve-js#634's failure with a quoted spelling.
+      //
+      // Both kinds this pass collects are fixed by the one change, because the
+      // region gates the whole loop body: carve-js registers ABBREVIATIONS here
+      // too, where carve-rs registers them in the block parser. The footnote
+      // form is unaffected either way - `parseFootnoteDef` runs during block
+      // parsing, which reads the fence for itself.
+      //
+      // THE DOCUMENT-WIDE INDEX STILL ANSWERS FIRST, and it carries two things
+      // at once. It keeps the container scan off the hot path - "no closer of
+      // this width anywhere ahead" refutes without walking anything, which is
+      // the answer for every ordinary document and for the run of unterminated
+      // openers that would otherwise make this quadratic. And it is left
+      // reading RAW lines deliberately, so that this change moves exactly one
+      // question and not two: a quoted `> %%%` carries its marker and is not in
+      // that index, so a quoted fence whose only closer is quoted still reads
+      // as unterminated and a definition inside it still registers even though
+      // the quote renders empty. carve-rs `71318e91` and carve-php `eb787c0`
+      // answer that exactly as carve-js does while the executable spec oracle
+      // answers it the other way, which makes it a seam of its own.
+      //
+      // A `+`-ATTACHED BLOCK SITS AT THE MARKER'S COLUMN, not the item's. §17
+      // lets `+` attach a FLUSH-LEFT block to an item whose content column is
+      // two, and the attached comment then legitimately continues at column 0.
+      // Measured at the item's column instead, it read as leaving the container
+      // on its own first body line, the region never opened, and the definition
+      // inside an invisible comment went live (raised by codex review). This is
+      // the same column `atAnOpenContentColumn` below already prefers, and
+      // `plusColumn` is set on the marker line above, so it is the marker's own
+      // column here and null again after the blank that ends the attachment.
+      //
+      // THE DOCUMENT-LEVEL ARM IS AN OPTIMIZATION, NOT A RULE, and saying so
+      // matters because removing it changes no output. With no container the
+      // scan's boundary is the end of input, and every RAW `%` run is also a
+      // run in the stripped view - stripping removes prefixes, it cannot remove
+      // the run - so the scan can only ever confirm what the index just said.
+      // What it skips is BUILDING the line index: an ordinary 300 KB document
+      // carrying one `%%%` block pays 127ms with this arm and 137ms without.
+      const commentScope: PrepassScope = {
+        quoteDepth: rawQuoteDepth,
+        contentCol: plusColumn ?? contentCol,
+      }
+      const opensRegion =
+        open !== null &&
+        commentBlockHasCloser(lexer, open[1]!.length, idx) &&
+        (commentScope.quoteDepth === 0 && commentScope.contentCol === 0
+          ? true
+          : commentCloserInScope(lexer, open[1]!.length, idx, commentScope, commentScopeMemo))
+      if (open && opensRegion) {
         commentFence = open[1]!.length
         paraState = 'no'
         continue
@@ -3886,6 +3962,199 @@ function exactCloserPossible(last: Map<number, number>, len: number, after: numb
  */
 function commentBlockHasCloser(lexer: Lexer, fence: number, after: number = lexer.pos): boolean {
   return exactCloserPossible(closerIndex(lexer).comment, fence, after)
+}
+
+/**
+ * From a `%%%` opener at line `from`, is there a matching closer BEFORE THE
+ * CONTAINER THE OPENER SITS IN ENDS?
+ *
+ * The definition prepass's own bound, and the reason it cannot use the
+ * document-wide index: a fence inside a list item or a quote is bounded by that
+ * container, so the closer has to arrive before the first non-blank line that
+ * leaves it, with blank lines transparent (carve-js#1146). `scopeHoldsLine` is
+ * the same container test the fence, verse and depth trackers in this pass
+ * already share, so all four agree on what "still inside" means.
+ *
+ * THE SCOPE IS ASKED BEFORE THE CLOSER, which is the opposite of the order the
+ * CODE fence uses a few hundred lines up - and the two orders are both right,
+ * because the two fence kinds close differently. A code fence re-bases its
+ * closer on the column it opened at, so a run written at column 0 for a fence
+ * opened at an item's content column is its closer by construction and has to
+ * be read before the container question. A comment fence has no such re-basing:
+ *
+ * ````
+ * - item
+ *   %%%
+ *   [r]: /url
+ * %%%
+ * ````
+ *
+ * The column-0 run ENDS THE ITEM, so it is not inside the fence's container and
+ * closes nothing; the opener degrades to a line comment and `[r]: /url` is an
+ * ordinary definition. Reading the closer first opened a region over it and the
+ * definition vanished. Verified against the executable spec oracle.
+ *
+ * A CLOSER IS WHATEVER THE LOOP THAT CONSUMES THE REGION WOULD CLOSE ON, i.e.
+ * a `%` run of this width in the `stripContainerPrefixes` view - see
+ * `commentRunLines`. Reading raw lines here instead looked like the smaller
+ * change and was not: a quoted fence with a quoted closer, plus any raw run of
+ * its width later in the document, passed the index and then found no closer in
+ * scope, so a definition the author had commented out went live. The raw-line
+ * question survives where it belongs, in the index that answers first.
+ *
+ * The scan is bounded by the container, so it is linear in that container
+ * rather than in the document, and it is reached only for an opener that HAS a
+ * container - a document-level opener keeps the O(1) index, where the
+ * unbounded question is the correct one anyway.
+ */
+function commentCloserInScope(
+  lexer: Lexer,
+  fence: number,
+  from: number,
+  scope: PrepassScope,
+  memo: CommentScopeMemo,
+): boolean {
+  const end = commentScopeEnd(lexer, from, scope, memo)
+  const at = commentRunLines(lexer).get(fence)
+  if (at === undefined) return false
+  // The first line of this width strictly after the opener. `at` is ascending,
+  // so a binary search answers it without walking the container - which is what
+  // keeps a run of openers inside one item linear rather than quadratic.
+  let lo = 0
+  let hi = at.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (at[mid]! <= from) lo = mid + 1
+    else hi = mid
+  }
+
+  return lo < at.length && at[lo]! < end
+}
+
+/**
+ * Every line carrying a `%` run, keyed by run length and ascending.
+ *
+ * Read through `stripContainerPrefixes`, which is the view the loop that
+ * CONSUMES the region closes on - so the scan and the close agree line for
+ * line, and a quoted `> %%%` counts here exactly as it counts there. Built once
+ * per lexer, and only for a document that opens a comment fence inside a
+ * container at all.
+ */
+function commentRunLines(lexer: Lexer): Map<number, number[]> {
+  if (lexer.commentRunLines !== undefined) return lexer.commentRunLines
+  const m = new Map<number, number[]>()
+  for (let i = 0; i < lexer.lines.length; i++) {
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[i - 1] ?? ''))
+    const c = RE_COMMENT_BLOCK_ANY.exec(stripContainerPrefixes(lexer.lines[i]!, afterTerm))
+    if (c === null) continue
+    const len = c[1]!.length
+    const at = m.get(len)
+    if (at !== undefined) at.push(i)
+    else m.set(len, [i])
+  }
+  lexer.commentRunLines = m
+
+  return m
+}
+
+/**
+ * The scan a `commentCloserInScope` boundary needs, remembered across the
+ * openers that share it.
+ *
+ * The boundary is a function of the lines and the scope alone, so the first
+ * line that ends a given scope is the same one for every opener BEFORE it.
+ * Openers are visited in ascending order, so one entry per scope is enough: a
+ * run of openers inside one container walks it once between them all instead of
+ * once each. Without any memo, 2000 openers in one item cost 316ms against
+ * 16ms.
+ *
+ * ONE ENTRY IN TOTAL WAS NOT ENOUGH. A document alternating openers at an outer
+ * scope with openers one item deeper evicted the single entry on every unit, so
+ * every outer opener rescanned the rest of the document - 2000 such units took
+ * 1295ms against 75ms (raised by codex review). Keyed by scope, each container
+ * keeps its own boundary and the alternation costs nothing.
+ */
+type CommentScopeMemo = Map<string, { from: number; end: number }>
+
+/**
+ * The first line after `from` at which the opener's container is over.
+ *
+ * A DEDENT ALONE DOES NOT END IT, which is where this parts company with
+ * `scopeHoldsLine` and has to. The trackers that share that helper ask it of a
+ * region the parser has ALREADY opened, where a dedent really does leave the
+ * container. This one asks about a region that may not open at all, and a plain
+ * dedented line inside a list item or below a quote is a LAZY CONTINUATION -
+ * the item keeps it, the comment keeps it, and nothing has left anything:
+ *
+ * ````
+ * - a
+ *   %%%
+ * x
+ *   [r]: /url
+ *   %%%
+ * ````
+ *
+ * `x` and the definition are both inside the comment - carve-js renders neither
+ * - so a boundary that ended at `x` would decide the fence never closed and put
+ * a definition the author commented out into the link table. Three rounds of
+ * codex review at high effort found four separate spellings of exactly that,
+ * each one a lazy line the block parser keeps: a dedent to column 0, a dedent to
+ * an enclosing item's own content column, a `+` continuation marker, and a
+ * marker line.
+ *
+ * SO ONLY ONE SHAPE ENDS IT: a blank line followed by a non-blank line that
+ * leaves the quote or falls below the column. That is the shape no lazy
+ * continuation can wear - a blank line closes the paragraph a lazy line would
+ * have folded into, so what follows it at the outer level is a new block there.
+ *
+ * The bound this leaves is deliberately LOOSER than the container really is,
+ * and that direction is the safe one: a scope that reaches too far can only
+ * make a region OPEN that would otherwise have degraded, which hides a
+ * definition the parser also hides. The opposite error publishes one out of an
+ * invisible comment. It is why a closer written at column 0 with NO blank line
+ * above it still closes an item-scoped fence here, which is the one row of
+ * carve-js#1146 this does not move.
+ */
+function commentScopeEnd(
+  lexer: Lexer,
+  from: number,
+  scope: PrepassScope,
+  memo: CommentScopeMemo,
+): number {
+  const key = `${scope.quoteDepth}|${scope.contentCol}`
+  const e = memo.get(key)
+  if (e !== undefined && from >= e.from && from < e.end) return e.end
+  let end = lexer.lines.length
+  for (let i = from + 1; i < lexer.lines.length; i++) {
+    const raw = lexer.lines[i]!
+    // The blank-line half first: it is two array reads, where the quote and
+    // column measurements below are regexes, and it rejects almost every line.
+    if (isBlankLine(raw) || !isBlankLine(lexer.lines[i - 1] ?? '')) continue
+    // AND A CONTINUATION MARKER IS NOT A DEPARTURE. `+` at column 0 after a
+    // blank line attaches the next block to the item rather than ending it
+    // (PART 17), so the fence is still inside its container and the closer
+    // below the marker is still its own. Taken as the boundary, the region
+    // never opened and the definition inside it went live while the comment
+    // body above it stayed invisible - the leak, one marker over (raised by
+    // codex review).
+    if (isContinuationMarker(raw)) continue
+    const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
+    const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
+    const depth = Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker))
+    const view = raw.replace(/^(?:>(?: |$))+/, '')
+    if (
+      depth < scope.quoteDepth ||
+      // VISUAL COLUMNS, the way the parser measures reach: a tab is worth up to
+      // four. The cap keeps it O(the column) rather than O(the indentation run).
+      (scope.contentCol > 0 && indentColumns(view, scope.contentCol) < scope.contentCol)
+    ) {
+      end = i
+      break
+    }
+  }
+  memo.set(key, { from, end })
+
+  return end
 }
 
 /**
