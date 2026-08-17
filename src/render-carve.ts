@@ -649,12 +649,36 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
 
       return withAttrs(headingBody)
     }
-    case 'paragraph':
-      return withAttrs(
-        guardThematicBreakLines(
-          renderInlines(node.children, ctx, attrs === '' && ctx.paragraphStartsAfterCaptionHost),
-        ),
+    case 'paragraph': {
+      const text = guardThematicBreakLines(
+        renderInlines(node.children, ctx, attrs === '' && ctx.paragraphStartsAfterCaptionHost),
       )
+      // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
+      // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
+      // return one stanza as two; a comment-only line is the one construct that
+      // leaves an empty verse line instead of rewriting it, and the block layer
+      // removes it before the inline run exists - so `%%` re-reads to exactly
+      // the empty line it was written for.
+      //
+      // It reaches here from a verbatim run that swallowed such a line: the run
+      // keeps the emptied line as a NEWLINE in its value, and that newline has
+      // to come back out as an empty line. §7c already spells the OTHER source
+      // of one, the empty-content `hard_break`, with a backslash, so no line
+      // arriving here is a break.
+      //
+      // A line block's children are its stanzas, so the guard is the whole
+      // scope: every empty line in this string is interior to one stanza.
+      //
+      // The lookahead is what keeps the LAST newline out of it. §7c writes the
+      // trailing `hard_break` of a last body line as `\` plus the newline it
+      // consumes, so the stanza ends in one - and the position after it is the
+      // closing fence, not an empty verse line.
+      if (ctx.lineBlockDepth > 0) {
+        return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
+      }
+
+      return withAttrs(text)
+    }
     case 'code_block': {
       const fence = safeFence(node.content, 3)
       const info = codeFenceInfo(node.lang, node.header, node.label)

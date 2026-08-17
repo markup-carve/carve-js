@@ -4953,6 +4953,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       if (!anchorable) stripPositions([line.comment])
       pendingComments.set(index, line.comment)
     })
+    const survivingBreaks = new Set(breakIndex.values())
     const inline: InlineNode[] = []
     for (const node of parsed) {
       if (node.type !== 'soft_break') {
@@ -4975,12 +4976,23 @@ function parseLineBlock(lexer: Lexer): LineBlock {
 
       inline.push(hardBreak)
     }
-    // What is left is a comment on the stanza's LAST line, which has no break
-    // after it, or one whose boundary an open verbatim run swallowed. Both keep
-    // the node - dropping it would lose an author's line from the tree - and
-    // both put it after the content it followed.
+    // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
+    // so it goes at the end - the boundary that opens its line is still there,
+    // which is what says the line is still there.
+    //
+    // A COMMENT AN OPEN RUN SWALLOWED does not survive, and that is §23's own
+    // account of the shape rather than a loss: what the run carries across the
+    // emptied line is a NEWLINE, the same thing it carries across every other
+    // boundary it swallows. There is no boundary left in the tree to host the
+    // node, and appending one anyway put a span BEFORE the run that contains it
+    // and after the node that follows it, which PART 12 containment refuses.
+    // The writer keeps the LINE - an empty verse line has exactly one spelling
+    // inside an open run, and it is a comment line.
     for (const index of [...pendingComments.keys()].sort((a, b) => a - b)) {
-      inline.push(pendingComments.get(index)!)
+      const isLastLine = index === lines.length - 1
+      if (isLastLine && (index === 0 || survivingBreaks.has(index - 1))) {
+        inline.push(pendingComments.get(index)!)
+      }
     }
 
     const paragraph: Paragraph = { type: 'paragraph', children: inline }
