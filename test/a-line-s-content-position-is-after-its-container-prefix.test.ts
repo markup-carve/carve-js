@@ -110,23 +110,26 @@ describe("a line's content position is after its container prefix", () => {
   })
 })
 
-describe('a decision survives the container that re-runs the pass', () => {
-  it('keeps a quoted hash inside an admonition that has a title of its own', () => {
-    // THE CASE THE SECOND SENTINEL EXISTS FOR, and the only shape that reaches
-    // it. The pass runs on a block's way out and is skipped for a block that
-    // emitted no authored hash, so a plain container never re-reads its
-    // children. An admonition with a TITLE renders inlines of its own, so it
-    // does run the pass again - over text that already carries the quote
-    // marker its child wrote.
+describe('a decision survives the container that would re-read it', () => {
+  it('keeps a nested quote\u2019s hash when the outer quote has one of its own', () => {
+    // THE CASE THE SECOND SENTINEL EXISTS FOR. The inner quote answers M2b on
+    // its own content and the outer one answers it on content that already
+    // carries the inner marker. Recorded as a distinct sentinel the inner
+    // answer is inert to that second pass; left undecided it is measured again
+    // against `> # deep`, scores as mid-line, and the outer marker takes the
+    // escape straight back off - markup-carve/carve#1330 returning by the back
+    // door.
     //
-    // Recording the answer as a distinct sentinel is what makes that re-run
-    // inert. Left undecided, the hash is measured a second time against
-    // `> # heading`, scores as mid-line, and the quote marker takes the escape
-    // straight back off - which is markup-carve/carve#1330 returning through
-    // the back door.
-    //
-    // Hand-built rather than parsed: the title has to carry an authored hash
-    // for the pass to re-run at all, and that is the whole trigger.
+    // The outer quote must carry a hash of ITS OWN, or it skips the pass
+    // entirely and the case proves nothing.
+    expect(md('> \\# outer\n>\n> > \\# deep')).toBe('> \\# outer\n>\n> > \\# deep')
+  })
+
+  it('keeps a quoted hash under an admonition, which prefixes nothing', () => {
+    // The other side of the same boundary: an admonition is not a container
+    // this target prefixes, so it settles nothing and the quote inside it is
+    // what decides. Hand-built because the title has to carry a hash too - the
+    // title's own is mid-line and loses its escape, the quoted one keeps it.
     const hash: InlineNode = { type: 'escaped_text', value: '#' }
     const doc: Document = {
       type: 'document',
@@ -147,9 +150,60 @@ describe('a decision survives the container that re-runs the pass', () => {
       ],
     }
 
-    // The title's own hash is mid-line and loses its escape; the quoted one
-    // stands at the content position of the line its block wrote and keeps it.
     expect(renderMarkdown(doc)).toBe('**C# tips**\n\n> \\# heading\n')
+  })
+})
+
+describe('the position is settled after the trim that shapes the line', () => {
+  it('reads a hash the trim moves to column 0 as being at column 0', () => {
+    // A BLOCK DOES NOT KNOW WHETHER ITS OWN LEADING WHITESPACE SURVIVES. Four
+    // spaces in front of the hash stay where the paragraph sits mid-document
+    // and are trimmed away where it is the first block of the document or of a
+    // container. Deciding before that trim scored the hash as over-indented and
+    // emitted it bare, and the trim then put the bare hash at column 0 - a
+    // heading where the author wrote text, which is the same corruption this
+    // clause exists to prevent, arriving from the other direction.
+    //
+    // Hand-built: the parser does not keep leading whitespace on a paragraph,
+    // and an ingested tree is a document this target has to render correctly.
+    const hash: InlineNode = { type: 'escaped_text', value: '#' }
+    const indented = (lead: string): Document => ({
+      type: 'document',
+      children: [
+        {
+          type: 'paragraph',
+          children: [{ type: 'text', value: lead }, hash, { type: 'text', value: ' heading' }],
+        },
+      ],
+    })
+
+    expect(renderMarkdown(indented('    '))).toBe('\\# heading\n')
+    expect(renderMarkdown(indented('\t'))).toBe('\\# heading\n')
+    expect(renderMarkdown(indented('  '))).toBe('\\# heading\n')
+  })
+
+  it('does the same for the first block inside a container', () => {
+    const hash: InlineNode = { type: 'escaped_text', value: '#' }
+    const doc: Document = {
+      type: 'document',
+      children: [
+        {
+          type: 'block_quote',
+          children: [
+            {
+              type: 'paragraph',
+              children: [
+                { type: 'text', value: '    ' },
+                hash,
+                { type: 'text', value: ' heading' },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+
+    expect(renderMarkdown(doc)).toBe('> \\# heading\n')
   })
 })
 
@@ -167,5 +221,31 @@ describe('the sentinels M2b decides on never come from the author', () => {
     // The characters below it were always stripped; asserted alongside so the
     // range is pinned at both ends rather than at the end that moved.
     expect(md('a \ue005 b')).toBe('a  b')
+  })
+
+  it('strips one carried on a stored smart-punctuation node', () => {
+    // The other way in. Both branches of that node emit a value straight off
+    // the tree, so a stored document could hand the resolve pass a sentinel it
+    // would read as an escape decision and write out as a backslash the
+    // document never held.
+    const withSentinel = (value: string): Document => ({
+      type: 'document',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: 'a ' },
+            { type: 'smart_punctuation', kind: 'ellipsis', value },
+            { type: 'text', value: ' b' },
+          ] as InlineNode[],
+        },
+      ],
+    })
+
+    for (const code of ['\ue005', '\ue007', '\ue008']) {
+      expect(renderMarkdown(withSentinel(`x${code}y`), { smartTypography: 'source' })).toBe(
+        'a xy b\n',
+      )
+    }
   })
 })

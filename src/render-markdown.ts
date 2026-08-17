@@ -123,6 +123,49 @@ interface MarkdownContext {
   authoredHashes: number
 }
 
+/**
+ * The finished content of a container, trimmed and with PART 11 section 8b M2b
+ * ANSWERED ON IT, ready for the caller to put its prefix in front.
+ *
+ * Every call site is a place the writer prefixes a container's lines, and that
+ * is the whole of the list: the block quote marker, the list and task marker
+ * with the alignment section 10 gives the lines under it, the footnote
+ * definition marker, the definition marker. M2b measures on the EMITTED LINE
+ * and a line's content position is after its container prefix
+ * (markup-carve/carve#1330), so the question has to be settled here - after the
+ * trim, which is part of the shape of the line, and before the prefix, which is
+ * what the position is measured past.
+ *
+ * A HEADING IS NOT A CONTAINER and does not call this. Its `## ` belongs to the
+ * block's own line, so the hash behind it stays mid-line and loses the escape,
+ * which is the reading CommonMark gives it. Neither is a table cell: `| ` opens
+ * no container either. Both are left to the resolve pass at the end, which
+ * measures on the finished document - the right answer for a line no container
+ * encloses, and the wrong one for a line inside a container, which is why these
+ * sites exist.
+ *
+ * DECIDING EARLIER DOES NOT WORK, and the trim is why. A block does not know
+ * whether the whitespace it wrote at the start of its first line survives:
+ * a paragraph opening with four spaces keeps them mid-document and loses them
+ * as the first block of a quote or of the document. Answering M2b before that
+ * trim scored the hash as over-indented and emitted it bare, and the trim then
+ * put it at column 0 - a heading where the author wrote text.
+ *
+ * The counter is what keeps this from costing anything. A nested container
+ * decides on its own way out and leaves the count where it found it, so an
+ * outer one that added no hash of its own never touches the text - which
+ * matters for exactly the shape carve-js#701 fixed, where re-scanning a subtree
+ * once per enclosing level is quadratic in the nesting depth.
+ */
+function containerContent(ctx: MarkdownContext, render: () => string): string {
+  const before = ctx.authoredHashes
+  const content = trimNonNbsp(render())
+  if (ctx.authoredHashes === before) return content
+  ctx.authoredHashes = before
+
+  return decideAuthoredHashes(content)
+}
+
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.blockDepth++
@@ -175,32 +218,7 @@ function withMarker(marker: string, content: string): string {
   return marker.replace(/ +$/, '')
 }
 
-/**
- * A block's text, with PART 11 section 8b M2b already answered on it.
- *
- * THE DECISION HAS TO HAPPEN HERE, at the boundary between a block writing its
- * own line and a container prefixing that line, because that is the last point
- * at which the two are distinguishable (markup-carve/carve#1330). It is also
- * the only point that needs no list of container kinds: whatever an enclosing
- * container puts in front of this text is a prefix because it arrives after.
- *
- * The counter is what keeps it from costing anything. A container's children
- * decide on their own way out and leave the count where they found it, so a
- * container that renders no inlines of its own reads an unchanged count and
- * never touches the text - which matters for exactly the shape carve-js#701
- * fixed, where re-scanning a subtree once per enclosing level is quadratic in
- * the nesting depth.
- */
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
-  const authoredHashesBefore = ctx.authoredHashes
-  const out = renderBlockText(node, ctx)
-  if (ctx.authoredHashes === authoredHashesBefore) return out
-  ctx.authoredHashes = authoredHashesBefore
-
-  return decideAuthoredHashes(out)
-}
-
-function renderBlockText(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'heading': {
       // A folded heading's line join takes PART 7's four characters. The class
@@ -227,7 +245,7 @@ function renderBlockText(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
-      const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
+      const lines = containerContent(ctx, () => renderBlocks(node.children, ctx)).split('\n')
       return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
     case 'list':
@@ -341,7 +359,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     } else {
       prefix = `${bullet} `
     }
-    const content = trimNonNbsp(renderListItem(item, ctx))
+    const content = containerContent(ctx, () => renderListItem(item, ctx))
     const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
@@ -372,7 +390,8 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   let out = ''
   for (const item of items) {
     for (const term of item.terms) out += `**${renderInlines(term, ctx)}**\n`
-    for (const def of item.definitions) out += `${withMarker(': ', trimNonNbsp(renderBlocks(def, ctx)))}\n`
+    for (const def of item.definitions)
+      out += `${withMarker(': ', containerContent(ctx, () => renderBlocks(def, ctx)))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -494,7 +513,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx))))}\n`
+    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))}\n`
   }
   return out
 }
@@ -732,9 +751,16 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'smart_punctuation':
       // Source mode reproduces what the author typed; the glyph is a
       // presentation choice a machine consumer cannot reverse.
-      return ctx.smartTypography === 'source'
-        ? node.value
-        : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
+      // STRIPPED LIKE EVERY OTHER AUTHOR FIELD. Both branches emit a value
+      // off the node, and a stored tree can carry anything in it - including a
+      // sentinel from the range below, which the resolve pass would then read
+      // as an escape decision and write out as a backslash the document never
+      // held. `code` has always stripped for the same reason.
+      return stripControls(
+        ctx.smartTypography === 'source'
+          ? node.value
+          : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value),
+      )
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown inline ${(t as { type: string }).type}`)
@@ -1256,20 +1282,19 @@ function resolveNarrowedEscapes(text: string): string {
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
     const ch = character(s)
-    // TWO FAMILIES, TWO TESTS, AND ONLY ONE OF THEM IS STILL OPEN HERE. M1b
+    // TWO FAMILIES, TWO TESTS, AND A THIRD CASE THAT IS ALREADY SETTLED. M1b
     // asks whether a delimiter of the same character stands beside the
-    // candidate, which is a question about the assembled line and is answered
-    // here. M2b asks WHERE ON THE LINE the candidate stands, and a line's
-    // content position is after its container prefix - so that one was
-    // answered by `decideAuthoredHashes` at the block that wrote the line,
-    // before any container prefixed it, and what arrives here is the answer.
-    //
-    // An UNDECIDED hash keeps its escape. It should not be reachable: every
-    // path that renders inlines runs inside a block, and every block decides
-    // on its way out. Should one ever open, keeping the author's backslash
-    // leaves text as text, which is the failure that cannot corrupt a
-    // document - dropping it is what returns an escaped hash as a heading.
-    const keep = s in AUTHORED_CHARACTER || adjacentToLiveDelimiter(line, offset, ch)
+    // candidate. M2b asks WHERE ON THE LINE the candidate stands, and this is
+    // the finished document, so the answer it gets here is the answer for a
+    // line NO CONTAINER ENCLOSES - which is the only kind that reaches it
+    // undecided. A line inside a container had its position settled at the
+    // prefix site, where the prefix was still separable from the content
+    // (markup-carve/carve#1330), and arrives carrying that answer.
+    const keep =
+      s === AUTHORED_KEPT ||
+      (s in AUTHORED_CHARACTER
+        ? opensAnAtxHeading(line, offset)
+        : adjacentToLiveDelimiter(line, offset, ch))
 
     return keep ? `\\${ch}` : ch
   })
