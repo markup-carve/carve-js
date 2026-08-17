@@ -7195,7 +7195,15 @@ function parseTable(lexer: Lexer): Table | Figure {
 export function splitTableRowSpans(line: string): Array<{ text: string; start: number }> {
   const cells: Array<{ text: string; start: number }> = []
   let buf = ''
-  let inCode = false
+  // The length of the backtick run that opened the verbatim span this scan is
+  // inside, or 0 when it is outside one. A BOOLEAN was not enough: a verbatim
+  // run opens on a run of N backticks and closes only on a run of EXACTLY N
+  // (`verbatimSpanEnd`, PART 9 §22), so toggling once per backtick read the
+  // second backtick of ` ``x ` as a CLOSER and left the scan outside a run that
+  // is still open - the interior `|` then split the row where the inline pass
+  // reads content. One production, two spellings, and only the one-backtick
+  // shape agreed (markup-carve/carve#1293, corpus category 328).
+  let openRun = 0
   let i = 0
   // Skip the leading row marker: `|` (standard) or `+` (continuation)
   if (line[0] === '|' || line[0] === '+') i = 1
@@ -7216,7 +7224,19 @@ export function splitTableRowSpans(line: string): Array<{ text: string; start: n
   const scanEnd = bodyEnd > i && line[bodyEnd - 1] === '|' ? bodyEnd - 1 : line.length
   for (; i < scanEnd; i++) {
     const ch = line[i]!
-    if (ch === '`') inCode = !inCode
+    if (ch === '`') {
+      // The MAXIMAL run, as the opener is: a run cannot cross `scanEnd`, whose
+      // character is the row's closing `|`.
+      let run = 1
+      while (line[i + run] === '`') run++
+      if (openRun === 0) openRun = run
+      else if (run === openRun) openRun = 0
+      // A run of any other length inside an open one is content, and so is the
+      // opener and the closer themselves.
+      buf += line.slice(i, i + run)
+      i += run - 1
+      continue
+    }
     if (ch === '\\' && line[i + 1] === '|') {
       // Keep the escape. It stops the pipe SPLITTING the row - that is this
       // loop's job - but resolving it here too made a cell the one place in the
@@ -7227,7 +7247,7 @@ export function splitTableRowSpans(line: string): Array<{ text: string; start: n
       i++
       continue
     }
-    if (ch === '|' && !inCode) {
+    if (ch === '|' && openRun === 0) {
       cells.push({ text: buf, start: cellStart })
       buf = ''
       cellStart = i + 1

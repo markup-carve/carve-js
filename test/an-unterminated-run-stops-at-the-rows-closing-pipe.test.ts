@@ -101,6 +101,46 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
     )
   })
 
+  it('a MULTI-backtick run reaches the closing pipe the same way', () => {
+    // A verbatim run opens on a run of N backticks and closes only on a run of
+    // EXACTLY N (§22). The splitter toggled once per backtick, so the second
+    // backtick of ` ``b ` read as the CLOSER, the scan believed it was outside a
+    // run, and the interior `|` split a row the inline pass reads as one cell:
+    // `<td>a <code>b</code></td><td>c</td>` for a document with one column.
+    // One production, two spellings, and only the one-backtick shape agreed
+    // (corpus 328-…-stops-at-the-closing-pipe-4). carve-rs `b6ff319c` produces
+    // this.
+    expect(html('| a ``b | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b | c</code></td></tr>\n  </tbody>\n</table>',
+    )
+    // Three, so the fix cannot be "two backticks" either.
+    expect(html('| a ```b | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b | c</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('a run of the WRONG length does not close a multi-backtick run', () => {
+    // The interior single backtick is content, so the run is still open at the
+    // `|` and the row keeps one cell. A splitter that closed on any run would
+    // split here.
+    expect(html('| a ``b `c | d |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b `c | d</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('a CLOSED multi-backtick run still leaves the pipe splitting', () => {
+    // The control for the row above: with the run closed, the scan is outside
+    // one and the pipe is a delimiter again. A fix that never left the run
+    // would fail this.
+    expect(html('| a ``b`` | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b</code></td><td>c</td></tr>\n  </tbody>\n</table>',
+    )
+    // And a pipe INSIDE the closed run is still content.
+    expect(html('| a ``b | c`` | d |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b | c</code></td><td>d</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
   it('a `+` continuation closes a run opened on the base row', () => {
     // The continuation row ends at its own closing pipe too, so the fragment it
     // contributes is `c\``, which closes the run the base row opened. carve-php
