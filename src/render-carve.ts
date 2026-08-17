@@ -1546,6 +1546,7 @@ function renderInlines(
         lastBoundary(nodes[idx - 1]),
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
+        opensBacktickRun(nodes[idx + 1]),
       )
       // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
       // live here and not in `renderInline`: the answer is a property of the
@@ -1653,6 +1654,15 @@ function renderInline(
   prevChar = '',
   nextChar = '',
   captionCanOpen = false,
+  /**
+   * Whether the node AFTER this one is written starting with a backtick run.
+   *
+   * `firstBoundary` cannot answer it: for a code span it reports the span's
+   * first CONTENT character, not the backtick that actually starts the piece.
+   * §27 binds `!` to a FOLLOWING BACKTICK RUN, so a text node ending in `!`
+   * needs to know (carve-js#1175).
+   */
+  nextOpensBacktickRun = false,
 ): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
@@ -1661,7 +1671,7 @@ function renderInline(
   const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
   switch (node.type) {
     case 'text':
-      return escapeText(cleanEscapedText(node), captionCanOpen)
+      return escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
     case 'escaped_text':
       // The author escaped this character; the writer says so again. No
       // minimal/conservative decision applies - the node IS the decision.
@@ -2464,7 +2474,7 @@ function guardThematicBreakLines(body: string): string {
  */
 const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
-function escapeText(text: string, captionCanOpen = false): string {
+function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
   let out = text
     .replace(UNWRITABLE_CONTROLS, '')
@@ -2494,6 +2504,19 @@ function escapeText(text: string, captionCanOpen = false): string {
     out[1] === ' '
   ) {
     out = '\\' + out
+  }
+  // A TRAILING `!` BEFORE A BACKTICK RUN is escaped in EVERY mode too, for the
+  // same reason and with the same shape. §27 makes `!` immediately before a
+  // verbatim run an INLINE LITERAL, and names this as the single case the
+  // construct reinterprets: "A literal `!` immediately before a backtick run is
+  // therefore written `\!`". So the escape is not optional - it is the only
+  // spelling of this tree - and leaving the minimal pass to discover that by
+  // failing its redundancy check escalated the WHOLE DOCUMENT to conservative
+  // escaping. `foo (bar) 50% a-b` in a document that also holds a `!` before a
+  // code span came out `foo \(bar\) 50\% a\-b`, which is the over-escaping PART
+  // 11 §4 forbids, while carve-rs wrote the whole line bare (carve-js#1175).
+  if (escapeMode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
+    out = out.slice(0, -1) + '\\!'
   }
   if (escapeMode === 'minimal') return out
   // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
@@ -2688,6 +2711,27 @@ function escapeCrossrefTarget(text: string): string {
 
 function escapeCriticText(text: string): string {
   return text.replace(/[\\{}]/g, '\\$&')
+}
+
+/**
+ * Whether this node's written form STARTS with a backtick run.
+ *
+ * The two that do are the code span and the raw inline, both of which go
+ * through `renderCode`. Inline math opens with `$` and an inline literal with
+ * `!`, so neither is one - the `!` that §27 binds has to reach the backtick
+ * itself, with nothing between.
+ *
+ * EMPTY CONTENT IS NOT ONE OF THEM. `renderCode('')` writes the fence twice
+ * with nothing between, so the two backticks read back as a single UNCLOSED
+ * run of two rather than a closed span - and §27 binds `!` to a run that
+ * closes. `` !`` `` is a `text` beside an empty `code` on the way in and on the
+ * way out, so the channel never opens and escaping the `!` would be exactly the
+ * guard corpus 304 refuses.
+ */
+function opensBacktickRun(node: InlineNode | undefined): boolean {
+  if (node?.type === 'code') return node.value !== ''
+  if (node?.type === 'raw_inline') return node.content !== ''
+  return false
 }
 
 function firstBoundary(node: InlineNode | undefined): string {
