@@ -2720,9 +2720,18 @@ function escapeCriticText(text: string): string {
  * through `renderCode`. Inline math opens with `$` and an inline literal with
  * `!`, so neither is one - the `!` that §27 binds has to reach the backtick
  * itself, with nothing between.
+ *
+ * EMPTY CONTENT IS NOT ONE OF THEM. `renderCode('')` writes the fence twice
+ * with nothing between, so the two backticks read back as a single UNCLOSED
+ * run of two rather than a closed span - and §27 binds `!` to a run that
+ * closes. `` !`` `` is a `text` beside an empty `code` on the way in and on the
+ * way out, so the channel never opens and escaping the `!` would be exactly the
+ * guard corpus 304 refuses.
  */
 function opensBacktickRun(node: InlineNode | undefined): boolean {
-  return node?.type === 'code' || node?.type === 'raw_inline'
+  if (node?.type === 'code') return node.value !== ''
+  if (node?.type === 'raw_inline') return node.content !== ''
+  return false
 }
 
 function firstBoundary(node: InlineNode | undefined): string {

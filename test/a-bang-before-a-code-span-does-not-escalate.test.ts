@@ -60,6 +60,21 @@ describe('a `!` before a code span does not escalate the document', () => {
     expect(carveToCarve(`${PROSE}\n\n\`l\na\n`)).toBe(`${PROSE}\n\n\`l\na\`\n`)
   })
 
+  it('CONTROL: an EMPTY code span is not a run that closes, so no escape', () => {
+    // `renderCode('')` writes the fence twice with nothing between, and two
+    // adjacent backticks read back as a single UNCLOSED run of two - never a
+    // `literal_inline`. The `!` opens no channel here, so escaping it would be
+    // the guard corpus 304 refuses. Raised by `codex review` on this branch and
+    // measured against `main`, which writes both of these bare.
+    expect(carveToCarve('!``\n')).toBe('!``\n')
+    expect(carveToCarve('a!``\n')).toBe('a!``\n')
+    expect(carveToCarve(`${PROSE}\n\n!\`\`\n`)).toBe(`${PROSE}\n\n!\`\`\n`)
+  })
+
+  it('CONTROL: but a run holding only a SPACE does close, and stays a literal', () => {
+    expect(carveToCarve('!` `\n')).toBe('!` `\n')
+  })
+
   it('CONTROL: a `!` NOT before a backtick run keeps its bare form', () => {
     // The escape guards one channel, and only where that channel opens.
     expect(carveToCarve('a! b\n')).toBe('a! b\n')
