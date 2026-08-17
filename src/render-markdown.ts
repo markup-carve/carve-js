@@ -1222,13 +1222,34 @@ function resolveNarrowedEscapes(text: string): string {
  * tab or the end of the line. A tag, an issue reference and a hex colour fail
  * the third even at a line's start, which is why the test is spelled on the run
  * rather than on the position alone.
+ *
+ * BOTH CONDITIONS ARE ANSWERED WITHOUT READING THE LINE (carve#1331). The
+ * first spelling searched backward for the line's newline and counted the whole
+ * run of hashes, so a candidate cost O(line) and a line of adjacent authored
+ * hashes - which is all candidates - cost O(n^2): 128KB took 3.3s against 0.1s
+ * before section 8b existed. Neither answer needs the line, because both
+ * conditions are bounded:
+ *
+ * - At most three spaces may precede the character, so the walk back stops
+ *   after four steps and the fourth decides. Anything else standing there means
+ *   the content position is elsewhere on the line, whatever the rest of it
+ *   holds.
+ * - The run has to be six or shorter, so counting stops at seven. The seventh
+ *   hash settles the question and the eight-thousandth cannot change it.
  */
 function opensAnAtxHeading(line: string, offset: number): boolean {
-  const start = line.lastIndexOf('\n', offset - 1) + 1
-  if (!/^ {0,3}$/.test(line.slice(start, offset))) return false
+  // The walk back over the indent, bounded at the four positions that can
+  // decide it. `i` lands on the first character of the run of spaces, so the
+  // line must either start there or carry its newline immediately before it.
+  let i = offset
+  while (i > 0 && line[i - 1] === ' ') {
+    if (offset - i >= 3) return false
+    i--
+  }
+  if (i > 0 && line[i - 1] !== '\n') return false
 
   let run = 0
-  while (line[offset + run] === '#') run++
+  while (run <= 6 && line[offset + run] === '#') run++
   if (run > 6) return false
 
   const after = line[offset + run] ?? '\n'
