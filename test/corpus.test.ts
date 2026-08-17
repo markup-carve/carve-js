@@ -480,6 +480,15 @@ const IMPLEMENTED = new Set([
   // whole value alongside every token. The corpus measured 1143 of 1143 in the
   // same run.
   'url-list-attributes-are-probed-token-wise',
+  // markup-carve/carve#1330. A line's content position is after its container
+  // prefix, so PART 11 section 8b M2b is answered where the block writes its
+  // own line rather than on the finished document, and `> \# heading` keeps the
+  // escape the author wrote instead of coming back through an importer as a
+  // heading. 2 of 2 documents and both `.md` sidecars byte-for-byte. The
+  // narrowing is pinned in the same pair and still holds: `> C\# is a language`
+  // and `- \#tag rest` drop their escapes exactly as they do outside a
+  // container.
+  'an-escaped-hash-keeps-its-escape-at-a-container-s-content-position',
 ])
 
 /**

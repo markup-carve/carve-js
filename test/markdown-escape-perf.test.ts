@@ -32,10 +32,17 @@ import { expectScansLinearly, perfIt } from './helpers/scaling.js'
  *
  * Measured before the fix, per-byte cost at 4x the input: 3.38x for the
  * adjacent shape and 3.72x for the spaced one, against a healthy 1.0x. The
- * asterisk row is the other family (M1b, which decides on the neighbouring
+ * underscore row is the other family (M1b, which decides on the neighbouring
  * delimiter rather than on the line) and was linear throughout; it is here so
  * the target keeps a row for both families rather than only for the one that
  * regressed.
+ *
+ * THE UNDERSCORE IS NOT INTERCHANGEABLE WITH AN ASTERISK HERE, which is the
+ * whole reason the character is named in the row rather than picked for
+ * variety. `NARROWED_SENTINEL` holds `_`, `#` and `[` and nothing else, so an
+ * authored `\*` never becomes a sentinel, `resolveNarrowedEscapes` returns at
+ * its first line, and a row built on asterisks reaches neither family - it
+ * would have measured the renderer at large while reading as a guard on M1b.
  */
 describe('the Markdown target on a line of authored escapes', () => {
   perfIt('a run of adjacent authored hashes scales near-linearly', () => {
@@ -57,9 +64,9 @@ describe('the Markdown target on a line of authored escapes', () => {
     })
   })
 
-  perfIt('a run of adjacent authored asterisks scales near-linearly', () => {
-    expectScansLinearly((input) => void carveToMarkdown(input), '\\*', {
-      label: 'adjacent authored asterisks',
+  perfIt('a run of adjacent authored underscores scales near-linearly', () => {
+    expectScansLinearly((input) => void carveToMarkdown(input), '\\_', {
+      label: 'adjacent authored underscores',
       suffix: '\n',
     })
   })

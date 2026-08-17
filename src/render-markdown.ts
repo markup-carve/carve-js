@@ -94,6 +94,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     abbrBudget: budgetForDocument(ast),
     smartTypography: opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph',
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    authoredHashes: 0,
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -115,6 +116,11 @@ interface MarkdownContext {
    * metacharacters that section 8 M1 requires escaping.
    */
   definedFootnotes: Set<string>
+  /**
+   * Authored hashes emitted since the enclosing block started, so a block that
+   * emitted none skips the M2b pass entirely rather than scanning its subtree.
+   */
+  authoredHashes: number
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
@@ -169,7 +175,32 @@ function withMarker(marker: string, content: string): string {
   return marker.replace(/ +$/, '')
 }
 
+/**
+ * A block's text, with PART 11 section 8b M2b already answered on it.
+ *
+ * THE DECISION HAS TO HAPPEN HERE, at the boundary between a block writing its
+ * own line and a container prefixing that line, because that is the last point
+ * at which the two are distinguishable (markup-carve/carve#1330). It is also
+ * the only point that needs no list of container kinds: whatever an enclosing
+ * container puts in front of this text is a prefix because it arrives after.
+ *
+ * The counter is what keeps it from costing anything. A container's children
+ * decide on their own way out and leave the count where they found it, so a
+ * container that renders no inlines of its own reads an unchanged count and
+ * never touches the text - which matters for exactly the shape carve-js#701
+ * fixed, where re-scanning a subtree once per enclosing level is quadratic in
+ * the nesting depth.
+ */
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
+  const authoredHashesBefore = ctx.authoredHashes
+  const out = renderBlockText(node, ctx)
+  if (ctx.authoredHashes === authoredHashesBefore) return out
+  ctx.authoredHashes = authoredHashesBefore
+
+  return decideAuthoredHashes(out)
+}
+
+function renderBlockText(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'heading': {
       // A folded heading's line join takes PART 7's four characters. The class
@@ -504,7 +535,11 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // section 8a's argument about the two link grammars standing: an author
       // who meant `[a](b)` as text still gets it back.
       if (AUTHORED_INERT.has(node.value)) return node.value
-      if (node.value in AUTHORED_SENTINEL) return AUTHORED_SENTINEL[node.value]!
+      if (node.value in AUTHORED_SENTINEL) {
+        ctx.authoredHashes++
+
+        return AUTHORED_SENTINEL[node.value]!
+      }
       return '\\' + node.value
     case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
@@ -1043,7 +1078,7 @@ function sanitizeMdUrl(url: string): string {
  * acts on the character (\u00a729 T4).
  */
 function stripControls(s: string): string {
-  return s.replace(/[\u000d\u007f-\u009f\ue004-\ue006]/gu, '')
+  return s.replace(/[\u000d\u007f-\u009f\ue004-\ue008]/gu, '')
 }
 
 /**
@@ -1063,7 +1098,7 @@ function stripControls(s: string): string {
  * with a flag.
  */
 function stripDestinationControls(s: string): string {
-  return s.replace(/\p{Cc}|[\ue004-\ue006]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/\p{Cc}|[\ue004-\ue008]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
@@ -1125,11 +1160,40 @@ const AUTHORED_INERT = new Set(['{', '}', '^', ',', '%', ':', '/', '@'])
 const AUTHORED_SENTINEL: Record<string, string> = {
   '#': '\ue007',
 }
+
+/**
+ * The same hash once M2b HAS decided to keep its escape.
+ *
+ * A second state rather than a second character, and the state is what makes
+ * the decision survive its containers. M2b measures on the EMITTED LINE, so it
+ * is answered where the block writes its own line and BEFORE any enclosing
+ * container puts a prefix in front of it. A container that renders inlines of
+ * its own - an admonition title, a table cell, a definition term - runs the
+ * decision pass again over text that already holds its children's answers, and
+ * by then the line it would measure on carries the prefix. An undecided
+ * sentinel would be re-read there and the quote marker would take the escape
+ * straight back off (markup-carve/carve#1330). This one is inert to the pass.
+ *
+ * IT IS ONE UTF-16 UNIT, exactly like the undecided form and like the bare
+ * character both stand for. The pass rewrites in place, so every offset in the
+ * text is unchanged and M1b's view of the line is the view it had before -
+ * spelling the decision as the two characters `\#` instead would shift every
+ * later candidate on the line and change M1b's answers with it.
+ */
+const AUTHORED_KEPT = '\ue008'
 const AUTHORED_CHARACTER: Record<string, string> = {
   '\ue007': '#',
+  '\ue008': '#',
 }
-const RE_NARROWED_SENTINEL = /[\ue004-\ue007]/g
-const HAS_NARROWED_SENTINEL = /[\ue004-\ue007]/
+const RE_NARROWED_SENTINEL = /[\ue004-\ue008]/g
+const HAS_NARROWED_SENTINEL = /[\ue004-\ue008]/
+const RE_UNDECIDED_HASH = /\ue007/g
+const HAS_UNDECIDED_HASH = /\ue007/
+
+/** The bare character a sentinel stands for, for both passes that build a line view. */
+function sentinelCharacter(s: string): string {
+  return NARROWED_CHARACTER[s] ?? AUTHORED_CHARACTER[s]!
+}
 
 /**
  * Whether the candidate at `i` is ADJACENT to an unescaped delimiter of the
@@ -1187,23 +1251,64 @@ function adjacentToLiveDelimiter(line: string, i: number, ch: string): boolean {
  */
 function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
-  const character = (s: string): string => NARROWED_CHARACTER[s] ?? AUTHORED_CHARACTER[s]!
+  const character = sentinelCharacter
   const line = text.replace(RE_NARROWED_SENTINEL, character)
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
     const ch = character(s)
-    // TWO FAMILIES, TWO TESTS. M1b asks whether a delimiter of the same
-    // character stands beside the candidate; M2b asks whether the candidate
-    // stands where an ATX heading could open. Dispatched on which family the
-    // sentinel came from, because the character alone does not say: a `#` in a
-    // text node is M1b's and an author-escaped one is M2b's.
-    const keep =
-      s in AUTHORED_CHARACTER
-        ? opensAnAtxHeading(line, offset)
-        : adjacentToLiveDelimiter(line, offset, ch)
+    // TWO FAMILIES, TWO TESTS, AND ONLY ONE OF THEM IS STILL OPEN HERE. M1b
+    // asks whether a delimiter of the same character stands beside the
+    // candidate, which is a question about the assembled line and is answered
+    // here. M2b asks WHERE ON THE LINE the candidate stands, and a line's
+    // content position is after its container prefix - so that one was
+    // answered by `decideAuthoredHashes` at the block that wrote the line,
+    // before any container prefixed it, and what arrives here is the answer.
+    //
+    // An UNDECIDED hash keeps its escape. It should not be reachable: every
+    // path that renders inlines runs inside a block, and every block decides
+    // on its way out. Should one ever open, keeping the author's backslash
+    // leaves text as text, which is the failure that cannot corrupt a
+    // document - dropping it is what returns an escaped hash as a heading.
+    const keep = s in AUTHORED_CHARACTER || adjacentToLiveDelimiter(line, offset, ch)
 
     return keep ? `\\${ch}` : ch
   })
+}
+
+/**
+ * Answer PART 11 section 8b M2b for every authored hash in one block's text,
+ * on the line THAT BLOCK writes (markup-carve/carve#1330).
+ *
+ * M2b's position is measured on the emitted line, and A LINE'S CONTENT
+ * POSITION IS AFTER ITS CONTAINER PREFIX - the block quote marker, the list or
+ * task marker, the definition marker, the alignment section 10 gives a
+ * continuation line, in whatever combination and to whatever depth. Deriving
+ * that from the finished document would mean parsing the prefixes back off it,
+ * and the item-alignment case cannot be recovered that way at all: a
+ * continuation line under `10. ` carries four spaces of pad, which reads as an
+ * over-indent to anything that does not already know the marker's width. That
+ * is section 10's own reason for refusing to reason about the content alone.
+ *
+ * So it is not derived. The pass runs where the writer HAS the answer: a block
+ * emits its own line, this decides on it, and everything the containers add
+ * afterwards is a prefix by construction, without any of them being named. A
+ * heading is not a container and its `## ` belongs to the block's own line, so
+ * a hash behind it is mid-line and loses the escape - which is the reading
+ * CommonMark gives it.
+ *
+ * THE NARROWING IS UNTOUCHED, and that is the half a correction like this
+ * loses first. Standing behind a prefix is not enough on its own: a hash mid
+ * line still drops its escape inside a quote, and one at the content position
+ * whose run is closed by a letter drops it too, because M2b's reading is
+ * CommonMark's and neither of those opens a heading.
+ */
+function decideAuthoredHashes(text: string): string {
+  if (!HAS_UNDECIDED_HASH.test(text)) return text
+  const line = text.replace(RE_NARROWED_SENTINEL, sentinelCharacter)
+
+  return text.replace(RE_UNDECIDED_HASH, (_s, offset: number) =>
+    opensAnAtxHeading(line, offset) ? AUTHORED_KEPT : '#',
+  )
 }
 
 /**
