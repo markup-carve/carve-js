@@ -4363,6 +4363,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       divDepth: 0,
       lazyFoldable: false,
       inDefList: false,
+      attrRun: null,
     }
     const defFenceMemo: QuotedFenceCloserMemo = new Map()
     /** Feed one collected body line to the S4 tracker. */
@@ -4736,6 +4737,12 @@ type BlockQuoteLazyMode =
 interface BlockQuoteLazyState {
   mode: BlockQuoteLazyMode
   /**
+   * The lines so far of a `{…}` block-attribute block that has not closed yet,
+   * newline-joined, or null when the tracker is not inside one - the quote's
+   * copy of `ItemLazyState.attrRun`, and read the same way.
+   */
+  attrRun: string | null
+  /**
    * Widths of the colon fences open in this quote, innermost last, so a bare
    * `:::` run reads as the innermost container's closer only on an EXACT width
    * match — `collectColonFenceBody`'s rule. A plain counter closed a `::::`
@@ -4802,7 +4809,26 @@ function trackBlockQuoteLazyState(
     if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
     return
   }
+  // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
+  // than instead of them. See `trackItemLazyState` for the whole of the reason;
+  // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
+  // same way.
+  if (trackWrappedAttributeRun(state, content)) {
+    closeBlockQuoteParagraph(state)
+    return
+  }
   if (isBlankLine(content)) {
+    closeBlockQuoteParagraph(state)
+    return
+  }
+  // A block-attribute line renders nothing and opens nothing: it collects into
+  // `pending` and floats forward to the next block (§15 A1/A2), and it does not
+  // survive the container that holds it (markup-carve/carve#1281). So the quote
+  // holds no paragraph after one, and a following flush-left line ends the quote
+  // rather than joining it - which is what leaves A4 with nothing to attach to.
+  // `trackItemLazyState` has read it this way for an item all along; the quote
+  // did not, and kept the line inside.
+  if (isBlockAttributeLine(content)) {
     closeBlockQuoteParagraph(state)
     return
   }
@@ -4931,6 +4957,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const state: BlockQuoteLazyState = {
     mode: { kind: 'closed' },
     colonWidths: [],
+    attrRun: null,
   }
   const fenceCloserMemo: QuotedFenceCloserMemo = new Map()
   while (!lexer.eof()) {
@@ -5469,6 +5496,12 @@ interface ItemLazyState {
   // and not absorbable text - which is why a malformed fence INSIDE an open
   // container arms nothing: the closer below it still has a container to close.
   divDepth: number
+  // The lines so far of a `{…}` block-attribute block that has not closed yet,
+  // newline-joined, or null when the tracker is not inside one. §15 A5 lets the
+  // block WRAP, so the tracker has to hold it open the way it holds a fence
+  // open - otherwise `{.k` / `#x}` reads as two lines of prose and the container
+  // keeps a paragraph nothing opened (markup-carve/carve#1281).
+  attrRun: string | null
 }
 
 /**
@@ -5789,6 +5822,78 @@ function markerLineLeavesParagraphOpen(content: string): boolean {
   return true
 }
 
+/**
+ * Does `content` OPEN a block-attribute block that has not closed on its own
+ * line?
+ *
+ * §15 A5 lets the block WRAP, and one block is one block however many lines it
+ * takes. `isBlockAttributeLine` above answers only for the single-line form,
+ * which is all a tracker handed one line at a time could see - so a body ending
+ * `{.k` / `#x}` read as two lines of prose, the author's braces reached the page
+ * and the attributes reached nothing (markup-carve/carve#1281, corpus
+ * 329-…-container-that-holds-it-6).
+ *
+ * Flush-left only, like `isBlockAttributeLine` and like every caller's own
+ * guard: an indented brace line is lazy paragraph text under the strict column-0
+ * rule (§24 C3), not a floater.
+ */
+function opensWrappedAttributeBlock(content: string): boolean {
+  return content.startsWith('{') && !content.includes('}')
+}
+
+/**
+ * One more line of a wrapped block-attribute run a tracker is standing in.
+ *
+ * `open` while nothing has carried a `}` yet; `attributes` once one has and the
+ * whole run parses; `text` when it does not, or when a blank arrives first - a
+ * blank inside an open brace is not a block, exactly as
+ * `tryCollectBlockAttributes` reads it. A `text` verdict hands the line back to
+ * the caller to classify normally, which is what keeps the run erring toward the
+ * old answer rather than toward closing a container the author kept open.
+ */
+function continueWrappedAttributeBlock(
+  collected: string,
+  content: string,
+): { run: string; verdict: 'open' | 'attributes' | 'text' } {
+  if (isBlankLine(content)) return { run: '', verdict: 'text' }
+  const run = `${collected}\n${content}`
+  if (!content.includes('}')) return { run, verdict: 'open' }
+
+  return { run: '', verdict: parseBlockAttributeRun(run) !== null ? 'attributes' : 'text' }
+}
+
+/**
+ * Advance a lazy-state tracker's wrapped-attribute run by one line, and say
+ * whether that line CLOSED one.
+ *
+ * ALONGSIDE THE CLASSIFIERS, NEVER INSTEAD OF THEM. A `{` with no `}` after it
+ * anywhere is not a block at all - the collector refuses it and the lines are
+ * the prose they look like - and a streaming tracker cannot know which it is
+ * until a `}` arrives. A run that SUPPRESSED classification while it waited
+ * therefore stopped reading the structural lines below it, and `> q` / `> {.k` /
+ * `> # H` / `tail` kept the flush-left line inside a quote whose last block is a
+ * heading. So the run is a side channel: it only ever OVERRIDES, and only when
+ * it closes as real attributes, at which point the container holds no open
+ * paragraph (§15 A5, markup-carve/carve#1281).
+ *
+ * The caller keeps its own state shape, so this reads and writes the one field
+ * both have.
+ */
+function trackWrappedAttributeRun(
+  state: { attrRun: string | null },
+  content: string,
+): boolean {
+  if (state.attrRun !== null) {
+    const { run, verdict } = continueWrappedAttributeBlock(state.attrRun, content)
+    state.attrRun = verdict === 'open' ? run : null
+
+    return verdict === 'attributes'
+  }
+  if (opensWrappedAttributeBlock(content)) state.attrRun = content
+
+  return false
+}
+
 function trackItemLazyState(
   content: string,
   state: ItemLazyState,
@@ -5820,6 +5925,17 @@ function trackItemLazyState(
   }
   if (state.inFence) {
     if (state.fenceClose!.test(content)) state.inFence = false
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
+  // A WRAPPED block-attribute block is held open the way a fence is (§15 A5).
+  // It renders nothing and opens nothing at either width, so the container has
+  // no paragraph for a column-0 line to fold into while the run is open or once
+  // it closes as attributes. A run that turns out NOT to parse hands its last
+  // line back to the classifiers below, where its lines are the prose they look
+  // like.
+  if (trackWrappedAttributeRun(state, content)) {
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -6169,6 +6285,7 @@ function parseList(lexer: Lexer): List {
       // line holds. See `markerLineLeavesParagraphOpen`.
       lazyFoldable: markerLineLeavesParagraphOpen(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
+      attrRun: null,
     }
     // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
     // The lead line never went through `trackItemLazyState`, so `- ``` ` left
