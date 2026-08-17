@@ -428,6 +428,39 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A bare delimiter rule does not escape what the source already escaped**
+  (#1160, #1162; the answer carve-php reached in
+  markup-carve/carve-php#1213). Six of the bare rules in
+  `escapePlainCarveInlineSyntax` prepended a backslash to every match without
+  asking whether one was there already, so an escape the source wrote itself
+  was doubled:
+
+  ```
+  a \#y b
+  a \*x* b
+  a \_x_ b
+  ```
+
+  came back as
+
+  ```
+  a \\#y b
+  a \\*x* b
+  a \\_x_ b
+  ```
+
+  A doubled backslash is worse than no escape at all: it renders as a literal
+  backslash the author never typed AND it frees the delimiter the first escape
+  was suppressing, so the run the source escaped away opens anyway. The `/`,
+  `=`, `~`, `*`, `_` and `#` rules now go through `escapeUnlessAlreadyEscaped`,
+  the helper written for exactly this, which the attribute block opener, the
+  verbatim delimiter, the unpaired braced opener and the mention rule already
+  used. The comment rule keeps its plain replace and needs no change: it
+  matches on the character BEFORE the `%%` and requires a space, a tab or the
+  start of the line there, so a backslash fails the match outright and the
+  escaped form is never reached. `carve migrate --from markdown` and
+  `--from bbcode` are the paths that run these rules.
+
 - **An at-sign in source text is not a Carve mention** (markup-carve/carve-php#1380,
   ported). The converter escaper already mirrored the parser's tag opener so
   that a hash in a source language's text does not come back as a Carve tag.
