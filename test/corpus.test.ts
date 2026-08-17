@@ -452,6 +452,7 @@ const IMPLEMENTED = new Set([
   // opened, so each entry names a case that was already passing rather than
   // one this list forces green.
   'a-comment-fence-at-an-item-s-content-column-registers-nothing-either',
+  'a-comment-fence-reached-through-a-quote-registers-nothing-either',
   'a-footnote-definition-inside-an-item-s-comment-registers-nothing',
   'a-comment-fence-opened-on-an-item-s-marker-line-hides-its-body-too',
   'a-comment-fence-one-item-deeper-registers-nothing-either',
