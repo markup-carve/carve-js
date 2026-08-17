@@ -149,26 +149,34 @@ describe('an unclosed comment fence hides no definition after it', () => {
     // Raised by codex review at high effort as a regression, and it is the
     // opposite: these are the rows where carve-js used to answer alone.
     //
-    // The closer index is built over RAW lines, so a `> %%%` closer is not in
-    // it, while the prepass matches its opener AFTER stripping the container
-    // prefix. Measuring from line 0 let a quoted opener borrow an unrelated
-    // TOP-LEVEL closer that happened to share its width and sit earlier in the
-    // document - an opener cannot be closed by a line above it, and that is
-    // what the old cursor allowed. Measuring from the opener ends it.
+    // An opener cannot be closed by a line ABOVE it, and measuring from line 0
+    // let a quoted opener borrow an unrelated closer that happened to share its
+    // width and sit earlier in the document. Measuring from the opener ends it.
+    // Every row here is an opener whose quote holds NO closer of its width, so
+    // it degrades to a line comment and the definition under it is ordinary.
     //
-    // Each of these changed with this fix, and each moved carve-js FROM
-    // disagreeing with carve-rs and carve-php TO agreeing with them.
-    const quotedAfterPair = '%%%\nx\n%%%\n\n> %%%\n> [d]: u\n> %%%\n\nsee [x][d]\n'
-    expect(resolved(quotedAfterPair)).toBe(true)
+    // These rows are the reason this file has to keep asking the question in a
+    // quote at all: they are the ones that must NOT move when the quoted fence
+    // that DOES close starts hiding its definitions (see
+    // `a-definition-inside-a-quoted-comment-fence`).
     expect(resolved('%%%\nx\n%%%\n\n> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(true)
     expect(resolved('> %%%\n> x\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
     expect(resolved('%%%\na\n%%%\n\n> %%%\n> b\n> %%%\n\n%%%\n[d]: u\n\nsee [x][d]\n')).toBe(true)
-    // CONTROL: the quoted shapes that did NOT depend on a stray earlier closer
-    // are unchanged, so the fix did not simply stop opening quoted regions.
-    expect(resolved('> %%%\n> [d]: u\n> %%%\n\nsee [x][d]\n')).toBe(true)
     expect(resolved('> %%%\n> [d]: u\n\nsee [x][d]\n')).toBe(true)
-    // CONTROL: width still nests inside a quote.
-    expect(resolved('> %%%%\n> %%%\n> [d]: u\n> %%%%\n\nsee [x][d]\n')).toBe(true)
+  })
+
+  it('a quoted opener does not borrow a TOP-LEVEL closer of its width', () => {
+    // The mirror of the row above, and the reason the two indexes stay apart.
+    // A `> %%%` is closed by a `> %%%`, not by a bare `%%%` written outside the
+    // quote: the quote ends first, so the fence leaves its container unclosed
+    // and degrades. Answering this from the document-wide index - which reads
+    // RAW lines and therefore holds the column-0 run - opened a region across
+    // the quote boundary and swallowed the definition instead.
+    expect(resolved('> %%%\n> [d]: u\n\n%%%\n\nsee [x][d]\n')).toBe(true)
+    // And the two halves of the answer agree, which is the check that catches a
+    // region opening silently: the opener degraded, so the quoted body RENDERS
+    // rather than being swallowed as a comment.
+    expect(carveToHtml('> %%%\n> shown\n\n%%%\n\nsee\n')).toContain('shown')
   })
 
   it('three `%%%` lines leave the third one degrading on its own', () => {

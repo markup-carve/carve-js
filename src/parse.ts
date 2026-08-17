@@ -1313,7 +1313,7 @@ class Lexer {
   // once by `commentRunLines`. `fenceCloserIndex` keeps only the LAST line of
   // each width, which answers "is there one ahead" and cannot answer "is there
   // one before the container ends" - the question `commentCloserInScope` asks.
-  commentRunLines: Map<number, number[]> | undefined = undefined
+  commentRunLines: Map<number, { line: number; depth: number }[]> | undefined = undefined
 
   // Document line number -> every index of THIS lexer's lines carrying it,
   // built once by attachDocumentOffsets when the first child asks for it.
@@ -2829,18 +2829,35 @@ function collectLinkDefs(lexer: Lexer) {
       // form is unaffected either way - `parseFootnoteDef` runs during block
       // parsing, which reads the fence for itself.
       //
-      // THE DOCUMENT-WIDE INDEX STILL ANSWERS FIRST, and it carries two things
-      // at once. It keeps the container scan off the hot path - "no closer of
-      // this width anywhere ahead" refutes without walking anything, which is
-      // the answer for every ordinary document and for the run of unterminated
-      // openers that would otherwise make this quadratic. And it is left
-      // reading RAW lines deliberately, so that this change moves exactly one
-      // question and not two: a quoted `> %%%` carries its marker and is not in
-      // that index, so a quoted fence whose only closer is quoted still reads
-      // as unterminated and a definition inside it still registers even though
-      // the quote renders empty. carve-rs `71318e91` and carve-php `eb787c0`
-      // answer that exactly as carve-js does while the executable spec oracle
-      // answers it the other way, which makes it a seam of its own.
+      // THE TWO SCOPES ASK DIFFERENT QUESTIONS, AND EACH GETS ITS OWN INDEX.
+      // A document-level opener is bounded by nothing but the end of input, so
+      // the document-wide index is the right question there - and it reads RAW
+      // lines, which is also right there: a `> %%%` inside a quote cannot close
+      // a fence opened at column 0, and counting it would open a region over
+      // the definitions between them.
+      //
+      // AN OPENER INSIDE A CONTAINER IS BOUNDED BY THAT CONTAINER, and asking
+      // the raw index first refuted it wrongly. A quoted `> %%%` carries its
+      // marker and is not in that index, so a quoted fence whose only closer is
+      // quoted read as unterminated: the region never opened and a definition
+      // the author had commented out went live in the link table, even though
+      // the quote itself renders empty. §5 registers no definition written
+      // inside a comment AT ANY COLUMN A FENCE CAN SIT AT (markup-carve/carve#1309);
+      // the corpus pinned the column-0 and list-item spellings and all three
+      // engines leaked through the quoted one (markup-carve/carve#1341).
+      //
+      // The tell that it was leakage and not a reading of the rule: it sorted
+      // definitions BY KIND. A footnote written in the same quoted fence stayed
+      // literal, because `parseFootnoteDef` runs during block parsing and reads
+      // the fence for itself, while the link reference definition this pass
+      // collects went through. No rule distinguishes them.
+      //
+      // So the container arm goes straight to `commentCloserInScope`, which
+      // reads the `stripContainerPrefixes` view the loop that CONSUMES the
+      // region closes on - a quoted `> %%%` counts there exactly as it counts
+      // in the parser. The hot-path property the raw index carried is kept
+      // inside that helper: it refutes on its own line index before it walks a
+      // container, so a run of unterminated openers stays linear.
       //
       // A `+`-ATTACHED BLOCK SITS AT THE MARKER'S COLUMN, not the item's. §17
       // lets `+` attach a FLUSH-LEFT block to an item whose content column is
@@ -2852,22 +2869,18 @@ function collectLinkDefs(lexer: Lexer) {
       // `plusColumn` is set on the marker line above, so it is the marker's own
       // column here and null again after the blank that ends the attachment.
       //
-      // THE DOCUMENT-LEVEL ARM IS AN OPTIMIZATION, NOT A RULE, and saying so
-      // matters because removing it changes no output. With no container the
-      // scan's boundary is the end of input, and every RAW `%` run is also a
-      // run in the stripped view - stripping removes prefixes, it cannot remove
-      // the run - so the scan can only ever confirm what the index just said.
-      // What it skips is BUILDING the line index: an ordinary 300 KB document
-      // carrying one `%%%` block pays 127ms with this arm and 137ms without.
+      // THE DOCUMENT-LEVEL ARM IS ALSO WHERE THE CHEAP ANSWER LIVES. It skips
+      // BUILDING the stripped line index: an ordinary 300 KB document carrying
+      // one `%%%` block pays 127ms on this arm and 137ms without.
       const commentScope: PrepassScope = {
         quoteDepth: rawQuoteDepth,
         contentCol: plusColumn ?? contentCol,
       }
+      const atDocumentLevel = commentScope.quoteDepth === 0 && commentScope.contentCol === 0
       const opensRegion =
         open !== null &&
-        commentBlockHasCloser(lexer, open[1]!.length, idx) &&
-        (commentScope.quoteDepth === 0 && commentScope.contentCol === 0
-          ? true
+        (atDocumentLevel
+          ? commentBlockHasCloser(lexer, open[1]!.length, idx)
           : commentCloserInScope(lexer, open[1]!.length, idx, commentScope, commentScopeMemo))
       if (open && opensRegion) {
         commentFence = open[1]!.length
@@ -4014,7 +4027,13 @@ function commentCloserInScope(
   scope: PrepassScope,
   memo: CommentScopeMemo,
 ): boolean {
-  const end = commentScopeEnd(lexer, from, scope, memo)
+  // THE LINE INDEX ANSWERS BEFORE THE CONTAINER IS WALKED. "No `%` run of this
+  // width anywhere ahead" refutes an opener outright, and that is the answer
+  // for every unterminated opener - so a document that is a run of them stays
+  // linear instead of paying a boundary scan each. This is the hot-path guard
+  // the RAW document-wide index used to provide one caller up; it has to live
+  // here now, because that index cannot see a `> %%%` and refuted the quoted
+  // spelling wrongly (markup-carve/carve#1341).
   const at = commentRunLines(lexer).get(fence)
   if (at === undefined) return false
   // The first line of this width strictly after the opener. `at` is ascending,
@@ -4024,33 +4043,72 @@ function commentCloserInScope(
   let hi = at.length
   while (lo < hi) {
     const mid = (lo + hi) >> 1
-    if (at[mid]! <= from) lo = mid + 1
+    if (at[mid]!.line <= from) lo = mid + 1
     else hi = mid
   }
+  if (lo >= at.length) return false
+  // ONLY A RUN AT THE OPENER'S OWN QUOTE DEPTH CLOSES IT, and the two
+  // directions fail for different reasons:
+  //
+  //   - a SHALLOWER run is the line that ENDED the opener's quote. `> > %%%`
+  //     is not closed by a `> %%%`, because the inner quote is over by then;
+  //   - a DEEPER run is inside a quote of its own, and the block parser reads
+  //     it as one. `> %%%` is not closed by a `> > %%%`: the opener degrades
+  //     to a line comment, its body RENDERS, and the definition beside it is
+  //     ordinary. Accepting it suppressed a definition the parser publishes,
+  //     which is the same two-halves-disagree shape this whole change is
+  //     about, one quote deeper (raised by codex review at high effort).
+  //
+  // A non-matching run is skipped and the next one of this width is asked, so
+  // an opener is not refuted by a line that was never its closer. Bounded by
+  // the container the same way the boundary is: the walk stops at the first run
+  // past `end`, so it reads only runs written inside the opener's own scope.
+  const end = commentScopeEnd(lexer, from, scope, memo)
+  for (let i = lo; i < at.length && at[i]!.line < end; i++) {
+    if (at[i]!.depth === scope.quoteDepth) return true
+  }
 
-  return lo < at.length && at[lo]! < end
+  return false
 }
 
 /**
- * Every line carrying a `%` run, keyed by run length and ascending.
+ * Every line carrying a `%` run, keyed by run length and ascending, WITH THE
+ * QUOTE DEPTH THE RUN WAS WRITTEN AT.
  *
  * Read through `stripContainerPrefixes`, which is the view the loop that
  * CONSUMES the region closes on - so the scan and the close agree line for
  * line, and a quoted `> %%%` counts here exactly as it counts there. Built once
  * per lexer, and only for a document that opens a comment fence inside a
  * container at all.
+ *
+ * THE DEPTH IS CARRIED BECAUSE STRIPPING THROWS AWAY THE ONE THING THAT
+ * DISTINGUISHES TWO RUNS OF THE SAME WIDTH. `> > %%%` and `> %%%` both strip to
+ * `%%%`, and a fence opened in the inner quote is NOT closed by a run written
+ * one level out - the inner quote ends first, so that opener leaves its
+ * container unclosed and degrades to a line comment (`markup-carve/carve#1341`).
+ * Without the depth the shallower run counted, the region opened across the
+ * quote boundary, and a definition the parser renders went missing from the
+ * link table. It is the quote-marker spelling of the column bound carve-rs
+ * `markup-carve/carve-rs#1052` put on the indented one, measured the same way
+ * `commentScopeEnd` measures a departure so the two agree.
  */
-function commentRunLines(lexer: Lexer): Map<number, number[]> {
+function commentRunLines(lexer: Lexer): Map<number, { line: number; depth: number }[]> {
   if (lexer.commentRunLines !== undefined) return lexer.commentRunLines
-  const m = new Map<number, number[]>()
+  const m = new Map<number, { line: number; depth: number }[]>()
   for (let i = 0; i < lexer.lines.length; i++) {
+    const raw = lexer.lines[i]!
     const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[i - 1] ?? ''))
-    const c = RE_COMMENT_BLOCK_ANY.exec(stripContainerPrefixes(lexer.lines[i]!, afterTerm))
+    const c = RE_COMMENT_BLOCK_ANY.exec(stripContainerPrefixes(raw, afterTerm))
     if (c === null) continue
-    const len = c[1]!.length
-    const at = m.get(len)
-    if (at !== undefined) at.push(i)
-    else m.set(len, [i])
+    const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
+    const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
+    const entry = {
+      line: i,
+      depth: Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker)),
+    }
+    const at = m.get(c[1]!.length)
+    if (at !== undefined) at.push(entry)
+    else m.set(c[1]!.length, [entry])
   }
   lexer.commentRunLines = m
 
@@ -4107,6 +4165,24 @@ type CommentScopeMemo = Map<string, { from: number; end: number }>
  * continuation can wear - a blank line closes the paragraph a lazy line would
  * have folded into, so what follows it at the outer level is a new block there.
  *
+ * AND FOR A QUOTED SCOPE THE BLANK LINE IS THE WHOLE TEST, because a blockquote
+ * does not survive one. `> a` / blank / `> b` is TWO blockquotes, so a `> %%%`
+ * written after the blank is not a closer that arrived late - it is a run in a
+ * DIFFERENT quote, and the fence above it never closed:
+ *
+ * ````
+ * > %%%
+ * > [r]: /url
+ *
+ * > %%%
+ * ````
+ *
+ * Measuring the following line's depth instead, that run read as still in
+ * scope, the region opened, and a definition the parser renders went missing
+ * from the link table. The depth test is the right one for a COLUMN scope,
+ * where a dedented line really can be a lazy continuation of the item; a quote
+ * has no such line across a blank.
+ *
  * The bound this leaves is deliberately LOOSER than the container really is,
  * and that direction is the safe one: a scope that reaches too far can only
  * make a region OPEN that would otherwise have degraded, which hides a
@@ -4138,6 +4214,14 @@ function commentScopeEnd(
     // body above it stayed invisible - the leak, one marker over (raised by
     // codex review).
     if (isContinuationMarker(raw)) continue
+    // A QUOTED SCOPE IS OVER AT THE BLANK, whatever stands after it. A
+    // blockquote does not survive a blank line, so the next non-blank line
+    // opens a NEW one even when it carries the same markers - and a `%%%` run
+    // there belongs to that quote, not to the fence above.
+    if (scope.quoteDepth > 0) {
+      end = i
+      break
+    }
     const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
     const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
     const depth = Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker))
