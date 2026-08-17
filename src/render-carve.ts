@@ -1515,6 +1515,14 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
     let firstLine = true
     let lineNodeCount = 0
     let lineHostsCaption = false
+    // THE CURRENT OUTPUT LINE, CARRIED FORWARD instead of read back off `out`.
+    // The two decisions below are properties of the line written so far, and
+    // `out` is the wrong place to ask: it grows with every node, and probing a
+    // growing accumulator per node is the quadratic shape this engine's scaling
+    // guards exist to keep out. Two counters answer both questions in O(piece).
+    let lineLength = 0
+    /** The last up-to-two characters of the current output line. */
+    let lineTail = ''
     nodes.forEach((node, idx) => {
       let piece = renderInline(
         node,
@@ -1528,7 +1536,7 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
       // output line, not of the neighbouring nodes. `lastBoundary` cannot stand
       // in for it - after a code span it reports the span's last CONTENT
       // character, not the backtick that actually ends the line.
-      const atLineStart = out === '' || out.endsWith('\n')
+      const atLineStart = lineLength === 0
 
       // THE SEPARATOR SPACE IS ONLY A SEPARATOR (PART 11 §1; §21). `%%` is
       // recognized after whitespace OR at the start of its line, so a comment
@@ -1564,12 +1572,24 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
       // so §1 wins and the spelling yields to another spelling of the SAME
       // construct - which for a `hard_break` is its own PART 3 form
       // (markup-carve/carve#1334).
-      if (ctx.lineBlockDepth > 0 && node.type === 'hard_break' && piece === '\n') {
-        const line = out.slice(out.lastIndexOf('\n') + 1)
-        if (line === '' || /(?:^|[^ \t]) $/.test(line)) piece = '\\\n'
+      if (
+        ctx.lineBlockDepth > 0 &&
+        node.type === 'hard_break' &&
+        piece === '\n' &&
+        (atLineStart || /(?:^|[^ \t]) $/.test(lineTail))
+      ) {
+        piece = '\\\n'
       }
 
       out += piece
+      const lastNewline = piece.lastIndexOf('\n')
+      if (lastNewline === -1) {
+        lineLength += piece.length
+        lineTail = (lineTail + piece).slice(-2)
+      } else {
+        lineLength = piece.length - lastNewline - 1
+        lineTail = piece.slice(lastNewline + 1).slice(-2)
+      }
       if (node.type === 'soft_break') {
         captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
         firstLine = false
