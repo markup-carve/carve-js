@@ -157,6 +157,83 @@ describe('shapes that were already right, and must stay right', () => {
   })
 })
 
+describe('a fence holds only the lines its container still reaches', () => {
+  /*
+   * Raised by review against the first cut of this fix, and a real regression
+   * it had introduced.
+   *
+   * A fence opened inside a quote or a list item does not hold a line that no
+   * longer reaches that container: the block parser has left the container and
+   * reads the line afresh. Skipping the trackers on such a line - which the
+   * first cut did, unconditionally - cost a `:::` closer its pop, and the depth
+   * stack then stayed open for the rest of the document. That is this ticket's
+   * own bug with its sign flipped: an abbreviation suppressed by a div that had
+   * in fact already closed.
+   *
+   * So the early exit is conditional on the container still holding the line.
+   * A line it does not hold falls through to the trackers and collects nothing.
+   */
+
+  it('a div closer outside the fence container still pops the depth', () => {
+    // The quoted fence never closes inside the quote, so the `:::` on the next
+    // line is outside its container and is the note's real closer. Miss the pop
+    // and `A` never expands.
+    const source = '::: note\n> ```\n:::\ntext\n```\n\n*[A]: expansion\n\nA here\n'
+
+    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+  })
+
+  it('CONTROL: a delimiter dedented out of its own item, unchanged here', () => {
+    // The shape that made the container test go AFTER the closer test rather
+    // than before it: a fence opened at an item's content column, with a
+    // delimiter written at column 0, is out of its container by construction,
+    // so a container test asked first would fire on the one line the closer
+    // test has to see.
+    //
+    // The rendered answer is the oracle's and does not move with this fix -
+    // that dedented run ends the item and opens a NEW top-level fence rather
+    // than closing the item's, so everything below it is code. Pinned as
+    // agreement, not as a claim about the pass: the divergence it can still
+    // produce is invisible from here because the reference is inside the same
+    // code block as its definition.
+    const source = '- ```\n  code\n```\n\n[r]: /url\n\n[r][]\n'
+
+    expect(html(source)).toBe(
+      '<ul> <li> <pre><code>code </code></pre> </li> </ul> <pre><code> [r]: /url [r][] </code></pre>',
+    )
+  })
+
+  it('a line past the container defines nothing either, as before', () => {
+    // The other half of the same branch, and the row that keeps it honest. A
+    // line the container no longer holds is allowed past the trackers so a
+    // boundary out there is seen - it is NOT thereby a definition site, and
+    // this pass still leaves the fence open across it.
+    //
+    // A RESIDUAL, pinned as it stands rather than as it should be: the oracle
+    // and carve-php resolve this reference, because the fence really did end
+    // with the quote that held it. carve-js has never done so and does not
+    // start here - making the fence end with its container also makes the pass
+    // re-read the line, which walks into a different pre-existing defect (a
+    // fence opener is taken to interrupt an open paragraph, which the parser
+    // does not do). Both are filed separately; this fix changes neither.
+    //
+    // Dropping the guard silently repairs this row, which is exactly why it is
+    // written down: the branch would otherwise look like dead code.
+    expect(html('> ```\n\n[r]: /url\n\n[r][]\n')).toBe(
+      '<blockquote> <pre><code> </code></pre> </blockquote> <p>[r][]</p>',
+    )
+  })
+
+  it('CONTROL: a line the container DOES hold is still verbatim', () => {
+    // The other side of the same condition, and the row that keeps the fix
+    // itself alive: a quoted `:::` inside a quoted fence is fence content, so
+    // it must not move the depth stack.
+    const source = '> ```\n> :::\n> ```\n\n*[A]: expansion\n\nA here\n'
+
+    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+  })
+})
+
 describe('a comment in a list item stays opaque, as §28 says', () => {
   /*
    * Filed alongside the shapes above as a second carve-js defect: a definition

@@ -2436,9 +2436,33 @@ function collectLinkDefs(lexer: Lexer) {
       // ONE of the two reads as closed is collected by one and rendered by the
       // other.
       const close = d.match(RE_FENCE_CLOSER_PREPASS)
-      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
+      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
         fence = null
-      continue // definitions inside fenced code are literal samples
+        continue
+      }
+      // The early exit is for a line the fence really holds. A fence opened
+      // inside a quote or a list item does NOT hold a line that no longer
+      // reaches that container: the block parser has left the container and
+      // reads the line afresh, so a `:::` closer out there is real structure
+      // and still has to move the depth stack. Skipping the trackers past the
+      // container was the one regression this reordering introduced - a div
+      // closer that lost its pop leaves every abbreviation below it
+      // suppressed, which is the reported bug with its sign flipped.
+      //
+      // Asked AFTER the closer, never before: a closer written at column 0 for
+      // a fence opened at an item's content column is dedented out of its
+      // container by construction, and testing the container first would read
+      // that very line as a new opener.
+      //
+      // Such a line is still no definition site - this pass leaves the fence
+      // open, exactly as it did before, and the guard below the trackers stops
+      // it short of collecting. That a fence can outlive its container at all
+      // is a separate defect of this pass, filed on its own; nothing here
+      // changes it.
+      const containerHoldsLine = fence.quoted
+        ? rawIsQuoted
+        : fence.contentCol === 0 || isBlankLine(raw) || leadingWhitespace(raw) >= fence.contentCol
+      if (containerHoldsLine) continue // definitions inside fenced code are literal samples
     }
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
@@ -2475,6 +2499,10 @@ function collectLinkDefs(lexer: Lexer) {
       if (colon[2] === '' && divs.length && divs[divs.length - 1] === width) divs.pop()
       else divs.push(width)
     }
+    // Only a line the fence's container no longer holds reaches here with a
+    // fence still open (see above). It was allowed past the trackers so a
+    // boundary out there is seen; it collects nothing.
+    if (fence) continue
     // OPENER: strip container prefixes (blockquote AND list marker) and re-base
     // to the content column, so a fence on a list item marker line (`- ```) or a
     // continuation line at the content column both open. RESIDUAL (line-based
