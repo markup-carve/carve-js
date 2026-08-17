@@ -305,6 +305,29 @@ export function escapePlainCarveInlineSyntax(
     out = out.replace(/(?<![A-Za-z0-9&])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, escapeFirst)
   }
 
+  // A MENTION is the tag's sibling and needs the same rule for the same
+  // reason: it opens on its own, so nothing downstream neutralizes it. Ported
+  // from carve-php#1381, which fixed the same gap there. None of the source
+  // languages here means a mention by that character, so prose that quoted a
+  // framework directive came back as a span.
+  //
+  // Mirrors the parser's opener (`RE_MENTION` and its preceding-character
+  // guard) rather than approximating it: a mention opens on an `@` NOT
+  // preceded by an alphanumeric or `_` and followed by one of those or `-`.
+  // The lookbehind is what leaves an email address alone, since `foo@bar` has
+  // a letter before the `@`.
+  //
+  // No brace guard, unlike the tag: `{@x@}` is not an attribute block and not
+  // a braced pair, so there is nothing above for this rule to duplicate.
+  //
+  // Goes through `escapeUnlessAlreadyEscaped` rather than a plain replace, so
+  // an at-sign the source already escaped is left alone. The bare rules above
+  // still use the plain replace and double such an escape; that divergence
+  // from carve-php#1213 is older than this rule and is not widened by it.
+  if (!bareHandled.includes('@')) {
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])@(?=[A-Za-z0-9_-])/g, out)
+  }
+
   return out
 }
 
