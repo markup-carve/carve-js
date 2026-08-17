@@ -416,6 +416,22 @@ const IMPLEMENTED = new Set([
   'an-attribute-block-reaches-the-nested-list-it-precedes',
   'a-block-attached-after-an-invisible-line-leaves-the-item-tight',
   'an-abbreviation-definition-in-an-item-body-is-paragraph-text',
+  // The pin bump to carve b6917ab adds TEN categories. Every document in all
+  // ten - 69 of them - was rendered through this engine and compared with its
+  // `.html` fixture before any name went in here. Only these five matched, and
+  // only these five are listed: 26 of 26 documents byte-for-byte.
+  //
+  // The other five did NOT match, on 18 of their 43 documents, and they are
+  // engine gaps rather than bookkeeping - carve-rs already renders three of
+  // them correctly. Adding them would turn a real divergence into a green run,
+  // which is the one thing this list must never do, so they stay out and the
+  // coverage guard below stays red until the engine work lands. They are named
+  // with their bytes on the bump PR.
+  'a-label-beginning-with-an-at-sign-is-not-a-reference-label',
+  'a-tab-after-a-fence-or-a-frontmatter-opener-depends-on-where-it-sits',
+  'an-attribute-line-after-a-continuation-marker-attributes-the-attached-block',
+  'an-unclosed-inline-run-in-a-line-block-reaches-the-end-of-the-block',
+  'which-inline-content-a-heading-id-is-derived-from',
 ])
 
 /**
