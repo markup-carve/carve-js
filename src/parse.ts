@@ -4909,7 +4909,15 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         startColumn:
           lexer.lineStartColumn(line.lineIndex) + (lexer.lines[line.lineIndex]?.length ?? 0),
         endColumn: lexer.lineStartColumn(next.lineIndex),
-        startOffset: Math.min(lineOffset + line.text.length, sourceLineEnd),
+        // A COMMENT LINE IS MEASURED FROM ITS SOURCE, not from the empty text
+        // the block layer left behind. The clamp above reads the parsed text's
+        // length, which is zero here, so the break would start at the line's
+        // FIRST column while its `startColumn` is derived from the source line
+        // and reports the last - one span with two answers, overlapping the
+        // `comment` node that occupies those same bytes.
+        startOffset: line.comment
+          ? sourceLineEnd
+          : Math.min(lineOffset + line.text.length, sourceLineEnd),
         endOffset: lexer.lineOffset(next.lineIndex),
       }
     }
@@ -4937,10 +4945,18 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // Read the boundary each break belongs to BEFORE any stripping takes the
     // position that says so.
     const breakIndex = new Map<InlineNode, number>()
+    // WHICH LINES STILL END AT A BOUNDARY, counting the boundaries the author
+    // spelled with a `\` as well as the ones the container hardens. A `\` is
+    // not a soft break and never reaches the conversion below, but it is just
+    // as much a surviving line end - and the comment reinsertion asks that
+    // question, not the conversion's.
+    const boundaryLines = new Set<number>()
     for (const node of parsed) {
-      if (node.type !== 'soft_break') continue
+      if (node.type !== 'soft_break' && node.type !== 'hard_break') continue
       const startLine = node.pos?.startLine
-      if (startLine !== undefined) breakIndex.set(node, startLine - firstLineNumber)
+      if (startLine === undefined) continue
+      boundaryLines.add(startLine - firstLineNumber)
+      if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
     }
     if (!anchorable) stripPositions(parsed)
     // REMOVED FROM THE RENDER, NOT FROM THE TREE (PART 9 §23). Every line the
@@ -4953,7 +4969,6 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       if (!anchorable) stripPositions([line.comment])
       pendingComments.set(index, line.comment)
     })
-    const survivingBreaks = new Set(breakIndex.values())
     const inline: InlineNode[] = []
     for (const node of parsed) {
       if (node.type !== 'soft_break') {
@@ -4990,7 +5005,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // inside an open run, and it is a comment line.
     for (const index of [...pendingComments.keys()].sort((a, b) => a - b)) {
       const isLastLine = index === lines.length - 1
-      if (isLastLine && (index === 0 || survivingBreaks.has(index - 1))) {
+      if (isLastLine && (index === 0 || boundaryLines.has(index - 1))) {
         inline.push(pendingComments.get(index)!)
       }
     }

@@ -651,7 +651,12 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     }
     case 'paragraph': {
       const text = guardThematicBreakLines(
-        renderInlines(node.children, ctx, attrs === '' && ctx.paragraphStartsAfterCaptionHost),
+        renderInlines(
+          node.children,
+          ctx,
+          attrs === '' && ctx.paragraphStartsAfterCaptionHost,
+          ctx.lineBlockDepth > 0,
+        ),
       )
       // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
       // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
@@ -1507,7 +1512,18 @@ function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
   }
 }
 
-function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = false): string {
+function renderInlines(
+  nodes: InlineNode[],
+  ctx: CarveContext,
+  captionCanOpen = false,
+  /**
+   * These nodes are a line block's STANZA, so the newline after the last of
+   * them ends the stanza rather than a line inside it (PART 11 §7c). Set only
+   * by the paragraph arm: a nested inline container inside a line block is not
+   * a stanza, and its last node is not at a stanza boundary.
+   */
+  isStanza = false,
+): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
@@ -1566,17 +1582,37 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
       //     columns is already NBSP content (§23 MEDIAL GAPS) and needs none -
       //     it reaches here sentinel-encoded, so it is not a space to this
       //     test either.
+      //   - the break ENDS THE STANZA. §7c's third sentence excuses a line with
+      //     no trailing whitespace because its "tree is identical either way",
+      //     and on a line INSIDE a stanza it is: the boundary hardens whether or
+      //     not a backslash spells it. At the stanza's end there is no boundary
+      //     to harden - the next newline belongs to the blank line or the
+      //     closing fence - so the bare spelling drops the break outright. The
+      //     ruling measured this as "a last body line loses a trailing `<br>`
+      //     WITH ITS SPACE"; the space is incidental, the loss is the break, and
+      //     `a\` and `a  \` lose it with no space involved.
       //
       // This is PART 11 §1a, not an exemption from it: the per-construct
       // spelling emits bytes that do not re-parse to the tree they came from,
       // so §1 wins and the spelling yields to another spelling of the SAME
       // construct - which for a `hard_break` is its own PART 3 form
       // (markup-carve/carve#1334).
+      //
+      // A LINE THAT ENDS IN A COMMENT IS EXEMPT. `%%` runs to end of line, so a
+      // trailing space there is INSIDE the comment, not content the parser is
+      // about to lose - stripping it leaves the same node. Protecting it with a
+      // backslash does not: the `\` lands inside the comment's own content, and
+      // the block layer, which takes the whole line before the inline parser
+      // sees it, reads the note back as `\`. A comment is always the last thing
+      // on its line, so the node before the break is the whole test.
       if (
         ctx.lineBlockDepth > 0 &&
         node.type === 'hard_break' &&
         piece === '\n' &&
-        (atLineStart || /(?:^|[^ \t]) $/.test(lineTail))
+        nodes[idx - 1]?.type !== 'comment' &&
+        (atLineStart ||
+          /(?:^|[^ \t]) $/.test(lineTail) ||
+          (isStanza && idx === nodes.length - 1))
       ) {
         piece = '\\\n'
       }

@@ -112,6 +112,68 @@ describe("a comment-only line in a line block is removed before any inline run",
     )
   })
 
+  it('writes an EMPTY comment line back as an empty comment line', () => {
+    // The writer emits ` %% ` for a comment with no content, and PART 2 strips
+    // the trailing space again - harmless until §7c, which read that same lone
+    // trailing space as a break worth protecting and turned `%%` into `%% \`,
+    // making the note's content a backslash.
+    expect(carveToCarve('::: |\na\n%%\nb\n:::\n')).toBe('::: |\na\n%%\nb\n:::\n')
+    holdsTheInvariant('::: |\na\n%%\nb\n:::\n')
+
+    // Same shape where the marker has whitespace after it and no content: the
+    // parser reads an empty comment either way.
+    expect(carveToCarve('::: |\na\n%% \nb\n:::\n')).toBe('::: |\na\n%%\nb\n:::\n')
+    holdsTheInvariant('::: |\na\n%% \nb\n:::\n')
+
+    // `%%%` is a comment whose content is `%`, and joins the opener rather than
+    // being separated from it (PART 11 §2).
+    expect(carveToCarve('::: |\na\n%%%\nb\n:::\n')).toBe('::: |\na\n%%%\nb\n:::\n')
+  })
+
+  it('keeps a last-line comment under a boundary the author spelled with `\\`', () => {
+    // The two spellings of the same boundary have to answer the same. A `\` is
+    // not a soft break and never reaches the hardening conversion, so reading
+    // the surviving boundaries off that conversion alone said no boundary ended
+    // the line above and deleted the note - on `a \` but not on `a`.
+    expect(carveToCarve('::: |\na \\\n%% secret\n:::\n')).toBe('::: |\na \\\n%% secret\n:::\n')
+    holdsTheInvariant('::: |\na \\\n%% secret\n:::\n')
+    holdsTheInvariant('::: |\n\\\n%% secret\n:::\n')
+  })
+
+  it('gives the break after an emptied line a span its own columns agree with', () => {
+    // The break is measured from the SOURCE line, not from the empty text the
+    // block layer left: reading the parsed length put its start at column 1
+    // while its `startColumn` said column 10, so one span had two answers and
+    // covered the `comment` node sitting on those same bytes.
+    const paragraph = (parse('::: |\na\n%% secret\nc\n:::\n').children[0] as never as {
+      children: { children: { type: string; pos?: Record<string, number> }[] }[]
+    }).children[0]!.children
+    const comment = paragraph.find((node) => node.type === 'comment')!
+    const breakAfter = paragraph[paragraph.indexOf(comment) + 1]!
+
+    expect(breakAfter.type).toBe('hard_break')
+    expect(breakAfter.pos!.startOffset).toBe(comment.pos!.endOffset)
+    expect(breakAfter.pos!.startColumn).toBe(comment.pos!.endColumn)
+  })
+
+  it('never writes a backslash into a comment’s own content', () => {
+    // §7c protects a lone trailing space because PART 2 would take it and
+    // change the tree. On a line that ENDS in a comment there is no such
+    // trade: `%%` runs to end of line, so the space is inside the note, and
+    // PART 2 taking it leaves the note. The backslash does not leave it - the
+    // block layer claims the whole line before the inline parser sees it, so
+    // the `\` is read back as part of the content.
+    //
+    // The trailing space itself is not recovered here; that is PART 2's
+    // pre-existing strip and predates both rulings. What must not happen is
+    // the writer ADDING a character to a note the author wrote.
+    const source = '::: |\na\n%% x \nb\n:::\n'
+    const formatted = carveToCarve(source)
+
+    expect(formatted).not.toContain('\\')
+    expect(carveToCarve(formatted)).toBe(formatted)
+  })
+
   it('does not add a separator space to a comment that follows content', () => {
     // The other side of the same writer change: where there IS something to
     // separate from, the space stays.
@@ -137,6 +199,25 @@ describe("a line block's hard break keeps its backslash", () => {
     expect(carveToHtml(carveToCarve('::: |\na\n\\\nb\n:::\n'))).toBe(
       '<div class="line-block">\n  <p>a<br>\n<br>\nb</p>\n</div>',
     )
+  })
+
+  it('keeps a trailing break on the last body line with no space at all', () => {
+    // §7c's third sentence excuses a line with no trailing whitespace because
+    // its "tree is identical either way". That holds INSIDE a stanza, where the
+    // boundary hardens with or without the backslash, and fails at the stanza's
+    // END, where the next newline belongs to the closing fence. Same loss as
+    // the row below, with no space involved in it.
+    expect(carveToCarve('::: |\na\\\n:::\n')).toBe('::: |\na\\\n:::\n')
+    holdsTheInvariant('::: |\na\\\n:::\n')
+
+    // And with a run of two columns, which MEDIAL GAPS already keeps as NBSP
+    // content: the spaces were never the reason, the break is.
+    expect(carveToCarve('::: |\na  \\\n:::\n')).toBe('::: |\na  \\\n:::\n')
+    holdsTheInvariant('::: |\na  \\\n:::\n')
+
+    // A stanza that is not the last one ends the same way - the blank line
+    // after it is the stanza separator, not a line boundary.
+    holdsTheInvariant('::: |\na\\\n\nb\n:::\n')
   })
 
   it('keeps a trailing break on the last body line', () => {
