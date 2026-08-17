@@ -43,9 +43,13 @@ describe('a continuation marker attaches every block in its run', () => {
 
   it('every later child of the run is written at the marker column too', () => {
     const src = '- x\n+\n---yaml\nk: v\n---\n'
-    // The break used to land at two columns under a flush paragraph and fold
-    // into it, so `<hr>` came out as an em dash.
-    expect(carveToCarve(src)).toBe('- x\n+\n---yaml\nk: v\n+\n---\n')
+    // ONE MARKER, ONE BLOCK (§17 L3, markup-carve/carve#1290). The marker takes
+    // the paragraph and the break below it is the document's, so the writer has
+    // no second child of the run to place and emits an ordinary separator. This
+    // row read `+` before the break while the marker still attached the whole
+    // run; carve-rs `b6ff319c` writes exactly what is asserted here, and renders
+    // the `<hr>` outside the list for the same reason.
+    expect(carveToCarve(src)).toBe('- x\n+\n---yaml\nk: v\n\n---\n')
     expect(roundTrips(src)).toBe(true)
     expect(carveToHtml(carveToCarve(src))).toContain('<hr>')
   })

@@ -5671,6 +5671,71 @@ function fencedBlockEnd(scan: AttachedScan): number {
  * and that the fence scan reads, which is how the list paths hand over their
  * content-column-dedented form.
  */
+/**
+ * How many of the `limit` lines at the lexer's position the ONE block a `+`
+ * attaches actually occupies (§17 L3).
+ *
+ * At least one line, always: a probe that consumed nothing would leave the
+ * caller's cursor where it was and the container loop would see the same line
+ * forever.
+ *
+ * A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO. Only
+ * `parseBlocks` owns a pending-attribute slot and this is a `parseBlock` call,
+ * so an attribute line left to it reads as a paragraph and the measurement stops
+ * in front of the block the attributes were written for.
+ */
+function attachedBlockExtent(
+  lexer: Lexer,
+  limit: number,
+  transform?: (line: string) => string,
+): number {
+  if (limit <= 1) return limit
+  const lines: string[] = []
+  for (let k = 0; k < limit; k++) {
+    const line = lexer.peek(k)!
+    lines.push(transform ? transform(line) : line)
+  }
+  const probe = subLexer(lines, lexer.parseOptions, 0)
+  probe.nested = true
+  probe.suppressPositions = true
+  // The depth the block is really parsed at. `MAX_NESTING_DEPTH` turns every
+  // line into literal paragraph text once it is reached, so a probe left at 0
+  // would measure a construct the real parse never builds. Stated as alignment,
+  // not as a fix: no document was found where it changes the answer, because at
+  // those depths a `+` has already stopped acting as a continuation marker.
+  probe.depth = lexer.depth + 1
+  // NO EXTENSION MATCHER RUNS FOR A MEASUREMENT. `matchBlock` and `matchInline`
+  // are public callbacks and nothing requires them to be pure: one allocating
+  // sequential ids would number its first authored block 2, because the probe
+  // called it once for a parse whose result is thrown away. The probe only needs
+  // to know where a block ENDS, and an extension block ends where the core
+  // parser's fallback for those same lines ends.
+  const matchers = activeMatchers
+  activeMatchers = []
+  try {
+    // A LEADING ATTRIBUTE RUN IS PART OF THE BLOCK IT FLOATS ONTO, and so is
+    // whatever INVISIBLE construct sits between them. Only `parseBlocks` owns a
+    // pending-attribute slot, and §15 A2a keeps that slot across a comment or a
+    // reference, footnote or abbreviation definition - so a probe that stopped
+    // at the first node would stop in front of the block the attributes were
+    // written for and leave it outside the container, attributes dropped.
+    for (;;) {
+      while (!probe.eof() && tryCollectBlockAttributes(probe) !== null) {
+        /* the run floats forward; keep looking for what it floats onto */
+      }
+      if (probe.eof()) return limit
+      const node = parseBlock(probe)
+      const invisible =
+        node === null || node.type === 'abbreviation_def' || node.type === 'comment'
+      if (!invisible || probe.eof()) break
+    }
+  } finally {
+    activeMatchers = matchers
+  }
+
+  return Math.min(Math.max(probe.pos, 1), limit)
+}
+
 function collectAttachedBlock(
   lexer: Lexer,
   isBoundary: (line: string) => boolean,
@@ -5689,6 +5754,22 @@ function collectAttachedBlock(
     take = fenced + 1
   } else {
     while (lexer.peek(take) !== undefined && !isBoundary(lexer.peek(take)!)) take++
+    // ...AND ONE BLOCK IS WHERE THAT BLOCK ENDS. §17 L3 says it in capitals: a
+    // `+` attaches "the FOLLOWING flush-left block to that container - ONE block
+    // of ANY kind". The trailing "up to the next blank line, sibling marker, or
+    // a further `+`" is the EXTENT of that one block, not a second thing the
+    // attachment is (markup-carve/carve#1290). The boundary scan above finds the
+    // outer limit; inside it the marker still takes only the first block, so
+    // `- a` / `+` / `para` / `> q` leaves the quote OUTSIDE the item and a
+    // second block costs a second marker.
+    //
+    // Measured by RE-PARSING rather than by a second line scan, so there is one
+    // definition of where a block ends: a scan would be a copy of the block
+    // grammar that could drift from it silently. A self-delimiting block never
+    // reaches here - `fencedBlockEnd` above reads its closer from the lines,
+    // which is also what keeps a deeply nested attachment affordable.
+    const measured = attachedBlockExtent(lexer, take, transform)
+    if (measured < take) take = measured
   }
   const startLineIndex = lexer.pos
   const lines: string[] = []
@@ -6244,6 +6325,29 @@ function parseList(lexer: Lexer): List {
         lineNumbers: attachedLineNumbers,
         startLineIndex: attachedStartLineIndex,
       } = collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
+      // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
+      // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
+      // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
+      // as soon as it had ONE block, so the second marker was left at the top
+      // level and rendered as a paragraph of its own - `<p>+</p>` on the page,
+      // with the block it was written for outside the item (§17 L3, corpus
+      // 327-…-that-block-s-extent-7).
+      //
+      // The blank between two attached blocks is a SEPARATOR, not a loosener:
+      // the author wrote no blank line, so the item stays tight, which is the
+      // same carve-out `plusSeparators` makes in the indented body.
+      while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
+        const plusLineIndex = lexer.pos
+        lexer.consume()
+        const more = collectAttachedBlock(lexer, isItemAttachBoundary, (a) =>
+          sliceColumns(a, baseIndent),
+        )
+        if (more.lines.length === 0) break
+        attached.push('')
+        attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
+        attached.push(...more.lines)
+        attachedLineNumbers.push(...more.lineNumbers)
+      }
       const sub = nestedSubLexer(lexer, attached, attachedStartLineIndex, attachedLineNumbers)
       const fbChildren = parseBlocks(sub, 0)
       const fbItem: ListItem = { type: 'list_item', children: fbChildren }
