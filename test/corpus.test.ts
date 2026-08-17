@@ -439,6 +439,22 @@ const IMPLEMENTED = new Set([
   'an-unclosed-verbatim-run-in-a-row-stops-at-the-closing-pipe',
   'a-floating-attribute-is-scoped-to-the-container-that-holds-it',
   'a-continuation-row-s-open-run-and-an-escaped-closing-pipe',
+  // The pin bump to carve 8b80822 adds SEVEN categories, one document each -
+  // markup-carve/carve#1311, which pins that a comment fence hides its body at
+  // every column and not only at column 0. Every one of the seven was rendered
+  // through this engine and compared with its `.html` fixture BEFORE its name
+  // went in here: 7 of 7 byte-for-byte, and the whole corpus at this pin
+  // measured 1131 of 1131 in the same run. No engine work was needed - the
+  // prepass here already treats a comment fence as opaque wherever it is
+  // opened, so each entry names a case that was already passing rather than
+  // one this list forces green.
+  'a-comment-fence-at-an-item-s-content-column-registers-nothing-either',
+  'a-footnote-definition-inside-an-item-s-comment-registers-nothing',
+  'a-comment-fence-opened-on-an-item-s-marker-line-hides-its-body-too',
+  'a-comment-fence-one-item-deeper-registers-nothing-either',
+  'a-wider-comment-fence-inside-an-item-hides-its-body-the-same-way',
+  'an-abbreviation-inside-a-comment-defines-nothing',
+  'a-comment-fence-inside-a-colon-container-registers-nothing',
 ])
 
 /**
