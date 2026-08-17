@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToMarkdown } from '../src/index.js'
+import { renderMarkdown } from '../src/render-markdown.js'
+import type { Document, InlineNode } from '../src/ast.js'
 
 /**
  * A LINE'S CONTENT POSITION IS AFTER ITS CONTAINER PREFIX (PART 11 section 8b
@@ -105,6 +107,49 @@ describe("a line's content position is after its container prefix", () => {
     // container encloses.
     expect(md('\\# heading')).toBe('\\# heading')
     expect(md('\\#tag rest')).toBe('#tag rest')
+  })
+})
+
+describe('a decision survives the container that re-runs the pass', () => {
+  it('keeps a quoted hash inside an admonition that has a title of its own', () => {
+    // THE CASE THE SECOND SENTINEL EXISTS FOR, and the only shape that reaches
+    // it. The pass runs on a block's way out and is skipped for a block that
+    // emitted no authored hash, so a plain container never re-reads its
+    // children. An admonition with a TITLE renders inlines of its own, so it
+    // does run the pass again - over text that already carries the quote
+    // marker its child wrote.
+    //
+    // Recording the answer as a distinct sentinel is what makes that re-run
+    // inert. Left undecided, the hash is measured a second time against
+    // `> # heading`, scores as mid-line, and the quote marker takes the escape
+    // straight back off - which is markup-carve/carve#1330 returning through
+    // the back door.
+    //
+    // Hand-built rather than parsed: the title has to carry an authored hash
+    // for the pass to re-run at all, and that is the whole trigger.
+    const hash: InlineNode = { type: 'escaped_text', value: '#' }
+    const doc: Document = {
+      type: 'document',
+      children: [
+        {
+          type: 'admonition',
+          kind: 'note',
+          title: [{ type: 'text', value: 'C' }, hash, { type: 'text', value: ' tips' }],
+          children: [
+            {
+              type: 'block_quote',
+              children: [
+                { type: 'paragraph', children: [hash, { type: 'text', value: ' heading' }] },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+
+    // The title's own hash is mid-line and loses its escape; the quoted one
+    // stands at the content position of the line its block wrote and keeps it.
+    expect(renderMarkdown(doc)).toBe('**C# tips**\n\n> \\# heading\n')
   })
 })
 
