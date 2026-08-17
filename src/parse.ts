@@ -2405,6 +2405,75 @@ function collectLinkDefs(lexer: Lexer) {
     const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
     const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
+    // AN OPEN CODE FENCE ANSWERS FIRST, ahead of every tracker below it.
+    // §24 S2 makes a line verbatim once the innermost matched container is a
+    // fenced body, and §28 says the same of a comment fence's body; neither
+    // asks what the line LOOKS like. The trackers below asked anyway, so a line
+    // inside a code sample was read as live structure and changed what got
+    // collected AFTER the fence closed - three symptoms of the one ordering
+    // (carve-js#1132):
+    //
+    //   - a `:::` line pushed a div, and the abbreviation branch requires
+    //     document level, so every abbreviation below the sample stopped
+    //     registering (the reported shape);
+    //   - a `%%%` line opened an opaque comment region that ran PAST the code
+    //     fence's closer and swallowed the definitions after it;
+    //   - a `::: |` line opened a verse region that did the same.
+    //
+    // Each one leaves a valid definition silently unresolved because of a
+    // character inside a code sample, which is the one thing verbatim content
+    // may never do. Only the fence's own closer is read here.
+    if (fence) {
+      // CLOSER: strip a blockquote prefix only when the fence is quoted, and
+      // NEVER a list marker -- a fence delimiter is a continuation line of pure
+      // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
+      // is not a closer. Re-base to the column the fence opened at.
+      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
+      const ki = k.length - k.replace(/^[ \t]+/, '').length
+      const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
+      // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
+      // the block lexer does, and a definition written after a fence that only
+      // ONE of the two reads as closed is collected by one and rendered by the
+      // other.
+      const close = d.match(RE_FENCE_CLOSER_PREPASS)
+      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
+        fence = null
+        continue
+      }
+      // The early exit is for a line the fence really holds. A fence opened
+      // inside a quote or a list item does NOT hold a line that no longer
+      // reaches that container: the block parser has left the container and
+      // reads the line afresh, so a `:::` closer out there is real structure
+      // and still has to move the depth stack. Skipping the trackers past the
+      // container was the one regression this reordering introduced - a div
+      // closer that lost its pop leaves every abbreviation below it
+      // suppressed, which is the reported bug with its sign flipped.
+      //
+      // Asked AFTER the closer, never before: a closer written at column 0 for
+      // a fence opened at an item's content column is dedented out of its
+      // container by construction, and testing the container first would read
+      // that very line as a new opener.
+      //
+      // Such a line is still no definition site - this pass leaves the fence
+      // open, exactly as it did before, and the guard below the trackers stops
+      // it short of collecting. That a fence can outlive its container at all
+      // is a separate defect of this pass, filed on its own; nothing here
+      // changes it.
+      // EVERY container the fence sits in has to hold the line, not whichever
+      // one is easiest to ask about. A quoted fence can also sit at a list
+      // item's content column (`> - ``` `), and a following `> :::` keeps the
+      // quote while leaving the item - so a quote-only test called it held and
+      // the div closer lost its pop again, one container further in.
+      //
+      // The column is measured on `k`, the same quote-stripped view the closer
+      // above reads, because a content column inside a quote is measured
+      // inside the quote (carve#658). Reading the raw indent there would
+      // compare a column against a line that still carries its `> ` prefix.
+      const containerHoldsLine =
+        (!fence.quoted || rawIsQuoted) &&
+        (fence.contentCol === 0 || isBlankLine(raw) || ki >= fence.contentCol)
+      if (containerHoldsLine) continue // definitions inside fenced code are literal samples
+    }
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
     if (commentFence !== null) {
@@ -2440,23 +2509,10 @@ function collectLinkDefs(lexer: Lexer) {
       if (colon[2] === '' && divs.length && divs[divs.length - 1] === width) divs.pop()
       else divs.push(width)
     }
-    if (fence) {
-      // CLOSER: strip a blockquote prefix only when the fence is quoted, and
-      // NEVER a list marker -- a fence delimiter is a continuation line of pure
-      // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
-      // is not a closer. Re-base to the column the fence opened at.
-      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
-      const ki = k.length - k.replace(/^[ \t]+/, '').length
-      const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
-      // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
-      // the block lexer does, and a definition written after a fence that only
-      // ONE of the two reads as closed is collected by one and rendered by the
-      // other.
-      const close = d.match(RE_FENCE_CLOSER_PREPASS)
-      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
-        fence = null
-      continue // definitions inside fenced code are literal samples
-    }
+    // Only a line the fence's container no longer holds reaches here with a
+    // fence still open (see above). It was allowed past the trackers so a
+    // boundary out there is seen; it collects nothing.
+    if (fence) continue
     // OPENER: strip container prefixes (blockquote AND list marker) and re-base
     // to the content column, so a fence on a list item marker line (`- ```) or a
     // continuation line at the content column both open. RESIDUAL (line-based
