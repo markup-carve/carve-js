@@ -2247,7 +2247,7 @@ function prepassMarker(text: string, re: RegExp = RE_PREPASS_MARKER): RegExpMatc
 }
 
 function collectLinkDefs(lexer: Lexer) {
-  let fence: { ch: string; len: number; contentCol: number; quoted: boolean } | null = null
+  let fence: { ch: string; len: number; contentCol: number; quoted: boolean; quoteDepth: number } | null = null
   // A LINE BLOCK is verse: a definition written inside one is text the author
   // laid out, not a definition (PART 9 §23). Tracked like a code fence, and
   // closed on its own width so a wider `:::: |` is not closed by a narrower run.
@@ -2405,6 +2405,19 @@ function collectLinkDefs(lexer: Lexer) {
     const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
     const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
+    // The DEPTH behind that boolean. A fence opened at two quote levels is not
+    // held by a line carrying one: `> :::` under `> > ``` ` has left the inner
+    // quote and closes the div outside it, and a boolean cannot tell the two
+    // apart - it reports "still quoted" and the closer loses its pop, which is
+    // the reordering regression one container deeper again. Same pattern as the
+    // boolean above, counted rather than tested, and taken as the MAX of the two
+    // views for the same reason the boolean ORs them (`- > ``` `).
+    const quoteRunDepth = (text: string): number => {
+      const run = /^(?:[^\S ]*>(?: |$))+/.exec(text)
+
+      return run ? (run[0].match(/>/g) ?? []).length : 0
+    }
+    const rawQuoteDepth = Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker))
     // AN OPEN CODE FENCE ANSWERS FIRST, ahead of every tracker below it.
     // §24 S2 makes a line verbatim once the innermost matched container is a
     // fenced body, and §28 says the same of a comment fence's body; neither
@@ -2470,7 +2483,7 @@ function collectLinkDefs(lexer: Lexer) {
       // inside the quote (carve#658). Reading the raw indent there would
       // compare a column against a line that still carries its `> ` prefix.
       const containerHoldsLine =
-        (!fence.quoted || rawIsQuoted) &&
+        rawQuoteDepth >= fence.quoteDepth &&
         (fence.contentCol === 0 || isBlankLine(raw) || ki >= fence.contentCol)
       if (containerHoldsLine) continue // definitions inside fenced code are literal samples
     }
@@ -2559,7 +2572,7 @@ function collectLinkDefs(lexer: Lexer) {
     const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
     const run = open ? open[2]! : rawOpen?.[1]
     if (run) {
-      fence = { ch: run[0]!, len: run.length, contentCol: openerCol, quoted: rawIsQuoted }
+      fence = { ch: run[0]!, len: run.length, contentCol: openerCol, quoted: rawIsQuoted, quoteDepth: rawQuoteDepth }
       continue
     }
     // Maintain footnote-body context (see `inFootnoteBody` above): a flush
