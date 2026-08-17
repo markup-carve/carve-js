@@ -2405,6 +2405,41 @@ function collectLinkDefs(lexer: Lexer) {
     const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
     const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
     const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
+    // AN OPEN CODE FENCE ANSWERS FIRST, ahead of every tracker below it.
+    // §24 S2 makes a line verbatim once the innermost matched container is a
+    // fenced body, and §28 says the same of a comment fence's body; neither
+    // asks what the line LOOKS like. The trackers below asked anyway, so a line
+    // inside a code sample was read as live structure and changed what got
+    // collected AFTER the fence closed - three symptoms of the one ordering
+    // (carve-js#1132):
+    //
+    //   - a `:::` line pushed a div, and the abbreviation branch requires
+    //     document level, so every abbreviation below the sample stopped
+    //     registering (the reported shape);
+    //   - a `%%%` line opened an opaque comment region that ran PAST the code
+    //     fence's closer and swallowed the definitions after it;
+    //   - a `::: |` line opened a verse region that did the same.
+    //
+    // Each one leaves a valid definition silently unresolved because of a
+    // character inside a code sample, which is the one thing verbatim content
+    // may never do. Only the fence's own closer is read here.
+    if (fence) {
+      // CLOSER: strip a blockquote prefix only when the fence is quoted, and
+      // NEVER a list marker -- a fence delimiter is a continuation line of pure
+      // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
+      // is not a closer. Re-base to the column the fence opened at.
+      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
+      const ki = k.length - k.replace(/^[ \t]+/, '').length
+      const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
+      // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
+      // the block lexer does, and a definition written after a fence that only
+      // ONE of the two reads as closed is collected by one and rendered by the
+      // other.
+      const close = d.match(RE_FENCE_CLOSER_PREPASS)
+      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
+        fence = null
+      continue // definitions inside fenced code are literal samples
+    }
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
     if (commentFence !== null) {
@@ -2439,23 +2474,6 @@ function collectLinkDefs(lexer: Lexer) {
       const width = colon[1]!.length
       if (colon[2] === '' && divs.length && divs[divs.length - 1] === width) divs.pop()
       else divs.push(width)
-    }
-    if (fence) {
-      // CLOSER: strip a blockquote prefix only when the fence is quoted, and
-      // NEVER a list marker -- a fence delimiter is a continuation line of pure
-      // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
-      // is not a closer. Re-base to the column the fence opened at.
-      const k = fence.quoted ? raw.replace(/^(?:[^\S ]*>(?: |$))+/, '') : raw
-      const ki = k.length - k.replace(/^[ \t]+/, '').length
-      const d = ki >= fence.contentCol ? k.slice(fence.contentCol) : k
-      // `TRAILING_WS`, not `\s`: this prepass decides the same `code_fence_close`
-      // the block lexer does, and a definition written after a fence that only
-      // ONE of the two reads as closed is collected by one and rendered by the
-      // other.
-      const close = d.match(RE_FENCE_CLOSER_PREPASS)
-      if (close && close[1]![0] === fence.ch && close[1]!.length >= fence.len)
-        fence = null
-      continue // definitions inside fenced code are literal samples
     }
     // OPENER: strip container prefixes (blockquote AND list marker) and re-base
     // to the content column, so a fence on a list item marker line (`- ```) or a
