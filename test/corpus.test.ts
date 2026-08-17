@@ -467,6 +467,18 @@ const IMPLEMENTED = new Set([
   // All ten were then rendered through this engine and compared with their
   // `.html` fixtures BEFORE this name went in - 10 of 10 byte-for-byte, and the
   // whole corpus at this pin measured 1141 of 1141 in the same run.
+  //
+  // The pin bump to carve 5951e6d adds NO category. It adds two documents to
+  // the category above - markup-carve/carve#1328, which amends section 25 to
+  // say the token pass runs IN ADDITION TO the value-wide probe rather than
+  // instead of it, and pins that with a `ping` and a `srcset` whose ONLY
+  // payload sits in the leading token. Those two are the only corpus documents
+  // that tell a token-only implementation apart from an additive one, so the
+  // pin had to move for them to be measured at all. Both were rendered through
+  // this engine and compared with their `.html` fixtures: 2 of 2
+  // byte-for-byte, no engine work needed, because `#1164` already probed the
+  // whole value alongside every token. The corpus measured 1143 of 1143 in the
+  // same run.
   'url-list-attributes-are-probed-token-wise',
 ])
 
