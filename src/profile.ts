@@ -49,6 +49,13 @@ export const CANONICAL_BLOCK_TYPES = [
   'figure',
   'figure_group',
   'caption',
+  // PART 12 §18 gives a citation definition its own block type, and
+  // `spec/docs/profiles.md` lists it alongside the other two definition kinds.
+  // This engine already EMITS it (markup-carve/carve-js#1122); only the
+  // nameable vocabulary was behind, and a type the vocabulary does not know
+  // falls through the string-only `isTypeAllowed` as ALLOWED - the opposite of
+  // what the same profile answers with an axis.
+  'citation_definition',
   // A DEFINITION LINE IS CONTENT, so both definition types are deniable
   // (carve#826, the ruling on carve#771). They render nothing in HTML and are
   // real output on the `carve`, `markdown` and `plain` targets, so a profile

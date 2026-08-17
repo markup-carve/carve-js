@@ -416,6 +416,29 @@ const IMPLEMENTED = new Set([
   'an-attribute-block-reaches-the-nested-list-it-precedes',
   'a-block-attached-after-an-invisible-line-leaves-the-item-tight',
   'an-abbreviation-definition-in-an-item-body-is-paragraph-text',
+  // The pin bump to carve b6917ab adds TEN categories. Every document in all
+  // ten - 69 of them - was rendered through this engine and compared with its
+  // `.html` fixture before any name went in here. Only these five matched, and
+  // only these five are listed: 26 of 26 documents byte-for-byte.
+  //
+  // The other five did NOT match, on 18 of their 43 documents, and they were
+  // engine gaps rather than bookkeeping. They stayed out and the coverage guard
+  // below stayed red - the one thing this list must never do is turn a real
+  // divergence into a green run - until the engine work landed as `#1140`,
+  // `#1141`, `#1142`, `#1143` and `#1144`. Their names are below, added the same
+  // way: all 43 documents rendered through this engine and compared with their
+  // `.html` fixtures first, 43 of 43 byte-for-byte, and the whole corpus at this
+  // pin measured at 1124 of 1124 in the same run.
+  'a-label-beginning-with-an-at-sign-is-not-a-reference-label',
+  'a-tab-after-a-fence-or-a-frontmatter-opener-depends-on-where-it-sits',
+  'an-attribute-line-after-a-continuation-marker-attributes-the-attached-block',
+  'an-unclosed-inline-run-in-a-line-block-reaches-the-end-of-the-block',
+  'which-inline-content-a-heading-id-is-derived-from',
+  'a-column-0-line-after-a-container-s-last-block-when-that-block-left-no-paragraph-open',
+  'a-continuation-marker-attaches-one-block-and-the-boundary-is-that-block-s-extent',
+  'an-unclosed-verbatim-run-in-a-row-stops-at-the-closing-pipe',
+  'a-floating-attribute-is-scoped-to-the-container-that-holds-it',
+  'a-continuation-row-s-open-run-and-an-escaped-closing-pipe',
 ])
 
 /**
