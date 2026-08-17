@@ -162,6 +162,142 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reported too - including an event-handler attribute on a `<dt>`, `<dd>` or
   group `<div>`, which were the only places in the importer where active markup
   was dropped in silence.
+
+- **An imported blockquote keeps the source it cites** (markup-carve/carve#1286).
+  A `<blockquote cite="u">` imported as a bare quote with a dropped-attribute
+  diagnostic; the citation is now kept on an ordinary block-attribute line.
+
+- **HTML import keeps the tightness the source spelled** (markup-carve/carve#1210,
+  spec corpus-convert 27/28). Every list imported loose, whatever the source
+  spelled, so `<ul><li>one</li><li>two</li></ul>` came back with a blank line
+  between its items and re-rendered as `<li><p>one</p></li>`. A bare-text
+  `<li>` now imports as a tight list item and a paragraph-wrapped
+  `<li><p>...</p></li>` as a loose one. Carve spells tightness per LIST rather
+  than per item, so a mixed list resolves the way CommonMark resolves it: one
+  paragraph item loosens the whole list, because resolving it tight would drop
+  the paragraph that item actually spelled. Looseness is decided per level, so
+  a paragraph item in a sublist does not loosen its bare-text parent. A nested
+  sublist beside bare text is structure rather than a paragraph wrapper and
+  leaves its host item tight, and the task-list checkbox `<input>` is consumed
+  into the `[x]` marker rather than imported, so it does not vote either.
+
+- **HTML import names the `<colgroup>` it drops.** The element went in
+  complete silence: the table walk looks for `tr`, descends through the
+  `<colgroup>` and finds none, so a table's column description left the
+  document with nothing in the report to say it had. Carve has no column model
+  - a table's columns are only the cells its rows carry - and whether it should
+  get one is a language question (`markup-carve/carve#1092`), so the drop
+  stands; what it gets is a `warning` naming the element under the
+  `<colgroup>`'s own path. The wording is verbatim from `carve-rs`, so the
+  engines report the drop in the same words. Only `<colgroup>` is scanned for:
+  an HTML parser answers a `col` start tag inside a table by inserting an
+  implied `<colgroup>` first, so `<table><col span="2"><col>` arrives as one
+  wrapper holding both and a bare `<col>` reports through it.
+
+- **A table's sections and rows keep the attributes they have a slot for.** A
+  `<tbody id="totals">` and a `<tr class="warn">` fell into the empty `attrs`
+  slot with no diagnostic at all, though the model has a place for both:
+  `table_row.attrs`, which the writer spells on the closing pipe and every
+  renderer emits on the `<tr>`, and the body group's `attrs` in
+  `table.rowGroups`. A `<tbody>` carrying attributes is now a table whose
+  grouping says something the rows cannot, so the field is emitted to hold
+  them; the head and the foot are stated as row COUNTS and have no slot, so a
+  `<thead>` or `<tfoot>` that carries any is reported by name, as is a
+  `<tbody>` whose grouping was dropped for another reason. An unsupported
+  attribute on one of these elements reports the way it does everywhere else,
+  where nothing was said about them at all before. A section with no rows is
+  read too - it is one of the table's sections, and reading them back off the
+  rows had missed it - and reported, because a body group is the run of rows it
+  consumes and one with none is not a group.
+
+- **BBCode keeps the backslash, the brace and the backtick a post typed.**
+  `bbcodeToCarve` ran one of the four escaping stages a language without a
+  backslash escape of its own needs, so three characters that are literal text
+  in a forum post became markup. A backslash was read as a Carve escape and ate
+  the character after it, turning `a \ b` into a non-breaking space with the
+  backslash gone; `a {#id} c` opened an attribute block and came back as a tag
+  span; and a backtick opened a code span, a lone one included. All three now
+  survive as the text the post wrote. A `[code]` body is unaffected: it is
+  stashed before any escaping runs.
+
+- **An unwrapped element reports the attributes it takes with it.** The importer
+  keeps an `id`, a `class` and `data-` pairs while it reads an element, and when
+  the element itself is unwrapped there is nothing left to hang them on - so
+  they went in silence. `<video id="player">` said the element had been
+  unwrapped and never that the id had gone with it. Applies to every unwrap arm:
+  embeds, `<section>` and friends, and any unmapped inline element.
+
+- **`<ol start>` is read by HTML's integer rules on import.** `Number()` stood
+  there and accepted what the attribute does not: `start="2.9"` opened a list at
+  2.9 and `start="1e3"` at 1000, both written back as their own marker, and
+  `start="foo"` became `NaN`, which the writer spelled `NaN. x`. Such a value is
+  now reported and the list starts where it would without the attribute.
+
+- **`htmlToCarve` keeps an authored table-cell `scope` position cannot explain**
+  (markup-carve/carve-js#1032). `<th scope="colgroup">` imports as
+  `|={scope=colgroup} A |`, and a `<th scope="rowgroup">` in a body row keeps
+  its value the same way, in the attributes slot a header cell has under the
+  binding order described in Changed above; the cell re-reads as the header
+  cell it was. `scope="col"` in the leading header run and `scope="row"` below
+  it are still dropped, because the renderer derives those from position and
+  importing them would write the generator's own output back as if the author
+  had typed it.
+
+- **HTML import keeps every attribute the language can hold** (#1156). The
+  importer's attribute policy was a KEEP LIST - `data-*` plus a handful of
+  named cases survived and everything else was dropped - so
+  `<blockquote aria-label="note">` imported without its label and any
+  attribute the list had not anticipated went the same way. The policy is now
+  a rule rather than a list: an attribute Carve can carry is carried, and only
+  the ones the language cannot hold are dropped with a diagnostic. Every
+  `aria-*` attribute survives an import, and so does an attribute no one
+  wrote a case for.
+
+- **Every HTML import adapter, `generic` included, reads the DPUB-ARIA
+  footnote roles** (markup-carve/carve-js#1105). An anchor with
+  `role="doc-noteref"` and the `role="doc-endnotes"` section feed the same
+  footnote pass the word-processor adapters run, so Pandoc 2.11+ HTML - and
+  this engine's own rendered footnotes - import as real `[^N]` references and
+  definitions without naming an adapter. This is a deliberate `generic`-mode
+  behavior change, matching carve-php's core policy; the roles are AUTHORED
+  semantics where the adapters' anchor-pair heuristic is an inference, so the
+  heuristic (and the vendor class names) stays adapter-gated. A role-less
+  document imports exactly as before, and an unmarked anchor addressing a
+  note stays the content link the author wrote.
+
+- **HTML-to-Carve conversion reports the figure wrapper it cannot spell**
+  (markup-carve/carve#1211, PART 12 §16). A `<figure>` wrapping a table imports
+  as a figure whose target is the table, which Carve source has no spelling for,
+  so the writer emits the table and a `^ ` caption line. That re-reads as the
+  table's own caption, moving the text from a `<figcaption>` beside the table to
+  a `<caption>` inside it. `htmlToCarve` now reports that as a
+  `structure-unspellable` warning and `carve migrate --from html --check-loss`
+  exits 1 for such input. `htmlToAst` is unchanged and reports nothing: a
+  consumer that keeps the AST keeps the wrapper.
+
+- **HTML import spells the seven semantic elements instead of unwrapping them**
+  (markup-carve/carve#1140). `<kbd>Tab</kbd>` imports as `[Tab]{kbd}`,
+  `<abbr title="X">c</abbr>` as `[c]{abbr="X"}` and `<time datetime="X">c</time>`
+  as `[c]{time="X"}`, with `samp`, `var`, `cite` and `dfn` alongside them; an
+  absent `title` or `datetime` gives the bare boolean, and leftover `id`,
+  `class` and `data-*` ride the same span. Neither an `element-unwrapped` nor an
+  `attribute-dropped` diagnostic fires for any of the seven, because neither
+  loss happens: a document Carve can express exactly imports as that document.
+  The compact attribute form, not
+  `:kbd[…]`: the generic spelling is the soft-deprecated compatibility form, so
+  importing into it would write a form scheduled for removal into freshly
+  migrated documents. `<mark>` and inline `<code>` are unchanged, each already
+  having its own syntax, and `<pre><code>` still imports as a code block. All
+  three modes map alike: none of the seven is active content for `safe` to
+  withhold, and `roundtrip` raw-preserves only what Carve cannot express, so an
+  exotic attribute on one of them (`<kbd dir="rtl">`) is now diagnosed as
+  dropped rather than riding along inside raw HTML - the treatment `<mark>` and
+  `<em>` already get there. `kbd`, `abbr` and `time` are core and round-trip
+  through a plain render; `samp`, `var`, `cite` and `dfn` belong to
+  `semanticSpan()`, so without that extension registered they render as
+  `<span samp="">out</span>` rather than `<samp>` - the semantic survives as an
+  attribute a reader can recover, where it was discarded before.
+
 - **A browser IIFE bundle.** `dist/carve.iife.min.js` exposes the whole public
   API as a `carve` global, for consumers that load classic scripts rather than
   ESM: CDN script tags, sandboxed iframes, userscript hosts. The `unpkg` and
@@ -230,16 +366,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **HTML import keeps every attribute the language can hold** (#1156). The
-  importer's attribute policy was a KEEP LIST - `data-*` plus a handful of
-  named cases survived and everything else was dropped - so
-  `<blockquote aria-label="note">` imported without its label and any
-  attribute the list had not anticipated went the same way. The policy is now
-  a rule rather than a list: an attribute Carve can carry is carried, and only
-  the ones the language cannot hold are dropped with a diagnostic. Every
-  `aria-*` attribute survives an import, and so does an attribute no one
-  wrote a case for.
-
 - **A `[@key]: entry` bibliography line is a `citation_definition` node**
   (markup-carve/carve#1276, PART 12 §18). The line used to reach the published
   tree as a paragraph whose first child is a `citation_group` followed by the
@@ -258,18 +384,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it sits and its entry renders in the references list, exactly as before. The
   canonical writer now writes the line back from the node, keeping a run of
   definition lines a run and always quoting the metadata values.
-
-- **Every HTML import adapter, `generic` included, reads the DPUB-ARIA
-  footnote roles** (markup-carve/carve-js#1105). An anchor with
-  `role="doc-noteref"` and the `role="doc-endnotes"` section feed the same
-  footnote pass the word-processor adapters run, so Pandoc 2.11+ HTML - and
-  this engine's own rendered footnotes - import as real `[^N]` references and
-  definitions without naming an adapter. This is a deliberate `generic`-mode
-  behavior change, matching carve-php's core policy; the roles are AUTHORED
-  semantics where the adapters' anchor-pair heuristic is an inference, so the
-  heuristic (and the vendor class names) stays adapter-gated. A role-less
-  document imports exactly as before, and an unmarked anchor addressing a
-  note stays the content link the author wrote.
 
 - **Every table cell pads its content in the canonical form** (PART 11 §6e). A
   cell carrying a prefix - the kind marker `=`, an alignment marker, an
@@ -309,38 +423,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   did not exist; it now writes `|={.x} a |` and keeps the delimiter row only for
   the one shape that still has no native spelling, a span marker promoted to a
   header cell.
-- **HTML-to-Carve conversion reports the figure wrapper it cannot spell**
-  (markup-carve/carve#1211, PART 12 §16). A `<figure>` wrapping a table imports
-  as a figure whose target is the table, which Carve source has no spelling for,
-  so the writer emits the table and a `^ ` caption line. That re-reads as the
-  table's own caption, moving the text from a `<figcaption>` beside the table to
-  a `<caption>` inside it. `htmlToCarve` now reports that as a
-  `structure-unspellable` warning and `carve migrate --from html --check-loss`
-  exits 1 for such input. `htmlToAst` is unchanged and reports nothing: a
-  consumer that keeps the AST keeps the wrapper.
-- **HTML import spells the seven semantic elements instead of unwrapping them**
-  (markup-carve/carve#1140). `<kbd>Tab</kbd>` imports as `[Tab]{kbd}`,
-  `<abbr title="X">c</abbr>` as `[c]{abbr="X"}` and `<time datetime="X">c</time>`
-  as `[c]{time="X"}`, with `samp`, `var`, `cite` and `dfn` alongside them; an
-  absent `title` or `datetime` gives the bare boolean, and leftover `id`,
-  `class` and `data-*` ride the same span. In 0.1.3 each of the seven came back
-  as its bare text with an `element-unwrapped` diagnostic, and `<time>` lost its
-  `datetime` to an `attribute-dropped` one step earlier, so a document Carve can
-  express exactly arrived as plain text. Both diagnostics stop firing for these
-  elements, because neither loss still happens. The compact attribute form, not
-  `:kbd[…]`: the generic spelling is the soft-deprecated compatibility form, so
-  importing into it would write a form scheduled for removal into freshly
-  migrated documents. `<mark>` and inline `<code>` are unchanged, each already
-  having its own syntax, and `<pre><code>` still imports as a code block. All
-  three modes map alike: none of the seven is active content for `safe` to
-  withhold, and `roundtrip` raw-preserves only what Carve cannot express, so an
-  exotic attribute on one of them (`<kbd dir="rtl">`) is now diagnosed as
-  dropped rather than riding along inside raw HTML - the treatment `<mark>` and
-  `<em>` already get there. `kbd`, `abbr` and `time` are core and round-trip
-  through a plain render; `samp`, `var`, `cite` and `dfn` belong to
-  `semanticSpan()`, so without that extension registered they render as
-  `<span samp="">out</span>` rather than `<samp>` - the semantic survives as an
-  attribute a reader can recover, where it was discarded before.
 - **A table's `rowGroups` is validated on ingest, at every depth**
   (markup-carve/carve-js#1055). `fromAstJson` now refuses a `rowGroups` that is
   missing `headRows`, `bodies` or `footRows`, carries a property the schema does
@@ -574,10 +656,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   demanded a non-empty link text, so `[][d]` was left as literal text instead
   of resolving against its definition.
 
-- **An imported blockquote keeps the source it cites** (markup-carve/carve#1286).
-  A `<blockquote cite="u">` imported as a bare quote with a dropped-attribute
-  diagnostic; the citation is now kept on an ordinary block-attribute line.
-
 - **`carveToCarve` writes no `+` continuation marker where a block-attributes
   line already interrupts** (markup-carve/carve#1275). The writer emits the
   marker so that a paragraph attached to a list item cannot come back folded
@@ -623,62 +701,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   move: PART 9 §17 L2 leaves the item tight when a sub-block is attached after
   a blank line, attributed or not.
 
-- **HTML import keeps the tightness the source spelled** (markup-carve/carve#1210,
-  spec corpus-convert 27/28). Every list imported loose, whatever the source
-  spelled, so `<ul><li>one</li><li>two</li></ul>` came back with a blank line
-  between its items and re-rendered as `<li><p>one</p></li>`. A bare-text
-  `<li>` now imports as a tight list item and a paragraph-wrapped
-  `<li><p>...</p></li>` as a loose one. Carve spells tightness per LIST rather
-  than per item, so a mixed list resolves the way CommonMark resolves it: one
-  paragraph item loosens the whole list, because resolving it tight would drop
-  the paragraph that item actually spelled. Looseness is decided per level, so
-  a paragraph item in a sublist does not loosen its bare-text parent. A nested
-  sublist beside bare text is structure rather than a paragraph wrapper and
-  leaves its host item tight, and the task-list checkbox `<input>` is consumed
-  into the `[x]` marker rather than imported, so it does not vote either.
-
-- **HTML import names the `<colgroup>` it drops.** The element went in
-  complete silence: the table walk looks for `tr`, descends through the
-  `<colgroup>` and finds none, so a table's column description left the
-  document with nothing in the report to say it had. Carve has no column model
-  - a table's columns are only the cells its rows carry - and whether it should
-  get one is a language question (`markup-carve/carve#1092`), so the drop
-  stands; what it gets is a `warning` naming the element under the
-  `<colgroup>`'s own path. The wording is verbatim from `carve-rs`, so the
-  engines report the drop in the same words. Only `<colgroup>` is scanned for:
-  an HTML parser answers a `col` start tag inside a table by inserting an
-  implied `<colgroup>` first, so `<table><col span="2"><col>` arrives as one
-  wrapper holding both and a bare `<col>` reports through it.
-
-- **A table's sections and rows keep the attributes they have a slot for.** A
-  `<tbody id="totals">` and a `<tr class="warn">` fell into the empty `attrs`
-  slot with no diagnostic at all, though the model has a place for both:
-  `table_row.attrs`, which the writer spells on the closing pipe and every
-  renderer emits on the `<tr>`, and the body group's `attrs` in
-  `table.rowGroups`. A `<tbody>` carrying attributes is now a table whose
-  grouping says something the rows cannot, so the field is emitted to hold
-  them; the head and the foot are stated as row COUNTS and have no slot, so a
-  `<thead>` or `<tfoot>` that carries any is reported by name, as is a
-  `<tbody>` whose grouping was dropped for another reason. An unsupported
-  attribute on one of these elements reports the way it does everywhere else,
-  where nothing was said about them at all before. A section with no rows is
-  read too - it is one of the table's sections, and reading them back off the
-  rows had missed it - and reported, because a body group is the run of rows it
-  consumes and one with none is not a group.
-
-- **A cell spanning both ways keeps the grid it came with.** A `^` is resolved
-  against the cell at the same INDEX above it, so a
-  `<td colspan="2" rowspan="2">` written with one mark for its origin left the
-  next rowspan in the row resolving against a column it does not own: the gap
-  between the two marks was filled with a cell the source did not have,
-  reported as an invention, and rendered as a `<td>` the table does not have.
-  The import writes a mark into each column the cell covers, and the renderer
-  absorbs a `^` standing under a merged `<` instead of finding no source and
-  rendering an empty cell - so `| A | < |` over `| ^ | ^ |` renders the covered
-  row empty whether it was imported or typed. `::: list-table` resolves the
-  same shape the same way. A `<th colspan rowspan>` also reported one row-head
-  column too few, because the column below the merged `<` read the cell two
-  rows up rather than the `<` that already carries its origin's header flag.
+- **A `^` standing under a merged `<` is absorbed by the cell above it.** The
+  renderer found no source for it and emitted an empty cell instead, so a
+  hand-typed `| A | < |` over `| ^ | ^ |` grew a `<td>` the table does not
+  have; the covered row renders empty now. `::: list-table` resolves the same
+  shape the same way, and a row-head column below a merged `<` reads the `<`
+  that already carries its origin's header flag rather than the cell two rows
+  up. HTML import writes a mark into each column a `colspan`/`rowspan` cell
+  covers, so an imported grid resolves against the same rule.
 
 - **A caret before a TAB is written bare.** The canonical writer escaped it as
   `\^`, but a tab after the marker leaves the line as prose (corpus 231), so the
@@ -686,15 +716,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   still re-attaches on re-parse and stays escaped. Corpus 304 states the rule
   both follow: a character is escaped only where it opens markup.
 
-- **BBCode keeps the backslash, the brace and the backtick a post typed.**
-  `bbcodeToCarve` ran one of the four escaping stages a language without a
-  backslash escape of its own needs, so three characters that are literal text
-  in a forum post became markup. A backslash was read as a Carve escape and ate
-  the character after it, turning `a \ b` into a non-breaking space with the
-  backslash gone; `a {#id} c` opened an attribute block and came back as a tag
-  span; and a backtick opened a code span, a lone one included. All three now
-  survive as the text the post wrote. A `[code]` body is unaffected: it is
-  stashed before any escaping runs.
 - **A delimiter the calling converter handles keeps its brace bare.** The
   escaper escaped the delimiter inside an UNESCAPED brace, which is only right
   when the brace was escaped - a bare one is a brace the caller declared it
@@ -707,23 +728,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a superscript. Escaping it costs nothing when nothing closes the run, since
   both spellings render alike. An attribute block opener is excluded, since it
   is not a pair opener and escaping its brace would destroy a pinned id.
-- **An unwrapped element reports the attributes it takes with it.** The importer
-  keeps an `id`, a `class` and `data-` pairs while it reads an element, and when
-  the element itself is unwrapped there is nothing left to hang them on - so
-  they went in silence. `<video id="player">` said the element had been
-  unwrapped and never that the id had gone with it. Applies to every unwrap arm:
-  embeds, `<section>` and friends, and any unmapped inline element.
-
 - **A `details` block carrying `{open}` renders it once in a static render.**
   The static renderer adds `open` so the body is expanded for print and did not
   check whether the block already carried it, so a hand-written `::: details
   {open}` came out as `<details open open="">`.
-
-- **`<ol start>` is read by HTML's integer rules on import.** `Number()` stood
-  there and accepted what the attribute does not: `start="2.9"` opened a list at
-  2.9 and `start="1e3"` at 1000, both written back as their own marker, and
-  `start="foo"` became `NaN`, which the writer spelled `NaN. x`. Such a value is
-  now reported and the list starts where it would without the attribute.
 
 - **The canonical writer no longer over-escapes a definition list it did not
   parse.** Its escape decision compares the two renders as trees and skips
@@ -960,15 +968,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `inline_extension` keeps its inlines under `content` while the abbreviation
   walk recursed generically into `children` - so `:kbd[HTML]` silently dropped
   an expansion that `*HTML*`, `[HTML](/u)` and `[HTML]{.x}` all got.
-- **`htmlToCarve` keeps an authored table-cell `scope` position cannot explain**
-  (markup-carve/carve-js#1032). `<th scope="colgroup">` imports as
-  `|={scope=colgroup} A |`, and a `<th scope="rowgroup">` in a body row keeps
-  its value the same way, in the attributes slot a header cell has under the
-  binding order described in Changed above; the cell re-reads as the header
-  cell it was. `scope="col"` in the leading header run and `scope="row"` below
-  it are still dropped, because the renderer derives those from position and
-  importing them would write the generator's own output back as if the author
-  had typed it.
 - **`lintCarve` reports the semantic-attribute rules against the render the
   caller configured** (markup-carve/carve#1167). PART 9 §9 splits the reserved
   names by tier, so `samp`, `var`, `cite` and `dfn` become elements only once
