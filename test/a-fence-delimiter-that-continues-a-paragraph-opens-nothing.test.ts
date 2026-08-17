@@ -59,6 +59,16 @@ describe('a fence delimiter continuing a paragraph opens no fence in the prepass
     expect(html(`text\nmore\n${B}\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
   })
 
+  it('holds for a SECOND delimiter on the line after the first', () => {
+    // The first delimiter is paragraph text, so the paragraph is still open on
+    // the line below it and the second one is text too - which the pass knows
+    // outright, without re-deriving it. Two different spellings, because a
+    // repeated one closes its own predecessor.
+    const source = `text\n${B}\n${T}\n\n[r]: /url\n\n[r][]\n`
+
+    expect(html(source)).toBe('<p>text <code> ~~~</code></p> <p><a href="/url">r</a></p>')
+  })
+
   it('holds when the paragraph continues past the delimiter', () => {
     expect(html(`text\n${B}\ntail\n\n[r]: /url\n\n[r][]\n`)).toContain('href="/url"')
   })
