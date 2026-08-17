@@ -209,9 +209,15 @@ export function escapePlainCarveInlineSyntax(
   line: string,
   handled: HandledDelimiters = {},
 ): string {
-  const escapeFirst = (m: string): string => `\\${m}`
   const bareHandled = handled.bare ?? ''
 
+  // The one bare rule that does NOT go through `escapeUnlessAlreadyEscaped`,
+  // and the one that does not need to: it matches on the character BEFORE the
+  // `%%`, which it requires to be a space, a tab or the start of the line. A
+  // backslash there fails the match outright, so an escaped `\%%` is never
+  // reached and cannot be escaped twice. The offset the helper would insert at
+  // is the captured character's, not the delimiter's, so it does not fit here
+  // either.
   let out = line.replace(/(^|[ \t])%%(?!%)/g, '$1\\%%')
 
   // Braced forms first, so the bare rules below see an escaped `{` and leave
@@ -261,13 +267,13 @@ export function escapePlainCarveInlineSyntax(
   // Only http and https URLs are protected above, so every other scheme reaches
   // this rule.
   if (!bareHandled.includes('/')) {
-    out = out.replace(/(?<![A-Za-z0-9/])\/(?!\s)([^/]+?)(?<!\s)\/(?![A-Za-z0-9])/g, escapeFirst)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9/])\/(?!\s)([^/]+?)(?<!\s)\/(?![A-Za-z0-9])/g, out)
   }
   if (!bareHandled.includes('=')) {
-    out = out.replace(/(?<![A-Za-z0-9=])(?<!(?<!\\)\{)=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, escapeFirst)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9=])(?<!(?<!\\)\{)=(?![=\s])([^=]+?)(?<!\s)=(?![A-Za-z0-9=])/g, out)
   }
   if (!bareHandled.includes('~')) {
-    out = out.replace(/(?<![A-Za-z0-9~])(?<!(?<!\\)\{)~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, escapeFirst)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9~])(?<!(?<!\\)\{)~(?![~\s])([^~]+?)(?<!\s)~(?![A-Za-z0-9~])/g, out)
   }
 
   // `*` is a strong and `_` an underline, and both are word-bounded: the
@@ -277,10 +283,10 @@ export function escapePlainCarveInlineSyntax(
   // Doubling is excluded because `**x**` and `__x__` are already literal to the
   // parser. Ported from carve-php#1141, which fixed the same gap there.
   if (!bareHandled.includes('*')) {
-    out = out.replace(/(?<![A-Za-z0-9*])(?<!(?<!\\)\{)\*(?![*\s])([^*\n]+?)(?<!\s)\*(?![A-Za-z0-9*])/g, escapeFirst)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9*])(?<!(?<!\\)\{)\*(?![*\s])([^*\n]+?)(?<!\s)\*(?![A-Za-z0-9*])/g, out)
   }
   if (!bareHandled.includes('_')) {
-    out = out.replace(/(?<![A-Za-z0-9_])(?<!(?<!\\)\{)_(?![_\s])([^_\n]+?)(?<!\s)_(?![A-Za-z0-9_])/g, escapeFirst)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])(?<!(?<!\\)\{)_(?![_\s])([^_\n]+?)(?<!\s)_(?![A-Za-z0-9_])/g, out)
   }
 
   // A TAG is the one construct here that is not a pair: `#x` opens on its own
@@ -302,7 +308,7 @@ export function escapePlainCarveInlineSyntax(
   // escaping its `#` stops it decoding, so `a &#8212; b` kept the entity
   // instead of becoming an em dash.
   if (!bareHandled.includes('#')) {
-    out = out.replace(/(?<![A-Za-z0-9&])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, escapeFirst)
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9&])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, out)
   }
 
   // A MENTION is the tag's sibling and needs the same rule for the same
@@ -320,10 +326,8 @@ export function escapePlainCarveInlineSyntax(
   // No brace guard, unlike the tag: `{@x@}` is not an attribute block and not
   // a braced pair, so there is nothing above for this rule to duplicate.
   //
-  // Goes through `escapeUnlessAlreadyEscaped` rather than a plain replace, so
-  // an at-sign the source already escaped is left alone. The bare rules above
-  // still use the plain replace and double such an escape; that divergence
-  // from carve-php#1213 is older than this rule and is not widened by it.
+  // Goes through `escapeUnlessAlreadyEscaped`, like every bare rule above, so
+  // an at-sign the source already escaped is left alone.
   if (!bareHandled.includes('@')) {
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])@(?=[A-Za-z0-9_-])/g, out)
   }
