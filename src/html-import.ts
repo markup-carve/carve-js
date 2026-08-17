@@ -12,7 +12,9 @@ import type {
   TableRow,
   TableRowGroups,
 } from './ast.js'
-import { renderCarve } from './render-carve.js'
+import { isAttrIdentifier, renderCarve } from './render-carve.js'
+import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE, isDangerousAttrName } from './render-html.js'
+import { hasOwnKey, setOwn } from './own-property.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -194,6 +196,47 @@ const SEMANTIC_SPAN_VALUE_SOURCE = new Map([['abbr', 'title'], ['dfn', 'title'],
  */
 const TEX_ANNOTATION_ENCODINGS = new Set(['application/x-tex', 'text/x-tex', 'latex'])
 
+/**
+ * The `data-` names that are A SERIALIZER'S PROTOCOL, not an author's content.
+ *
+ * Everything else the source carries is kept, so these need naming: a
+ * round-trip marker carries the stored Carve source for the element it sits on,
+ * and re-emitting it as `{data-carve-src=…}` would make the importer's output
+ * claim a provenance it does not have.
+ */
+const ROUND_TRIP_MARKER_ATTRIBUTES = new Set(['data-djot-src', 'data-carve-src'])
+
+/**
+ * The dangerous URL scheme an attribute value hides where the RENDERER's value
+ * sanitizer cannot see it, or `undefined` when there is none.
+ *
+ * §25 blanks a value whose scheme leads the value, which covers every attribute
+ * holding ONE URL. A list-valued attribute holds several - `srcset="a.png 1x,
+ * javascript:alert(1) 2x"`, `ping="/log javascript:alert(1)"` - and a safe first
+ * entry hides the rest, so the renderer writes the whole list back out.
+ *
+ * The importer will not be the thing that puts one there. This is deliberately
+ * an IMPORT-side refusal and not a change to §25: the renderer's behavior on
+ * hand-written Carve is a separate question with its own false-positive cost
+ * (a prose `title` may legitimately contain the word `javascript:`), and
+ * widening the import is what makes the shape reachable from untrusted HTML.
+ *
+ * The denylist and the normalization are the renderer's own, so this cannot
+ * drift into blocking a different set than §25 blocks.
+ */
+const DENIED_SCHEMES = new Set(DANGEROUS_URL_SCHEMES.map((scheme) => scheme.toLowerCase()))
+
+function launderableScheme(value: string): string | undefined {
+  // The FIRST token is the renderer's business: it blanks the whole value.
+  for (const token of value.split(/[\s,]+/).slice(1)) {
+    const colon = token.indexOf(':')
+    if (colon === -1) continue
+    const scheme = token.slice(0, colon).replace(SCHEME_PROBE_STRIP_RE, '').toLowerCase()
+    if (DENIED_SCHEMES.has(scheme)) return scheme
+  }
+  return undefined
+}
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -248,45 +291,86 @@ class Importer {
     this.diagnostics.push({ code, message, severity, path })
   }
 
+  /**
+   * An element's attributes, as the Carve attributes that carry them.
+   *
+   * THE POLICY IS A REFUSAL LIST, NOT A KEEP LIST. An attribute is dropped only
+   * where there is a reason to drop it - it is an injection sink (§25), it is
+   * CSS the language has no slot for, or its name is not spellable as a Carve
+   * attribute identifier. Everything else is kept, because Carve's attribute
+   * syntax can hold it and dropping what fits is a silent loss applied in bulk
+   * to exactly the documents an importer runs on: `aria-label` on an imported
+   * quote is an accessibility regression the format never required
+   * (markup-carve/carve-js#1156, matching carve-php).
+   *
+   * The refusal is DERIVED, not enumerated: `isDangerousAttrName` is the
+   * renderer's own §25 name filter, so the importer cannot admit a sink the
+   * renderer knows to strip, and `isAttrIdentifier` is the Carve writer's own
+   * name rule, so the importer cannot keep a name the writer would rewrite into
+   * a different one.
+   */
   private attrs(node: P5Node, path: string): Attrs | undefined {
     const attrs: Attrs = {}
     const classes: string[] = []
     const keyValues: Record<string, string> = {}
     for (const attr of node.attrs ?? []) {
       const name = attr.name.toLowerCase()
-      if (name.startsWith('on')) {
-        this.add('attribute-dropped', `Dropped event-handler attribute ${name} on <${node.tagName}>`, 'warning', path)
+      if (isDangerousAttrName(name)) {
+        // `srcdoc` and `formaction` are not event handlers, so they get their
+        // own wording - but not their own membership test. The set is the
+        // renderer's.
+        const kind = name.startsWith('on') ? 'event-handler' : 'injection-sink'
+        this.add('attribute-dropped', `Dropped ${kind} attribute ${name} on <${node.tagName}>`, 'warning', path)
       } else if (name === 'style') {
         this.styles(attr.value, keyValues, path)
       } else if (name === 'id') {
         attrs.id = attr.value
       } else if (name === 'class') {
         classes.push(...attr.value.split(/\s+/).filter(Boolean))
-      } else if (name.startsWith('data-') && !['data-djot-src', 'data-carve-src'].includes(name)) {
-        keyValues[name] = attr.value
-      } else if (name === 'title' && node.tagName !== 'a' && node.tagName !== 'img') {
-        keyValues.title = attr.value
-      } else if (name === 'open' && node.tagName === 'details') {
-        // The disclosure's own state, and the one attribute of a `<details>`
-        // that means something after the import: `{open}` is PART 11 §6c's
-        // bare boolean, which the details extension renders back onto the tag.
-        keyValues.open = ''
-      } else if (name === 'cite' && node.tagName === 'blockquote') {
-        // The source the quote is attributed to. `{cite=u}` on a block quote is
-        // authorable Carve that the HTML renderer writes back onto the tag, so
-        // the import round-trips and there is nothing to report as dropped
-        // (markup-carve/carve#1286). The renderer is what sanitizes the value -
-        // a `javascript:` destination is blanked there, not admitted here.
-        keyValues.cite = attr.value
-      } else if (name === 'scope' && node.tagName === 'th') {
-        // Kept here, and dropped again in `table()` when it matches the value
-        // the renderer derives from position. `colgroup` and `rowgroup` have no
-        // marker spelling and no positional derivation, so an authored one is
-        // the only way to reach them and nothing can reconstruct it
-        // (markup-carve/carve-js#1032).
-        keyValues.scope = attr.value
-      } else if (!this.isSemanticHtmlAttribute(node.tagName ?? '', name)) {
-        this.add('attribute-dropped', `Dropped unsupported attribute ${name} on <${node.tagName}>`, 'info', path)
+      } else if (ROUND_TRIP_MARKER_ATTRIBUTES.has(name)) {
+        // A serializer's own marker rather than the author's content, so it is
+        // not re-emitted as an attribute of the imported document.
+        this.add('attribute-dropped', `Dropped round-trip marker ${name} on <${node.tagName}>`, 'info', path)
+      } else if (this.isConsumedHtmlAttribute(node.tagName ?? '', name)) {
+        // Read as content or as an instruction somewhere else in this importer,
+        // so keeping it here as well would give the same source two spellings.
+      } else if (!isAttrIdentifier(name)) {
+        this.add('attribute-dropped', `Dropped unsupported attribute ${name} on <${node.tagName}>: not spellable as a Carve attribute name`, 'info', path)
+      } else if (/[\r\n]/.test(attr.value)) {
+        // A quoted attribute value ENDS at the line break, so writing this back
+        // produces an attribute block that does not reparse as one: it lands in
+        // the document as literal `{name="first` text and the attribute is gone
+        // anyway. Refused loudly rather than emitted as corruption.
+        this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value spans a line break, which a Carve attribute value cannot`, 'warning', path)
+      } else {
+        // Everything the language can hold, held. `cite` on a block quote,
+        // `open` on a `<details>` (PART 11 §6c's bare boolean, which the
+        // details extension renders back onto the tag), `scope` on a `<th>`
+        // (dropped again in `table()` when it matches the value the renderer
+        // derives from position, markup-carve/carve-js#1032), `aria-*`, `role`,
+        // microdata and any name a producer invented all arrive here. The
+        // renderer sanitizes a LEADING dangerous scheme - `{foo=javascript:…}`
+        // is blanked there, not refused here (markup-carve/carve#1286) - and
+        // the one shape it does not reach is refused on the way in.
+        if (hasOwnKey(keyValues, name)) {
+          // A `style` declaration already mapped to this key. CSS beats the
+          // presentational attribute in HTML, and it has to beat it in BOTH
+          // source orders - a plain assignment let `<p style="text-align:left"
+          // align="right">` come out right-aligned purely because `align` was
+          // written second.
+          this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: a mapped CSS declaration already sets it`, 'info', path)
+        } else {
+          const laundered = launderableScheme(attr.value)
+          if (laundered !== undefined) {
+            this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value carries a ${laundered} URL the renderer does not reach`, 'warning', path)
+          } else {
+            // `setOwn`, not `keyValues[name] = …`: a `<p __proto__="x">` would
+            // run the prototype setter, store nothing, and lose the attribute
+            // in silence (markup-carve/carve-js#886's class, reached here by
+            // keeping attribute names the document chose).
+            setOwn(keyValues, name, attr.value)
+          }
+        }
       }
     }
     if (classes.length) attrs.classes = classes
@@ -294,19 +378,30 @@ class Importer {
     return attrs.id || attrs.classes || attrs.keyValues ? attrs : undefined
   }
 
-  private isSemanticHtmlAttribute(tag: string, name: string): boolean {
-    if (tag === 'a') return name === 'href'
-    if (tag === 'img') return name === 'src' || name === 'alt'
+  /**
+   * Whether the importer already READ this attribute somewhere else - as the
+   * node's own content, or as an instruction about what node to build.
+   *
+   * These are neither kept by `attrs()` nor reported: a `<a href>` reaches the
+   * link's destination and a `<td colspan>` reaches the cell's span, so keeping
+   * the name as well would give one source two spellings, and reporting it
+   * would name a loss that does not happen.
+   */
+  private isConsumedHtmlAttribute(tag: string, name: string): boolean {
+    // `title` on a link or an image is the node's own `title` field, written
+    // back as the `"…"` after the destination - so it must not ALSO ride along
+    // as `{title=…}`, which would put the same text on the tag twice.
+    if (tag === 'a') return name === 'href' || name === 'title'
+    if (tag === 'img') return name === 'src' || name === 'alt' || name === 'title'
     if (tag === 'ol') return name === 'start' || name === 'type'
     if (tag === 'input') return name === 'type' || name === 'checked'
     if (tag === 'td' || tag === 'th') return name === 'colspan' || name === 'rowspan'
-    // `datetime` is the VALUE of the `time` span attribute, not an unsupported
-    // extra: `semanticSpan()` reads it off the node and it survives the import,
-    // so reporting it dropped here would be a diagnostic for a loss that no
-    // longer happens. `title` needs no entry - `attrs()` already keeps it.
+    // `datetime` is the VALUE of the `time` span attribute, not an extra:
+    // `semanticSpan()` reads it off the node and it survives the import. A
+    // `title` on `<time>` needs no entry - it is an ordinary kept attribute
+    // there, unlike on a link or an image, where the node has a field for it.
     if (tag === 'time') return name === 'datetime'
-    // `alttext` and `display` are READ by `mathml()` and reach the math node,
-    // so reporting them dropped would name a loss that does not happen.
+    // `alttext` and `display` are READ by `mathml()` and reach the math node.
     // `xmlns` is the MathML namespace declaration, which is what makes the
     // element MathML in the first place - it is consumed by having been
     // recognized, not discarded.
@@ -1395,19 +1490,29 @@ class Importer {
     if (tag === 'code') return [{ type: 'code', value: this.text(node), ...(attrs ? { attrs } : {}) }]
     if (tag === 'a') {
       const title = this.attr(node, 'title')
-      return [{ type: 'link', href: this.attr(node, 'href') ?? '', children, ...(title ? { title } : {}), ...(attrs ? { attrs } : {}) }]
+      // `!== undefined`, not truthiness: `<a href="u" title="">` has a title,
+      // and the writer spells the empty one `[x](u "")`. Under a truthiness test
+      // it vanished with no diagnostic, because `attrs()` treats a link's title
+      // as consumed here rather than keeping it as `{title=…}`.
+      return [{ type: 'link', href: this.attr(node, 'href') ?? '', children, ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'img') {
       const title = this.attr(node, 'title')
-      return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title ? { title } : {}), ...(attrs ? { attrs } : {}) }]
+      return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
     }
-    if (tag === 'br') return [{ type: 'hard_break' }]
+    if (tag === 'br') {
+      // A hard break has no `attrs` slot, so anything `attrs()` kept for this
+      // element is lost here and has to say so - the alternative is the silence
+      // that carve#1210 exists to kill.
+      if (attrs) this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <br>: a hard break has no attribute slot`, 'warning', path)
+      return [{ type: 'hard_break' }]
+    }
     // The synthetic element the adapter footnote pass leaves at each
     // reference site (adapterFootnotes); never present in real HTML input.
     if (tag === 'carve-footnote-ref') {
       return [{ type: 'footnote_ref', id: this.attr(node, 'label') ?? '' }]
     }
-    if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, attrs)]
+    if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, path, attrs)]
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
     /*
      * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
@@ -1603,7 +1708,7 @@ class Importer {
    * strictly better than the unwrap it replaces, where the semantic was
    * discarded outright, but it is a real difference and the tests show it.
    */
-  private semanticSpan(tag: string, node: P5Node, children: InlineNode[], attrs?: Attrs): InlineNode {
+  private semanticSpan(tag: string, node: P5Node, children: InlineNode[], path: string, attrs?: Attrs): InlineNode {
     const source = SEMANTIC_SPAN_VALUE_SOURCE.get(tag)
     const value = source === undefined ? '' : this.attr(node, source) ?? ''
     const keyValues: Record<string, string> = { ...attrs?.keyValues }
@@ -1611,6 +1716,14 @@ class Importer {
     // along: `attrs()` collected it before the tag was known, and keeping both
     // would render the same attribute onto the element twice over.
     if (source === 'title') delete keyValues.title
+    // The span's own key is the semantic marker, so an attribute of the SAME
+    // name cannot also be carried - `<kbd kbd="literal">` has one slot and two
+    // claims on it. It used to be dropped by the keep-list before it got here;
+    // now it arrives, so the collision has to be named rather than overwritten
+    // in silence (markup-carve/carve-js#1156).
+    if (hasOwnKey(keyValues, tag) && keyValues[tag] !== value) {
+      this.add('attribute-dropped', `Dropped ${tag} on <${tag}>: the name is this span's own semantic marker`, 'warning', path)
+    }
     keyValues[tag] = value
     return { type: 'span', children, attrs: { ...attrs, keyValues } }
   }
