@@ -215,6 +215,40 @@ describe('a fence holds only the lines its container still reaches', () => {
     expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
   })
 
+  it('the quote is held by DEPTH, not by "is quoted at all"', () => {
+    // Third round of the same finding, one quote level deeper. The fence opens
+    // at two quote levels; the `> :::` below carries one, so it has left the
+    // inner quote and closes the div outside it. A boolean reports "still
+    // quoted" and skips the pop.
+    //
+    // The closer on the line after is what makes it observable: without it the
+    // fence never closes and the abbreviation is suppressed either way, which
+    // is why the two-level shape looked equivalent until the closer was added.
+    const source = '> ::: note\n> > ```\n> :::\n> > ```\n\n*[A]: expansion\n\nA here\n'
+
+    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+  })
+
+  it('a quote behind a list marker counts toward the depth, as before', () => {
+    // The depth reads the marker-stripped view too, for the same reason the
+    // boolean it replaces did: `- > ``` ` opens a QUOTED fence, and reading
+    // only the raw line would score it zero and hold every later line.
+    //
+    // A RESIDUAL again, and a larger one - 55 documents turn on this term, and
+    // on every one of them the oracle, carve-rs and carve-php resolve the
+    // definition where carve-js does not. Dropping the term repairs all 55,
+    // which is exactly why it is written down: this fix is scoped to what a
+    // code sample's interior may decide, and those 55 diverge identically
+    // before and after it. They belong to the container-lifetime defect filed
+    // separately, not here.
+    const source = '- > ```\n  :::\n  ```\n\n*[A]: expansion\n\nA here\n'
+
+    expect(html(source)).toBe(
+      '<ul> <li> <blockquote> <pre><code> </code></pre> </blockquote> ' +
+        '<div> <pre><code> </code></pre> </div> </li> </ul> <p>A here</p>',
+    )
+  })
+
   it('a line past the container defines nothing either, as before', () => {
     // The other half of the same branch, and the row that keeps it honest. A
     // line the container no longer holds is allowed past the trackers so a
