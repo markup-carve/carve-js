@@ -1905,15 +1905,19 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   // Consume leading frontmatter first so `lexer.pos` marks the end of the
   // metadata region; the def passes and parseBlocks all start from there.
   lexer.consumeFrontmatter()
-  // First pass: collect abbreviation and reference-link definitions so
-  // they can be resolved regardless of document order (grammar §6).
-  collectLinkDefs(lexer)
-
   const prevMatchers = activeMatchers
   const prevCtx = activeMatcherCtx
+  // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
+  // no matcher, but it now asks whether one is registered: an extension's
+  // `matchBlock` may claim any line, and a claimed line reads as prose to a
+  // line-shape test. `makeMatcherCtx` captures the definition maps by
+  // reference, so building it first sees the same tables the pass fills.
   activeMatchers = (opts.extensions ?? []).filter((e) => e.matchInline || e.matchBlock)
   activeMatcherCtx = activeMatchers.length ? makeMatcherCtx(lexer, opts) : null
   try {
+    // First pass: collect abbreviation and reference-link definitions so
+    // they can be resolved regardless of document order (grammar §6).
+    collectLinkDefs(lexer)
     const children = parseBlocks(lexer, 0)
     appendLinkReferenceDefinitions(children, lexer, source)
     const doc: Document = { type: 'document', children }
@@ -2263,6 +2267,82 @@ function quoteRunDepth(text: string): number {
   return run ? (run[0].match(/>/g) ?? []).length : 0
 }
 
+/**
+ * Does the prepass's view of a line START A BLOCK, so that no paragraph is left
+ * open below it?
+ *
+ * `lineOpensBlock` is the block parser's own answer and does all the work. The
+ * arms on top of it are the ones its other caller cannot reach, each measured
+ * against the executable spec rather than assumed:
+ *
+ *   - AN ABBREVIATION DEFINITION is a block only "as a direct child of the
+ *     document" (PART 12 §7), so `lineOpensBlock` leaves it out - it serves a
+ *     colon-fence body, which is never document level. This pass sweeps the
+ *     document, where the line is invisible and leaves no paragraph open, so the
+ *     arm comes back at the one depth the construct exists at.
+ *   - AN EMPTY CONTAINER LINE (`>`) strips to nothing here. The RAW line is not
+ *     blank, so the caller's blank test misses it, and a container line with no
+ *     content leaves no paragraph open either.
+ *   - A COMMENT LINE (`%% ...`) renders nothing and opens nothing below it.
+ *     `lineOpensBlock` carries the `%%%` BLOCK form only.
+ *   - A BLOCK-ATTRIBUTE LINE (`{...}`) floats forward to the next block (§15),
+ *     so it too is invisible. `peekBlockAttributes` is the real test and needs a
+ *     cursor this pass does not have; the leading brace alone is the safe
+ *     approximation, since a paragraph line that merely STARTS with `{` is then
+ *     read as a block opener and the fence below it opens as it does today.
+ *   - A CONTINUATION MARKER (`+`) ATTACHES the block below it (§17 L3/L4), and
+ *     an attached fence opens with no closer, exactly as one after any other
+ *     block opener does.
+ *   - A TABLE CONTINUATION ROW (`+ ... |`) is consumed by `parseTable` as part
+ *     of the table above it, so the table - not a paragraph - is what is open.
+ *     It reaches no dispatcher entry of its own, which is why `lineOpensBlock`
+ *     has no reason to carry it (raised by codex review).
+ *
+ * EVERY ARM IS CHECKED AGAINST THE BLOCK PARSER, not against a list of
+ * constructs, because that is what settles carve-js#1136 in the first place: a
+ * delimiter renders as an inline verbatim span exactly when a paragraph was
+ * open on it, so `carveToHtml` reports the answer directly. Write the REFERENCE
+ * ABOVE the construct when checking - below it, both the definition and the
+ * reference land inside the same code block and the document renders the same
+ * either way, which is a check that cannot fail.
+ *
+ * ERRING TRUE IS THE SAFE DIRECTION, and two arms lean on that deliberately:
+ *
+ *   - The `+` above is prose when there is nothing to attach to, and this
+ *     engine then renders the delimiter below it as `<code></code>` in a
+ *     paragraph. Telling the two apart needs the attachment rule; erring TRUE
+ *     leaves carve-js#1136 unfixed on a STRAY `+`, which the executable spec
+ *     refuses outright, rather than risking the attaching form, which is the
+ *     common one and has a definite answer.
+ *   - The abbreviation is not gated on document level for the same reason. A
+ *     list whose item ends at a flush abbreviation leaves this pass's `listCols`
+ *     populated while the block parser has already closed the item, so the gate
+ *     answered "not document level" on a line the parser read as a definition.
+ *
+ * A DESCRIPTION MARKER (`:  `) was tried and is deliberately absent: this engine
+ * renders the delimiter below one as `<code></code>` INSIDE the description, so
+ * a paragraph really is open and the arm made this pass contradict the parser it
+ * feeds. carve-rs is self-consistent the same way. The executable spec reads a
+ * description differently at the block level, so that document already diverges
+ * above this pass and is not this pass's to settle.
+ *
+ * The caller reads FALSE as "a paragraph is open below this line", which
+ * suppresses a fence opener - saying that wrongly would collect a definition
+ * written inside a fenced code sample. Saying TRUE wrongly only opens a fence
+ * this pass already opens today.
+ */
+function prepassOpensBlock(line: string): boolean {
+  return (
+    line === '' ||
+    lineOpensBlock(line) ||
+    RE_COMMENT_LINE.test(line) ||
+    line.startsWith('{') ||
+    isContinuationMarker(line) ||
+    RE_TABLE_CONT.test(line) ||
+    RE_ABBR_DEF.test(line)
+  )
+}
+
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number; contentCol: number; quoted: boolean; quoteDepth: number } | null = null
   // A LINE BLOCK is verse: a definition written inside one is text the author
@@ -2312,6 +2392,36 @@ function collectLinkDefs(lexer: Lexer) {
   // consumed and registered by nobody, so it vanished AND defined nothing
   // (carve-js#736).
   let plusColumn: number | null = null
+  // IS A PARAGRAPH OPEN? A bare fence delimiter on a line that CONTINUES one
+  // does not open a fence - the block parser reads it as paragraph text and the
+  // run becomes an inline code span, while this pass opened a fence and took
+  // the rest of the document as its body, collecting nothing from it
+  // (carve-js#1136). §10 is the rule: a fence interrupts an open paragraph only
+  // with a closer ahead, so BOTH halves are needed - suppressing every opener
+  // under an open paragraph would collect the definitions inside a fence that
+  // does close, which is the opposite error.
+  //
+  // The state is "is a paragraph open", not "was the previous line blank": a
+  // fence after a heading opens normally, and a blank-line test would reject it.
+  let paraOpen = false
+  // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
+  // is invisible. `prepassOpensBlock` sees only the leading brace, so the
+  // continuation lines read as prose and reopened a paragraph over a run the
+  // block parser consumes whole (raised by codex review). `peekBlockAttributes`
+  // is the real reader and ends the run at the first `}` or a blank line.
+  let attrRun = false
+  // NO PARAGRAPH STATE AT ALL WHEN A BLOCK MATCHER IS REGISTERED. An
+  // extension's `matchBlock` may claim any line at a block boundary and this
+  // pass cannot know which, so a claimed line reads as prose, the paragraph
+  // stays open, and a real fence below it would be suppressed with its code
+  // sample collected. Falling back to the behavior before carve-js#1136 costs
+  // the fix on those documents and can never activate a definition written
+  // inside code, which is the direction that matters.
+  const hasBlockMatchers = activeMatchers.some((e) => e.matchBlock)
+  // `codeCloserPossible` over the prepass's own view of a closer, built once per
+  // document and only when a paragraph is actually open under a fence-shaped
+  // line. A scan per opener is the quadratic shape this index exists to close.
+  let prepassClosers: CloserIndex['code'] | null = null
   for (let idx = 0; idx < lexer.lines.length; idx++) {
     // Skip leading frontmatter — `lexer.pos` is its end (0 when there is
     // none, including an unclosed opener that is NOT frontmatter), so a
@@ -2449,6 +2559,9 @@ function collectLinkDefs(lexer: Lexer) {
     // character inside a code sample, which is the one thing verbatim content
     // may never do. Only the fence's own closer is read here.
     if (fence) {
+      // A line under an open fence is VERBATIM CONTENT, not prose, so no
+      // paragraph is open on the line below it - including the closer's own.
+      paraOpen = false
       // CLOSER: strip a blockquote prefix only when the fence is quoted, and
       // NEVER a list marker -- a fence delimiter is a continuation line of pure
       // indentation, so a literal `- ``` / `> ``` inside a doc-level code sample
@@ -2504,6 +2617,7 @@ function collectLinkDefs(lexer: Lexer) {
     if (commentFence !== null) {
       const close = RE_COMMENT_BLOCK_ANY.exec(line)
       if (close && close[1]!.length === commentFence) commentFence = null
+      paraOpen = false
       continue
     }
     {
@@ -2513,17 +2627,20 @@ function collectLinkDefs(lexer: Lexer) {
       // suppress every definition in the rest of the document.
       if (open && commentBlockHasCloser(lexer, open[1]!.length, idx)) {
         commentFence = open[1]!.length
+        paraOpen = false
         continue
       }
     }
     if (verse !== null) {
       const close = line.trim().match(/^(:{3,})$/)
       if (close && close[1]!.length >= verse) verse = null
+      paraOpen = false
       continue
     }
     const verseOpen = line.trim().match(/^(:{3,})[ \t]*\|$/)
     if (verseOpen) {
       verse = verseOpen[1]!.length
+      paraOpen = false
       continue
     }
     // Track `:::` nesting so the abbreviation branch can require document
@@ -2538,6 +2655,30 @@ function collectLinkDefs(lexer: Lexer) {
     // fence still open (see above). It was allowed past the trackers so a
     // boundary out there is seen; it collects nothing.
     if (fence) continue
+    // WHETHER A PARAGRAPH IS OPEN ON THE NEXT LINE, decided here because every
+    // line that carries verbatim or opaque content has already been consumed
+    // above with the flag cleared.
+    //
+    // The rule reads only the line itself, which is the SAFE simplification of
+    // §10's two halves. A paragraph stays open across a line that starts no
+    // block, and a line that starts one ends it; the cases where the two halves
+    // differ - a list marker opens a block but does NOT interrupt an open
+    // paragraph - cannot separate them here, because `line` has the marker
+    // stripped already and reads as the item's content either way. That is also
+    // the answer §10 wants: `text` / `- a` folds the bullet into the paragraph,
+    // and `- a` after a blank opens an item whose paragraph a flush-left line
+    // lazily continues. Both leave a paragraph open.
+    // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0. Its content
+    // column is §16's own and a flush line has left the body, so the block
+    // parser opens a top-level fence there even with a paragraph open inside the
+    // note - unlike a list item, whose paragraph a flush line really does
+    // continue. `line` has the body's indentation stripped, so without this the
+    // two are indistinguishable here (raised by codex review).
+    const paraWasOpen =
+      paraOpen && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
+    const inAttrRun = attrRun
+    attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
+    paraOpen = !isBlankLine(raw) && !inAttrRun && !prepassOpensBlock(line)
     // OPENER: strip container prefixes (blockquote AND list marker) and re-base
     // to the content column, so a fence on a list item marker line (`- ```) or a
     // continuation line at the content column both open. RESIDUAL (line-based
@@ -2584,8 +2725,42 @@ function collectLinkDefs(lexer: Lexer) {
     const rawOpen = open ? null : RE_RAW_FENCE.exec(deIndented)
     const run = open ? open[2]! : rawOpen?.[1]
     if (run) {
-      fence = { ch: run[0]!, len: run.length, contentCol: openerCol, quoted: rawIsQuoted, quoteDepth: rawQuoteDepth }
-      continue
+      // A FENCE INTERRUPTS AN OPEN PARAGRAPH ONLY WITH A CLOSER AHEAD (§10 I4,
+      // and `startsInterruptingBlock`'s backtick arm is the block parser's own
+      // spelling of it). Without a closer the delimiter is not a fence at all -
+      // it is an inline verbatim run inside the paragraph it continues - and
+      // opening one here took the rest of the document as its body and
+      // collected nothing from it (carve-js#1136).
+      //
+      // Both halves are load-bearing. Suppressing every opener under an open
+      // paragraph instead would leave a fence that DOES close unopened, and
+      // then a definition written inside that code sample is collected and goes
+      // live in the link table.
+      // The index is built at most once, and only when a paragraph is really
+      // open under a fence-shaped line - the short circuit keeps every ordinary
+      // document from paying for it.
+      if (
+        !paraWasOpen ||
+        hasBlockMatchers ||
+        codeCloserPossibleIn(
+          (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
+          run,
+          idx,
+        )
+      ) {
+        fence = {
+          ch: run[0]!,
+          len: run.length,
+          contentCol: openerCol,
+          quoted: rawIsQuoted,
+          quoteDepth: rawQuoteDepth,
+        }
+        paraOpen = false
+        continue
+      }
+      // Not a fence: the line is the paragraph's own text and the paragraph is
+      // still open below it.
+      paraOpen = true
     }
     // Maintain footnote-body context (see `inFootnoteBody` above): a flush
     // footnote opener enters the body; a non-blank line at column 0 leaves it.
@@ -3313,6 +3488,24 @@ const RE_ANY_COLON_CLOSER = /^[ \t]*(:{3,})[ \t]*$/
 // narrows.
 const RE_ANY_FENCE_CLOSER = new RegExp('^[ \\t]*([`~]{3,})' + FENCE_TRAILING_WS)
 
+// THE SAME CLOSER SEEN THROUGH A CONTAINER PREFIX, for the definition prepass.
+//
+// The prepass matches a closer on a view with the blockquote markers and the
+// list marker already stripped, so `> ``` ` and `- ``` ` are closers there and
+// are invisible to the pattern above. That direction of error is the harmless
+// one for a REFUTING index, and it is the fatal one here: the prepass reads the
+// answer POSITIVELY, to decide whether a fence interrupts an open paragraph
+// (carve-js#1136), and a missed closer says "does not interrupt" - which leaves
+// the fence unopened and collects the definitions written INSIDE it.
+//
+// So this one tolerates every prefix the prepass strips, and the error runs the
+// other way: a line that is not really a closer answers "a closer may be ahead",
+// the fence opens as it does today, and nothing is collected that was not
+// already.
+const RE_PREPASS_ANY_FENCE_CLOSER = new RegExp(
+  '^(?:[ \\t]*>)*[ \\t]*(?:(?:[-*+]|[0-9]+[.)]|[A-Za-z][.)])[ \\t]+)*[ \\t]*([`~]{3,})' + FENCE_TRAILING_WS,
+)
+
 /**
  * Where a closer of each fence shape LAST occurs in a lexer's lines.
  *
@@ -3338,17 +3531,20 @@ interface CloserIndex {
   code: Map<string, { runs: number[]; lastAtLeast: number[] }>
 }
 
-function buildCloserIndex(lines: string[]): CloserIndex {
-  const comment = new Map<number, number>()
-  const colon = new Map<number, number>()
+/**
+ * The CODE half of `buildCloserIndex`, over whatever closer pattern the caller
+ * reads its lines with.
+ *
+ * Factored out because there is a second view of these lines: the definition
+ * prepass matches a closer after stripping container prefixes, so more lines are
+ * closer-shaped there than `RE_ANY_FENCE_CLOSER` admits. Both indexes are the
+ * same suffix-maximum structure over a different pattern; spelling that twice is
+ * how the two would drift.
+ */
+function buildCodeCloserIndex(lines: string[], re: RegExp): CloserIndex['code'] {
   const codeLast = new Map<string, Map<number, number>>()
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!
-    const c = RE_COMMENT_BLOCK_ANY.exec(line)
-    if (c) comment.set(c[1]!.length, i)
-    const d = RE_ANY_COLON_CLOSER.exec(line)
-    if (d) colon.set(d[1]!.length, i)
-    const f = RE_ANY_FENCE_CLOSER.exec(line)
+    const f = re.exec(lines[i]!)
     if (f) {
       const run = f[1]!
       let byRun = codeLast.get(run[0]!)
@@ -3371,7 +3567,21 @@ function buildCloserIndex(lines: string[]): CloserIndex {
     code.set(char, { runs, lastAtLeast })
   }
 
-  return { comment, colon, code }
+  return code
+}
+
+function buildCloserIndex(lines: string[]): CloserIndex {
+  const comment = new Map<number, number>()
+  const colon = new Map<number, number>()
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    const c = RE_COMMENT_BLOCK_ANY.exec(line)
+    if (c) comment.set(c[1]!.length, i)
+    const d = RE_ANY_COLON_CLOSER.exec(line)
+    if (d) colon.set(d[1]!.length, i)
+  }
+
+  return { comment, colon, code: buildCodeCloserIndex(lines, RE_ANY_FENCE_CLOSER) }
 }
 
 /** `buildCloserIndex` over a lexer's own lines, built at most once. */
@@ -3383,7 +3593,12 @@ function closerIndex(lexer: Lexer): CloserIndex {
 
 /** Whether a code/raw closer for `marker` may occur after line index `after`. */
 function codeCloserPossible(index: CloserIndex, marker: string, after: number): boolean {
-  const entry = index.code.get(marker[0]!)
+  return codeCloserPossibleIn(index.code, marker, after)
+}
+
+/** `codeCloserPossible` against a code index built over any closer pattern. */
+function codeCloserPossibleIn(code: CloserIndex['code'], marker: string, after: number): boolean {
+  const entry = code.get(marker[0]!)
   if (entry === undefined) return false
   let lo = 0
   let hi = entry.runs.length

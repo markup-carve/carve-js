@@ -147,30 +147,38 @@ describe('a tab-padded code fence closer still closes', () => {
     expect(carveToHtml(`- a\n\n  ${F}\n  x\n\n  y\n  ${F}\n`)).toBe(carveToHtml(src))
   })
 
-  it('the DEFINITION PREPASS sees the widened opener too, as carve-php does', () => {
-    // Raised by codex review as a regression. It is a real behavior change and
-    // it goes the other way: this document moves carve-js INTO agreement with
-    // carve-php, which is the reference for the ruling.
+  it('the DEFINITION PREPASS reads the widened opener the way the block parser does', () => {
+    // THE WIDENED OPENER IS INVISIBLE HERE, and that is the point of the row.
     //
-    // Once `` ```<TAB> `` is a fence opener, the prepass opens an opaque region
-    // on it. With no closer ahead the region runs to the end of the document,
-    // so a definition below it registers nothing and the reference stays
-    // literal. carve-php builds exactly that - its AST for this document holds
-    // two paragraphs and no definition node - and carve-js did not, because the
-    // line was not an opener here at all.
+    // It was not always. This assertion used to pin the opposite: the prepass
+    // opened an opaque region on `` ```<TAB> `` that ran to the end of the
+    // document, so the definition below it registered nothing and the reference
+    // stayed literal - carve-php's answer, and taken as the reference for the
+    // ruling.
     //
-    // Verified at carve-php `8a9dc5c`. The review's claim that carve-php
-    // resolves this was measured against the wrong engine build.
+    // It was the wrong reading of the disagreement. Look at the first line of
+    // the expectation: this engine's BLOCK parser renders the delimiter as an
+    // inline code span inside the paragraph it continues, exactly as the
+    // executable spec and carve-rs do. A fence interrupts an open paragraph
+    // only with a closer ahead (§10 I4), and there is none. So the block parser
+    // was right and only the prepass disagreed with it - about a line that both
+    // of them read, in the same document (carve-js#1136). carve-php holds the
+    // same internal contradiction and is the engine that has to move.
+    //
+    // What the ruling changed is therefore the CLOSER, and the closer alone.
     const src = `p\n${F}${T}\n\n[d]: u\n\nsee [x][d]\n`
-    expect(carveToHtml(src)).toBe('<p>p\n<code></code></p>\n<p>see [x][d]</p>')
-    // CONTROL: the same document with no tab is unaffected in either engine,
-    // so this is the widened opener acting and not the prepass changing.
-    expect(carveToHtml(`p\n${F}\n\n[d]: u\n\nsee [x][d]\n`)).toBe(
-      '<p>p\n<code></code></p>\n<p>see [x][d]</p>',
-    )
-    // And with a CLOSER ahead the region ends, so the definition below it is
-    // collected as usual.
+    expect(carveToHtml(src)).toBe('<p>p\n<code></code></p>\n<p>see <a href="u">x</a></p>')
+    // CONTROL: the same document with no tab renders identically, which is what
+    // "the widened opener is invisible here" means.
+    expect(carveToHtml(`p\n${F}\n\n[d]: u\n\nsee [x][d]\n`)).toBe(carveToHtml(src))
+    // And with a CLOSER ahead the fence really does open - it interrupts the
+    // paragraph, and the definition below its closer is collected as usual.
     expect(carveToHtml(`p\n\n${F}${T}\nx\n${F}\n\n[d]: u\n\nsee [x][d]\n`)).toBe(
+      '<p>p</p>\n<pre><code>x\n</code></pre>\n<p>see <a href="u">x</a></p>',
+    )
+    // The same, with the paragraph left OPEN over the widened opener: the fence
+    // closes, so it interrupts, and nothing below it is swallowed.
+    expect(carveToHtml(`p\n${F}${T}\nx\n${F}\n\n[d]: u\n\nsee [x][d]\n`)).toBe(
       '<p>p</p>\n<pre><code>x\n</code></pre>\n<p>see <a href="u">x</a></p>',
     )
   })
