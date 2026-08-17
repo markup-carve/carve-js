@@ -435,6 +435,7 @@ const IMPLEMENTED = new Set([
   'an-unclosed-inline-run-in-a-line-block-reaches-the-end-of-the-block',
   'a-comment-only-line-in-a-line-block-is-removed-before-any-inline-run',
   'a-line-block-s-hard-break-keeps-its-backslash',
+  'a-line-block-s-last-body-line-keeps-its-backslash',
   'which-inline-content-a-heading-id-is-derived-from',
   'a-column-0-line-after-a-container-s-last-block-when-that-block-left-no-paragraph-open',
   'a-continuation-marker-attaches-one-block-and-the-boundary-is-that-block-s-extent',
