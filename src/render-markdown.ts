@@ -487,17 +487,24 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'text':
       return escapeUnresolvedCrossrefs(cleanEscapedText(node))
     case 'escaped_text':
-      // Reproduce the author's escape. `\-\-` was written precisely so a
-      // downstream processor with smart punctuation on would not read an en
-      // dash; emitting the character bare loses exactly that (carve#350).
+      // Reproduce the author's escape where it protects something ON THIS
+      // TARGET. `\-\-` was written precisely so a downstream processor with
+      // smart punctuation on would not read an en dash; emitting the character
+      // bare loses exactly that (carve#350), so the triggers section 8 names
+      // are kept whatever their position.
       //
-      // NO SENTINEL HERE, and section 8a says why: M1b is a rule about a
-      // character that reached this writer inside a TEXT node - one the Carve
-      // grammar did not read as an opener and the author did not mark. This is
-      // the other case. The author said which reading they meant, M2 gives it
-      // back whatever the character, and the line test never sees it. The
-      // underscore used to take the sentinel here and lose its backslash to
-      // the intraword rule, which is M1b deciding a node M1 never governed.
+      // PART 11 section 8b narrows the rest, on the finding section 8a already
+      // states. M2a: a character this target's readers never read as markup is
+      // emitted BARE, which is Carve's own delimiters. M2b: the hash is read
+      // as markup only where it would open an ATX heading, so it takes a
+      // sentinel and is decided on the line like M1b's candidates.
+      //
+      // Every character Markdown CAN read keeps M2 as written. The bracket in
+      // particular keeps its escape at every position, which is what leaves
+      // section 8a's argument about the two link grammars standing: an author
+      // who meant `[a](b)` as text still gets it back.
+      if (AUTHORED_INERT.has(node.value)) return node.value
+      if (node.value in AUTHORED_SENTINEL) return AUTHORED_SENTINEL[node.value]!
       return '\\' + node.value
     case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
@@ -1092,8 +1099,37 @@ const NARROWED_CHARACTER: Record<string, string> = {
   '\ue005': '#',
   '\ue006': '[',
 }
-const RE_NARROWED_SENTINEL = /[\ue004-\ue006]/g
-const HAS_NARROWED_SENTINEL = /[\ue004-\ue006]/
+/**
+ * PART 11 section 8b M2a: characters this target's readers never read as
+ * markup, at ANY position on the line.
+ *
+ * An `escaped_text` node holding one of these is emitted BARE. They are
+ * Carve's own delimiters and Markdown has no reading for them, so the escape
+ * protects nothing and lands inside an identifier.
+ *
+ * The tilde is NOT here: GFM reads a single-tilde pair as strikethrough. Nor
+ * are the smart-punctuation triggers, which section 8b keeps whatever their
+ * position, because a processor with substitution on rewrites the TEXT rather
+ * than reading markup.
+ */
+const AUTHORED_INERT = new Set(['{', '}', '^', ',', '%', ':', '/', '@'])
+
+/**
+ * PART 11 section 8b M2b: read as markup only at a line's CONTENT POSITION.
+ *
+ * A second sentinel family, extending the run above. Separate from
+ * NARROWED_SENTINEL because the two are decided by DIFFERENT tests: M1b asks
+ * about an adjacent delimiter of the same character, M2b asks where on the
+ * line the character stands.
+ */
+const AUTHORED_SENTINEL: Record<string, string> = {
+  '#': '\ue007',
+}
+const AUTHORED_CHARACTER: Record<string, string> = {
+  '\ue007': '#',
+}
+const RE_NARROWED_SENTINEL = /[\ue004-\ue007]/g
+const HAS_NARROWED_SENTINEL = /[\ue004-\ue007]/
 
 /**
  * Whether the candidate at `i` is ADJACENT to an unescaped delimiter of the
@@ -1151,12 +1187,53 @@ function adjacentToLiveDelimiter(line: string, i: number, ch: string): boolean {
  */
 function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
-  const line = text.replace(RE_NARROWED_SENTINEL, (s) => NARROWED_CHARACTER[s]!)
+  const character = (s: string): string => NARROWED_CHARACTER[s] ?? AUTHORED_CHARACTER[s]!
+  const line = text.replace(RE_NARROWED_SENTINEL, character)
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
-    const ch = NARROWED_CHARACTER[s]!
-    return adjacentToLiveDelimiter(line, offset, ch) ? `\\${ch}` : ch
+    const ch = character(s)
+    // TWO FAMILIES, TWO TESTS. M1b asks whether a delimiter of the same
+    // character stands beside the candidate; M2b asks whether the candidate
+    // stands where an ATX heading could open. Dispatched on which family the
+    // sentinel came from, because the character alone does not say: a `#` in a
+    // text node is M1b's and an author-escaped one is M2b's.
+    const keep =
+      s in AUTHORED_CHARACTER
+        ? opensAnAtxHeading(line, offset)
+        : adjacentToLiveDelimiter(line, offset, ch)
+
+    return keep ? `\\${ch}` : ch
   })
+}
+
+/**
+ * Whether the `#` at `offset` would open an ATX heading (PART 11 section 8b
+ * M2b).
+ *
+ * `line` is the assembled output with every candidate resolved to its BARE
+ * character, the same view M1b decides on. The offset carries across directly
+ * because a sentinel is one UTF-16 unit exactly like the character it stands
+ * for - carve-php cannot do that, since its sentinel is three bytes and the
+ * character is one.
+ *
+ * Three conditions, all of them CommonMark's: the character stands at the
+ * line's content position, which admits up to three leading spaces; the run of
+ * hashes starting there is one to six long; and the run is closed by a space, a
+ * tab or the end of the line. A tag, an issue reference and a hex colour fail
+ * the third even at a line's start, which is why the test is spelled on the run
+ * rather than on the position alone.
+ */
+function opensAnAtxHeading(line: string, offset: number): boolean {
+  const start = line.lastIndexOf('\n', offset - 1) + 1
+  if (!/^ {0,3}$/.test(line.slice(start, offset))) return false
+
+  let run = 0
+  while (line[offset + run] === '#') run++
+  if (run > 6) return false
+
+  const after = line[offset + run] ?? '\n'
+
+  return after === ' ' || after === '\t' || after === '\n'
 }
 
 function normalize(text: string): string {
