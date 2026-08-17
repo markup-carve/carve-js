@@ -150,3 +150,127 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
     )
   })
 })
+
+/**
+ * A `+` continuation extends the CELL, so the block an unclosed run reaches the
+ * end of is that whole cell, continuation included: the run spans the row
+ * boundary and closes on the continuation row.
+ *
+ * The continuation was cut with a FRESH scanner, which cuts INSIDE the run and
+ * leaves a segment with no column to join - and a dropped segment is content
+ * loss rather than a second answer. It is carried PER COLUMN, never per line:
+ * the run belongs to one column and a continuation joins per column, so the
+ * columns before it are still cut at their own pipes (markup-carve/carve#1293,
+ * corpus category 333). carve-rs `b6ff319c` produces every expectation below.
+ */
+describe('a continuation row is cut while the run is still open', () => {
+  it('the interior pipe of the continuation is content', () => {
+    // Was `<td>a <code>b c</code></td>`: the ` | d` segment was cut off and
+    // dropped, so the document lost a run of characters it never renders.
+    expect(html('| a `b |\n+ c | d` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b c | d</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('the columns BEFORE the run are still cut at their own pipes', () => {
+    // Carrying the run across the whole continuation line swallows those
+    // separators and pushes the text into the wrong cell, which leaves the run's
+    // own cell holding an empty `<code></code>` - the artifact the ruling
+    // rejects, produced from the other direction.
+    expect(html('| x | a `b |\n+ y | c` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>x y</td><td>a <code>b c</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('the carried run keeps its LENGTH across the boundary', () => {
+    // A two-backtick run carried as "some run is open" would close on the single
+    // backtick a one-backtick reader looks for.
+    expect(html('| a ``b |\n+ c | d`` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b c | d</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('a LATER column resumes its own run, not the first one', () => {
+    // The carry is indexed by column. A reader that only seeded column 0 leaves
+    // every later column closed, and this document's interior pipe then splits a
+    // cell the run owns - dropping the segment behind it, since the base row has
+    // no third column for it to join. carve-rs `b6ff319c` produces this.
+    expect(html('| x | a `b |\n+ y | c | d` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>x y</td><td>a <code>b c | d</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('a run whose OPENER is longer is not closed by a shorter one', () => {
+    // The carried value is a LENGTH, not a flag. Carried as "open", the single
+    // backtick in the continuation closes the two-backtick run, the `|` after it
+    // splits, and `d``` is left with no column to join - the content loss this
+    // ruling rejects. carve-rs still reads it that way; the two agree on every
+    // other row here.
+    expect(html('| a ``b |\n+ c ` | d`` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b c ` | d</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('the run a cell ENDS in is measured with the same rule', () => {
+    // `a ``b `c` ends inside the two-backtick run: the single backtick is
+    // content. A measurement that closed on any run would hand the continuation
+    // a closed column and split at its pipe.
+    expect(html('| a ``b `c |\n+ d | e`` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b `c d | e</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('a run stays open across TWO continuation rows', () => {
+    expect(html('| a `b |\n+ c |\n+ d` |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b c d</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('an ESCAPED backtick outside a run opens none', () => {
+    // The measurement is of the state the INLINE parser will be in, and there an
+    // escaped backtick is a literal. Counting it opened a run the inline pass
+    // does not have, so the continuation's real opener read as a closer, the pipe
+    // behind it split a cell the run owns, and `z` was dropped for an empty
+    // `<code></code>`. carve-rs `b6ff319c` reads it the same way this branch now
+    // does.
+    expect(html('| a | x \\` |\n+ b | y` | z |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a b</td><td>x ` y<code> | z</code></td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('...but INSIDE a run the backslash is content and the backtick closes', () => {
+    // A verbatim body resolves no escapes, so ``b \\`` is a closed run holding
+    // `b \\` - the cell ends OUTSIDE a run, and the continuation splits at its
+    // own pipe. An escape rule applied inside the run would carry a run that is
+    // not open and swallow the separator.
+    expect(html('| a `b \\` |\n+ c | d |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b \\</code> c</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  // The controls. A reader that carried a run that is NOT open would stop
+  // splitting continuation rows at all.
+  it('a continuation whose column left no open run still splits', () => {
+    expect(html('| a | b |\n+ c | d |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a c</td><td>b d</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('a run CLOSED on the base row leaves the continuation splitting', () => {
+    expect(html('| a `b` | c |\n+ d | e |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a <code>b</code> d</td><td>c e</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('an escaped closing pipe is still an escape', () => {
+    // The row closes there, because the line ends in a pipe; what the escape
+    // decides is what the CELL holds, which is a literal pipe and not an
+    // orphaned backslash.
+    expect(html('| a b \\|')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a b |</td></tr>\n  </tbody>\n</table>',
+    )
+    expect(html('| a \\| b | c |')).toBe(
+      '<table>\n  <tbody>\n    <tr><td>a | b</td><td>c</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+})

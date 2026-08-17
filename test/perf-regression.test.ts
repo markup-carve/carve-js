@@ -205,3 +205,22 @@ describe('parser perf regression: a `+`-attached fence that never closes', () =>
     )
   })
 })
+
+// D) A table's `+` continuation rows. Cutting a continuation into cells needs
+//    the run state each COLUMN was left in, and reading that back out of the
+//    cell's accumulated source before every row is quadratic in the number of
+//    rows: a cell that has absorbed k fragments is re-scanned whole for the
+//    k+1th. Each cell carries its state forward instead, so only the new
+//    fragment is read.
+describe('parser perf regression: table continuation rows', () => {
+  perfIt('a run of continuation rows scales near-linearly', () => {
+    const build = (repeats: number) => '| a | b |\n' + '+ c | d |\n'.repeat(repeats)
+    expectBuiltInputScansLinearly((input) => void carveToHtml(input), build, {
+      label: 'table continuation rows',
+      // A row is a dozen bytes and every row is a parse step, so the byte
+      // counts the helper divides by are reached with far fewer repeats than a
+      // four-character inline fragment needs.
+      smallRepeats: 2000,
+    })
+  })
+})
