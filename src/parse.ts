@@ -2246,6 +2246,23 @@ function prepassMarker(text: string, re: RegExp = RE_PREPASS_MARKER): RegExpMatc
   return m
 }
 
+/**
+ * How many block quote markers lead `text`, zero when none do.
+ *
+ * The counted form of the prepass's own quote-prefix test, and it uses that
+ * exact pattern: a fence opened at two quote levels is not held by a line
+ * carrying one, and a boolean cannot tell those apart.
+ *
+ * Module scope rather than the per-line loop it serves: the loop runs once per
+ * line of every document, and a closure allocated there is allocated that many
+ * times for a value that depends on nothing outside its argument.
+ */
+function quoteRunDepth(text: string): number {
+  const run = /^(?:[^\S ]*>(?: |$))+/.exec(text)
+
+  return run ? (run[0].match(/>/g) ?? []).length : 0
+}
+
 function collectLinkDefs(lexer: Lexer) {
   let fence: { ch: string; len: number; contentCol: number; quoted: boolean; quoteDepth: number } | null = null
   // A LINE BLOCK is verse: a definition written inside one is text the author
@@ -2412,11 +2429,6 @@ function collectLinkDefs(lexer: Lexer) {
     // the reordering regression one container deeper again. Same pattern as the
     // boolean above, counted rather than tested, and taken as the MAX of the two
     // views for the same reason the boolean ORs them (`- > ``` `).
-    const quoteRunDepth = (text: string): number => {
-      const run = /^(?:[^\S ]*>(?: |$))+/.exec(text)
-
-      return run ? (run[0].match(/>/g) ?? []).length : 0
-    }
     const rawQuoteDepth = Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker))
     // AN OPEN CODE FENCE ANSWERS FIRST, ahead of every tracker below it.
     // §24 S2 makes a line verbatim once the innermost matched container is a
