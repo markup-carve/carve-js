@@ -7105,6 +7105,12 @@ interface RawCell {
   attrs?: Attrs
   raw: string
   /**
+   * The backtick run this cell's collected source ends INSIDE, 0 when it ends
+   * outside one. Carried forward per continuation row rather than recomputed
+   * from `raw`, which would be quadratic in the number of rows.
+   */
+  openRun: number
+  /**
    * Where this cell sits in the document, when that is answerable.
    *
    * Cleared once a `+` continuation row merges into the cell: its content then
@@ -7149,6 +7155,51 @@ export function rowAttrsFromLine(line: string): { attrs?: Attrs; body: string } 
   return { body: line }
 }
 
+/**
+ * The length of the backtick run a cell's source ends INSIDE, or 0 when it ends
+ * outside one, resumed from the state `from` the cell was already in.
+ *
+ * The state a `+` continuation row's matching column starts in: a run the base
+ * row left open is still open when the continuation is cut, which is what keeps
+ * that continuation's own pipes content (PART 9 §22,
+ * markup-carve/carve#1293).
+ *
+ * RESUMED, never recomputed. A cell accumulates a fragment per continuation row,
+ * so re-reading the whole accumulated text before every row is quadratic in the
+ * number of rows - about a second on sixteen thousand short continuations,
+ * against forty milliseconds. Each cell carries its own state forward instead,
+ * and only the new fragment is read.
+ *
+ * ESCAPE-AWARE OUTSIDE A RUN, because this measures the state the INLINE parser
+ * will be in for this text. Outside a run an escaped backtick opens nothing, and
+ * a scan that counted it opened a run the inline pass does not have - which made
+ * the continuation's real opener look like a closer and split a cell the run
+ * owns, dropping the segment behind it. INSIDE a run the body is verbatim and
+ * resolves no escapes, so the backslash is content and the backtick after it
+ * still closes.
+ */
+function openVerbatimRun(text: string, from = 0): number {
+  let openRun = from
+  for (let i = 0; i < text.length; i++) {
+    if (openRun === 0 && text[i] === '\\') {
+      // OUTSIDE a run only. An escape consumes the next character, so an
+      // escaped backtick opens nothing. INSIDE one the body is verbatim and
+      // resolves no escapes, so the backslash is content and the backtick
+      // after it still closes - which is what the inline parser does with it.
+      i++
+      continue
+    }
+    if (text[i] !== '`') continue
+    let run = 1
+    while (text[i + run] === '`') run++
+    if (openRun === 0) openRun = run
+    else if (run === openRun) openRun = 0
+    i += run - 1
+  }
+
+  return openRun
+}
+
 function parseTable(lexer: Lexer): Table | Figure {
   // Collect raw cell source first; a `+` continuation row appends its
   // non-empty fragments to the previous row's *source* so an inline
@@ -7185,7 +7236,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         column: lexer.lineStartColumn(lineIndex) + line.length,
         offset: lexer.lineOffset(lineIndex) + line.length,
       }
-      splitTableRowSpans(line).forEach(({ text: src }, idx) => {
+      splitTableRowSpans(line, lastRaw.map((c) => c.openRun)).forEach(({ text: src }, idx) => {
         const frag = trimCellPadding(src)
         const target = lastRaw![idx]
         // A fragment on a span (`^`/`<`) column is skipped: the spec's
@@ -7194,6 +7245,9 @@ function parseTable(lexer: Lexer): Table | Figure {
         // (verified). A `+` after the span row is not a spec'd ordering.
         if (!frag || !target || target.span) return
         target.raw = target.raw ? `${target.raw} ${frag}` : frag
+        // Only the NEW fragment is read; the joining space is not a run
+        // character, so resuming from the cell's own state is exact.
+        target.openRun = openVerbatimRun(frag, target.openRun)
         // The CELL keeps no span. Its content sits in two column ranges on
         // non-adjacent lines, and one range covering both would swallow the
         // neighbouring column's content on the lines between - so cell 1 would
@@ -7219,7 +7273,7 @@ function parseTable(lexer: Lexer): Table | Figure {
     const lineCol = lexer.lineStartColumn(lineIndex)
     const raw: RawCell[] = splitTableRowSpans(rowBody).map(({ text: src, start }) => {
       const { header, span, align, attrs, content } = parseCellMarkers(src)
-      const c: RawCell = { header, raw: content }
+      const c: RawCell = { header, raw: content, openRun: openVerbatimRun(content) }
       if (span) c.span = span
       if (align) c.align = align
       if (attrs) c.attrs = attrs
@@ -7413,7 +7467,10 @@ function parseTable(lexer: Lexer): Table | Figure {
  * `\|` is two source characters for one content character - so the text is not
  * always a verbatim slice even though its start always is.
  */
-export function splitTableRowSpans(line: string): Array<{ text: string; start: number }> {
+export function splitTableRowSpans(
+  line: string,
+  carried?: readonly number[],
+): Array<{ text: string; start: number }> {
   const cells: Array<{ text: string; start: number }> = []
   let buf = ''
   // The length of the backtick run that opened the verbatim span this scan is
@@ -7424,7 +7481,22 @@ export function splitTableRowSpans(line: string): Array<{ text: string; start: n
   // is still open - the interior `|` then split the row where the inline pass
   // reads content. One production, two spellings, and only the one-backtick
   // shape agreed (markup-carve/carve#1293, corpus category 328).
-  let openRun = 0
+  // THE CONTINUATION IS CUT WHILE THE RUN IS STILL OPEN. A `+` continuation
+  // extends the CELL, so the block an unclosed run reaches the end of is that
+  // whole cell, continuation included - the run spans the row boundary and
+  // closes on the continuation row. Cutting the continuation with a FRESH
+  // scanner cuts inside the run and leaves a segment with no column to join,
+  // and a dropped segment is content loss rather than a second answer
+  // (markup-carve/carve#1293, corpus category 333).
+  //
+  // Per COLUMN, never per line. The open run belongs to ONE column and a
+  // continuation joins per column, so the columns before it are still cut at
+  // their own pipes; carrying the run across the whole continuation line
+  // instead swallows those separators and pushes the text into the wrong cell,
+  // which leaves the run's own cell holding an empty `<code></code>` - the
+  // artifact that ruling rejects, produced from the other direction.
+  let cellIndex = 0
+  let openRun = carried?.[0] ?? 0
   let i = 0
   // Skip the leading row marker: `|` (standard) or `+` (continuation)
   if (line[0] === '|' || line[0] === '+') i = 1
@@ -7472,6 +7544,8 @@ export function splitTableRowSpans(line: string): Array<{ text: string; start: n
       cells.push({ text: buf, start: cellStart })
       buf = ''
       cellStart = i + 1
+      cellIndex++
+      openRun = carried?.[cellIndex] ?? 0
       continue
     }
     buf += ch
