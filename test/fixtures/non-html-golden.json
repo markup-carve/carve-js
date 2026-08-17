@@ -169,7 +169,7 @@
     },
     "escapes": {
         "carve": "literal \\* and \\# and \\_\n",
-        "markdown": "literal \\* and \\# and \\_\n",
+        "markdown": "literal \\* and # and \\_\n",
         "plain": "literal * and # and _\n",
         "ansi": "literal * and # and _\n"
     },

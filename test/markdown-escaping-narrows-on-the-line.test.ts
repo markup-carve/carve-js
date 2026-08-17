@@ -134,15 +134,66 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
   })
 
-  describe('M2 is untouched: an authored escape comes back as an escape', () => {
+  describe('M2 keeps every character this target can read as markup', () => {
     it('keeps the backslash whatever the line says', () => {
       // Section 8a states this as the reason a line-level test can stand in
       // for the parser section 2 needs: a character the author DID escape is
       // an `escaped_text` node, so every case where the author said which
-      // reading they meant is out of M1b's hands.
+      // reading they meant is out of M1b's hands. Section 8b narrowed M2, but
+      // not for these: `_` can pair and `[` can open a link at any position,
+      // so both keep the escape everywhere and that argument still stands.
       expect(md('a\\_b')).toBe('a\\_b')
-      expect(md('\\#not a heading')).toBe('\\#not a heading')
       expect(md('\\[not a link')).toBe('\\[not a link')
+      expect(md('a\\*b')).toBe('a\\*b')
+    })
+
+    it('keeps a smart-punctuation trigger, which is what M2 is for', () => {
+      // Not a Markdown metacharacter, so M1 never reached it. A processor with
+      // substitution on rewrites the TEXT, which is a different hazard from
+      // reading markup and is why section 8b names these four explicitly.
+      expect(md('a\\-\\- b')).toBe('a\\-\\- b')
+    })
+  })
+
+  describe('M2a: an authored escape of an inert character is emitted bare', () => {
+    it('drops the backslash from Carve delimiters Markdown cannot read', () => {
+      expect(md('hi \\@user ok')).toBe('hi @user ok')
+      expect(md('a \\{x b')).toBe('a {x b')
+      expect(md('a \\^x b')).toBe('a ^x b')
+      expect(md('a \\%x b')).toBe('a %x b')
+      expect(md('a \\:x b')).toBe('a :x b')
+      expect(md('a \\/x b')).toBe('a /x b')
+    })
+  })
+
+  describe('M2b: the hash is decided by where it stands', () => {
+    it('drops the backslash where no heading could open', () => {
+      expect(md('a \\#y b')).toBe('a #y b')
+      expect(md('issue \\#123 fixed')).toBe('issue #123 fixed')
+      expect(md('C\\# is a language')).toBe('C# is a language')
+      expect(md('Bau \\#64748b')).toBe('Bau #64748b')
+      expect(md('see (\\#tag) there')).toBe('see (#tag) there')
+    })
+
+    it('keeps it where an ATX heading would open', () => {
+      expect(md('\\# heading')).toBe('\\# heading')
+    })
+
+    it('drops it at a line start that no space closes', () => {
+      // The position passes and the run does not: `#tag` is a paragraph in
+      // CommonMark, which is why the test is spelled on the run.
+      expect(md('\\#not a heading')).toBe('#not a heading')
+      expect(md('\\#tag rest')).toBe('#tag rest')
+    })
+
+    it('escapes only the FIRST hash of a run, which is sufficient', () => {
+      // A heading that cannot open needs nothing done to the rest of its run.
+      // That is M1e's argument about the angle bracket, one character over.
+      expect(md('\\#\\#\\# heading')).toBe('\\### heading')
+    })
+
+    it('leaves a run of seven alone, since no flavour reads it as a heading', () => {
+      expect(md('\\#\\#\\#\\#\\#\\#\\# x')).toBe('####### x')
     })
   })
 
