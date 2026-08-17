@@ -4774,6 +4774,14 @@ function parseLineBlock(lexer: Lexer): LineBlock {
      * (corpus 268-trailing-whitespace-on-a-content-line-is-dropped-12).
      */
     aligned: boolean
+    /**
+     * The comment this line WAS, for a line the block layer emptied.
+     *
+     * Kept because §23 removes the line from the RENDER and not from the tree:
+     * it stays a `comment` node like any other, so the canonical writer can put
+     * the author's line back at the column they wrote it at.
+     */
+    comment?: Comment
   }
   const stanzas: StanzaLine[][] = []
   let stanza: StanzaLine[] = []
@@ -4787,6 +4795,53 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         stanzas.push(stanza)
         stanza = []
       }
+      continue
+    }
+    // A COMMENT-ONLY BODY LINE IS REMOVED HERE, AT THE BLOCK LAYER (PART 9
+    // §23, NORMATIVE). `comment_line` is a block - PART 1 lists it among the
+    // invisible blocks and §10 I5 rules on it - so the line is decided with
+    // the other block-layer decisions, BEFORE any inline content exists.
+    //
+    // Doing it in the inline pass instead, which is where this engine did it,
+    // let an unclosed verbatim run opened on an EARLIER line claim the line
+    // under §21's verbatim exclusion and PUBLISH the comment's own text - the
+    // one outcome a comment may never have, on a document whose only defect is
+    // a stray backtick somewhere above (markup-carve/carve#1333). No inline run
+    // can reach a decision taken before it exists.
+    //
+    // It leaves an EMPTY VERSE LINE rather than dropping the row: the stanza
+    // split above has already run, so emptying the line keeps the stanza's
+    // shape, which is the layout a line block exists to preserve. The empty
+    // line then carries a NEWLINE into an open run like every other break that
+    // run swallows (carve#1282).
+    //
+    // ONLY A LINE WHOSE FIRST CHARACTER IS `%` QUALIFIES. In verse the leading
+    // run is CONTENT, so `comment_line`'s optional `[whitespace]` prefix has
+    // nothing to consume and an indented `%%` line is ordinary verse text.
+    // `%%%` is included: §28 degrades a fence opener with no closer to a
+    // comment line, and §23 makes a fence opener ordinary text here anyway.
+    //
+    // A TRAILING `%%` after content is a DIFFERENT construct - `inline_comment`
+    // (PART 3, §21) - and this does not reach it. Inside a verbatim run there
+    // is no comment there at all, only two percent characters in content, and
+    // an engine may never delete author bytes out of one.
+    if (ln.startsWith('%%')) {
+      const comment: Comment = {
+        type: 'comment',
+        block: false,
+        content: ln.slice(2).replace(/^[ \t]/, ''),
+      }
+      if (lexer.hasDocumentOffsets) {
+        comment.pos = {
+          startLine: lexer.lineNumber(lineIndex),
+          endLine: lexer.lineNumber(lineIndex),
+          startColumn: lexer.lineStartColumn(lineIndex),
+          endColumn: lexer.lineStartColumn(lineIndex) + ln.length,
+          startOffset: lexer.lineOffset(lineIndex),
+          endOffset: lexer.lineOffset(lineIndex) + ln.length,
+        }
+      }
+      stanza.push({ text: '', lineIndex, aligned: true, comment })
       continue
     }
     const expanded = expandLineBlockWhitespace(ln)
@@ -4888,15 +4943,45 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       if (startLine !== undefined) breakIndex.set(node, startLine - firstLineNumber)
     }
     if (!anchorable) stripPositions(parsed)
-    const inline: InlineNode[] = parsed.map((node) => {
-      if (node.type !== 'soft_break') return node
-      const hardBreak = { type: 'hard_break' } as InlineNode
+    // REMOVED FROM THE RENDER, NOT FROM THE TREE (PART 9 §23). Every line the
+    // block layer emptied above goes back in as the `comment` node it is, at
+    // the boundary that ends it, so the canonical writer emits the author's own
+    // line back at the column they wrote it at.
+    const pendingComments = new Map<number, Comment>()
+    lines.forEach((line, index) => {
+      if (!line.comment) return
+      if (!anchorable) stripPositions([line.comment])
+      pendingComments.set(index, line.comment)
+    })
+    const inline: InlineNode[] = []
+    for (const node of parsed) {
+      if (node.type !== 'soft_break') {
+        inline.push(node)
+        continue
+      }
       const index = breakIndex.get(node)
+      // The comment sits BEFORE the break that ends its line: the line is empty
+      // now, so there is nothing else on it.
+      if (index !== undefined) {
+        const comment = pendingComments.get(index)
+        if (comment) {
+          inline.push(comment)
+          pendingComments.delete(index)
+        }
+      }
+      const hardBreak = { type: 'hard_break' } as InlineNode
       const pos = index === undefined ? undefined : breakPos(index)
       if (pos) hardBreak.pos = pos
 
-      return hardBreak
-    })
+      inline.push(hardBreak)
+    }
+    // What is left is a comment on the stanza's LAST line, which has no break
+    // after it, or one whose boundary an open verbatim run swallowed. Both keep
+    // the node - dropping it would lose an author's line from the tree - and
+    // both put it after the content it followed.
+    for (const index of [...pendingComments.keys()].sort((a, b) => a - b)) {
+      inline.push(pendingComments.get(index)!)
+    }
 
     const paragraph: Paragraph = { type: 'paragraph', children: inline }
     if (lexer.hasDocumentOffsets) {

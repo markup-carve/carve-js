@@ -715,7 +715,14 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
         ctx.colonFenceDepth--
         ctx.lineBlockDepth--
       }
-      return withAttrs(fence + ' |\n' + lineBlockLayoutWhitespace(body) + '\n' + fence)
+      // A BODY THAT ALREADY ENDS ITS LINE DOES NOT GET A SECOND NEWLINE. The
+      // last body line can end in a `hard_break`, which under §7c is written
+      // `\` plus the newline it consumes (PART 3); adding the closer's newline
+      // on top of that leaves a BLANK line before the fence, which ends the
+      // stanza and takes the trailing `<br>` - and the space it was holding -
+      // with it (markup-carve/carve#1334).
+      const layout = lineBlockLayoutWhitespace(body)
+      return withAttrs(fence + ' |\n' + layout + (layout.endsWith('\n') ? '' : '\n') + fence)
     }
     case 'div': {
       // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
@@ -1485,13 +1492,60 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
     let lineNodeCount = 0
     let lineHostsCaption = false
     nodes.forEach((node, idx) => {
-      out += renderInline(
+      let piece = renderInline(
         node,
         ctx,
         lastBoundary(nodes[idx - 1]),
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
       )
+      // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
+      // live here and not in `renderInline`: the answer is a property of the
+      // output line, not of the neighbouring nodes. `lastBoundary` cannot stand
+      // in for it - after a code span it reports the span's last CONTENT
+      // character, not the backtick that actually ends the line.
+      const atLineStart = out === '' || out.endsWith('\n')
+
+      // THE SEPARATOR SPACE IS ONLY A SEPARATOR (PART 11 §1; §21). `%%` is
+      // recognized after whitespace OR at the start of its line, so a comment
+      // that already STARTS its line has nothing to separate from and must not
+      // be given a space it did not have.
+      //
+      // Everywhere else the space was cosmetic - leading whitespace is stripped
+      // on the way back in - which is why it went unnoticed. A LINE BLOCK is
+      // the one place it is not: there leading whitespace is preserved CONTENT
+      // (PART 9 §23), so the space pushed the marker off column 0, the reparse
+      // read `%%` as ordinary verse, and `carve fmt` PUBLISHED the text the
+      // author hid (carve-js#1170; carve-php fixed the same defect in
+      // markup-carve/carve-php#1394, carve-rs never had it).
+      if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
+
+      // A LINE BLOCK'S HARD BREAK KEEPS ITS BACKSLASH WHERE THE BARE NEWLINE
+      // WOULD BE RE-READ (PART 11 §7c, NORMATIVE). The container hardens every
+      // line boundary of its own accord, so the bare newline is right for most
+      // lines and wrong for exactly two - the two where §7's precondition
+      // fails, because the parser does NOT discard the trailing run when a
+      // backslash follows it (PART 7 makes that run INTERIOR).
+      //
+      //   - the line's content is EMPTY. A bare newline is a BLANK line, which
+      //     ends the stanza, so one stanza comes back as two.
+      //   - the line's content ends in a LONE space. A bare newline makes that
+      //     space line-trailing, where PART 2 drops it. A run of TWO OR MORE
+      //     columns is already NBSP content (§23 MEDIAL GAPS) and needs none -
+      //     it reaches here sentinel-encoded, so it is not a space to this
+      //     test either.
+      //
+      // This is PART 11 §1a, not an exemption from it: the per-construct
+      // spelling emits bytes that do not re-parse to the tree they came from,
+      // so §1 wins and the spelling yields to another spelling of the SAME
+      // construct - which for a `hard_break` is its own PART 3 form
+      // (markup-carve/carve#1334).
+      if (ctx.lineBlockDepth > 0 && node.type === 'hard_break' && piece === '\n') {
+        const line = out.slice(out.lastIndexOf('\n') + 1)
+        if (line === '' || /(?:^|[^ \t]) $/.test(line)) piece = '\\\n'
+      }
+
+      out += piece
       if (node.type === 'soft_break') {
         captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
         firstLine = false
