@@ -5035,6 +5035,17 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // as much a surviving line end - and the comment reinsertion asks that
     // question, not the conversion's.
     const boundaryLines = new Set<number>()
+    // EVERY SLOT AN INLINE NODE HOLDS OTHER INLINES IN, not just `children`: an
+    // inline footnote carries its body in `inline` and an inline extension in
+    // `content`, and a walk that knows only one name misses two containers.
+    // Named once so the two passes below cannot drift apart on it.
+    const INLINE_SLOTS = ['children', 'inline', 'content'] as const
+    const slotsOf = (node: InlineNode): InlineNode[][] => {
+      const record = node as unknown as Record<string, unknown>
+      // `content` is a STRING on a comment and on an inline literal, so the
+      // array test is the discriminator rather than the name.
+      return INLINE_SLOTS.map((slot) => record[slot]).filter(Array.isArray) as InlineNode[][]
+    }
     // AT EVERY DEPTH. An inline container that opens on one body line and
     // closes on a later one holds the boundaries between them as its OWN
     // children, so a walk over the stanza's top-level nodes never sees them
@@ -5048,8 +5059,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
           if (node.type === 'soft_break') breakIndex.set(node, startLine - firstLineNumber)
           continue
         }
-        const children = (node as { children?: InlineNode[] }).children
-        if (Array.isArray(children)) readBoundaries(children)
+        for (const slot of slotsOf(node)) readBoundaries(slot)
       }
     }
     readBoundaries(parsed)
@@ -5087,9 +5097,10 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       const out: InlineNode[] = []
       for (const node of nodes) {
         if (node.type !== 'soft_break') {
-          const children = (node as { children?: InlineNode[] }).children
-          if (Array.isArray(children)) {
-            ;(node as { children: InlineNode[] }).children = place(children, false)
+          const record = node as unknown as Record<string, unknown>
+          for (const slot of INLINE_SLOTS) {
+            const value = record[slot]
+            if (Array.isArray(value)) record[slot] = place(value as InlineNode[], false)
           }
           out.push(node)
           continue
@@ -5100,6 +5111,18 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         if (index !== undefined) {
           const comment = pendingComments.get(index)
           if (comment) {
+            // A NESTED REINSERTION CARRIES NO POSITION. The comment's own span
+            // is the one it was written at, but the nodes it would sit among
+            // are measured from the JOINED text, which is shorter than the
+            // source by exactly the line this comment emptied - so `c` in
+            // `*a` / `%% secret` / `c*` reports the offset of `%` (a defect of
+            // its own, filed as carve-js#1182, and visible on `main` without
+            // this pass). Publishing a correct span beside them would assert
+            // that two nodes hold the same bytes, which PART 12 containment
+            // refuses; PART 12 §4 already sanctions omitting a position that
+            // cannot be produced. The TOP-LEVEL insertion is unaffected: there
+            // every break is re-posed from line geometry and the spans agree.
+            if (!top) delete (comment as { pos?: Position }).pos
             out.push(comment)
             pendingComments.delete(index)
           }

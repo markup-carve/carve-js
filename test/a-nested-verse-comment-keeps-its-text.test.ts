@@ -78,6 +78,52 @@ describe('a verse comment nested under an inline container keeps its text', () =
     )
   })
 
+  it('and in a container that holds its inlines under another name', () => {
+    // An inline footnote carries its body in `inline` and an inline extension
+    // in `content`, so a walk that knows only `children` misses both. Raised by
+    // `codex review` on this branch.
+    expect(carveToCarve('::: |\n^[a\n%% secret\nc]\n:::\n')).toBe(
+      '::: |\n^[a\n%% secret\nc]\n:::\n',
+    )
+    expect(carveToCarve('::: |\n:kbd[a\n%% secret\nc]\n:::\n')).toBe(
+      '::: |\n:kbd[a\n%% secret\nc]\n:::\n',
+    )
+  })
+
+  it('a NESTED reinsertion carries no position, so no two nodes claim one byte', () => {
+    // The comment's own span is right, but the nodes it sits among are measured
+    // from the JOINED text, which the emptied line made shorter than the source
+    // - `c` below reports the offset of a `%`. That is carve-js#1182 and it is
+    // on `main` without this pass; publishing a correct span beside those would
+    // assert that two nodes hold the same bytes, which PART 12 containment
+    // refuses. PART 12 §4 sanctions omitting a position instead.
+    const nodes = (
+      parse('::: |\n*a\n%% secret\nc*\n:::\n').children[0] as {
+        children: { children: { children: { type: string; pos?: unknown }[] }[] }[]
+      }
+    ).children[0]!.children[0]!.children
+    expect(nodes.map((n) => n.type)).toEqual([
+      'text',
+      'soft_break',
+      'comment',
+      'soft_break',
+      'text',
+    ])
+    expect(nodes[2]!.pos).toBeUndefined()
+  })
+
+  it('CONTROL: the TOP-LEVEL reinsertion still carries its position', () => {
+    // There every break is re-posed from line geometry, so the spans agree and
+    // there is nothing to omit.
+    const nodes = (
+      parse('::: |\na\n%% secret\nc\n:::\n').children[0] as {
+        children: { children: { type: string; pos?: { startOffset: number } }[] }[]
+      }
+    ).children[0]!.children
+    expect(nodes[2]!.type).toBe('comment')
+    expect(nodes[2]!.pos?.startOffset).toBe(8)
+  })
+
   it('publishes nothing, at either depth', () => {
     // The whole reason no render check could catch the loss.
     expect(carveToHtml('::: |\n*a\n%% secret\nc*\n:::\n')).not.toContain('secret')
