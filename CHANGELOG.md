@@ -230,6 +230,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **HTML import keeps every attribute the language can hold** (#1156). The
+  importer's attribute policy was a KEEP LIST - `data-*` plus a handful of
+  named cases survived and everything else was dropped - so
+  `<blockquote aria-label="note">` imported without its label and any
+  attribute the list had not anticipated went the same way. The policy is now
+  a rule rather than a list: an attribute Carve can carry is carried, and only
+  the ones the language cannot hold are dropped with a diagnostic. Every
+  `aria-*` attribute survives an import, and so does an attribute no one
+  wrote a case for.
+
 - **A `[@key]: entry` bibliography line is a `citation_definition` node**
   (markup-carve/carve#1276, PART 12 §18). The line used to reach the published
   tree as a paragraph whose first child is a `citation_group` followed by the
@@ -417,6 +427,123 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already a no-op and still accepts its value, so no caller breaks.
 
 ### Fixed
+
+- **An at-sign in source text is not a Carve mention** (markup-carve/carve-php#1380,
+  ported). The converter escaper already mirrored the parser's tag opener so
+  that a hash in a source language's text does not come back as a Carve tag.
+  A mention is the same construct with a different character and had no rule,
+  so importing `hi @user ok` from Markdown or BBCode produced a mention span
+  where the source had plain prose.
+
+- **A comment fence hides its body wherever it stands, and closes with its
+  container** (markup-carve/carve#1309; #1118, #1146). The definition prepass
+  is the pass that collects link reference, footnote and abbreviation
+  definitions before the document is parsed, and it read a comment fence only
+  at column 0. An unterminated `%%%` inside a list item therefore swallowed
+  the definition after it - the definition neither registered nor rendered,
+  which is the worse of the two failure modes - and a definition written after
+  an unclosed `%%%` at any column was not collected at all, so the reference
+  to it came back as literal text. The prepass now asks about the fence it is
+  standing on, at every column, and a fence opened inside a container is
+  closed by that container's end.
+
+- **A prepass tracker ends with the container that holds it** (#1135, #1139).
+  The prepass modeled containers per line and had no notion of a container
+  ENDING, so every tracker it opened - a code fence, a `:::` depth entry, a
+  verse block - outlived the block quote or list item that opened it and went
+  on suppressing definitions in the rest of the document.
+
+- **A fence delimiter that continues a paragraph opens no fence in the
+  prepass** (#1136). A bare fence delimiter on a line that continues an open
+  paragraph is not a fence, and the block parser already read it that way, as
+  an inline code span inside the paragraph. The prepass opened a fence on it
+  instead, and an unterminated fence has no closer, so it took the rest of the
+  document with it.
+
+- **An open code fence answers the definition prepass first** (#1132). A
+  `:::` line inside a code fence was read as a container opener by the
+  prepass, so a definition after the fence was attributed to a container that
+  does not exist. The early fence exit is now gated on the container still
+  holding the line, and the fence's quote depth is compared by depth rather
+  than by whether the line was quoted at all.
+
+- **A bare-dot ordered item is a container the definition prepass can see**
+  (#1120). A column-0 abbreviation definition under a `. x` item was collected
+  and applied to the whole document, while the same line under a numbered
+  marker or a bullet - at the same content column - was not.
+
+- **A tab after a fence or frontmatter opener is decided by its position**
+  (markup-carve/carve#1295; #1121). A tab BEFORE content is the
+  marker-to-content separator, that slot admits a space and nothing else, so
+  the construct does not open. A tab at end of line with nothing after it was
+  never that slot: it is trailing whitespace on a content line, it is dropped,
+  and the bare opener it leaves opens normally. The fence lookahead index was
+  narrowed with the opener, so a line ending in a tab is no longer recorded as
+  a candidate closer either.
+
+- **A marker-line block that leaves no paragraph open ends its container**
+  (markup-carve/carve#1280, corpus category 326). NO OPEN PARAGRAPH, NO LAZY
+  LINE was pinned here for an empty quote, which read as though EMPTINESS were
+  the property doing the work. A column-0 line after a container's last block
+  folded into the list item and ended the block quote whenever that block left
+  no paragraph open, so `- # H` and an indented `# H` behaved differently.
+  Four of the category's thirteen documents passed before, thirteen after.
+
+- **A continuation marker attaches one block, bounded by that block**
+  (markup-carve/carve#1290, corpus category 327). A `+` attaches exactly ONE
+  block; the trailing "up to the next blank line, sibling marker, or a further
+  `+`" is that block's EXTENT and not a count. Four of the category's nine
+  documents passed before, nine after.
+
+- **A floating attribute is scoped to the container that holds it**
+  (markup-carve/carve#1281, corpus category 329). A pending attribute block
+  escaped its container and attached to the block after the closer. It is now
+  dropped at the container's end, and the linter reports it. Eight of the
+  category's ten documents passed before, ten after.
+
+- **A row's verbatim run closes on a run of its own length** (corpus category
+  328). A verbatim run opens on N backticks and closes only on a run of
+  exactly N (PART 9 §22); inside a table row it was closing on any run. Five
+  of the category's six documents passed before, six after.
+
+- **A continuation row is cut while the base row's run is still open** (corpus
+  category 333). Five of the category's six documents passed before, six
+  after.
+
+- **The row closing pipe is not part of an unterminated run**
+  (markup-carve/carve#1284). An unclosed verbatim run took the row's closing
+  `|` into itself while the row still ended at it, so the character vanished
+  into the span and terminated the row at the same time.
+
+- **A continuation row's carried text keeps its own span** (#1153). A `+`
+  continuation row joins its fragment onto the cell's source with a space
+  standing in for the row boundary, so the assembled cell text is not a slice
+  of the document and one base offset drifts from the join onward. The engine
+  answered by dropping the cell's anchor entirely, which cost every inline in
+  the cell its position; each fragment now carries its own anchor, so a node
+  that can be placed is placed.
+
+- **A definition term keeps its trailing run on a folded line** (#1145). The
+  trailing-whitespace strip that a paragraph and a definition term share was
+  never called by the term, so a folded continuation line kept its trail into
+  the rendered output.
+
+- **A line block's stanza is one inline run, so an unclosed run reaches its
+  end** (markup-carve/carve#1282; #1116). An unclosed inline run stopped at a
+  line block's line break instead of reaching the end of the block, and what
+  it carries across the break is a newline rather than a space.
+
+- **A line block's footnotes are numbered like any other block's** (#1117). An
+  inline footnote inside a `::: |` line block rendered as the literal `[^]`
+  and its body was dropped.
+
+- **An empty link text is still a reference** (#1119). The reference branch
+  demanded a non-empty link text, so `[][d]` was left as literal text instead
+  of resolving against its definition.
+
+- **An imported blockquote keeps the source it cites** (markup-carve/carve#1286).
+  A `<blockquote cite="u">` imported as a bare quote with a dropped-attribute
+  diagnostic; the citation is now kept on an ordinary block-attribute line.
 
 - **`carveToCarve` writes no `+` continuation marker where a block-attributes
   line already interrupts** (markup-carve/carve#1275). The writer emits the
