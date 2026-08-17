@@ -203,6 +203,18 @@ describe('a fence holds only the lines its container still reaches', () => {
     )
   })
 
+  it('EVERY container has to hold the line, not just the outermost', () => {
+    // The second round of the same review finding, one container further in.
+    // A quoted fence can also sit at a list item's content column, and the
+    // `> :::` below keeps the quote while leaving the item - so a quote-only
+    // hold test called the line held and the div closer lost its pop again.
+    // The column is measured inside the quote, on the same quote-stripped view
+    // the closer reads.
+    const source = '> ::: note\n> - ```\n> :::\ntext\n```\n\n*[A]: expansion\n\nA here\n'
+
+    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+  })
+
   it('a line past the container defines nothing either, as before', () => {
     // The other half of the same branch, and the row that keeps it honest. A
     // line the container no longer holds is allowed past the trackers so a

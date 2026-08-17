@@ -2459,9 +2459,19 @@ function collectLinkDefs(lexer: Lexer) {
       // it short of collecting. That a fence can outlive its container at all
       // is a separate defect of this pass, filed on its own; nothing here
       // changes it.
-      const containerHoldsLine = fence.quoted
-        ? rawIsQuoted
-        : fence.contentCol === 0 || isBlankLine(raw) || leadingWhitespace(raw) >= fence.contentCol
+      // EVERY container the fence sits in has to hold the line, not whichever
+      // one is easiest to ask about. A quoted fence can also sit at a list
+      // item's content column (`> - ``` `), and a following `> :::` keeps the
+      // quote while leaving the item - so a quote-only test called it held and
+      // the div closer lost its pop again, one container further in.
+      //
+      // The column is measured on `k`, the same quote-stripped view the closer
+      // above reads, because a content column inside a quote is measured
+      // inside the quote (carve#658). Reading the raw indent there would
+      // compare a column against a line that still carries its `> ` prefix.
+      const containerHoldsLine =
+        (!fence.quoted || rawIsQuoted) &&
+        (fence.contentCol === 0 || isBlankLine(raw) || ki >= fence.contentCol)
       if (containerHoldsLine) continue // definitions inside fenced code are literal samples
     }
     // A comment fence's closer is a leading `%` run of the SAME length;
