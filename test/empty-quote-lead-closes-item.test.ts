@@ -37,9 +37,19 @@ describe('a list item whose only content is an empty quote', () => {
     }
   })
 
-  it('keeps a marker-line block attribute in the item for its following block', () => {
-    expect(norm(carveToHtml('. {i}\n`\n'))).toBe('<ol><li><p i=""><code></code></p></li></ol>')
-    expect(norm(carveToHtml('. {i}\nX\n'))).toBe('<ol><li><p i="">X</p></li></ol>')
+  it('ends the item on a marker-line block attribute, which reaches nothing', () => {
+    // An attribute block renders nothing and opens nothing - it collects into
+    // `pending` and floats forward - so there is no open paragraph for the
+    // column-0 line to fold into, and S4 gives the same answer it gives the
+    // empty quote above. The attribute never reaches the block below, because
+    // the item ends first and the block is not in it (corpus
+    // 326-…-no-paragraph-open-9, markup-carve/carve#1280).
+    expect(norm(carveToHtml('. {i}\nX\n'))).toBe('<ol><li></li></ol><p>X</p>')
+    // The same, with a lead the renderer spells differently. carve-rs leaves the
+    // lone backtick literal where this engine makes an empty code span; that
+    // divergence is inline-verbatim's and predates this rule, so the structure
+    // is what this row is about.
+    expect(norm(carveToHtml('. {i}\n`\n'))).toBe('<ol><li></li></ol><p><code></code></p>')
   })
 
   it('keeps a brace line that is NOT an attribute line inside the item', () => {

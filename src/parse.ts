@@ -4397,9 +4397,12 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // for the same reason it is seeded by hand here: nothing precedes it, so
       // no closer lookahead applies and a fence on it opens unconditionally
       // (markup-carve/carve#950). The lead opens a paragraph unless it is one of
-      // the shapes that open nothing.
-      lazyState.lazyFoldable =
-        !isBlankLine(first) && !isEmptyQuoteLine(first) && !isBlockAttributeLine(first)
+      // the shapes that open nothing - PART 1 S4's question, asked here in the
+      // ONE spelling the list item asks it in. THE CONTAINER KIND IS NOT A
+      // PARAMETER (carve#920): a heading, a table or an attribute block written
+      // on the `:  ` marker leaves no paragraph open for exactly the reason it
+      // leaves none on a `- ` marker.
+      lazyState.lazyFoldable = markerLineLeavesParagraphOpen(first)
       const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
       if (leadFence) {
         lazyState.inFence = true
@@ -5711,6 +5714,81 @@ function isBlockAttributeLine(content: string): boolean {
   return parseBlockAttributeRun(content) !== null
 }
 
+/**
+ * Does the block written ON a list item's MARKER LINE leave an open paragraph
+ * behind it?
+ *
+ * PART 1 S4: NO OPEN PARAGRAPH, NO LAZY LINE. The parameter S4 names is whether
+ * a paragraph is open, and a block that leaves none leaves none WHEREVER it was
+ * written - so `- # H` puts a heading in the item exactly as `- ` plus an
+ * indented `# H` would, and the flush-left line below it is not that item's
+ * (markup-carve/carve#1280, corpus category 326).
+ *
+ * The seeding this answers for asked only "blank, or an empty quote?". Every
+ * other paragraph-less shape therefore read as an OPEN paragraph and swallowed
+ * the line below it: a heading, a table, a thematic break, a comment, a link
+ * reference definition, a footnote definition and an attribute block - seven
+ * kinds, none of which holds a paragraph, and every one of which this same
+ * engine already ended on in a block quote (`> # H` / `tail`). One rule stated
+ * for one container and not the other.
+ *
+ * The question is asked of a quote RECURSIVELY, so a quote is not automatically
+ * an open paragraph either: what decides is the block the quote itself ends on,
+ * which is why `- > # H` ends the item and `- > q` does not.
+ *
+ * ONLY THE MARKER LINE. Once the item has collected lines at its content column
+ * the running `trackItemLazyState` answers instead, and S4 leaves that half
+ * deliberately open - corpus 75-list-nesting-and-looseness-4 pins the FOLDING
+ * answer for a heading reached that way (`- a` / `  - b` / `    # N` / `lazy`
+ * keeps the line inside the item). carve-rs gates the same question on the same
+ * boundary.
+ *
+ * Not listed, and deliberately: a code, raw or comment fence, which the two
+ * blocks below this seeding already open by hand, and a colon fence, which
+ * holds a container the line below folds INTO rather than out of.
+ */
+function markerLineLeavesParagraphOpen(content: string): boolean {
+  // Strip to the block that actually sits at the bottom of the stack: `> > # H`
+  // is the quote's question twice over, and `- - # H` is the sub-item's, whose
+  // first block is the heading exactly as a bare `- # H`'s is. Each strip
+  // shortens the line, so the loop terminates.
+  let rest = content
+  for (;;) {
+    const quoted = RE_BLOCKQUOTE.exec(rest)
+    if (quoted) {
+      rest = quoted[1] ?? ''
+      continue
+    }
+    const marked = extractItemAttr(rest)?.stripped ?? rest
+    const item = RE_TASK.exec(marked) ?? RE_ORDERED.exec(marked) ?? RE_UNORDERED.exec(marked)
+    if (item) {
+      rest = item[item.length - 1]!
+      continue
+    }
+    break
+  }
+  if (isBlankLine(rest) || trimStructural(rest) === '') return false
+  // THE STRICT COLUMN-0 RULE APPLIES TO WHAT IS LEFT (§24 C3). A quote marker
+  // takes exactly one following space, so `>  [r]: /u` leaves a line that is
+  // INDENTED inside the quote - and an indented definition, comment or table row
+  // is paragraph text there, not the construct. Three of the classifiers below
+  // tolerate a leading run (`RE_LINK_DEF` and `RE_COMMENT_LINE` match `[ \t]*`
+  // first), so without this they answered for a construct the block parser never
+  // builds and moved a line out of a container that did hold an open paragraph.
+  if (rest.startsWith(' ') || rest.startsWith('\t')) return true
+  if (RE_HEADING.test(rest)) return false
+  if (RE_HR.test(rest)) return false
+  if (isTableRow(rest)) return false
+  // Both comment spellings: `%%` renders nothing, and `%%%` opens a fence whose
+  // body is taken from the content column and nowhere else, so neither leaves a
+  // paragraph for a column-0 line.
+  if (RE_COMMENT_LINE.test(rest)) return false
+  if (RE_FOOTNOTE_DEF.test(rest) || isLinkDefLine(rest)) return false
+  if (isBlockAttributeLine(rest)) return false
+
+  return true
+}
+
 function trackItemLazyState(
   content: string,
   state: ItemLazyState,
@@ -5894,10 +5972,27 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
-  // Everything else (plain prose, list-marker content, div body text) leaves an
-  // open paragraph the dedented line can continue. Prose folds into a def body,
-  // so an open def list stays open (inDefList unchanged) - and it is the SAME
-  // paragraph, so an absorption already under way survives it.
+  // A NESTED MARKER LINE IS A MARKER LINE. The sub-item it opens is a container
+  // whose first block is whatever the marker holds, so S4's question about it is
+  // the one `markerLineLeavesParagraphOpen` answers - `- a` / `  - # N` leaves a
+  // heading open-paragraph-less at the bottom of the stack, and the flush-left
+  // line below reaches no container at all (markup-carve/carve#1280). Asked of
+  // the MARKER content only: a heading on a line the sub-item COLLECTS is the
+  // other half of S4, which the enumeration below decides and corpus
+  // 75-list-nesting-and-looseness-4 pins the folding answer for.
+  const nestedMarker = extractItemAttr(content)?.stripped ?? content
+  if (RE_TASK.test(nestedMarker) || RE_ORDERED.test(nestedMarker) || RE_UNORDERED.test(nestedMarker)) {
+    state.absorbingFence = false
+    // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
+    // question asked once.
+    state.lazyFoldable = markerLineLeavesParagraphOpen(content)
+    state.inDefList = false
+    return
+  }
+  // Everything else (plain prose, div body text) leaves an open paragraph the
+  // dedented line can continue. Prose folds into a def body, so an open def list
+  // stays open (inDefList unchanged) - and it is the SAME paragraph, so an
+  // absorption already under way survives it.
   state.absorbingFence = wasAbsorbing
   state.lazyFoldable = true
 }
@@ -6070,13 +6165,9 @@ function parseList(lexer: Lexer): List {
       absorbingFence: false,
       divDepth: 0,
       // The lead text opens a paragraph unless it is one of the shapes that
-      // open nothing: a blank, an empty quote, or a block-attribute line (which
-      // renders nothing and floats forward). `trackItemLazyState` applies the
-      // same three to every later line; this is the lead-line copy of it.
-      // An attribute written ON the marker line belongs to the item and floats
-      // to its next block; keep collecting that block. A standalone attribute
-      // line encountered later still ends lazy continuation (§10 I5).
-      lazyFoldable: !isBlankLine(content) && !isEmptyQuoteLine(content),
+      // open nothing - PART 1 S4's one question, asked of the block the marker
+      // line holds. See `markerLineLeavesParagraphOpen`.
+      lazyFoldable: markerLineLeavesParagraphOpen(content),
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
     }
     // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
@@ -6265,7 +6356,17 @@ function parseList(lexer: Lexer): List {
         // part of the paragraph the fence never interrupted. Without this, giving
         // the opener its info string (see trackItemLazyState) latched the tracker
         // inside a comment that never closes, and the item ended there.
-        (((lazyState.lazyFoldable || lazyState.inComment) &&
+        //
+        // "The paragraph the fence never interrupted" is the whole of that
+        // reason, so it needs a paragraph to have been open when the fence
+        // arrived - which `lazyFoldableBeforeComment` is exactly the record of.
+        // A comment fence written ON THE MARKER LINE interrupts nothing: it IS
+        // the item's first block, and it takes its body from the content column
+        // and nowhere else, so a column-0 line below it reaches no container
+        // (§24 C3) and ends the item, the same answer `- %% c` gives one
+        // spelling over (PART 1 S4, markup-carve/carve#1280).
+        (((lazyState.lazyFoldable ||
+          (lazyState.inComment && lazyState.lazyFoldableBeforeComment)) &&
           !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
