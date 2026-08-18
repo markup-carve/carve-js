@@ -102,6 +102,55 @@ const BLOCK = new Set([
   'figure', 'footer', 'form', 'header', 'hgroup', 'main', 'nav', 'ol', 'p', 'pre',
   'section', 'table', 'ul', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
 ])
+/**
+ * Is this node a BLOCK being flattened into an inline slot?
+ *
+ * The list-item spellings are here beside `BLOCK` because a `<ul>` reaching a
+ * caption flattens its items too, and the boundary between two `<li>` is the
+ * same boundary between two `<p>` - the clause is over every inline-only slot
+ * an importer can reach, not over the caption it was first measured in.
+ */
+function isFlattenedBlock(node: P5Node): boolean {
+  const tag = node.tagName
+  if (!tag) return false
+
+  return BLOCK.has(tag) || FLATTENED_BLOCK_EXTRA.has(tag)
+}
+
+/** The block-level containers `BLOCK` leaves out because they are never top level. */
+const FLATTENED_BLOCK_EXTRA = new Set(['li', 'dt', 'dd', 'td', 'th', 'tr', 'caption', 'figcaption'])
+
+/**
+ * Is a separator needed between what is already in the slot and what follows?
+ *
+ * The clause makes one required at a block boundary and SUFFICIENT iff
+ * re-reading the slot draws no token from both sides of the join - so a side
+ * that carries nothing is not a side, and a boundary that already separates
+ * needs nothing added. Every arm below is one of those two readings, and the
+ * two whitespace arms are not one arm twice: whitespace already at the join can
+ * sit on either side of it, and `<p>a </p><p>b</p>` and `<p>a</p><p> b</p>`
+ * reach this from opposite directions.
+ *
+ * A whitespace-only block needs no arm of its own. It ARRIVES as leading
+ * whitespace and then LEAVES as trailing whitespace, so the two arms already
+ * hold `<p>a</p><p> </p><p>b</p>` to one space.
+ *
+ * A BREAK IS ASKED FROM BOTH SIDES for the same reason the whitespace is.
+ * `<p>a</p><p><br>b</p>` reaches the join with the break on the RIGHT, and a
+ * separator inserted before it writes a trailing space the source never had
+ * (raised by `codex review`).
+ */
+function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
+  const last = before.at(-1)
+  const first = after[0]
+  if (last === undefined || first === undefined) return false
+  if (last.type === 'hard_break' || first.type === 'hard_break') return false
+  if (last.type === 'text' && /\s$/.test(last.value)) return false
+  if (first.type === 'text' && /^\s/.test(first.value)) return false
+
+  return true
+}
+
 const ADAPTERS = new Set<HtmlImportAdapter>([
   'generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs',
 ])
@@ -1396,7 +1445,26 @@ class Importer {
 
   private inlines(nodes: P5Node[], parentPath: string, depth: number): InlineNode[] {
     const out: InlineNode[] = []
-    nodes.forEach((node, index) => out.push(...this.inline(node, this.childPath(parentPath, node, index), depth)))
+    // A BLOCK BOUNDARY IN AN INLINE SLOT SURVIVES ONLY IN THE BYTES (PART 11
+    // §1b). A caption holds inline content, so a `<figcaption>` carrying two
+    // paragraphs is flattened - and the slot has nowhere to put a node for the
+    // boundary, so joining the two sides silently rewrites the document:
+    // `one` + `two` is the one word `onetwo`, `<strong>a</strong>` +
+    // `<strong>b</strong>` is one strong run holding a literal asterisk, and
+    // two code spans become one span holding the delimiters that used to end
+    // and begin them. Nothing is dropped in any of those, so no diagnostic
+    // fires and no gate below this one can see it.
+    let previousWasBlock = false
+    nodes.forEach((node, index) => {
+      const produced = this.inline(node, this.childPath(parentPath, node, index), depth)
+      const atBoundary = previousWasBlock || isFlattenedBlock(node)
+      if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
+      out.push(...produced)
+      // A BLOCK THAT CONTRIBUTES NO TOKEN IS NOT A SIDE, so it neither takes a
+      // separator of its own nor leaves one owing to the block after it:
+      // `<p>a</p><p></p><p>b</p>` is `a b`, never `a  b`.
+      if (produced.length > 0) previousWasBlock = isFlattenedBlock(node)
+    })
     const merged: InlineNode[] = []
     for (const node of out) {
       const last = merged.at(-1)
