@@ -150,6 +150,37 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
+  it('renders footer rows one per line', () => {
+    const src = [
+      '{footer-rows=2}',
+      '{header-cols=1}',
+      '::: list-table',
+      '- - Region',
+      '  - Q1',
+      '- - EMEA',
+      '  - 10',
+      '- - Region',
+      '  - Q1',
+      '- - EMEA',
+      '  - 10',
+      ':::',
+    ].join('\n')
+    expect(h(src)).toBe(
+      [
+        '<table>',
+        '  <tbody>',
+        '    <tr><th scope="row">Region</th><td>Q1</td></tr>',
+        '    <tr><th scope="row">EMEA</th><td>10</td></tr>',
+        '  </tbody>',
+        '  <tfoot>',
+        '    <tr><th scope="row">Region</th><td>Q1</td></tr>',
+        '    <tr><th scope="row">EMEA</th><td>10</td></tr>',
+        '  </tfoot>',
+        '</table>',
+      ].join('\n'),
+    )
+  })
+
   it('pads ragged rows with empty cells', () => {
     const src = [
       '::: list-table',
