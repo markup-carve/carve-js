@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml } from '../src/index.js'
 
 const code = (source: string): string =>
   /<code[^>]*>([\s\S]*?)<\/code>/.exec(carveToHtml(source))?.[1] ?? '(no code block)'
@@ -24,10 +24,13 @@ describe('a fence running to the end of a container keeps its blank lines', () =
     const source = '```=html\n\n```\n\nafter\n'
     expect(carveToHtml(source)).toBe('\n\n<p>after</p>')
     expect(carveToHtml(source, { allowRawHtml: false })).toBe('\n\n<p>after</p>')
+    expect(carveToCarve(source)).toBe(source)
   })
 
   it('still emits nothing for a raw block with no payload lines', () => {
-    expect(carveToHtml('```=html\n```\n\nafter\n')).toBe('<p>after</p>')
+    const source = '```=html\n```\n\nafter\n'
+    expect(carveToHtml(source)).toBe('<p>after</p>')
+    expect(carveToCarve(source)).toBe(source)
   })
 
   it.each([
