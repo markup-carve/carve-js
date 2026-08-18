@@ -510,6 +510,275 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A marker on a block quote's lazy continuation is text** (#1200). A bare
+  list marker is not a paragraph interrupter, so it folds into a quoted
+  paragraph as literal text where one is open. `parseBlockQuote` has always
+  read it that way, and `> q` / `- s` is one quoted paragraph at the top level
+  already. The list item's collector asked a different question, and asked it
+  of the LINE rather than of what was open: it split the item's stream at the
+  first marker-shaped line, so the quote ended there and a sub-list opened.
+
+  ```
+  - > q
+    - s
+  tail
+  ```
+
+  used to render
+
+  ```html
+  <ul>
+    <li>
+      <blockquote><p>q</p></blockquote>
+      <ul>
+        <li>s
+  tail</li>
+      </ul>
+    </li>
+  </ul>
+  ```
+
+  and now matches carve-rs and the executable spec:
+
+  ```html
+  <ul>
+    <li>
+      <blockquote><p>q
+  - s
+  tail</p></blockquote>
+    </li>
+  </ul>
+  ```
+
+  The collector already carried this derivation for the three opaque bodies
+  beside it - PART 9 §24 S1 and S2 place a line by the COLUMN it reaches and
+  never read its first character - and an open block quote paragraph was a
+  fourth open thing it did not ask about. Every marker dialect follows without
+  being named: bullet, star, ordered, bare dot, task box, abutting attribute,
+  and a nested quote the item ends on. It is the QUOTE's paragraph and not the
+  item's, so `- > # h` / `  - s` really does open a sub-list: a heading left
+  the quote with no paragraph for the marker to fold into, and a table and a
+  blank line do the same.
+
+- **A link reference definition reaches its column by composing the strips**
+  (#1199, markup-carve/carve#1372). The definition prepass read a line's
+  container prefix by walking list markers on a view that strips a column-0
+  quote run and stops at the first quote it meets. Under `- > - - x` that
+  recorded one column, 2, and lost the items at 6 and 8, so it could not tell a
+  definition written at 7 - which the block parser folds as the innermost
+  item's paragraph text - from one written at 8, which is that item's content.
+  It never had to: the gate carried an exemption for any line supplying a
+  container prefix of its own, and every quoted definition line does, so the
+  line registered whatever column it was written at while `carveToHtml` printed
+  the same line as text in the same output. The prefix is now peeled the way
+  PART 9 §24 C5 hands a body down, each strip taken against the column the one
+  before it HANDS OUT, and the exemption is gone. Two rules fall out of the
+  same walk, each of which was a separate hole: a block quote marker counts
+  only AT the handed-out column, so the second `>` of `>   > [r]: /url` sits at
+  column 4 of a body that starts at 2 and is ordinary text; and a line that
+  stops short of an open quote reaches nothing inside it, so `- > x` /
+  `    [r]: /url` is the quote paragraph's lazy continuation. The footnote kind
+  was already on the correct side of this, because `parseFootnoteDef` runs
+  during block parsing and reads the structure rather than the line.
+
+- **An unresolved reference publishes no comment written in its label**
+  (#1192). Making `rawRef` a slice of the DOCUMENT (#1183) is what the
+  canonical writer needed, and it is also what all four render targets emit for
+  an unresolved reference, so a comment line inside the label was PUBLISHED:
+
+  ```
+  ::: |
+  [a
+  %% secret
+  c][missing]
+  :::
+  ```
+
+  rendered
+
+  ```html
+  <div class="line-block">
+    <p>[a
+  %% secret
+  c][missing]</p>
+  </div>
+  ```
+
+  and `carveToMarkdown`, `carveToPlainText` and `carveToAnsi` carried it too. A
+  comment renders nothing at any indent, and the block layer removes a
+  comment-only line BEFORE the stanza is scanned as one inline run, so the text
+  the inline layer sees is `[a` / empty / `c][missing]` and that is the literal
+  fallback. The split is at the CONSUMER: `rawRef` stays verbatim and
+  `render-carve` keeps emitting it, while the four render targets go through
+  one helper that empties a comment-only line the way the block layer does. The
+  line is EMPTIED rather than dropped, because the boundary it carried is still
+  there. The LINE form only: a fence opener is not a line the block layer
+  empties, and an inline `%%` in an ordinary paragraph is untouched.
+
+- **A flattened block boundary keeps a separator** (markup-carve/carve#1325,
+  PART 11 §1b). A slot that takes inline content only has nowhere to put a node
+  for the boundary between two former sibling blocks, so it has to survive as
+  bytes or not at all, and in HTML import it did not. Two of the four shapes
+  CORRUPT rather than merely merge:
+
+  | input caption | emitted Carve | rendered back as |
+  | --- | --- | --- |
+  | `<p>one</p><p>two</p>` | `one two` was `onetwo` | one word |
+  | `<p><strong>a</strong></p><p><strong>b</strong></p>` | `*a**b*` | one strong run holding a literal asterisk |
+  | `<p><code>a</code></p><p><code>b</code></p>` | the two spans glued, delimiters and all | one code span holding the delimiters that used to end and begin the two |
+  | `<p>a</p><p></p><p>b</p>` | `ab` | one word |
+
+  Nothing is dropped in any of them, so no diagnostic fired: `element-unwrapped`
+  says a `<p>` was unwrapped and says nothing about what the unwrapping joined,
+  and the round trip holds on the joined value. Where two former siblings each
+  contribute at least one TOKEN a separator is now required, and it is
+  sufficient if and only if re-reading the slot draws no token from both sides
+  of the join. Sufficiency is what keeps it from over-separating: a side that
+  carries nothing is not a side, and a boundary that already separates needs
+  nothing added, so `<p>a</p><p> </p><p>b</p>` is held to one space. The rule is
+  over every inline-only slot an importer can reach rather than over the caption
+  it was first measured in, so two `<li>` separate exactly as two `<p>`. A
+  character that was TEXT and turns into a live delimiter once its neighbor
+  arrives beside it stays the writer's job: `<p>a *b</p><p>c* d</p>` flattens to
+  `a \*b c\* d`.
+
+- **A block at a container's content column ends the paragraph it sits under**
+  (#1189, markup-carve/carve#1364 with carve#1348, carve#1349, carve#1357 and
+  carve#1363). At a container's content column a line is read as a BLOCK, and a
+  block ends the paragraph it sits under; what it RENDERS is not a parameter,
+  so an invisible line ends it exactly as a visible one does, and the container
+  itself ends because the following line is at document column 0. The plainest
+  spelling, and the one all eight reported documents reduce to:
+
+  ```
+  - a
+    %% c
+  tail
+  ```
+
+  `tail` was swallowed by the item. Six mechanisms, one rule. The item tracker
+  answered "is a paragraph open" and "is the item still collecting" with one
+  flag, so closing the paragraph also ended the item; they are separated now. A
+  continuation row carries no leading pipe, so a table ending on one was not
+  seen as a table, which is carried as a flag re-armed by both row branches and
+  seeded from the MARKER LINE. A quote nested in a quote is asked what its own
+  last block ends on, through a per-level tracker rather than a re-read of the
+  line, and that descent is a LOOP rather than a recursion, because
+  `'> '.repeat(20000)` is a 40 KB document this parser handles and the first
+  version overflowed the stack on it. A footnote definition's block runs to the
+  end of its body, blank lines and all, while a link reference definition has
+  no body and opens no run. And a description marker opens a content column,
+  which was the one container the definition prepass could not see, so a
+  definition written at one rendered nowhere and defined nothing.
+
+- **A line of markers is walked by offset, not by re-slicing** (#1190). The
+  strip that answers PART 1 S4 for a marker line peeled one container marker at
+  a time and handed the remainder on as a fresh string. Every regex it consults
+  is anchored with `$`, so each step read to the END of the line to answer a
+  question about its HEAD, and the peel then allocated that tail again. Both
+  halves are linear in what is left, so a line of N markers cost O(N * line
+  length). The walk now carries an OFFSET and asks the same regexes against a
+  window at that offset, widened until it answers, since a marker's indent, its
+  space run and its abutting attribute payload are each unbounded. Per-byte
+  cost from 1000 to 4000 markers, before and after:
+
+  | shape | before | after |
+  | --- | --- | --- |
+  | `- ` | 3.50x | 0.78x |
+  | `1. ` | 3.92x | 0.99x |
+  | `- [ ] ` | 4.19x | 1.02x |
+  | `-{#a} ` | 3.69x | 0.96x |
+  | `- > ` | 4.02x | 0.95x |
+
+  An 8 KB line of bullets went from 6284 ms to 243 ms on the machine this was
+  profiled on; the ratios above are the load-independent claim. It is not the
+  bullet alone, and a line of bare `> ` markers was already linear, because the
+  question is only asked of a list item's content. 144,130 generated documents,
+  every marker spelling crossed with every other over every block the
+  classifier branches on, render byte-identically to before.
+
+- **A line block hardens a soft break at every depth** (#1174,
+  markup-carve/carve#1351). PART 9 §23 hardens a line boundary by NODE KIND
+  rather than by depth, and its neighboring clause makes the two exemptions a
+  question of node PRESENCE: a backslash break and a newline an open verbatim
+  run swallowed leave no break node to convert. The conversion ran on the
+  stanza's top-level nodes only, so these two documents differed by one
+  character and by a whole break:
+
+  ```
+  ::: |
+  *Roses are red,\
+  Violets are blue.*
+  :::
+  ```
+
+  ```
+  ::: |
+  *Roses are red,
+  Violets are blue.*
+  :::
+  ```
+
+  The first emitted its break inside the `strong` and the second emitted none.
+  The conversion now runs wherever a break node is. Driving it by node kind
+  rather than by a list of container types decides one case the reported
+  examples do not: an inline footnote's body is an inline SLOT of a node inside
+  the stanza, so a boundary written in it hardens with the rest. This reverses
+  four rows previously pinned by #1127. The canonical writer needed no change,
+  and a backslash that is now redundant is dropped.
+
+- **A line block's nested inline is measured and captured from its own source**
+  (#1182, #1183). A stanza is parsed as one inline run over the JOINED body
+  text, and the block layer has already emptied every comment-only line in it,
+  so the joined text is shorter than the source by exactly those lines and two
+  fields taken from it were wrong past the first one. `lineAnchors` gives every
+  line its own origin, but the re-basing of a nested scan carried only
+  `anchoredRanges`, so anything under an inline container fell back to
+  `baseOffset + localOffset`: in `*a` / `%% secret` / `c*` that put `c` on the
+  second `%` of the comment line. The anchors are carried inward now, sharing
+  the array and carrying the starting line as a delta, so a nested construct
+  costs no copy. And `rawRef` was sliced out of the joined text, where the
+  author's characters simply are not, so it is read from the DOCUMENT instead -
+  which is what `rawRef`'s own contract asks for, since it is documented as the
+  authored source verbatim. The capture verifies itself rather than trusting
+  the span: container prefixes are stripped from the scanned text deliberately,
+  so a candidate is accepted only when every one of its lines either matches
+  the scanned line or stands against an EMPTY one. A quoted or indented
+  reference therefore keeps its stripped spelling, and so does a reconstructed
+  text such as a stanza with expanded tabs or a table cell assembled from
+  continuation rows. The defect was never the line block's: `> *a` / `> c*`
+  reported `c` at the span of the `>` marker, a list item reported a lone
+  space, and a list inside a quote reported `>` again. The IMAGE form carried
+  the same `rawRef` defect, and a CRLF document defeated the first version of
+  the source capture.
+
+- **A comment fence is read behind its whole container prefix** (#1181,
+  markup-carve/carve#1309). The definition prepass measured a line's block
+  quote depth from two views, the raw line and the line behind a SINGLE list
+  marker, which answers for one marker only. A quote standing behind two of
+  them was invisible to it, so `- - > %%%` reported depth 0 while its own
+  closer `    > %%%` reported 1, the closer was not accepted at the opener's
+  depth, and the comment region never opened:
+
+  ```
+  - - > %%%
+      > [r]: /url
+      > %%%
+
+  See [r][].
+  ```
+
+  The list renders as empty nested blockquotes, so the definition line is
+  nowhere on screen, and the reference resolved anyway - both halves of the
+  answer visible at once and contradicting each other. The invariant the
+  prepass is enforcing is that a line's container prefix is a RUN and its quote
+  depth is the number of `>` markers anywhere in it, so one walk counts them
+  and the three places that each spelled the two-view measurement now share it.
+  Quote markers are counted while list markers are only consumed, so a fence
+  opened in an inner quote is still not closed by a run written one level out.
+  Of 30 prefix shapes, 10 move, every one of them from leaking to deferring and
+  none the other way.
+
 - **A bare delimiter rule does not escape what the source already escaped**
   (#1160, #1162; the answer carve-php reached in
   markup-carve/carve-php#1213). Six of the bare rules in
