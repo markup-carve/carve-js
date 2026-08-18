@@ -96,7 +96,7 @@ describe('table column metadata', () => {
     const html = carveToHtml(source, { extensions: [listTable()] })
     expect(html).toContain('<col style="width: 30%;">')
     expect(html).toContain('<th scope="col" style="text-align: left; vertical-align: top;">A</th>')
-    expect(html).toContain('<tfoot>\n    <tr><td style="text-align: left; vertical-align: top;">E</td>')
+    expect(html).toContain('<tfoot><tr><td style="text-align: left; vertical-align: top;">E</td>')
     expect(html).not.toContain('footer-rows=')
   })
 })
