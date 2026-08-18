@@ -8795,21 +8795,26 @@ function parseCellMarkers(src: string): {
   // recognized; a *repeated* character is the start of content, so for
   // `|=<<` the first `<` aligns and the second `<` is content.
   const markerStart = i
-  while ('<>~^v'.includes(src[i] ?? '')) i++
-  const markerRun = src.slice(markerStart, i)
   let align: 'left' | 'right' | 'center' | undefined
   let valign: 'top' | 'middle' | 'bottom' | undefined
-  let validRun = markerRun.length > 0 && (/\s/.test(src[i] ?? '') || src[i] === '{')
-  for (const marker of markerRun) {
+  while ('<>~^v'.includes(src[i] ?? '')) {
+    const marker = src[i]!
     if (marker === '<' || marker === '>' || marker === '~') {
-      if (align === undefined) align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
-      else if (marker === '~' && valign === undefined) valign = 'middle'
-      else validRun = false
+      if (align === undefined) {
+        align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
+      } else if (marker === '~' && valign === undefined) {
+        valign = 'middle'
+      } else {
+        break
+      }
     } else {
-      if (valign !== undefined) validRun = false
-      else valign = marker === '^' ? 'top' : 'bottom'
+      if (valign !== undefined) break
+      valign = marker === '^' ? 'top' : 'bottom'
     }
+    i++
   }
+  const validRun = i > markerStart &&
+    (/\s/.test(src[i] ?? '') || src[i] === '{' || '<>~^v'.includes(src[i] ?? ''))
   if (!validRun) {
     i = markerStart
     align = undefined
