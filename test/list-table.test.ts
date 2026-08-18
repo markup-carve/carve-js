@@ -150,7 +150,7 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
-  it('renders footer rows one per line', () => {
+  it('renders footer rows in the canonical compact wrapper', () => {
     const src = [
       '{footer-rows=2}',
       '{header-cols=1}',
@@ -172,10 +172,7 @@ describe('list-table Tier-3 extension', () => {
         '    <tr><th scope="row">Region</th><td>Q1</td></tr>',
         '    <tr><th scope="row">EMEA</th><td>10</td></tr>',
         '  </tbody>',
-        '  <tfoot>',
-        '    <tr><th scope="row">Region</th><td>Q1</td></tr>',
-        '    <tr><th scope="row">EMEA</th><td>10</td></tr>',
-        '  </tfoot>',
+        '  <tfoot><tr><th scope="row">Region</th><td>Q1</td></tr><tr><th scope="row">EMEA</th><td>10</td></tr></tfoot>',
         '</table>',
       ].join('\n'),
     )
