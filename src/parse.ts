@@ -6908,6 +6908,97 @@ function isBlockAttributeLine(content: string): boolean {
 }
 
 /**
+ * How much of the line each prefix step reads before it widens.
+ *
+ * Large enough that an ordinary marker - indent, marker, task box, space run -
+ * is decided in one window, small enough that the per-step copy is a constant
+ * rather than the tail it replaced.
+ */
+const PREFIX_WINDOW = 32
+
+/**
+ * The line the prefix walk may read, as an END OFFSET.
+ *
+ * Every regex the walk consults is anchored with `$` and matches `.`, which
+ * excludes U+000A - so none of them can match across a newline, and the walk
+ * must not window past one either. Taken ONCE, because a per-step `indexOf`
+ * would be the same linear read the windowing exists to remove.
+ *
+ * The newline itself is INSIDE the bound. `- \n` is a marker whose content is
+ * the newline (`[^ \t]` admits it, and `$` is then satisfied), so a bound that
+ * stopped one character earlier would decline a strip the regex makes.
+ */
+function prefixWalkBound(content: string): number {
+  const nl = content.indexOf('\n')
+
+  return nl === -1 ? content.length : nl + 1
+}
+
+/**
+ * The length of the block quote marker at `from`, or 0 when there is none.
+ *
+ * `RE_BLOCKQUOTE` takes `>` plus at most one space, so a two-character window
+ * already decides it; the window is only ever short when the line itself is,
+ * and `>` alone at the end of the line consumes the whole remainder exactly as
+ * `quoted[1] ?? ''` did.
+ */
+function quotePrefixLength(content: string, from: number, bound: number): number {
+  const window = content.slice(from, Math.min(from + PREFIX_WINDOW, bound))
+  const quoted = RE_BLOCKQUOTE.exec(window)
+  if (!quoted) return 0
+
+  return window.length - (quoted[1]?.length ?? 0)
+}
+
+/**
+ * The length of the list item marker at `from`, or 0 when there is none.
+ *
+ * Asked of a WINDOW, and widened until it answers. A marker's own head is
+ * short, but its indent, its space run and its abutting attribute block are
+ * not bounded, so a fixed window would decline a marker it merely could not
+ * see. Doubling costs the prefix twice over at worst, and every widened window
+ * is charged to characters the walk then consumes, so the walk stays linear in
+ * the line.
+ *
+ * A truncated window cannot INVENT a marker: each pattern's trailing group is
+ * `([^ \t].*)$`, so cutting the tail short only shortens that group, and the
+ * marker length is read as what the window does NOT leave to it. It can only
+ * hide one, which is what the widening answers.
+ */
+function markerPrefixLength(content: string, from: number, bound: number): number {
+  for (let width = PREFIX_WINDOW; ; width *= 2) {
+    const end = Math.min(from + width, bound)
+    const window = content.slice(from, end)
+    const marked = extractItemAttr(window)?.stripped ?? window
+    const item = RE_TASK.exec(marked) ?? RE_ORDERED.exec(marked) ?? RE_UNORDERED.exec(marked)
+    // The attribute block is stripped OUT of `marked`, so the marker length is
+    // measured against the window rather than against `marked`: the content is
+    // a suffix of both, and only the window still holds the braces.
+    if (item) return window.length - item[item.length - 1]!.length
+    if (end === bound) return 0
+  }
+}
+
+/**
+ * How much of `content` is container prefix - any interleaving of block quote
+ * markers and list item markers, in any order and to any depth.
+ */
+function walkContainerPrefix(content: string): number {
+  const bound = prefixWalkBound(content)
+  let at = 0
+  for (;;) {
+    const quote = quotePrefixLength(content, at, bound)
+    if (quote > 0) {
+      at += quote
+      continue
+    }
+    const marker = markerPrefixLength(content, at, bound)
+    if (marker === 0) return at
+    at += marker
+  }
+}
+
+/**
  * Does the block written ON a list item's MARKER LINE leave an open paragraph
  * behind it?
  *
@@ -6944,22 +7035,24 @@ function markerLineLeavesParagraphOpen(content: string): boolean {
   // Strip to the block that actually sits at the bottom of the stack: `> > # H`
   // is the quote's question twice over, and `- - # H` is the sub-item's, whose
   // first block is the heading exactly as a bare `- # H`'s is. Each strip
-  // shortens the line, so the loop terminates.
-  let rest = content
-  for (;;) {
-    const quoted = RE_BLOCKQUOTE.exec(rest)
-    if (quoted) {
-      rest = quoted[1] ?? ''
-      continue
-    }
-    const marked = extractItemAttr(rest)?.stripped ?? rest
-    const item = RE_TASK.exec(marked) ?? RE_ORDERED.exec(marked) ?? RE_UNORDERED.exec(marked)
-    if (item) {
-      rest = item[item.length - 1]!
-      continue
-    }
-    break
-  }
+  // consumes at least one character, so the walk terminates.
+  //
+  // WALKED BY OFFSET, NOT BY RE-SLICING. Every regex this strip consults ends
+  // on `(...)$`, so each one reads to the END OF THE LINE to answer a question
+  // about its HEAD - and the loop then allocated that tail as the next `rest`.
+  // Both halves are linear in what is left, so a line of N markers cost
+  // O(N * line length): `'- '.repeat(8000)` took ~7 s of which ~6.2 s was this
+  // one regex, and the growth held at ~3.9x per doubling across four doublings
+  // (carve-js#1190). §25 treats that shape as a denial of service rather than a
+  // slow parse, because the input is 8 KB.
+  //
+  // `markerPrefixLength` and `quotePrefixLength` below ask the same regexes the
+  // same question against a WINDOW at the offset instead, so the cost is the
+  // prefix rather than the tail. They are the same regexes on purpose: this is
+  // the third place the marker grammar is read, and re-spelling it is how two
+  // readers come to disagree about whether a line opened an item.
+  const walked = walkContainerPrefix(content)
+  const rest = walked === 0 ? content : content.slice(walked)
   if (isBlankLine(rest) || trimStructural(rest) === '') return false
   // THE STRICT COLUMN-0 RULE APPLIES TO WHAT IS LEFT (§24 C3). A quote marker
   // takes exactly one following space, so `>  [r]: /u` leaves a line that is
