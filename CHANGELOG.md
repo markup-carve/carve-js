@@ -65,6 +65,8 @@ HTML import gained, each previously unwrapped, dropped or silently wrong:
 
 ### Fixed
 
+- **A table alignment run requires a literal space separator.** Tabs and other JavaScript whitespace now remain visible cell content, matching the grammar and the PHP and Rust engines.
+
 Block structure and containers:
 
 - **A marker on a block quote's lazy continuation is text** (#1200). `- > q` / `  - s` no longer ends the quote and opens a sub-list; a bare marker folds into the open quoted paragraph, in every marker dialect.

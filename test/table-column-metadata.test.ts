@@ -11,6 +11,20 @@ describe('table column metadata', () => {
     })
   })
 
+  it('requires a literal space to terminate an alignment run', () => {
+    for (const separator of ['\t', '\v', '\f', '\u2000', '\uFEFF']) {
+      const cell = parse(`|<${separator}x |\n`).children[0]
+      expect(cell).toMatchObject({
+        rows: [{ cells: [{ children: [{ type: 'text', value: `<${separator}x` }] }] }],
+      })
+      expect(cell).not.toMatchObject({ rows: [{ cells: [{ align: 'left' }] }] })
+    }
+
+    expect(parse('|< x |\n').children[0]).toMatchObject({
+      rows: [{ cells: [{ align: 'left', children: [{ type: 'text', value: 'x' }] }] }],
+    })
+  })
+
   it('keeps in-table alignment ahead of the table attribute, per field', () => {
     const source = '{aligns="left" valigns="bottom"}\n|=>^ H |\n| x |\n'
     expect(carveToHtml(source)).toContain(
