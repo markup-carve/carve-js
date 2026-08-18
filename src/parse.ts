@@ -5638,6 +5638,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       openedCommentAtColumn: false,
       inTable: false,
       invisibleAtColumn: false,
+      commentAtColumn: false,
       inFootnoteBody: false,
       quoteInner: null,
       absorbingFence: false,
@@ -6899,6 +6900,8 @@ interface ItemLazyState {
    * the ruling says and what separates 358 from 357-2.
    */
   invisibleAtColumn: boolean
+  /** Only comments keep §24 C3's nonzero below-column path open. */
+  commentAtColumn: boolean
   /**
    * Is the tracker inside a footnote definition's body?
    *
@@ -7620,6 +7623,8 @@ function trackItemLazyState(
   state.quoteInner = null
   const wasInvisibleAtColumn = state.invisibleAtColumn
   state.invisibleAtColumn = false
+  const wasCommentAtColumn = state.commentAtColumn
+  state.commentAtColumn = false
   // A FOOTNOTE DEFINITION'S BODY RUNS ON. A blank between its lines is inside
   // the body rather than after it, so it does not end the run.
   //
@@ -7639,6 +7644,7 @@ function trackItemLazyState(
   }
   if (state.inFootnoteBody) {
     state.invisibleAtColumn = wasInvisibleAtColumn
+    state.commentAtColumn = wasCommentAtColumn
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -7660,6 +7666,7 @@ function trackItemLazyState(
       // column, where the whole run adds no block.
       state.lazyFoldable = state.lazyFoldableBeforeComment && !state.openedCommentAtColumn
       state.invisibleAtColumn = state.openedCommentAtColumn
+      state.commentAtColumn = state.openedCommentAtColumn
     } else {
       state.lazyFoldable = false
     }
@@ -7786,6 +7793,7 @@ function trackItemLazyState(
     // them is the container's again.
     state.inFootnoteBody = RE_FOOTNOTE_DEF.test(content)
     state.invisibleAtColumn = true
+    state.commentAtColumn = RE_COMMENT_LINE.test(content)
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -8103,6 +8111,7 @@ function parseList(lexer: Lexer): List {
       lazyFoldableBeforeComment: false,
       openedCommentAtColumn: false,
       invisibleAtColumn: false,
+      commentAtColumn: false,
       inFootnoteBody: false,
       absorbingFence: false,
       divDepth: 0,
@@ -8319,7 +8328,7 @@ function parseList(lexer: Lexer): List {
           // there (corpus 197, 277-3, 358). The container ends at document
           // column 0, which is the line this test excludes and which is all
           // that separates 358 from 357-2.
-          (lazyState.invisibleAtColumn && indentColumns(l, contentCol) > 0)) &&
+          (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
           !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under

@@ -11,6 +11,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **A vertical table-cell marker requires a horizontal partner.** Lone `^` and `v` prefixes remain visible content; paired two-axis runs are unchanged.
 
+### Fixed
+
+- **Definitions collected at a list item's content column close its paragraph**
+  (markup-carve/carve#1376). A following line below that column no longer uses
+  the comment-only continuation path; bare-dot items use the bullet column.
+
 ## [0.1.4] - 2026-08-18
 
 ### Added
