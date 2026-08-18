@@ -1294,6 +1294,8 @@ class Lexer {
    */
   atDocumentLevel = false
   linkDefs: Map<string, LinkDef> = new Map()
+  /** Document lines admitted only as a block quote's lazy paragraph text. */
+  literalLazyLinkDefLines: Set<number> = new Set()
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
   footnoteDefs: Map<string, BlockNode[]> = new Map()
@@ -1564,6 +1566,7 @@ function nestedSubLexer(
   )
   sub.abbrDefs = parent.abbrDefs
   sub.linkDefs = parent.linkDefs
+  sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
   sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
@@ -3408,7 +3411,17 @@ function collectLinkDefs(lexer: Lexer) {
       composed.peeled.some((one) => one.content === col) ||
       openCols.some((e, i) => i < composed.depth && e.col === col)
     const anyReached = composed.peeled.length > 0 || composed.depth > 0
-    const atAnOpenContentColumn = plusColumn !== null
+    // An unmarked line may lazily continue a quote's open paragraph, but it
+    // does not reach a container inside that quote. Falling back to the outer
+    // `contentCol` here made a definition-shaped lazy line both disappear from
+    // the paragraph and become active document-wide.
+    const stoppedAtQuote =
+      !composed.peeled.some((one) => one.quote) &&
+      composed.depth < openCols.length &&
+      openCols[composed.depth]!.quote
+    const atAnOpenContentColumn = stoppedAtQuote
+      ? false
+      : plusColumn !== null
       ? rawIndent === plusColumn
       : anyReached
         ? reached(composed.column)
@@ -3819,7 +3832,11 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // literal paragraph text -- and, since RE_LINK_DEF also matches `[^fn]: …`, an
   // indented footnote def (missed by the flush-anchored RE_FOOTNOTE_DEF above)
   // must not be swallowed here either. Require the def flush at column 0.
-  if (leadingWhitespace(line) === 0 && isLinkDefLine(line)) {
+  if (
+    leadingWhitespace(line) === 0 &&
+    isLinkDefLine(line) &&
+    !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))
+  ) {
     lexer.consume()
     return null
   }
@@ -6408,6 +6425,10 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     if (!blockQuoteParagraphOpen(state)) break
     const lineIndex = lexer.pos
     lexer.consume()
+    const lazyLinkDef = isLinkDefLine(ln)
+    if (lazyLinkDef) {
+      lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
+    }
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
     trackBlockQuoteLazyState(
@@ -8321,7 +8342,9 @@ function parseList(lexer: Lexer): List {
         // its residual indent preserved), so only the genuinely-under-indented
         // case is stripped.
         let lazyLine = l
-        if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
+        if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
+          lazyLine = l.replace(/^[ \t]+/, '')
+        } else if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
           lazyLine = l.replace(/^[ \t]+/, '')
         } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
           // A block-SHAPED line below the content column opens nothing (§24 C3:
@@ -9651,6 +9674,7 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     if (
       !flattened &&
       lines.length > 0 &&
+      !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
       startsInterruptingBlock(lexer) &&
       !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
     )
