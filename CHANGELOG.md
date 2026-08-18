@@ -643,12 +643,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `a \*b c\* d`.
 
 - **A block at a container's content column ends the paragraph it sits under**
-  (#1189, markup-carve/carve#1364 with carve#1348, carve#1349, carve#1357 and
-  carve#1363). At a container's content column a line is read as a BLOCK, and a
-  block ends the paragraph it sits under; what it RENDERS is not a parameter,
-  so an invisible line ends it exactly as a visible one does, and the container
-  itself ends because the following line is at document column 0. The plainest
-  spelling, and the one all eight reported documents reduce to:
+  (#1189, markup-carve/carve#1364 with markup-carve/carve#1348,
+  markup-carve/carve#1349, markup-carve/carve#1357 and
+  markup-carve/carve#1363). At a container's content column a line is read as a
+  BLOCK, and a block ends the paragraph it sits under; what it RENDERS is not a
+  parameter, so an invisible line ends it exactly as a visible one does, and
+  the container itself ends because the following line is at document column 0.
+  The plainest spelling, and the one all eight reported documents reduce to:
 
   ```
   - a
