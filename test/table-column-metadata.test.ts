@@ -4,7 +4,7 @@ import { carveToHtml, lintCarve, listTable, parse } from '../src/index.js'
 const rules = (source: string) => lintCarve(source).map((warning) => warning.rule)
 
 describe('table column metadata', () => {
-  it('rejects duplicate axes and vertical-before-horizontal order as a whole', () => {
+  it('rejects duplicate axes and reverse-order pairs as a whole', () => {
     expect(carveToHtml('|=<< Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
     expect(parse('|=~> H |\n').children[0]).toMatchObject({
       rows: [{ cells: [{ children: [{ type: 'text', value: '~> H' }] }] }],
