@@ -38,6 +38,8 @@ const IMPLEMENTED = new Set([
   'an-unterminated-fence-at-a-content-column-opens-no-block-so-the-paragraph-stays-open',
   'table-columns-carry-alignment-vertical-alignment-and-widths',
   'a-table-alignment-run-carries-two-independent-axes',
+  'a-vertical-table-marker-needs-a-horizontal-partner',
+  'an-all-blank-raw-payload-still-emits-its-line',
   'a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one',
   // The category the freeze at carve `0f6b990` adds. It needed no engine work:
   // this build renders all four of its documents, and all 62 quote/list prefixes

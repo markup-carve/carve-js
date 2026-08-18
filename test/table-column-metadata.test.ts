@@ -11,6 +11,18 @@ describe('table column metadata', () => {
     })
   })
 
+  it('requires a horizontal partner for every vertical marker', () => {
+    const table = parse('|=^ Top |=v Bottom |=<^ Paired |=v> Reverse |\n').children[0]
+    expect(table).toMatchObject({
+      rows: [{ cells: [
+        { header: true, children: [{ type: 'text', value: '^ Top' }] },
+        { header: true, children: [{ type: 'text', value: 'v Bottom' }] },
+        { header: true, align: 'left', valign: 'top' },
+        { header: true, align: 'right', valign: 'bottom' },
+      ] }],
+    })
+  })
+
   it('requires a literal space to terminate an alignment run', () => {
     for (const separator of ['\t', '\v', '\f', '\u2000', '\uFEFF']) {
       const cell = parse(`|<${separator}x |\n`).children[0]
