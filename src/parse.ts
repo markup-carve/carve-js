@@ -2256,21 +2256,53 @@ function prepassMarker(text: string, re: RegExp = RE_PREPASS_MARKER): RegExpMatc
   return m
 }
 
-/**
- * How many block quote markers lead `text`, zero when none do.
- *
- * The counted form of the prepass's own quote-prefix test, and it uses that
- * exact pattern: a fence opened at two quote levels is not held by a line
- * carrying one, and a boolean cannot tell those apart.
- *
- * Module scope rather than the per-line loop it serves: the loop runs once per
- * line of every document, and a closure allocated there is allocated that many
- * times for a value that depends on nothing outside its argument.
- */
-function quoteRunDepth(text: string): number {
-  const run = /^(?:[^\S ]*>(?: |$))+/.exec(text)
+// The prepass's own quote-prefix pattern, named once so the walk below and any
+// future reader of it cannot drift apart on which lines carry a marker.
+const RE_QUOTE_RUN = /^(?:[^\S ]*>(?: |$))+/
 
-  return run ? (run[0].match(/>/g) ?? []).length : 0
+/**
+ * The block quote depth of `text` behind its WHOLE container prefix.
+ *
+ * A line's container prefix is any interleaving of list markers and block quote
+ * markers - `- - > `, `- > - > ` - and the quote this pass has to see may sit
+ * at the END of it. The two views taken instead answered for ONE marker: the
+ * raw line, and the line behind a single `RE_PREPASS_MARKER_STRIP`. So
+ * `- - > %%%` read as unquoted at depth 0 while its own closer `    > %%%` read
+ * as depth 1; no run at the opener's depth was found, the comment region never
+ * opened, and a link reference definition written inside an invisible comment
+ * registered (carve-js#1181). `- > - > %%%` failed the same test from the other
+ * side, counting one quote on a line that carries two.
+ *
+ * WALK THE RUN RATHER THAN ADD ANOTHER MARKER. Every widening of this prefix so
+ * far has been one more spelling - column 0, then indented, then quoted, then a
+ * quote behind one marker - and each one left the next depth to be found. The
+ * invariant the prepass is actually enforcing is that a line's container prefix
+ * is a RUN and the quote depth is the number of `>` markers anywhere in it, so
+ * this consumes the run and counts them.
+ *
+ * Quote markers are COUNTED and list markers only CONSUMED, because the depth
+ * is what tells `> > %%%` from `> %%%`: a fence opened in the inner quote is
+ * not closed by a run written one level out (markup-carve/carve#1341). This
+ * widens which lines are read as quoted; it never collapses two depths into
+ * one.
+ */
+function containerQuoteDepth(text: string): number {
+  let rest = text
+  let depth = 0
+  // Both arms consume at least one character - a quote run carries its own `>`,
+  // and the marker pattern needs a marker character and a space after it - so
+  // the walk terminates on every input.
+  for (;;) {
+    const run = RE_QUOTE_RUN.exec(rest)
+    if (run !== null) {
+      depth += (run[0].match(/>/g) ?? []).length
+      rest = rest.slice(run[0].length)
+      continue
+    }
+    const marker = prepassMarker(rest, RE_PREPASS_MARKER_STRIP)
+    if (marker === null) return depth
+    rest = rest.slice(marker[0].length)
+  }
 }
 
 /**
@@ -2579,24 +2611,18 @@ function collectLinkDefs(lexer: Lexer) {
     // legacy set (see `RE_BLANK_LINE`). Spelling one rule twice is what let the
     // two answers drift.
     prevBlank = isBlankLine(raw)
-    // A fence is quoted if a blockquote prefix leads the line, possibly behind a
-    // single list marker (`- > ```), so its closer is blockquote-stripped. Deeper
-    // list/quote mixing is a documented residual.
+    // A fence is quoted if a blockquote marker stands anywhere in the line's
+    // container prefix, however many list markers lead it (`- > ``` `,
+    // `- - > ``` `), so its closer is blockquote-stripped.
     //
-    // The SECOND spelling of `RE_PREPASS_MARKER`, and it carries the bare-dot
-    // branch for the same reason (carve-js#1120): without it `. > ``` ` did not
-    // read as quoted while `1. > ``` ` did.
-    const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
-    const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
-    const rawIsQuoted = /^(?:[^\S ]*>(?: |$))+/.test(raw) || /^(?:[^\S ]*>(?: |$))+/.test(afterMarker)
-    // The DEPTH behind that boolean. A fence opened at two quote levels is not
-    // held by a line carrying one: `> :::` under `> > ``` ` has left the inner
-    // quote and closes the div outside it, and a boolean cannot tell the two
-    // apart - it reports "still quoted" and the closer loses its pop, which is
-    // the reordering regression one container deeper again. Same pattern as the
-    // boolean above, counted rather than tested, and taken as the MAX of the two
-    // views for the same reason the boolean ORs them (`- > ``` `).
-    const rawQuoteDepth = Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker))
+    // THE DEPTH AND THE BOOLEAN COME FROM ONE WALK. A fence opened at two quote
+    // levels is not held by a line carrying one: `> :::` under `> > ``` ` has
+    // left the inner quote and closes the div outside it, and a boolean cannot
+    // tell the two apart - it reports "still quoted" and the closer loses its
+    // pop. Reading the raw line and the line behind ONE marker answered both
+    // questions for a single marker only (carve-js#1181).
+    const rawQuoteDepth = containerQuoteDepth(raw)
+    const rawIsQuoted = rawQuoteDepth > 0
     // AN OPEN CODE FENCE ANSWERS FIRST, ahead of every tracker below it.
     // §24 S2 makes a line verbatim once the innermost matched container is a
     // fenced body, and §28 says the same of a comment fence's body; neither
@@ -4100,11 +4126,13 @@ function commentRunLines(lexer: Lexer): Map<number, { line: number; depth: numbe
     const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[i - 1] ?? ''))
     const c = RE_COMMENT_BLOCK_ANY.exec(stripContainerPrefixes(raw, afterTerm))
     if (c === null) continue
-    const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
-    const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
     const entry = {
       line: i,
-      depth: Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker)),
+      // THE OPENER AND THE CLOSER ARE MEASURED THE SAME WAY, which is the whole
+      // point of naming this once: `- - > %%%` measured its own depth as 0 here
+      // while its closer `    > %%%` measured 1, so no run at the opener's depth
+      // existed and the region never opened (carve-js#1181).
+      depth: containerQuoteDepth(raw),
     }
     const at = m.get(c[1]!.length)
     if (at !== undefined) at.push(entry)
@@ -4222,9 +4250,7 @@ function commentScopeEnd(
       end = i
       break
     }
-    const markerStrip = prepassMarker(raw, RE_PREPASS_MARKER_STRIP)
-    const afterMarker = markerStrip ? raw.slice(markerStrip[0].length) : raw
-    const depth = Math.max(quoteRunDepth(raw), quoteRunDepth(afterMarker))
+    const depth = containerQuoteDepth(raw)
     const view = raw.replace(/^(?:>(?: |$))+/, '')
     if (
       depth < scope.quoteDepth ||
