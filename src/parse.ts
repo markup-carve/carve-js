@@ -2500,6 +2500,104 @@ function prepassOpensBlock(line: string): boolean {
   )
 }
 
+/**
+ * A container the definition prepass has open, by the ABSOLUTE column its
+ * content starts at. `quote` separates the two ways a line reaches one: a block
+ * quote is reached by writing its marker again, a list item by indentation
+ * alone.
+ */
+interface OpenContainer {
+  col: number
+  quote: boolean
+}
+
+/** One container peeled off a line's own prefix by `composeContainerPrefix`. */
+interface PeeledContainer {
+  /** The column the container's content starts at. */
+  content: number
+  quote: boolean
+  /** Whether it CONTINUES a container already open, rather than opening one. */
+  matched: boolean
+}
+
+/**
+ * Peel a line's container prefix the way PART 9 §24 C5 hands a body down, and
+ * report the column the line's own content starts at.
+ *
+ * COMPOSE THE STRIPS, DO NOT WALK THE PREFIX (markup-carve/carve#1372). Each
+ * strip is taken against the column the one before it HANDS OUT, so a marker
+ * counts only where a container really puts one:
+ *
+ *   - a BLOCK QUOTE marker exactly at the handed-out column. `>   > [r]: /url`
+ *     carries ONE quote: the second `>` sits at column 4 of a body that starts
+ *     at 2, so it is ordinary text (carve-js#649, one level in), and `> > x` /
+ *     `>   > [r]: /url` is the same line one quote deeper;
+ *   - a LIST or DESCRIPTION marker wherever it is written, which is the rule the
+ *     prepass's own `listCols` walk already applies - indentation before a
+ *     bullet opens a nested list rather than disqualifying it.
+ *
+ * A LIST ITEM IS REACHED BY INDENTATION, A BLOCK QUOTE BY ITS MARKER. So the
+ * walk enters every open item whose content column the line's indentation
+ * covers, and enters an open quote only where the line writes the marker again.
+ * `depth` is how far into `open` it got: a line that stops short of a quote is
+ * that quote paragraph's lazy continuation and reaches nothing inside it, which
+ * is why `- > x` / `    [r]: /url` is text at the quote's own content column.
+ *
+ * The `column` that comes back is what the definition gate compares against the
+ * columns the walk reached. Under `- > - - x` those are 2, 4, 6 and 8, and a
+ * definition written at 7 reaches none of them, so it is the innermost item's
+ * paragraph text and defines nothing - while the same line one column further
+ * right is a definition (carve-js#1199).
+ */
+function composeContainerPrefix(
+  raw: string,
+  afterTerm: boolean,
+  open: readonly OpenContainer[],
+): { column: number; peeled: PeeledContainer[]; depth: number } {
+  const peeled: PeeledContainer[] = []
+  let pos = 0
+  let depth = 0
+  // The column the container behind the walk hands its body out at. The
+  // document hands out column 0.
+  let handed = 0
+  for (;;) {
+    const rest = raw.slice(pos)
+    const ind = leadingWhitespace(rest)
+    const col = pos + ind
+    while (depth < open.length && !open[depth]!.quote && open[depth]!.col <= col) {
+      handed = open[depth]!.col
+      depth++
+    }
+    const after = rest.slice(ind)
+    if (after === '') return { column: col, peeled, depth }
+    if (after[0] === '>' && (after.length === 1 || after[1] === ' ')) {
+      if (col !== handed) return { column: col, peeled, depth }
+      const content = col + (after.length === 1 ? 1 : 2)
+      const matched = depth < open.length && open[depth]!.quote && open[depth]!.col === content
+      if (matched) depth++
+      peeled.push({ content, quote: true, matched })
+      handed = content
+      pos = content
+      continue
+    }
+    // The DESCRIPTION body column is where the text really starts, not §16's
+    // fixed three: the oracle registers a definition under a wider `:   ` too,
+    // so the extra spaces are the marker's slot rather than indentation in the
+    // body.
+    const desc = afterTerm ? /^:[ \t]+/.exec(after) : null
+    const marker = desc ?? prepassMarker(after)
+    if (marker === null || !/\S/.test(after.slice(marker[0].length))) {
+      return { column: col, peeled, depth }
+    }
+    const content = col + marker[0].length
+    const matched = depth < open.length && !open[depth]!.quote && open[depth]!.col === content
+    if (matched) depth++
+    peeled.push({ content, quote: false, matched })
+    handed = content
+    pos = content
+  }
+}
+
 function collectLinkDefs(lexer: Lexer) {
   // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
   // opened, or null when there was none. A fence inside a div ends at that div's
@@ -2551,6 +2649,17 @@ function collectLinkDefs(lexer: Lexer) {
   // stripContainerPrefixes; a list nested inside a blockquote is not tracked
   // here — a rarer residual case.)
   const listCols: number[] = []
+  // THE COMPOSED CONTENT-COLUMN STACK, absolute, outermost first - `listCols`
+  // read through every container rather than through list markers alone.
+  //
+  // `listCols` walks a line's list markers on `unquoted`, which strips a
+  // COLUMN-0 quote run and stops at the first quote it meets. So under
+  // `- > - - x` it records 2 and loses 6 and 8, and the definition gate below
+  // fell back to an exemption for any line carrying a prefix of its own - which
+  // registered every quoted definition whatever column it was written at
+  // (carve-js#1199). This stack is what that gate asks instead; the trackers
+  // above keep `listCols`, whose answers they already agree with.
+  const openCols: OpenContainer[] = []
   let prevBlank = true
   // Track whether we are inside a footnote body. A footnote continuation is
   // indented, so an indented link def inside a note body must still be collected
@@ -2865,6 +2974,35 @@ function collectLinkDefs(lexer: Lexer) {
       (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
     ) {
       while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
+    }
+    // THE COMPOSED STACK IS MAINTAINED ON THE SAME THREE BRANCHES, over the
+    // whole container prefix rather than over list markers alone.
+    const composed = composeContainerPrefix(raw, afterTerm, openCols)
+    if (isBlankLine(raw)) {
+      // A BLANK LINE ENDS EVERY OPEN BLOCK QUOTE, and everything written inside
+      // one goes with it. A list item is transparent across a blank, which is
+      // why `listCols` treats every blank that way and this stack cannot.
+      //
+      // NOT LOAD-BEARING, and said so rather than left to be discovered: a
+      // mutation that removes this drop changes no output across the suite or
+      // 1652 swept prefix shapes, because the walk's own `depth` already refuses
+      // to enter a quote the line does not re-mark, and a line that DOES re-mark
+      // it peels into the same entry whether or not the blank dropped it. It
+      // stays because it states the rule where the state is kept.
+      const firstQuote = openCols.findIndex((e) => e.quote)
+      if (firstQuote >= 0) openCols.length = firstQuote
+    } else if (composed.peeled.length) {
+      // The walk confirmed `depth` of the open containers. Anything past that
+      // is gone: a sibling list marker at an open item's own column closes that
+      // item, and everything written inside it goes with it.
+      openCols.length = composed.depth
+      for (const one of composed.peeled) {
+        if (!one.matched) openCols.push({ col: one.content, quote: one.quote })
+      }
+    } else if (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed)) {
+      while (openCols.length && openCols[openCols.length - 1]!.col > composed.column) {
+        openCols.pop()
+      }
     }
     // strip the enclosing content column so a fence delimiter at that column
     // is recognized (kept-indent view keeps residual indent after markers)
@@ -3261,22 +3399,31 @@ function collectLinkDefs(lexer: Lexer) {
     // the reader saw `[r]: /u` as prose while a reference to it silently
     // resolved (the `VA` rows of carve#669 and carve#701, at indents 1 and 3).
     const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
+    // THE COLUMN IS THE COMPOSED ONE, and it is compared against the columns the
+    // line REACHED plus the ones it opened itself. `rawIndent` measures a line
+    // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
+    // indent before a marker the block parser strips - and the exemption below
+    // let it through on top of that.
+    const reached = (col: number): boolean =>
+      composed.peeled.some((one) => one.content === col) ||
+      openCols.some((e, i) => i < composed.depth && e.col === col)
+    const anyReached = composed.peeled.length > 0 || composed.depth > 0
     const atAnOpenContentColumn = plusColumn !== null
       ? rawIndent === plusColumn
-      : listCols.length
-        ? listCols.includes(rawIndent)
-        : rawIndent === openColumn
-    // Compared against the QUOTE-STRIPPED view, not the raw line. `kept` has
-    // both the quote prefix and any list marker removed, so `kept === raw` was
-    // really asking "does this line carry a marker of its own?" - the exemption
-    // that keeps `- [ref]: /url`, where the definition IS the item's content and
-    // sits at its column by construction. A quote prefix made the two differ for
-    // the same reason a marker does, so every quoted line skipped the guard and
-    // a definition PAST the column collected inside a quote while the identical
-    // shape outside one stayed literal (carve-js#648). Content columns are
-    // measured inside the quote (carve#658), so the quote must not change the
-    // answer.
-    const notAtContentColumn = kept === unquoted && !atAnOpenContentColumn
+      : anyReached
+        ? reached(composed.column)
+        : composed.column === openColumn
+    // NO EXEMPTION FOR A LINE THAT CARRIES ITS OWN PREFIX. The guard used to
+    // apply only where `kept === unquoted`, which asked "does this line carry a
+    // marker of its own?" - because `rawIndent` measured the wrong thing on the
+    // lines that do, and `- [ref]: /url` had to survive it. It was widened once
+    // already, from `kept === raw` to `kept === unquoted`, when a COLUMN-0 quote
+    // marker turned out to open the same hole (carve-js#648); an indented quote
+    // marker, and a quote behind another one, are the same hole again
+    // (carve-js#1199). Composing the strips answers for all of them at once:
+    // `composed.column` is where the definition really sits, and on a marker
+    // line that is the column the marker just handed out.
+    const notAtContentColumn = !atAnOpenContentColumn
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
     const [defLine, defAttrText] = splitTrailingAttrBlock(line)
