@@ -44,9 +44,9 @@ describe('a verse comment nested under an inline container keeps its text', () =
         type: 'strong',
         children: [
           { type: 'text', value: 'a' },
-          { type: 'soft_break' },
+          { type: 'hard_break' },
           { type: 'comment', block: false, content: 'secret' },
-          { type: 'soft_break' },
+          { type: 'hard_break' },
           { type: 'text', value: 'c' },
         ],
       },
@@ -117,9 +117,9 @@ describe('a verse comment nested under an inline container keeps its text', () =
     const nodes = strong.children
     expect(nodes.map((n) => n.type)).toEqual([
       'text',
-      'soft_break',
+      'hard_break',
       'comment',
-      'soft_break',
+      'hard_break',
       'text',
     ])
     // Each node's span is the source it was authored at, so slicing the
@@ -188,19 +188,19 @@ describe('a verse comment nested under an inline container keeps its text', () =
     ])
   })
 
-  it('CONTROL: a nested boundary keeps its SOFT spelling', () => {
-    // carve-js#1127 ruled that a break inside a closed inline construct is not
-    // hardened, and carve-php and carve-rs both produce this. Whether PART 9
-    // §23 reaches that break is open on markup-carve/carve#1351; pinned here so a
-    // change to it is a decision rather than a side effect of this pass.
+  it('a nested boundary is HARDENED, like every other boundary', () => {
+    // RULED on markup-carve/carve#1351, reversing carve-js#1127: PART 9 §23
+    // hardens by NODE KIND at every depth, so a break inside a closed inline
+    // construct hardens like the rest. Only the backslash break and a newline a
+    // verbatim run swallowed stay exempt, because neither leaves a node.
     expect(content('::: |\n*a\nb\nc*\n:::\n')).toEqual([
       {
         type: 'strong',
         children: [
           { type: 'text', value: 'a' },
-          { type: 'soft_break' },
+          { type: 'hard_break' },
           { type: 'text', value: 'b' },
-          { type: 'soft_break' },
+          { type: 'hard_break' },
           { type: 'text', value: 'c' },
         ],
       },

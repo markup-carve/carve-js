@@ -5140,33 +5140,40 @@ function parseLineBlock(lexer: Lexer): LineBlock {
       if (!anchorable) stripPositions([line.comment])
       pendingComments.set(index, line.comment)
     })
-    // THE REINSERTION DESCENDS; THE CONVERSION DOES NOT (carve-js#1174).
+    // BOTH THE REINSERTION AND THE CONVERSION DESCEND (carve-js#1174,
+    // markup-carve/carve#1351).
     //
     // Both passes used to walk the stanza's TOP-LEVEL nodes only, so an emptied
     // comment line whose boundary ended up under an inline container - `*` that
     // opened on an earlier body line - found nowhere to sit and was dropped
-    // from the tree. `carve fmt` then wrote the line back as a bare `%%` and
-    // the author's own text was gone from a document that renders identically
-    // either way, which is why no render check could see it.
+    // from the tree, and every boundary nested under such a container kept the
+    // SOFT spelling the inline parser gave it.
     //
-    // The boundary is the same boundary at either depth, so the node goes back
-    // at it at either depth. What does NOT follow is the SOFT-TO-HARD
-    // conversion: a break inside a closed inline construct keeps its soft
-    // spelling, which is what carve-js#1127 ruled and what carve-php and
-    // carve-rs both produce. Whether §23 reaches that break is open on
-    // markup-carve/carve#1351; either answer keeps this pass, because the comment
-    // belongs at the boundary whichever way the boundary is spelled.
+    // §23 HARDENS A LINE BOUNDARY BY NODE KIND, NOT BY DEPTH. Its neighboring
+    // clause, A BACKSLASH BREAK IS NOT ADDITIVE, states that ONE line boundary
+    // produces ONE break however the boundary is spelled, and makes the
+    // exemption a question of node PRESENCE: a backslash break and a newline an
+    // open verbatim run swallowed are exempt because they leave no break node
+    // to convert, which is a difference in KIND rather than in depth.
+    //
+    // carve-js violated that against itself. A stanza line ending in a
+    // backslash inside emphasis emitted its break inside the `strong`, while
+    // the same two lines without the backslash emitted none, because the
+    // conversion ran at depth 0 only. It now runs wherever a break node is, so
+    // the two spellings of one boundary agree. This reverses the four rows
+    // carve-js#1127 pinned; PART 11 §7c is amended alongside, so the writer
+    // follows.
     //
     // Depth-first in source order, so `pendingComments` is still consumed in
     // the order the author wrote the lines.
-    const place = (nodes: InlineNode[], top: boolean): InlineNode[] => {
+    const place = (nodes: InlineNode[]): InlineNode[] => {
       const out: InlineNode[] = []
       for (const node of nodes) {
         if (node.type !== 'soft_break') {
           const record = node as unknown as Record<string, unknown>
           for (const slot of INLINE_SLOTS) {
             const value = record[slot]
-            if (Array.isArray(value)) record[slot] = place(value as InlineNode[], false)
+            if (Array.isArray(value)) record[slot] = place(value as InlineNode[])
           }
           out.push(node)
           continue
@@ -5190,27 +5197,20 @@ function parseLineBlock(lexer: Lexer): LineBlock {
             pendingComments.delete(index)
           }
         }
-        // EVERY SURVIVING BREAK IS RE-POSED FROM LINE GEOMETRY, at either
-        // depth. Only the SPELLING differs by depth - a break inside a closed
-        // inline construct keeps its soft form (carve-js#1127) - and the
-        // position was never what the two answers disagreed about. A nested
-        // break left on its scanned span ends where the NEXT line starts, so
-        // the one that ends an emptied comment line covered that whole line and
-        // overlapped the comment reinserted just above it.
-        const pos = index === undefined ? undefined : breakPos(index)
-        if (!top) {
-          if (pos) node.pos = pos
-          out.push(node)
-          continue
-        }
+        // EVERY SURVIVING BREAK IS HARDENED AND RE-POSED FROM LINE GEOMETRY, at
+        // any depth. A nested break left on its scanned span ends where the
+        // NEXT line starts, so the one that ends an emptied comment line
+        // covered that whole line and overlapped the comment reinserted just
+        // above it.
         const hardBreak = { type: 'hard_break' } as InlineNode
+        const pos = index === undefined ? undefined : breakPos(index)
         if (pos) hardBreak.pos = pos
 
         out.push(hardBreak)
       }
       return out
     }
-    const inline: InlineNode[] = place(parsed, true)
+    const inline: InlineNode[] = place(parsed)
     // A COMMENT ON THE STANZA'S LAST LINE has no break after it to sit before,
     // so it goes at the end - the boundary that opens its line is still there,
     // which is what says the line is still there.
