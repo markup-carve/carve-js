@@ -294,7 +294,7 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    // The MARKER AS WRITTEN (PART 10 §10a): `[n]: …` is a link reference
+    // The MARKER AS WRITTEN (PART 11 §10a): `[n]: …` is a link reference
     // definition, so emitting one where the author wrote a footnote definition
     // turns it into a different construct on the way back.
     out += `[^${stripControls(label)}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`

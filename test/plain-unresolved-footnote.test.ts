@@ -24,7 +24,7 @@ describe('an unresolved footnote reference stays literal in plain text', () => {
   })
 
   it('still renders a resolved reference as a marker', () => {
-    // The DEFINITION keeps its caret (PART 10 §10a: the marker is emitted as
+    // The DEFINITION keeps its caret (PART 11 §10a: the marker is emitted as
     // written, and `[a]: …` is a link reference definition rather than this
     // construct). Whether the REFERENCE should keep its own caret on this
     // target is carve#550, still open, so it is pinned here as it stands.
