@@ -15,7 +15,7 @@ import { carveToCarve, carveToHtml, parse } from '../src/index.js'
  * aligned body cells.
  */
 const GFM = '| Name | Age |\n|:-----|----:|\n| Alice | 28  |\n'
-const NATIVE = '|=<Name|=>Age|\n| Alice | 28 |\n'
+const NATIVE = '|=< Name |=> Age |\n| Alice | 28 |\n'
 const CANONICAL = '|=< Name |=> Age |\n| Alice | 28 |\n'
 
 const alignsOf = (src: string): (string | undefined)[][] => {
@@ -49,7 +49,7 @@ describe('a GFM delimiter row aligns the header, not every row', () => {
   it('keeps a genuine per-cell override', () => {
     // The header says right; one body cell overrides to left. That marker is not
     // redundant and must survive.
-    const src = '|=Item|=>Qty|\n| Apple | 12 |\n| Subtotal |<12|\n'
+    const src = '|= Item |=> Qty |\n| Apple | 12 |\n| Subtotal |< 12 |\n'
     expect(carveToCarve(src)).toBe('|= Item |=> Qty |\n| Apple | 12 |\n| Subtotal |< 12 |\n')
   })
 })

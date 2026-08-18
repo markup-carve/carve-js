@@ -34,6 +34,10 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-raw-block-keeps-the-blank-line-at-the-end-of-its-payload-too',
+  'an-unterminated-fence-at-a-content-column-opens-no-block-so-the-paragraph-stays-open',
+  'table-columns-carry-alignment-vertical-alignment-and-widths',
+  'a-table-alignment-run-carries-two-independent-axes',
   // The category the freeze at carve `0f6b990` adds. It needed no engine work:
   // this build renders all four of its documents, and all 62 quote/list prefixes
   // to depth five for both definition kinds, exactly as the executable spec does

@@ -88,6 +88,7 @@ describe("the generated wire-field map", () => {
     }
 
     expect(inlineRecords.sort()).toEqual([
+      "table.columns",
       "table.rowGroups",
       "table.rowGroups.bodies",
     ]);

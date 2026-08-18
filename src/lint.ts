@@ -51,7 +51,7 @@ import { SPEC_VERSION } from './version.js'
 import { hasOwnKey } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue } from './render-html.js'
-import type { Attrs, BlockNode, Document, Heading } from './ast.js'
+import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
 
 export interface LintWarning {
   /** 1-based line number. */
@@ -929,6 +929,7 @@ function collectSilentFailures(
 
   const headings: Positioned[] = []
   const paragraphs: Positioned[] = []
+  const tables: Table[] = []
   const walk = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) walk(item)
@@ -938,6 +939,7 @@ function collectSilentFailures(
     const node = value as Record<string, unknown>
     if (node.type === 'heading') headings.push(node as Positioned)
     else if (node.type === 'paragraph') paragraphs.push(node as Positioned)
+    else if (node.type === 'table') tables.push(node as unknown as Table)
     for (const key of Object.keys(node)) {
       if (key !== 'pos' && key !== 'attrs') walk(node[key])
     }
@@ -1150,6 +1152,17 @@ function collectSilentFailures(
     if (!isTableRow(row)) continue
     const { body } = rowAttrsFromLine(row)
     for (const { text, start } of splitTableRowSpans(body)) {
+      const unpadded = /^(?:=)?([<>~^v]{1,2})(?![<>~^v{\s])/.exec(text)
+      if (unpadded) {
+        const at = text.startsWith('=') ? 1 : 0
+        push(
+          i + 1,
+          prefixWidth + indent + start + at + 1,
+          unpadded[1]!.length,
+          'table-alignment-run-padding',
+          `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. Add a space after the run to make it alignment.`,
+        )
+      }
       const block = readCellAttributeBlock(text)
       if (!block) continue
       const marker = text[block.length]
@@ -1165,6 +1178,50 @@ function collectSilentFailures(
           `cell is not aligned. Write "${marker}${text.slice(0, block.length)}" to align it, ` +
           `or put a space after the block to keep the "${marker}" as content deliberately.`,
       )
+    }
+  }
+
+  for (const table of tables) {
+    const kv = table.attrs?.keyValues ?? {}
+    const widest = Math.max(0, ...table.rows.map((row) => row.cells.length))
+    const lineNo = table.pos?.startLine ?? 1
+    const tableStart = lineStart[lineNo - 1] ?? source.length
+    const addTableWarning = (rule: string, key: string, message: string): void => {
+      const found = source.lastIndexOf(key, tableStart)
+      const start = found >= 0 ? found : (lineStart[lineNo - 1] ?? 0)
+      const before = source.slice(0, start)
+      const warningLine = before.split('\n').length
+      const warningColumn = start - before.lastIndexOf('\n')
+      out.push({ line: warningLine, column: warningColumn, rule, message, start, end: start + key.length })
+    }
+    for (const key of ['aligns', 'valigns', 'widths'] as const) {
+      if (kv[key] === undefined) continue
+      const values = kv[key]!.split(',')
+      if (values.length < widest) {
+        addTableWarning(
+          'table-column-arity',
+          key,
+          `${key} supplies ${values.length} column entries for a ${widest}-column table; the unset tail is valid but may be accidental.`,
+        )
+      }
+    }
+    const widths = kv.widths?.split(',').map((raw) => Number(raw.trim())).filter(Number.isFinite) ?? []
+    if (widths.reduce((sum, width) => sum + width, 0) > 100) {
+      addTableWarning('table-width-total', 'widths', 'The specified table column widths total more than 100%.')
+    }
+    const aligns = kv.aligns?.split(',') ?? []
+    const valigns = kv.valigns?.split(',') ?? []
+    const headerRows = table.rows.filter((row) => row.cells.some((cell) => cell.header))
+    for (let column = 0; column < widest; column++) {
+      const markerAlign = headerRows.some((row) => row.cells[column]?.align !== undefined)
+      const markerValign = headerRows.some((row) => row.cells[column]?.valign !== undefined)
+      if ((markerAlign && aligns[column]?.trim()) || (markerValign && valigns[column]?.trim())) {
+        addTableWarning(
+          'table-column-overlap',
+          markerAlign && aligns[column]?.trim() ? 'aligns' : 'valigns',
+          `Column ${column + 1} supplies the same alignment axis both in the table and in a table attribute; the in-table marker wins.`,
+        )
+      }
     }
   }
 }
