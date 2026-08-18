@@ -114,6 +114,29 @@ export interface UnclosedContainer {
 let activeMatchers: CarveExtension[] = []
 let activeMatcherCtx: MatcherContext | null = null
 
+/**
+ * The document being parsed, for the one field that promises VERBATIM SOURCE.
+ *
+ * `rawRef` on an unresolved reference is the authored spelling, and the writer
+ * emits it unchanged - so it has to come from the document, not from the text
+ * the scanner walks. Those are the same string almost everywhere; a line block
+ * is where they part, because the block layer empties every comment-only line
+ * before the stanza is scanned as one inline run (carve-js#1183).
+ *
+ * Saved and restored in the same `finally` as the matchers above, so a nested
+ * parse cannot leave a later slice reading another document's bytes.
+ *
+ * SLICED BY UTF-16 INDEX, which is what a span holds while parsing. Positions
+ * are published in CODEPOINTS (PART 12 §4), but `toCodepointPositions` converts
+ * them once at the end of `parse()`, long after this is read - so slicing here
+ * needs no conversion, and adding one would break every astral document.
+ *
+ * The text carries a stripped BOM back, because positions index the FILE rather
+ * than the stripped view (carve#876), and it carries the NUL replacement,
+ * because that is the document every other reported span describes.
+ */
+let activeDocument: string | null = null
+
 // Content must carry at least one non-ASCII-whitespace character, mirroring
 // RE_CAPTION: `# ` / `#   ` (marker + whitespace only) and `#\t…` are NOT
 // headings, exactly like the caption rule. Leading spaces are folded into the
@@ -1351,7 +1374,7 @@ class Lexer {
     // not a run - or a body ending in a blank line gains a line it never had.
     if (typeof source === 'string') {
       if (layoutWork.on) layoutWork.seam += source.length
-      this.lines = source.replace(/\r\n?/g, '\n').split('\n')
+      this.lines = normalizeNewlines(source).split('\n')
     } else {
       this.lines = source.slice()
     }
@@ -1476,9 +1499,23 @@ class Lexer {
   }
 }
 
+/**
+ * The document's line endings as the lexer reads them: `\r\n` and a lone `\r`
+ * both become `\n`.
+ *
+ * Named once because a THIRD spelling of it is what a verbatim capture needs.
+ * Offsets index the RAW source, endings and all, while every line the scanner
+ * walks has already been normalized - so a document slice compared against the
+ * scanner's text differs on every line of a CRLF document unless both are read
+ * the same way (raised by `codex review`).
+ */
+function normalizeNewlines(source: string): string {
+  return source.replace(/\r\n?/g, '\n')
+}
+
 function normalizedSourceLines(source: string): string[] {
   if (layoutWork.on) layoutWork.seam += source.length
-  const lines = source.replace(/\r\n?/g, '\n').split('\n')
+  const lines = normalizeNewlines(source).split('\n')
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines
 }
@@ -1913,6 +1950,8 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   lexer.consumeFrontmatter()
   const prevMatchers = activeMatchers
   const prevCtx = activeMatcherCtx
+  const prevDocument = activeDocument
+  activeDocument = strippedBom ? '﻿' + source : source
   // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
   // no matcher, but it now asks whether one is registered: an extension's
   // `matchBlock` may claim any line, and a claimed line reads as prose to a
@@ -1938,6 +1977,7 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   } finally {
     activeMatchers = prevMatchers
     activeMatcherCtx = prevCtx
+    activeDocument = prevDocument
     activeQuoteCharacters = previousQuoteCharacters
   }
 }
@@ -5137,28 +5177,33 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         if (index !== undefined) {
           const comment = pendingComments.get(index)
           if (comment) {
-            // A NESTED REINSERTION CARRIES NO POSITION. The comment's own span
-            // is the one it was written at, but the nodes it would sit among
-            // are measured from the JOINED text, which is shorter than the
-            // source by exactly the line this comment emptied - so `c` in
-            // `*a` / `%% secret` / `c*` reports the offset of `%` (a defect of
-            // its own, filed as carve-js#1182, and visible on `main` without
-            // this pass). Publishing a correct span beside them would assert
-            // that two nodes hold the same bytes, which PART 12 containment
-            // refuses; PART 12 §4 already sanctions omitting a position that
-            // cannot be produced. The TOP-LEVEL insertion is unaffected: there
-            // every break is re-posed from line geometry and the spans agree.
-            if (!top) delete (comment as { pos?: Position }).pos
+            // A NESTED REINSERTION KEEPS ITS POSITION NOW. It could not before:
+            // the nodes it sits among were measured from the JOINED text, which
+            // is shorter than the source by exactly the line this comment
+            // emptied, so `c` in `*a` / `%% secret` / `c*` reported the offset
+            // of `%` and a correct span beside it would have asserted that two
+            // nodes hold the same bytes (carve-js#1182). With the anchors
+            // carried into the nested scan those siblings are measured from the
+            // line they were written on, and the spans nest the way PART 12
+            // containment asks.
             out.push(comment)
             pendingComments.delete(index)
           }
         }
+        // EVERY SURVIVING BREAK IS RE-POSED FROM LINE GEOMETRY, at either
+        // depth. Only the SPELLING differs by depth - a break inside a closed
+        // inline construct keeps its soft form (carve-js#1127) - and the
+        // position was never what the two answers disagreed about. A nested
+        // break left on its scanned span ends where the NEXT line starts, so
+        // the one that ends an emptied comment line covered that whole line and
+        // overlapped the comment reinserted just above it.
+        const pos = index === undefined ? undefined : breakPos(index)
         if (!top) {
+          if (pos) node.pos = pos
           out.push(node)
           continue
         }
         const hardBreak = { type: 'hard_break' } as InlineNode
-        const pos = index === undefined ? undefined : breakPos(index)
         if (pos) hardBreak.pos = pos
 
         out.push(hardBreak)
@@ -9657,6 +9702,15 @@ interface InlineSource {
    */
   lineAnchors?: Array<{ offset: number; column: number }>
   /**
+   * How many lines into `lineAnchors` this text starts.
+   *
+   * A nested scan (an emphasis body, a link label) re-bases its text on its own
+   * offset 0, and the anchors belong to the WHOLE stanza. Carrying a delta
+   * rather than re-basing the array is what keeps this linear, exactly as
+   * `rangeShift` does for `anchoredRanges`.
+   */
+  anchorShift?: number
+  /**
    * False when this text cannot be located in the document at all, so no `pos`
    * is emitted for anything scanned from it.
    *
@@ -9725,6 +9779,7 @@ function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {
     startColumn: overrides.startColumn ?? 1,
   }
   if (overrides.lineAnchors) source.lineAnchors = overrides.lineAnchors
+  if (overrides.anchorShift) source.anchorShift = overrides.anchorShift
   if (overrides.anchoredRanges) source.anchoredRanges = overrides.anchoredRanges
   if (overrides.rangeShift) source.rangeShift = overrides.rangeShift
   if (overrides.anchored === false) source.anchored = false
@@ -10141,7 +10196,7 @@ function scanInlineInner(
             src: '',
             alt,
             ref: mref[1]! !== '' ? mref[1]! : alt,
-            rawRef: rest.slice(0, len),
+            rawRef: rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
           }
           if (attrs) img.attrs = attrs
           out.push(withPos(img, source, text, i, i + len))
@@ -10280,8 +10335,10 @@ function scanInlineInner(
             children: scanInline(innerText, shiftSource(source, text, i + 1), inFootnote),
             ref: mref[1]! !== '' ? mref[1]! : innerText,
             // rawRef includes any consumed trailing {attrs} so the literal
-            // fallback for an unresolved ref preserves the full source.
-            rawRef: rest.slice(0, len),
+            // fallback for an unresolved ref preserves the full source, and it
+            // is read from the DOCUMENT where the scanner's own text is not
+            // that source (carve-js#1183).
+            rawRef: rawSourceSlice(source, text, i, i + len) ?? rest.slice(0, len),
           }
           if (attrs) refLink.attrs = attrs
           out.push(withPos(refLink, source, text, i, i + len))
@@ -10757,10 +10814,69 @@ function sourcePos(
   }
 }
 
+/**
+ * The AUTHORED SOURCE of `text[start..end)`, for a field that promises verbatim.
+ *
+ * `rawRef` is documented as the authored source verbatim, and the writer emits
+ * it unchanged for an unresolved reference. Captured from the scanner's own
+ * text it is not verbatim in a line block: the block layer empties every
+ * comment-only line before the stanza is scanned as one inline run, so
+ * `[a` / `%% secret` / `c][missing]` captured `[a\n\nc][missing]` and `carve
+ * fmt` wrote the line back as a bare `%%`, losing the author's text from a
+ * document that renders the same either way (carve-js#1183).
+ *
+ * IT VERIFIES ITSELF RATHER THAN TRUSTING THE SPAN, because the document is not
+ * always the right answer. Container prefixes are stripped from this text on
+ * purpose - a `> ` or a list item's indent is not part of the reference the
+ * author wrote - so a blockquote's document slice would put those markers back
+ * INTO `rawRef` and the writer would emit them inside the label.
+ *
+ * So the candidate is accepted only when every line of it either matches the
+ * scanner's line exactly or stands against an EMPTY one. That is precisely the
+ * emptied-comment-line shape and nothing else: a differing line that still
+ * holds text is a prefix this text was right to drop, and a blank line inside a
+ * paragraph or a stanza ends the block rather than appearing in one. A
+ * reconstructed text (a line block with expanded tabs, a table cell assembled
+ * from continuation rows) fails the same test and keeps the scanned spelling.
+ *
+ * Undefined means "no better answer than the local text", never an empty one.
+ */
+function rawSourceSlice(
+  source: InlineSource,
+  text: string,
+  start: number,
+  end: number,
+): string | undefined {
+  // ONLY ANCHORED TEXT CAN BE ASKED. Without `lineAnchors` a span is a single
+  // base offset plus a local one, which is the document only when the two never
+  // diverge - and a bare `inlineSource()` scanning a detached label has no
+  // document behind it at all.
+  if (!source.lineAnchors || activeDocument === null) return undefined
+  const pos = sourcePos(source, text, start, end)
+  if (pos?.startOffset === undefined || pos.endOffset === undefined) return undefined
+  const candidate = normalizeNewlines(activeDocument.slice(pos.startOffset, pos.endOffset))
+  const local = text.slice(start, end)
+  if (candidate === local) return undefined
+  const candidateLines = candidate.split('\n')
+  const localLines = local.split('\n')
+  if (candidateLines.length !== localLines.length) return undefined
+  for (const [i, localLine] of localLines.entries()) {
+    if (localLine !== '' && localLine !== candidateLines[i]) return undefined
+  }
+
+  return candidate
+}
+
 function shiftSource(source: InlineSource, text: string, by: number): InlineSource {
   const point = pointAt(source, text, by)
   const shifted: InlineSource = {
-    baseOffset: source.baseOffset + by,
+    // THE ANCHORED BASE, NOT THE LINEAR ONE. `baseOffset + by` walks the LOCAL
+    // text, which is the document only while the two have the same length. A
+    // line block's joined text is shorter than its source by every comment line
+    // the block layer emptied, so past the first such line the linear sum lands
+    // mid-comment: `*a` / `%% secret` / `c*` measured `c` at the second `%`
+    // (carve-js#1182). `pointAt` already resolved the anchored answer.
+    baseOffset: point?.offset ?? source.baseOffset + by,
     startLine: point?.line ?? source.startLine,
     startColumn: point?.column ?? source.startColumn,
   }
@@ -10768,7 +10884,30 @@ function shiftSource(source: InlineSource, text: string, by: number): InlineSour
     shifted.anchoredRanges = source.anchoredRanges
     shifted.rangeShift = (source.rangeShift ?? 0) + by
   }
+  if (source.lineAnchors) {
+    // CARRIED INWARD, which is the whole defect: the anchors reached the
+    // stanza's top-level nodes and stopped at the first inline container, so a
+    // node nested under one was measured from the joined text. Shared, with the
+    // starting LINE carried as a delta - the array belongs to the whole stanza,
+    // and copying a suffix per nested construct is quadratic in a tall stanza
+    // that also carries markup.
+    shifted.lineAnchors = source.lineAnchors
+    shifted.anchorShift = (source.anchorShift ?? 0) + newlinesUpTo(text, by)
+  }
   return shifted
+}
+
+/** How many newlines of `text` sit strictly before `offset`. */
+function newlinesUpTo(text: string, offset: number): number {
+  const indices = newlineIndices(text)
+  let lo = 0
+  let hi = indices.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (indices[mid]! < offset) lo = mid + 1
+    else hi = mid
+  }
+  return lo
 }
 
 // Per-document cache of newline offsets for each inline text. pointAt() used to
@@ -10823,26 +10962,28 @@ function pointAt(
     }
   }
   const indices = newlineIndices(text)
-  // Count newlines strictly before `offset` (binary search for the insertion
-  // point of `offset` in the sorted indices).
-  let lo = 0
-  let hi = indices.length
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (indices[mid]! < offset) {
-      lo = mid + 1
-    } else {
-      hi = mid
-    }
-  }
-  const newlinesBefore = lo
+  const newlinesBefore = newlinesUpTo(text, offset)
   const line = source.startLine + newlinesBefore
   // Offset of this line's start within the LOCAL text.
   const lineStart = newlinesBefore === 0 ? 0 : indices[newlinesBefore - 1]! + 1
   const withinLine = offset - lineStart
 
-  const anchor = source.lineAnchors?.[newlinesBefore]
+  // A NESTED SCAN STARTS PART WAY INTO THE ANCHORED TEXT, so its first line is
+  // whichever line of the outer text it began on. `anchorShift` carries that
+  // index rather than a re-based copy of the array, for the reason `rangeShift`
+  // carries one: an inline construct per line would otherwise copy the whole
+  // anchor list per construct.
+  const anchor = source.lineAnchors?.[newlinesBefore + (source.anchorShift ?? 0)]
   if (anchor) {
+    // THE FIRST LINE MAY BEGIN MID-LINE and the rest never do. A shifted text
+    // starts wherever its opener left off, so its origin is the source's own
+    // base, which `shiftSource` already resolved through this function; only a
+    // line reached by crossing a newline starts where the anchor says. For an
+    // unshifted source the two agree by construction, since its first anchor IS
+    // its base.
+    if (newlinesBefore === 0) {
+      return { line, column: source.startColumn + offset, offset: source.baseOffset + offset }
+    }
     return { line, column: anchor.column + withinLine, offset: anchor.offset + withinLine }
   }
 
