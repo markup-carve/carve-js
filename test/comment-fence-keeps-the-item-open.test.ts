@@ -133,11 +133,29 @@ describe('a comment does not change a fold state that was already closed', () =>
       expect(out).toBe(squash(carveToHtml(`- a\n${block}lazy\n`)))
     })
 
-    it(`still folds after ${what} when a PARAGRAPH re-opens it`, () => {
-      // The other side of the control, so this is not just asserting that
-      // everything ends the item: a real paragraph after the block does re-open
-      // the fold, and the comment must not prevent that either.
+    it(`ends the fold on the comment even where a PARAGRAPH re-opened it after ${what}`, () => {
+      // SUPERSEDED READING, changed deliberately. This used to assert that a
+      // paragraph after the block re-opens the fold and the comment does not
+      // prevent it, on the premise that an invisible construct never changes
+      // the item's state. `markup-carve/carve#1364` rules the other way: at a
+      // container's content column a line is read as a BLOCK, a block ends the
+      // paragraph it sits under, and WHAT IT RENDERS IS NOT A PARAMETER - so
+      // the comment fence ends `para` and `lazy` at column 0 reaches no
+      // container. carve-php `925f7dc` renders all three shapes this way.
+      //
+      // The invisibility claim survives one column in: the same comment written
+      // BELOW the content column adds no block, and the fold holds. That is the
+      // control, and it is what the pair below pins.
       const out = squash(carveToHtml(`- a\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
+
+      expect(out).toContain('<p>lazy</p>')
+    })
+
+    it(`still folds after ${what} when the comment sits BELOW the content column`, () => {
+      // The other side of the control, so this is not just asserting that
+      // everything ends the item: a paragraph after the block does re-open the
+      // fold, and a comment that is not at the column does not close it again.
+      const out = squash(carveToHtml(`- a\n${block}  para\n %%% c\n %%%\nlazy\n`))
 
       expect(out).not.toContain('<p>lazy</p>')
     })

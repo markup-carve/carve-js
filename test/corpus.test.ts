@@ -34,6 +34,23 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // The twelve categories the freeze at carve `0490ae5` brings in. Four pin the
+  // line-block hard-break ruling `#1188` implemented; the other eight are the
+  // container-boundary family - a block at a container's content column ends
+  // the paragraph it sits under, however the block is spelled and whatever it
+  // renders - plus the two controls that catch an over-wide reading of it.
+  'a-bracketed-construct-spanning-a-line-boundary',
+  'a-bracketed-construct-spanning-a-verse-boundary',
+  'a-bracketed-construct-s-identifiers-stay-on-one-line',
+  'a-closed-inline-construct-spanning-a-verse-boundary',
+  'a-block-at-a-container-s-content-column-ends-the-paragraph-whatever-it-renders',
+  'a-container-whose-table-ends-on-a-continuation-row',
+  'a-container-whose-table-ends-on-a-joined-header-row',
+  'a-continuation-row-joins-the-row-above-it-whatever-its-cells-hold',
+  'a-definition-at-a-container-s-content-column',
+  'a-footnote-definition-s-block-runs-to-the-end-of-its-body',
+  'a-quote-inside-a-quote-is-asked-what-it-ends-on',
+  'what-a-content-column-block-does-not-reach',
   // Four categories the pin bump for PART 11 §10e brings into the corpus. The
   // engine work for each of them already landed here (`#1029`, `#1030`,
   // `#1038`, `#1041`); only the pin was behind, so these are bookkeeping and
