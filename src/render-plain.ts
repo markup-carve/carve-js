@@ -7,7 +7,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
-import { isUnresolvedReference } from './unresolved-reference.js'
+import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -312,7 +312,7 @@ function renderImageText(node: { alt: string; src?: string; ref?: string; rawRef
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src) return stripControls(node.rawRef ?? '')
+  if (node.ref !== undefined && !node.src) return stripControls(referenceSourceText(node.rawRef))
 
   return stripControls(node.alt)
 }
@@ -411,7 +411,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return stripControls(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return stripControls(referenceSourceText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost link context applies while its label renders.

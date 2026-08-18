@@ -18,7 +18,7 @@ import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
-import { isUnresolvedReference } from './unresolved-reference.js'
+import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -582,7 +582,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return escapeText(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination reaches rendered Markdown.
@@ -811,7 +811,7 @@ function renderImage(node: Image): string {
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
-  if (isUnresolvedReference(node)) return escapeText(node.rawRef ?? '')
+  if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
   const src = markdownDestination(node.src)
   const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined
