@@ -1152,7 +1152,7 @@ function collectSilentFailures(
     if (!isTableRow(row)) continue
     const { body } = rowAttrsFromLine(row)
     for (const { text, start } of splitTableRowSpans(body)) {
-      const unpadded = /^(?:=)?([<>~^v]{1,2})(?![<>~^v{\s])/.exec(text)
+      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?{\s])/.exec(text)
       if (unpadded) {
         const at = text.startsWith('=') ? 1 : 0
         push(

@@ -6,7 +6,9 @@ const rules = (source: string) => lintCarve(source).map((warning) => warning.rul
 describe('table column metadata', () => {
   it('rejects duplicate axes and reverse-order pairs as a whole', () => {
     expect(carveToHtml('|=<< Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
-    expect(carveToHtml('|=~> H |\n')).toContain('<th scope="col">~&gt; H</th>')
+    expect(parse('|=~> H |\n').children[0]).toMatchObject({
+      rows: [{ cells: [{ children: [{ type: 'text', value: '~> H' }] }] }],
+    })
   })
 
   it('requires a horizontal partner for every vertical marker', () => {
@@ -19,6 +21,27 @@ describe('table column metadata', () => {
         { header: true, children: [{ type: 'text', value: 'v> Reverse' }] },
       ] }],
     })
+  })
+
+  it('uses question mark to inherit horizontal alignment while overriding vertical', () => {
+    const source = '|=>^ H |\n|?v x |\n'
+    expect(parse(source).children[0]).toMatchObject({
+      rows: [
+        { cells: [{ align: 'right', valign: 'top' }] },
+        { cells: [{ valign: 'bottom', children: [{ type: 'text', value: 'x' }] }] },
+      ],
+    })
+    expect(carveToHtml(source)).toContain(
+      '<td style="text-align: right; vertical-align: bottom;">x</td>',
+    )
+  })
+
+  it('keeps every other question-mark run visible', () => {
+    for (const [source, value] of [['| ? |\n', '?'], ['|v? x |\n', 'v? x'], ['|?< x |\n', '?< x'], ['|^< x |\n', '^< x']]) {
+      expect(parse(source).children[0]).toMatchObject({
+        rows: [{ cells: [{ children: [{ type: 'text', value }] }] }],
+      })
+    }
   })
 
   it('requires a literal space to terminate an alignment run', () => {
