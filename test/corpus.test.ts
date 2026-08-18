@@ -538,6 +538,18 @@ const IMPLEMENTED = new Set([
   // demoted by LAZY FOLDING and by nothing else, so an opener that reaches its
   // container stays an opener whatever sits below it.
   'only-lazy-folding-demotes-a-marker-line-colon-opener',
+  // The pin bump to carve 22f7f47 adds ONE category of THREE documents, and no
+  // engine work here either: all three were rendered through this engine and
+  // compared with their `.html` fixtures before this name went in, 3 of 3
+  // byte-for-byte, and the whole corpus measured 1259 of 1259 in the same run.
+  //
+  // markup-carve/carve#1388, closing markup-carve/carve#1383 - a blank line
+  // before a sibling marker separates the items whatever consumed it, so a
+  // blank an item's own unterminated interior swallowed still reaches the
+  // section 17 L1 looseness decision. The freeze measured all six container
+  // kinds; this engine already loosened every one of them, and it also starts
+  // the new list where the third document changes the bullet.
+  'a-blank-line-before-a-sibling-marker-separates-the-items-whatever-consumed-it',
 ])
 
 /**
