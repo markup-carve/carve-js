@@ -8,6 +8,7 @@ import {
   carveToMarkdown,
   carveToPlainText,
   citations,
+  listTable,
   smartQuotes,
 } from '../src/index.js'
 
@@ -49,6 +50,9 @@ const targets: Record<string, { extension: string; render: Render }> = {
  * than one target.
  */
 const featureRunners: Record<string, (source: string, render: Render) => string> = {
+  'list-table': (source, render) => render(source, { extensions: [listTable()] }),
+  'list-table-columns-1344': (source, render) => render(source, { extensions: [listTable()] }),
+  'list-table-local-headers-1248': (source, render) => render(source, { extensions: [listTable()] }),
   'smart-quotes-locale-de': (source, render) =>
     render(source, { extensions: [smartQuotes({ locale: 'de' })] }),
   'social-link-templates': (source, render) =>
