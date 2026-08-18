@@ -1502,9 +1502,9 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   }
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
-      const a = grid[r]![c]!.cell.align ?? node.columns?.[c]?.align ?? columnAlign[c]
+      const a = grid[r]![c]!.cell.align ?? columnAlign[c] ?? node.columns?.[c]?.align
       if (a) grid[r]![c]!.align = a
-      const v = grid[r]![c]!.cell.valign ?? node.columns?.[c]?.valign ?? columnValign[c]
+      const v = grid[r]![c]!.cell.valign ?? columnValign[c] ?? node.columns?.[c]?.valign
       if (v) grid[r]![c]!.valign = v
     }
   }
