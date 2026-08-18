@@ -8854,7 +8854,7 @@ function parseCellMarkers(src: string): {
   }
   const validRun = i > markerStart &&
     !invalidAxis &&
-    (/\s/.test(src[i] ?? '') || src[i] === '{' ||
+    (src[i] === ' ' || src[i] === '{' ||
       (src[i] !== undefined && '<>~^v'.includes(src[i]!)))
   if (!validRun) {
     i = markerStart
