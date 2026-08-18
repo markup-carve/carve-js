@@ -8797,7 +8797,7 @@ function parseCellMarkers(src: string): {
   const markerStart = i
   let align: 'left' | 'right' | 'center' | undefined
   let valign: 'top' | 'middle' | 'bottom' | undefined
-  while ('<>~^v'.includes(src[i] ?? '')) {
+  while (src[i] !== undefined && '<>~^v'.includes(src[i]!)) {
     const marker = src[i]!
     if (marker === '<' || marker === '>' || marker === '~') {
       if (align === undefined) {
@@ -8814,7 +8814,8 @@ function parseCellMarkers(src: string): {
     i++
   }
   const validRun = i > markerStart &&
-    (/\s/.test(src[i] ?? '') || src[i] === '{' || '<>~^v'.includes(src[i] ?? ''))
+    (/\s/.test(src[i] ?? '') || src[i] === '{' ||
+      (src[i] !== undefined && '<>~^v'.includes(src[i]!)))
   if (!validRun) {
     i = markerStart
     align = undefined
