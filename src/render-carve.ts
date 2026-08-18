@@ -718,7 +718,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'thematic_break':
       return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
     case 'table':
-      return withAttrs(renderTable(node, ctx))
+      return renderTableWithColumns(node, ctx)
     case 'admonition': {
       // The quoted title is re-parsed as a quoted_title token (which admits
       // no escapes and cannot contain a quote), so the inline serialization
@@ -826,6 +826,27 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
     }
   }
+}
+
+function renderTableWithColumns(node: Table, ctx: CarveContext): string {
+  if (!node.columns?.length) {
+    const attrs = renderBlockAttrs(node.attrs)
+    const body = renderTable(node, ctx)
+    return attrs ? `${attrs}\n${body}` : body
+  }
+  const keyValues = { ...(node.attrs?.keyValues ?? {}) }
+  const join = (field: 'align' | 'valign', key: string) => {
+    if (keyValues[key] === undefined && node.columns!.some((column) => column[field] !== undefined)) {
+      keyValues[key] = node.columns!.map((column) => column[field] ?? '').join(',')
+    }
+  }
+  join('align', 'aligns')
+  join('valign', 'valigns')
+  if (keyValues.widths === undefined && node.columns.some((column) => column.width !== undefined)) {
+    keyValues.widths = node.columns.map((column) => column.width === undefined ? '' : String(column.width * 100)).join(',')
+  }
+  const attrs = renderBlockAttrs({ ...(node.attrs ?? {}), keyValues })
+  return `${attrs}\n${renderTable(node, ctx)}`
 }
 
 function renderList(node: List, ctx: CarveContext): string {
@@ -1341,6 +1362,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
     return padCell(attrs, spanMarker)
   }
   const align = alignMarker(cell.align)
+  const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
   // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
   // after the kind marker and after the alignment marker, so `|={.x} h |` is
   // an attributed header cell. Writing the block ahead of the markers instead
@@ -1348,7 +1370,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // a data cell whose content starts with `=` - and reads it as that, so an
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
-  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${attrs}`
+  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${valign}${attrs}`
   // The space `padCell` writes after the prefix is what keeps a content sigil
   // content: the alignment scan runs right after `|` or `|=` and consumes one
   // `<`, `>` or `~`, so `| ~x~ |` written glued came back as CENTER alignment

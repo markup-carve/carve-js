@@ -3520,6 +3520,7 @@ function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry)
         // attrs win on conflict (id/key last), classes accumulate (§15).
         node.attrs = mergeAttrs(pending, node.attrs ?? {})
       }
+      if (node.type === 'table') deriveTableColumns(node)
       // A code fence's opener "header" becomes the `title` attribute on the
       // <pre>. Resolved here (after the pending merge) so a preceding
       // {title=...} line wins, and so the title lives on the node attrs --
@@ -3553,6 +3554,31 @@ function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry)
   // caller split one stream in two, handed on to the next half.
   if (carry) carry.attrs = pending
   return out
+}
+
+function deriveTableColumns(table: Table): void {
+  const kv = table.attrs?.keyValues
+  if (!kv) return
+  const aligns = positional(kv.aligns, new Set(['left', 'right', 'center']))
+  const valigns = positional(kv.valigns, new Set(['top', 'middle', 'bottom']))
+  const widths = kv.widths?.split(',').map((raw) => {
+    const value = Number(raw.trim())
+    return Number.isFinite(value) && value > 0 && value <= 100 ? value / 100 : undefined
+  }) ?? []
+  const count = Math.max(aligns.length, valigns.length, widths.length)
+  if (count === 0) return
+  table.columns = Array.from({ length: count }, (_, i) => ({
+    ...(aligns[i] ? { align: aligns[i] as 'left' | 'right' | 'center' } : {}),
+    ...(valigns[i] ? { valign: valigns[i] as 'top' | 'middle' | 'bottom' } : {}),
+    ...(widths[i] ? { width: widths[i] } : {}),
+  }))
+}
+
+function positional(value: string | undefined, allowed: Set<string>): Array<string | undefined> {
+  return value?.split(',').map((raw) => {
+    const item = raw.trim()
+    return allowed.has(item) ? item : undefined
+  }) ?? []
 }
 
 /**
@@ -8747,6 +8773,7 @@ function parseCellMarkers(src: string): {
   header: boolean
   span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
   attrs?: Attrs
   content: string
 } {
@@ -8763,12 +8790,46 @@ function parseCellMarkers(src: string): {
     header = true
     i++
   }
-  // A `<`/`>`/`~` immediately after `|` or `|=` IS an alignment marker
-  // (spec: docs/case-study/syntax.md, "Disambiguation"). Exactly one is
-  // recognized; a *repeated* character is the start of content, so for
-  // `|=<<` the first `<` aligns and the second `<` is content.
-  const align = TABLE_ALIGNMENT_MARKERS.get(src[i] ?? '')
-  if (align !== undefined) i++
+  // A one- or two-axis run is consumed as a unit. A duplicate axis other than
+  // `~~` invalidates the whole run, so `|=<< Note|` keeps both `<` bytes as
+  // visible content instead of silently consuming a valid-looking prefix.
+  const markerStart = i
+  let align: 'left' | 'right' | 'center' | undefined
+  let valign: 'top' | 'middle' | 'bottom' | undefined
+  let invalidAxis = false
+  while (src[i] !== undefined && '<>~^v'.includes(src[i]!)) {
+    const marker = src[i]!
+    if (marker === '<' || marker === '>' || marker === '~') {
+      if (align === undefined) {
+        // In a two-axis run `~` takes the missing axis. Looking ahead lets the
+        // vertical-first `~>` spelling mean middle/right while a lone `~`
+        // remains horizontal center.
+        if (marker === '~' && valign === undefined && (src[i + 1] === '<' || src[i + 1] === '>')) {
+          valign = 'middle'
+        } else {
+          align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
+        }
+      } else if (marker === '~' && valign === undefined) {
+        valign = 'middle'
+      } else {
+        invalidAxis = true
+        break
+      }
+    } else {
+      if (valign !== undefined) { invalidAxis = true; break }
+      valign = marker === '^' ? 'top' : 'bottom'
+    }
+    i++
+  }
+  const validRun = i > markerStart &&
+    !invalidAxis &&
+    (/\s/.test(src[i] ?? '') || src[i] === '{' ||
+      (src[i] !== undefined && '<>~^v'.includes(src[i]!)))
+  if (!validRun) {
+    i = markerStart
+    align = undefined
+    valign = undefined
+  }
 
   // A `{...}` attribute block supplies the cell's attributes. It binds LAST -
   // after the kind marker and after the alignment marker, in every cell - and
@@ -8794,8 +8855,8 @@ function parseCellMarkers(src: string): {
   if (i > 0) {
     // A tight prefix was consumed; the rest is content.
     const content = trimCellPadding(src.slice(i))
-    if (align !== undefined && attrs !== undefined) return { header, align, attrs, content }
-    if (align !== undefined) return { header, align, content }
+    if ((align !== undefined || valign !== undefined) && attrs !== undefined) return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), attrs, content }
+    if (align !== undefined || valign !== undefined) return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), content }
     if (attrs !== undefined) return { header, attrs, content }
     return { header, content }
   }
@@ -8811,6 +8872,7 @@ interface RawCell {
   header: boolean
   span?: 'rowspan' | 'colspan'
   align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
   attrs?: Attrs
   raw: string
   /**
@@ -9018,10 +9080,11 @@ function parseTable(lexer: Lexer): Table | Figure {
     const lineNo = lexer.lineNumber(lineIndex)
     const lineCol = lexer.lineStartColumn(lineIndex)
     const raw: RawCell[] = splitTableRowSpans(rowBody).map(({ text: src, start }) => {
-      const { header, span, align, attrs, content } = parseCellMarkers(src)
+      const { header, span, align, valign, attrs, content } = parseCellMarkers(src)
       const c: RawCell = { header, raw: content, openRun: openVerbatimRun(content) }
       if (span) c.span = span
       if (align) c.align = align
+      if (valign) c.valign = valign
       if (attrs) c.attrs = attrs
       if (canPosition) {
         c.pos = {
@@ -9139,6 +9202,7 @@ function parseTable(lexer: Lexer): Table | Figure {
         }
         if (c.span) cell.span = c.span
         if (c.align) cell.align = c.align
+        if (c.valign) cell.valign = c.valign
         if (c.attrs) cell.attrs = c.attrs
         if (c.pos) cell.pos = c.pos
         return cell

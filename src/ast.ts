@@ -283,7 +283,16 @@ export interface Table extends BaseNode {
   /** Structured publishing/navigation label; Carve 0.1 source has no spelling. */
   shortCaption?: InlineNode[]
   rowGroups?: TableRowGroups
+  /** Positional metadata for the corresponding table columns. */
+  columns?: TableColumn[]
   rows: TableRow[]
+}
+
+export interface TableColumn {
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  /** Fraction of the table width, greater than zero and at most one. */
+  width?: number
 }
 
 export interface TableRow extends BaseNode {
@@ -302,6 +311,7 @@ export interface TableCell extends BaseNode {
    * inherits its column's alignment (taken from row 0).
    */
   align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
   children: InlineNode[]
 }
 

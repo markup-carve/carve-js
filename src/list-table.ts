@@ -147,6 +147,9 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
 
   const headerRows = headerCount(node.attrs?.keyValues?.['header-rows'])
   const headerCols = headerCount(node.attrs?.keyValues?.['header-cols'])
+  const footerRows = headerCount(node.attrs?.keyValues?.['footer-rows'])
+  if (headerRows + footerRows > rows.length) return null
+  const footerStart = rows.length - footerRows
 
   // Resolve `^`/`<` span markers into a positional grid, mirroring carve-js's
   // pipe-table span model (render-html `renderTable`) so the output is identical
@@ -154,7 +157,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   // header/body boundary: an HTML cell cannot reliably span across
   // <thead>/<tbody>, so a `^` that would extend a header cell down into the body
   // is not merged and degrades to an empty cell.
-  const grid = resolveSpans(rows, headerRows)
+  const grid = resolveSpans(rows, headerRows, footerStart)
 
   // Assign each rendered cell an output column by flowing it top-down past any
   // column a rowspan from an earlier row still holds (browser / pipe-table
@@ -162,6 +165,8 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   // padding.
   const placement = placeColumns(grid)
   const columnCount = placement.columnCount
+  const columns = listTableColumns(node, columnCount)
+  if (columns === null) return null
 
   const lines: string[] = []
 
@@ -172,6 +177,14 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   const caption = node.title ? ctx.renderInlines(node.title).trim() : ''
   if (caption !== '') {
     lines.push(`${pad}  <caption>${caption}</caption>`)
+  }
+  if (columns.some((column) => column.width !== undefined)) {
+    lines.push(`${pad}  <colgroup>`)
+    for (const column of columns) {
+      const style = column.width === undefined ? '' : ` style="width: ${column.width}%;"`
+      lines.push(`${pad}    <col${style}>`)
+    }
+    lines.push(`${pad}  </colgroup>`)
   }
 
   const renderRow = (gridRow: GridEntry[], rowIndex: number): string => {
@@ -195,6 +208,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
       if (isHeaderCell) attrHtml += ` scope="${isHeaderRow ? 'col' : 'row'}"`
       if (entry.rowspan > 1) attrHtml += ` rowspan="${entry.rowspan}"`
       if (entry.colspan > 1) attrHtml += ` colspan="${entry.colspan}"`
+      attrHtml += columnStyle(columns[col])
       // Carry the cell's own list-item attributes (e.g. `{.x}`) onto the
       // <td>/<th> so authored cell styling is not dropped. The structural span
       // attributes above always win on conflict.
@@ -214,14 +228,15 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
       const tag = isPadHeader ? 'th' : 'td'
       // A padded cell is still a header cell where the grid says so.
       const scope = isPadHeader ? ` scope="${isHeaderRow ? 'col' : 'row'}"` : ''
-      html += `<${tag}${scope}></${tag}>`
+      html += `<${tag}${scope}${columnStyle(columns[col])}></${tag}>`
     }
 
     return `<tr>${html}</tr>`
   }
 
   const headGrid = grid.slice(0, headerRows)
-  const bodyGrid = grid.slice(headerRows)
+  const bodyGrid = grid.slice(headerRows, footerStart)
+  const footGrid = grid.slice(footerStart)
 
   if (headGrid.length > 0) {
     let thead = ''
@@ -237,6 +252,13 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
       body.push(`${pad}    ${renderRow(gridRow, offset + headerRows)}`)
     })
     lines.push(`${pad}  <tbody>\n${body.join('\n')}\n${pad}  </tbody>`)
+  }
+  if (footGrid.length > 0) {
+    let tfoot = ''
+    footGrid.forEach((gridRow, offset) => {
+      tfoot += renderRow(gridRow, footerStart + offset)
+    })
+    lines.push(`${pad}  <tfoot>${tfoot}</tfoot>`)
   }
 
   const attrs = renderTableAttributes(node, ctx)
@@ -350,7 +372,7 @@ function extractCells(rowItem: ListItem): CellEntry[] | null {
  * `^` in a body row whose source sits in the header rows is NOT merged and
  * degrades to an empty cell (an HTML cell cannot span row groups reliably).
  */
-function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
+function resolveSpans(rows: CellEntry[][], headerRows = 0, footerStart = rows.length): GridEntry[][] {
   const grid: GridEntry[][] = rows.map((cells) =>
     cells.map((entry) => ({
       cell: entry.cell,
@@ -377,8 +399,9 @@ function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
         // Clamp at the header/body boundary: a `^` in a body row must not extend
         // a cell that originated in the header rows. Leave it unmerged (it then
         // renders as an empty cell) so no <th rowspan> crosses into <tbody>.
-        const crossesHeader = up !== undefined && up < headerRows && r >= headerRows
-        if (src && !crossesHeader) {
+        const groupOf = (row: number) => row < headerRows ? 0 : row >= footerStart ? 2 : 1
+        const crossesGroup = up !== undefined && groupOf(up) !== groupOf(r)
+        if (src && !crossesGroup) {
           // A `^` under a merged `<` is absorbed and renders nothing: the
           // origin's rowspan is grown by the mark at its own index, and the
           // count this one adds lands on the merged `<`, which renders nothing
@@ -485,6 +508,51 @@ function renderCellAttributes(cell: ListItem, ctx: BlockExtensionRenderContext):
   return ctx.renderAttrs(stripSpanAttrs(cell.attrs))
 }
 
+interface ListTableColumn {
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  /** Source spelling is a percentage. */
+  width?: number
+}
+
+function listTableColumns(node: Admonition, count: number): ListTableColumn[] | null {
+  const kv = node.attrs?.keyValues ?? {}
+  const split = (key: string): string[] => kv[key] === undefined ? [] : kv[key]!.split(',').map((v) => v.trim())
+  const aligns = split('aligns')
+  const valigns = split('valigns')
+  const widths = split('widths')
+  if ([aligns, valigns, widths].some((values) => values.length > count)) return null
+  const columns = Array.from({ length: count }, (): ListTableColumn => ({}))
+  for (let i = 0; i < count; i++) {
+    const align = aligns[i]
+    if (align) {
+      if (align !== 'left' && align !== 'right' && align !== 'center') return null
+      columns[i]!.align = align
+    }
+    const valign = valigns[i]
+    if (valign) {
+      if (valign !== 'top' && valign !== 'middle' && valign !== 'bottom') return null
+      columns[i]!.valign = valign
+    }
+    const rawWidth = widths[i]
+    if (rawWidth) {
+      const width = Number(rawWidth)
+      if (!Number.isFinite(width) || width <= 0 || width > 100) return null
+      columns[i]!.width = width
+    }
+  }
+  return columns
+}
+
+function columnStyle(column: ListTableColumn | undefined): string {
+  if (!column?.align && !column?.valign) return ''
+  const style = [
+    column.align ? `text-align: ${column.align};` : '',
+    column.valign ? `vertical-align: ${column.valign};` : '',
+  ].filter(Boolean).join(' ')
+  return ` style="${style}"`
+}
+
 /**
  * Build the `<table>` tag attributes.
  *
@@ -500,11 +568,15 @@ function renderTableAttributes(node: Admonition, ctx: BlockExtensionRenderContex
   const keyValues = { ...(attrs.keyValues ?? {}) }
   delete keyValues['header-rows']
   delete keyValues['header-cols']
+  delete keyValues['footer-rows']
+  delete keyValues.aligns
+  delete keyValues.valigns
+  delete keyValues.widths
 
   const classes = (attrs.classes ?? []).filter((c) => c !== '' && c !== 'list-table')
 
   const order = (attrs.order ?? []).filter(
-    (s) => s !== 'header-rows' && s !== 'header-cols' && !(s === '.class' && classes.length === 0),
+    (s) => !['header-rows', 'header-cols', 'footer-rows', 'aligns', 'valigns', 'widths'].includes(s) && !(s === '.class' && classes.length === 0),
   )
 
   const cleaned: Attrs = {}
@@ -564,4 +636,3 @@ function headerCount(value: string | undefined): number {
   if (value.trim() === '') return 1
   return Math.max(0, toInt(value))
 }
-
