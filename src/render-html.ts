@@ -1185,9 +1185,17 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
           // The dd anchors at its `:  ` marker line (the body may start
           // later, e.g. the `:  +` first-block form), matching carve-php.
           const ddLine = it.definitionLines?.[di] ?? d[0]?.pos?.startLine
-          if (d.length === 1 && d[0]!.type === 'paragraph') {
+          // A COMMENT IS NOT RICHER CONTENT. It renders the empty string, so a
+          // description holding one paragraph and one comment is the
+          // single-paragraph shape with an invisible block beside it - counting
+          // it took the block form, whose only extra child renders nothing
+          // (markup-carve/carve#1364, corpus 350-6). An all-comment description
+          // still falls through to the block arm, where `body === ''` closes it
+          // on its own line.
+          const visible = d.filter((child) => child.type !== 'comment')
+          if (visible.length === 1 && visible[0]!.type === 'paragraph') {
             lines.push(
-              `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((d[0] as Paragraph).children, opts)}</dd>`,
+              `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((visible[0] as Paragraph).children, opts)}</dd>`,
             )
           } else {
             const body = renderBlocks(d, opts, level + 2)

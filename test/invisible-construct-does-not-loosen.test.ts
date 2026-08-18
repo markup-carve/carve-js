@@ -79,15 +79,15 @@ describe('the blank is still remembered', () => {
     )
   })
 
-  it('a different marker kind is unchanged by this rule', () => {
-    // `- a` / blank / `%% note` / `+ b`: the `+` is not a sibling of `-`, so
-    // the sibling clause never fires and this engine folds the line into the
-    // item. It renders loose here and TIGHT in the executable spec - a
-    // PRE-EXISTING divergence, identical before and after this change, and not
-    // what carve#621 is about. Pinned as-is so a future fix has to be
-    // deliberate rather than a side effect.
+  it('a different marker kind ends the item on the comment', () => {
+    // `- a` / blank / `%% note` / `+ b`: the `+` is not a sibling of `-`, so the
+    // sibling clause never fires. This used to fold the line into the item and
+    // render it loose, recorded here as a PRE-EXISTING divergence from the
+    // executable spec. `markup-carve/carve#1364` closes it: the comment at the
+    // content column is a block, so the item holds no open paragraph and `+ b`
+    // at column 0 reaches no container. carve-php `925f7dc` renders it this way.
     expect(carveToHtml('- a\n\n  %% note\n+ b\n')).toBe(
-      '<ul>\n  <li><p>a</p>\n    <p>+ b</p>\n  </li>\n</ul>',
+      '<ul>\n  <li>a</li>\n</ul>\n<p>+ b</p>',
     )
   })
 })

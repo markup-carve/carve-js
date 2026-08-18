@@ -27,8 +27,12 @@ describe('a block that renders to nothing contributes no line', () => {
   })
 
   it('a comment block inside a definition body', () => {
+    // The comment renders the empty string, and since `markup-carve/carve#1364`
+    // it is not counted as richer content either - so the description is the
+    // single-paragraph shape it looks like rather than a block one whose only
+    // extra child produces nothing. carve-php `925f7dc` agrees.
     expect(h(':: t\n:  body\n\n   %%%\n   x\n   %%%')).toBe(
-      ['<dl>', '  <dt>t</dt>', '  <dd>', '    <p>body</p>', '  </dd>', '</dl>'].join('\n'),
+      ['<dl>', '  <dt>t</dt>', '  <dd>body</dd>', '</dl>'].join('\n'),
     )
   })
 

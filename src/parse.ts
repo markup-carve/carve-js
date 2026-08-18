@@ -2829,6 +2829,20 @@ function collectLinkDefs(lexer: Lexer) {
         rest = rest.slice(m2[0].length)
         m2 = prepassMarker(rest)
       }
+    } else if (RE_DEFLIST_DEF.test(unquoted)) {
+      // A DESCRIPTION MARKER OPENS A CONTENT COLUMN, exactly as an item marker
+      // does. It was the one container this pass could not see, so a definition
+      // written at a description's column read as top-level indentation and was
+      // skipped: `:: t` / `:  a` / `   [r]: /u` rendered nowhere and defined
+      // nothing, while the same line one column further left registered
+      // (markup-carve/carve#1357, corpus 350-5).
+      //
+      // The column is the parser's `DEFLIST_CONTENT_COL` and not the marker's
+      // own width: `:` plus two or more spaces is one marker whose body starts
+      // at column 3 however many spaces were typed, which is what the block
+      // parser slices at.
+      while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
+      listCols.push(indent + DEFLIST_CONTENT_COL)
     } else if (
       !isBlankLine(raw) &&
       // A LINK REFERENCE DEFINITION at column 0 ends the item too, so it has
@@ -5423,6 +5437,11 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       inComment: false,
       commentLen: 0,
       lazyFoldableBeforeComment: false,
+      openedCommentAtColumn: false,
+      inTable: false,
+      invisibleAtColumn: false,
+      inFootnoteBody: false,
+      quoteInner: null,
       absorbingFence: false,
       divDepth: 0,
       lazyFoldable: false,
@@ -5430,12 +5449,22 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       attrRun: null,
     }
     const defFenceMemo: QuotedFenceCloserMemo = new Map()
-    /** Feed one collected body line to the S4 tracker. */
-    const track = (content: string, atLineIndex?: number): void => {
-      trackItemLazyState(content, lazyState, (marker) =>
-        atLineIndex === undefined
-          ? true
-          : itemFenceHasCloser(lexer, marker, atLineIndex, DEFLIST_CONTENT_COL, defFenceMemo),
+    /**
+     * Feed one collected body line to the S4 tracker.
+     *
+     * `atContentColumn` is false only for a line the body took LAZILY, from
+     * below its content column. An invisible line there adds no block, so the
+     * paragraph it was folded into is still open behind it.
+     */
+    const track = (content: string, atLineIndex?: number, atContentColumn = true): void => {
+      trackItemLazyState(
+        content,
+        lazyState,
+        (marker) =>
+          atLineIndex === undefined
+            ? true
+            : itemFenceHasCloser(lexer, marker, atLineIndex, DEFLIST_CONTENT_COL, defFenceMemo),
+        atContentColumn,
       )
     }
     // The boundary set for a `+`-attached block in a definition body: a blank,
@@ -5467,7 +5496,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // PARAMETER (carve#920): a heading, a table or an attribute block written
       // on the `:  ` marker leaves no paragraph open for exactly the reason it
       // leaves none on a `- ` marker.
-      lazyState.lazyFoldable = markerLineLeavesParagraphOpen(first)
+      const firstState = markerLineState(first)
+      lazyState.lazyFoldable = firstState.leavesParagraphOpen
+      lazyState.inTable = firstState.endsOnTableRow
+      lazyState.quoteInner = firstState.quote
       const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
       if (leadFence) {
         lazyState.inFence = true
@@ -5627,7 +5659,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         const lineIndex = lexer.pos
         bodyLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-        track(ln)
+        track(ln, undefined, false)
         lexer.consume()
         continue
       }
@@ -5812,9 +5844,30 @@ type BlockQuoteLazyMode =
   | { kind: 'paragraph'; absorbingFence: boolean }
   | { kind: 'code_fence'; close: RegExp }
   | { kind: 'comment_fence'; length: number }
+  // A QUOTE INSIDE THIS ONE IS ASKED WHAT IT ENDS ON, rather than assumed to
+  // end on a paragraph. PART 1 S4 is about the open STACK, and the block at the
+  // bottom of it may be several quotes down: `> a` / `> > # H` / `tail` ends the
+  // outer quote because the inner one ends on a heading, and `> > | a |` /
+  // `> > + b |` because it ends on a table (markup-carve/carve#1357). The inner
+  // state is CARRIED across the outer quote's lines, so a nested table spanning
+  // two of them is one table rather than two first rows.
+  | { kind: 'quote'; inner: BlockQuoteLazyState }
 
 interface BlockQuoteLazyState {
   mode: BlockQuoteLazyMode
+  /**
+   * Did the line before this one leave a table open?
+   *
+   * A CONTINUATION ROW IS MORE TABLE, and only where a table is above it
+   * (markup-carve/carve#1349). It carries no leading pipe, so `isTableRow` does
+   * not see it, and a container whose table ended on one reported an open
+   * paragraph its table did not have. With no row above, `+ b |` is prose and a
+   * dedented line still folds into it.
+   *
+   * Cleared at the top of the tracker and re-armed by the two row branches,
+   * exactly as the fence absorption is.
+   */
+  inTable: boolean
   /**
    * The lines so far of a `{…}` block-attribute block that has not closed yet,
    * newline-joined, or null when the tracker is not inside one - the quote's
@@ -5831,8 +5884,13 @@ interface BlockQuoteLazyState {
   colonWidths: number[]
 }
 
-const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean =>
-  state.mode.kind === 'paragraph'
+/** Iterative for the reason `trackBlockQuoteLazyState` is: the chain is as deep as the document nests. */
+const blockQuoteParagraphOpen = (state: BlockQuoteLazyState): boolean => {
+  let level = state
+  while (level.mode.kind === 'quote') level = level.mode.inner
+
+  return level.mode.kind === 'paragraph'
+}
 
 const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
   state.mode = { kind: 'closed' }
@@ -5864,16 +5922,46 @@ const closeBlockQuoteParagraph = (state: BlockQuoteLazyState): void => {
  *  - a comment fence needs its closer either way, which is what
  *    `hasCommentCloser` has done since carve-js#832.
  */
+/**
+ * Track verbatim/paragraph state across a blockquote's collected inner lines.
+ *
+ * ITERATIVE, NOT RECURSIVE, and that is a requirement rather than a style.
+ * `'> '.repeat(20000)` is a 40 KB document the parser handles today, and a
+ * tracker that recursed once per nesting level overflowed the stack on it -
+ * a denial of service under §25, in the one pass added to answer a question
+ * about depth. The descent is a loop over the quote prefix instead; each step
+ * hands the next level the text behind its own marker.
+ */
 function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
   hasFenceCloser: (marker: string) => boolean,
 ): void {
+  let text = content
+  let level = state
+  for (;;) {
+    const descend = classifyQuotedLine(text, level, hasCommentCloser, hasFenceCloser)
+    if (descend === null) return
+    text = descend.text
+    level = descend.state
+  }
+}
+
+function classifyQuotedLine(
+  content: string,
+  state: BlockQuoteLazyState,
+  hasCommentCloser: (fence: number) => boolean,
+  hasFenceCloser: (marker: string) => boolean,
+): { text: string; state: BlockQuoteLazyState } | null {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does: cleared here and re-armed only in the two branches that
   // continue the same paragraph, exactly as `trackItemLazyState` does it.
   const wasAbsorbing = state.mode.kind === 'paragraph' && state.mode.absorbingFence
+  // Carried the same way the absorption is, and for the same reason: every
+  // other block ends the table, so only the two row branches re-arm it.
+  const wasInTable = state.inTable
+  state.inTable = false
   if (state.mode.kind === 'comment_fence') {
     // EXACT length, per PART 9 §28: "The CLOSER matches on EXACT delimiter
     // length (§2), so a longer opener nests shorter fences and a too-short line
@@ -5882,11 +5970,11 @@ function trackBlockQuoteLazyState(
     // comment closed it here and was body text to the parser.
     const run = commentFenceRun(content)
     if (run === state.mode.length) state.mode = { kind: 'closed' }
-    return
+    return null
   }
   if (state.mode.kind === 'code_fence') {
     if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
-    return
+    return null
   }
   // A WRAPPED block-attribute block, tracked ALONGSIDE the classifiers rather
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
@@ -5894,11 +5982,11 @@ function trackBlockQuoteLazyState(
   // same way.
   if (trackWrappedAttributeRun(state, content)) {
     closeBlockQuoteParagraph(state)
-    return
+    return null
   }
   if (isBlankLine(content)) {
     closeBlockQuoteParagraph(state)
-    return
+    return null
   }
   // A block-attribute line renders nothing and opens nothing: it collects into
   // `pending` and floats forward to the next block (§15 A1/A2), and it does not
@@ -5909,7 +5997,7 @@ function trackBlockQuoteLazyState(
   // did not, and kept the line inside.
   if (isBlockAttributeLine(content)) {
     closeBlockQuoteParagraph(state)
-    return
+    return null
   }
   // A heading, table row, or thematic break is an UNCONDITIONAL paragraph
   // interrupter (no matching-closer dependency), so it leaves no open trailing
@@ -5919,8 +6007,32 @@ function trackBlockQuoteLazyState(
   // `> a\n> # h\n- item` is a quote (para + heading) plus a sibling list.
   // Mirrors trackItemLazyState.
   if (RE_HEADING.test(content) || isTableRow(content) || RE_HR.test(content)) {
+    state.inTable = isTableRow(content)
     closeBlockQuoteParagraph(state)
-    return
+    return null
+  }
+  // A TABLE IS A TABLE HOWEVER ITS LAST ROW IS SPELLED. The row test above
+  // reads a leading pipe and a continuation row carries none, so `> | a |` /
+  // `> + b |` / `tail` kept `tail` inside the quote where the standard-row
+  // spelling of the same table sends it out (markup-carve/carve#1348).
+  if (wasInTable && RE_TABLE_CONT.test(content)) {
+    state.inTable = true
+    closeBlockQuoteParagraph(state)
+    return null
+  }
+  // A QUOTED LINE OPENS OR CONTINUES A QUOTE INSIDE THIS ONE, and what THAT
+  // quote ends on is what this one ends on. Asked by carrying an inner tracker
+  // rather than by re-reading the line, so a nested table, fence or div spanning
+  // several lines is one block there as it is here.
+  const quoted = RE_BLOCKQUOTE.exec(content)
+  if (quoted) {
+    const inner: BlockQuoteLazyState =
+      state.mode.kind === 'quote'
+        ? state.mode.inner
+        : { mode: { kind: 'closed' }, inTable: false, colonWidths: [], attrRun: null }
+    state.mode = { kind: 'quote', inner }
+
+    return { text: quoted[1] ?? '', state: inner }
   }
   // Two more kinds that leave no paragraph, for the same S4 reason. A
   // definition TERM is bounded like a heading - it holds inline content, not a
@@ -5937,7 +6049,7 @@ function trackBlockQuoteLazyState(
     isLinkDefLine(content)
   ) {
     closeBlockQuoteParagraph(state)
-    return
+    return null
   }
   // The colon-fence arm below is `trackItemLazyState`'s, restated for the quote:
   // one construct answering S4 two ways depending on the container kind is the
@@ -5955,7 +6067,7 @@ function trackBlockQuoteLazyState(
   if (bareFence && bareFenceRun![1]!.length === state.colonWidths[state.colonWidths.length - 1]) {
     state.colonWidths.pop()
     closeBlockQuoteParagraph(state)
-    return
+    return null
   }
   if (
     RE_DIV_OPEN.test(content) ||
@@ -5972,21 +6084,21 @@ function trackBlockQuoteLazyState(
     // inside a container as readily as at the quote's own level.
     if (wasAbsorbing && bareFence) {
       state.mode = { kind: 'paragraph', absorbingFence: true }
-      return
+      return null
     }
     // A colon-fence OPENER is structural and needs no closer ahead ("colon-fence
     // containers open immediately and auto-close at EOF"), so it interrupts an
     // open quoted paragraph and leaves an EMPTY container holding none either.
     state.colonWidths.push(colonFenceOpenerLen(content) ?? 3)
     closeBlockQuoteParagraph(state)
-    return
+    return null
   }
   // A fence-shaped line that is NOT a valid opener is ordinary paragraph text
   // (`:::note` fails §12's opener test - a type word needs a space), and from
   // here the paragraph absorbs the next bare fence-shaped line as well.
   if (/^:{3,}/.test(content)) {
     state.mode = { kind: 'paragraph', absorbingFence: true }
-    return
+    return null
   }
   // A code or raw fence interrupts an OPEN paragraph only when a matching
   // closer follows in this quote (§10 CLOSER LOOKAHEAD, as
@@ -5999,7 +6111,7 @@ function trackBlockQuoteLazyState(
   const fenceMarker = fence ? fence[2]! : raw ? raw[1]! : null
   if (fenceMarker !== null && (!blockQuoteParagraphOpen(state) || hasFenceCloser(fenceMarker))) {
     state.mode = { kind: 'code_fence', close: fenceCloseRe(fenceMarker) }
-    return
+    return null
   }
   // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 section 28). Every
   // opener was treated as opening here, so `> %%%` with no closer put the
@@ -6015,7 +6127,7 @@ function trackBlockQuoteLazyState(
   const commentRun = commentFenceRun(content)
   if (commentRun !== undefined && hasCommentCloser(commentRun)) {
     state.mode = { kind: 'comment_fence', length: commentRun }
-    return
+    return null
   }
   // Everything else (plain prose, a folded list-marker line, div body text, or
   // a fence/comment-looking line while a paragraph is open) leaves an open
@@ -6027,6 +6139,8 @@ function trackBlockQuoteLazyState(
   // (corpus 260). Absorption ends where the paragraph does, and every branch
   // that ends one returns above this point.
   state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing }
+
+  return null
 }
 
 function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
@@ -6035,6 +6149,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   const innerLineNumbers: number[] = []
   const state: BlockQuoteLazyState = {
     mode: { kind: 'closed' },
+    inTable: false,
     colonWidths: [],
     attrRun: null,
   }
@@ -6547,12 +6662,61 @@ interface ItemLazyState {
   // NOTHING, so closing one may not change whether the item ends in an open
   // paragraph - it has to restore what was there before the fence.
   lazyFoldableBeforeComment: boolean
+  /**
+   * Did the open comment fence start AT the container's content column?
+   *
+   * A fence at the column is a BLOCK, so the paragraph it interrupted does not
+   * come back when it closes; one collected below the column adds no block, and
+   * the paragraph above it is still open when the run ends.
+   */
+  openedCommentAtColumn: boolean
   // Whether the item's collected content currently ends in an OPEN paragraph
   // that a dedented (below content-column) non-blank line lazily continues
   // (CommonMark family-D rule). True after plain prose, a blockquote line, or
   // plain text inside an open div/admonition; false after a code fence, table,
   // heading, thematic break, a just-opened div, or a blank line.
   lazyFoldable: boolean
+  /**
+   * Did the line before this one leave a table open?
+   *
+   * A CONTINUATION ROW IS MORE TABLE, and only where a table is above it
+   * (markup-carve/carve#1349). It carries no leading pipe, so `isTableRow` does
+   * not see it, and an item whose table ended on one reported an open paragraph
+   * its table did not have. With no row above, `- a` / `  + b |` is a paragraph
+   * and its `+ b |` is prose, so a dedented line still folds in.
+   */
+  inTable: boolean
+  /**
+   * Did the item's last block render nothing, written AT the content column?
+   *
+   * An invisible line at the column ends the PARAGRAPH, not the container
+   * (markup-carve/carve#1364). Those are two answers and this tracker gave one
+   * flag for both, so closing the paragraph also ended the item and a
+   * below-column line that belongs to it came out at the top level (corpus 197,
+   * 277-3, 358). The container still ends at document column 0, which is what
+   * the ruling says and what separates 358 from 357-2.
+   */
+  invisibleAtColumn: boolean
+  /**
+   * Is the tracker inside a footnote definition's body?
+   *
+   * A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
+   * all (markup-carve/carve#1363, PART 1 S4). Its continuation lines are the
+   * definition's, not the container's, so none of them reopens a paragraph for a
+   * column-0 line to continue. A LINK reference definition has no body and must
+   * not open a run - it is the control the ruling names, and the one an
+   * over-wide fix breaks.
+   */
+  inFootnoteBody: boolean
+  /**
+   * The tracker for the quote this item currently ends on, or null.
+   *
+   * PART 1 S4 is about the open STACK, so what the ITEM ends on may be several
+   * quotes down: `:  > | a |` / `   > + b |` ends on a table, not on a quoted
+   * paragraph. Carried across the item's lines for the same reason the quote's
+   * own nested tracker is - a quoted table spanning two of them is one table.
+   */
+  quoteInner: BlockQuoteLazyState | null
   // Whether the item currently has an OPEN definition list (a `:: term` or
   // `:  def` marker was the last structural line, possibly across a separator
   // blank). Used so an UNDER-indented (below content-column) def/term marker
@@ -6874,24 +7038,6 @@ function collectAttachedBlock(
  * quote's own lazy continuation. After a code fence or a table (no open
  * trailing paragraph) the dedented line must END the item instead.
  */
-/**
- * A quote marker with NOTHING after it opens a quote holding no paragraph.
- *
- * PART 1 S4: NO OPEN PARAGRAPH, NO LAZY LINE. `- >` + a column-0 line closes
- * the item; `- > q` + the same line folds, because there the quote holds one.
- * Treating every quote line as paragraph-opening kept the line inside the item
- * - the answer S4 names as wrong (carve#561, carve#572).
- */
-function isEmptyQuoteLine(content: string): boolean {
-  let rest = content
-  let sawQuote = false
-  // `> > q` holds a paragraph; `> >` does not.
-  for (let m = RE_BLOCKQUOTE.exec(rest); m; m = RE_BLOCKQUOTE.exec(rest)) {
-    sawQuote = true
-    rest = m[1] ?? ''
-  }
-  return sawQuote && trimStructural(rest) === ''
-}
 
 /**
  * A `{…}` line that is a block-attribute line rather than paragraph text.
@@ -6915,6 +7061,21 @@ function isBlockAttributeLine(content: string): boolean {
  * rather than the tail it replaced.
  */
 const PREFIX_WINDOW = 32
+
+/**
+ * The one character any of the three invisible blocks can open with.
+ *
+ * CHEAP FIRST, because this runs on every line an item collects. `isLinkDefLine`
+ * splits a trailing attribute block off the line before it tests, which makes it
+ * the most expensive predicate in the tracker - putting it on the path of every
+ * ordinary prose line cost about 3x on a deeply-indented staircase, and the
+ * scaling guard caught it at 2.28x per byte against a 2.0 threshold.
+ *
+ * A strict superset, so it decides nothing: both definition forms open with `[`
+ * after optional indentation and a comment with `%`, and `splitTrailingAttrBlock`
+ * only removes a TRAILING block, so it cannot change the leading character.
+ */
+const RE_INVISIBLE_BLOCK_LEAD = /^[ \t]*[%[]/
 
 /**
  * The line the prefix walk may read, as an END OFFSET.
@@ -6999,6 +7160,34 @@ function walkContainerPrefix(content: string): number {
 }
 
 /**
+ * The quote a marker line ends on, tracked, or null when it ends on none.
+ *
+ * The marker line never goes through the running tracker, so a quote opened
+ * there arrived at the next line as a FRESH one and forgot the table, fence or
+ * div it was holding: `:  > | a |` / `   > + b |` read the continuation row
+ * with no row above it (markup-carve/carve#1348, corpus 349-5).
+ */
+function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
+  const quoted = RE_BLOCKQUOTE.exec(content)
+  if (!quoted) return null
+  const inner: BlockQuoteLazyState = {
+    mode: { kind: 'closed' },
+    inTable: false,
+    colonWidths: [],
+    attrRun: null,
+  }
+  trackBlockQuoteLazyState(
+    quoted[1] ?? '',
+    inner,
+    () => true,
+    () => true,
+  )
+
+  return inner
+}
+
+
+/**
  * Does the block written ON a list item's MARKER LINE leave an open paragraph
  * behind it?
  *
@@ -7031,28 +7220,49 @@ function walkContainerPrefix(content: string): number {
  * blocks below this seeding already open by hand, and a colon fence, which
  * holds a container the line below folds INTO rather than out of.
  */
-function markerLineLeavesParagraphOpen(content: string): boolean {
-  // Strip to the block that actually sits at the bottom of the stack: `> > # H`
-  // is the quote's question twice over, and `- - # H` is the sub-item's, whose
-  // first block is the heading exactly as a bare `- # H`'s is. Each strip
-  // consumes at least one character, so the walk terminates.
-  //
-  // WALKED BY OFFSET, NOT BY RE-SLICING. Every regex this strip consults ends
-  // on `(...)$`, so each one reads to the END OF THE LINE to answer a question
-  // about its HEAD - and the loop then allocated that tail as the next `rest`.
-  // Both halves are linear in what is left, so a line of N markers cost
-  // O(N * line length): `'- '.repeat(8000)` took ~7 s of which ~6.2 s was this
-  // one regex, and the growth held at ~3.9x per doubling across four doublings
-  // (carve-js#1190). §25 treats that shape as a denial of service rather than a
-  // slow parse, because the input is 8 KB.
-  //
-  // `markerPrefixLength` and `quotePrefixLength` below ask the same regexes the
-  // same question against a WINDOW at the offset instead, so the cost is the
-  // prefix rather than the tail. They are the same regexes on purpose: this is
-  // the third place the marker grammar is read, and re-spelling it is how two
-  // readers come to disagree about whether a line opened an item.
+/**
+ * The block at the BOTTOM of a marker line's stack, as text.
+ *
+ * Split out of the classifier so the three questions asked of a marker line -
+ * does it leave a paragraph, does it end on a table row, and what quote does it
+ * end on - are answered from ONE walk. Asking them separately walked the prefix
+ * twice per marker line and cost about 40% on a deeply-indented staircase; the
+ * scaling guard read it as 2.28x per byte against a 2.0 threshold.
+ */
+function markerLineBottomBlock(content: string): string {
+  // `> > # H` is the quote's question twice over, and `- - # H` is the
+  // sub-item's, whose first block is the heading exactly as a bare `- # H`'s
+  // is - so the strip runs to the bottom of the stack. It is a WALK BY OFFSET:
+  // every regex it consults is anchored with `$`, so re-slicing the remainder
+  // per marker cost O(N * line length) on a line of N markers (carve-js#1190).
   const walked = walkContainerPrefix(content)
-  const rest = walked === 0 ? content : content.slice(walked)
+
+  return walked === 0 ? content : content.slice(walked)
+}
+
+/**
+ * Everything a marker line's seeding needs, from one walk.
+ *
+ * `endsOnTableRow` is FALSE for a quoted line: the table is the quote's, and
+ * `quote` carries it there. Claiming it at this level as well would let a
+ * continuation row written outside the quote join a table that is not there.
+ */
+function markerLineState(content: string): {
+  leavesParagraphOpen: boolean
+  endsOnTableRow: boolean
+  quote: BlockQuoteLazyState | null
+} {
+  const bottom = markerLineBottomBlock(content)
+  const quote = markerLineQuoteState(content)
+
+  return {
+    leavesParagraphOpen: bottomBlockLeavesParagraphOpen(bottom),
+    endsOnTableRow: quote === null && isTableRow(bottom),
+    quote,
+  }
+}
+
+function bottomBlockLeavesParagraphOpen(rest: string): boolean {
   if (isBlankLine(rest) || trimStructural(rest) === '') return false
   // THE STRICT COLUMN-0 RULE APPLIES TO WHAT IS LEFT (§24 C3). A quote marker
   // takes exactly one following space, so `>  [r]: /u` leaves a line that is
@@ -7151,6 +7361,17 @@ function trackItemLazyState(
   content: string,
   state: ItemLazyState,
   hasFenceCloser: (marker: string) => boolean = () => true,
+  /**
+   * Does this line sit AT the container's content column, rather than below it?
+   *
+   * Only the invisible blocks read it. An invisible line AT the column is a
+   * BLOCK and ends the paragraph, and what it renders is not a parameter
+   * (markup-carve/carve#1364); the same line collected BELOW the column is a
+   * lazy continuation and adds no block at all, which is what keeps
+   * `- a` / `  %% c` / ` b` folding (corpus 358). Every line the item collects
+   * at its own column arrives here as true; the two lazy call sites pass false.
+   */
+  atContentColumn = true,
 ): void {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
@@ -7160,6 +7381,39 @@ function trackItemLazyState(
   // opens a real div, and this tracker has to give the same answer.
   const wasAbsorbing = state.absorbingFence
   state.absorbingFence = false
+  // Carried the same way the absorption is, and for the same reason: every
+  // other block ends the table, so only the two row branches re-arm it.
+  const wasInTable = state.inTable
+  state.inTable = false
+  // The quote the item ended on is dropped by every line that is not more of
+  // it; the quoted branch below re-arms it.
+  const wasQuote = state.quoteInner
+  state.quoteInner = null
+  const wasInvisibleAtColumn = state.invisibleAtColumn
+  state.invisibleAtColumn = false
+  // A FOOTNOTE DEFINITION'S BODY RUNS ON. A blank between its lines is inside
+  // the body rather than after it, so it does not end the run.
+  //
+  // AT THE BODY COLUMN, which is the parser's own boundary and not merely
+  // "indented". `parseFootnoteDef` takes a continuation line only at
+  // `FOOTNOTE_BODY_COLUMN`, so a line one column in is the CONTAINER's prose
+  // and leaves an open paragraph behind it. Reading any indent as body made
+  // `- a` / `  [^f]: t` / ` more` / `tail` end the item where carve-php folds
+  // `tail` into it - found by sweeping the columns after `codex review` named
+  // the mechanism, and not by the shape it predicted.
+  if (
+    state.inFootnoteBody &&
+    !isBlankLine(content) &&
+    indentColumns(content, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN
+  ) {
+    state.inFootnoteBody = false
+  }
+  if (state.inFootnoteBody) {
+    state.invisibleAtColumn = wasInvisibleAtColumn
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
   if (state.inComment) {
     // A CLOSER IS NOT A BARE RUN. This said it was - "so this test stays
     // anchored, unlike the opener below, which may carry an info string" - and
@@ -7169,7 +7423,14 @@ function trackItemLazyState(
     const run = commentFenceRun(content)
     if (run === state.commentLen) {
       state.inComment = false
-      state.lazyFoldable = state.lazyFoldableBeforeComment
+      // A CLOSED COMMENT FENCE AT THE COLUMN IS A CLOSED BLOCK, so the paragraph
+      // it interrupted is gone and does not come back: `- a` / `  %%% c` /
+      // `  %%%` / `tail` leaves the item on a block, and `tail` at column 0
+      // reaches no container (markup-carve/carve#1364, corpus 357-3). Restoring
+      // the pre-comment state is still right for a fence collected BELOW the
+      // column, where the whole run adds no block.
+      state.lazyFoldable = state.lazyFoldableBeforeComment && !state.openedCommentAtColumn
+      state.invisibleAtColumn = state.openedCommentAtColumn
     } else {
       state.lazyFoldable = false
     }
@@ -7249,6 +7510,7 @@ function trackItemLazyState(
     state.inComment = true
     state.commentLen = commentRun
     state.lazyFoldableBeforeComment = state.lazyFoldable
+    state.openedCommentAtColumn = atContentColumn
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -7264,6 +7526,39 @@ function trackItemLazyState(
     return
   }
   if (isTableRow(content) || RE_HR.test(content)) {
+    state.inTable = isTableRow(content)
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
+  // A TABLE IS A TABLE HOWEVER ITS LAST ROW IS SPELLED. The row test above reads
+  // a leading pipe and a continuation row carries none, so an item whose table
+  // ended on one kept a dedented line where the standard-row spelling of the
+  // same table sent it out (markup-carve/carve#1348).
+  if (wasInTable && RE_TABLE_CONT.test(content)) {
+    state.inTable = true
+    state.lazyFoldable = false
+    state.inDefList = false
+    return
+  }
+  // AN INVISIBLE LINE AT THE CONTENT COLUMN IS A BLOCK. A comment and a
+  // reference or footnote definition each render nothing, and what a block
+  // renders is not a parameter (markup-carve/carve#1364): the paragraph above it
+  // is over, so a column-0 line below reaches no container. The quote's tracker
+  // has closed on the definitions all along; this one never did.
+  //
+  // No RE_ABBR_DEF: PART 12 §7 recognizes an abbreviation definition only as a
+  // direct child of the document, so inside an item the line IS a paragraph.
+  if (
+    atContentColumn &&
+    RE_INVISIBLE_BLOCK_LEAD.test(content) &&
+    (RE_COMMENT_LINE.test(content) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))
+  ) {
+    // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
+    // link reference definition has no body at all, so the line after either of
+    // them is the container's again.
+    state.inFootnoteBody = RE_FOOTNOTE_DEF.test(content)
+    state.invisibleAtColumn = true
     state.lazyFoldable = false
     state.inDefList = false
     return
@@ -7271,8 +7566,28 @@ function trackItemLazyState(
   // A blockquote line keeps the fold open: the quote's trailing paragraph
   // absorbs the dedented line via the quote's own lazy continuation. An EMPTY
   // quote holds no paragraph, so it does not (PART 1 S4).
-  if (RE_BLOCKQUOTE.test(content)) {
-    state.lazyFoldable = !isEmptyQuoteLine(content)
+  // A QUOTED LINE OPENS OR CONTINUES A QUOTE, and what THAT quote ends on is
+  // what the item ends on: `- > q` folds a column-0 line into the quote's
+  // paragraph, `- >` holds none and closes the item (carve#561, carve#572), and
+  // `:  > | a |` / `   > + b |` ends on a table one level down. A line test
+  // could answer the first two; only the quote's own tracker answers the third,
+  // because a quoted table spanning two lines is one block.
+  const quotedLine = RE_BLOCKQUOTE.exec(content)
+  if (quotedLine) {
+    const inner: BlockQuoteLazyState = wasQuote ?? {
+      mode: { kind: 'closed' },
+      inTable: false,
+      colonWidths: [],
+      attrRun: null,
+    }
+    trackBlockQuoteLazyState(
+      quotedLine[1] ?? '',
+      inner,
+      () => true,
+      () => true,
+    )
+    state.quoteInner = inner
+    state.lazyFoldable = blockQuoteParagraphOpen(inner)
     state.inDefList = false
     return
   }
@@ -7343,7 +7658,7 @@ function trackItemLazyState(
   }
   // A NESTED MARKER LINE IS A MARKER LINE. The sub-item it opens is a container
   // whose first block is whatever the marker holds, so S4's question about it is
-  // the one `markerLineLeavesParagraphOpen` answers - `- a` / `  - # N` leaves a
+  // the one `markerLineState` answers - `- a` / `  - # N` leaves a
   // heading open-paragraph-less at the bottom of the stack, and the flush-left
   // line below reaches no container at all (markup-carve/carve#1280). Asked of
   // the MARKER content only: a heading on a line the sub-item COLLECTS is the
@@ -7354,7 +7669,10 @@ function trackItemLazyState(
     state.absorbingFence = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
-    state.lazyFoldable = markerLineLeavesParagraphOpen(content)
+    const nested = markerLineState(content)
+    state.lazyFoldable = nested.leavesParagraphOpen
+    state.inTable = nested.endsOnTableRow
+    state.quoteInner = nested.quote
     state.inDefList = false
     return
   }
@@ -7548,18 +7866,25 @@ function parseList(lexer: Lexer): List {
     const plusSeparators = new Set<number>()
     // Track whether the item's collected content currently ends in an open
     // paragraph (family-D lazy continuation). The lead text opens one.
+    // ONE WALK for the three questions the lead line answers.
+    const leadState = markerLineState(content)
     const lazyState: ItemLazyState = {
       inFence: false,
       fenceClose: null,
       inComment: false,
       commentLen: 0,
       lazyFoldableBeforeComment: false,
+      openedCommentAtColumn: false,
+      invisibleAtColumn: false,
+      inFootnoteBody: false,
       absorbingFence: false,
       divDepth: 0,
       // The lead text opens a paragraph unless it is one of the shapes that
       // open nothing - PART 1 S4's one question, asked of the block the marker
-      // line holds. See `markerLineLeavesParagraphOpen`.
-      lazyFoldable: markerLineLeavesParagraphOpen(content),
+      // line holds. See `markerLineState`.
+      lazyFoldable: leadState.leavesParagraphOpen,
+      inTable: leadState.endsOnTableRow,
+      quoteInner: leadState.quote,
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
       attrRun: null,
     }
@@ -7759,7 +8084,14 @@ function parseList(lexer: Lexer): List {
         // (§24 C3) and ends the item, the same answer `- %% c` gives one
         // spelling over (PART 1 S4, markup-carve/carve#1280).
         (((lazyState.lazyFoldable ||
-          (lazyState.inComment && lazyState.lazyFoldableBeforeComment)) &&
+          (lazyState.inComment && lazyState.lazyFoldableBeforeComment) ||
+          // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
+          // (markup-carve/carve#1364). The item goes on collecting, so a line
+          // still indented belongs to it and starts a paragraph of its own
+          // there (corpus 197, 277-3, 358). The container ends at document
+          // column 0, which is the line this test excludes and which is all
+          // that separates 358 from 357-2.
+          (lazyState.invisibleAtColumn && indentColumns(l, contentCol) > 0)) &&
           !lazyContinuationEndsList(l, lexer)) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
@@ -7805,7 +8137,10 @@ function parseList(lexer: Lexer): List {
         }
         nested.push(lazyLine)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        trackItemLazyState(lazyLine, lazyState)
+        // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
+        // is the lazy continuation of the paragraph above it, which stays open
+        // behind it (corpus 183, 197, 358).
+        trackItemLazyState(lazyLine, lazyState, () => true, false)
         lexer.consume()
       } else {
         break
@@ -7970,8 +8305,37 @@ function parseList(lexer: Lexer): List {
       if (open.length === 0) openIdx = k
       open.push(opened)
     }
+    // A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
+    // all (markup-carve/carve#1363, PART 1 S4). A blank between two lines of the
+    // definition is inside its block, not an interior separator of the item, so
+    // it must not loosen the item any more than a blank inside a fence does.
+    //
+    // ONLY THE FOOTNOTE FORM. A link reference definition has no body at all, so
+    // it opens no run and the blank after it still loosens - `- a` /
+    // `  [r]: /u` / blank / `    more` IS a second paragraph (corpus 359-2). That
+    // is the control an over-wide fix breaks, and it is the whole difference
+    // between the two definition kinds here.
+    const inFootnoteRun: boolean[] = new Array(nested.length).fill(false)
+    for (let k = 0; k < nested.length; k++) {
+      const line = nested[k]!
+      if (indentColumns(line, 1) !== 0 || !RE_FOOTNOTE_DEF.test(line)) continue
+      // The run reaches the LAST indented line under the definition; the blanks
+      // after that one are the item's again, so a trailing blank still loosens.
+      let last = k
+      for (let j = k + 1; j < nested.length; j++) {
+        const next = nested[j]!
+        if (next === '') continue
+        // The same `FOOTNOTE_BODY_COLUMN` boundary the tracker uses, so the two
+        // agree about where the definition's block ends.
+        if (indentColumns(next, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
+        last = j
+      }
+      for (let j = k + 1; j <= last; j++) inFootnoteRun[j] = true
+      k = last
+    }
     for (let k = 0; k < nested.length; k++) {
       if (inFence[k + 1]!) continue
+      if (inFootnoteRun[k]!) continue
       if (nested[k] !== '') continue
       // A `+`-injected separator never loosens, even when the block it attaches
       // is a plain paragraph -- it keeps the item tight like a `+`-attached
