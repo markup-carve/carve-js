@@ -4,11 +4,9 @@ import { carveToHtml, lintCarve, listTable, parse } from '../src/index.js'
 const rules = (source: string) => lintCarve(source).map((warning) => warning.rule)
 
 describe('table column metadata', () => {
-  it('rejects duplicate axes as a whole and accepts middle before horizontal', () => {
+  it('rejects duplicate axes and reverse-order pairs as a whole', () => {
     expect(carveToHtml('|=<< Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
-    expect(parse('|=~> H |\n').children[0]).toMatchObject({
-      rows: [{ cells: [{ align: 'right', valign: 'middle' }] }],
-    })
+    expect(carveToHtml('|=~> H |\n')).toContain('<th scope="col">~&gt; H</th>')
   })
 
   it('requires a horizontal partner for every vertical marker', () => {
@@ -18,7 +16,7 @@ describe('table column metadata', () => {
         { header: true, children: [{ type: 'text', value: '^ Top' }] },
         { header: true, children: [{ type: 'text', value: 'v Bottom' }] },
         { header: true, align: 'left', valign: 'top' },
-        { header: true, align: 'right', valign: 'bottom' },
+        { header: true, children: [{ type: 'text', value: 'v> Reverse' }] },
       ] }],
     })
   })
