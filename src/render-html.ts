@@ -1396,17 +1396,30 @@ function renderListItem(
 
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  const tableAttrs = node.attrs ? {
+    ...node.attrs,
+    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !['aligns', 'valigns', 'widths'].includes(key))),
+    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !['aligns', 'valigns', 'widths'].includes(key)) } : {}),
+  } : undefined
   const lines: string[] = [
-    `${pad}<table${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`,
+    `${pad}<table${renderAttrs(tableAttrs)}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
   ]
   if (node.caption) {
     lines.push(`${pad}  <caption>${renderInlines(node.caption, opts)}</caption>`)
+  }
+  if (node.columns?.some((column) => column.width !== undefined)) {
+    lines.push(`${pad}  <colgroup>`)
+    for (const column of node.columns) {
+      const style = column.width === undefined ? '' : ` style="width: ${column.width * 100}%;"`
+      lines.push(`${pad}    <col${style}>`)
+    }
+    lines.push(`${pad}  </colgroup>`)
   }
 
   // Build effective rowspan/colspan by walking rows.
   // For each cell, compute span counts: a '^' cell extends the cell above;
   // a '<' cell extends the cell to its left.
-  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>> = []
+  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>> = []
   for (let r = 0; r < node.rows.length; r++) {
     const row = node.rows[r]!
     const gridRow: typeof grid[number] = []
@@ -1473,6 +1486,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   // (headerEnd === 0) have no column default — body markers are the only
   // alignment available.
   const columnAlign: Array<'left' | 'right' | 'center' | undefined> = []
+  const columnValign: Array<'top' | 'middle' | 'bottom' | undefined> = []
   for (let r = 0; r < headerEnd; r++) {
     const hr = grid[r]!
     for (let c = 0; c < hr.length; c++) {
@@ -1480,11 +1494,18 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (entry.skip || !entry.cell.align) continue
       for (let k = c; k < c + entry.colspan; k++) columnAlign[k] = entry.cell.align
     }
+    for (let c = 0; c < hr.length; c++) {
+      const entry = hr[c]!
+      if (entry.skip || !entry.cell.valign) continue
+      for (let k = c; k < c + entry.colspan; k++) columnValign[k] = entry.cell.valign
+    }
   }
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
-      const a = grid[r]![c]!.cell.align ?? columnAlign[c]
+      const a = grid[r]![c]!.cell.align ?? node.columns?.[c]?.align ?? columnAlign[c]
       if (a) grid[r]![c]!.align = a
+      const v = grid[r]![c]!.cell.valign ?? node.columns?.[c]?.valign ?? columnValign[c]
+      if (v) grid[r]![c]!.valign = v
     }
   }
   if (headerEnd > 0) {
@@ -1547,7 +1568,7 @@ function cellScopeAttr(cell: TableCell, isHeaderCell: boolean, inHeaderRun: bool
 }
 
 function renderTableRowFlat(
-  cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
+  cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>,
   opts: RenderOptions,
   inHeaderRun = false,
 ): string {
@@ -1567,8 +1588,9 @@ function renderTableRowFlat(
       attrs.push(`colspan="${entry.colspan}"`)
       emitted.add('colspan')
     }
-    if (entry.align) {
-      attrs.push(`style="text-align: ${entry.align};"`)
+    if (entry.align || entry.valign) {
+      const styles = `${entry.align ? `text-align: ${entry.align};` : ''}${entry.align && entry.valign ? ' ' : ''}${entry.valign ? `vertical-align: ${entry.valign};` : ''}`
+      attrs.push(`style="${styles}"`)
       emitted.add('style')
     }
     // Author cell attributes (a `{...}` glued to the opening pipe) come first,
