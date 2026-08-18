@@ -8827,10 +8827,19 @@ function parseCellMarkers(src: string): {
   const markerStart = i
   let align: 'left' | 'right' | 'center' | undefined
   let valign: 'top' | 'middle' | 'bottom' | undefined
+  let inheritedHorizontal = false
   let invalidAxis = false
-  while (src[i] !== undefined && '<>~^v'.includes(src[i]!)) {
+  if (src[i] === '?' && src[i + 1] !== undefined && '^~v'.includes(src[i + 1]!)) {
+    inheritedHorizontal = true
+    valign = src[i + 1] === '^' ? 'top' : src[i + 1] === '~' ? 'middle' : 'bottom'
+    i += 2
+  }
+  while (!inheritedHorizontal && src[i] !== undefined && '<>~^v?'.includes(src[i]!)) {
     const marker = src[i]!
-    if (marker === '<' || marker === '>' || marker === '~') {
+    if (marker === '?') {
+      invalidAxis = true
+      break
+    } else if (marker === '<' || marker === '>' || marker === '~') {
       if (align === undefined) {
         // In a two-axis run `~` takes the missing axis. Looking ahead lets the
         // vertical-first `~>` spelling mean middle/right while a lone `~`
@@ -8854,13 +8863,14 @@ function parseCellMarkers(src: string): {
   }
   const validRun = i > markerStart &&
     !invalidAxis &&
-    align !== undefined &&
+    (align !== undefined || inheritedHorizontal) &&
     (src[i] === ' ' || src[i] === '{' ||
-      (src[i] !== undefined && '<>~^v'.includes(src[i]!)))
+      (!inheritedHorizontal && src[i] !== undefined && '<>~^v?'.includes(src[i]!)))
   if (!validRun) {
     i = markerStart
     align = undefined
     valign = undefined
+    inheritedHorizontal = false
   }
 
   // A `{...}` attribute block supplies the cell's attributes. It binds LAST -

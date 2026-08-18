@@ -1370,6 +1370,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   }
   const align = alignMarker(cell.align)
   const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
+  const inheritedHorizontal = !align && valign ? '?' : ''
   // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
   // after the kind marker and after the alignment marker, so `|={.x} h |` is
   // an attributed header cell. Writing the block ahead of the markers instead
@@ -1377,7 +1378,7 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // a data cell whose content starts with `=` - and reads it as that, so an
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
-  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${valign}${attrs}`
+  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
   // The space `padCell` writes after the prefix is what keeps a content sigil
   // content: the alignment scan runs right after `|` or `|=` and consumes one
   // `<`, `>` or `~`, so `| ~x~ |` written glued came back as CENTER alignment
