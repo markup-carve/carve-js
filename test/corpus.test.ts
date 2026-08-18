@@ -515,6 +515,29 @@ const IMPLEMENTED = new Set([
   // and `- \#tag rest` drop their escapes exactly as they do outside a
   // container.
   'an-escaped-hash-keeps-its-escape-at-a-container-s-content-position',
+  // The pin bump to carve 4bf77a3 adds FOUR categories of ELEVEN documents, and
+  // none of them is engine work here: all eleven were rendered through this
+  // engine and compared with their `.html` fixtures before these names went in,
+  // 11 of 11 byte-for-byte, and the whole corpus measured 1256 of 1256 in the
+  // same run.
+  //
+  // markup-carve/carve#1370 - five documents. A paragraph opened after a block
+  // inside an item is still open for a lazy line below it, so a column-0 line
+  // continues it rather than ending the item. carve-rs and carve-php both
+  // lagged this one; this engine already answered all five.
+  'a-paragraph-opened-after-a-block-in-an-item-is-still-open-for-a-lazy-line',
+  // markup-carve/carve#1379 - three documents, and a clarification rather than a
+  // new clause: a blank line ends the open paragraph WHATEVER container stands
+  // above it, so an unterminated `:::` div reaches no further past a blank than
+  // a terminated one, an opaque body, a quote, or no container at all.
+  'an-unterminated-container-does-not-extend-the-item-past-a-blank-line',
+  // markup-carve/carve#1385 - one document. An item's checkbox is decided by the
+  // marker, not by whatever its first block turns out to be.
+  'a-task-item-s-checkbox-is-not-decided-by-its-first-block',
+  // markup-carve/carve#1386 - two documents. A marker-line colon opener is
+  // demoted by LAZY FOLDING and by nothing else, so an opener that reaches its
+  // container stays an opener whatever sits below it.
+  'only-lazy-folding-demotes-a-marker-line-colon-opener',
 ])
 
 /**
