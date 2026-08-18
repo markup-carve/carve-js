@@ -413,7 +413,7 @@ function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    // The marker as written (PART 10 §10a): the caret is part of the construct.
+    // The marker as written (PART 11 §10a): the caret is part of the construct.
     out += `${style(`[^${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }
   return out

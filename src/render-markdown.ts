@@ -303,7 +303,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
       return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
     case 'abbreviation_def':
-      // PART 10 §10a: a definition NOTHING references still reaches this
+      // PART 11 §10a: a definition NOTHING references still reaches this
       // target. HTML drops it because it has nowhere to put one; Markdown,
       // plain text and the terminal do not get to drop content the author
       // wrote, and dropping it made the output depend on whether a reference
@@ -461,7 +461,8 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   // reader takes a line written directly after the last row as ANOTHER ROW, so
   // the caption comes back as a fabricated data cell, which is worse than
   // losing it. Adjacency attaches only where it does not change what the
-  // adjacent block is, which is why §10d's move is unavailable here.
+  // adjacent block is - the move a caption cannot make on this target, whatever
+  // it could make on another.
   if (node.caption && node.caption.length > 0) {
     out += `\n${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
   }

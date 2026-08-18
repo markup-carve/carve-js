@@ -3,7 +3,7 @@ import { carveToMarkdown, carveToPlainText, carveToAnsi, carveToCarve, carveToHt
 import { carveToAstJson } from '../src/index.js'
 
 /*
- * PART 10 §10a: an unused definition survives the non-HTML targets.
+ * PART 11 §10a: an unused definition survives the non-HTML targets.
  *
  * "HTML drops it, because HTML has nowhere to put a definition nobody used;
  * the other three do not get to drop content the author wrote." Dropping it
