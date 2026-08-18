@@ -790,7 +790,14 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return renderImage(node)
     case 'raw_block': {
       const fence = safeFence(node.content, 3)
-      return withAttrs(`${fence}=${escapeFormat(node.format)}\n${protectVerbatim(node.content)}\n${fence}`)
+      const content = protectVerbatim(node.content)
+      // Empty content means zero payload lines, while an all-newline content
+      // value records exactly that many blank payload lines. In both cases an
+      // extra separator before the closer would change the AST on every
+      // format pass. Non-blank content still needs the ordinary closing-line
+      // separator (including content with a trailing blank line).
+      const closerSeparator = node.content === '' || /^\n+$/.test(node.content) ? '' : '\n'
+      return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
     }
     case 'abbreviation_def':
       return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
