@@ -21,6 +21,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
+import { SourceUnspellableError } from './source-unspellable-error.js'
 
 export interface CarveRenderOptions {}
 
@@ -106,6 +107,11 @@ interface CarveContext {
   paragraphStartsAfterCaptionHost: boolean
 }
 
+/**
+ * Render canonical Carve source.
+ *
+ * @throws {SourceUnspellableError} when no source can reproduce an AST node.
+ */
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
@@ -1736,6 +1742,12 @@ function renderInline(
     case 'math':
       return withAttrs(renderMath(node.display, node.content))
     case 'raw_inline':
+      if (node.content === '') {
+        throw new SourceUnspellableError(
+          'raw_inline',
+          'an empty raw inline has no Carve source spelling',
+        )
+      }
       return `${renderCode(node.content)}{=${escapeFormat(node.format)}}`
     case 'literal_inline':
       // §27: `!` prefix on a verbatim span. A trailing attribute block is the

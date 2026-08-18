@@ -8,4 +8,4 @@
  * provenance stamp written by `carve fmt --stamp`.
  */
 export const SPEC_VERSION = '0.1'
-export const LIB_VERSION = '0.1.3'
+export const LIB_VERSION = '0.1.4'

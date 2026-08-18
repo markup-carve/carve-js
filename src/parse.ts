@@ -7715,13 +7715,11 @@ function trackItemLazyState(
     state.inDefList = false
     return
   }
-  // A heading keeps the item open for a dedented plain line, but no longer
-  // ABSORBS it: headings end at their newline (SINGLE-LINE HEADINGS), so the
-  // line is taken into the item and becomes a paragraph of its own there
-  // (corpus 73-list-nesting-and-looseness-4). A table row or thematic break
-  // leaves no open trailing content at all, so a dedented line ends the item.
+  // A heading is a block and leaves no paragraph open. At the item's content
+  // column a following dedented line therefore reaches no container (PART 1
+  // S4, carve#1377), just as it does after a table row or thematic break.
   if (RE_HEADING.test(content)) {
-    state.lazyFoldable = true
+    state.lazyFoldable = false
     state.inDefList = false
     return
   }

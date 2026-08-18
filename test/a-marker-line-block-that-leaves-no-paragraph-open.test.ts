@@ -108,12 +108,10 @@ describe('a marker-line block that leaves no paragraph open ends the item', () =
     expect(carveToHtml('- {1a}\ntail\n')).toBe('<ul>\n  <li>{1a}\ntail</li>\n</ul>')
   })
 
-  it('only the marker line: a collected heading still folds', () => {
-    // Corpus 75-list-nesting-and-looseness-4. S4 leaves this half deliberately
-    // open and the corpus pins the FOLDING answer for it, so the rule above is
-    // gated on the marker line rather than on the heading.
+  it('a collected heading closes the inner item too', () => {
+    // Corpus 75-list-nesting-and-looseness-4, updated by carve#1377.
     expect(carveToHtml('- a\n  - b\n    # N\nlazy\n')).toBe(
-      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <h1 id="N">N</h1>\n        lazy\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ul>\n      <li>b\n        <h1 id="N">N</h1>\n      </li>\n    </ul>\n    lazy\n  </li>\n</ul>',
     )
   })
 

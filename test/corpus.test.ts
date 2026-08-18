@@ -552,6 +552,9 @@ const IMPLEMENTED = new Set([
   // kinds; this engine already loosened every one of them, and it also starts
   // the new list where the third document changes the bullet.
   'a-blank-line-before-a-sibling-marker-separates-the-items-whatever-consumed-it',
+  // markup-carve/carve#1377. A heading at an item's content column is a
+  // bounded block and leaves no paragraph open for a flush-left line.
+  'a-heading-at-an-item-s-content-column-leaves-no-paragraph-open',
 ])
 
 /**
