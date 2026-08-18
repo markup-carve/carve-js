@@ -90,18 +90,31 @@ describe('a verse comment nested under an inline container keeps its text', () =
     )
   })
 
-  it('a NESTED reinsertion carries no position, so no two nodes claim one byte', () => {
-    // The comment's own span is right, but the nodes it sits among are measured
-    // from the JOINED text, which the emptied line made shorter than the source
-    // - `c` below reports the offset of a `%`. That is carve-js#1182 and it is
-    // on `main` without this pass; publishing a correct span beside those would
-    // assert that two nodes hold the same bytes, which PART 12 containment
-    // refuses. PART 12 §4 sanctions omitting a position instead.
-    const nodes = (
-      parse('::: |\n*a\n%% secret\nc*\n:::\n').children[0] as {
-        children: { children: { children: { type: string; pos?: unknown }[] }[] }[]
+  it('a NESTED reinsertion carries its position, and no two nodes claim one byte', () => {
+    // This omitted the position while carve-js#1182 stood: the comment's own
+    // span was right, but the nodes it sits among were measured from the JOINED
+    // text, which the emptied line made shorter than the source, so `c` below
+    // reported the offset of a `%`. Publishing a correct span beside those
+    // would have asserted that two nodes hold the same bytes, which PART 12
+    // containment refuses, and PART 12 §4 sanctions omitting one instead. With
+    // the stanza's line anchors carried into the nested scan the siblings are
+    // measured from the line they were written on, so there is nothing left to
+    // omit.
+    const src = '::: |\n*a\n%% secret\nc*\n:::\n'
+    const strong = (
+      parse(src).children[0] as {
+        children: {
+          children: {
+            pos: { startOffset: number; endOffset: number }
+            children: {
+              type: string
+              pos?: { startOffset: number; endOffset: number }
+            }[]
+          }[]
+        }[]
       }
-    ).children[0]!.children[0]!.children
+    ).children[0]!.children[0]!
+    const nodes = strong.children
     expect(nodes.map((n) => n.type)).toEqual([
       'text',
       'soft_break',
@@ -109,7 +122,24 @@ describe('a verse comment nested under an inline container keeps its text', () =
       'soft_break',
       'text',
     ])
-    expect(nodes[2]!.pos).toBeUndefined()
+    // Each node's span is the source it was authored at, so slicing the
+    // document by it returns what the author wrote there.
+    expect(nodes.map((n) => src.slice(n.pos!.startOffset, n.pos!.endOffset))).toEqual([
+      'a',
+      '\n',
+      '%% secret',
+      '\n',
+      'c',
+    ])
+    // CONTAINMENT, which is the property the omission was protecting: the
+    // siblings run in source order, none overlaps the next, and all of them sit
+    // inside the emphasis that holds them.
+    for (const [i, node] of nodes.entries()) {
+      expect(node.pos!.startOffset).toBeGreaterThanOrEqual(
+        i === 0 ? strong.pos.startOffset : nodes[i - 1]!.pos!.endOffset,
+      )
+      expect(node.pos!.endOffset).toBeLessThanOrEqual(strong.pos.endOffset)
+    }
   })
 
   it('CONTROL: the TOP-LEVEL reinsertion still carries its position', () => {
