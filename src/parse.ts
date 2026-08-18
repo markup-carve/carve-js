@@ -6913,6 +6913,33 @@ function insideOpenFence(state: ItemLazyState): boolean {
 }
 
 /**
+ * Does the item currently end on a BLOCK QUOTE WITH AN OPEN PARAGRAPH?
+ *
+ * A line at the item's content column that does not carry the quote's marker is
+ * that paragraph's lazy continuation, and `parseBlockQuote` already reads it
+ * that way: "a bare list marker is NOT a paragraph interrupter, so it FOLDS into
+ * the quoted paragraph as literal text - but ONLY when an open paragraph
+ * precedes it". At the top level `> q` / `- s` is one quoted paragraph in this
+ * engine already.
+ *
+ * The item's own collector asked a different question, and only about the line:
+ * it split its stream at the first marker-shaped line, so `- > q` / `  - s`
+ * ended the quote and opened a sub-list where every other reader keeps the text
+ * (carve-js#1200). That is the same derivation `insideOpenFence` above carries
+ * for the three opaque bodies - PART 9 §24 S1 and S2 place a line by the COLUMN
+ * it reaches and never read its first character - so the marker test asks what
+ * is open rather than what the line looks like.
+ *
+ * It is the QUOTE'S paragraph, not the item's: `lazyFoldable` is true after a
+ * quoted line whether or not that quote still has a paragraph, and `- > # h` /
+ * `  - s` really does open a sub-list, because a heading left the quote with no
+ * paragraph for the marker to fold into.
+ */
+function insideOpenQuoteParagraph(state: ItemLazyState): boolean {
+  return state.quoteInner !== null && blockQuoteParagraphOpen(state.quoteInner)
+}
+
+/**
  * A lookahead over the lines an attached block may hold, already in the form
  * the block will be parsed in.
  *
@@ -8173,6 +8200,7 @@ function parseList(lexer: Lexer): List {
         // body. `insideOpenFence` answers for all three at once.
         const isMarker =
           !insideOpenFence(lazyState) &&
+          !insideOpenQuoteParagraph(lazyState) &&
           (RE_ORDERED.test(l) ||
             RE_UNORDERED.test(l) ||
             RE_TASK.test(l) ||
