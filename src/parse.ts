@@ -5496,9 +5496,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // PARAMETER (carve#920): a heading, a table or an attribute block written
       // on the `:  ` marker leaves no paragraph open for exactly the reason it
       // leaves none on a `- ` marker.
-      lazyState.lazyFoldable = markerLineLeavesParagraphOpen(first)
-      lazyState.inTable = markerLineEndsOnTableRow(first)
-      lazyState.quoteInner = markerLineQuoteState(first)
+      const firstState = markerLineState(first)
+      lazyState.lazyFoldable = firstState.leavesParagraphOpen
+      lazyState.inTable = firstState.endsOnTableRow
+      lazyState.quoteInner = firstState.quote
       const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
       if (leadFence) {
         lazyState.inFence = true
@@ -7062,6 +7063,21 @@ function isBlockAttributeLine(content: string): boolean {
 const PREFIX_WINDOW = 32
 
 /**
+ * The one character any of the three invisible blocks can open with.
+ *
+ * CHEAP FIRST, because this runs on every line an item collects. `isLinkDefLine`
+ * splits a trailing attribute block off the line before it tests, which makes it
+ * the most expensive predicate in the tracker - putting it on the path of every
+ * ordinary prose line cost about 3x on a deeply-indented staircase, and the
+ * scaling guard caught it at 2.28x per byte against a 2.0 threshold.
+ *
+ * A strict superset, so it decides nothing: both definition forms open with `[`
+ * after optional indentation and a comment with `%`, and `splitTrailingAttrBlock`
+ * only removes a TRAILING block, so it cannot change the leading character.
+ */
+const RE_INVISIBLE_BLOCK_LEAD = /^[ \t]*[%[]/
+
+/**
  * The line the prefix walk may read, as an END OFFSET.
  *
  * Every regex the walk consults is anchored with `$` and matches `.`, which
@@ -7170,26 +7186,6 @@ function markerLineQuoteState(content: string): BlockQuoteLazyState | null {
   return inner
 }
 
-/**
- * Does the block written ON a marker line end on a TABLE ROW?
- *
- * The marker line never goes through the running tracker - it is seeded by hand
- * - so a table opened there left `inTable` false and the continuation row below
- * it read as prose: `- | a |` / `  + b |` kept a dedented line where
- * `- | a |` / `  | b |` sent it out (markup-carve/carve#1348).
- *
- * The same strip as `markerLineLeavesParagraphOpen`, because it is the same
- * question about the same line: what sits at the bottom of the stack.
- */
-function markerLineEndsOnTableRow(content: string): boolean {
-  // A quoted table is the QUOTE's, and `markerLineQuoteState` carries it there.
-  // Claiming it here as well would let a continuation row written outside the
-  // quote join a table that is not at this level.
-  if (RE_BLOCKQUOTE.test(content)) return false
-  const walked = walkContainerPrefix(content)
-
-  return isTableRow(walked === 0 ? content : content.slice(walked))
-}
 
 /**
  * Does the block written ON a list item's MARKER LINE leave an open paragraph
@@ -7224,28 +7220,49 @@ function markerLineEndsOnTableRow(content: string): boolean {
  * blocks below this seeding already open by hand, and a colon fence, which
  * holds a container the line below folds INTO rather than out of.
  */
-function markerLineLeavesParagraphOpen(content: string): boolean {
-  // Strip to the block that actually sits at the bottom of the stack: `> > # H`
-  // is the quote's question twice over, and `- - # H` is the sub-item's, whose
-  // first block is the heading exactly as a bare `- # H`'s is. Each strip
-  // consumes at least one character, so the walk terminates.
-  //
-  // WALKED BY OFFSET, NOT BY RE-SLICING. Every regex this strip consults ends
-  // on `(...)$`, so each one reads to the END OF THE LINE to answer a question
-  // about its HEAD - and the loop then allocated that tail as the next `rest`.
-  // Both halves are linear in what is left, so a line of N markers cost
-  // O(N * line length): `'- '.repeat(8000)` took ~7 s of which ~6.2 s was this
-  // one regex, and the growth held at ~3.9x per doubling across four doublings
-  // (carve-js#1190). §25 treats that shape as a denial of service rather than a
-  // slow parse, because the input is 8 KB.
-  //
-  // `markerPrefixLength` and `quotePrefixLength` below ask the same regexes the
-  // same question against a WINDOW at the offset instead, so the cost is the
-  // prefix rather than the tail. They are the same regexes on purpose: this is
-  // the third place the marker grammar is read, and re-spelling it is how two
-  // readers come to disagree about whether a line opened an item.
+/**
+ * The block at the BOTTOM of a marker line's stack, as text.
+ *
+ * Split out of the classifier so the three questions asked of a marker line -
+ * does it leave a paragraph, does it end on a table row, and what quote does it
+ * end on - are answered from ONE walk. Asking them separately walked the prefix
+ * twice per marker line and cost about 40% on a deeply-indented staircase; the
+ * scaling guard read it as 2.28x per byte against a 2.0 threshold.
+ */
+function markerLineBottomBlock(content: string): string {
+  // `> > # H` is the quote's question twice over, and `- - # H` is the
+  // sub-item's, whose first block is the heading exactly as a bare `- # H`'s
+  // is - so the strip runs to the bottom of the stack. It is a WALK BY OFFSET:
+  // every regex it consults is anchored with `$`, so re-slicing the remainder
+  // per marker cost O(N * line length) on a line of N markers (carve-js#1190).
   const walked = walkContainerPrefix(content)
-  const rest = walked === 0 ? content : content.slice(walked)
+
+  return walked === 0 ? content : content.slice(walked)
+}
+
+/**
+ * Everything a marker line's seeding needs, from one walk.
+ *
+ * `endsOnTableRow` is FALSE for a quoted line: the table is the quote's, and
+ * `quote` carries it there. Claiming it at this level as well would let a
+ * continuation row written outside the quote join a table that is not there.
+ */
+function markerLineState(content: string): {
+  leavesParagraphOpen: boolean
+  endsOnTableRow: boolean
+  quote: BlockQuoteLazyState | null
+} {
+  const bottom = markerLineBottomBlock(content)
+  const quote = markerLineQuoteState(content)
+
+  return {
+    leavesParagraphOpen: bottomBlockLeavesParagraphOpen(bottom),
+    endsOnTableRow: quote === null && isTableRow(bottom),
+    quote,
+  }
+}
+
+function bottomBlockLeavesParagraphOpen(rest: string): boolean {
   if (isBlankLine(rest) || trimStructural(rest) === '') return false
   // THE STRICT COLUMN-0 RULE APPLIES TO WHAT IS LEFT (§24 C3). A quote marker
   // takes exactly one following space, so `>  [r]: /u` leaves a line that is
@@ -7534,6 +7551,7 @@ function trackItemLazyState(
   // direct child of the document, so inside an item the line IS a paragraph.
   if (
     atContentColumn &&
+    RE_INVISIBLE_BLOCK_LEAD.test(content) &&
     (RE_COMMENT_LINE.test(content) || RE_FOOTNOTE_DEF.test(content) || isLinkDefLine(content))
   ) {
     // ONLY THE FOOTNOTE DEFINITION OPENS A RUN. A comment is one line and a
@@ -7640,7 +7658,7 @@ function trackItemLazyState(
   }
   // A NESTED MARKER LINE IS A MARKER LINE. The sub-item it opens is a container
   // whose first block is whatever the marker holds, so S4's question about it is
-  // the one `markerLineLeavesParagraphOpen` answers - `- a` / `  - # N` leaves a
+  // the one `markerLineState` answers - `- a` / `  - # N` leaves a
   // heading open-paragraph-less at the bottom of the stack, and the flush-left
   // line below reaches no container at all (markup-carve/carve#1280). Asked of
   // the MARKER content only: a heading on a line the sub-item COLLECTS is the
@@ -7651,9 +7669,10 @@ function trackItemLazyState(
     state.absorbingFence = false
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
-    state.lazyFoldable = markerLineLeavesParagraphOpen(content)
-    state.inTable = markerLineEndsOnTableRow(content)
-    state.quoteInner = markerLineQuoteState(content)
+    const nested = markerLineState(content)
+    state.lazyFoldable = nested.leavesParagraphOpen
+    state.inTable = nested.endsOnTableRow
+    state.quoteInner = nested.quote
     state.inDefList = false
     return
   }
@@ -7847,6 +7866,8 @@ function parseList(lexer: Lexer): List {
     const plusSeparators = new Set<number>()
     // Track whether the item's collected content currently ends in an open
     // paragraph (family-D lazy continuation). The lead text opens one.
+    // ONE WALK for the three questions the lead line answers.
+    const leadState = markerLineState(content)
     const lazyState: ItemLazyState = {
       inFence: false,
       fenceClose: null,
@@ -7860,10 +7881,10 @@ function parseList(lexer: Lexer): List {
       divDepth: 0,
       // The lead text opens a paragraph unless it is one of the shapes that
       // open nothing - PART 1 S4's one question, asked of the block the marker
-      // line holds. See `markerLineLeavesParagraphOpen`.
-      lazyFoldable: markerLineLeavesParagraphOpen(content),
-      inTable: markerLineEndsOnTableRow(content),
-      quoteInner: markerLineQuoteState(content),
+      // line holds. See `markerLineState`.
+      lazyFoldable: leadState.leavesParagraphOpen,
+      inTable: leadState.endsOnTableRow,
+      quoteInner: leadState.quote,
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
       attrRun: null,
     }
