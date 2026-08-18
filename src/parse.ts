@@ -4066,7 +4066,15 @@ function parseRawBlock(lexer: Lexer): RawBlock {
     lexer.consume()
     lines.push(ln)
   }
-  return { type: 'raw_block', format, content: lines.join('\n') }
+  // `join` collapses both no payload lines and one blank payload line to the
+  // same empty string. They render differently: the former contributes
+  // nothing, while every blank line between the delimiters is verbatim raw
+  // payload. Preserve the count when the payload is entirely blank so a
+  // renderer never has to guess which source shape produced `content: ""`.
+  const content = lines.length > 0 && lines.every((line) => line === '')
+    ? '\n'.repeat(lines.length)
+    : lines.join('\n')
+  return { type: 'raw_block', format, content }
 }
 
 // A closer of each fence shape, spelled PERMISSIVELY: a leading indentation run

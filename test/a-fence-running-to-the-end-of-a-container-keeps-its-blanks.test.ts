@@ -20,6 +20,16 @@ const code = (source: string): string =>
  * (markup-carve/carve-rs#908).
  */
 describe('a fence running to the end of a container keeps its blank lines', () => {
+  it('keeps the only blank line in an all-blank raw payload', () => {
+    const source = '```=html\n\n```\n\nafter\n'
+    expect(carveToHtml(source)).toBe('\n\n<p>after</p>')
+    expect(carveToHtml(source, { allowRawHtml: false })).toBe('\n\n<p>after</p>')
+  })
+
+  it('still emits nothing for a raw block with no payload lines', () => {
+    expect(carveToHtml('```=html\n```\n\nafter\n')).toBe('<p>after</p>')
+  })
+
   it.each([
     ['a bullet item', '- ```\n  x\n\n', 'x\n\n'],
     ['an ordered item', '1. ```\n   x\n\n', 'x\n\n'],
