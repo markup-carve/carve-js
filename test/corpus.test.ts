@@ -576,7 +576,17 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['53-table-doubled-alignment-marker', {
+    reason: 'carve#1344 makes an invalid duplicate-axis run fall back as a whole',
+    html: `<table>
+  <thead><tr><th scope="col">&lt;&lt; Note</th><th scope="col">Plain</th></tr></thead>
+  <tbody>
+    <tr><td>a</td><td>b</td></tr>
+  </tbody>
+</table>`,
+  }],
+])
 
 
 

@@ -8790,30 +8790,39 @@ function parseCellMarkers(src: string): {
     header = true
     i++
   }
-  // A `<`/`>`/`~` immediately after `|` or `|=` IS an alignment marker
-  // (spec: docs/case-study/syntax.md, "Disambiguation"). Exactly one is
-  // recognized; a *repeated* character is the start of content, so for
-  // `|=<<` the first `<` aligns and the second `<` is content.
+  // A one- or two-axis run is consumed as a unit. A duplicate axis other than
+  // `~~` invalidates the whole run, so `|=<< Note|` keeps both `<` bytes as
+  // visible content instead of silently consuming a valid-looking prefix.
   const markerStart = i
   let align: 'left' | 'right' | 'center' | undefined
   let valign: 'top' | 'middle' | 'bottom' | undefined
+  let invalidAxis = false
   while (src[i] !== undefined && '<>~^v'.includes(src[i]!)) {
     const marker = src[i]!
     if (marker === '<' || marker === '>' || marker === '~') {
       if (align === undefined) {
-        align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
+        // In a two-axis run `~` takes the missing axis. Looking ahead lets the
+        // vertical-first `~>` spelling mean middle/right while a lone `~`
+        // remains horizontal center.
+        if (marker === '~' && valign === undefined && (src[i + 1] === '<' || src[i + 1] === '>')) {
+          valign = 'middle'
+        } else {
+          align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
+        }
       } else if (marker === '~' && valign === undefined) {
         valign = 'middle'
       } else {
+        invalidAxis = true
         break
       }
     } else {
-      if (valign !== undefined) break
+      if (valign !== undefined) { invalidAxis = true; break }
       valign = marker === '^' ? 'top' : 'bottom'
     }
     i++
   }
   const validRun = i > markerStart &&
+    !invalidAxis &&
     (/\s/.test(src[i] ?? '') || src[i] === '{' ||
       (src[i] !== undefined && '<>~^v'.includes(src[i]!)))
   if (!validRun) {

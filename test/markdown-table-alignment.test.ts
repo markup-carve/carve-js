@@ -22,7 +22,7 @@ describe('the Markdown delimiter row carries the column alignment', () => {
   })
 
   it('reads the doubled marker form', () => {
-    expect(delimiterRow('|=<< Note |= Plain |\n| a | b |\n')).toBe('| :--- | --- |')
+    expect(delimiterRow('|=<< Note |= Plain |\n| a | b |\n')).toBe('| --- | --- |')
   })
 
   it('does not let a per-cell override speak for the column', () => {

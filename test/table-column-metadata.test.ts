@@ -4,6 +4,13 @@ import { carveToHtml, lintCarve, listTable, parse } from '../src/index.js'
 const rules = (source: string) => lintCarve(source).map((warning) => warning.rule)
 
 describe('table column metadata', () => {
+  it('rejects duplicate axes as a whole and accepts middle before horizontal', () => {
+    expect(carveToHtml('|=<< Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
+    expect(parse('|=~> H |\n').children[0]).toMatchObject({
+      rows: [{ cells: [{ align: 'right', valign: 'middle' }] }],
+    })
+  })
+
   it('keeps in-table alignment ahead of the table attribute, per field', () => {
     const source = '{aligns="left" valigns="bottom"}\n|=>^ H |\n| x |\n'
     expect(carveToHtml(source)).toContain(
