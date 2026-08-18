@@ -34,6 +34,11 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // The category the freeze at carve `0f6b990` adds. It needed no engine work:
+  // this build renders all four of its documents, and all 62 quote/list prefixes
+  // to depth five for both definition kinds, exactly as the executable spec does
+  // (markup-carve/carve#1368).
+  'a-definition-behind-an-alternating-container-prefix-registers-at-the-innermost-content-column',
   // The twelve categories the freeze at carve `0490ae5` brings in. Four pin the
   // line-block hard-break ruling `#1188` implemented; the other eight are the
   // container-boundary family - a block at a container's content column ends
