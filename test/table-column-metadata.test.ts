@@ -4,10 +4,10 @@ import { carveToHtml, lintCarve, listTable, parse } from '../src/index.js'
 const rules = (source: string) => lintCarve(source).map((warning) => warning.rule)
 
 describe('table column metadata', () => {
-  it('rejects duplicate axes as a whole and accepts middle before horizontal', () => {
+  it('rejects duplicate axes and vertical-before-horizontal order as a whole', () => {
     expect(carveToHtml('|=<< Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
     expect(parse('|=~> H |\n').children[0]).toMatchObject({
-      rows: [{ cells: [{ align: 'right', valign: 'middle' }] }],
+      rows: [{ cells: [{ children: [{ type: 'text', value: '~> H' }] }] }],
     })
   })
 
@@ -18,7 +18,7 @@ describe('table column metadata', () => {
         { header: true, children: [{ type: 'text', value: '^ Top' }] },
         { header: true, children: [{ type: 'text', value: 'v Bottom' }] },
         { header: true, align: 'left', valign: 'top' },
-        { header: true, align: 'right', valign: 'bottom' },
+        { header: true, children: [{ type: 'text', value: 'v> Reverse' }] },
       ] }],
     })
   })
@@ -37,7 +37,7 @@ describe('table column metadata', () => {
   })
 
   it('keeps every other question-mark run visible', () => {
-    for (const [source, value] of [['| ? |\n', '?'], ['|v? x |\n', 'v? x'], ['|?< x |\n', '?< x']]) {
+    for (const [source, value] of [['| ? |\n', '?'], ['|v? x |\n', 'v? x'], ['|?< x |\n', '?< x'], ['|^< x |\n', '^< x']]) {
       expect(parse(source).children[0]).toMatchObject({
         rows: [{ cells: [{ children: [{ type: 'text', value }] }] }],
       })

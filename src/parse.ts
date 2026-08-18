@@ -8828,7 +8828,8 @@ function parseCellMarkers(src: string): {
   let align: 'left' | 'right' | 'center' | undefined
   let valign: 'top' | 'middle' | 'bottom' | undefined
   let inheritedHorizontal = false
-  let invalidAxis = false
+  let invalidAxis = src[i] === '^' || src[i] === 'v' ||
+    (src[i] === '~' && (src[i + 1] === '<' || src[i + 1] === '>'))
   if (src[i] === '?' && src[i + 1] !== undefined && '^~v'.includes(src[i + 1]!)) {
     inheritedHorizontal = true
     valign = src[i + 1] === '^' ? 'top' : src[i + 1] === '~' ? 'middle' : 'bottom'
