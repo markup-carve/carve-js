@@ -75,9 +75,11 @@ describe("a line block's nested inline keeps its own source", () => {
       const src = '::: |\n*a\n%% secret\nc*\n:::\n'
       expect(spans(src, [0, 0])).toEqual([
         ['text', 'a'],
-        ['soft_break', '\n'],
+        // HARDENED at every depth (markup-carve/carve#1351). The spelling moved
+        // after this file was written; the spans are what it pins.
+        ['hard_break', '\n'],
         ['comment', '%% secret'],
-        ['soft_break', '\n'],
+        ['hard_break', '\n'],
         ['text', 'c'],
       ])
     })
@@ -116,9 +118,9 @@ describe("a line block's nested inline keeps its own source", () => {
       const src = '::: |\n*a\nbb\nc*\n:::\n'
       expect(spans(src, [0, 0])).toEqual([
         ['text', 'a'],
-        ['soft_break', '\n'],
+        ['hard_break', '\n'],
         ['text', 'bb'],
-        ['soft_break', '\n'],
+        ['hard_break', '\n'],
         ['text', 'c'],
       ])
     })

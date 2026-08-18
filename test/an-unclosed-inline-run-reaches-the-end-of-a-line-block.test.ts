@@ -68,7 +68,11 @@ describe('an unclosed inline run reaches the end of a line block', () => {
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1">\n' +
-        '      <p>note\nmore<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        // The note's body is an inline SLOT of a node inside the stanza, so the
+        // boundary the author wrote inside it is a break node like any other
+        // and hardens with the rest (markup-carve/carve#1351). The rule is node
+        // kind at every depth, not a list of container types.
+        '      <p>note<br>\nmore<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
         '    </li>\n' +
         '  </ol>\n' +
         '</section>',
@@ -116,24 +120,48 @@ describe('an unclosed inline run reaches the end of a line block', () => {
     )
   })
 
-  it('a CLOSED inline construct that spans lines keeps the newline too', () => {
-    // Raised as a P1 in review, on the reading that a line block must always
-    // render a `<br>` at every line boundary. It must not, and carve-rs is the
-    // engine that says so: a newline CONSUMED by an inline construct is not a
-    // line break, whether the construct closed or not. Emphasis, a link and a
-    // semantic span all agree with carve-rs byte for byte, so the rows are
-    // pinned here rather than argued about again.
+  it('a CLOSED inline construct that spans lines HARDENS the boundary', () => {
+    // RULED on markup-carve/carve#1351, reversing the four rows carve-js#1127
+    // pinned here. §23 hardens a line boundary by NODE KIND, not by depth: its
+    // neighboring clause, A BACKSLASH BREAK IS NOT ADDITIVE, says one line
+    // boundary produces one break however it is spelled, and exempts the
+    // backslash and the swallowed newline because they leave NO node. A closed
+    // construct spanning two body lines leaves a break node, so it hardens.
+    //
+    // The tell that the old answer was wrong was carve-js disagreeing with
+    // itself: a backslash-terminated line inside emphasis emitted the break
+    // inside the `strong`, and the same two lines without it emitted none.
+    // Do not re-litigate these rows; the ruling is the citation.
     expect(carveToHtml('::: |\n*a\nb*\n:::\n')).toBe(
-      '<div class="line-block">\n  <p><strong>a\nb</strong></p>\n</div>',
+      '<div class="line-block">\n  <p><strong>a<br>\nb</strong></p>\n</div>',
     )
     expect(carveToHtml('::: |\n[a\nb](https://x)\n:::\n')).toBe(
-      '<div class="line-block">\n  <p><a href="https://x">a\nb</a></p>\n</div>',
+      '<div class="line-block">\n  <p><a href="https://x">a<br>\nb</a></p>\n</div>',
     )
     expect(carveToHtml('::: |\n{+a\nb+}\n:::\n')).toBe(
-      '<div class="line-block">\n  <p><ins>a\nb</ins></p>\n</div>',
+      '<div class="line-block">\n  <p><ins>a<br>\nb</ins></p>\n</div>',
     )
     expect(carveToHtml('::: |\na *bo\nld* b\n:::\n')).toBe(
-      '<div class="line-block">\n  <p>a <strong>bo\nld</strong> b</p>\n</div>',
+      '<div class="line-block">\n  <p>a <strong>bo<br>\nld</strong> b</p>\n</div>',
+    )
+  })
+
+  it('EXEMPT: the two spellings that leave no break node produce no extra break', () => {
+    // The exemption in §23's neighboring clause is NODE PRESENCE, not depth, so
+    // these two are what separates the ruling from "a line block always emits a
+    // break at every boundary" - which it does not. Both must stay as they are.
+    //
+    // A newline an open verbatim run SWALLOWED leaves no node, so there is
+    // nothing to harden and the run keeps a literal newline.
+    expect(carveToHtml('::: |\na `b\nc` d\n:::\n')).toBe(
+      '<div class="line-block">\n  <p>a <code>b\nc</code> d</p>\n</div>',
+    )
+    // A BACKSLASH break is already a hard break, and ONE boundary produces ONE
+    // break however it is spelled - so the backslash adds nothing rather than
+    // doubling it. This is the row that made the old answer inconsistent: it
+    // emitted the break inside the emphasis while the plain boundary did not.
+    expect(carveToHtml('::: |\n*Roses are red,\\\nViolets are blue.*\n:::\n')).toBe(
+      '<div class="line-block">\n  <p><strong>Roses are red,<br>\nViolets are blue.</strong></p>\n</div>',
     )
   })
 
