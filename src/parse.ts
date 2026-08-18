@@ -8836,19 +8836,13 @@ function parseCellMarkers(src: string): {
   const markerStart = i
   let align: 'left' | 'right' | 'center' | undefined
   let valign: 'top' | 'middle' | 'bottom' | undefined
-  let invalidAxis = false
+  let invalidAxis = src[i] === '^' || src[i] === 'v' ||
+    (src[i] === '~' && (src[i + 1] === '<' || src[i + 1] === '>'))
   while (src[i] !== undefined && '<>~^v'.includes(src[i]!)) {
     const marker = src[i]!
     if (marker === '<' || marker === '>' || marker === '~') {
       if (align === undefined) {
-        // In a two-axis run `~` takes the missing axis. Looking ahead lets the
-        // vertical-first `~>` spelling mean middle/right while a lone `~`
-        // remains horizontal center.
-        if (marker === '~' && valign === undefined && (src[i + 1] === '<' || src[i + 1] === '>')) {
-          valign = 'middle'
-        } else {
-          align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
-        }
+        align = marker === '<' ? 'left' : marker === '>' ? 'right' : 'center'
       } else if (marker === '~' && valign === undefined) {
         valign = 'middle'
       } else {
