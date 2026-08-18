@@ -38,6 +38,7 @@ const IMPLEMENTED = new Set([
   'an-unterminated-fence-at-a-content-column-opens-no-block-so-the-paragraph-stays-open',
   'table-columns-carry-alignment-vertical-alignment-and-widths',
   'a-table-alignment-run-carries-two-independent-axes',
+  'a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one',
   // The category the freeze at carve `0f6b990` adds. It needed no engine work:
   // this build renders all four of its documents, and all 62 quote/list prefixes
   // to depth five for both definition kinds, exactly as the executable spec does
@@ -576,17 +577,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['53-table-doubled-alignment-marker', {
-    reason: 'carve#1344 makes an invalid duplicate-axis run fall back as a whole',
-    html: `<table>
-  <thead><tr><th scope="col">&lt;&lt; Note</th><th scope="col">Plain</th></tr></thead>
-  <tbody>
-    <tr><td>a</td><td>b</td></tr>
-  </tbody>
-</table>`,
-  }],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
 
 
 
