@@ -3368,7 +3368,10 @@ function collectLinkDefs(lexer: Lexer) {
     // (text), not a document-level definition. A blank line first pops the
     // stack, and then it is one.
     const abbr =
-      divs.length === 0 && listCols.length === 0 && !inFootnoteBody
+      !paragraphReallyOpen &&
+      divs.length === 0 &&
+      listCols.length === 0 &&
+      !inFootnoteBody
         ? RE_ABBR_DEF.exec(raw)
         : null
     if (abbr) {
@@ -3474,7 +3477,7 @@ function collectLinkDefs(lexer: Lexer) {
     const m =
       topLevelIndentedDef ||
       notAtContentColumn ||
-      (paragraphReallyOpen && composed.peeled.some((one) => !one.quote))
+      paragraphReallyOpen
         ? null
         : RE_LINK_DEF.exec(defLine)
     if (m) {
