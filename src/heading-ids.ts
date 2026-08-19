@@ -667,8 +667,8 @@ export function resolveHeadingIds(
     if (!node || typeof node !== 'object') return
     const id = (node as { attrs?: Attrs }).attrs?.id
     if (typeof id === 'string') used.add(id)
-    for (const key in node as Record<string, unknown>) {
-      if (key === 'attrs' || key === 'pos') continue
+    for (const key of Object.keys(node as Record<string, unknown>)) {
+      if (key === 'pos') continue
       const v = (node as Record<string, unknown>)[key]
       if (Array.isArray(v)) for (const el of v) reserveExplicitIds(el)
       else if (v && typeof v === 'object') reserveExplicitIds(v)
