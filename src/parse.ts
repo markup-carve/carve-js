@@ -2665,7 +2665,6 @@ function collectLinkDefs(lexer: Lexer) {
   let prevBlank = true
   // §10: definitions and fence-shaped lines inside an already-open paragraph
   // are text, so the flat symbol-table pass must not claim them independently.
-  let paragraphOpen = false
   let inDefinitionBody = false
   // Track whether we are inside a footnote body. A footnote continuation is
   // indented, so an indented link def inside a note body must still be collected
@@ -2753,6 +2752,8 @@ function collectLinkDefs(lexer: Lexer) {
     const afterTerm =
       RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[idx - 1] ?? '')) || inDefinitionBody
     const line = stripContainerPrefixes(raw, afterTerm)
+    if (RE_DEFLIST_DEF.test(raw)) inDefinitionBody = true
+    else if (RE_DEFLIST_TERM.test(raw)) inDefinitionBody = false
     // Enter/leave footnote context before paragraph tracking: an inline-body
     // opener itself opens a paragraph and otherwise continues past this point.
     if (RE_FOOTNOTE_DEF.test(line)) inFootnoteBody = true
@@ -6301,9 +6302,9 @@ function classifyQuotedLine(
   }
   // Once prose is open, every nonblank quoted line remains in that paragraph.
   // Marker classification resumes only after a blank or container boundary.
-  if (state.paragraphOpen) {
-    state.absorbingFence = wasAbsorbing
-    return
+  if (blockQuoteParagraphOpen(state)) {
+    state.mode = { kind: 'paragraph', absorbingFence: wasAbsorbing }
+    return null
   }
   // A heading, table row, or thematic break is an UNCONDITIONAL paragraph
   // interrupter (no matching-closer dependency), so it leaves no open trailing
@@ -8341,7 +8342,13 @@ function parseList(lexer: Lexer): List {
           // column 0, which is the line this test excludes and which is all
           // that separates 358 from 357-2.
           (lazyState.commentAtColumn && indentColumns(l, contentCol) > 0)) &&
-          !lazyContinuationEndsList(l, lexer)) ||
+          !(
+            indentColumns(l, baseIndent + 1) <= baseIndent &&
+            (RE_TASK.test(l) ||
+              RE_UNORDERED.test(l) ||
+              RE_ORDERED.test(l) ||
+              extractItemAttr(l) !== null)
+          )) ||
           // A list marker indented past the base column but BELOW the content
           // column folds into the lead text rather than ending the list. Under
           // symmetric §10 no list marker interrupts a paragraph, so on the
