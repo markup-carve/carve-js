@@ -9,6 +9,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Core inline parsing skips punctuation dispatch for ordinary prose runs.**
+  With no extension matcher active, consecutive ASCII letters, digits and
+  horizontal whitespace are appended together instead of probing smart
+  typography, emphasis and every other inline recognizer byte by byte. The
+  shared 49 KiB Tier-1 benchmark improves by about 25% locally.
 - **A vertical table-cell marker requires a horizontal partner.** Lone `^` and `v` prefixes remain visible content; paired two-axis runs are unchanged.
 
 ### Fixed
