@@ -5660,7 +5660,6 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       inDefList: false,
       attrRun: null,
     }
-    const defFenceMemo: QuotedFenceCloserMemo = new Map()
     /**
      * Feed one collected body line to the S4 tracker.
      *
@@ -5668,16 +5667,8 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
      * below its content column. An invisible line there adds no block, so the
      * paragraph it was folded into is still open behind it.
      */
-    const track = (content: string, atLineIndex?: number, atContentColumn = true): void => {
-      trackItemLazyState(
-        content,
-        lazyState,
-        (marker) =>
-          atLineIndex === undefined
-            ? true
-            : itemFenceHasCloser(lexer, marker, atLineIndex, DEFLIST_CONTENT_COL, defFenceMemo),
-        atContentColumn,
-      )
+    const track = (content: string, _atLineIndex?: number, atContentColumn = true): void => {
+      trackItemLazyState(content, lazyState, atContentColumn)
     }
     // The boundary set for a `+`-attached block in a definition body: a blank,
     // a further `+`, or the next term / description marker. Whether a line in
@@ -6134,6 +6125,7 @@ function trackBlockQuoteLazyState(
   content: string,
   state: BlockQuoteLazyState,
   hasCommentCloser: (fence: number) => boolean,
+  hasFenceCloser: (marker: string) => boolean = () => true,
 ): void {
   let text = content
   let level = state
@@ -7471,7 +7463,6 @@ function trackWrappedAttributeRun(
 function trackItemLazyState(
   content: string,
   state: ItemLazyState,
-  hasFenceCloser: (marker: string) => boolean = () => true,
   /**
    * Does this line sit AT the container's content column, rather than below it?
    *
@@ -8262,7 +8253,7 @@ function parseList(lexer: Lexer): List {
         // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
         // is the lazy continuation of the paragraph above it, which stays open
         // behind it (corpus 183, 197, 358).
-        trackItemLazyState(lazyLine, lazyState, () => true, false)
+        trackItemLazyState(lazyLine, lazyState, false)
         lexer.consume()
       } else {
         break

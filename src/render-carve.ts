@@ -479,34 +479,6 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
   return out
 }
 
-/** Every non-blank line of `text`, prefixed with `columns` spaces. */
-function indentLines(text: string, columns: number): string {
-  const pad = ' '.repeat(columns)
-  return text
-    .split('\n')
-    .map((line) => (line === '' ? line : pad + line))
-    .join('\n')
-}
-
-/**
- * Whether two adjacent sibling lists would read back as ONE list.
- *
- * The axes are §11 N1's: a list kind, and for each kind the marker character
- * the author chose plus the plain-vs-task classification. When any of them
- * differs the lists already separate on their own and the writer owes them
- * nothing - which is what carve#286 established.
- */
-function listsWouldMerge(a: List, b: List): boolean {
-  if (a.ordered !== b.ordered) return false
-  if (isTaskList(a) !== isTaskList(b)) return false
-  if (a.ordered) return (a.delim ?? '.') === (b.delim ?? '.') && a.olType === b.olType
-  return (a.bulletChar ?? '-') === (b.bulletChar ?? '-')
-}
-
-function isTaskList(list: List): boolean {
-  return list.items.some((item) => item.checked !== undefined)
-}
-
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
