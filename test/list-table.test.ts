@@ -21,6 +21,12 @@ describe('list-table Tier-3 extension', () => {
     expect(html).not.toContain(' align=')
     expect(html).not.toContain(' valign=')
   })
+
+  it('formats footer rows as a row group', () => {
+    expect(h('{footer-rows=1}\n::: list-table\n- - A\n- - Z\n:::')).toContain(
+      '  <tfoot>\n    <tr><td>Z</td></tr>\n  </tfoot>',
+    )
+  })
   it('renders a basic two-column table with header row and caption', () => {
     const src = [
       '{header-rows=1}',
@@ -163,7 +169,7 @@ describe('list-table Tier-3 extension', () => {
     )
   })
 
-  it('renders footer rows in the canonical compact wrapper', () => {
+  it('renders footer rows in the canonical row-group wrapper', () => {
     const src = [
       '{footer-rows=2}',
       '{header-cols=1}',
@@ -185,7 +191,10 @@ describe('list-table Tier-3 extension', () => {
         '    <tr><th scope="row">Region</th><td>Q1</td></tr>',
         '    <tr><th scope="row">EMEA</th><td>10</td></tr>',
         '  </tbody>',
-        '  <tfoot><tr><th scope="row">Region</th><td>Q1</td></tr><tr><th scope="row">EMEA</th><td>10</td></tr></tfoot>',
+        '  <tfoot>',
+        '    <tr><th scope="row">Region</th><td>Q1</td></tr>',
+        '    <tr><th scope="row">EMEA</th><td>10</td></tr>',
+        '  </tfoot>',
         '</table>',
       ].join('\n'),
     )
