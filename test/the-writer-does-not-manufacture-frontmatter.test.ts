@@ -72,11 +72,14 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
   })
 
   it('a hoisted footnote definition promoting a `---yaml`-shaped PARAGRAPH', () => {
-    // The head cannot be respelled - it is the paragraph's own text - so the
-    // CLOSER moves instead. This shape is why the fallback is document-wide.
+    // The head cannot be respelled as a BREAK - it is the paragraph's own text
+    // - so it is escaped instead, which is what carve#1443 changed here: the
+    // run is now literal `---` rather than an em dash, and a bare `---yaml` at
+    // byte 0 would open frontmatter. Escaping the head is enough on its own, so
+    // the closer keeps the `---` the author wrote.
     const src = '[^a]: n\n\n---yaml\nk: v\n---\n'
     expect(roundTrips(src)).toBe(true)
-    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n***\n\n[^a]: n\n')
+    expect(carveToCarve(src)).toBe('\\-\\-\\-yaml\nk: v\n\n---\n\n[^a]: n\n')
   })
 
   it('CONTROL: an abbreviation definition is not hoisted, and never was', () => {
@@ -98,8 +101,11 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     // writer does not pay a respelling that changes nothing. This row is what
     // makes the second `opensFrontmatter` call load-bearing rather than
     // decorative; it is a KNOWN residual of §1, not a case this fix claims.
+    // The head is escaped since carve#1443 made the run literal text, which is
+    // what keeps the document safe here - the marker itself is still the one
+    // the author wrote.
     const src = '[^a]: n\n\n---yaml\nk: v\n\n```\n---\n```\n\n***\n'
-    expect(carveToCarve(src)).toBe('---yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n')
+    expect(carveToCarve(src)).toBe('\\-\\-\\-yaml\nk: v\n\n```\n---\n```\n\n***\n\n[^a]: n\n')
   })
 
   it('a break inside a container is respelled with the rest', () => {

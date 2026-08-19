@@ -10507,6 +10507,17 @@ function allocateDashes(n: number): string {
   return '—'.repeat(em) + '–'.repeat(en)
 }
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
+/*
+ * The space class the hyphen-run flanking test reads (PART 9 §8, carve#1443).
+ *
+ * PART 7's four whitespace characters plus the NO-BREAK SPACE - NOT `\s`. A
+ * VERTICAL TAB and a FORM FEED are CONTENT in Carve, so `---<VT>` has to answer
+ * the way `---!` answers, and `\s` takes both. The nbsp is in for the reason it
+ * is in quote flanking below: the question asked is "does a space stand here",
+ * and a nbsp is a space to the reader - in either of its spellings, so the
+ * internal U+E000 placeholder for an escaped `\ ` counts too.
+ */
+const isFlankSpace = (ch: string) => /[ \t\n\r\u00a0\ue000]/.test(ch)
 // Adjudicated smart-quote opening context (matches carve-rs on these inputs):
 // a straight quote curls OPENING when preceded by start-of-content, Unicode
 // whitespace (incl. NBSP, handled below via the U+E000 placeholder), or one of
@@ -10581,6 +10592,26 @@ function smartToken(
   if (text[i] === '-' && text[i + 1] === '-') {
     let n = 0
     while (text[i + n] === '-') n++
+    // PART 9 §8 (carve#1443): a run PRECEDED by whitespace (or the start of the
+    // content) and FOLLOWED by a non-whitespace character is a long CLI flag,
+    // not a dash, and stays literal. `git log --oneline` rendered `git log
+    // –oneline` before this - silently, and in the output only.
+    //
+    // The run start is scanned back to, not assumed to be `i`: a literal run is
+    // emitted one hyphen at a time, so the next character re-enters here with
+    // hyphens already behind it. Reading only forward would convert the tail of
+    // `---foo` into an en dash.
+    let start = i
+    while (start > 0 && text[start - 1] === '-') start--
+    const before = start > 0 ? text[start - 1]! : ''
+    const after = text[i + n] ?? ''
+    //
+    // The whole run is consumed as literal text rather than declined, so the
+    // arrow token cannot pick up what the dash rule put down: declining left
+    // `-->` as a stray `-` plus a live `->`, and the flag rendered `-→`.
+    if ((before === '' || isFlankSpace(before)) && after !== '' && !isFlankSpace(after)) {
+      return { out: text.slice(i, i + n), len: n, kind: 'literal_hyphen_run' }
+    }
     return { out: allocateDashes(n), len: n, kind: 'dash_run' }
   }
   const c = text[i]!
@@ -10947,6 +10978,15 @@ function scanInlineInner(
           ? lastEmittedGlyph(out)
           : ''
       const st = smartToken(text, i, prevForQuote)
+      if (st && st.kind === 'literal_hyphen_run') {
+        // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the
+        // buffer rather than becoming a node, so it renders and round-trips as
+        // the hyphens the author wrote.
+        buf += st.out
+        bufLast = st.out[st.out.length - 1]!
+        i += st.len
+        continue
+      }
       if (st) {
         flush()
         // A dash run resolves to one or more glyphs; each consumes a fixed
