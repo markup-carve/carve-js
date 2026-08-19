@@ -1398,8 +1398,8 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const tableAttrs = node.attrs ? {
     ...node.attrs,
-    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !['aligns', 'valigns', 'widths'].includes(key))),
-    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !['aligns', 'valigns', 'widths'].includes(key)) } : {}),
+    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key))),
+    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key)) } : {}),
   } : undefined
   const lines: string[] = [
     `${pad}<table${renderAttrs(tableAttrs)}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
@@ -1469,15 +1469,18 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     }
   }
 
-  // Detect header section: leading consecutive rows where all cells are headers
-  let headerEnd = 0
-  while (
-    headerEnd < grid.length &&
-    grid[headerEnd]!.some((e) => !e.skip) &&
-    grid[headerEnd]!.every((e) => e.cell.header || e.skip)
-  ) {
-    headerEnd++
+  // An explicit source partition wins; otherwise retain the native leading
+  // run of `|=` header rows.
+  const sourcePartition = node.attrs?.keyValues?.['header-rows'] !== undefined || node.attrs?.keyValues?.['footer-rows'] !== undefined
+  let headerEnd = sourcePartition && node.rowGroups ? node.rowGroups.headRows : 0
+  if (!sourcePartition || !node.rowGroups) {
+    while (
+      headerEnd < grid.length &&
+      grid[headerEnd]!.some((e) => !e.skip) &&
+      grid[headerEnd]!.every((e) => e.cell.header || e.skip)
+    ) headerEnd++
   }
+  const footerStart = sourcePartition && node.rowGroups ? grid.length - node.rowGroups.footRows : grid.length
 
   // Column defaults come from the header section. With multiple header
   // rows the last row that specifies an alignment for a column wins;
@@ -1509,15 +1512,19 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     }
   }
   if (headerEnd > 0) {
-    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts, true))
+    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts, true, true))
     lines.push(`${pad}  <thead>${rows.join('')}</thead>`)
   }
-  if (headerEnd < grid.length) {
+  if (headerEnd < footerStart) {
     lines.push(`${pad}  <tbody>`)
-    for (let r = headerEnd; r < grid.length; r++) {
+    for (let r = headerEnd; r < footerStart; r++) {
       lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts)}`)
     }
     lines.push(`${pad}  </tbody>`)
+  }
+  if (footerStart < grid.length) {
+    const rows = grid.slice(footerStart).map((r) => renderTableRowFlat(r, opts))
+    lines.push(`${pad}  <tfoot>${rows.join('')}</tfoot>`)
   }
   lines.push(`${pad}</table>`)
   return lines.join('\n')
@@ -1571,13 +1578,14 @@ function renderTableRowFlat(
   cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>,
   opts: RenderOptions,
   inHeaderRun = false,
+  promoteToHeader = false,
 ): string {
   // A row attribute block (`| … |{.x}`) lives on the TableRow, shared by every
   // grid entry in this row.
   const parts: string[] = [`<tr${renderAttrs(cells[0]?.row.attrs)}>`]
   for (const entry of cells) {
     if (entry.skip) continue
-    const tag = entry.cell.header ? 'th' : 'td'
+    const tag = entry.cell.header || promoteToHeader ? 'th' : 'td'
     const attrs: string[] = []
     const emitted = new Set<string>()
     if (entry.rowspan > 1) {

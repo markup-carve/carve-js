@@ -8,6 +8,19 @@ const h = (s: string): string => carveToHtml(s, { extensions: [listTable()] }).t
 const plain = (s: string): string => carveToHtml(s).trim()
 
 describe('list-table Tier-3 extension', () => {
+  it('lets cell alignment override column defaults', () => {
+    const html = h([
+      '{aligns="left,right" valigns="top,bottom"}',
+      '::: list-table',
+      '- -{align=center valign=middle} A',
+      '  - B',
+      ':::',
+    ].join('\n'))
+    expect(html).toContain('<td style="text-align: center; vertical-align: middle;">A</td>')
+    expect(html).toContain('<td style="text-align: right; vertical-align: bottom;">B</td>')
+    expect(html).not.toContain(' align=')
+    expect(html).not.toContain(' valign=')
+  })
   it('renders a basic two-column table with header row and caption', () => {
     const src = [
       '{header-rows=1}',

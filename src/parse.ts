@@ -3533,7 +3533,7 @@ function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry)
         // attrs win on conflict (id/key last), classes accumulate (§15).
         node.attrs = mergeAttrs(pending, node.attrs ?? {})
       }
-      if (node.type === 'table') deriveTableColumns(node)
+      if (node.type === 'table') deriveTableMetadata(node)
       // A code fence's opener "header" becomes the `title` attribute on the
       // <pre>. Resolved here (after the pending merge) so a preceding
       // {title=...} line wins, and so the title lives on the node attrs --
@@ -3569,7 +3569,7 @@ function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry)
   return out
 }
 
-function deriveTableColumns(table: Table): void {
+function deriveTableMetadata(table: Table): void {
   const kv = table.attrs?.keyValues
   if (!kv) return
   const aligns = positional(kv.aligns, new Set(['left', 'right', 'center']))
@@ -3579,12 +3579,29 @@ function deriveTableColumns(table: Table): void {
     return Number.isFinite(value) && value > 0 && value <= 100 ? value / 100 : undefined
   }) ?? []
   const count = Math.max(aligns.length, valigns.length, widths.length)
-  if (count === 0) return
-  table.columns = Array.from({ length: count }, (_, i) => ({
-    ...(aligns[i] ? { align: aligns[i] as 'left' | 'right' | 'center' } : {}),
-    ...(valigns[i] ? { valign: valigns[i] as 'top' | 'middle' | 'bottom' } : {}),
-    ...(widths[i] ? { width: widths[i] } : {}),
-  }))
+  if (count > 0) {
+    table.columns = Array.from({ length: count }, (_, i) => ({
+      ...(aligns[i] ? { align: aligns[i] as 'left' | 'right' | 'center' } : {}),
+      ...(valigns[i] ? { valign: valigns[i] as 'top' | 'middle' | 'bottom' } : {}),
+      ...(widths[i] ? { width: widths[i] } : {}),
+    }))
+  }
+
+  const rowCount = (value: string | undefined): number | undefined => {
+    if (value === undefined) return 0
+    if (value.trim() === '') return 1
+    return /^\d+$/.test(value.trim()) ? Number(value.trim()) : undefined
+  }
+  const headRows = rowCount(kv['header-rows'])
+  const footRows = rowCount(kv['footer-rows'])
+  if (headRows === undefined || footRows === undefined || headRows + footRows > table.rows.length) return
+  if (kv['header-rows'] !== undefined || kv['footer-rows'] !== undefined) {
+    table.rowGroups = {
+      headRows,
+      bodies: [{ headRows: 0, bodyRows: table.rows.length - headRows - footRows }],
+      footRows,
+    }
+  }
 }
 
 function positional(value: string | undefined, allowed: Set<string>): Array<string | undefined> {
