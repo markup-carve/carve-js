@@ -41,6 +41,11 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
     ['HTML', carveToHtml],
     ['Markdown', carveToMarkdown],
     ['ANSI', carveToAnsi],
+    // Plain joined this list with PART 11 §10f. Until that clause it emitted
+    // the bare key in the body and so had no amplification vector at all; now
+    // it writes `TERM (expansion)` at every occurrence, which is the same
+    // vector under the same budget.
+    ['plain text', carveToPlainText],
   ] as const) {
     it(`${name}: renders without throwing, bounded near the budget, fast`, () => {
       const t0 = Date.now()
@@ -54,10 +59,13 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
       // and key bytes), nowhere near the ~100MB naive blowup. A loose 3x-budget
       // ceiling proves the bound without being brittle.
       expect(out!.length).toBeLessThan(budget * 3)
-      // Only as many full expansions as fit in the budget are emitted, PLUS the
-      // one in the definition line itself: PART 10 §10a keeps the definition on
-      // this target, and one copy per definition is bounded by the input rather
-      // than by the number of uses - which is what the guard is for (carve#589).
+      // Only as many full expansions as fit in the budget are emitted, PLUS at
+      // most one in a surviving definition line: one copy per definition is
+      // bounded by the input rather than by the number of uses, which is what
+      // the guard is for (carve#589). The allowance is `+ 1` rather than an
+      // exact count because PART 11 §10f decides per target whether that line
+      // survives - Markdown keeps it, plain and the terminal drop it here
+      // because this definition's expansion IS emitted.
       const fullExpansions = out!.split(expansion).length - 1
       expect(fullExpansions).toBeLessThanOrEqual(Math.ceil(budget / EXPANSION_LEN) + 1)
       // Fast: a real document is far below budget; even this worst case is quick.
@@ -65,16 +73,26 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
     })
   }
 
-  it('plain text emits the expansion once, in the definition, and never per use', () => {
-    // This target does not expand an abbreviation in the body at all, so the
-    // amplification vector is absent whatever the definition does. What it now
-    // carries is the definition LINE (PART 10 §10a) - exactly one copy, however
-    // many times the abbreviation is used.
+  it('plain text drops the definition line it now duplicates, and stays bounded', () => {
+    // THIS TEST PINNED THE OPPOSITE until PART 11 §10f, and both of its halves
+    // moved. It asserted exactly one full expansion in the output, in the
+    // definition LINE, on the ground that this target never expanded an
+    // abbreviation in the body. §10f emits the expansion at every occurrence
+    // and drops the line, so the single copy is gone and the many copies are
+    // what the budget has to bound.
     let out: string | undefined
     expect(() => {
       out = carveToPlainText(src)
     }).not.toThrow()
-    expect(out!.split(expansion).length - 1).toBe(1)
+    // The line is gone: this definition's own expansion is emitted.
+    expect(out!.startsWith('*[HT]:')).toBe(false)
+    const fullExpansions = out!.split(expansion).length - 1
+    // Expanded at all - a zero here would pass the bound below while meaning
+    // the clause was never implemented.
+    expect(fullExpansions).toBeGreaterThan(0)
+    // ...and bounded by the budget rather than by the 1000 uses, with no `+ 1`
+    // to spend on a definition line that is no longer there.
+    expect(fullExpansions).toBeLessThanOrEqual(Math.ceil(budget / EXPANSION_LEN))
   })
 
   it('a normal small abbreviation still renders <abbr title=...> under budget', () => {
@@ -87,6 +105,8 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
     )
     // ANSI emits the dim ` (EXPANSION)` suffix when under budget.
     expect(carveToAnsi(small)).toContain('(HyperText Markup Language)')
+    // PART 11 §10f: so does plain text, without the styling.
+    expect(carveToPlainText(small)).toBe('Use HTML (HyperText Markup Language) here.\n')
   })
 
   it('counter resets per render call (no leak across calls)', () => {

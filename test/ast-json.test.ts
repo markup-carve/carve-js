@@ -90,6 +90,19 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
     })
   }
 
+  it('preserves structural short captions without rendering them', () => {
+    const json = toAstJson(parse('![alt](/i.png)\n^ Full caption\n'))
+    const figure = json.children[0] as typeof json.children[number] & {
+      shortCaption?: Array<{ type: 'text'; value: string }>
+    }
+    figure.shortCaption = [{ type: 'text', value: 'Navigation label' }]
+
+    const back = fromAstJson(JSON.parse(JSON.stringify(json)))
+    expect(toAstJson(back)).toEqual(json)
+    expect(renderHtml(back)).toContain('<figcaption>Full caption</figcaption>')
+    expect(renderHtml(back)).not.toContain('Navigation label')
+  })
+
   it('restores frontmatter and footnote definitions onto the runtime root', () => {
     // The runtime shape is what renderers, extensions and the profile filter
     // read; the exchange shape puts both in the tree. Decoding has to undo that,

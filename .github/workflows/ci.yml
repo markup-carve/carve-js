@@ -69,9 +69,51 @@ jobs:
       - name: Scaling guards
         run: npm run test:perf
 
+  browser-bundle:
+    name: browser bundle parity
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive # the parity check renders the spec corpus
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Builds dist/carve.iife.min.js and asserts it renders identically to
+      # the ESM build. esbuild is fetched by npx at the version pinned in
+      # scripts/build-browser.mjs, so it stays out of devDependencies and off
+      # every git-dependency install. Roughly two seconds, hence per-PR.
+      - name: Bundle parity
+        run: npm run test:browser
+
   mxss:
     name: browser mutation-XSS (svg fence)
     runs-on: ubuntu-latest
+
+    # THE INSTALL STEP HANGS, and without a bound it hangs for the six hours a
+    # job is allowed. `npx playwright install --with-deps chromium` fetches a
+    # browser and runs apt-get, and it stalled three times in two hours on one
+    # evening - 40 to 47 minutes each - while the same step finished in 66
+    # seconds on other branches in between. Every one of those held a merge and
+    # a runner slot, and the check itself never started.
+    #
+    # The whole job is 1 to 5 minutes when it is healthy, so this bounds a hang
+    # to roughly three times its own worst honest run and turns it into a red
+    # check a rerun clears, rather than a pending one nobody can distinguish
+    # from slow.
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4

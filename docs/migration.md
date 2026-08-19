@@ -25,13 +25,71 @@ Carve's blank-line-around-blocks rule:
 | `**x**`, `__x__`             | `*x*`      | Carve strong is a single `*`                               |
 | `***x***`, `___x___`         | `/*x*/`    | Carve's canonical bold-italic                              |
 | `~~x~~`                      | `~x~`      | Carve strikethrough is a single `~`                        |
-| `==x==`                      | `=x=`      | highlight: Carve uses a single `=` (`==x==` renders literal) |
-| `^x^`                        | `^x^`      | superscript: identical in Carve                            |
+| `==x==`                      | `==x==`    | literal by default - not CommonMark or GFM (`dialect.highlight` converts it to `=x=`) |
+| `^x^`                        | `^x^`      | literal by default - not CommonMark or GFM (`dialect.superscript` converts it to `{^x^}`) |
 | `<mark>x</mark>`             | `=x=`      | highlight tag → bare marker (brace-forced `{=x=}` intraword) |
 | `<sub>x</sub>`               | `,x,`      | subscript tag → bare marker (`H<sub>2</sub>O` → `H{,2,}O` intraword) |
 | `<sup>x</sup>`               | `^x^`      | superscript tag → bare marker (brace-forced `{^x^}` intraword) |
-| `$x$`                        | `` $`x` `` | inline math (`$5` left as currency)                        |
+| `$x$`                        | `$x$`      | literal by default - not CommonMark or GFM (`dialect.math` converts it to `` $`x` ``, leaving `$5` as currency) |
 | `<em>`/`<strong>`/`<del>`/…  | Carve form | other inline HTML tags map to their Carve markers          |
+
+The default dialect is **CommonMark plus GFM, plus footnote references**, so a
+source construct none of those defines stays as written rather than becoming
+Carve markup. Seven flavour extensions are opt-in through the second argument:
+
+```ts
+markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math: true })
+// => 'a =hi= {^up^} $`x`'
+```
+
+| Source                | Flavour            | Flag              | Off (the default)         | On                    |
+| --------------------- | ------------------ | ----------------- | ------------------------- | --------------------- |
+| `==x==`               | Obsidian, Quarto   | `highlight`       | literal                   | `=x=`                 |
+| `^x^`                 | Pandoc             | `superscript`     | literal                   | `{^x^}`               |
+| `$x$`                 | Pandoc, GitHub     | `math`            | literal                   | `` $`x` ``            |
+| `^[body]`             | Pandoc             | `inlineFootnotes` | `\^[body]`                | an inline footnote    |
+| `*[HTML]: HyperText`  | PHP Markdown Extra | `abbreviations`   | `\*[HTML]: HyperText`     | an abbreviation       |
+| `::: note`            | Pandoc, Quarto     | `fencedDivs`      | `\::: note`               | a div                 |
+| `[t]{.c}`, `{.c}`     | Pandoc, kramdown   | `attributes`      | `[t]\{.c}`, `\{.c}`       | attributes            |
+
+`attributes` covers an attribute list wherever it would attach, not just the
+bare span: `[t](u){.c}`, `![alt](u){.c}`, `` `x`{.c} ``, `<https://e.com/>{.c}`
+and the emphasis family are all escaped with it off. A braced delimiter pair is
+not an attribute list and is never escaped as one - `{,x,}` is a subscript in
+Carve wherever it stands, and it is what `<sub>x</sub>` converts to.
+
+The last four differ from the first three in how they got here: Carve spells
+them the way the source does, so nothing had to be rewritten for a CommonMark
+document to grow markup its author never saw. Escaping is what keeps them
+literal, which is why the "off" column shows a backslash.
+
+A handful of Carve constructs have no Markdown spelling in any flavour and are
+always escaped, with no flag: `` a $`x` `` and `` a $$`x` `` (math spans),
+`` a !`x` `` (a literal span), `a :term[x]` (an extension call), and a leading
+`^ ` on a paragraph (a caption, which binds to the block above it).
+
+**One exception to the contract: `[^1]` footnote references convert by
+default.** They are in neither CommonMark nor GFM, so the rule above would put
+them behind a flag. The rule exists to stop a migrated document from rendering
+differently than its author saw it, and here it would cause exactly that:
+github.com renders footnotes, so an author who wrote one saw one, and leaving
+it literal would take it away. Where the letter of the contract and the reason
+for it disagree, the reason governs. `[^1]` with its `[^1]: …` definition
+therefore migrates to a Carve footnote, and this is the only construct the
+contract makes room for.
+
+The HTML tags below are unaffected: `<mark>`, `<sub>` and `<sup>` mean one
+thing in every dialect, so they always convert.
+
+On the command line the same transform is `carve migrate --from markdown`
+(`--from md` works too), which reads a named file or stdin and writes Carve to
+stdout. The dialect flags have no CLI spelling yet, so the command is
+CommonMark plus GFM only.
+
+```sh
+carve migrate --from markdown README.md > README.crv
+cat post.txt | carve migrate --from bbcode
+```
 
 > [!NOTE]
 > Carve's highlight and subscript markers are **single** characters (`=x=`,
@@ -63,6 +121,34 @@ becomes
 ```
 
 Body rows are already valid Carve, so they pass through unchanged.
+
+**A pipe row without a delimiter row stays text.** Carve reads any line that
+begins and ends with `|` as a table row, with no delimiter row anywhere, so a
+row GFM shows as a paragraph would otherwise become a table on migration:
+
+```md
+| a | b |
+| c | d |
+```
+
+GFM renders that as one paragraph, and so does the migrated document - the
+opening pipe of each line is escaped, which keeps the row literal and keeps it
+in the paragraph it belongs to:
+
+```
+\| a | b |
+\| c | d |
+```
+
+The same applies to every partly-formed table: a delimiter row with no header
+above it, a header and delimiter whose column counts disagree, and a stray pipe
+row before or after a real table. A table GFM does read - inside a block quote
+or a list item as much as at the top level - is untouched.
+
+> [!NOTE]
+> A `---` kept as literal text still renders as an em dash, because Carve
+> applies smart typography to prose. That is true of any `---` a migrated
+> document carries, not only one inside a pipe row.
 
 To go the other way - flagging a Djot document that would silently mis-render
 under Carve - use `djotMigrationWarnings`, and to rewrite those collisions in

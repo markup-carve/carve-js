@@ -34,6 +34,7 @@ import {
   carveToAstJson,
   diffAst,
   formatChanges,
+  mergeAst,
   fromAstJson,
   toAstJson,
   applyProfile,
@@ -47,6 +48,11 @@ import {
   type AstJsonDocument,
   type MigrationWarning,
   type ProfileOptions,
+  htmlToCarve,
+  markdownToCarve,
+  bbcodeToCarve,
+  type HtmlImportAdapter,
+  type HtmlImportMode,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
@@ -75,8 +81,15 @@ Usage:
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
   carve diff [--json] a.crv b.crv  Report what changed in the DOCUMENT
+  carve merge [--json] base.crv ours.crv theirs.crv
+                                   Three-way merge independent AST edits
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
+  carve migrate --from FORMAT [options] [file]
+                                   Convert html, markdown (md) or bbcode to
+                                   Carve. --mode, --adapter, --report and
+                                   --check-loss are html's alone: it is the
+                                   only importer that drops anything
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -178,6 +191,62 @@ exits 1 if anything is reported, 0 if clean.
                      guessing at it.
   -h, --help     Show this help
 `
+
+async function runMigrate(args: string[], io: CliIO): Promise<number> {
+  let values: { from?: string; mode?: string; adapter?: string; report?: string; 'check-loss'?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        from: { type: 'string' }, mode: { type: 'string' }, adapter: { type: 'string' },
+        report: { type: 'string' }, 'check-loss': { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve migrate: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) { io.write(HELP); return 0 }
+  const from = values.from
+  if (from === undefined) {
+    io.writeErr('carve migrate: --from html, markdown or bbcode is required\n')
+    return 2
+  }
+  if (!['html', 'markdown', 'md', 'bbcode'].includes(from)) {
+    io.writeErr(`carve migrate: unknown source format ${from}\n`)
+    return 2
+  }
+  if (positionals.length > 1) { io.writeErr('carve migrate: takes at most one input file\n'); return 2 }
+  const modes = new Set(['safe', 'semantic', 'roundtrip'])
+  const adapters = new Set(['generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs'])
+  const mode = values.mode ?? 'safe'
+  const adapter = values.adapter ?? 'generic'
+  // Only the HTML importer drops anything: the other two parse their source
+  // whole, so --mode, --adapter, --report and --check-loss describe decisions
+  // they never make. They stay unvalidated and unused there rather than
+  // rejected, which is how carve-rs already treats them on its markdown path.
+  if (from === 'html') {
+    if (!modes.has(mode)) { io.writeErr(`carve migrate: unknown mode ${mode}\n`); return 2 }
+    if (!adapters.has(adapter)) { io.writeErr(`carve migrate: unknown adapter ${adapter}\n`); return 2 }
+  }
+  let source: string
+  try { source = positionals[0] ? io.readFile(positionals[0]) : await io.readStdin() }
+  catch { io.writeErr(`carve migrate: cannot read ${positionals[0]}\n`); return 2 }
+  if (from !== 'html') {
+    io.write(from === 'bbcode' ? bbcodeToCarve(source) : markdownToCarve(source))
+    return 0
+  }
+  const result = htmlToCarve(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })
+  io.write(result.value)
+  const report = JSON.stringify(result.report, null, 2) + '\n'
+  if (values.report === '-') io.writeErr(report)
+  else if (values.report) io.writeFile(values.report, report)
+  return values['check-loss'] && result.report.diagnostics.length > 0 ? 1 : 0
+}
 
 /** Report the un-auto-fixable (overlapping) warnings for one input. */
 function reportSkipped(skipped: MigrationWarning[], file: string, io: CliIO): void {
@@ -731,7 +800,9 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   if (sub === 'diff') return runDiff(rest, io)
+  if (sub === 'merge') return runMerge(rest, io)
   if (sub === 'portability') return runPortability(rest, io)
+  if (sub === 'migrate') return runMigrate(rest, io)
   // Default action is render, so the `render` subcommand is optional:
   // `carve --ansi file.crv` / `carve file.crv` render directly (matching the
   // carve-rs / carve-php CLIs). A first arg that is not fix/lint/render is a
@@ -806,6 +877,77 @@ async function runDiff(args: string[], io: CliIO): Promise<number> {
   io.write(values.json ? `${JSON.stringify(changes, null, 2)}\n` : formatChanges(changes))
 
   return changes.length > 0 ? 1 : 0
+}
+
+/** `carve merge base ours theirs` - combine independent structural edits. */
+async function runMerge(args: string[], io: CliIO): Promise<number> {
+  let values: { json?: boolean; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: { json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve merge: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+  if (positionals.length !== 3) {
+    io.writeErr('carve merge: takes exactly three files (base, ours, theirs)\n')
+    return 2
+  }
+
+  const sources: string[] = []
+  for (const file of positionals) {
+    try {
+      sources.push(io.readFile(file))
+    } catch {
+      io.writeErr(`carve merge: cannot read ${file}\n`)
+      return 2
+    }
+  }
+
+  let result: ReturnType<typeof mergeAst>
+  try {
+    result = mergeAst(
+      carveToAstJson(sources[0]!),
+      carveToAstJson(sources[1]!),
+      carveToAstJson(sources[2]!),
+    )
+  } catch (error) {
+    io.writeErr(`carve merge: ${(error as Error).message}\n`)
+    return 2
+  }
+  if (!result.ok) {
+    if (values.json) io.write(`${JSON.stringify(result, null, 2)}\n`)
+    else {
+      for (const conflict of result.conflicts) {
+        io.writeErr(`conflict ${conflict.reason} at ${conflict.path}\n`)
+      }
+      const plural = result.conflicts.length === 1 ? '' : 's'
+      io.writeErr(`${result.conflicts.length} structural conflict${plural}\n`)
+    }
+    return 1
+  }
+
+  if (values.json) io.write(`${JSON.stringify(result, null, 2)}\n`)
+  else {
+    try {
+      const payloadLength = Buffer.byteLength(JSON.stringify(result.ast), 'utf8')
+      io.write(renderCarve(fromAstJson(result.ast, payloadLength)))
+    } catch (error) {
+      io.writeErr(`carve merge: ${(error as Error).message}\n`)
+      return 2
+    }
+  }
+  return 0
 }
 
 /**

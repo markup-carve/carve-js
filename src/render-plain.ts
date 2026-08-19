@@ -1,4 +1,5 @@
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
+import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
@@ -6,6 +7,14 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
+import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+
+// Set while rendering a span that carries an authored `abbr`, so a resolved
+// abbreviation inside it contributes only its visible text (carve#1127).
+let suppressAutomaticAbbreviation = false
+
+/** No definition has been found expanded yet - the first pass, or no definition. */
+const NO_EXPANDED_DEFINITIONS: ReadonlySet<string> = new Set()
 
 export interface PlainTextRenderOptions {
   /**
@@ -38,21 +47,41 @@ export function smartTypographyIsSource(
  */
 
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
+  // PART 11 §10f: a definition whose own expansion this render emits loses its
+  // line, and the lines come before the occurrences that decide it. So when the
+  // document has a definition at all, render once to find out which pairs were
+  // actually expanded - budget, unreached branches and all - and once for real.
+  // See abbr-expansion-emitted.ts for why predicting that from the tree instead
+  // is wrong in the direction that deletes text.
+  if (!documentHasAbbreviationDef(ast)) return renderPass(ast, opts, NO_EXPANDED_DEFINITIONS).text
+  const probe = renderPass(ast, opts, NO_EXPANDED_DEFINITIONS)
+  return renderPass(ast, opts, probe.expanded).text
+}
+
+function renderPass(
+  ast: Document,
+  opts: PlainTextRenderOptions,
+  expandedDefinitions: ReadonlySet<string>,
+): { text: string; expanded: Set<string> } {
   const ctx: PlainContext = {
     smartSource: smartTypographyIsSource(opts.smartTypography),
     listDepth: 0,
     blockDepth: 0,
     inlineDepth: 0,
     // This target expands a crossref label exactly as the other three do, so it
-    // needs the same bound. It is the only expansion here - an abbreviation
-    // renders as its key on this target - which is why there was no budget
-    // until the crossref needed one (markup-carve/carve-js#892).
+    // needs the same bound. It shares that bound with the abbreviation, which
+    // expands here as of PART 11 §10f; before that clause an abbreviation
+    // rendered as its bare key and the crossref was the only expansion, which
+    // is why there was no budget until the crossref needed one
+    // (markup-carve/carve-js#892).
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    expandedDefinitions,
+    expanded: new Set(),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return stripBidiControls(normalize(`${out}${footnotes}`))
+  return { text: stripBidiControls(normalize(`${out}${footnotes}`)), expanded: ctx.expanded }
 }
 
 interface PlainContext {
@@ -69,6 +98,16 @@ interface PlainContext {
    * path never populates because it does no numbering.
    */
   definedFootnotes: Set<string>
+  /**
+   * The `(term, expansion)` pairs the FIRST pass expanded, so an
+   * `abbreviation_def` can tell whether ITS OWN expansion is emitted. PART 11
+   * §10f, and see abbr-expansion-emitted.ts for why that is the test rather
+   * than "is the term referenced". Empty on the first pass, where every
+   * definition line is written and thrown away with the rest of the string.
+   */
+  expandedDefinitions: ReadonlySet<string>
+  /** The pairs THIS pass expanded, which is what the first pass is run for. */
+  expanded: Set<string>
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: PlainContext): string {
@@ -87,8 +126,16 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return `${renderInlines(node.children, ctx)}\n\n`
     case 'paragraph':
       return `${renderInlines(node.children, ctx)}\n\n`
-    case 'code_block':
-      return `${stripControls(node.content)}\n\n`
+    case 'code_block': {
+      // Caption floor, the same one the `div` case below already applies: a
+      // fence header (`"src/app.js"`) and a grouping label (`[Node]`) are
+      // authored text, and this target has nowhere to attach them, so they
+      // become standalone lines rather than being dropped. Header first when
+      // both are present, matching the div's title-then-label order.
+      const header = node.header ? `${stripControls(node.header)}\n\n` : ''
+      const label = node.label ? `${stripControls(node.label)}\n\n` : ''
+      return `${header}${label}${stripControls(node.content)}\n\n`
+    }
     case 'block_quote':
       return `"${trimNonNbsp(renderBlocks(node.children, ctx))}"\n\n`
     case 'list':
@@ -118,18 +165,38 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
+    case 'figure_group': {
+      // PART 11 degradation (D8): the GROUP caption line first, a blank line,
+      // then each child in source order - a panel as its caption line over its
+      // host degradation, stray content as usual - with a blank line between.
+      let out = ''
+      if (node.caption !== undefined) {
+        out += `${trimNonNbsp(renderInlines(node.caption, ctx))}\n\n`
+      }
+      for (const child of node.children) {
+        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      }
+      return out
+    }
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
       return `${renderImageText(node)}\n\n`
     case 'abbreviation_def':
-      // PART 10 §10a - see the note in render-markdown.
+      // PART 11 §10f: this target DROPS a definition whose own expansion it
+      // emits, because the words would otherwise appear twice - once as this
+      // line and once beside every occurrence. A definition whose expansion
+      // reaches no output keeps its line, which is §10a and is what the pair
+      // lookup answers; see abbr-expansion-emitted.ts.
+      if (ctx.expandedDefinitions.has(abbreviationPairKey(node.abbr, node.expansion))) return ''
       return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
     case 'raw_block':
     case 'comment':
       return ''
     case 'link_reference_definition':
-      // Renders nothing: a definition line is not prose.
+    case 'citation_definition':
+      // Renders nothing: a definition line is not prose. PART 12 §18 gave the
+      // citation line a node without moving output on any target.
       return ''
     default: {
       const t: never = node
@@ -196,18 +263,38 @@ function renderFigure(node: Figure, ctx: PlainContext): string {
         : trimNonNbsp(renderBlock(node.target, ctx))
   // The caption sits on its own line directly under the figure (`\n`) - an
   // image target used to glue it on. A blockquote target keeps the blank-line
-  // separation; a table drops the caption entirely. End with the block
-  // separator so a following block is not glued (matching carve-php).
-  const sep =
-    node.target.type === 'block_quote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
+  // separation. A table takes the same single newline as every other target:
+  // the empty separator this branch used to take was only right while a table
+  // dropped its caption outright, and since it stopped doing that the caption
+  // was welded onto the last body line instead. This target's own table
+  // renderer already writes a caption on its own line, so the two agree. End
+  // with the block separator so a following block is not glued (matching
+  // carve-php).
+  const sep = node.target.type === 'block_quote' ? '\n\n' : '\n'
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
+}
+
+/**
+ * A composite figure's PANEL on this target: caption line first, then the host
+ * degradation (D8) - the inverse of the standalone figure, because with the
+ * group caption leading the whole block, a caption under its host would read
+ * as belonging to the NEXT panel.
+ */
+function renderPanelFigure(node: Figure, ctx: PlainContext): string {
+  const target =
+    node.target.type === 'image'
+      ? stripControls(node.target.alt)
+      : node.target.type === 'table'
+        ? trimNonNbsp(renderTable(node.target, ctx))
+        : trimNonNbsp(renderBlock(node.target, ctx))
+  return `${trimNonNbsp(renderInlines(node.caption, ctx))}\n${target}\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    // The MARKER AS WRITTEN (PART 10 §10a): `[n]: …` is a link reference
+    // The MARKER AS WRITTEN (PART 11 §10a): `[n]: …` is a link reference
     // definition, so emitting one where the author wrote a footnote definition
     // turns it into a different construct on the way back.
     out += `[^${stripControls(label)}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
@@ -222,7 +309,10 @@ function renderImageText(node: { alt: string; src?: string; ref?: string; rawRef
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
-  if (node.ref !== undefined && !node.src) return stripControls(node.rawRef ?? '')
+  // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
+  // image writes back from, which carries no `type` for the shared predicate
+  // to key on.
+  if (node.ref !== undefined && !node.src) return stripControls(referenceSourceText(node.rawRef))
 
   return stripControls(node.alt)
 }
@@ -280,9 +370,36 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'strong':
     case 'underline':
     case 'superscript':
+    case 'span': {
+      // An AUTHORED `abbr` is the one expansion this target has to print
+      // inline. The automatic case does not need it: the `*[TERM]: expansion`
+      // definition line is emitted verbatim, so the mapping survives once at
+      // the definition rather than at every occurrence. An authored value has
+      // NO definition line to carry it, so dropping it loses the text
+      // outright - `[HTML]{abbr="Custom"}` came out as bare `HTML` with
+      // "Custom" nowhere in the output (carve#1176).
+      //
+      // Parentheses are already this target's idiom for an aside: an inline
+      // footnote renders `(content)` here.
+      const authoredAbbr = node.attrs?.keyValues?.abbr
+      if (authoredAbbr !== undefined) {
+        const previous = suppressAutomaticAbbreviation
+        suppressAutomaticAbbreviation = true
+        try {
+          const inner = renderInlines(node.children, ctx)
+          if (authoredAbbr === '') return inner
+          if (!ctx.abbrBudget.charge(utf8ByteLength(authoredAbbr))) return inner
+
+          return `${inner} (${stripControls(authoredAbbr)})`
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
+
+      return renderInlines(node.children, ctx)
+    }
     case 'subscript':
     case 'highlight':
-    case 'span':
     case 'insert':
     case 'strike':
       return renderInlines(node.children, ctx)
@@ -294,7 +411,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return stripControls(referenceSourceText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost link context applies while its label renders.
@@ -328,7 +445,23 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'inline_extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation':
-      return stripControls(node.abbr)
+      // Inside a span carrying its own `abbr`, only the visible text
+      // (carve#1127): the authored value has already been printed by the span,
+      // and it OUTRANKS this expansion (PART 9 §9).
+      if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
+      // DoS guard, the same one the terminal spends: once cumulative expansion
+      // bytes exceed the budget, degrade to the key alone. A degraded
+      // occurrence emits no expansion, so it records no pair and the definition
+      // it came from keeps its line.
+      if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return stripControls(node.abbr)
+      ctx.expanded.add(abbreviationPairKey(node.abbr, node.expansion))
+      // PART 11 §10f: `TERM (expansion)`, the shape the terminal already
+      // writes and the shape PART 9 §9 already writes here for an AUTHORED
+      // value. This half is not separable from dropping the definition line
+      // above - carve#1178 left plain without an automatic expansion on the
+      // ground that the line carried the mapping, and §10f takes that line
+      // away, so emitting neither would lose the author's expansion outright.
+      return `${stripControls(node.abbr)} (${stripControls(node.expansion)})`
     case 'footnote_ref':
     case 'inline_footnote': {
       if (node.inline) {

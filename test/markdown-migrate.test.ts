@@ -57,25 +57,31 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('a ~~gone~~ word')).toBe('a ~gone~ word')
   })
 
-  it('converts ==highlight== to a single = (Carve highlight)', () => {
-    expect(conv('a ==hot== word')).toBe('a =hot= word')
+  it('leaves ==highlight== literal, and converts it when asked', () => {
+    // Literal text in CommonMark and GFM alike, so converting it by default
+    // invented a highlight the source never had.
+    expect(conv('a ==hot== word')).toBe('a ==hot== word')
+    expect(markdownToCarve('a ==hot== word', { highlight: true })).toBe('a =hot= word')
   })
 
-  it('converts ^superscript^ to the braced {^x^} (Carve has no bare superscript)', () => {
-    expect(conv('x^2^ end')).toBe('x{^2^} end')
-    expect(conv('a ^up^ end')).toBe('a {^up^} end')
+  it('leaves ^superscript^ literal, and converts it when asked', () => {
+    expect(conv('x^2^ end')).toBe('x^2^ end')
+    expect(markdownToCarve('x^2^ end', { superscript: true })).toBe('x{^2^} end')
+    expect(markdownToCarve('a ^up^ end', { superscript: true })).toBe('a {^up^} end')
   })
 
   it('does not pair footnote-reference carets into a superscript span', () => {
     expect(conv('a [^x] b [^y]')).toBe('a [^x] b [^y]')
   })
 
-  it('converts inline math $x$ to $`x`', () => {
-    expect(conv('value $a+b$ here')).toBe('value $`a+b` here')
+  it('leaves inline math literal, and converts it when asked', () => {
+    expect(conv('value $a+b$ here')).toBe('value $a+b$ here')
+    expect(markdownToCarve('value $a+b$ here', { math: true })).toBe('value $`a+b` here')
   })
 
-  it('converts display math $$x$$ to $$`x`', () => {
-    expect(conv('$$a+b$$')).toBe('$$`a+b`')
+  it('converts display math $$x$$ to $$`x` when asked', () => {
+    expect(conv('$$a+b$$')).toBe('$$a+b$$')
+    expect(markdownToCarve('$$a+b$$', { math: true })).toBe('$$`a+b`')
   })
 
   it('does not treat currency $5 as math', () => {
@@ -86,12 +92,19 @@ describe('markdownToCarve — inline construct mapping', () => {
     expect(conv('costs $5-$10 today')).toBe('costs $5-$10 today')
   })
 
-  it('converts digit-starting math like $2+2$', () => {
-    expect(conv('so $2+2$ holds')).toBe('so $`2+2` holds')
+  it('converts digit-starting math like $2+2$ when asked', () => {
+    expect(markdownToCarve('so $2+2$ holds', { math: true })).toBe('so $`2+2` holds')
   })
 
   it('preserves delimiter characters inside a math span', () => {
-    expect(conv('eq $*x*$ end')).toBe('eq $`*x*` end')
+    expect(markdownToCarve('eq $*x*$ end', { math: true })).toBe('eq $`*x*` end')
+  })
+
+  it('leaves currency alone whether or not math is enabled', () => {
+    for (const dialect of [undefined, { math: true }]) {
+      expect(markdownToCarve('costs $5 today', dialect)).toBe('costs $5 today')
+      expect(markdownToCarve('costs $5-$10 today', dialect)).toBe('costs $5-$10 today')
+    }
   })
 
   it('leaves intraword underscores literal (foo__bar__baz)', () => {
@@ -224,11 +237,30 @@ describe('markdownToCarve — multiline paragraph inline mapping', () => {
     expect(carveToHtml(carve)).toBe('<p><a href="/u">a\nb</a></p>')
   })
 
+  // The rows carry a DELIMITER ROW because that is what makes them a table:
+  // without one GFM reads the block as a paragraph, and the converter now keeps
+  // it as one (markup-carve/carve-js#1061). The subject here is the row
+  // boundary, so it needs rows that really are rows.
   it('does not let emphasis leak across table row boundaries', () => {
-    const md = ['| *a | b |', '| c | d* |', '| **x** | *y* |', '| **z** | *w* |'].join('\n')
-    const carve = ['| *a | b |', '| c | d* |', '| *x* | /y/ |', '| *z* | /w/ |'].join('\n')
+    const md = [
+      '| h1 | h2 |',
+      '|---|---|',
+      '| *a | b |',
+      '| c | d* |',
+      '| **x** | *y* |',
+      '| **z** | *w* |',
+    ].join('\n')
+    const carve = [
+      '|= h1 |= h2 |',
+      '| *a | b |',
+      '| c | d* |',
+      '| *x* | /y/ |',
+      '| *z* | /w/ |',
+    ].join('\n')
     expect(conv(md)).toBe(carve)
     expect(carveToHtml(carve)).toContain('<tr><td><strong>x</strong></td><td><em>y</em></td></tr>')
+    // The unpaired `*` stayed on its own row rather than pairing across two.
+    expect(carveToHtml(carve)).toContain('<tr><td>*a</td><td>b</td></tr>')
   })
 
   it('preserves line count and leading whitespace in a multiline paragraph', () => {
@@ -627,9 +659,12 @@ describe('markdownToCarve — HTML entities', () => {
   })
 
   it('keeps entities literal inside indented code blocks', () => {
-    const markdown = '    a&nbsp;b &amp; c'
-    expect(conv(markdown)).toBe(markdown)
-    expect(carveToHtml(conv(markdown))).toBe('<p>a&amp;nbsp;b &amp;amp; c</p>')
+    // The indented block becomes a fence, so it stays CODE - it used to land
+    // as a paragraph, which is what the old `<p>` expectation here recorded.
+    expect(conv('    a&nbsp;b &amp; c')).toBe('```\na&nbsp;b &amp; c\n```')
+    expect(carveToHtml(conv('    a&nbsp;b &amp; c'))).toBe(
+      '<pre><code>a&amp;nbsp;b &amp;amp; c\n</code></pre>',
+    )
   })
 
   it('escapes a decoded Carve delimiter so it renders literally', () => {
@@ -884,11 +919,12 @@ describe('markdownToCarve — Carve-only inline syntax is literal in Markdown', 
     ['a {=x=} b', '<p>a {=x=} b</p>'],
     ['a {+x+} b', '<p>a {+x+} b</p>'],
     ['a {-x-} b', '<p>a {-x-} b</p>'],
-    ['a {~x~} b', '<p>a {~x~} b</p>'],
+    // The braces are literal, but GFM reads the tilde pair through them.
+    ['a {~x~} b', '<p>a {<s>x</s>} b</p>'],
     ['a {/x/} b', '<p>a {/x/} b</p>'],
     ['a /it/ b', '<p>a /it/ b</p>'],
     ['a =hl= b', '<p>a =hl= b</p>'],
-    ['a ~s~ b', '<p>a ~s~ b</p>'],
+    ['a ~ b', '<p>a ~ b</p>'],
     ['a %%c%% b', '<p>a %%c%% b</p>'],
     ['%% whole line', '<p>%% whole line</p>'],
     // One pass escapes only the outer brace, and the inner pair would then
@@ -926,8 +962,7 @@ describe('markdownToCarve — Carve-only inline syntax is literal in Markdown', 
     ['**b**', '<strong>b</strong>'],
     ['_em_', '<em>em</em>'],
     ['~~s~~', '<s>s</s>'],
-    ['==h==', '<mark>h</mark>'],
-    ['^sup^', '<sup>sup</sup>'],
+    ['~s~', '<s>s</s>'],
     ['<sub>x</sub>', '<sub>x</sub>'],
     ['<ins>x</ins>', '<ins>x</ins>'],
     ['`*x*`', '<code>*x*</code>'],
@@ -1015,5 +1050,113 @@ describe('markdownToCarve — frontmatter', () => {
     // is the meaning-preserving one. Guards the existing line-0 rule behavior.
     expect(carveToHtml(conv('---\n---'))).toBe('<hr>\n<hr>')
     expect(carveToHtml(conv('---\n\n---'))).toBe('<hr>\n<hr>')
+  })
+})
+
+describe('markdownToCarve — hard breaks', () => {
+  it('converts two trailing spaces to a backslash break', () => {
+    // Carve gives trailing spaces no meaning, so carrying them across DROPPED
+    // the break; the backslash is Carve's spelling for it.
+    expect(conv('a  \nb')).toBe('a\\\nb')
+    expect(carveToHtml(conv('a  \nb'))).toBe('<p>a<br>\nb</p>')
+  })
+
+  it('leaves trailing spaces at the end of a paragraph alone', () => {
+    // CommonMark has no hard break at a paragraph's end, so there is none to
+    // convert - and a stray backslash there would render as a literal one.
+    expect(carveToHtml(conv('a  \n\nb'))).toBe('<p>a</p>\n<p>b</p>')
+  })
+
+  it('does not touch spacing inside a code span', () => {
+    expect(carveToHtml(conv('`a  b`'))).toBe('<p><code>a  b</code></p>')
+  })
+
+  it('converts a hard break inside a list item', () => {
+    expect(carveToHtml(conv('- a  \n  b'))).toContain('<br>')
+  })
+})
+
+describe('markdownToCarve — indented code blocks', () => {
+  it('becomes a fence, so the code stays code', () => {
+    expect(conv('    indented\n    code')).toBe('```\nindented\ncode\n```')
+    expect(carveToHtml(conv('    indented\n    code'))).toBe(
+      '<pre><code>indented\ncode\n</code></pre>',
+    )
+  })
+
+  it('stops the code being read as markup', () => {
+    // The bug this fixes: as a paragraph, the code's own delimiters were
+    // parsed, so `*not bold*` rendered BOLD.
+    const html = carveToHtml(conv('    let x = *not bold* and _not em_'))
+    expect(html).not.toContain('<strong>')
+    expect(html).toContain('let x = *not bold* and _not em_')
+  })
+
+  it('keeps a blank line that is inside the block', () => {
+    // A blank line does not end an indented code block in CommonMark; only a
+    // less-indented non-blank line does.
+    expect(conv('    a\n\n    b')).toBe('```\na\n\nb\n```')
+  })
+
+  it('gives a trailing blank line back to the document', () => {
+    expect(carveToHtml(conv('    a\n\ntext'))).toBe(
+      '<pre><code>a\n</code></pre>\n<p>text</p>',
+    )
+  })
+
+  it('removes exactly four columns, keeping the code own indent', () => {
+    expect(conv('    a\n        b')).toBe('```\na\n    b\n```')
+  })
+
+  it('picks a fence longer than any backtick run inside', () => {
+    expect(conv('    ```\n    x\n    ```')).toBe('````\n```\nx\n```\n````')
+  })
+
+  it('a tab-indented block is code too', () => {
+    expect(conv('\ta')).toBe('```\na\n```')
+  })
+
+  it('leaves an indented continuation line under a list item alone', () => {
+    // Four spaces under a list item is item content, not a code block; the
+    // previous line is not blank, so it never reaches the code branch.
+    expect(carveToHtml(conv('- a\n    b'))).not.toContain('<pre>')
+  })
+})
+
+describe('markdownToCarve — GFM strikethrough', () => {
+  const html = (md: string): string => carveToHtml(conv(md)).trim()
+
+  it('treats a paired single tilde as strikethrough', () => {
+    // GFM strikethrough is "a matching pair of one or two tildes", so the
+    // single form is struck; it used to be escaped into literal text.
+    expect(conv('a ~b~ c')).toBe('a ~b~ c')
+    expect(html('a ~b~ c')).toBe('<p>a <s>b</s> c</p>')
+  })
+
+  it('still treats the doubled form as strikethrough', () => {
+    expect(html('a ~~b~~ c')).toBe('<p>a <s>b</s> c</p>')
+  })
+
+  it('leaves an unpaired tilde literal', () => {
+    for (const md of ['a ~ b', 'a ~b c', 'approx ~5 items']) {
+      expect(html(md)).not.toContain('<s>')
+    }
+  })
+})
+
+describe('markdownToCarve — dialect flags are independent', () => {
+  const html = (md: string): string => carveToHtml(conv(md)).trim()
+
+  it('enabling one does not enable the others', () => {
+    expect(markdownToCarve('a ==b== and ^c^ and $d+e$', { highlight: true })).toBe(
+      'a =b= and ^c^ and $d+e$',
+    )
+  })
+
+  it('the default is CommonMark plus GFM', () => {
+    // GFM constructs stay on; everything wider stays literal.
+    expect(html('a ~~s~~ b')).toContain('<s>s</s>')
+    expect(html('a ==b== c')).not.toContain('<mark>')
+    expect(html('a ^b^ c')).not.toContain('<sup>')
   })
 })

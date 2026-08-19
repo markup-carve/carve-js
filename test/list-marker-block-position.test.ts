@@ -4,10 +4,12 @@ import { carveToHtml } from '../src/index.js'
 const h = (s: string) => carveToHtml(s)
 
 /**
- * List markers follow the uniform block-position rule (grammar PART 9 §10).
+ * Symmetric list interruption (grammar PART 9 §10).
  *
- * A bullet, task, or ordered marker inside an open paragraph is continuation
- * text. A separating blank creates the block position needed to start a list.
+ * A list marker never interrupts an open paragraph: a bullet (`- `/`* `) and a
+ * task marker need a blank line before them, exactly like an ordered marker
+ * (`1.`/`a.`/`i.`) already did. Without the blank line the marker folds into the
+ * open paragraph as lazy continuation.
  *
  * A quoted paragraph behaves like a top-level paragraph: a list marker folds
  * into the open quoted paragraph as literal text (it does not end the quote),
@@ -19,12 +21,12 @@ const h = (s: string) => carveToHtml(s)
  * item's content column opens a sublist with no blank line (§24). A marker BELOW
  * the content column folds.
  */
-describe('list-marker block position (§10)', () => {
-  it('a bullet in open prose folds without a blank line', () => {
+describe('symmetric list interruption (§10)', () => {
+  it('a bullet does not interrupt prose (folds, no blank line)', () => {
     expect(h('intro\n- a')).toBe('<p>intro\n- a</p>')
   })
 
-  it('an ordered marker in open prose folds too', () => {
+  it('an ordered marker does not interrupt prose either (unchanged)', () => {
     expect(h('intro\n1. a')).toBe('<p>intro\n1. a</p>')
   })
 
@@ -33,7 +35,7 @@ describe('list-marker block position (§10)', () => {
     expect(h('intro\n\n1. a')).toBe('<p>intro</p>\n<ol>\n  <li>a</li>\n</ol>')
   })
 
-  it('a thematic break opens after a separating blank', () => {
+  it('a thematic break still interrupts (not a list marker)', () => {
     expect(h("intro\n\n---\n\nmore\n")).toBe('<p>intro</p>\n<hr>\n<p>more</p>')
   })
 

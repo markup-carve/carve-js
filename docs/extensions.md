@@ -1,5 +1,23 @@
 # Extensions
 
+## smartQuotes
+
+Select locale-specific opening and closing quote glyphs. This changes only the
+resolved presentation glyphs; source mode and canonical Carve output still emit
+the quotes the author typed.
+
+```ts
+import { carveToHtml, smartQuotes } from '@markup-carve/carve'
+
+carveToHtml('"Hallo"', { extensions: [smartQuotes({ locale: 'de' })] })
+// <p>„Hallo“</p>
+```
+
+Twenty locale sets match carve-php, with region/language fallback and explicit
+`openDoubleQuote`, `closeDoubleQuote`, `openSingleQuote`, and
+`closeSingleQuote` overrides. Apostrophes such as `don't` and `'70s` remain
+U+2019 in every locale.
+
 Extensions are plain objects passed via `{ extensions: [...] }` to `carveToHtml`
 (and the other renderers). They can add inline/block syntax with parse-stage
 matchers, transform the AST before rendering, and override renderers for
@@ -348,6 +366,19 @@ carveToHtml('[docs](https://example.com)', { extensions: [externalLinks()] })
 Configurable `target`, `rel`, and `nofollow`. Relative and anchor links are
 left untouched. (Semantic spans like `:kbd[…]`, `:abbr[…]`, `:dfn[…]` are
 already core, no extension needed.)
+
+The complete built-in semantic registry is `abbr`, `cite`, `dfn`, `kbd`,
+`samp`, `var`, `time`, `code`, and `mark`. Each `:name[content]{attrs}` form
+remains an ordinary `inline_extension` AST node and renders as the same-named
+HTML element. Unknown names retain `<span class="ext-name">`; plain and ANSI
+render only the content. `:cite[…]` is not a bibliographic `[@key]` citation,
+and `:abbr[…]` is independent of automatic abbreviation definitions.
+
+The same registry is available as compact span-attribute sugar:
+`[Ctrl]{kbd}`, `[HTML]{abbr="HyperText Markup Language"}`, and combinations
+such as `[CSS]{dfn abbr="Cascading Style Sheets"}`. Non-semantic attributes
+remain on one outer span. `abbr`, `dfn`, and `time` values map to `title`,
+`title`, and `datetime`, respectively.
 
 ## headingPermalinks
 

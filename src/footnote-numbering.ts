@@ -26,6 +26,7 @@
 import type { BlockNode, Document, FootnoteRef, InlineFootnote, InlineNode } from './ast.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { ownValue } from './own-property.js'
+import { isUnresolvedReference } from './unresolved-reference.js'
 
 /** A footnote instance in document order; index + 1 = its assigned number. */
 export interface FootnoteOrderEntry {
@@ -70,10 +71,15 @@ function walkBlockInlines(
   switch (node.type) {
     case 'heading':
     case 'paragraph':
+    // A bibliography entry's inlines are rendered - in the references list -
+    // so a footnote reference in one is numbered like any other. It reached
+    // this walk as a paragraph before PART 12 §18 made the line its own node,
+    // and skipping it here would have unnumbered the reference and left it
+    // rendering as its own source text.
+    case 'citation_definition':
       visit(node.children)
       break
     case 'block_quote':
-      if (node.attribution) visit(node.attribution)
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'list':
@@ -84,6 +90,14 @@ function walkBlockInlines(
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'div':
+    // A LINE BLOCK HOLDS ORDINARY BLOCKS and differs from a div only in that
+    // its newlines are hard breaks (§4.4), so its inlines are numbered like any
+    // other. Falling to `default` here did not degrade the note, it deleted it:
+    // an inline footnote carries no `id`, so an unnumbered one renders as the
+    // literal `[^]` and its body reaches no endnotes section - the content is
+    // gone from the document rather than merely unlinked
+    // (markup-carve/carve-js#1117).
+    case 'line_block':
       node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
       break
     case 'definition_list':
@@ -101,23 +115,39 @@ function walkBlockInlines(
       if (node.target.type === 'block_quote' || node.target.type === 'table')
         walkBlockInlines(node.target, visit, depth + 1)
       break
+    case 'figure_group':
+      if (node.caption) visit(node.caption)
+      node.children.forEach((c) => walkBlockInlines(c, visit, depth + 1))
+      break
     default:
       break
   }
 }
 
+/**
+ * Visit an inline subtree, telling `fn` whether the node it is looking at sits
+ * in text the document DISCARDS.
+ *
+ * An unresolved reference degrades to its literal source (PART 9R R1), so the
+ * link text built for it never reaches the reader. Everything under such a node
+ * is therefore visited but marked discarded, rather than skipped outright: a
+ * footnote reference in there must have any stale `number` cleared, the same
+ * way a reference whose definition went away does (carve-js#698).
+ */
 function visitInlineTree(
   nodes: InlineNode[],
-  fn: (n: InlineNode) => void,
+  fn: (n: InlineNode, discarded: boolean) => void,
   depth = 0,
+  discarded = false,
 ): void {
   if (depth >= MAX_RENDER_DEPTH) throw new RenderDepthError('numberFootnotes', MAX_RENDER_DEPTH)
   for (const n of nodes) {
-    fn(n)
+    fn(n, discarded)
     const kids =
       (n as { children?: InlineNode[]; content?: InlineNode[] }).children ??
       (n as { content?: InlineNode[] }).content
-    if (Array.isArray(kids)) visitInlineTree(kids, fn, depth + 1)
+    if (Array.isArray(kids))
+      visitInlineTree(kids, fn, depth + 1, discarded || isUnresolvedReference(n))
   }
 }
 
@@ -131,8 +161,20 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
   const order: FootnoteOrderEntry[] = []
   const refs: FootnoteRefVisit[] = []
   const labelIndexes = new Map<string, number>()
-  const onNode = (n: InlineNode): void => {
+  const onNode = (n: InlineNode, discarded: boolean): void => {
     if (n.type !== 'footnote_ref' && n.type !== 'inline_footnote') return
+    // A NOTE INSIDE AN UNRESOLVED REFERENCE IS NOT A REFERENCE (PART 9R R2,
+    // markup-carve/carve#1198). The reference degraded to its literal source,
+    // so the text holding this note was discarded: it draws no number, a
+    // definition it was the only use of stays unreferenced and is dropped, and
+    // no endnotes section is written on its account. Numbering it anyway is
+    // what a pipeline does when it resolves footnotes before it knows the
+    // reference failed, and the numbering says so - the note a reader can see
+    // then reads as a repeat of a reference the document does not contain.
+    if (discarded) {
+      delete n.number
+      return
+    }
     // Inline footnote (`^[content]`): always a fresh, anonymous entry.
     if (n.inline) {
       const orderIndex = order.length

@@ -32,7 +32,9 @@ describe('boolean (bare-word) attributes', () => {
   })
 
   it('multiple bare words', () => {
-    expect(h('[x]{kbd foo}')).toBe('<p><span kbd="" foo="">x</span></p>')
+    // The consumed name renames the span and `foo` rides the element it was
+    // written on (PART 9 §9).
+    expect(h('[x]{kbd foo}')).toBe('<p><kbd foo="">x</kbd></p>')
   })
 
   it('mixes with class (both applied, source order)', () => {

@@ -5,16 +5,13 @@ import { TABLE_ALIGNMENT_MARKERS } from '../src/parse.js'
 /**
  * PART 11 §1: `to_html(fmt(x)) == to_html(x)`.
  *
- * `fmt` rewrites a table's delimiter row as `|=` header cells. A prefixed cell
- * is written TIGHT, so the first character of its content lands exactly where
- * the parser's alignment scan reads - and that scan consumes one `<`, `>` or `~`
- * glued to `|` or `|=`. A header cell whose content opened with one therefore
- * came back with an alignment it never had and its first character eaten
- * (markup-carve/carve-js#903).
+ * `fmt` rewrites a table's delimiter row as `|=` header cells. The canonical
+ * padding after every prefix keeps the first content character away from the
+ * parser's alignment scan, which consumes one `<`, `>` or `~` glued to `|` or
+ * `|=` (markup-carve/carve-js#903).
  *
- * The fix is one space between the marker and the content. It is not "stop
- * emitting `|=`": rewriting the delimiter row is correct in general, which the
- * first control below is here to keep true.
+ * Rewriting the delimiter row remains correct in general, which the first
+ * control below is here to keep true.
  */
 
 const roundTrips = (src: string) => carveToHtml(carveToCarve(src)) === carveToHtml(src)
@@ -29,7 +26,7 @@ describe('a header cell is not written so its content reads as alignment', () =>
 
   it('a strikethrough header cell keeps its strikethrough', () => {
     const src = '| ~x~ |\n|---|\n| y |\n'
-    expect(carveToCarve(src)).toBe('|= ~x~|\n| y |\n')
+    expect(carveToCarve(src)).toBe('|= ~x~ |\n| y |\n')
     expect(roundTrips(src)).toBe(true)
     expect(carveToHtml(carveToCarve(src))).toContain('<s>x</s>')
     // The centering the old output invented reached every cell in the column.
@@ -57,26 +54,26 @@ describe('a header cell is not written so its content reads as alignment', () =>
     // Reached without a delimiter row at all, so the fix is on the cell writer
     // rather than on the delimiter-row rewrite.
     expect(roundTrips('|= ~x~ |\n| y |\n')).toBe(true)
-    expect(carveToCarve('|= ~x~ |\n| y |\n')).toBe('|= ~x~|\n| y |\n')
+    expect(carveToCarve('|= ~x~ |\n| y |\n')).toBe('|= ~x~ |\n| y |\n')
   })
 
   it('CONTROL: the delimiter row is still rewritten as `|=`', () => {
     // The row this ticket is most likely to be misread as asking to change. No
-    // mutation of the sigil guard moves it.
-    expect(carveToCarve('| a |\n|---|\n| y |\n')).toBe('|=a|\n| y |\n')
+    // change to canonical cell padding removes it.
+    expect(carveToCarve('| a |\n|---|\n| y |\n')).toBe('|= a |\n| y |\n')
     expect(roundTrips('| a |\n|---|\n| y |\n')).toBe(true)
   })
 
-  it('CONTROL: content that is not sigil-initial keeps its tight form', () => {
-    expect(carveToCarve('| /e/ |\n|---|\n| y |\n')).toBe('|=/e/|\n| y |\n')
-    expect(carveToCarve('|= ^x |\n| y |\n')).toBe('|=^x|\n| y |\n')
-    expect(carveToCarve('|= =x |\n| y |\n')).toBe('|==x|\n| y |\n')
+  it('CONTROL: content that is not sigil-initial gets canonical padding too', () => {
+    expect(carveToCarve('| /e/ |\n|---|\n| y |\n')).toBe('|= /e/ |\n| y |\n')
+    expect(carveToCarve('|= ^x |\n| y |\n')).toBe('|= ^x |\n| y |\n')
+    expect(carveToCarve('|= =x |\n| y |\n')).toBe('|= =x |\n| y |\n')
   })
 
-  it('CONTROL: a cell that already carries an alignment is untouched', () => {
+  it('CONTROL: a cell that already carries an alignment is padded', () => {
     // The scan consumes exactly one marker, so the emitted alignment already
-    // shields the content behind it. Adding a space here would be noise.
-    expect(carveToCarve('|=< ~x~ |\n| y |\n')).toBe('|=<~x~|\n| y |\n')
+    // shields the content behind it; canonical padding still applies uniformly.
+    expect(carveToCarve('|=< ~x~ |\n| y |\n')).toBe('|=< ~x~ |\n| y |\n')
     expect(roundTrips('|=< ~x~ |\n| y |\n')).toBe(true)
   })
 
@@ -94,8 +91,8 @@ describe('a header cell is not written so its content reads as alignment', () =>
     // BYTES, not just the rendering. A body cell is padded by the row writer,
     // so a guard that fired on it would add a second space that changes nothing
     // and reads as a defect - the round trip alone cannot see that.
-    expect(carveToCarve('| a |\n|---|\n| ~y~ |\n')).toBe('|=a|\n| ~y~ |\n')
-    expect(carveToCarve('|= a |{.r}\n| ~y~ |{.s}\n')).toBe('|=a|{.r}\n| ~y~ |{.s}\n')
+    expect(carveToCarve('| a |\n|---|\n| ~y~ |\n')).toBe('|= a |\n| ~y~ |\n')
+    expect(carveToCarve('|= a |{.r}\n| ~y~ |{.s}\n')).toBe('|= a |{.r}\n| ~y~ |{.s}\n')
   })
 
   it('is idempotent', () => {

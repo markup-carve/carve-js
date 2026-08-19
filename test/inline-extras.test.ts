@@ -124,7 +124,7 @@ describe('inline extras (nbsp, raw inline, symbols)', () => {
   })
 
   it('keeps `:type[content]` as an extension, not a symbol', () => {
-    expect(h(':kbd[Esc]')).toBe('<p><kbd>Esc</kbd></p>')
+    expect(h(':kbd[Esc]')).toBe('<p><span class="ext-kbd">Esc</span></p>')
     expect(inlineTypes(':kbd[Ctrl]')).toContain('inline_extension')
     expect(inlineTypes(':kbd[Ctrl]')).not.toContain('symbol')
   })

@@ -165,6 +165,7 @@ function walkHeadings(
       }
       case 'div':
       case 'admonition':
+      case 'figure_group':
         descend((b as { children?: unknown }).children, inBlockquote)
         break
       case 'definition_list': {

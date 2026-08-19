@@ -10,30 +10,54 @@
  * is not a thing their CI can see.
  *
  * This renders the spec corpus through both engines and counts the documents
- * that differ, then compares that count against `published-drift.baseline`.
- * Green while the drift matches the baseline; red when it grows. Moving the
- * baseline is a commit that says "we accept shipping this far behind", and a
- * release resets it to zero.
+ * that differ, then holds that count under the ceiling in
+ * `published-drift.ceiling`.
  *
- * The ratchet shape is deliberate: the spec repo uses it for the refusal set
- * and the schema-field exemptions, both checked in BOTH directions so a state
- * cannot rot in either. Here that means a SHRINKING drift fails too - it says
- * the baseline is stale and someone published without resetting it.
+ * It used to be an exact-equality ratchet against a baseline, checked in BOTH
+ * directions so the number could not rot. That shape assumed a release would
+ * come along and reset it to zero. Under a policy of not releasing on a
+ * schedule it fails on every run instead, permanently, which is the one thing a
+ * gate must not do: a red that is always red carries no information, and the
+ * next real regression arrives into a job everybody already ignores.
+ *
+ * So the number is now a ceiling rather than a target. The value is a
+ * JUDGEMENT, not a measurement, and it is edited by hand with a reason - there
+ * is deliberately no flag that records the current count, because a gate that
+ * accepts whatever it finds is the same thing as no gate.
+ *
+ * The starting value of 100 is "one skipped release round". Skipping the round
+ * prepared on 2026-08-11 put the count at 78, so the ceiling sits above one
+ * round and below two: breaching it means a second round has piled up behind
+ * the first, which is the point at which the release is genuinely overdue
+ * rather than deferred.
+ *
+ * Read that number honestly. The hand audit behind carve#608 found 38 corpus
+ * documents differing and called it unacceptable; 78 is twice that. The ceiling
+ * is not a claim that this is fine, it is a claim about when it stops being a
+ * decision and starts being a backlog.
+ *
+ * The count is printed on every run, green included. A ceiling nobody watches
+ * is how 38 documents accumulated unnoticed the first time.
+ *
+ * Two things this measure is bad at, both of which carve-js#1039 addresses:
+ * five repositories pin a git revision instead of installing from npm and are
+ * invisible here (the worst is 256 commits behind, against 65 for the published
+ * tag), and the document count is spiky - it went from 20 to 78 in a day
+ * because a spec bump landed, not because consumers moved.
  *
  * Usage:
- *   node scripts/published-drift.mjs            # check against the baseline
- *   node scripts/published-drift.mjs --write    # record the current count
+ *   node scripts/published-drift.mjs            # check against the ceiling
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..')
-const baselineFile = resolve(repo, 'published-drift.baseline')
+const ceilingFile = resolve(repo, 'published-drift.ceiling')
 const corpusDir = resolve(repo, 'spec/tests/corpus')
 
 if (!existsSync(corpusDir)) {
@@ -75,26 +99,35 @@ const publishedVersion = execFileSync('npm', ['view', '@markup-carve/carve', 've
 }).trim()
 
 const count = differing.length
-console.log(`published ${publishedVersion} vs working tree: ${count} of ${files.length} corpus documents differ (${threw} threw)`)
+const ceiling = Number(readFileSync(ceilingFile, 'utf8').trim())
+
+const headline = `published ${publishedVersion} vs working tree: ${count} of ${files.length} corpus documents differ (${threw} threw), ceiling ${ceiling}`
+console.log(headline)
 for (const f of differing.slice(0, 10)) console.log(`  ${f}`)
 if (differing.length > 10) console.log(`  ... and ${differing.length - 10} more`)
 
-if (process.argv.includes('--write')) {
-  writeFileSync(baselineFile, `${count}\n`)
-  console.log(`Wrote baseline ${count}`)
+// Reported on every run, not only on failure. The trend toward the ceiling is
+// the part worth seeing, and a job that only speaks when it fails hides it.
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const listed = differing.slice(0, 20).map((f) => `- \`${f}\``).join('\n')
+  appendFileSync(
+    process.env.GITHUB_STEP_SUMMARY,
+    `## Published engine drift\n\n${headline}\n\n${listed}\n` +
+      (differing.length > 20 ? `\n_...and ${differing.length - 20} more._\n` : ''),
+  )
+}
+
+if (count <= ceiling) {
+  console.log(`Under the ceiling (${count} <= ${ceiling}).`)
   process.exit(0)
 }
 
-const baseline = Number(readFileSync(baselineFile, 'utf8').trim())
-if (count === baseline) {
-  console.log(`Matches the baseline (${baseline}).`)
-  process.exit(0)
-}
-
-// Both directions, for the reason in the header.
 console.error(
-  count > baseline
-    ? `\nDrift GREW: ${count} documents differ, baseline ${baseline}. Either publish a release (which resets this to 0) or record the new number deliberately:\n  node scripts/published-drift.mjs --write`
-    : `\nDrift SHRANK: ${count} documents differ, baseline ${baseline}. A release was published without resetting the baseline; record it:\n  node scripts/published-drift.mjs --write`,
+  `\nDrift is over the ceiling: ${count} documents differ, ceiling ${ceiling}.\n` +
+    'Publish a release (which drops this to 0), or raise the ceiling in\n' +
+    '`published-drift.ceiling` with a commit message saying why this much is acceptable.\n' +
+    'Raising it to whatever today happens to be is not an answer - the number is a\n' +
+    'judgement about how far behind consumers may ship, and carve#608 is what it\n' +
+    'looks like when nobody makes that judgement.',
 )
 process.exit(1)

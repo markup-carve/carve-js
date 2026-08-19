@@ -144,6 +144,7 @@ function walkBlock(
     case 'block_quote':
     case 'div':
     case 'admonition':
+    case 'figure_group':
       node.children.forEach((c) => walkBlock(c, targets, counts))
       break
     case 'list':

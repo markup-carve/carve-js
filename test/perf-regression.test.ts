@@ -145,13 +145,37 @@ describe('span-attribute output is preserved (bounding elides only failures)', (
 //    guard pins the linear-in-bytes behavior: a ~177 KB staircase parses well
 //    under the cap; a true quadratic-in-bytes regression would take many seconds.
 describe('parser perf regression: deeply-indented list staircase', () => {
-  it('nested-list dedent stays linear in input bytes', () => {
+  // THIS WAS AN ABSOLUTE 2000ms CAP AND IT WAS THE WRONG INSTRUMENT TWICE OVER.
+  //
+  // It was ungated, so it ran inside the everyday suite alongside 400-odd other
+  // files - the exact arrangement the header above blames for "a 2000ms cap on
+  // a ~40ms operation" failing - and it read 2002.4ms on `main` on Node 22 for
+  // a parser nobody had touched. Its comment claimed ~250ms locally, which
+  // would have been 8x of headroom; the real local reading is ~950ms at 600
+  // lines, so the margin was about 2x. A cap that close to the measurement is a
+  // scheduled flake, and raising 2000 to 4000 only reschedules it.
+  //
+  // So it becomes a RATIO, the way every other guard in this file already
+  // works, and it moves behind `perfIt` so the scaling-guards job measures it
+  // on a runner of its own.
+  //
+  // THE SIZES DOUBLE THE LINES, NOT QUADRUPLE THEM, and that is the whole
+  // reason the shared helper grew a `largeRepeats`. Line `i` carries `i` spaces,
+  // so the input BYTES grow with the SQUARE of the line count: 150 to 300 lines
+  // is already 4x the input, which is the separation the 2.0 threshold is set
+  // for. Reading the same shape per LINE is the false quadratic a pre-release
+  // audit flagged, and the per-byte view is what corrects it.
+  //
+  // The per-byte cost is not perfectly flat - nesting deepens with every line,
+  // so it drifts up around 1.3x across this 4x - which is why the sizes stay
+  // close together. A genuine quadratic-in-bytes regression reads the whole 4x.
+  perfIt('nested-list dedent stays linear in input bytes', () => {
     const mk = (n: number) => Array.from({ length: n }, (_, i) => ' '.repeat(i) + '- x').join('\n')
-    carveToHtml(mk(150)) // warm up
-    const t = timeMin(() => void carveToHtml(mk(600)), 3)
-    // ~250ms locally at 177 KB; a quadratic-in-bytes regression is multiple
-    // seconds. Absolute cap (not a ratio) per this file's noise-robust convention.
-    expect(t).toBeLessThan(2000)
+    expectBuiltInputScansLinearly((input) => void carveToHtml(input), mk, {
+      label: 'indented list staircase',
+      smallRepeats: 150,
+      largeRepeats: 300,
+    })
   })
 })
 
@@ -203,5 +227,24 @@ describe('parser perf regression: a `+`-attached fence that never closes', () =>
         Array.from({ length: repeats }, (_, i) => `- x\n+\n${'%'.repeat(3 + i)}\na\n`).join('\n'),
       { label: 'unclosable comment fence', smallRepeats: 400 },
     )
+  })
+})
+
+// D) A table's `+` continuation rows. Cutting a continuation into cells needs
+//    the run state each COLUMN was left in, and reading that back out of the
+//    cell's accumulated source before every row is quadratic in the number of
+//    rows: a cell that has absorbed k fragments is re-scanned whole for the
+//    k+1th. Each cell carries its state forward instead, so only the new
+//    fragment is read.
+describe('parser perf regression: table continuation rows', () => {
+  perfIt('a run of continuation rows scales near-linearly', () => {
+    const build = (repeats: number) => '| a | b |\n' + '+ c | d |\n'.repeat(repeats)
+    expectBuiltInputScansLinearly((input) => void carveToHtml(input), build, {
+      label: 'table continuation rows',
+      // A row is a dozen bytes and every row is a parse step, so the byte
+      // counts the helper divides by are reached with far fewer repeats than a
+      // four-character inline fragment needs.
+      smallRepeats: 2000,
+    })
   })
 })

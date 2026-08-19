@@ -18,6 +18,11 @@ import { blankDeniedDestination } from './deny-listed-destination.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
+import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+
+// Set while rendering a span that carries an authored `abbr`, so a resolved
+// abbreviation inside it contributes only its visible text (carve#1127).
+let suppressAutomaticAbbreviation = false
 
 /**
  * Whether smart typography renders as its glyph or as the source run the author
@@ -89,6 +94,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     abbrBudget: budgetForDocument(ast),
     smartTypography: opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph',
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    authoredHashes: 0,
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -110,6 +116,54 @@ interface MarkdownContext {
    * metacharacters that section 8 M1 requires escaping.
    */
   definedFootnotes: Set<string>
+  /**
+   * Authored hashes emitted since the enclosing block started, so a block that
+   * emitted none skips the M2b pass entirely rather than scanning its subtree.
+   */
+  authoredHashes: number
+}
+
+/**
+ * The finished content of a container, trimmed and with PART 11 section 8b M2b
+ * ANSWERED ON IT, ready for the caller to put its prefix in front.
+ *
+ * Every call site is a place the writer prefixes a container's lines, and that
+ * is the whole of the list: the block quote marker, the list and task marker
+ * with the alignment section 10 gives the lines under it, the footnote
+ * definition marker, the definition marker. M2b measures on the EMITTED LINE
+ * and a line's content position is after its container prefix
+ * (markup-carve/carve#1330), so the question has to be settled here - after the
+ * trim, which is part of the shape of the line, and before the prefix, which is
+ * what the position is measured past.
+ *
+ * A HEADING IS NOT A CONTAINER and does not call this. Its `## ` belongs to the
+ * block's own line, so the hash behind it stays mid-line and loses the escape,
+ * which is the reading CommonMark gives it. Neither is a table cell: `| ` opens
+ * no container either. Both are left to the resolve pass at the end, which
+ * measures on the finished document - the right answer for a line no container
+ * encloses, and the wrong one for a line inside a container, which is why these
+ * sites exist.
+ *
+ * DECIDING EARLIER DOES NOT WORK, and the trim is why. A block does not know
+ * whether the whitespace it wrote at the start of its first line survives:
+ * a paragraph opening with four spaces keeps them mid-document and loses them
+ * as the first block of a quote or of the document. Answering M2b before that
+ * trim scored the hash as over-indented and emitted it bare, and the trim then
+ * put it at column 0 - a heading where the author wrote text.
+ *
+ * The counter is what keeps this from costing anything. A nested container
+ * decides on its own way out and leaves the count where it found it, so an
+ * outer one that added no hash of its own never touches the text - which
+ * matters for exactly the shape carve-js#701 fixed, where re-scanning a subtree
+ * once per enclosing level is quadratic in the nesting depth.
+ */
+function containerContent(ctx: MarkdownContext, render: () => string): string {
+  const before = ctx.authoredHashes
+  const content = trimNonNbsp(render())
+  if (ctx.authoredHashes === before) return content
+  ctx.authoredHashes = before
+
+  return decideAuthoredHashes(content)
 }
 
 function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
@@ -122,6 +176,48 @@ function renderBlocks(blocks: BlockNode[], ctx: MarkdownContext): string {
   }
 }
 
+/**
+ * A block MARKER joined to the content it introduces, with the space that
+ * separates the two dropped when there IS no content.
+ *
+ * Every marker this target emits carries that separator - `> `, `- `, `1. `,
+ * `- [ ] `, `: `, `## `, `[^a]: `, `*[X]: `. Where the content is empty the
+ * separator is all that is left on the line, and a line ending in whitespace is
+ * not stable: editors that strip it on save, `git apply --whitespace=fix` and CI
+ * whitespace checks all rewrite it, so the renderer produces output that
+ * ordinary tooling changes behind it. That is the argument PART 11 section 9
+ * makes ON THIS TARGET when it forbids the two-trailing-space hard break, and
+ * the one section 7 makes for the canonical writer; `renderList`'s continuation
+ * pad already applied it here, and this extends it to the marker lines.
+ *
+ * The separator carries no meaning to a reader either: `> ` and `>`, `- ` and
+ * `-`, `## ` and `##`, `1. ` and `1.` parse to the same document in commonmark
+ * 0.31.2, and PART 2's NO TRAILING WHITESPACE clause drops the run on every
+ * content line - so the dropped byte is one Carve's own parser would not read
+ * back.
+ *
+ * THE TEST IS ON THE CONTENT, not on the finished line, and that is what keeps
+ * VERBATIM payload intact. A fenced code block's body is the block's payload,
+ * not a content line (PART 2, WHERE IT DOES NOT REACH), so a body line of
+ * `abc<SP>` - or one that is a single space - keeps its bytes even inside a
+ * quote, where it arrives here as non-empty content behind a `> `. Corpus case
+ * 268-trailing-whitespace-on-a-content-line-is-dropped-9 pins that. A sweep over
+ * the emitted LINE, or over the finished document, would corrupt it; the
+ * canonical writer runs such a sweep and needs a verbatim-sentinel scheme to do
+ * it safely, which this target has no need of.
+ */
+function withMarker(marker: string, content: string): string {
+  if (content !== '') return `${marker}${content}`
+
+  // A SPACE, not PART 2's two-character `whitespace` terminal. Every marker
+  // above separates itself from its content with a space and none of them uses
+  // a tab, so a `[ \t]` class here would carry a branch no input can reach -
+  // and an unreachable branch reads as a rule that is wider than it is. The
+  // sibling helper in the canonical writer does take the full terminal, because
+  // that one sweeps AUTHOR lines, where a tab is reachable.
+  return marker.replace(/ +$/, '')
+}
+
 function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
   switch (node.type) {
     case 'heading': {
@@ -131,7 +227,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r]*\n[ \t\r]*/g, ' '))
       const id = node.attrs?.id
       const suffix = id && ctx.referencedHeadingIds.has(id) ? ` {#${id}}` : ''
-      return `${'#'.repeat(node.level)} ${text}${suffix}\n\n`
+      return `${withMarker(`${'#'.repeat(node.level)} `, `${text}${suffix}`)}\n\n`
     }
     case 'paragraph':
       return `${protectParagraphListMarkers(renderInlines(node.children, ctx))}\n\n`
@@ -149,8 +245,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
-      const lines = trimNonNbsp(renderBlocks(node.children, ctx)).split('\n')
-      return `${lines.map((line) => `> ${line}`).join('\n')}\n\n`
+      const lines = containerContent(ctx, () => renderBlocks(node.children, ctx)).split('\n')
+      return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
     case 'list':
       return renderList(node, ctx)
@@ -184,6 +280,21 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
+    case 'figure_group': {
+      // PART 11 degradation (D8): the panels in source order, each host
+      // degraded as usual with its caption as an EMPHASIZED paragraph after
+      // it; stray content in place; the group caption as a BOLD paragraph at
+      // the end. A table panel's caption is the table's own and stays where
+      // that renderer puts it.
+      let out = ''
+      for (const child of node.children) {
+        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      }
+      if (node.caption !== undefined) {
+        out += `**${trimNonNbsp(renderInlines(node.caption, ctx))}**\n\n`
+      }
+      return out
+    }
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
@@ -192,7 +303,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
       return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
     case 'abbreviation_def':
-      // PART 10 §10a: a definition NOTHING references still reaches this
+      // PART 11 §10a: a definition NOTHING references still reaches this
       // target. HTML drops it because it has nowhere to put one; Markdown,
       // plain text and the terminal do not get to drop content the author
       // wrote, and dropping it made the output depend on whether a reference
@@ -202,13 +313,18 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // target's contract is that embedded HTML cannot become live markup
       // downstream. Writing the occurrence escaped and the definition raw made
       // one output disagree with itself (markup-carve/carve-js#894).
-      return `*[${escapeMdHtml(stripControls(node.abbr))}]: ${escapeMdHtml(stripControls(node.expansion))}\n\n`
+      return `${withMarker(`*[${escapeMdHtml(stripControls(node.abbr))}]: `, escapeMdHtml(stripControls(node.expansion)))}\n\n`
     case 'comment':
       return ''
     case 'link_reference_definition':
       // Renders nothing, same as carve-php on this target. The definition's
       // destination already reached every link that resolved it, and Markdown's
       // own reference form is not what this writer emits.
+      return ''
+    case 'citation_definition':
+      // Renders nothing, which is what the line has always produced here: the
+      // entry belongs to the references list, and PART 12 §18 gave the line a
+      // node without moving output on any target.
       return ''
     default: {
       const t: never = node
@@ -243,7 +359,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     } else {
       prefix = `${bullet} `
     }
-    const content = trimNonNbsp(renderListItem(item, ctx))
+    const content = containerContent(ctx, () => renderListItem(item, ctx))
     const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
@@ -255,7 +371,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     // own content-column model is lenient enough to read it back as a list,
     // which is why this was invisible from inside the engine and only pandoc
     // showed it (carve#1069, carve-php#1142).
-    out += `${prefix}${lines.shift() ?? ''}\n`
+    out += `${withMarker(prefix, lines.shift() ?? '')}\n`
     const continuation = ' '.repeat(prefix.length)
     // A line with no content takes no pad: PART 11 section 7 emits such a line
     // empty, and trailing whitespace is what editors and `git apply
@@ -274,7 +390,8 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   let out = ''
   for (const item of items) {
     for (const term of item.terms) out += `**${renderInlines(term, ctx)}**\n`
-    for (const def of item.definitions) out += `: ${trimNonNbsp(renderBlocks(def, ctx))}\n`
+    for (const def of item.definitions)
+      out += `${withMarker(': ', containerContent(ctx, () => renderBlocks(def, ctx)))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -336,8 +453,20 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     // reject the entire table (carve#1042, PART 11 §10b).
     out += `| ${Array.from({ length: headerColumns }, (_, i) => separator(i)).join(' | ')} |\n`
   }
-  out += `${rows.join('\n')}\n\n`
-  return out
+  out += `${rows.join('\n')}\n`
+  // PART 11 §10e T2: a caption is authored text, and Markdown has no
+  // table-caption syntax - so it survives as body text AFTER the table,
+  // separated by one blank line, the position an image caption and a listing
+  // caption already take on this target. The blank line is not cosmetic: a GFM
+  // reader takes a line written directly after the last row as ANOTHER ROW, so
+  // the caption comes back as a fabricated data cell, which is worse than
+  // losing it. Adjacency attaches only where it does not change what the
+  // adjacent block is - the move a caption cannot make on this target, whatever
+  // it could make on another.
+  if (node.caption && node.caption.length > 0) {
+    out += `\n${trimNonNbsp(renderInlines(node.caption, ctx))}\n`
+  }
+  return `${out}\n`
 }
 
 function renderFigure(node: Figure, ctx: MarkdownContext): string {
@@ -348,13 +477,35 @@ function renderFigure(node: Figure, ctx: MarkdownContext): string {
         ? trimNonNbsp(renderTable(node.target, ctx))
         : trimNonNbsp(renderBlock(node.target, ctx))
   // The caption sits on its own line directly under the figure (`\n`) - an
-  // image target used to glue it on (`![a](/u)cap`). A blockquote target keeps
-  // the blank-line separation; a table drops the caption entirely.
+  // image target used to glue it on (`![a](/u)cap`). A block quote keeps the
+  // blank-line separation, and so does a table: PART 11 §10e T2 requires one
+  // blank line there, because a line directly after the last row is read as
+  // another row. The empty separator this branch used to take was only ever
+  // right while a table dropped its caption outright.
   const sep =
-    node.target.type === 'block_quote' ? '\n\n' : node.target.type === 'table' ? '' : '\n'
+    node.target.type === 'block_quote' || node.target.type === 'table' ? '\n\n' : '\n'
   // End with the block separator so a following block is not glued to the
   // caption (matching every other block renderer and carve-php).
   return `${target}${sep}${renderInlines(node.caption, ctx)}\n\n`
+}
+
+/**
+ * A composite figure's PANEL: the host degraded exactly as `renderFigure`
+ * degrades it, with the caption emphasized rather than plain - the D8 shape
+ * that keeps a panel caption visually subordinate to the group's bold one.
+ */
+function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
+  const target =
+    node.target.type === 'image'
+      ? renderImage(node.target)
+      : node.target.type === 'table'
+        ? trimNonNbsp(renderTable(node.target, ctx))
+        : trimNonNbsp(renderBlock(node.target, ctx))
+  // A BLANK line before the caption, for every host: the emphasized caption is
+  // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
+  // example). The single-newline glue is the standalone figure's shape, not
+  // the panel's.
+  return `${target}\n\n*${trimNonNbsp(renderInlines(node.caption, ctx))}*\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
@@ -363,7 +514,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    out += `[^${escapeMdHtml(stripControls(label))}]: ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
+    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))}\n`
   }
   return out
 }
@@ -387,17 +538,28 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'text':
       return escapeUnresolvedCrossrefs(cleanEscapedText(node))
     case 'escaped_text':
-      // Reproduce the author's escape. `\-\-` was written precisely so a
-      // downstream processor with smart punctuation on would not read an en
-      // dash; emitting the character bare loses exactly that (carve#350).
+      // Reproduce the author's escape where it protects something ON THIS
+      // TARGET. `\-\-` was written precisely so a downstream processor with
+      // smart punctuation on would not read an en dash; emitting the character
+      // bare loses exactly that (carve#350), so the triggers section 8 names
+      // are kept whatever their position.
       //
-      // NO SENTINEL HERE, and section 8a says why: M1b is a rule about a
-      // character that reached this writer inside a TEXT node - one the Carve
-      // grammar did not read as an opener and the author did not mark. This is
-      // the other case. The author said which reading they meant, M2 gives it
-      // back whatever the character, and the line test never sees it. The
-      // underscore used to take the sentinel here and lose its backslash to
-      // the intraword rule, which is M1b deciding a node M1 never governed.
+      // PART 11 section 8b narrows the rest, on the finding section 8a already
+      // states. M2a: a character this target's readers never read as markup is
+      // emitted BARE, which is Carve's own delimiters. M2b: the hash is read
+      // as markup only where it would open an ATX heading, so it takes a
+      // sentinel and is decided on the line like M1b's candidates.
+      //
+      // Every character Markdown CAN read keeps M2 as written. The bracket in
+      // particular keeps its escape at every position, which is what leaves
+      // section 8a's argument about the two link grammars standing: an author
+      // who meant `[a](b)` as text still gets it back.
+      if (AUTHORED_INERT.has(node.value)) return node.value
+      if (node.value in AUTHORED_SENTINEL) {
+        ctx.authoredHashes++
+
+        return AUTHORED_SENTINEL[node.value]!
+      }
       return '\\' + node.value
     case 'emphasis':
       return `*${renderInlines(node.children, ctx)}*`
@@ -420,7 +582,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined && !node.href) return escapeText(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination reaches rendered Markdown.
@@ -428,8 +590,32 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return renderLink(node, ctx)
     case 'image':
       return renderImage(node)
-    case 'span':
+    case 'span': {
+      // PART 9 §10 + carve#1127: an authored `abbr` OUTRANKS automatic
+      // expansion, and a resolved abbreviation inside such a span contributes
+      // only its visible text - a renderer must not emit the nested expansion.
+      // The HTML target already did this; markdown and ansi emitted the
+      // DEFINITION's text instead, so `[HTML]{abbr="Custom"}` under a
+      // `*[HTML]: Hyper Text Markup Language` line came out with the wrong
+      // title on two of five targets (carve#1176).
+      const authoredAbbr = node.attrs?.keyValues?.abbr
+      if (authoredAbbr !== undefined) {
+        const previous = suppressAutomaticAbbreviation
+        suppressAutomaticAbbreviation = true
+        try {
+          const inner = renderInlines(node.children, ctx)
+          if (authoredAbbr === '') return inner
+          if (!ctx.abbrBudget.charge(utf8ByteLength(authoredAbbr))) return inner
+          const title = escapeMdHtml(stripControls(authoredAbbr)).replace(/"/g, '&quot;')
+
+          return `<abbr title="${title}">${inner}</abbr>`
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
+
       return renderInlines(node.children, ctx)
+    }
     case 'math': {
       // Escaped, exactly as the HTML target escapes the same content: a
       // consumer decodes the entity back to the character before its math
@@ -472,6 +658,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // survives (markdown allows inline HTML), matching carve-php. Dropping it
       // to plain text would lose the expansion.
       const text = escapeMdHtml(stripControls(node.abbr))
+      // Inside a span carrying its own `abbr`, only the visible text (carve#1127).
+      if (suppressAutomaticAbbreviation) return text
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to the plain key text only (no <abbr>, no title).
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion))) return text
@@ -564,9 +752,16 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'smart_punctuation':
       // Source mode reproduces what the author typed; the glyph is a
       // presentation choice a machine consumer cannot reverse.
-      return ctx.smartTypography === 'source'
-        ? node.value
-        : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value)
+      // STRIPPED LIKE EVERY OTHER AUTHOR FIELD. Both branches emit a value
+      // off the node, and a stored tree can carry anything in it - including a
+      // sentinel from the range below, which the resolve pass would then read
+      // as an escape decision and write out as a backslash the document never
+      // held. `code` has always stripped for the same reason.
+      return stripControls(
+        ctx.smartTypography === 'source'
+          ? node.value
+          : (node.glyph ?? SMART_PUNCTUATION_GLYPHS[node.kind] ?? node.value),
+      )
     default: {
       const t: never = node
       throw new Error(`renderMarkdown: unknown inline ${(t as { type: string }).type}`)
@@ -616,7 +811,7 @@ function renderImage(node: Image): string {
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
-  if (node.ref !== undefined && !node.src) return escapeText(node.rawRef ?? '')
+  if (isUnresolvedReference(node)) return escapeText(referenceSourceText(node.rawRef))
   const src = markdownDestination(node.src)
   const alt = escapeMarkdownLabel(node.alt)
   return node.title === undefined
@@ -810,12 +1005,26 @@ function escapeText(text: string): string {
   // this renderer sees `"a &"` and `"; b"` as separate text nodes. That is the
   // mistake section 8a documents for `_`, `#` and `[`, which is why those three
   // are emitted as sentinels and decided in normalize().
-  text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  // Escape Markdown metacharacters (none overlap with the HTML chars above).
+  // Escape Markdown metacharacters (none overlap with the angle brackets
+  // handled below).
   // `_`, `#` and `[` are emitted as SENTINELS rather than as backslashes:
   // section 8a decides those three on the EMITTED LINE, which only normalize()
   // can see. `*` and everything else keep M1 here and unconditionally.
-  return text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+  text = text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+  // PART 11 section 8a M1e: a `<` is escaped only where the emitted line would
+  // read it as markup - before an ASCII letter, `/`, `!` or `?`, the four
+  // things that open raw HTML. Everything else is inert, and so is `>`
+  // mid-line; at line start `>` is a block quote marker M1 already covers.
+  //
+  // A BACKSLASH, not an entity. This wrote `&lt;`/`&gt;` unconditionally with no
+  // clause behind it (carve#1148), and that is precisely because an entity is
+  // not the operation this section describes: M2 and M3 protect a character so
+  // it survives as itself, and `&lt;` replaces it instead. Escaping the `<`
+  // alone suffices - a tag that cannot open cannot be closed.
+  //
+  // AFTER the metacharacter pass, so the backslash this inserts is not itself
+  // escaped by it.
+  return text.replace(/<(?=[A-Za-z/!?])/g, '\\<')
 }
 
 /** Keep paragraph continuation lines from becoming lists in Markdown readers. */
@@ -896,7 +1105,7 @@ function sanitizeMdUrl(url: string): string {
  * acts on the character (\u00a729 T4).
  */
 function stripControls(s: string): string {
-  return s.replace(/[\u000d\u007f-\u009f\ue004-\ue006]/gu, '')
+  return s.replace(/[\u000d\u007f-\u009f\ue004-\ue008]/gu, '')
 }
 
 /**
@@ -916,7 +1125,7 @@ function stripControls(s: string): string {
  * with a flag.
  */
 function stripDestinationControls(s: string): string {
-  return s.replace(/\p{Cc}|[\ue004-\ue006]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/\p{Cc}|[\ue004-\ue008]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
@@ -952,8 +1161,66 @@ const NARROWED_CHARACTER: Record<string, string> = {
   '\ue005': '#',
   '\ue006': '[',
 }
-const RE_NARROWED_SENTINEL = /[\ue004-\ue006]/g
-const HAS_NARROWED_SENTINEL = /[\ue004-\ue006]/
+/**
+ * PART 11 section 8b M2a: characters this target's readers never read as
+ * markup, at ANY position on the line.
+ *
+ * An `escaped_text` node holding one of these is emitted BARE. They are
+ * Carve's own delimiters and Markdown has no reading for them, so the escape
+ * protects nothing and lands inside an identifier.
+ *
+ * The tilde is NOT here: GFM reads a single-tilde pair as strikethrough. Nor
+ * are the smart-punctuation triggers, which section 8b keeps whatever their
+ * position, because a processor with substitution on rewrites the TEXT rather
+ * than reading markup.
+ */
+const AUTHORED_INERT = new Set(['{', '}', '^', ',', '%', ':', '/', '@'])
+
+/**
+ * PART 11 section 8b M2b: read as markup only at a line's CONTENT POSITION.
+ *
+ * A second sentinel family, extending the run above. Separate from
+ * NARROWED_SENTINEL because the two are decided by DIFFERENT tests: M1b asks
+ * about an adjacent delimiter of the same character, M2b asks where on the
+ * line the character stands.
+ */
+const AUTHORED_SENTINEL: Record<string, string> = {
+  '#': '\ue007',
+}
+
+/**
+ * The same hash once M2b HAS decided to keep its escape.
+ *
+ * A second state rather than a second character, and the state is what makes
+ * the decision survive its containers. M2b measures on the EMITTED LINE, so it
+ * is answered where the block writes its own line and BEFORE any enclosing
+ * container puts a prefix in front of it. A container that renders inlines of
+ * its own - an admonition title, a table cell, a definition term - runs the
+ * decision pass again over text that already holds its children's answers, and
+ * by then the line it would measure on carries the prefix. An undecided
+ * sentinel would be re-read there and the quote marker would take the escape
+ * straight back off (markup-carve/carve#1330). This one is inert to the pass.
+ *
+ * IT IS ONE UTF-16 UNIT, exactly like the undecided form and like the bare
+ * character both stand for. The pass rewrites in place, so every offset in the
+ * text is unchanged and M1b's view of the line is the view it had before -
+ * spelling the decision as the two characters `\#` instead would shift every
+ * later candidate on the line and change M1b's answers with it.
+ */
+const AUTHORED_KEPT = '\ue008'
+const AUTHORED_CHARACTER: Record<string, string> = {
+  '\ue007': '#',
+  '\ue008': '#',
+}
+const RE_NARROWED_SENTINEL = /[\ue004-\ue008]/g
+const HAS_NARROWED_SENTINEL = /[\ue004-\ue008]/
+const RE_UNDECIDED_HASH = /\ue007/g
+const HAS_UNDECIDED_HASH = /\ue007/
+
+/** The bare character a sentinel stands for, for both passes that build a line view. */
+function sentinelCharacter(s: string): string {
+  return NARROWED_CHARACTER[s] ?? AUTHORED_CHARACTER[s]!
+}
 
 /**
  * Whether the candidate at `i` is ADJACENT to an unescaped delimiter of the
@@ -1011,12 +1278,114 @@ function adjacentToLiveDelimiter(line: string, i: number, ch: string): boolean {
  */
 function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
-  const line = text.replace(RE_NARROWED_SENTINEL, (s) => NARROWED_CHARACTER[s]!)
+  const character = sentinelCharacter
+  const line = text.replace(RE_NARROWED_SENTINEL, character)
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
-    const ch = NARROWED_CHARACTER[s]!
-    return adjacentToLiveDelimiter(line, offset, ch) ? `\\${ch}` : ch
+    const ch = character(s)
+    // TWO FAMILIES, TWO TESTS, AND A THIRD CASE THAT IS ALREADY SETTLED. M1b
+    // asks whether a delimiter of the same character stands beside the
+    // candidate. M2b asks WHERE ON THE LINE the candidate stands, and this is
+    // the finished document, so the answer it gets here is the answer for a
+    // line NO CONTAINER ENCLOSES - which is the only kind that reaches it
+    // undecided. A line inside a container had its position settled at the
+    // prefix site, where the prefix was still separable from the content
+    // (markup-carve/carve#1330), and arrives carrying that answer.
+    const keep =
+      s === AUTHORED_KEPT ||
+      (s in AUTHORED_CHARACTER
+        ? opensAnAtxHeading(line, offset)
+        : adjacentToLiveDelimiter(line, offset, ch))
+
+    return keep ? `\\${ch}` : ch
   })
+}
+
+/**
+ * Answer PART 11 section 8b M2b for every authored hash in one block's text,
+ * on the line THAT BLOCK writes (markup-carve/carve#1330).
+ *
+ * M2b's position is measured on the emitted line, and A LINE'S CONTENT
+ * POSITION IS AFTER ITS CONTAINER PREFIX - the block quote marker, the list or
+ * task marker, the definition marker, the alignment section 10 gives a
+ * continuation line, in whatever combination and to whatever depth. Deriving
+ * that from the finished document would mean parsing the prefixes back off it,
+ * and the item-alignment case cannot be recovered that way at all: a
+ * continuation line under `10. ` carries four spaces of pad, which reads as an
+ * over-indent to anything that does not already know the marker's width. That
+ * is section 10's own reason for refusing to reason about the content alone.
+ *
+ * So it is not derived. The pass runs where the writer HAS the answer: a block
+ * emits its own line, this decides on it, and everything the containers add
+ * afterwards is a prefix by construction, without any of them being named. A
+ * heading is not a container and its `## ` belongs to the block's own line, so
+ * a hash behind it is mid-line and loses the escape - which is the reading
+ * CommonMark gives it.
+ *
+ * THE NARROWING IS UNTOUCHED, and that is the half a correction like this
+ * loses first. Standing behind a prefix is not enough on its own: a hash mid
+ * line still drops its escape inside a quote, and one at the content position
+ * whose run is closed by a letter drops it too, because M2b's reading is
+ * CommonMark's and neither of those opens a heading.
+ */
+function decideAuthoredHashes(text: string): string {
+  if (!HAS_UNDECIDED_HASH.test(text)) return text
+  const line = text.replace(RE_NARROWED_SENTINEL, sentinelCharacter)
+
+  return text.replace(RE_UNDECIDED_HASH, (_s, offset: number) =>
+    opensAnAtxHeading(line, offset) ? AUTHORED_KEPT : '#',
+  )
+}
+
+/**
+ * Whether the `#` at `offset` would open an ATX heading (PART 11 section 8b
+ * M2b).
+ *
+ * `line` is the assembled output with every candidate resolved to its BARE
+ * character, the same view M1b decides on. The offset carries across directly
+ * because a sentinel is one UTF-16 unit exactly like the character it stands
+ * for - carve-php cannot do that, since its sentinel is three bytes and the
+ * character is one.
+ *
+ * Three conditions, all of them CommonMark's: the character stands at the
+ * line's content position, which admits up to three leading spaces; the run of
+ * hashes starting there is one to six long; and the run is closed by a space, a
+ * tab or the end of the line. A tag, an issue reference and a hex colour fail
+ * the third even at a line's start, which is why the test is spelled on the run
+ * rather than on the position alone.
+ *
+ * BOTH CONDITIONS ARE ANSWERED WITHOUT READING THE LINE (carve#1331). The
+ * first spelling searched backward for the line's newline and counted the whole
+ * run of hashes, so a candidate cost O(line) and a line of adjacent authored
+ * hashes - which is all candidates - cost O(n^2): 128KB took 3.3s against 0.1s
+ * before section 8b existed. Neither answer needs the line, because both
+ * conditions are bounded:
+ *
+ * - At most three spaces may precede the character, so the walk back stops
+ *   after four steps and the fourth decides. Anything else standing there means
+ *   the content position is elsewhere on the line, whatever the rest of it
+ *   holds.
+ * - The run has to be six or shorter, so counting stops at seven. The seventh
+ *   hash settles the question and the eight-thousandth cannot change it.
+ */
+function opensAnAtxHeading(line: string, offset: number): boolean {
+  // The walk back over the indent, bounded at the four positions that can
+  // decide it. `i` lands on the first character of the run of spaces, so the
+  // line must either start there or carry its newline immediately before it.
+  let i = offset
+  while (i > 0 && line[i - 1] === ' ') {
+    if (offset - i >= 3) return false
+    i--
+  }
+  if (i > 0 && line[i - 1] !== '\n') return false
+
+  let run = 0
+  while (run <= 6 && line[offset + run] === '#') run++
+  if (run > 6) return false
+
+  const after = line[offset + run] ?? '\n'
+
+  return after === ' ' || after === '\t' || after === '\n'
 }
 
 function normalize(text: string): string {
@@ -1075,6 +1444,13 @@ function walkBlocks(
         visit(block, block.caption)
         if (block.target.type === 'block_quote') walkBlocks(block.target.children, visit, depth + 1)
         else if (block.target.type === 'table') walkBlocks([block.target], visit, depth + 1)
+        break
+      case 'figure_group':
+        // The prepass feeds the heading-id index and the reference scan; a
+        // heading inside a composite figure is a crossref target like any
+        // other, and the group caption carries references of its own.
+        if (block.caption) visit(block, block.caption)
+        walkBlocks(block.children, visit, depth + 1)
         break
       default:
         break

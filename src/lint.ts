@@ -25,7 +25,17 @@
  * position and skip verbatim regions (code/raw blocks) the parser already
  * accounts for.
  */
-import { parse, type UnclosedContainer } from './parse.js'
+import {
+  parse,
+  isTableRow,
+  readCellAttributeBlock,
+  rowAttrsFromLine,
+  splitTableRowSpans,
+  stripContainerPrefixesKeepIndent,
+  RE_AFTER_TERM,
+  TABLE_ALIGNMENT_MARKERS,
+  type UnclosedContainer,
+} from './parse.js'
 import {
   slugify,
   inlineText,
@@ -33,13 +43,15 @@ import {
   normalizeHeadingRefLabel,
   headingRefKeyFromLabel,
   isCollapsedRef,
+  figureGroupPanels,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
 import { readStamp, compareSpecVersions } from './stamp.js'
 import { SPEC_VERSION } from './version.js'
 import { hasOwnKey } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
-import type { BlockNode, Document, Heading } from './ast.js'
+import { renderedAttrValue, escapeAttrValue } from './render-html.js'
+import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
 
 export interface LintWarning {
   /** 1-based line number. */
@@ -292,6 +304,21 @@ export function lintCarve(
      * input.
      */
     platforms?: readonly LintPlatform[]
+    /**
+     * The extensions the caller actually renders with, so the semantic-attribute
+     * rules can describe the output the author will get (markup-carve/carve#1167).
+     *
+     * PART 9 §9 splits the reserved names by tier: core renders `abbr`, `time`
+     * and `kbd` as elements, and `samp`, `var`, `cite` and `dfn` only become
+     * elements once the SemanticSpan extension is enabled. In a core render
+     * those four stay ORDINARY attributes and their value reaches the output
+     * intact, so reporting it as discarded reports a loss that is not
+     * happening - the same defect these rules exist to catch, pointed the other
+     * way. With the extension on, the value IS dropped and the report is right.
+     *
+     * Pass what you pass to `carveToHtml`. Omitted means a core render.
+     */
+    extensions?: readonly { name?: string; semanticSpanNames?: readonly string[] }[]
   } = {},
 ): LintWarning[] {
   const unclosedContainers: UnclosedContainer[] = []
@@ -359,6 +386,26 @@ export function lintCarve(
 
   checkDeclaredVersion(source, doc, (w) => out.push(w))
 
+  // A template tag and PART 9 §21a deliberately have the same surface shape.
+  // Template hosts normally run first, but `{% raw %}` hands the converter bare
+  // tags; once parsed, those tags are indistinguishable from comments. Report
+  // the collision and leave the source untouched.
+  // ONE WARNING PER TAG-SHAPED COMMENT, not one per document and not one for
+  // every braced comment in a document that has one. The report points at the
+  // constructs that vanish; an ordinary note in the same file is not one of
+  // them, and the file's second `{% endif %}` is (carve validation.md).
+  const templateTag = /^(?:raw|endraw|endif|endfor|endblock|if\s+.+|for\s+.+|block\s+.+)$/s
+  walkDocument(doc, (node) => {
+    if (node.type !== 'comment' || node.delimited !== true) return
+    if (typeof node.content !== 'string' || !templateTag.test(node.content.trim())) return
+    out.push({
+      ...locate(node as Positioned, toUtf16),
+      rule: 'braced-comment-in-a-template-source',
+      message:
+        'This braced comment is a template tag. Liquid, Nunjucks, or Twig source may have reached Carve as text; the tag is parsed as an invisible comment.',
+    })
+  })
+
   // Build the final heading-id set exactly as resolveHeadingIds does
   // (explicit ids win; colliding slugs get a `-2`, `-3`, … suffix), and warn
   // on every collision along the way.
@@ -413,6 +460,7 @@ export function lintCarve(
           break
         case 'admonition':
         case 'div':
+        case 'figure_group':
           indexHeadings(block.children, inBlockquote)
           break
         case 'list':
@@ -441,6 +489,92 @@ export function lintCarve(
     if (node.type === 'table' && captionHasNumber(node.caption)) used.add(attrs.id)
     if (node.type === 'figure' && captionHasNumber(node.caption)) used.add(attrs.id)
   })
+
+  // Composite figures (PART 9 §4c): register the crossref targets a NUMBERED
+  // group creates - its own id and its panels' ids (resolved as "Figure Na") -
+  // and report the shapes that silently do less than they look like they do.
+  const checkFigureGroups = (blocks: BlockNode[]): void => {
+    for (const b of blocks) {
+      switch (b.type) {
+        case 'admonition':
+          // A bare `::: figure` only parses as an admonition when an OPEN
+          // group's body demoted it (groups do not nest); one carrying a
+          // title or [label] never matched the figure production at all.
+          if (b.kind === 'figure') {
+            if (b.title !== undefined || b.label !== undefined) {
+              out.push({
+                ...locate(b, toUtf16),
+                rule: 'figure-group-opener-metadata',
+                message:
+                  'A "::: figure" opener carrying a quoted title or [label] is not a composite figure; it renders as a generic container. Drop the title/label to open a figure group.',
+              })
+            } else {
+              out.push({
+                ...locate(b, toUtf16),
+                rule: 'figure-group-nested',
+                message:
+                  'A "::: figure" inside a composite figure does not nest; it renders as a generic container. Move it out of the enclosing group.',
+              })
+            }
+          }
+          checkFigureGroups(b.children)
+          break
+        case 'figure_group': {
+          // The panel predicate has ONE spelling (figureGroupPanels), shared
+          // with the numbering pass, so the lint cannot drift from what the
+          // resolver registers.
+          const panels = figureGroupPanels(b)
+          if (panels.length === 0) {
+            out.push({
+              ...locate(b, toUtf16),
+              rule: 'figure-group-empty',
+              message:
+                'This "::: figure" group holds no captionable panel; the panels wrapper renders around the preserved content only.',
+            })
+          } else if (panels.length === 1) {
+            out.push({
+              ...locate(b, toUtf16),
+              rule: 'figure-group-single-panel',
+              message:
+                'This "::: figure" group holds a single panel; a plain captioned figure renders the same content without the group wrapper.',
+            })
+          }
+          const numbered = captionHasNumber(b.caption)
+          if (numbered && b.attrs?.id !== undefined) used.add(b.attrs.id)
+          for (const panel of panels) {
+            if (captionHasNumber(panel.caption)) {
+              out.push({
+                ...locate(panel, toUtf16),
+                rule: 'figure-group-panel-number',
+                message:
+                  'A "#" placeholder in a panel caption stays literal: panels are not numbering units, the group caption carries the number (and panel ids resolve with its letter).',
+              })
+            }
+            if (numbered && panel.attrs?.id !== undefined) used.add(panel.attrs.id)
+          }
+          checkFigureGroups(b.children)
+          break
+        }
+        case 'block_quote':
+        case 'div':
+          checkFigureGroups(b.children)
+          break
+        case 'list':
+          for (const it of b.items) checkFigureGroups(it.children)
+          break
+        case 'definition_list':
+          for (const it of b.items) for (const d of it.definitions) checkFigureGroups(d)
+          break
+        case 'figure':
+          if (b.target.type === 'block_quote') checkFigureGroups(b.target.children)
+          break
+        default:
+          break
+      }
+    }
+  }
+  checkFigureGroups(doc.children)
+  for (const body of Object.values(doc.footnoteDefs ?? {})) checkFigureGroups(body)
 
   // `used` now holds every valid id. A crossref to anything else degrades to
   // literal text in resolveHeadingIds.
@@ -484,13 +618,33 @@ export function lintCarve(
   const footnoteRefs = collectFootnoteRefs(doc)
   const footnoteDefs = doc.footnoteDefs ?? {}
   const referencedFootnotes = new Set<string>()
+  // Definitions grouped by their whitespace-insensitive key, so a miss can name
+  // the definition the author probably meant. Built once, not per reference.
+  const defsByWhitespaceKey = new Map<string, string[]>()
+  for (const label of Object.keys(footnoteDefs)) {
+    const key = whitespaceKey(label)
+    const bucket = defsByWhitespaceKey.get(key)
+    if (bucket) bucket.push(label)
+    else defsByWhitespaceKey.set(key, [label])
+  }
   for (const { id, node } of footnoteRefs) {
     referencedFootnotes.add(id)
     if (hasOwnKey(footnoteDefs, id)) continue
+    // A near miss is worth naming. "No matching definition" is true but leaves
+    // the reader hunting for a difference they cannot see - the definition is
+    // RIGHT THERE and differs by a space. Saying which one, and that matching
+    // is exact, turns a hunt into a fix.
+    const near = (defsByWhitespaceKey.get(whitespaceKey(id)) ?? []).filter((label) => label !== id)
+    const hint =
+      near.length === 1
+        ? ` Definition [^${near[0]}] differs only in whitespace; footnote labels are matched exactly.`
+        : near.length > 1
+          ? ` ${near.length} definitions differ from it only in whitespace; footnote labels are matched exactly.`
+          : ''
     out.push({
       ...locate(node, toUtf16),
       rule: 'unresolved-footnote',
-      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.`,
+      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.${hint}`,
     })
   }
 
@@ -499,7 +653,15 @@ export function lintCarve(
   // per line replaces a per-line scan over a growing range list (was O(n^2),
   // and was computed twice).
   const verbatimLines = collectVerbatimLines(doc)
-  collectSilentFailures(source, doc, verbatimLines, out, toUtf16)
+  // The source-line rules skip a COMMENT body as well as a verbatim one. A
+  // comment is discarded text - it reaches no output at all - so a report that
+  // some construct inside it silently degraded is describing something that was
+  // never going to render. Raised by codex review against the new table-cell
+  // rule; `fence-delimiter-indentation` beside it had the same false positive.
+  const unrendered = new Set(verbatimLines)
+  for (const ln of collectCommentLines(doc)) unrendered.add(ln)
+  collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
+  collectSilentFailures(source, doc, unrendered, out, toUtf16)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never
@@ -525,6 +687,7 @@ export function lintCarve(
 const TRAILING_HEADING_ATTR = /(^|\s)(\{\s*[.#][^{}]*\})\s*$/
 /** A fenced block whose info string is the legacy `raw FORMAT` form. */
 const LEGACY_RAW_FENCE = /^(\s*)(`{3,}|~{3,})\s*raw\s+(\S+)/
+
 /** A line that looks like the old tight blockquote spelling. */
 const BLOCKQUOTE_WITHOUT_SPACE = /^(>)([^ ].*)$/
 /** A line that opens like a block construct (`:::`, `{#`, `{.`). */
@@ -544,6 +707,173 @@ const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
  * the content.
  */
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
+
+/**
+ * PART 9 §10's nine reserved names, in the order the renderer nests them.
+ *
+ * Mirrors SEMANTIC_SPAN_ORDER in render-html.ts. A name added there and not
+ * here goes unreported by both rules below.
+ */
+// The seven names PART 9 §9 and §10 reserve between them: three in core, four
+// in the SemanticSpan extension.
+const SEMANTIC_SPAN_NAMES = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+
+/** The three core renders as elements with no extension enabled (PART 9 §9). */
+const CORE_SEMANTIC_NAMES = new Set<string>(['abbr', 'time', 'kbd'])
+
+/**
+ * The names whose authored value reaches the output, as `title` or `datetime`.
+ * On every other name that becomes an element the value only selects that
+ * element and is dropped.
+ */
+const SEMANTIC_NAMES_KEEPING_A_VALUE = new Set<string>(['abbr', 'dfn', 'time'])
+
+/**
+ * The names that will actually become an ELEMENT in the caller's render.
+ *
+ * Core's three, plus whatever the enabled extensions add. A name outside this
+ * set stays an ordinary attribute, so its value reaches the output and nothing
+ * is lost - see the `extensions` option above for why that distinction is the
+ * whole point of these two rules.
+ */
+function semanticElementNames(
+  extensions?: readonly { semanticSpanNames?: readonly string[] }[],
+): ReadonlySet<string> {
+  const names = new Set(CORE_SEMANTIC_NAMES)
+  for (const extension of extensions ?? []) {
+    for (const name of extension.semanticSpanNames ?? []) names.add(name)
+  }
+  return names
+}
+
+/**
+ * Reserved names that ARE valid HTML attributes on a given element, so finding
+ * one there is the author getting what they asked for rather than a silent
+ * failure.
+ *
+ * `cite` on a blockquote is the case that matters: it is a URL attribute of
+ * `blockquote` and `q` in HTML, and `{cite="https://…"}` on a quote renders
+ * `<blockquote cite="https://…">`. Reporting that would be telling an author
+ * their correct markup is wrong.
+ */
+const VALID_ATTRIBUTE_ON: Record<string, ReadonlySet<string>> = {
+  block_quote: new Set(['cite']),
+}
+
+/**
+ * Longest authored value quoted back whole, in CODEPOINTS.
+ *
+ * Past it the diagnostic keeps its head and marks the cut, so a pasted
+ * paragraph in an attribute cannot push the sentence explaining the problem off
+ * the reader's screen. Counted in codepoints rather than UTF-16 units so the
+ * cut never lands between the halves of a surrogate pair.
+ */
+const QUOTED_VALUE_LIMIT = 120
+
+/** Marks a value the diagnostic cut, inside the quotes it was cut from. */
+const QUOTED_VALUE_ELLIPSIS = '…'
+
+/**
+ * The rendered value as the diagnostic quotes it: what the renderer writes,
+ * cut if it is long, escaped as the renderer escapes it.
+ *
+ * The three steps run in exactly that order and none of them commutes. The
+ * sanitizer reads the WHOLE value, so cutting first could quote a long
+ * `javascript:…` back as a harmless-looking prefix while the output holds an
+ * empty attribute. Escaping last is what keeps the cut off the middle of an
+ * entity, which would quote `&qu` at an author who wrote a quote.
+ */
+function quotedAttrValue(name: string, value: string): string {
+  const rendered = renderedAttrValue(name, value)
+  const chars = Array.from(rendered)
+  if (chars.length <= QUOTED_VALUE_LIMIT) return escapeAttrValue(rendered)
+
+  return escapeAttrValue(chars.slice(0, QUOTED_VALUE_LIMIT).join('')) + QUOTED_VALUE_ELLIPSIS
+}
+
+/**
+ * Two rules about the compact semantic-span names (PART 9 §10).
+ *
+ * Neither describes an engine defect - all three engines render these
+ * byte-identically and exactly as the clause says. They report the two places
+ * where the clause's own scope loses something an author wrote, with nothing
+ * else marking it (markup-carve/carve#1131, markup-carve/carve#1132).
+ */
+function collectSemanticAttributeWarnings(
+  doc: Document,
+  out: LintWarning[],
+  toUtf16: (offset: number) => number,
+  elementNames: ReadonlySet<string>,
+): void {
+  walkDocument(doc, (node) => {
+    const attrs = (node as { attrs?: Attrs }).attrs
+    const values = attrs?.keyValues
+    if (!values) return
+    const type = node.type as string | undefined
+    if (typeof type !== 'string') return
+
+    for (const name of SEMANTIC_SPAN_NAMES) {
+      const value = values[name]
+      if (value === undefined) continue
+
+      if (type === 'span') {
+        // §10 applies only to a name that becomes an ELEMENT in this render.
+        // One that does not stays an ordinary attribute and carries its value
+        // to the output, so there is nothing to report.
+        if (
+          value !== '' &&
+          elementNames.has(name) &&
+          !SEMANTIC_NAMES_KEEPING_A_VALUE.has(name)
+        ) {
+          out.push({
+            ...locate(node as Positioned, toUtf16),
+            rule: 'semantic-attribute-value-ignored',
+            message:
+              `Value on the semantic attribute "${name}" is discarded: it selects the <${name}> element ` +
+              'and reaches no output. Only abbr, dfn and time carry a value (as title or datetime).',
+          })
+        }
+        continue
+      }
+
+      // Same tier test for the other rule: a name this render leaves an
+      // ordinary attribute is an ordinary attribute everywhere, so it is not
+      // "outside the span" - it is exactly what the author asked for.
+      if (!elementNames.has(name)) continue
+
+      // §10 is scoped to an ordinary span, so the same name anywhere else
+      // stays a raw attribute - ``c`{kbd}` renders `<code kbd="">`, and
+      // ``c`{kbd="keyboard"}` renders `<code kbd="keyboard">`.
+      if (VALID_ATTRIBUTE_ON[type]?.has(name)) continue
+      out.push({
+        ...locate(node as Positioned, toUtf16),
+        rule: 'semantic-attribute-outside-span',
+        message:
+          `"${name}" is a semantic span attribute (PART 9 \u00a710) and only applies to an ordinary ` +
+          `[content]{attrs} span; on ${type} it stays a raw attribute and renders as ` +
+          // The value the RENDERER writes, not a fixed empty one. The boolean
+          // form does render an empty value, which is why this read true until
+          // a value was authored; naming it unconditionally made the sentence
+          // false on exactly the inputs it exists to explain
+          // (markup-carve/carve-js#1058).
+          `${name}="${quotedAttrValue(name, value)}".`,
+      })
+    }
+  })
+}
+
+/**
+ * The key Djot would match a label on: ends trimmed, interior whitespace runs
+ * collapsed.
+ *
+ * Carve matches labels EXACTLY (PART 9 §16), so this is NEVER used to resolve
+ * anything - only to explain a miss. Two labels sharing this key are the pair a
+ * reader is most likely to have meant as one, and the difference between them
+ * is invisible in rendered output and usually in the editor too.
+ */
+function whitespaceKey(label: string): string {
+  return label.trim().replace(/\s+/g, ' ')
+}
 
 /**
  * The set of 1-based source line numbers that fall inside a verbatim region
@@ -599,6 +929,7 @@ function collectSilentFailures(
 
   const headings: Positioned[] = []
   const paragraphs: Positioned[] = []
+  const tables: Table[] = []
   const walk = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) walk(item)
@@ -608,6 +939,7 @@ function collectSilentFailures(
     const node = value as Record<string, unknown>
     if (node.type === 'heading') headings.push(node as Positioned)
     else if (node.type === 'paragraph') paragraphs.push(node as Positioned)
+    else if (node.type === 'table') tables.push(node as unknown as Table)
     for (const key of Object.keys(node)) {
       if (key !== 'pos' && key !== 'attrs') walk(node[key])
     }
@@ -815,169 +1147,116 @@ function collectSilentFailures(
     )
   }
 
-}
-
-/**
- * PORTABILITY (advisory) - source whose whitespace parses differently in Djot.
- *
- * Nothing here is a defect in the document: Carve renders it exactly as the
- * author intended. The rule marks a place where Carve accepts whitespace that
- * Djot does not, so a document that avoids it is valid Djot source as well.
- * The portable form is also the CommonMark-safe form, so the advice costs no
- * Markdown compatibility.
- */
-function collectPortableWhitespace(
-  source: string,
-  doc: Document,
-  verbatimLines: Set<number>,
-  out: LintWarning[],
-): void {
-  const lines = source.split('\n')
-  // A source-relative table of each line's UTF-16 start offset, so a
-  // continuation line (which has no AST node of its own to read a position
-  // from) can still report a `start`/`end` in the same units as every other
-  // LintWarning.
-  const lineStart: number[] = []
-  for (let off = 0, i = 0; i < lines.length; i++) {
-    lineStart[i] = off
-    off += lines[i]!.length + 1
-  }
-
-  // A `>` blockquote marker with no space after it. Djot has no `>>` marker at
-  // all, so a nested quote must be written `> > q`; anchoring on each
-  // block_quote node's OWN startColumn (as the parser itself recorded it, not
-  // a hardcoded column) reports each level separately, and is naturally
-  // correct through arbitrary interposed containers - a list item, a div, an
-  // admonition - since it never has to walk the raw text past their syntax to
-  // reach a nested quote's real column.
+  // 6. A cell attribute block written BEFORE an alignment marker, which is the
+  //    order §5 T10 retired. `|{#x}< content |` used to be read as attributes
+  //    plus a left-alignment marker; the marker run now comes first, so the `<`
+  //    is literal content and the cell is not aligned.
   //
-  // A block_quote node's own position spans its ENTIRE range (startLine to
-  // endLine), including every continuation line at this nesting depth - not
-  // just the line it opens on - so each of those lines needs its own marker
-  // check: Djot does not strip an unspaced `>` on a continuation line either;
-  // it falls through to lazy paragraph continuation and the `>` survives as
-  // literal text, which is a silent divergence from Carve (which always
-  // strips it) exactly like the opening-line case this rule already covers.
+  //    REPORTED, NOT REWRITTEN. `fmt` must not turn `|{#x}< content |` into
+  //    `|<{#x} content |` in its default path: that ADDS `text-align: left` and
+  //    REMOVES a literal `<` from the content, so it would break
+  //    `toHtml(fmt(x)) == toHtml(x)` on a document that is currently correct.
+  //    Every engine measured renders this source as attributes plus a literal
+  //    `<` today, which is exactly why the author has to be the one to choose.
+  //    The message therefore names both spellings.
   //
-  // A LAZY continuation line carries no marker of its own at all - not even
-  // the outermost one - and is ordinary paragraph text that happens to be
-  // laid out under the quote. Nothing on that line is a marker, so a `>`
-  // that lands at a node's recorded column there is coincidence, not syntax
-  // (e.g. "> > As the report says.\n  >90% of cases fail." - line 2 is a
-  // lazy continuation, and its literal ">90%" happens to sit at the inner
-  // quote's recorded column 3). Checking it anyway would both false-positive
-  // AND, if the advice were taken, corrupt a document the two engines
-  // already agree on: adding the suggested space turns "&gt;90%" (Carve and
-  // Djot: identical today) into "&gt; 90%" in Carve but a dropped chevron
-  // ("90%") in Djot, since Djot would then read it as a real, if oddly
-  // placed, blockquote marker. So before trusting a node's own column on a
-  // given physical line, EVERY enclosing block_quote's marker must also be
-  // present at ITS OWN recorded column on that same line - if any ancestor's
-  // marker is missing, the line is a lazy continuation at that outer level
-  // and this node's column carries no marker either, so the line is skipped
-  // entirely for this node. `ancestorCols` is collected once while walking
-  // the tree, outermost first, rather than re-derived from the text.
-  //
-  // KNOWN LIMITATION: on a continuation line, this still checks each node at
-  // its OWN recorded startColumn, which was computed from the node's OPENING
-  // line. When an OUTER quote's marker is unspaced on a LATER line, every
-  // INNER level's marker on that same physical line shifts one column to the
-  // left of where the inner node's own recorded startColumn expects it, so
-  // the inner check silently misses it on that line (e.g. `> > a\n>>bad\n`
-  // reports only the outer, at [2,1] - not the inner, which sits at column 2
-  // on that line, not its own recorded column 3). This is bounded, not open-
-  // ended: fixing the reported outer marker and re-running the linter moves
-  // the inner marker back to its recorded column, so it is then reported too
-  // - a divergent document is never reported clean, just not fully explained
-  // in one pass. A version of this rule that also gets nested mixed-spacing
-  // right in one pass would need to walk each line's live text forward from
-  // its enclosing container's column, consuming each level's marker as it is
-  // actually spaced on THAT line rather than trusting a recorded column - but
-  // that walk cannot generically tell a quote's own repeated `>` prefix apart
-  // from another container's marker syntax (a list bullet, a div fence)
-  // interposed between two quote levels on the same line, and misidentifying
-  // that syntax as content would be a worse, non-convergent miss than this
-  // one. Per-node anchoring stays correct through any such interposition,
-  // which is why it is what this rule uses despite the narrower limitation
-  // above.
-  //
-  // Exempt: whitespace of any kind (a tab and two spaces both parse identically
-  // in the two engines) and end of line (a bare `>` separator line likewise),
-  // a lazy continuation line that carries no marker at this column at all
-  // (there is nothing to make portable), and any line inside a verbatim
-  // (code/raw) region, where the character at this column is sample text, not
-  // a marker.
-  //
-  // KNOWN LIMITATION: a `>` marker followed by a fence opener on the SAME line
-  // (for example `>` immediately followed by three backticks) is skipped,
-  // because collectVerbatimLines marks that line verbatim, so the unspaced
-  // marker is never checked. This is a miss, not a false positive: the rule
-  // simply says nothing about that line rather than reporting it wrongly.
-  //
-  // No sort is needed here: `lintCarve` already sorts `out` by `start` at the
-  // end, and two quote warnings from this loop can never share a `start`.
-  const quotes: Array<{ node: Positioned; ancestorCols: number[] }> = []
-  const collectQuotes = (value: unknown, ancestorCols: number[]): void => {
-    if (Array.isArray(value)) {
-      for (const item of value) collectQuotes(item, ancestorCols)
-      return
-    }
-    if (!value || typeof value !== 'object') return
-    const node = value as Record<string, unknown>
-    let childAncestorCols = ancestorCols
-    if (node.type === 'block_quote') {
-      const q = node as Positioned
-      quotes.push({ node: q, ancestorCols })
-      const col = q.pos?.startColumn
-      if (col) childAncestorCols = [...ancestorCols, col]
-    }
-    for (const key of Object.keys(node)) {
-      if (key !== 'pos' && key !== 'attrs') collectQuotes(node[key], childAncestorCols)
+  //    SPLIT WITH THE PARSER'S OWN SPLITTER, not with a pipe regex. A pipe
+  //    inside a code span or behind a backslash does not open a cell, so a
+  //    regex over the raw line reported `| a \|{#x}< b |` - where the block is
+  //    ordinary content and there is no cell to align.
+  for (let i = 0; i < lines.length; i++) {
+    if (verbatimLines.has(i + 1)) continue
+    const line = lines[i]!
+    // A table opens inside a blockquote and inside a list item too, so the row
+    // is found through the container prefixes rather than only at the top
+    // level. Every strip is anchored at the start, so what it removed is a
+    // prefix and its WIDTH maps the column back onto the source line.
+    const stripped = stripContainerPrefixesKeepIndent(line)
+    const prefixWidth = line.length - stripped.length
+    const indent = stripped.length - stripped.trimStart().length
+    const row = stripped.slice(indent)
+    // A COMPLETE row, gated by the parser's own predicate. A leading `|` with
+    // no closing one is a paragraph (`|{#x}< content` renders as text), and
+    // reporting cell syntax there would be reporting a cell that does not
+    // exist. A `+` continuation row is out of scope for the same reason the
+    // parser only reads one inside an open table: whether it is a row at all is
+    // a question about the lines above it.
+    if (!isTableRow(row)) continue
+    const { body } = rowAttrsFromLine(row)
+    for (const { text, start } of splitTableRowSpans(body)) {
+      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?{\s])/.exec(text)
+      if (unpadded) {
+        const at = text.startsWith('=') ? 1 : 0
+        push(
+          i + 1,
+          prefixWidth + indent + start + at + 1,
+          unpadded[1]!.length,
+          'table-alignment-run-padding',
+          `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. Add a space after the run to make it alignment.`,
+        )
+      }
+      const block = readCellAttributeBlock(text)
+      if (!block) continue
+      const marker = text[block.length]
+      if (marker === undefined || !TABLE_ALIGNMENT_MARKERS.has(marker)) continue
+      const spelling = text.slice(0, block.length + 1)
+      push(
+        i + 1,
+        prefixWidth + indent + start + 1,
+        block.length + 1,
+        'table-cell-attribute-before-marker',
+        `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
+          `which Carve no longer reads as one: the "${marker}" is literal content and the ` +
+          `cell is not aligned. Write "${marker}${text.slice(0, block.length)}" to align it, ` +
+          `or put a space after the block to keep the "${marker}" as content deliberately.`,
+      )
     }
   }
-  collectQuotes(doc.children, [])
-  // A footnote definition body is a normal block sequence living outside
-  // `doc.children` (see the Document.footnoteDefs docblock in ast.ts).
-  if (doc.footnoteDefs) collectQuotes(Object.values(doc.footnoteDefs), [])
 
-  for (const { node: q, ancestorCols } of quotes) {
-    const startLine = q.pos?.startLine
-    const endLine = q.pos?.endLine ?? startLine
-    const col = q.pos?.startColumn
-    if (!startLine || !endLine || !col) continue
-    for (let line = startLine; line <= endLine; line++) {
-      if (verbatimLines.has(line)) continue
-      const text = lines[line - 1] ?? ''
-      // Every enclosing quote's own marker must be present at ITS OWN
-      // recorded column on this physical line before this node's column can
-      // be trusted as a marker position at all - see the comment above.
-      if (ancestorCols.some((aCol) => text[aCol - 1] !== '>')) continue
-      // Guard against position drift, and skip a lazy continuation line: only
-      // flag where this node's own marker really is.
-      if (text[col - 1] !== '>') continue
-      const after = text[col]
-      if (after === undefined || after === ' ' || after === '\t' || after === '\r') continue
-      const start = (lineStart[line - 1] ?? 0) + (col - 1)
-      out.push({
-        line,
-        column: col,
-        rule: 'portable-quote-marker-space',
-        message:
-          'This ">" blockquote marker has no space after it. Carve treats it as a real ' +
-          'quote marker regardless; Djot only recognizes it when followed by a space, a ' +
-          'tab, or the end of the line, and otherwise leaves the ">" as literal text. ' +
-          'Write "> " with a space - and a nested quote as "> > ", since Djot has no ' +
-          '">>" marker.',
-        start,
-        end: start + 1,
-      })
+  for (const table of tables) {
+    const kv = table.attrs?.keyValues ?? {}
+    const widest = Math.max(0, ...table.rows.map((row) => row.cells.length))
+    const lineNo = table.pos?.startLine ?? 1
+    const tableStart = lineStart[lineNo - 1] ?? source.length
+    const addTableWarning = (rule: string, key: string, message: string): void => {
+      const found = source.lastIndexOf(key, tableStart)
+      const start = found >= 0 ? found : (lineStart[lineNo - 1] ?? 0)
+      const before = source.slice(0, start)
+      const warningLine = before.split('\n').length
+      const warningColumn = start - before.lastIndexOf('\n')
+      out.push({ line: warningLine, column: warningColumn, rule, message, start, end: start + key.length })
+    }
+    for (const key of ['aligns', 'valigns', 'widths'] as const) {
+      if (kv[key] === undefined) continue
+      const values = kv[key]!.split(',')
+      if (values.length < widest) {
+        addTableWarning(
+          'table-column-arity',
+          key,
+          `${key} supplies ${values.length} column entries for a ${widest}-column table; the unset tail is valid but may be accidental.`,
+        )
+      }
+    }
+    const widths = kv.widths?.split(',').map((raw) => Number(raw.trim())).filter(Number.isFinite) ?? []
+    if (widths.reduce((sum, width) => sum + width, 0) > 100) {
+      addTableWarning('table-width-total', 'widths', 'The specified table column widths total more than 100%.')
+    }
+    const aligns = kv.aligns?.split(',') ?? []
+    const valigns = kv.valigns?.split(',') ?? []
+    const headerRows = table.rows.filter((row) => row.cells.some((cell) => cell.header))
+    for (let column = 0; column < widest; column++) {
+      const markerAlign = headerRows.some((row) => row.cells[column]?.align !== undefined)
+      const markerValign = headerRows.some((row) => row.cells[column]?.valign !== undefined)
+      if ((markerAlign && aligns[column]?.trim()) || (markerValign && valigns[column]?.trim())) {
+        addTableWarning(
+          'table-column-overlap',
+          markerAlign && aligns[column]?.trim() ? 'aligns' : 'valigns',
+          `Column ${column + 1} supplies the same alignment axis both in the table and in a table attribute; the in-table marker wins.`,
+        )
+      }
     }
   }
 }
-
-// Deprecated compatibility path retained for the CLI option docs/history; the
-// blockquote marker rule is now core syntax and is reported by default.
-void collectPortableWhitespace
 
 function collectFootnoteDefinitionWarnings(
   source: string,
@@ -994,13 +1273,38 @@ function collectFootnoteDefinitionWarnings(
   }
 
   const firstSites = new Map<string, { line: number; col: number; start: number; end: number }>()
+  // First label seen for each whitespace-insensitive key, so a later label that
+  // collides with it can name its twin.
+  const firstByWhitespaceKey = new Map<string, string>()
+
+  const defs = doc.footnoteDefs ?? {}
 
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
-    const m = FOOTNOTE_DEF.exec(line)
+    // A definition inside a block quote or list item is a definition: the
+    // parser strips the container prefix before collecting it, and the
+    // document renders it. Scanning the raw line made every rule below blind
+    // to those, so `> [^a]: one` twice reported no duplicate (carve-js#1019).
+    // The parser's own stripper is used rather than a second spelling of it.
+    // Indentation is KEPT: it is what separates a definition inside a quote
+    // from a line merely indented under something else. Dropping it made an
+    // over-indented literal `    [^a]: x` match, and a real definition for the
+    // same label elsewhere then made it look like a duplicate.
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixesKeepIndent(lines[i - 1] ?? ''))
+    const m = FOOTNOTE_DEF.exec(stripContainerPrefixesKeepIndent(line, afterTerm))
     if (!m) continue
-    const label = m[1]!.trim()
+    // Raw, like the parser: a footnote label is matched exactly (PART 9 §16),
+    // so `[^ a ]` and `[^a]` are two different definitions and neither is a
+    // duplicate of the other.
+    const label = m[1]!
+    // The parser is the authority on what a definition IS. Stripping prefixes
+    // line-by-line has no block context, so on its own it would read a marker
+    // on a hard-wrapped prose line as a container (the limitation
+    // `stripContainerPrefixes` documents). Reporting only labels the parser
+    // actually collected keeps these rules from inventing a definition the
+    // document does not have.
+    if (!hasOwnKey(defs, label)) continue
     const col = line.indexOf('[^') + 1
     const start = (lineStart[i] ?? 0) + (col - 1)
     const site = { line: i + 1, col, start, end: start + m[0].length }
@@ -1014,6 +1318,29 @@ function collectFootnoteDefinitionWarnings(
         end: site.end,
       })
     } else {
+      // Two definitions that differ only in whitespace are LEGAL and distinct -
+      // that is the exact-matching rule working. They are also, almost always,
+      // one definition the author typed twice: the difference does not survive
+      // into rendered output and is invisible in most editors, so a reader
+      // comparing the two sees no reason they are separate footnotes.
+      //
+      // Djot's answer is to merge them, which silently drops one definition's
+      // content and emits duplicate ids. Carve keeps both and says so here
+      // instead, which is the same information without the data loss.
+      const key = whitespaceKey(label)
+      const twin = firstByWhitespaceKey.get(key)
+      if (twin !== undefined && twin !== label) {
+        out.push({
+          line: site.line,
+          column: site.col,
+          rule: 'footnote-labels-differ-only-in-whitespace',
+          message: `Footnote definitions [^${twin}] and [^${label}] differ only in whitespace, so they are two separate footnotes; labels are matched exactly.`,
+          start: site.start,
+          end: site.end,
+        })
+      } else if (twin === undefined) {
+        firstByWhitespaceKey.set(key, label)
+      }
       firstSites.set(label, site)
     }
   }
@@ -1326,7 +1653,9 @@ function collectUnpublishedLines(
   source.split('\n').forEach((line, i) => {
     const m = FOOTNOTE_DEF.exec(line)
     if (!m) return
-    const label = m[1]!.trim()
+    // Raw: `doc.footnoteDefs` is keyed by the label as written, so trimming
+    // here would miss a padded definition and report it as referenced.
+    const label = m[1]!
     if (hasOwnKey(defs, label) && !referencedFootnotes.has(label)) lines.add(i + 1)
   })
   // Frontmatter carries no node in `children`, but it DOES report a span - so

@@ -3,8 +3,8 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 
 const cases = [
   ['| ~x~ |\n| a | b |\n', '| ~x~ |\n| a | b |\n'],
-  ['| |x |\n|---|\n| y |\n', '|=|=x|\n| y |\n'],
-  ['| h |\n|---|\n| |x |\n', '|=h|\n|  | x |\n'],
+  ['| |x |\n|---|\n| y |\n', '|= |= x |\n| y |\n'],
+  ['| h |\n|---|\n| |x |\n', '|= h |\n| | x |\n'],
 ] as const
 
 describe('ragged table formatting', () => {

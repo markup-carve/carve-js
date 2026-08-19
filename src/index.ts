@@ -28,6 +28,7 @@ import {
   promoteBlockImages,
   type AsciiHeadingIdMode,
 } from './heading-ids.js'
+import { promoteCitationDefinitions } from './citations.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { Profile } from './profile.js'
 import { applyProfile as applyProfileImpl } from './profile-filter.js'
@@ -51,9 +52,33 @@ import { coalesceTextRuns } from './coalesce-text-runs.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 
 export * from './ast.js'
+export {
+  htmlToAst,
+  htmlToCarve,
+  HtmlImportLimitError,
+  type HtmlImportAdapter,
+  type HtmlImportDiagnostic,
+  type HtmlImportDiagnosticCode,
+  type HtmlImportMode,
+  type HtmlImportOptions,
+  type HtmlImportResult,
+} from './html-import.js'
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
+export {
+  applyAstPatch,
+  createAstPatch,
+  AstPatchError,
+  type AstPatchOperation,
+} from './ast-patch.js'
+export {
+  mergeAst,
+  type MergeConflict,
+  type MergeOptions,
+  type MergeResolution,
+  type MergeResult,
+} from './merge.js'
 export {
   checkPortability,
   normalizeHtml,
@@ -75,6 +100,7 @@ export {
   AstJsonUnknownFieldError,
   AstJsonUnknownNodeTypeError,
   AstJsonNodeTypeError,
+  AstJsonPartitionError,
   AstJsonSchemaError,
   MAX_AST_JSON_DEPTH,
   type AstJsonDocument,
@@ -83,6 +109,7 @@ export {
   type FootnoteDefNode,
 } from './ast-json.js'
 export { RenderDepthError, MAX_RENDER_DEPTH } from './render-depth.js'
+export { SourceUnspellableError } from './source-unspellable-error.js'
 export type { RenderOptions } from './render-html.js'
 export type { MarkdownRenderOptions } from './render-markdown.js'
 export type { CarveRenderOptions } from './render-carve.js'
@@ -109,7 +136,12 @@ export {
   type MigrationCategory,
   type MigrationFixResult,
 } from './djot-migrate.js'
-export { markdownToCarve } from './markdown-migrate.js'
+export {
+  bbcodeToCarve,
+  BbcodeInputTooLargeError,
+  BBCODE_MAX_INPUT_LENGTH,
+} from './bbcode-migrate.js'
+export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
 export { migrateCarve01To02 } from './migrate-0-1-to-0-2.js'
 export {
   lintCarve,
@@ -120,10 +152,19 @@ export {
 } from './lint.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
+export { semanticSpan } from './semantic-span.js'
 export { listTable } from './list-table.js'
 export { glossary } from './glossary.js'
 export { headingNumbers, type HeadingNumbersOptions } from './heading-numbers.js'
 export { codeCallouts } from './code-callouts.js'
+export {
+  smartQuotes,
+  smartQuoteLocales,
+  isSmartQuoteLocaleSupported,
+  SMART_QUOTE_LOCALES,
+  type QuoteCharacters,
+  type SmartQuotesOptions,
+} from './smart-quotes.js'
 export { index } from './index-terms.js'
 export {
   citations,
@@ -283,6 +324,16 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
   if (doc.footnoteDefs) {
     for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
   }
+  // A `[@key]: entry` line is a `citation_definition`, not a paragraph holding
+  // its own unrecognized source (PART 12 §18). Here rather than in the
+  // citations extension's `afterParse` hook because THIS is the stage that
+  // matters: `parse` is what `toAstJson` serializes and what §3a makes
+  // pre-resolve, and `parse` does not call that hook - so a fix living there
+  // would look right through the extension and leave the published tree
+  // carrying the paragraph (carve#1276). Representation, not resolution, the
+  // same standing as `promoteBlockImages` above: no rendered output moves on
+  // any target.
+  doc.children = promoteCitationDefinitions(doc.children)
   return doc
 }
 

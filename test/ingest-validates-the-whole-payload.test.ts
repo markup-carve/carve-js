@@ -175,6 +175,7 @@ describe('a node position is checked for WHICH node, not only that it is one', (
     for (const target of [
       { type: 'image', src: '/a.png', alt: '' },
       { type: 'paragraph', children: [] },
+      { type: 'code_block', content: '' },
       { type: 'block_quote', children: [] },
     ]) {
       expect(() =>

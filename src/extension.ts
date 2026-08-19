@@ -201,6 +201,8 @@ export interface BeforeRenderContext {
 /** A named extension unit contributing any subset of the lifecycle hooks. */
 export interface CarveExtension {
   name: string
+  /** Parse-time opening/closing double and single quote glyphs. */
+  quoteCharacters?: readonly [string, string, string, string]
   /** Parse-stage inline matcher (adds inline syntax; never hijacks core). */
   matchInline?: InlineMatcher
   /** Parse-stage block matcher (tried before the paragraph fallback). */
@@ -221,6 +223,17 @@ export interface CarveExtension {
    * hook to read the context.
    */
   beforeRender?(doc: Document, ctx: BeforeRenderContext): Document
+  /**
+   * Semantic span attribute names this extension adds, inner to outer.
+   *
+   * DECLARATIVE ON PURPOSE. The nesting order, the value mapping and PART 9
+   * §9's riding rule live in ONE renderer; an extension that re-implemented
+   * them for its own names would be a second copy of the feature, drifting
+   * from core the first time either side changed - which is the defect the
+   * tier split exists to remove. So an extension names what it claims and core
+   * renders it.
+   */
+  semanticSpanNames?: readonly string[]
   /** Renderers keyed by the extension type name (the `name` in `:name[…]`). */
   renderers?: Record<string, ExtensionRenderer>
   /** Renderers keyed by core block node `type` (e.g. `admonition`). */

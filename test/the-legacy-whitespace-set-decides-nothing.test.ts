@@ -16,12 +16,16 @@ import { autolink } from '../src/autolink.js'
  * their own mains.
  *
  * NOT COVERED HERE, on purpose:
- *   - The TAB row. Whether a delimiter line's trailing run is `whitespace` or
- *     the narrower `space` is unruled: no production names that run at all, and
- *     the three engines disagree (carve-rs takes a tab after `:::` and after `+`
- *     but not after ` ``` `; carve-php takes it in all three). This change
- *     narrows the class to `whitespace` and leaves that question open, so every
- *     tab assertion below is a CONTROL rather than a fixed row.
+ *   - The TAB row, for every construct EXCEPT the code fence. Whether a
+ *     delimiter line's trailing run is `whitespace` or the narrower `space` was
+ *     unruled when this file was written, and the three engines disagreed
+ *     (carve-rs takes a tab after `:::` and after `+` but not after ` ``` `;
+ *     carve-php takes it in all three). markup-carve/carve#1285 has since ruled
+ *     the CODE fence's row only: that run is `space`, and a tab neither opens
+ *     nor closes a fence. Its assertions live in
+ *     `a-code-fence-line-ending-in-a-tab-is-not-a-fence.test.ts`. The colon
+ *     fence's and the continuation marker's tab rows are still unruled, so
+ *     those remain CONTROLS rather than fixed rows.
  *   - U+FEFF, U+200B and U+180E in an AUTOLINK body. `url_char` enumerates
  *     ASCII, and whether it admits non-ASCII at all is markup-carve/carve#860.
  *     Their rows are controls too: they must not move until that lands.
@@ -51,12 +55,27 @@ describe('a fence delimiter line', () => {
   // of its own means the fence closed; `y` inside the block means it did not.
   const closes = (ch: string) => /<p>y<\/p>/.test(carveToHtml('```\nx\n```' + ch + '\ny\n'))
 
-  it('is closed by a run of spaces and tabs', () => {
+  it('is closed by a run of spaces', () => {
     // CONTROL for the whole class: narrowed to nothing, every fence in the corpus
-    // would run to end of document. The tab row is the unruled one (see header).
+    // would run to end of document.
     expect(closes('')).toBe(true)
     expect(closes(' ')).toBe(true)
     expect(closes('   ')).toBe(true)
+  })
+
+  it('IS closed by a run holding a tab', () => {
+    // markup-carve/carve#1285 ruled the code fence's row and this asserted the
+    // narrow reading: the trailing run is `space`, so a tab in it is not
+    // padding and the line is not a closer.
+    //
+    // markup-carve/carve#1295 then split that by POSITION. What the separator
+    // clause governs is whitespace standing BETWEEN a marker and content; a
+    // CLOSER HAS NO CONTENT after its marker, so a tab there is trailing, PART
+    // 2 drops it, and the line closes. carve-php was the only engine already
+    // right; carve-js#1132 brought this one over.
+    //
+    // The tab remains excluded where it really is a separator - `` ```<TAB>php ``
+    // does not OPEN a fence - which is a different line and has its own file.
     expect(closes('\t')).toBe(true)
     expect(closes(' \t ')).toBe(true)
   })

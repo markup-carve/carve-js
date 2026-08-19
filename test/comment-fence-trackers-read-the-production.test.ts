@@ -73,7 +73,7 @@ describe('content after the closer re-opens a paragraph the lazy line folds into
   const AFTER_BARE = '> %%%\n> secret\n> %%%\n> after\nlazy\n'
 
   it('the reference row, pinned literally', () => {
-    expect(html(AFTER_BARE)).toBe('<blockquote> <p>after lazy</p> </blockquote>')
+    expect(html(AFTER_BARE)).toBe('<blockquote><p>after lazy</p></blockquote>')
   })
 
   for (const [label, source] of [
@@ -143,7 +143,7 @@ describe('shapes the spellings cannot disagree about', () => {
   it('CONTROL: a two-percent line comment is not a fence', () => {
     // `%%` is `inline_comment`, a different production, and narrowing the fence
     // predicate must not start claiming it.
-    expect(html('> %% note\n> a\nlazy\n')).toBe('<blockquote> <p>a lazy</p> </blockquote>')
+    expect(html('> %% note\n> a\nlazy\n')).toBe('<blockquote><p>a lazy</p></blockquote>')
   })
 })
 
@@ -161,7 +161,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
 
     expect(html('> %%% TODO\n> secret\nlazy\n')).toBe(bare)
     expect(html('>  %%%\n> secret\nlazy\n')).toBe(bare)
-    expect(bare).toBe('<blockquote> <p>secret lazy</p> </blockquote>')
+    expect(bare).toBe('<blockquote><p>secret lazy</p></blockquote>')
   })
 
   it('CONTROL: a TERMINATED fence still opens one', () => {
@@ -209,7 +209,7 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
     // line - which is the only way to tell "stop here" from "ignore this line
     // and keep looking". Found by building the mutant and diffing its output.
     expect(html('> %%%\n> secret\nlazy\n\n> %%%\n')).toBe(
-      '<blockquote> <p>secret lazy</p> </blockquote> <blockquote> </blockquote>',
+      '<blockquote><p>secret lazy</p></blockquote> <blockquote> </blockquote>',
     )
   })
 

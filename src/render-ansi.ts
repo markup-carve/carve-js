@@ -2,12 +2,21 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import type { BlockNode, DefinitionItem, Document, Figure, InlineNode, List, Table, Text } from './ast.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
+import { abbreviationPairKey, documentHasAbbreviationDef } from './abbr-expansion-emitted.js'
 import { normalizeLegacyInline } from './legacy-nodes.js'
 import { blankDeniedDestination } from './deny-listed-destination.js'
 import { smartTypographyIsSource } from './render-plain.js'
 import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
+import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+
+// Set while rendering a span that carries an authored `abbr`, so a resolved
+// abbreviation inside it contributes only its visible text (carve#1127).
+let suppressAutomaticAbbreviation = false
+
+/** No definition has been found expanded yet - the first pass, or no definition. */
+const NO_EXPANDED_DEFINITIONS: ReadonlySet<string> = new Set()
 
 export interface AnsiRenderOptions {
   /** See `PlainTextRenderOptions.smartTypography` (carve#560). */
@@ -46,6 +55,20 @@ const FG_BRIGHT_GREEN = '\x1b[92m'
 const FG_BRIGHT_WHITE = '\x1b[97m'
 
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
+  // PART 11 §10f, and see the twin comment in render-plain.ts: the definition
+  // lines come before the occurrences that decide whether they survive, so a
+  // document holding a definition is rendered once to find out which pairs were
+  // actually expanded and once for real.
+  if (!documentHasAbbreviationDef(ast)) return renderPass(ast, opts, NO_EXPANDED_DEFINITIONS).text
+  const probe = renderPass(ast, opts, NO_EXPANDED_DEFINITIONS)
+  return renderPass(ast, opts, probe.expanded).text
+}
+
+function renderPass(
+  ast: Document,
+  opts: AnsiRenderOptions,
+  expandedDefinitions: ReadonlySet<string>,
+): { text: string; expanded: Set<string> } {
   const ctx: AnsiContext = {
     smartSource: smartTypographyIsSource(opts.smartTypography),
     listDepth: 0,
@@ -55,10 +78,12 @@ export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string 
     inlineDepth: 0,
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
+    expandedDefinitions,
+    expanded: new Set(),
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
-  return stripBidiControls(normalize(`${out}${footnotes}`))
+  return { text: stripBidiControls(normalize(`${out}${footnotes}`)), expanded: ctx.expanded }
 }
 
 interface AnsiContext {
@@ -77,6 +102,16 @@ interface AnsiContext {
    * path never populates because it does no numbering.
    */
   definedFootnotes: Set<string>
+  /**
+   * The `(term, expansion)` pairs the FIRST pass expanded, so an
+   * `abbreviation_def` can tell whether ITS OWN expansion is emitted. PART 11
+   * §10f, and see abbr-expansion-emitted.ts for why that is the test rather
+   * than "is the term referenced". Empty on the first pass, where every
+   * definition line is written and thrown away with the rest of the string.
+   */
+  expandedDefinitions: ReadonlySet<string>
+  /** The pairs THIS pass expanded, which is what the first pass is run for. */
+  expanded: Set<string>
 }
 
 /**
@@ -116,6 +151,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return renderCodeBlock(
         stripControls(node.content),
         node.lang ? stripControls(node.lang) : node.lang,
+        node.header ? stripControls(node.header) : undefined,
+        node.label ? stripControls(node.label) : undefined,
       )
     case 'block_quote':
       ctx.blockQuoteDepth++
@@ -165,6 +202,18 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
       return renderFigure(node, ctx)
+    case 'figure_group': {
+      // PART 11 degradation (D8), matching the plain-text shape: the GROUP
+      // caption line first (styled like every caption on this target), a blank
+      // line, then each child in source order - a panel as its caption line
+      // over its host degradation, stray content as usual.
+      let out = ''
+      if (node.caption !== undefined) out += renderCaption(node.caption, ctx)
+      for (const child of node.children) {
+        out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
+      }
+      return out
+    }
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
@@ -172,12 +221,19 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'raw_block':
       return `${style(`[raw:${node.format}] ${stripControls(node.content)}`, DIM)}\n\n`
     case 'abbreviation_def':
-      // PART 10 §10a - see the note in render-markdown.
+      // PART 11 §10f: this target DROPS a definition whose own expansion it
+      // emits, because the words would otherwise appear twice - once as this
+      // dim line and once beside every occurrence. A definition whose expansion
+      // reaches no output keeps its line, which is §10a and is what the pair
+      // lookup answers; see abbr-expansion-emitted.ts.
+      if (ctx.expandedDefinitions.has(abbreviationPairKey(node.abbr, node.expansion))) return ''
       return `${style(`*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}`, DIM)}\n\n`
     case 'comment':
       return ''
     case 'link_reference_definition':
-      // Renders nothing: a definition line is not prose.
+    case 'citation_definition':
+      // Renders nothing: a definition line is not prose. PART 12 §18 gave the
+      // citation line a node without moving output on any target.
       return ''
     default: {
       const t: never = node
@@ -207,8 +263,19 @@ function renderHeading(level: number, content: string): string {
   return `${out}\n\n`
 }
 
-function renderCodeBlock(content: string, lang?: string): string {
+function renderCodeBlock(content: string, lang?: string, header?: string, label?: string): string {
   let out = ''
+  // PART 11 §10e T1: a fence's title (`"src/app.js"`) and grouping label
+  // (`[Node]`) render the way a fenced div's already do on this target - a bold
+  // standalone line each, above the block, the title always before the label.
+  // Both are authored text, and docs/graceful-degradation.md forbids dropping
+  // it. Folding them into the rule line instead was considered and rejected:
+  // the rule line exists only when the fence has a LANGUAGE, so a titled fence
+  // without one would have needed a rule line invented for it, and a fence
+  // carrying both tokens would have needed a separator invented too.
+  if (header) out += `${style(header, BOLD)}\n\n`
+  if (label) out += `${style(label, BOLD)}\n\n`
+  // The language keeps the slot this target already gave it, unchanged.
   if (lang) out += `${style(`┌── ${lang} `, DIM)}\n`
   for (const line of content.replace(/\n$/, '').split('\n')) {
     out += `${style(`  ${line}`, FG_BRIGHT_WHITE)}\n`
@@ -328,11 +395,25 @@ function renderCaption(nodes: InlineNode[], ctx: AnsiContext): string {
   return `${style(trimNonNbsp(renderInlines(nodes, ctx)), ITALIC + DIM)}\n\n`
 }
 
+/**
+ * A composite figure's PANEL on this target: caption line first, then the host
+ * degradation (D8) - see the plain-text twin for why the order inverts.
+ */
+function renderPanelFigure(node: Figure, ctx: AnsiContext): string {
+  const target =
+    node.target.type === 'image'
+      ? renderImage(node.target)
+      : node.target.type === 'table'
+        ? trimEndNonNbsp(renderTable(node.target, ctx))
+        : trimEndNonNbsp(renderBlock(node.target, ctx))
+  return `${style(trimNonNbsp(renderInlines(node.caption, ctx)), ITALIC + DIM)}\n${target}\n\n`
+}
+
 function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
   for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
-    // The marker as written (PART 10 §10a): the caret is part of the construct.
+    // The marker as written (PART 11 §10a): the caret is part of the construct.
     out += `${style(`[^${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }
   return out
@@ -414,7 +495,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined && !node.href) return stripControls(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return stripControls(referenceSourceText(node.rawRef))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination gets ANSI link styling.
@@ -446,8 +527,28 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     }
     case 'image':
       return renderImage(node)
-    case 'span':
+    case 'span': {
+      // carve#1127 again: the authored value wins, and the nested expansion is
+      // not emitted. ANSI has no markup to carry a title, so the expansion is
+      // parenthetical text - the same shape this target already uses for an
+      // ordinary abbreviation, carrying the AUTHORED text (carve#1176).
+      const authoredAbbr = node.attrs?.keyValues?.abbr
+      if (authoredAbbr !== undefined) {
+        const previous = suppressAutomaticAbbreviation
+        suppressAutomaticAbbreviation = true
+        try {
+          const inner = renderInlines(node.children, ctx)
+          if (authoredAbbr === '') return inner
+          if (!ctx.abbrBudget.charge(utf8ByteLength(authoredAbbr))) return inner
+
+          return `${inner}${style(` (${stripControls(authoredAbbr)})`, DIM)}`
+        } finally {
+          suppressAutomaticAbbreviation = previous
+        }
+      }
+
       return renderInlines(node.children, ctx)
+    }
     case 'math':
       return style(stripControls(node.content), FG_BRIGHT_MAGENTA)
     case 'raw_inline':
@@ -479,10 +580,15 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'inline_extension':
       return renderInlines(node.content, ctx)
     case 'abbreviation': {
+      // Inside a span carrying its own `abbr`, only the visible text (carve#1127).
+      if (suppressAutomaticAbbreviation) return stripControls(node.abbr)
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to the plain key text only (no ` (EXPANSION)` suffix).
+      // A degraded occurrence emits no expansion, so it records no pair and the
+      // definition it came from keeps its line (PART 11 §10f).
       if (!ctx.abbrBudget.charge(utf8ByteLength(node.expansion)))
         return stripControls(node.abbr)
+      ctx.expanded.add(abbreviationPairKey(node.abbr, node.expansion))
       return `${stripControls(node.abbr)}${style(` (${stripControls(node.expansion)})`, DIM)}`
     }
     case 'footnote_ref':
@@ -569,7 +675,10 @@ function renderImage(node: { alt: string; src?: string; ref?: string; rawRef?: s
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
-  if (node.ref !== undefined && !node.src) return stripControls(node.rawRef ?? '')
+  // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
+  // image writes back from, which carries no `type` for the shared predicate
+  // to key on.
+  if (node.ref !== undefined && !node.src) return stripControls(referenceSourceText(node.rawRef))
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

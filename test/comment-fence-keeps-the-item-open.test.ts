@@ -139,6 +139,15 @@ describe('a comment does not change a fold state that was already closed', () =>
       // the fold, and the comment must not prevent that either.
       const out = squash(carveToHtml(`- a\n\n${block}  para\n  %%% c\n  %%%\nlazy\n`))
 
+      expect(out).toContain('<p>lazy</p>')
+    })
+
+    it(`still folds after ${what} when the comment sits BELOW the content column`, () => {
+      // The other side of the control, so this is not just asserting that
+      // everything ends the item: a paragraph after the block does re-open the
+      // fold, and a comment that is not at the column does not close it again.
+      const out = squash(carveToHtml(`- a\n${block}  para\n %%% c\n %%%\nlazy\n`))
+
       expect(out).not.toContain('<p>lazy</p>')
     })
   }

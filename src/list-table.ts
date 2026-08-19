@@ -120,13 +120,17 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   // decision below is made on a pristine AST and a deferred render is
   // byte-identical to the plain div.
   const rows: CellEntry[][] = []
+  const localHeaderRows: boolean[] = []
   for (const rowItem of outerList.items) {
     const cells = extractCells(rowItem)
     // A null row is malformed (a block sits BEFORE the inner cell list, e.g.
     // `- row intro` then an indented `- A`); it cannot become table cells
     // without dropping the leading content. Defer the whole block.
     if (cells === null) return null
+    const localHeader = structuralMarker(cells[0]?.cell.attrs, 'header-row')
+    if (localHeader === null || cells.slice(1).some((entry) => structuralMarker(entry.cell.attrs, 'header-row') !== false)) return null
     rows.push(cells)
+    localHeaderRows.push(localHeader)
   }
 
   if (rows.length === 0) return null
@@ -137,6 +141,8 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   // renderer so the literal nested list is emitted and nothing is lost.
   for (const cells of rows) {
     if (cells.length === 0) return null
+    if (cells.some((entry) => structuralMarker(entry.cell.attrs, 'header') === null)) return null
+    if (cells.some((entry) => !validCellAlignment(entry.cell.attrs))) return null
   }
 
   // DoS guard: span resolution rescans prior rows, so a pathologically large
@@ -147,6 +153,30 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
 
   const headerRows = headerCount(node.attrs?.keyValues?.['header-rows'])
   const headerCols = headerCount(node.attrs?.keyValues?.['header-cols'])
+  const footerRows = headerCount(node.attrs?.keyValues?.['footer-rows'])
+  if (headerRows + footerRows > rows.length) return null
+  const footerStart = rows.length - footerRows
+  if (localHeaderRows.slice(footerStart).some(Boolean)) return null
+
+  // Each intermediate header run starts a body group. Consecutive marked rows
+  // are one group's header; a marker after body data starts the next group.
+  const bodyGroups: Array<{ start: number; end: number }> = []
+  let groupStart = headerRows
+  let groupHasData = false
+  for (let row = headerRows; row < footerStart; row++) {
+    if (localHeaderRows[row] && groupHasData) {
+      bodyGroups.push({ start: groupStart, end: row })
+      groupStart = row
+      groupHasData = false
+    }
+    if (!localHeaderRows[row]) groupHasData = true
+  }
+  if (groupStart < footerStart) bodyGroups.push({ start: groupStart, end: footerStart })
+
+  const rowGroup = rows.map((_, row) => row < headerRows ? 0 : row >= footerStart ? bodyGroups.length + 1 : 1)
+  bodyGroups.forEach((group, index) => {
+    for (let row = group.start; row < group.end; row++) rowGroup[row] = index + 1
+  })
 
   // Resolve `^`/`<` span markers into a positional grid, mirroring carve-js's
   // pipe-table span model (render-html `renderTable`) so the output is identical
@@ -154,7 +184,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   // header/body boundary: an HTML cell cannot reliably span across
   // <thead>/<tbody>, so a `^` that would extend a header cell down into the body
   // is not merged and degrades to an empty cell.
-  const grid = resolveSpans(rows, headerRows)
+  const grid = resolveSpans(rows, rowGroup)
 
   // Assign each rendered cell an output column by flowing it top-down past any
   // column a rowspan from an earlier row still holds (browser / pipe-table
@@ -162,6 +192,8 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   // padding.
   const placement = placeColumns(grid)
   const columnCount = placement.columnCount
+  const columns = listTableColumns(node, columnCount)
+  if (columns === null) return null
 
   const lines: string[] = []
 
@@ -173,9 +205,17 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   if (caption !== '') {
     lines.push(`${pad}  <caption>${caption}</caption>`)
   }
+  if (columns.some((column) => column.width !== undefined)) {
+    lines.push(`${pad}  <colgroup>`)
+    for (const column of columns) {
+      const style = column.width === undefined ? '' : ` style="width: ${column.width}%;"`
+      lines.push(`${pad}    <col${style}>`)
+    }
+    lines.push(`${pad}  </colgroup>`)
+  }
 
   const renderRow = (gridRow: GridEntry[], rowIndex: number): string => {
-    const isHeaderRow = rowIndex < headerRows
+    const isHeaderRow = rowIndex < headerRows || localHeaderRows[rowIndex]!
     const cols = placement.cols[rowIndex]!
     let html = ''
     let nextCol = 0
@@ -185,11 +225,17 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
       if (entry.skip) return
 
       const col = cols[i]!
-      const isHeaderCell = isHeaderRow || col < headerCols
+      const isHeaderCell = isHeaderRow || col < headerCols || structuralMarker(entry.cell.attrs, 'header') === true
       const tag = isHeaderCell ? 'th' : 'td'
       let attrHtml = ''
+      // PART 10 §T9, the same rule and the same position as the pipe table:
+      // `col` in the header-row run, `row` for a cell that is a header only
+      // because it falls inside `header-cols`. A ListTable and the pipe table
+      // it is equivalent to must not differ in accessibility markup.
+      if (isHeaderCell) attrHtml += ` scope="${isHeaderRow ? 'col' : 'row'}"`
       if (entry.rowspan > 1) attrHtml += ` rowspan="${entry.rowspan}"`
       if (entry.colspan > 1) attrHtml += ` colspan="${entry.colspan}"`
+      attrHtml += cellStyle(entry.cell.attrs, columns[col])
       // Carry the cell's own list-item attributes (e.g. `{.x}`) onto the
       // <td>/<th> so authored cell styling is not dropped. The structural span
       // attributes above always win on conflict.
@@ -205,15 +251,18 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
     // suppresses padding (placement.rowReach accounts for it).
     let col = Math.max(nextCol, placement.rowReach[rowIndex]!)
     for (; col < columnCount; col++) {
-      const tag = isHeaderRow || col < headerCols ? 'th' : 'td'
-      html += `<${tag}></${tag}>`
+      const isPadHeader = isHeaderRow || col < headerCols
+      const tag = isPadHeader ? 'th' : 'td'
+      // A padded cell is still a header cell where the grid says so.
+      const scope = isPadHeader ? ` scope="${isHeaderRow ? 'col' : 'row'}"` : ''
+      html += `<${tag}${scope}${columnStyle(columns[col])}></${tag}>`
     }
 
     return `<tr>${html}</tr>`
   }
 
   const headGrid = grid.slice(0, headerRows)
-  const bodyGrid = grid.slice(headerRows)
+  const footGrid = grid.slice(footerStart)
 
   if (headGrid.length > 0) {
     let thead = ''
@@ -223,12 +272,19 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
     lines.push(`${pad}  <thead>${thead}</thead>`)
   }
 
-  if (bodyGrid.length > 0) {
+  for (const group of bodyGroups) {
     const body: string[] = []
-    bodyGrid.forEach((gridRow, offset) => {
-      body.push(`${pad}    ${renderRow(gridRow, offset + headerRows)}`)
+    grid.slice(group.start, group.end).forEach((gridRow, offset) => {
+      body.push(`${pad}    ${renderRow(gridRow, group.start + offset)}`)
     })
     lines.push(`${pad}  <tbody>\n${body.join('\n')}\n${pad}  </tbody>`)
+  }
+  if (footGrid.length > 0) {
+    const foot: string[] = []
+    footGrid.forEach((gridRow, offset) => {
+      foot.push(`${pad}    ${renderRow(gridRow, footerStart + offset)}`)
+    })
+    lines.push(`${pad}  <tfoot>\n${foot.join('\n')}\n${pad}  </tfoot>`)
   }
 
   const attrs = renderTableAttributes(node, ctx)
@@ -342,7 +398,7 @@ function extractCells(rowItem: ListItem): CellEntry[] | null {
  * `^` in a body row whose source sits in the header rows is NOT merged and
  * degrades to an empty cell (an HTML cell cannot span row groups reliably).
  */
-function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
+function resolveSpans(rows: CellEntry[][], rowGroup: number[] = rows.map(() => 0)): GridEntry[][] {
   const grid: GridEntry[][] = rows.map((cells) =>
     cells.map((entry) => ({
       cell: entry.cell,
@@ -354,23 +410,27 @@ function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
     })),
   )
 
-  // Per source column, the last row index (above the current one) whose cell is
-  // not skipped - the nearest source a `^` can extend. Maintained incrementally
-  // so an all-`^` column resolves in O(1) (carve-js parity).
-  const lastNonSkip: number[] = []
+  // Per source column, the last row index (above the current one) a `^`
+  // resolves against. Maintained incrementally so an all-`^` column resolves in
+  // O(1) (pipe-table parity).
+  const base: number[] = []
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
       const entry = grid[r]![c]!
       if (entry.skip) continue
 
       if (entry.marker === '^' && r > 0) {
-        const up = lastNonSkip[c]
+        const up = base[c]
         const src = up !== undefined ? grid[up]?.[c] : undefined
         // Clamp at the header/body boundary: a `^` in a body row must not extend
         // a cell that originated in the header rows. Leave it unmerged (it then
         // renders as an empty cell) so no <th rowspan> crosses into <tbody>.
-        const crossesHeader = up !== undefined && up < headerRows && r >= headerRows
-        if (src && !crossesHeader) {
+        const crossesGroup = up !== undefined && rowGroup[up] !== rowGroup[r]
+        if (src && !crossesGroup) {
+          // A `^` under a merged `<` is absorbed and renders nothing: the
+          // origin's rowspan is grown by the mark at its own index, and the
+          // count this one adds lands on the merged `<`, which renders nothing
+          // either (pipe-table parity).
           src.rowspan++
           entry.skip = true
         }
@@ -384,9 +444,10 @@ function resolveSpans(rows: CellEntry[][], headerRows = 0): GridEntry[][] {
         }
       }
 
-      // A cell that ends up non-skipped becomes the nearest source for the cells
-      // below it in this column.
-      if (!entry.skip) lastNonSkip[c] = r
+      // Any cell that is not a RESOLVED `^` is what the cells below it in this
+      // column resolve against - a merged `<` included, because the column it
+      // covers is still a column of the grid.
+      if (!entry.skip || entry.marker === '<') base[c] = r
     }
   }
 
@@ -469,7 +530,76 @@ function renderCell(
 function renderCellAttributes(cell: ListItem, ctx: BlockExtensionRenderContext): string {
   if (!cell.attrs) return ''
 
-  return ctx.renderAttrs(stripSpanAttrs(cell.attrs))
+  return ctx.renderAttrs(stripStructuralCellAttrs(cell.attrs))
+}
+
+/** A bare list-item `{header}` is structural. A valued form is malformed. */
+function structuralMarker(attrs: Attrs | undefined, key: 'header' | 'header-row'): boolean | null {
+  const value = attrs?.keyValues?.[key]
+  if (value === undefined) return false
+  return value === '' ? true : null
+}
+
+interface ListTableColumn {
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  /** Source spelling is a percentage. */
+  width?: number
+}
+
+function listTableColumns(node: Admonition, count: number): ListTableColumn[] | null {
+  const kv = node.attrs?.keyValues ?? {}
+  const split = (key: string): string[] => kv[key] === undefined ? [] : kv[key]!.split(',').map((v) => v.trim())
+  const aligns = split('aligns')
+  const valigns = split('valigns')
+  const widths = split('widths')
+  if ([aligns, valigns, widths].some((values) => values.length > count)) return null
+  const columns = Array.from({ length: count }, (): ListTableColumn => ({}))
+  for (let i = 0; i < count; i++) {
+    const align = aligns[i]
+    if (align) {
+      if (align !== 'left' && align !== 'right' && align !== 'center') return null
+      columns[i]!.align = align
+    }
+    const valign = valigns[i]
+    if (valign) {
+      if (valign !== 'top' && valign !== 'middle' && valign !== 'bottom') return null
+      columns[i]!.valign = valign
+    }
+    const rawWidth = widths[i]
+    if (rawWidth) {
+      const width = Number(rawWidth)
+      if (!Number.isFinite(width) || width <= 0 || width > 100) return null
+      columns[i]!.width = width
+    }
+  }
+  return columns
+}
+
+function columnStyle(column: ListTableColumn | undefined): string {
+  if (!column?.align && !column?.valign) return ''
+  const style = [
+    column.align ? `text-align: ${column.align};` : '',
+    column.valign ? `vertical-align: ${column.valign};` : '',
+  ].filter(Boolean).join(' ')
+  return ` style="${style}"`
+}
+
+/** Resolve a cell's semantic alignment over its column defaults. */
+function validCellAlignment(attrs: Attrs | undefined): boolean {
+  const align = attrs?.keyValues?.align
+  const valign = attrs?.keyValues?.valign
+  return (align === undefined || align === 'left' || align === 'right' || align === 'center') &&
+    (valign === undefined || valign === 'top' || valign === 'middle' || valign === 'bottom')
+}
+
+function cellStyle(attrs: Attrs | undefined, column: ListTableColumn | undefined): string {
+  const align = attrs?.keyValues?.align as ListTableColumn['align'] | undefined
+  const valign = attrs?.keyValues?.valign as ListTableColumn['valign'] | undefined
+  const resolved: ListTableColumn = {}
+  if (align ?? column?.align) resolved.align = (align ?? column?.align)!
+  if (valign ?? column?.valign) resolved.valign = (valign ?? column?.valign)!
+  return columnStyle(resolved)
 }
 
 /**
@@ -487,11 +617,15 @@ function renderTableAttributes(node: Admonition, ctx: BlockExtensionRenderContex
   const keyValues = { ...(attrs.keyValues ?? {}) }
   delete keyValues['header-rows']
   delete keyValues['header-cols']
+  delete keyValues['footer-rows']
+  delete keyValues.aligns
+  delete keyValues.valigns
+  delete keyValues.widths
 
   const classes = (attrs.classes ?? []).filter((c) => c !== '' && c !== 'list-table')
 
   const order = (attrs.order ?? []).filter(
-    (s) => s !== 'header-rows' && s !== 'header-cols' && !(s === '.class' && classes.length === 0),
+    (s) => !['header-rows', 'header-cols', 'footer-rows', 'aligns', 'valigns', 'widths'].includes(s) && !(s === '.class' && classes.length === 0),
   )
 
   const cleaned: Attrs = {}
@@ -505,25 +639,25 @@ function renderTableAttributes(node: Admonition, ctx: BlockExtensionRenderContex
 
 /** Drop any author-written span attribute (case-insensitively) so the computed
  *  structural rowspan/colspan stays the only one emitted. */
-function stripSpanAttrs(attrs: Attrs): Attrs {
+function stripStructuralCellAttrs(attrs: Attrs): Attrs {
   if (!attrs.keyValues) return attrs
   const has = Object.keys(attrs.keyValues).some((k) => {
     const l = k.toLowerCase()
-    return l === 'rowspan' || l === 'colspan'
+    return l === 'rowspan' || l === 'colspan' || l === 'header' || l === 'header-row' || l === 'align' || l === 'valign'
   })
   if (!has) return attrs
 
   const keyValues = Object.fromEntries(
     Object.entries(attrs.keyValues).filter(([k]) => {
       const l = k.toLowerCase()
-      return l !== 'rowspan' && l !== 'colspan'
+      return l !== 'rowspan' && l !== 'colspan' && l !== 'header' && l !== 'header-row' && l !== 'align' && l !== 'valign'
     }),
   )
   const out: Attrs = { ...attrs, keyValues }
   if (attrs.order) {
     out.order = attrs.order.filter((s) => {
       const l = s.toLowerCase()
-      return l !== 'rowspan' && l !== 'colspan'
+      return l !== 'rowspan' && l !== 'colspan' && l !== 'header' && l !== 'header-row' && l !== 'align' && l !== 'valign'
     })
   }
 
@@ -551,4 +685,3 @@ function headerCount(value: string | undefined): number {
   if (value.trim() === '') return 1
   return Math.max(0, toInt(value))
 }
-

@@ -70,7 +70,11 @@ export function details(): CarveExtension {
         const innerPad = ctx.indent(ctx.level + 1)
         const rendered = adm.title ? ctx.renderInlines(adm.title).trim() : ''
         const summary = rendered !== '' ? rendered : 'Details'
-        const open = `<details open${ctx.renderAttrs(adm.attrs)}>`
+        // `open` unless the block already carries it: an imported
+        // `<details open>` - and a hand-written `{open}` - puts it in the
+        // attributes, and adding it again wrote `<details open open="">`.
+        const authored = adm.attrs?.keyValues?.['open'] !== undefined
+        const open = `<details${authored ? '' : ' open'}${ctx.renderAttrs(adm.attrs)}>`
         const body = ctx.renderChildren(adm.children, ctx.level + 1)
         return (
           `${pad}${open}\n` +

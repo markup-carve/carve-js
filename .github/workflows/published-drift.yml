@@ -1,15 +1,22 @@
 name: Published engine drift
 
-# Nine repositories install `@markup-carve/carve` from npm, so what they ship is
-# whatever was last published. Nothing measured the distance between that and
+# Eight repositories install `@markup-carve/carve` from npm, so what they ship
+# is whatever was last published. Nothing measured the distance between that and
 # main until someone audited it by hand and found 176 commits and 38 corpus
 # documents (markup-carve/carve#608). Their own CI cannot see it: their tests
 # pass against the engine they installed.
 #
-# This job measures it on a schedule and holds it to a number committed in the
-# repo. Green while the drift matches `published-drift.baseline`; red when it
-# moves in EITHER direction - growing means a release is due, shrinking means a
-# release happened without resetting the baseline.
+# This job measures it on a schedule and holds it UNDER the ceiling committed in
+# `published-drift.ceiling`. It was an exact-equality ratchet until the project
+# stopped releasing on a schedule, at which point it went red on every run - and
+# a gate that is always red is a gate nobody reads.
+#
+# The count is written to the job summary on every run, green included, so the
+# trend toward the ceiling stays visible without anyone opening a log.
+#
+# Five further repositories pin a git revision instead, and this job cannot see
+# them at all; markup-carve/carve-js#1039 covers measuring what each consumer
+# actually resolves.
 
 on:
   schedule:

@@ -150,12 +150,14 @@ describe('a boundary line inside an open fence does not end the container', () =
     })
 
     it('keeps a comment fence whole', () => {
-      // Loose for the same separate reason the footnote row above is, and
-      // likewise unchanged by this fix: `:: t` / `:  d` / `+` / `%%%` / `a` /
-      // `%%%` already renders this way. What this row pins is that `b` stays
-      // inside the comment instead of becoming a document-level paragraph.
+      // TIGHT since `markup-carve/carve#1364`: a comment is not richer content,
+      // so a description holding one paragraph and one comment block takes the
+      // single-paragraph shape rather than the block one whose only extra child
+      // renders the empty string. carve-php `925f7dc` agrees. What this row
+      // pins is unchanged by that: `b` stays inside the comment instead of
+      // becoming a document-level paragraph.
       expect(html(doc(':: t', ':  d', '+', ...COMMENT, '', 'z'))).toBe(
-        '<dl><dt>t</dt><dd><p>d</p></dd></dl><p>z</p>',
+        '<dl><dt>t</dt><dd>d</dd></dl><p>z</p>',
       )
     })
   })

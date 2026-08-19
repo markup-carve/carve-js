@@ -59,6 +59,86 @@ describe('carve CLI — dispatch', () => {
   })
 })
 
+describe('carve migrate — HTML import', () => {
+  it('writes Carve plus a machine-readable loss report', async () => {
+    const t = makeIO({ stdin: '<p onclick="x()">Hello</p>' })
+    const code = await run(['migrate', '--from', 'html', '--report', 'report.json', '--check-loss'], t.io)
+    expect(code).toBe(1)
+    expect(t.out).toBe('Hello\n')
+    expect(JSON.parse(t.files['report.json']!)).toMatchObject({ mode: 'safe', diagnostics: [{ code: 'attribute-dropped' }] })
+  })
+
+  it('fails the loss check and reports an unspellable table figure wrapper', async () => {
+    const html = '<figure><table><tr><td>1</td></tr></table><figcaption>Cap</figcaption></figure>'
+    const t = makeIO({ stdin: html })
+    const code = await run(['migrate', '--from', 'html', '--report', 'report.json', '--check-loss'], t.io)
+    const report = JSON.parse(t.files['report.json']!)
+    expect(code).toBe(1)
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'structure-unspellable',
+      message: expect.stringContaining('figure wrapping a table'),
+    }))
+  })
+})
+
+describe('carve migrate — the other importers', () => {
+  it.each([
+    ['markdown', '**bold** and _em_\n'],
+    ['md', '**bold** and _em_\n'],
+  ])('converts Markdown with --from %s', async (from, stdin) => {
+    const t = makeIO({ stdin })
+    const code = await run(['migrate', '--from', from], t.io)
+    expect(code).toBe(0)
+    expect(t.err).toBe('')
+    expect(t.out).toContain('*bold* and /em/')
+  })
+
+  it('converts BBCode with --from bbcode', async () => {
+    const t = makeIO({ stdin: '[b]bold[/b] and [i]em[/i]\n' })
+    const code = await run(['migrate', '--from', 'bbcode'], t.io)
+    expect(code).toBe(0)
+    expect(t.out).toContain('*bold* and /em/')
+  })
+
+  it('reads the input file rather than stdin when one is named', async () => {
+    const t = makeIO({ files: { 'in.md': '# Title\n' } })
+    const code = await run(['migrate', '--from', 'markdown', 'in.md'], t.io)
+    expect(code).toBe(0)
+    expect(t.out).toContain('# Title')
+  })
+
+  // Djot has no importer here yet, only the `fix` linter, so it must fail as
+  // an unknown format rather than look supported.
+  it.each(['djot', 'rst'])('rejects the unsupported source format %s', async (from) => {
+    const t = makeIO({ stdin: 'x' })
+    const code = await run(['migrate', '--from', from], t.io)
+    expect(code).toBe(2)
+    expect(t.err).toContain(`unknown source format ${from}`)
+  })
+
+  it('names every supported format when --from is missing', async () => {
+    const t = makeIO({ stdin: 'x' })
+    const code = await run(['migrate'], t.io)
+    expect(code).toBe(2)
+    expect(t.err).toContain('html, markdown or bbcode')
+  })
+
+  /**
+   * The loss report belongs to the HTML importer alone, so a Markdown
+   * migration ignores its options instead of validating or honoring them.
+   */
+  it('ignores the HTML-only options for the other formats', async () => {
+    const t = makeIO({ stdin: '**bold**\n' })
+    const code = await run(
+      ['migrate', '--from', 'markdown', '--mode', 'nonsense', '--check-loss', '--report', 'report.json'],
+      t.io,
+    )
+    expect(code).toBe(0)
+    expect(t.out).toBe('*bold*\n')
+    expect(t.files['report.json']).toBeUndefined()
+  })
+})
+
 describe('carve fix — stdin mode', () => {
   it('fixes stdin and writes the result to stdout', async () => {
     const t = makeIO({ stdin: 'use _emphasis_ here' })
@@ -659,6 +739,42 @@ describe('carve diff', () => {
     const t = makeIO()
     await run(['--help'], t.io)
     expect(t.out).toContain('carve diff')
+  })
+})
+
+describe('carve merge', () => {
+  const files = {
+    'base.crv': '# Old\n\nSee [docs](/a).\n',
+    'ours.crv': '# New\n\nSee [docs](/a).\n',
+    'theirs.crv': '# Old\n\nSee [docs](/b).\n',
+    'other.crv': '# Other\n\nSee [docs](/a).\n',
+  }
+
+  it('combines independent edits as Carve source', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', 'base.crv', 'ours.crv', 'theirs.crv'], t.io)).toBe(0)
+    expect(t.out).toContain('New')
+    expect(t.out).toContain('/b')
+  })
+
+  it('returns machine-readable conflicts without choosing a winner', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', '--json', 'base.crv', 'ours.crv', 'other.crv'], t.io)).toBe(1)
+    const result = JSON.parse(t.out)
+    expect(result).toMatchObject({ ok: false, ast: null })
+    expect(result.conflicts.length).toBeGreaterThan(0)
+  })
+
+  it('returns the same machine-readable envelope on success', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', '--json', 'base.crv', 'ours.crv', 'theirs.crv'], t.io)).toBe(0)
+    expect(JSON.parse(t.out)).toMatchObject({ ok: true, conflicts: [], ast: { type: 'document' } })
+  })
+
+  it('requires base, ours and theirs', async () => {
+    const t = makeIO({ files })
+    expect(await run(['merge', 'base.crv', 'ours.crv'], t.io)).toBe(2)
+    expect(t.err).toContain('exactly three files')
   })
 })
 

@@ -14,12 +14,14 @@ import type {
   BlockQuote,
   Document,
   Figure,
+  FigureGroup,
   Heading,
   Image,
   InlineNode,
   List,
   ListItem,
   Paragraph,
+  Span,
   Table,
   TableCell,
   TableRow,
@@ -38,12 +40,14 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
 // calls. Rendering is synchronous and single-threaded, so a module-scoped
 // tracker is safe and avoids threading a counter through every signature.
 let abbrBudget: AbbrBudget | null = null
+let suppressAutomaticAbbreviation = false
 
 // Per-render document id namespace (extensions contract §2.6): seeded with
 // every explicit / heading id in the resolved AST, consumed by extensions via
@@ -51,6 +55,14 @@ let abbrBudget: AbbrBudget | null = null
 let docIds: DocumentIdRegistry | null = null
 
 export interface RenderOptions {
+  /**
+   * The semantic span names this render consumes, inner to outer.
+   *
+   * Absent means core's three (PART 9 §9). The SemanticSpan extension passes
+   * the seven-name order (PART 9 §10) so its four extra names behave exactly
+   * as core's do - one code path, one nesting order, one riding rule.
+   */
+  semanticSpanNames?: readonly string[]
   /**
    * Render mode. `"interactive"` (default) emits the live forms - clickable
    * tabs, client-script diagrams, KaTeX-ready math. `"static"` emits a
@@ -282,7 +294,15 @@ function sanitizeUrl(url: string, opts: RenderOptions): string {
  *  handlers (`on*`) and these are stripped from ALL rendered attributes, always
  *  - there is no legitimate use in a content-markup document. */
 const DANGEROUS_ATTR_NAMES = new Set(['srcdoc', 'formaction'])
-function isDangerousAttrName(name: string): boolean {
+/**
+ * The PART 9 §25 attribute-NAME defense, exported for the same reason
+ * `renderedAttrValue` is: a caller outside the renderer must not answer "is
+ * this name refused?" from a second copy of the rules. `html-import.ts` keeps
+ * every attribute it has no reason to drop, so this IS its refusal set - two
+ * hand-maintained lists would drift, and the drift would be an importer that
+ * admits a sink the renderer knows about (markup-carve/carve-js#1156).
+ */
+export function isDangerousAttrName(name: string): boolean {
   const n = name.toLowerCase()
   return n.startsWith('on') || DANGEROUS_ATTR_NAMES.has(n)
 }
@@ -296,20 +316,111 @@ const HTML_ATTR_NAME_RE = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/
 const DANGEROUS_VALUE_SCHEMES = new Set(DANGEROUS_URL_SCHEMES)
 
 /**
+ * ASCII whitespace, HTML's own class: TAB, LF, FF, CR and SPACE. The token
+ * boundary for `URL_LIST_SEPARATORS` below, and deliberately NARROWER than
+ * `SCHEME_PROBE_STRIP_RE`: the strip class removes every Unicode space, but
+ * the split breaks only where the attribute grammars put their boundaries. So
+ * `a<U+202F>javascript:x` is ONE token to a consumer and resolves as a
+ * relative URL, while `<U+202F>javascript:x` is a token whose scheme the strip
+ * uncovers.
+ */
+const ASCII_WHITESPACE = '\\t\\n\\f\\r '
+
+/**
+ * PART 9 §25: the four attributes whose value is a LIST of URLs a consumer
+ * resolves or fetches, mapped to the separator that attribute's own grammar
+ * uses. Probed at every candidate rather than at the value's head, because the
+ * leading-scheme probe vouches for the whole value only where the whole value
+ * is one URL (markup-carve/carve#1320).
+ *
+ * THE TWO HALVES SPLIT DIFFERENTLY AND THAT IS THE RULE, NOT AN OVERSIGHT.
+ * `ping` (on `a`/`area`) and `attributionsrc` (on `a`/`img`/`script`) are
+ * space-separated sets whose grammars hold no comma, so splitting them on one
+ * would blank a lone legitimate URL that merely carries a comma in its path.
+ * `srcset` (on `img`/`source`) and `imagesrcset` (on `link`) are comma-separated
+ * candidate strings, and there the comma really does end a candidate: a
+ * whitespace-only split misses `safe.png 1x,javascript:alert(1) 2x` outright,
+ * one absent space hiding the second candidate inside the first's descriptor.
+ *
+ * The comma split over-blanks `srcset="https://example.com/a,data:x 1x"`, which
+ * is ONE candidate to a consumer. The spec pins that shape blanked and its
+ * `ping` counterpart kept, so the engines cannot each pick a tokenization;
+ * reading it exactly would take the HTML candidate-list algorithm, descriptor
+ * scan included, from three engines that must agree byte for byte.
+ */
+const URL_LIST_SEPARATORS = new Map<string, RegExp>([
+  ['srcset', new RegExp(`[,${ASCII_WHITESPACE}]+`)],
+  ['imagesrcset', new RegExp(`[,${ASCII_WHITESPACE}]+`)],
+  ['ping', new RegExp(`[${ASCII_WHITESPACE}]+`)],
+  ['attributionsrc', new RegExp(`[${ASCII_WHITESPACE}]+`)],
+])
+
+/**
+ * Whether the LEADING scheme of `value` is denylisted. Control characters and
+ * Unicode whitespace are stripped from the scheme before comparison, because a
+ * reader may ignore any of them when it decides what the scheme is - so
+ * `java\tscript:` does not evade the check that `javascript:` fails.
+ */
+function hasDeniedValueScheme(value: string): boolean {
+  const colon = value.indexOf(':')
+  if (colon === -1) return false
+  const scheme = value.slice(0, colon).replace(SCHEME_PROBE_STRIP_RE, '').toLowerCase()
+  return DANGEROUS_VALUE_SCHEMES.has(scheme)
+}
+
+/**
  * Blank an attribute value that carries a dangerous URL scheme or a CSS
  * `expression(...)`, so an author cannot smuggle script through an attribute
- * the name filter allows (e.g. `background`, `style`). The scheme is
- * normalized (C0 controls + spaces stripped) before comparison to defeat
- * `java\tscript:` style evasion, matching the link/image URL sanitizer.
+ * the name filter allows (e.g. `background`, `style`).
+ *
+ * A URL-list attribute is probed at EVERY candidate and the ENTIRE value is
+ * blanked on any hit, so the same value cannot be refused in position one and
+ * emitted verbatim in position two. Blanking the whole value rather than
+ * excising the candidate follows the `Cf` case in this clause (carve#782):
+ * rewriting would make the rendered attribute differ from the author's bytes.
+ *
+ * THE VALUE-WIDE PROBE STILL RUNS FOR THOSE FOUR NAMES, on top of the per-token
+ * one. The clause adds a MUST about where the probe runs, and says the rule
+ * "changes WHERE the probe runs, not WHAT it denies" - so the token pass may
+ * only ever deny more. Dropping the value-wide pass would deny LESS, because
+ * the strip class is wider than the split class in the other direction too:
+ * `ping="java script:alert(1)"` is two clean tokens whose scheme only appears
+ * once the value-wide strip closes the gap, and that spelling is blanked today.
+ *
+ * PROSE ATTRIBUTES ARE NOT TOKENIZED. `title`, `alt` and `aria-label` carry
+ * colons routinely, and a blanket "any token that looks like a scheme" test
+ * would refuse ordinary text - which is the constraint that decided this shape.
  */
 function sanitizeAttrValue(name: string, value: string): string {
-  const colon = value.indexOf(':')
-  if (colon !== -1) {
-    const scheme = value.slice(0, colon).replace(SCHEME_PROBE_STRIP_RE, '').toLowerCase()
-    if (DANGEROUS_VALUE_SCHEMES.has(scheme)) return ''
+  const n = name.toLowerCase()
+  if (hasDeniedValueScheme(value)) return ''
+  const separator = URL_LIST_SEPARATORS.get(n)
+  if (separator && value.split(separator).some((token) => token !== '' && hasDeniedValueScheme(token))) {
+    return ''
   }
-  if (name.toLowerCase() === 'style' && hasDangerousCss(value)) return ''
+  if (n === 'style' && hasDangerousCss(value)) return ''
   return value
+}
+
+/**
+ * The value this renderer WRITES for a raw `name="…"` attribute, before
+ * escaping - which is to say, the authored text unless the sanitizer above
+ * blanked it.
+ *
+ * The single place that answers "what does the output actually contain?" for a
+ * raw attribute, so a caller outside the renderer cannot answer it from a
+ * second copy of the rules. `lint.ts` quotes it in
+ * `semantic-attribute-outside-span` (markup-carve/carve-js#1058), where naming
+ * the authored text instead would describe an output that does not exist:
+ * `{kbd="javascript:alert(1)"}` renders `kbd=""`.
+ */
+export function renderedAttrValue(name: string, value: string): string {
+  return sanitizeAttrValue(name, value)
+}
+
+/** How this renderer escapes a value it writes inside `name="…"`. */
+export function escapeAttrValue(value: string): string {
+  return escapeAttr(value)
 }
 
 /** Detect script-bearing / fetching constructs in a CSS `style` value. Blanks
@@ -383,6 +494,18 @@ function sourceLineAttr(
 const RENDER_MODES = new Set(['interactive', 'static'])
 
 export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
+  // PART 9 §10: an extension may add semantic span names. Core renders them,
+  // so the order below is the union in the canonical order rather than
+  // whatever sequence the extensions were registered in.
+  const declared = opts.extensions?.flatMap((e) => e.semanticSpanNames ?? []) ?? []
+  if (declared.length > 0 && opts.semanticSpanNames === undefined) {
+    opts = {
+      ...opts,
+      semanticSpanNames: EXTENDED_SEMANTIC_SPAN_ORDER.filter(
+        (name) => CORE_SEMANTIC_SPAN_ORDER.includes(name as never) || declared.includes(name),
+      ),
+    }
+  }
   // Reject an unknown mode rather than guess (spec: an impl MUST reject an
   // unknown mode value). Omitting it means "interactive".
   if (opts.mode !== undefined && !RENDER_MODES.has(opts.mode)) {
@@ -717,6 +840,75 @@ function renderAttrs(attrs?: Attrs): string {
 }
 
 /**
+ * PART 9 §9: the names core reserves on a span, inner to outer.
+ *
+ * THREE, not the seven this once carried. A name is core when it carries data
+ * the author would otherwise lose (`abbr`'s expansion, `time`'s machine-readable
+ * value) or when a core clause already rules its interaction (`abbr` again,
+ * against abbreviation definitions); `kbd` is core on ubiquity alone. `samp`,
+ * `var`, `cite` and `dfn` are the SemanticSpan extension's (PART 9 §10) and
+ * reach this renderer through {@link RenderOptions.semanticSpanNames}.
+ */
+export const CORE_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'kbd'] as const
+
+/** The extension's full order, for the four names it adds. */
+export const EXTENDED_SEMANTIC_SPAN_ORDER = ['abbr', 'time', 'samp', 'var', 'kbd', 'cite', 'dfn'] as const
+
+/** The attribute a non-empty value maps to, per name. */
+const SEMANTIC_VALUE_ATTRIBUTE: Record<string, string | undefined> = {
+  abbr: 'title',
+  dfn: 'title',
+  time: 'datetime',
+}
+
+/** Render PART 9 §9 semantic attributes on an ordinary span. */
+export function renderSemanticSpanWith(
+  node: Span,
+  opts: RenderOptions,
+  order: readonly string[],
+): string {
+  const values = node.attrs?.keyValues
+  const names = order.filter((name) => values?.[name] !== undefined)
+  const previousSuppress = suppressAutomaticAbbreviation
+  if (values?.abbr !== undefined) suppressAutomaticAbbreviation = true
+  let body: string
+  try {
+    body = renderInlines(node.children, opts)
+  } finally {
+    suppressAutomaticAbbreviation = previousSuppress
+  }
+  if (names.length === 0) return `<span${renderAttrs(node.attrs)}>${body}</span>`
+
+  // PART 9 §9: leftovers RIDE the outermost semantic element. A consumed name
+  // RENAMES the span rather than wrapping it, so the author's id, classes and
+  // remaining key/values land on the element they were written on.
+  const isSemantic = (key: string) => order.includes(key)
+  const keyValues = Object.fromEntries(Object.entries(values ?? {}).filter(([key]) => !isSemantic(key)))
+  const riding: Attrs = { ...node.attrs, keyValues }
+  if (riding.order) riding.order = riding.order.filter((key) => !isSemantic(key))
+
+  let html = body
+  const outermost = names[names.length - 1]
+  for (const name of names) {
+    const value = values![name]!
+    const mapsTo = value !== '' ? SEMANTIC_VALUE_ATTRIBUTE[name] : undefined
+    // A DERIVED ATTRIBUTE YIELDS TO AN AUTHORED ONE of the same name: `title`
+    // and `datetime` are names an author may also write, and one element never
+    // carries the same attribute twice.
+    const attrs: Attrs = name === outermost ? riding : {}
+    const derived = mapsTo !== undefined && attrs.keyValues?.[mapsTo] === undefined
+      ? ` ${mapsTo}="${escapeAttr(value)}"`
+      : ''
+    html = `<${name}${derived}${renderAttrs(attrs)}>${html}</${name}>`
+  }
+  return html
+}
+
+function renderSemanticSpan(node: Span, opts: RenderOptions): string {
+  return renderSemanticSpanWith(node, opts, opts.semanticSpanNames ?? CORE_SEMANTIC_SPAN_ORDER)
+}
+
+/**
  * Like renderAttrs, but merges a mandatory `baseClass` ahead of author
  * classes (math keeps `math inline` while honoring `{.foo}`), and can
  * drop the author id when a structural id already exists (footnote refs).
@@ -993,9 +1185,17 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
           // The dd anchors at its `:  ` marker line (the body may start
           // later, e.g. the `:  +` first-block form), matching carve-php.
           const ddLine = it.definitionLines?.[di] ?? d[0]?.pos?.startLine
-          if (d.length === 1 && d[0]!.type === 'paragraph') {
+          // A COMMENT IS NOT RICHER CONTENT. It renders the empty string, so a
+          // description holding one paragraph and one comment is the
+          // single-paragraph shape with an invisible block beside it - counting
+          // it took the block form, whose only extra child renders nothing
+          // (markup-carve/carve#1364, corpus 350-6). An all-comment description
+          // still falls through to the block arm, where `body === ''` closes it
+          // on its own line.
+          const visible = d.filter((child) => child.type !== 'comment')
+          if (visible.length === 1 && visible[0]!.type === 'paragraph') {
             lines.push(
-              `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((d[0] as Paragraph).children, opts)}</dd>`,
+              `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((visible[0] as Paragraph).children, opts)}</dd>`,
             )
           } else {
             const body = renderBlocks(d, opts, level + 2)
@@ -1015,6 +1215,8 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     }
     case 'figure':
       return renderFigure(node, opts, level)
+    case 'figure_group':
+      return renderFigureGroup(node, opts, level)
     case 'abbreviation_def':
       return ''
     case 'raw_block':
@@ -1043,6 +1245,11 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // link or image that resolves the label (PART 9R R1). carve-php emits nothing
       // for it on this target too, which is what keeps the two in agreement.
       return ''
+    case 'citation_definition':
+      // PART 12 §18, and the same argument: the definition renders nothing
+      // where it sits. Its entry renders in the references list the citations
+      // extension builds, which is why giving the line a node moved no HTML.
+      return ''
     default: {
       const t: never = node
       throw new Error(`renderHtml: unknown block ${(t as { type: string }).type}`)
@@ -1053,12 +1260,33 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
 function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const attrs = sourceLineAttr(opts, node.pos?.startLine, node.attrs) + renderAttrs(node.attrs)
-  if (node.children.length === 1 && node.children[0]!.type === 'paragraph') {
-    const para = node.children[0] as Paragraph
+  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING, exactly as it does for
+  // a list item. A comment (PART 9 section 4.13) and a raw block for another
+  // target both render '', and an invisible child was enough to push a
+  // single-paragraph quote into the expanded form: `> %% c` then `> y` gave
+  // `<blockquote>\n  <p>y</p>\n</blockquote>` where the oracle gives the
+  // compact one (markup-carve/carve#1106).
+  //
+  // Decided by rendering rather than by a type list, so a third node type that
+  // renders nothing cannot be added silently.
+  // Rendered ONCE and reused for the expanded form below. Calling `renderBlock`
+  // here and letting `renderBlocks` render the same children again doubles the
+  // work at every nesting level, which is exponential in depth: a 24-deep quote
+  // went from under a millisecond to 3.6 seconds, and a 32-deep one did not
+  // finish. The list-item renderer caches for the same reason.
+  const rendered = node.children.map((child) =>
+    child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
+  )
+  const visible = node.children.filter((_, i) => rendered[i] !== '')
+  if (visible.length === 1 && visible[0]!.type === 'paragraph') {
+    const para = visible[0] as Paragraph
     const inner = renderInlines(para.children, opts)
     return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
   }
-  const inner = renderBlocks(node.children, opts, level + 1)
+  const inner = node.children
+    .map((child, i) => rendered[i] ?? renderBlock(child, opts, level + 1))
+    .filter((piece) => piece !== '')
+    .join('\n')
   return `${pad}<blockquote${attrs}>\n${inner}\n${pad}</blockquote>`
 }
 
@@ -1105,9 +1333,24 @@ function renderListItem(
     return `<p${renderAttrs(p.attrs)}${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}>${inner}</p>`
   }
 
+  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING. A comment (§4.13) and a
+  // raw block for another target both render '', and an invisible child was
+  // enough to push a single-paragraph item into the expanded form:
+  // `- %% c` then `  y` gave `<li>\n    y\n  </li>` where the oracle and
+  // carve-php give `<li>y</li>` (carve-js#990).
+  //
+  // "Renders nothing" is decided by rendering, not by a type list, because two
+  // unrelated node types reach it - a comment and a non-HTML raw block - and a
+  // third would be added silently otherwise. The result is cached so no child
+  // is rendered twice.
+  const prerendered = item.children.map((child) =>
+    child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
+  )
+  const visible = item.children.filter((_, i) => prerendered[i] !== '')
+
   // Single paragraph: stays on the <li> line. Tight omits <p>, loose keeps it.
-  if (item.children.length === 1 && item.children[0]!.type === 'paragraph') {
-    return `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}${wrapPara(item.children[0] as Paragraph, true)}</li>`
+  if (visible.length === 1 && visible[0]!.type === 'paragraph') {
+    return `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}${wrapPara(visible[0] as Paragraph, true)}</li>`
   }
 
   // Mixed content (e.g. a lead paragraph followed by a nested list): the
@@ -1127,17 +1370,24 @@ function renderListItem(
   //
   // It is also what made corpus 228 fail here: the item is tight, and the second
   // paragraph was the one getting wrapped.
+  let seenVisible = 0
   item.children.forEach((child, i) => {
     if (child.type === 'paragraph') {
       const rendered = wrapPara(child as Paragraph, true)
-      if (i === 0) head += rendered
+      // The LEAD is the first child that renders something, not index 0: an
+      // invisible child ahead of it does not take the <li> line.
+      if (seenVisible === 0) head += rendered
       else body.push(`${indent(level + 1)}${rendered}`)
+      seenVisible++
     } else {
-      // Skip blocks that render to nothing (a comment, an abbreviation def, a
-      // non-HTML raw block): pushing `''` would leave stray blank lines inside
-      // the <li> (`<p>a</p>\n\n  </li>`). Matches carve-rs.
-      const rendered = renderBlock(child, opts, level + 1)
-      if (rendered !== '') body.push(rendered)
+      // Blocks that render to nothing are skipped: pushing `''` would leave
+      // stray blank lines inside the <li> (`<p>a</p>\n\n  </li>`). Matches
+      // carve-rs.
+      const rendered = prerendered[i]!
+      if (rendered !== '') {
+        body.push(rendered)
+        seenVisible++
+      }
     }
   })
   if (body.length === 0) return `${head}</li>`
@@ -1146,17 +1396,30 @@ function renderListItem(
 
 function renderTable(node: Table, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  const tableAttrs = node.attrs ? {
+    ...node.attrs,
+    keyValues: Object.fromEntries(Object.entries(node.attrs.keyValues ?? {}).filter(([key]) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key))),
+    ...(node.attrs.order ? { order: node.attrs.order.filter((key) => !['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows'].includes(key)) } : {}),
+  } : undefined
   const lines: string[] = [
-    `${pad}<table${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`,
+    `${pad}<table${renderAttrs(tableAttrs)}${sourceLineAttr(opts, node.pos?.startLine, tableAttrs)}>`,
   ]
   if (node.caption) {
     lines.push(`${pad}  <caption>${renderInlines(node.caption, opts)}</caption>`)
+  }
+  if (node.columns?.some((column) => column.width !== undefined)) {
+    lines.push(`${pad}  <colgroup>`)
+    for (const column of node.columns) {
+      const style = column.width === undefined ? '' : ` style="width: ${column.width * 100}%;"`
+      lines.push(`${pad}    <col${style}>`)
+    }
+    lines.push(`${pad}  </colgroup>`)
   }
 
   // Build effective rowspan/colspan by walking rows.
   // For each cell, compute span counts: a '^' cell extends the cell above;
   // a '<' cell extends the cell to its left.
-  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>> = []
+  const grid: Array<Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>> = []
   for (let r = 0; r < node.rows.length; r++) {
     const row = node.rows[r]!
     const gridRow: typeof grid[number] = []
@@ -1166,19 +1429,27 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     }
     grid.push(gridRow)
   }
-  // Per column, the last row index (above the current one) whose cell is not
-  // skipped. This is exactly what the previous `while (grid[up][c].skip) up--`
-  // scan found, but maintained incrementally so a '^' resolves in O(1) instead
-  // of walking up every prior row (an all-'^' table was O(rows^2)).
-  const lastNonSkip: number[] = []
+  // Per column, the last row index (above the current one) a '^' resolves
+  // against. Maintained incrementally so a '^' resolves in O(1) instead of
+  // walking up every prior row (an all-'^' table was O(rows^2)).
+  const base: number[] = []
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
       const entry = grid[r]![c]!
       if (entry.skip) continue
       if (entry.cell.span === 'rowspan' && r > 0) {
-        const up = lastNonSkip[c]
+        const up = base[c]
         const src = up !== undefined ? grid[up]?.[c] : undefined
         if (src) {
+          // A '^' standing under a merged '<' is ABSORBED: it renders nothing.
+          // A cell spanning both ways carries a mark into each column it
+          // covers, and the origin's rowspan is grown by the mark at the
+          // origin's own index; the count this one adds lands on the merged
+          // '<', which renders nothing either, so it is discarded with it. (A
+          // branch skipping the increment was here and no mutation of it could
+          // change an output.) Before this, such a mark found no source at all
+          // and rendered an empty cell, putting a `<td>` in a row the spans
+          // above it already cover.
           src.rowspan++
           entry.skip = true
         }
@@ -1191,21 +1462,25 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
           entry.skip = true
         }
       }
-      // A cell that ends up non-skipped becomes the nearest source for the
-      // cells below it in this column.
-      if (!entry.skip) lastNonSkip[c] = r
+      // Any cell that is not a RESOLVED '^' is what the cells below it in this
+      // column resolve against - a merged '<' included, because the column it
+      // covers is still a column of the grid.
+      if (!entry.skip || entry.cell.span === 'colspan') base[c] = r
     }
   }
 
-  // Detect header section: leading consecutive rows where all cells are headers
-  let headerEnd = 0
-  while (
-    headerEnd < grid.length &&
-    grid[headerEnd]!.some((e) => !e.skip) &&
-    grid[headerEnd]!.every((e) => e.cell.header || e.skip)
-  ) {
-    headerEnd++
+  // An explicit source partition wins; otherwise retain the native leading
+  // run of `|=` header rows.
+  const sourcePartition = node.attrs?.keyValues?.['header-rows'] !== undefined || node.attrs?.keyValues?.['footer-rows'] !== undefined
+  let headerEnd = sourcePartition && node.rowGroups ? node.rowGroups.headRows : 0
+  if (!sourcePartition || !node.rowGroups) {
+    while (
+      headerEnd < grid.length &&
+      grid[headerEnd]!.some((e) => !e.skip) &&
+      grid[headerEnd]!.every((e) => e.cell.header || e.skip)
+    ) headerEnd++
   }
+  const footerStart = sourcePartition && node.rowGroups ? grid.length - node.rowGroups.footRows : grid.length
 
   // Column defaults come from the header section. With multiple header
   // rows the last row that specifies an alignment for a column wins;
@@ -1214,6 +1489,7 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
   // (headerEnd === 0) have no column default — body markers are the only
   // alignment available.
   const columnAlign: Array<'left' | 'right' | 'center' | undefined> = []
+  const columnValign: Array<'top' | 'middle' | 'bottom' | undefined> = []
   for (let r = 0; r < headerEnd; r++) {
     const hr = grid[r]!
     for (let c = 0; c < hr.length; c++) {
@@ -1221,23 +1497,34 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (entry.skip || !entry.cell.align) continue
       for (let k = c; k < c + entry.colspan; k++) columnAlign[k] = entry.cell.align
     }
+    for (let c = 0; c < hr.length; c++) {
+      const entry = hr[c]!
+      if (entry.skip || !entry.cell.valign) continue
+      for (let k = c; k < c + entry.colspan; k++) columnValign[k] = entry.cell.valign
+    }
   }
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
-      const a = grid[r]![c]!.cell.align ?? columnAlign[c]
+      const a = grid[r]![c]!.cell.align ?? columnAlign[c] ?? node.columns?.[c]?.align
       if (a) grid[r]![c]!.align = a
+      const v = grid[r]![c]!.cell.valign ?? columnValign[c] ?? node.columns?.[c]?.valign
+      if (v) grid[r]![c]!.valign = v
     }
   }
   if (headerEnd > 0) {
-    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts))
+    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts, true, true))
     lines.push(`${pad}  <thead>${rows.join('')}</thead>`)
   }
-  if (headerEnd < grid.length) {
+  if (headerEnd < footerStart) {
     lines.push(`${pad}  <tbody>`)
-    for (let r = headerEnd; r < grid.length; r++) {
+    for (let r = headerEnd; r < footerStart; r++) {
       lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts)}`)
     }
     lines.push(`${pad}  </tbody>`)
+  }
+  if (footerStart < grid.length) {
+    const rows = grid.slice(footerStart).map((r) => renderTableRowFlat(r, opts))
+    lines.push(`${pad}  <tfoot>${rows.join('')}</tfoot>`)
   }
   lines.push(`${pad}</table>`)
   return lines.join('\n')
@@ -1263,16 +1550,42 @@ function stripStructuralAttrs(attrs: Attrs | undefined, emitted: Set<string>): A
   return out
 }
 
+/**
+ * PART 10 §T9: a header cell states what it heads - `col` in the leading
+ * header-row run, `row` below it. Empty when the cell is not a header, or when
+ * the author named a `scope` themselves.
+ *
+ * An authored value REPLACES the default rather than joining it: emitting both
+ * gives `<th scope="col" scope="colgroup">`, two attributes of one name and
+ * invalid HTML. Suppressing it is also what keeps `colgroup` and `rowgroup`
+ * reachable, since neither has a marker spelling here.
+ *
+ * The test is case-INSENSITIVE, the one place this departs from Carve's
+ * case-sensitive attribute names: `{Scope=…}` stays a different Carve attribute
+ * and still reaches the output as `Scope`, but HTML attribute names are not
+ * case-sensitive, so emitting the default beside it is the same collision by
+ * another spelling.
+ */
+function cellScopeAttr(cell: TableCell, isHeaderCell: boolean, inHeaderRun: boolean): string {
+  if (!isHeaderCell) return ''
+  const keys = Object.keys(cell.attrs?.keyValues ?? {})
+  if (keys.some((key) => key.toLowerCase() === 'scope')) return ''
+
+  return ` scope="${inHeaderRun ? 'col' : 'row'}"`
+}
+
 function renderTableRowFlat(
-  cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center' }>,
+  cells: Array<{ row: TableRow; cell: TableCell; rowspan: number; colspan: number; skip: boolean; align?: 'left' | 'right' | 'center'; valign?: 'top' | 'middle' | 'bottom' }>,
   opts: RenderOptions,
+  inHeaderRun = false,
+  promoteToHeader = false,
 ): string {
   // A row attribute block (`| … |{.x}`) lives on the TableRow, shared by every
   // grid entry in this row.
   const parts: string[] = [`<tr${renderAttrs(cells[0]?.row.attrs)}>`]
   for (const entry of cells) {
     if (entry.skip) continue
-    const tag = entry.cell.header ? 'th' : 'td'
+    const tag = entry.cell.header || promoteToHeader ? 'th' : 'td'
     const attrs: string[] = []
     const emitted = new Set<string>()
     if (entry.rowspan > 1) {
@@ -1283,14 +1596,18 @@ function renderTableRowFlat(
       attrs.push(`colspan="${entry.colspan}"`)
       emitted.add('colspan')
     }
-    if (entry.align) {
-      attrs.push(`style="text-align: ${entry.align};"`)
+    if (entry.align || entry.valign) {
+      const styles = `${entry.align ? `text-align: ${entry.align};` : ''}${entry.align && entry.valign ? ' ' : ''}${entry.valign ? `vertical-align: ${entry.valign};` : ''}`
+      attrs.push(`style="${styles}"`)
       emitted.add('style')
     }
     // Author cell attributes (a `{...}` glued to the opening pipe) come first,
     // then the structural span / alignment attributes; any author copy of a
     // structural key actually emitted here is dropped to avoid a duplicate.
+    // The scope default LEADS the author's attributes, which is the order the
+    // corpus pins (`<th scope="col" class="highlight">`).
     const attrStr =
+      cellScopeAttr(entry.cell, tag === 'th', inHeaderRun) +
       renderAttrs(stripStructuralAttrs(entry.cell.attrs, emitted)) +
       (attrs.length ? ' ' + attrs.join(' ') : '')
     parts.push(`<${tag}${attrStr}>${renderInlines(entry.cell.children, opts)}</${tag}>`)
@@ -1339,7 +1656,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   return `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}>\n${titleLine}${labelLine}${body}\n${pad}</${tag}>`
 }
 
-function renderFigure(node: Figure, opts: RenderOptions, level: number): string {
+function renderFigure(node: Figure, opts: RenderOptions, level: number, leadClass?: string): string {
   const pad = indent(level)
   let inner: string
   if (node.target.type === 'image') {
@@ -1352,10 +1669,74 @@ function renderFigure(node: Figure, opts: RenderOptions, level: number): string 
   } else {
     inner = renderTable(node.target, opts, level + 1)
   }
-  return `${pad}<figure${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>\n${inner}\n${pad}  <figcaption>${renderInlines(
+  // A composite figure's PANEL leads its classes with the panel marker, the
+  // way the group's own wrapper leads with `carve-figure-group` - the
+  // class-first injection renderAdmonition uses (PART 9 §4c).
+  const open =
+    leadClass === undefined
+      ? `${pad}<figure${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      : `${pad}<figure${sourceLineAttr(opts, node.pos?.startLine, node.attrs)} class="${[
+          ...new Set([leadClass, ...(node.attrs?.classes ?? [])]),
+        ]
+          .map(escapeAttr)
+          .join(' ')}"${renderAttrs(withoutClassSlot(node.attrs))}>`
+  return `${open}\n${inner}\n${pad}  <figcaption>${renderInlines(
     node.caption,
     opts,
   )}</figcaption>\n${pad}</figure>`
+}
+
+/** A copy of `attrs` with the class slot removed (the caller renders it). */
+function withoutClassSlot(attrs: Attrs | undefined): Attrs {
+  const rest: Attrs = {}
+  if (attrs?.id !== undefined) rest.id = attrs.id
+  if (attrs?.keyValues) rest.keyValues = attrs.keyValues
+  // The class is structurally first; the id/key attrs after it keep their
+  // source order (order minus the class slot) - same rule as renderAdmonition.
+  if (attrs?.order) rest.order = attrs.order.filter((s) => s !== '.class')
+  return rest
+}
+
+function renderFigureGroup(node: FigureGroup, opts: RenderOptions, level: number): string {
+  const pad = indent(level)
+  // Class-first injection like renderAdmonition: `carve-figure-group` leads,
+  // attribute-line classes merge after it, id and the rest keep source order.
+  // DEDUPED, first occurrence kept - the oracle's renderBlockAttrs rule - so
+  // an authored `.carve-figure-group` does not double the marker.
+  const classValue = [...new Set(['carve-figure-group', ...(node.attrs?.classes ?? [])])]
+    .map(escapeAttr)
+    .join(' ')
+  const rest = withoutClassSlot(node.attrs)
+  const lines = [
+    `${pad}<figure${sourceLineAttr(opts, node.pos?.startLine, rest)} class="${classValue}"${renderAttrs(rest)}>`,
+  ]
+  // FLAT: panels and stray content nest DIRECTLY in the group figure, no
+  // wrapper div. HTML's figure content model is one figcaption first-or-last
+  // plus flow content, and figure is itself flow content, so the panel
+  // figures are legal direct children - the shape Pandoc's subfigure HTML
+  // takes as well. The group figcaption stays last.
+  const inner = node.children
+    .map((c) => {
+      // §4c panels: the `figure` and `table` children, in source order. A
+      // captioned host already renders as a <figure> and takes the panel
+      // class; a table does not render as a figure on its own, so its panel
+      // wrapper is explicit and the table keeps its own attrs and <caption>.
+      if (c.type === 'figure') return renderFigure(c, opts, level + 1, 'carve-figure-panel')
+      if (c.type === 'table') {
+        const t = renderTable(c, opts, level + 2)
+        return `${pad}  <figure class="carve-figure-panel">\n${t}\n${pad}  </figure>`
+      }
+      // Non-panel stray content is preserved in place.
+      return renderBlock(c, opts, level + 1)
+    })
+    .filter((s) => s !== '')
+    .join('\n')
+  if (inner !== '') lines.push(inner)
+  if (node.caption !== undefined) {
+    lines.push(`${pad}  <figcaption>${renderInlines(node.caption, opts)}</figcaption>`)
+  }
+  lines.push(`${pad}</figure>`)
+  return lines.join('\n')
 }
 
 function renderImage(img: Image, opts: RenderOptions): string {
@@ -1366,8 +1747,9 @@ function renderImage(img: Image, opts: RenderOptions): string {
   // JSON never goes through.
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
-  // no longer answers this question (carve#596).
-  if (img.ref !== undefined && !img.src) return escapeHtml(img.rawRef ?? '')
+  // no longer answers this question (carve#596) - the shared predicate is the
+  // one the footnote-numbering pass asks as well.
+  if (isUnresolvedReference(img)) return escapeHtml(referenceSourceText(img.rawRef))
   const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
   const src = escapeAttr(sanitizeUrl(img.src, opts))
   // The sanitized structural src wins; never re-emit an author-supplied
@@ -1508,7 +1890,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (node.ref !== undefined && !node.href) return escapeHtml(node.rawRef ?? '')
+      if (isUnresolvedReference(node)) return escapeHtml(referenceSourceText(node.rawRef))
       // LINKS NEVER NEST, AT THE RENDER SEAM (PART 12 §3a,
       // markup-carve/carve#817). An anchor may not contain another anchor, and
       // that is a RENDERING rule: the node reaches the serialized tree as the
@@ -1528,7 +1910,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'image':
       return renderImage(node, opts)
     case 'span':
-      return `<span${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</span>`
+      return renderSemanticSpan(node, opts)
     case 'math': {
       const base = node.display ? 'math display' : 'math inline'
       // Static mode: if a build-time math renderer is supplied, emit its
@@ -1654,6 +2036,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       return renderExtension(node.name, node.content, node.attrs, opts)
     }
     case 'abbreviation': {
+      if (suppressAutomaticAbbreviation) return escapeHtml(node.abbr)
       // DoS guard: once cumulative expansion bytes exceed the budget, degrade
       // to plain key text (no <abbr>, no title). charge() accounts for the
       // expansion's UTF-8 bytes.
@@ -1706,8 +2089,13 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // Unresolved: literal source, the same as an unresolved reference link.
       return `&lt;/#${escapeHtml(node.target)}&gt;`
     case 'caption_number':
-      // Filled by resolve(); an unresolved placeholder renders empty.
-      return node.n === undefined ? '' : String(node.n)
+      // Filled by resolve(); an unresolved placeholder renders its authored
+      // spelling - the unresolved-reference precedent (PART 12 §3a), the
+      // visible failure this language prefers to a silent one, and what the
+      // Markdown/plain/ANSI arms already do. A composite figure's PANEL
+      // caption keeps its placeholder un-numbered by design (PART 9 §4c), so
+      // this arm is what makes it render as the literal `#` the author wrote.
+      return node.n === undefined ? '#' : String(node.n)
     case 'citation_group': {
       // Extension-produced node: per-extension resolution in registration order
       // (mirrors the block path). For each extension, static mode tries its
@@ -1758,11 +2146,12 @@ function renderExtension(
   const inner = renderInlines(content, opts)
   // Author attributes on the extension (grammar §415 `extension_inline …
   // [attributes]`) attach to its output element, e.g. `:kbd[x]{.foo}`.
-  // Handle common semantic shorthands
-  const semanticTags = new Set(['kbd', 'dfn', 'abbr', 'cite', 'samp', 'var', 'code', 'mark', 'time'])
-  if (semanticTags.has(name)) {
-    return `<${name}${renderAttrs2(attrs)}>${inner}</${name}>`
-  }
+  // PART 9 §10: CORE REGISTERS NO `:name[…]` HANDLER AT ALL, semantic or
+  // otherwise. The extension SYNTAX is core; the handlers are Tier-2/3, which
+  // is what docs/extensions.md always said and what this function stopped
+  // doing when a hardcoded set of seven tags lived here. The SemanticSpan
+  // extension re-registers them as a soft-deprecated spelling; without it
+  // every name takes the readable fallback.
   return `<span${renderAttrs2(attrs, { baseClass: `ext-${name}` })}>${inner}</span>`
 }
 

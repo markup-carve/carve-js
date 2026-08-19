@@ -168,7 +168,7 @@ describe('a figure gives its target a span too', () => {
     expect(codepoints.slice(figure.pos.startOffset, figure.pos.endOffset).join('')).toContain('^ Caption')
   })
 
-  it('ends the quoted block where the attribution begins', () => {
+  it('ends the quoted block where the caption begins', () => {
     const src = '> Stay hungry, stay foolish.\n^ Steve Jobs\n'
     const codepoints = [...src]
     const figure = parse(src).children[0] as Record<string, any>

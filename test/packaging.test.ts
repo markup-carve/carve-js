@@ -196,14 +196,14 @@ describe('package metadata', () => {
     expect(pkg.scripts?.prepare).toBe('npm run build')
   })
 
-  it('installs nothing at runtime', () => {
+  it('installs only the HTML5 parser at runtime', () => {
     // `carve portability` runs djot.js, and the obvious way to give it one is
     // a dependency. That would put a second markup parser in the tree of every
     // consumer, including the ones embedding this in a browser bundle, to
     // serve one subcommand. Instead the engine is injected (src/portability.ts)
     // and the CLI imports it lazily, which only works as long as this stays
     // empty.
-    expect(pkg.dependencies ?? {}).toEqual({})
+    expect(pkg.dependencies ?? {}).toEqual({ parse5: '^7.3.0' })
   })
 
   it('declares djot.js as an OPTIONAL peer', () => {

@@ -12,8 +12,8 @@
  *
  * carve-js' AST is heterogeneous: children live under different fields
  * depending on the node (`children`, `items`, `rows`, `cells`, `terms`,
- * `definitions`, `inline`, `content`, `target`, `caption`, `title`,
- * `attribution`). We expose a uniform child-list view over those fields so
+ * `definitions`, `inline`, `content`, `target`, `caption`, and `title`). We
+ * expose a uniform child-list view over those fields so
  * the walk mirrors carve-php's `getChildren()` / `removeChild()` /
  * `replaceChildNode()` semantics.
  */
@@ -131,6 +131,10 @@ function childArrays(node: NodeLike): ChildArray[] {
     case 'figure':
       if (node['caption']) push(node['caption'], false)
       break
+    case 'figure_group':
+      if (node['caption']) push(node['caption'], false)
+      push(node['children'], true)
+      break
     case 'footnote_ref':
     case 'inline_footnote':
       // Inline footnote content is inline.
@@ -145,7 +149,6 @@ function childArrays(node: NodeLike): ChildArray[] {
       break
     case 'block_quote':
       push(node['children'], true)
-      if (node['attribution']) push(node['attribution'], false)
       break
     case 'heading':
     case 'paragraph':
@@ -190,6 +193,7 @@ const BLOCK_CANONICAL = new Set([
   'line_block',
   'comment',
   'figure',
+  'figure_group',
   'caption',
 ])
 
@@ -205,6 +209,7 @@ const BLOCK_JS_TYPES = new Set([
   'div',
   'definition_list',
   'figure',
+  'figure_group',
   'image',
   'abbreviation_def',
   'raw_block',

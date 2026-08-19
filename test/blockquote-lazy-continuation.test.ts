@@ -89,6 +89,10 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     expect(html("> quoted\n\n%% c\n")).toBe('<blockquote><p>quoted</p></blockquote>')
   })
 
+  it('a terminal quoted line comment leaves following text outside the quote', () => {
+    expect(html('> %% hidden\ntail')).toBe('<blockquote>\n\n</blockquote>\n<p>tail</p>')
+  })
+
   it('an invisible block-attribute line still ends the quote', () => {
     expect(html("> quoted\n")).toBe('<blockquote><p>quoted</p></blockquote>')
   })

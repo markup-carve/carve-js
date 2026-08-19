@@ -34,10 +34,61 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-raw-block-keeps-the-blank-line-at-the-end-of-its-payload-too',
+  'an-unterminated-fence-at-a-content-column-opens-no-block-so-the-paragraph-stays-open',
+  'table-columns-carry-alignment-vertical-alignment-and-widths',
+  'a-table-alignment-run-carries-two-independent-axes',
+  'a-vertical-table-marker-needs-a-horizontal-partner',
+  'a-table-cell-can-inherit-horizontal-alignment',
+  'a-collected-definition-closes-the-item-paragraph',
+  'an-all-blank-raw-payload-still-emits-its-line',
+  'a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one',
+  // The category the freeze at carve `0f6b990` adds. It needed no engine work:
+  // this build renders all four of its documents, and all 62 quote/list prefixes
+  // to depth five for both definition kinds, exactly as the executable spec does
+  // (markup-carve/carve#1368).
+  'a-definition-behind-an-alternating-container-prefix-registers-at-the-innermost-content-column',
+  // The twelve categories the freeze at carve `0490ae5` brings in. Four pin the
+  // line-block hard-break ruling `#1188` implemented; the other eight are the
+  // container-boundary family - a block at a container's content column ends
+  // the paragraph it sits under, however the block is spelled and whatever it
+  // renders - plus the two controls that catch an over-wide reading of it.
+  'a-bracketed-construct-spanning-a-line-boundary',
+  'a-bracketed-construct-spanning-a-verse-boundary',
+  'a-bracketed-construct-s-identifiers-stay-on-one-line',
+  'a-closed-inline-construct-spanning-a-verse-boundary',
+  'a-block-at-a-container-s-content-column-ends-the-paragraph-whatever-it-renders',
+  'a-container-whose-table-ends-on-a-continuation-row',
+  'a-container-whose-table-ends-on-a-joined-header-row',
+  'a-continuation-row-joins-the-row-above-it-whatever-its-cells-hold',
+  'a-definition-at-a-container-s-content-column',
+  'a-footnote-definition-s-block-runs-to-the-end-of-its-body',
+  'a-quote-inside-a-quote-is-asked-what-it-ends-on',
+  'what-a-content-column-block-does-not-reach',
+  // Four categories the pin bump for PART 11 §10e brings into the corpus. The
+  // engine work for each of them already landed here (`#1029`, `#1030`,
+  // `#1038`, `#1041`); only the pin was behind, so these are bookkeeping and
+  // not new behavior - each runs as a real test from here on.
+  'a-marker-glued-to-a-name-opens-nothing',
+  'a-math-span-s-base-class-keeps-the-class-slot-in-place',
+  'an-abbreviation-expands-inside-an-inline-container',
+  'an-angle-bracket-is-escaped-only-where-it-opens-markup',
+  'a-semantic-name-renames-the-span-and-the-leftovers-ride-the-element',
+  'a-derived-title-yields-to-an-authored-one',
+  'two-attributes-need-a-separator-between-them',
+  'the-semantic-registry-holds-no-element-carve-already-spells',
+  'a-boolean-lang-is-the-third-spelling-of-the-same-key',
+  'a-language-attribute-is-exact-sugar-for-lang',
+  'a-malformed-language-tag-leaves-the-whole-block-literal',
+  'a-language-attribute-and-lang-are-one-key',
+  'the-language-sigil-takes-no-padding',
+  'a-semantic-span-keeps-its-wrapper-unless-consumption-empties-it',
+  'a-structural-attribute-leads-the-author-s-own',
   'a-caret-line-does-not-end-a-paragraph-it-cannot-caption',
   'heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key',
   'a-column-zero-definition-ends-an-open-list-item',
   'adjacent-block-openers-in-an-attached-run-stay-separate',
+  'adjacent-sibling-lists-survive-the-round-trip',
   'an-empty-footnote-body-is-written-with-the-empty-sentinel',
   'a-caption-attaches-across-one-blank-line',
   'a-container-a-lazy-line-folded-into-is-still-open',
@@ -71,6 +122,7 @@ const IMPLEMENTED = new Set([
   'lists',
   'task-lists',
   'blockquote-with-attribution',
+  'composite-figures',
   'image-with-caption',
   'tables',
   'tables-with-rowspan-and-colspan',
@@ -160,6 +212,8 @@ const IMPLEMENTED = new Set([
   'abbreviation-definition-interrupts-a-paragraph',
   'literal-less-than-in-prose',
   'boolean-attributes',
+  'a-boolean-and-a-key-value-of-the-same-name-are-one-attribute',
+  'two-attributes-need-a-separator-between-them',
   'table-span-marker-in-first-column',
   'table-cell-attributes',
   'table-row-attributes',
@@ -342,6 +396,172 @@ const IMPLEMENTED = new Set([
   // and the `+` that attaches a flush-left block to each of them - and five of
   // them answered it wrong before, one per fence kind.
   'a-boundary-line-inside-an-open-fence-does-not-end-the-container',
+  'a-fence-keeps-the-blank-line-at-the-end-of-its-content',
+  'a-boolean-and-a-key-value-of-the-same-name-are-one-attribute',
+  // Added with the spec bump that carries carve#1198. Only the last of these
+  // is the rule this bump implements (PART 9R R2); the other nine are
+  // documents this engine already rendered correctly, and the pin was simply
+  // behind. Categories 310, 311 and 314-4 are the ones a fix keyed on
+  // "brackets" rather than on "the text reached the reader" would break, so
+  // they are listed here rather than left as silent todos.
+  'a-captioned-quote-holds-more-than-one-block',
+  'an-empty-inline-note-is-literal',
+  'a-multi-letter-ordered-marker-opens-no-list',
+  'a-note-s-content-recognizes-no-note',
+  'a-footnote-in-link-text-nests-the-anchors',
+  'a-footnote-in-reference-link-text-nests-the-anchors-too',
+  'a-note-body-s-own-references-resolve',
+  'a-reference-link-s-text-survives-its-own-frame',
+  'an-inline-note-s-content-resolves-after-the-note',
+  'a-footnote-in-an-unresolved-reference-is-not-a-reference',
+  // The two categories markup-carve/carve#1206 adds. All twelve documents were
+  // rendered and compared against their fixtures before either name was added:
+  // this engine's READ path already closes an alt text at the matching `]`, so
+  // every one of them matched byte for byte at the pin this commit moves off.
+  // What was wrong was the WRITE path, which this commit fixes - four of the
+  // twelve failed the formatter sweep in `render-carve.test.ts`, none the
+  // renderer sweep here.
+  'an-image-s-alt-text-closes-where-a-link-s-text-closes',
+  'an-editorial-comment-s-bracket-is-content-not-the-close',
+  // Category 319, the six documents that separate the cell-attribute orders.
+  // Four of them (the attributed header cell, the header cell with an alignment
+  // marker, the data cell with one, and the row composing cell blocks with a row
+  // block) were rendered against this engine before the parser changed and did
+  // not match; the other two (the retired order, and the ambiguous `|{#x}=R|`)
+  // matched then and still do. All six match now.
+  'cell-attributes-bind-after-the-kind-and-alignment-markers',
+  // Category 320 arrives with the same submodule bump and needed no code: both
+  // documents were rendered against this engine's HTML and `.fmt` outputs
+  // before anything here changed, and both already matched.
+  'the-canonical-writer-glues-a-code-fence-to-its-info-string',
+  // Categories 321 to 324, the twenty-eight documents this pin bump brings in.
+  // None of them needed engine work: the rules behind the first two already
+  // landed here (delimited inline comments in `#1104`, the attribute block
+  // reaching the nested list it precedes in `#1107`), and the other two are
+  // documents about behavior this engine already had. Every one of the
+  // twenty-eight was rendered through this engine and compared with its `.html`
+  // fixture BEFORE its name was added - 28 of 28 byte-for-byte, so each entry
+  // names a case that was already passing rather than one this list forces
+  // green.
+  'delimited-comments',
+  'an-attribute-block-reaches-the-nested-list-it-precedes',
+  'a-block-attached-after-an-invisible-line-leaves-the-item-tight',
+  'an-abbreviation-definition-in-an-item-body-is-paragraph-text',
+  // The pin bump to carve b6917ab adds TEN categories. Every document in all
+  // ten - 69 of them - was rendered through this engine and compared with its
+  // `.html` fixture before any name went in here. Only these five matched, and
+  // only these five are listed: 26 of 26 documents byte-for-byte.
+  //
+  // The other five did NOT match, on 18 of their 43 documents, and they were
+  // engine gaps rather than bookkeeping. They stayed out and the coverage guard
+  // below stayed red - the one thing this list must never do is turn a real
+  // divergence into a green run - until the engine work landed as `#1140`,
+  // `#1141`, `#1142`, `#1143` and `#1144`. Their names are below, added the same
+  // way: all 43 documents rendered through this engine and compared with their
+  // `.html` fixtures first, 43 of 43 byte-for-byte, and the whole corpus at this
+  // pin measured at 1124 of 1124 in the same run.
+  'a-label-beginning-with-an-at-sign-is-not-a-reference-label',
+  'a-tab-after-a-fence-or-a-frontmatter-opener-depends-on-where-it-sits',
+  'an-attribute-line-after-a-continuation-marker-attributes-the-attached-block',
+  'an-unclosed-inline-run-in-a-line-block-reaches-the-end-of-the-block',
+  'a-comment-only-line-in-a-line-block-is-removed-before-any-inline-run',
+  'a-line-block-s-hard-break-keeps-its-backslash',
+  'a-line-block-s-last-body-line-keeps-its-backslash',
+  'which-inline-content-a-heading-id-is-derived-from',
+  'a-column-0-line-after-a-container-s-last-block-when-that-block-left-no-paragraph-open',
+  'a-continuation-marker-attaches-one-block-and-the-boundary-is-that-block-s-extent',
+  'an-unclosed-verbatim-run-in-a-row-stops-at-the-closing-pipe',
+  'a-floating-attribute-is-scoped-to-the-container-that-holds-it',
+  'a-continuation-row-s-open-run-and-an-escaped-closing-pipe',
+  // The pin bump to carve 8b80822 adds SEVEN categories, one document each -
+  // markup-carve/carve#1311, which pins that a comment fence hides its body at
+  // every column and not only at column 0. Every one of the seven was rendered
+  // through this engine and compared with its `.html` fixture BEFORE its name
+  // went in here: 7 of 7 byte-for-byte, and the whole corpus at this pin
+  // measured 1131 of 1131 in the same run. No engine work was needed - the
+  // prepass here already treats a comment fence as opaque wherever it is
+  // opened, so each entry names a case that was already passing rather than
+  // one this list forces green.
+  'a-comment-fence-at-an-item-s-content-column-registers-nothing-either',
+  'a-comment-fence-reached-through-a-quote-registers-nothing-either',
+  'a-footnote-definition-inside-an-item-s-comment-registers-nothing',
+  'a-comment-fence-opened-on-an-item-s-marker-line-hides-its-body-too',
+  'a-comment-fence-one-item-deeper-registers-nothing-either',
+  'a-wider-comment-fence-inside-an-item-hides-its-body-the-same-way',
+  'an-abbreviation-inside-a-comment-defines-nothing',
+  'a-comment-fence-inside-a-colon-container-registers-nothing',
+  // The pin bump to carve 483bcea adds ONE category of TEN documents -
+  // markup-carve/carve#1320, the token-wise probe for the four URL-list
+  // attributes. This one is NOT bookkeeping: the renderer read only the value's
+  // leading scheme, so `srcset="safe.png 1x, javascript:alert(1) 2x"` rendered
+  // verbatim while the same value with the payload first was blanked. SEVEN of
+  // the ten documents were red before `sanitizeAttrValue` learned to tokenize;
+  // the other three are the leading-position value the old rule already blanked
+  // and the two that must be KEPT (a `ping` carrying a comma in its path, and a
+  // `title` carrying prose colons).
+  // All ten were then rendered through this engine and compared with their
+  // `.html` fixtures BEFORE this name went in - 10 of 10 byte-for-byte, and the
+  // whole corpus at this pin measured 1141 of 1141 in the same run.
+  //
+  // The pin bump to carve 5951e6d adds NO category. It adds two documents to
+  // the category above - markup-carve/carve#1328, which amends section 25 to
+  // say the token pass runs IN ADDITION TO the value-wide probe rather than
+  // instead of it, and pins that with a `ping` and a `srcset` whose ONLY
+  // payload sits in the leading token. Those two are the only corpus documents
+  // that tell a token-only implementation apart from an additive one, so the
+  // pin had to move for them to be measured at all. Both were rendered through
+  // this engine and compared with their `.html` fixtures: 2 of 2
+  // byte-for-byte, no engine work needed, because `#1164` already probed the
+  // whole value alongside every token. The corpus measured 1143 of 1143 in the
+  // same run.
+  'url-list-attributes-are-probed-token-wise',
+  // markup-carve/carve#1330. A line's content position is after its container
+  // prefix, so PART 11 section 8b M2b is answered where the block writes its
+  // own line rather than on the finished document, and `> \# heading` keeps the
+  // escape the author wrote instead of coming back through an importer as a
+  // heading. 2 of 2 documents and both `.md` sidecars byte-for-byte. The
+  // narrowing is pinned in the same pair and still holds: `> C\# is a language`
+  // and `- \#tag rest` drop their escapes exactly as they do outside a
+  // container.
+  'an-escaped-hash-keeps-its-escape-at-a-container-s-content-position',
+  // The pin bump to carve 4bf77a3 adds FOUR categories of ELEVEN documents, and
+  // none of them is engine work here: all eleven were rendered through this
+  // engine and compared with their `.html` fixtures before these names went in,
+  // 11 of 11 byte-for-byte, and the whole corpus measured 1256 of 1256 in the
+  // same run.
+  //
+  // markup-carve/carve#1370 - five documents. A paragraph opened after a block
+  // inside an item is still open for a lazy line below it, so a column-0 line
+  // continues it rather than ending the item. carve-rs and carve-php both
+  // lagged this one; this engine already answered all five.
+  'a-paragraph-opened-after-a-block-in-an-item-is-still-open-for-a-lazy-line',
+  // markup-carve/carve#1379 - three documents, and a clarification rather than a
+  // new clause: a blank line ends the open paragraph WHATEVER container stands
+  // above it, so an unterminated `:::` div reaches no further past a blank than
+  // a terminated one, an opaque body, a quote, or no container at all.
+  'an-unterminated-container-does-not-extend-the-item-past-a-blank-line',
+  // markup-carve/carve#1385 - one document. An item's checkbox is decided by the
+  // marker, not by whatever its first block turns out to be.
+  'a-task-item-s-checkbox-is-not-decided-by-its-first-block',
+  // markup-carve/carve#1386 - two documents. A marker-line colon opener is
+  // demoted by LAZY FOLDING and by nothing else, so an opener that reaches its
+  // container stays an opener whatever sits below it.
+  'only-lazy-folding-demotes-a-marker-line-colon-opener',
+  // The pin bump to carve 22f7f47 adds ONE category of THREE documents, and no
+  // engine work here either: all three were rendered through this engine and
+  // compared with their `.html` fixtures before this name went in, 3 of 3
+  // byte-for-byte, and the whole corpus measured 1259 of 1259 in the same run.
+  //
+  // markup-carve/carve#1388, closing markup-carve/carve#1383 - a blank line
+  // before a sibling marker separates the items whatever consumed it, so a
+  // blank an item's own unterminated interior swallowed still reaches the
+  // section 17 L1 looseness decision. The freeze measured all six container
+  // kinds; this engine already loosened every one of them, and it also starts
+  // the new list where the third document changes the bullet.
+  'a-blank-line-before-a-sibling-marker-separates-the-items-whatever-consumed-it',
+  // markup-carve/carve#1377. A heading at an item's content column is a
+  // bounded block and leaves no paragraph open for a flush-left line.
+  'a-heading-at-an-item-s-content-column-leaves-no-paragraph-open',
 ])
 
 /**
@@ -361,7 +581,9 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+
+
 
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
@@ -375,6 +597,24 @@ const pairs = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+/*
+ * AN ENTRY THAT NAMES NOTHING IS NOT A PASS.
+ *
+ * The two assertions below only run for an entry whose slug is IN the corpus,
+ * so a declaration left behind after an upstream RENAME - which is what a spec
+ * change does to a category whose section title moved - matched no case, ran no
+ * assertion, and read as coverage. That is how the tier-split entries survived
+ * the bump that made them stale: `293-a-semantic-span-keeps-its-wrapper-…`
+ * became `293-a-semantic-name-renames-the-span-…` upstream, and nine entries
+ * quietly stopped being checked in either direction.
+ */
+describe('AHEAD_OF_PIN', () => {
+  it('names only corpus cases that exist', () => {
+    const orphaned = [...AHEAD_OF_PIN.keys()].filter((slug) => !pairs.includes(slug))
+    expect(orphaned, 'renamed upstream, or already retired - either way the entry asserts nothing').toEqual([])
+  })
+})
 
 describe('spec corpus population', () => {
   it('matches the independently derived example count', () => {

@@ -156,7 +156,6 @@ export interface Paragraph extends BaseNode {
 export interface BlockQuote extends BaseNode {
   type: 'block_quote'
   children: BlockNode[]
-  attribution?: InlineNode[]
 }
 
 export interface List extends BaseNode {
@@ -232,10 +231,68 @@ export interface ThematicBreak extends BaseNode {
   marker?: '-' | '*' | '_'
 }
 
+/**
+ * One body group of {@link TableRowGroups}, consuming `headRows + bodyRows` of
+ * the table's rows.
+ */
+export interface TableBodyGroup {
+  /** Rows at the start of this group forming its intermediate header. */
+  headRows: number
+  /** Rows in this group after its intermediate header. */
+  bodyRows: number
+  /**
+   * Leading columns of this group's rows that are row headers. Absent means
+   * zero. It sits on the group rather than on the table because that is where
+   * the exchanged model puts it.
+   */
+  rowHeadColumns?: number
+  attrs?: Attrs
+}
+
+/**
+ * An explicit head/body/foot partition of a table's rows (PART 12 §15).
+ *
+ * It PARTITIONS `rows` and never repeats them: the counts consume `rows` in
+ * order, head first, then each body, then the foot, and they MUST account for
+ * every row exactly once. `fromAstJson` refuses a payload where they do not,
+ * because JSON Schema cannot relate one field's value to another's length and
+ * a non-summing partition therefore validates cleanly.
+ *
+ * Carve 0.1 SOURCE has no spelling for it. Absent means the implicit structure
+ * every renderer already derives - the leading run of header rows as the head,
+ * everything after it as one body, no foot, no row-head columns - so a table
+ * that carries it says something that derivation cannot. HTML, plain and ANSI
+ * output ignore it.
+ */
+export interface TableRowGroups {
+  /**
+   * Rows at the start of `rows` forming the table head. Stated rather than
+   * derived, because a body's own intermediate header rows are header rows too
+   * and the leading run alone cannot say where one ends and the other begins.
+   */
+  headRows: number
+  /** The body groups, in order, each consuming the next `headRows + bodyRows`. */
+  bodies: TableBodyGroup[]
+  /** Rows at the end of `rows` forming the table foot. */
+  footRows: number
+}
+
 export interface Table extends BaseNode {
   type: 'table'
   caption?: InlineNode[]
+  /** Structured publishing/navigation label; Carve 0.1 source has no spelling. */
+  shortCaption?: InlineNode[]
+  rowGroups?: TableRowGroups
+  /** Positional metadata for the corresponding table columns. */
+  columns?: TableColumn[]
   rows: TableRow[]
+}
+
+export interface TableColumn {
+  align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
+  /** Fraction of the table width, greater than zero and at most one. */
+  width?: number
 }
 
 export interface TableRow extends BaseNode {
@@ -254,6 +311,7 @@ export interface TableCell extends BaseNode {
    * inherits its column's alignment (taken from row 0).
    */
   align?: 'left' | 'right' | 'center'
+  valign?: 'top' | 'middle' | 'bottom'
   children: InlineNode[]
 }
 
@@ -375,6 +433,29 @@ export interface Figure extends BaseNode {
   type: 'figure'
   target: Image | BlockQuote | Table | CodeBlock | Paragraph
   caption: InlineNode[]
+  /** Structured publishing/navigation label; ordinary renderers ignore it. */
+  shortCaption?: InlineNode[]
+}
+
+/**
+ * A composite figure: a bare `::: figure` fence (PART 9 §4c).
+ *
+ * `children` are ordinary blocks in source order; the PANELS are the `figure`
+ * and `table` nodes among them, derived by type rather than repeated under a
+ * second key, so the two can never disagree. `caption` is the group caption
+ * (the `^ ` line after the CLOSING fence); absent means uncaptioned, not empty.
+ *
+ * Discriminated by `type`, deliberately: every `figure` carries a `target`,
+ * the group does not, and a consumer probing for the missing field instead of
+ * reading the type string would break silently the day either shape grows a
+ * field. No `title`, no `label`, no `shortCaption` - that design space belongs
+ * to markup-carve/carve#1118 and markup-carve/carve#1121 and is not claimed
+ * here.
+ */
+export interface FigureGroup extends BaseNode {
+  type: 'figure_group'
+  children: BlockNode[]
+  caption?: InlineNode[]
 }
 
 export interface AbbreviationDef extends BaseNode {
@@ -408,6 +489,36 @@ export interface LinkReferenceDefinition extends BaseNode {
   title?: string
 }
 
+/**
+ * The `[@key]: {author= year=} entry` bibliography line (Tier-2, citations).
+ *
+ * PART 12 §18 (NORMATIVE): a citation definition is a NODE, shaped after §10's
+ * link reference definition rather than after the footnote. A footnote body
+ * holds BLOCKS; this holds a metadata run plus one line of rendered text, so
+ * the entry is `children` of INLINE nodes and the metadata lands in `attrs` -
+ * the same two slots §10 spends on a definition line's tail. `key` rather than
+ * `label` because `citation.key` already names the same string at the use site.
+ *
+ * Of the four definition kinds this was the only one with no node, and both
+ * behaviors on record lost a different half of what §10 keeps: carve-php
+ * consumed the line at parse time, discarding `pos` so nothing could put the
+ * line back, and carve-js left it a paragraph whose first child is a
+ * `citation_group` followed by the literal text `: {author=` - the parser's
+ * failure to recognize the line, published (markup-carve/carve#1276).
+ *
+ * Renders nothing where it sits, on every target: the entry's text renders in
+ * the references list the citations extension builds, exactly as before.
+ */
+export interface CitationDefinition extends BaseNode {
+  type: 'citation_definition'
+  /** The citation key as the author wrote it, WITHOUT the `@`. */
+  key: string
+  /** The entry's inline content: what follows the `]: ` separator and the
+   *  optional metadata block. Required, and may be empty - which source lines
+   *  carry no entry is a question §18 leaves open. */
+  children: InlineNode[]
+}
+
 export interface RawBlock extends BaseNode {
   type: 'raw_block'
   format: string
@@ -417,6 +528,8 @@ export interface RawBlock extends BaseNode {
 export interface Comment extends BaseNode {
   type: 'comment'
   block: boolean
+  /** Present only for the explicitly closed `{% … %}` inline form. */
+  delimited?: boolean
   content: string
 }
 
@@ -433,9 +546,11 @@ export type BlockNode =
   | LineBlock
   | DefinitionList
   | Figure
+  | FigureGroup
   | Image
   | AbbreviationDef
   | LinkReferenceDefinition
+  | CitationDefinition
   | RawBlock
   | Comment
 
@@ -607,7 +722,7 @@ export interface Image extends BaseNode {
   rawRef?: string
 }
 
-/** Inline span: `[text]{attrs}` -> <span {attrs}>text</span> (PART 9 §14). */
+/** Inline span: `[text]{attrs}` (PART 9 §14); semantic attributes affect HTML rendering. */
 export interface Span extends BaseNode {
   type: 'span'
   children: InlineNode[]

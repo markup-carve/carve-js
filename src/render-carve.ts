@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { opensFrontmatter, parse, TABLE_ALIGNMENT_MARKERS } from './parse.js'
+import { opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -21,6 +21,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
+import { SourceUnspellableError } from './source-unspellable-error.js'
 
 export interface CarveRenderOptions {}
 
@@ -106,6 +107,11 @@ interface CarveContext {
   paragraphStartsAfterCaptionHost: boolean
 }
 
+/**
+ * Render canonical Carve source.
+ *
+ * @throws {SourceUnspellableError} when no source can reproduce an AST node.
+ */
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
@@ -398,9 +404,19 @@ function stableJson(value: unknown): string {
  * document carrying a definition list escalated to conservative escaping and two
  * corpus round-trips came back with escapes the formatter would not have written.
  *
- * The rule, since this is now twice: a NAME-based skip is the whole hazard here.
- * Any field holding offsets belongs on this list whatever it is called, and the
- * test that catches a missing one is the corpus round-trip, not this comment.
+ * `termSpans` is the THIRD, sitting on the same entry as `definitionSpans` and
+ * missed when that one was added. It hid behind the fast path above this
+ * comparison: a document that was PARSED re-parses to the tree it came from, so
+ * the minimal form wins before the comparison runs, and only a tree BUILT
+ * without positions - what the HTML importer and `--from-json` hand the writer -
+ * reaches it. Such a document escalated whenever an escape candidate stood
+ * anywhere before its last term, which is why `<dl><dt>A<dd>x language.<dt>B`
+ * came out of the importer as `x language\.`.
+ *
+ * The rule, since this is now three times: a NAME-based skip is the whole hazard
+ * here. Any field holding offsets belongs on this list whatever it is called,
+ * and the test that catches a missing one is the corpus round-trip, not this
+ * comment.
  */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
@@ -411,6 +427,7 @@ function canonical(value: unknown): unknown {
         key === 'pos' ||
         key === 'footnoteDefPos' ||
         key === 'definitionSpans' ||
+        key === 'termSpans' ||
         key === 'srcByteLength'
       )
         continue
@@ -470,6 +487,7 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   ctx.afterCaptionHost = false
   try {
     const parts: string[] = []
+    let previousBlock: BlockNode | null = null
     let previousRendered: BlockNode | undefined
     for (const block of blocks) {
       ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
@@ -480,7 +498,20 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
           && previousRendered.type === 'list' && block.type === 'list'
           ? `${sentinels[4]}\n`
           : ''
-        parts.push(separator + rendered)
+        const text = separator + rendered
+        // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
+        // lines are one paragraph in the source and N nodes in the tree since
+        // PART 12 §18, so the default block separator would open a blank line
+        // between lines the author wrote adjacent - and PART 11 §6 binds the
+        // writer to the author's layout. Adjacency is read from `pos`, so a
+        // blank line the author DID write survives, and a tree with no
+        // positions falls back to the separator every other block gets.
+        if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
+          parts[parts.length - 1] += `\n${text}`
+        } else {
+          parts.push(text)
+        }
+        previousBlock = block
       }
       // Adjacency is in the AST, not merely in visible output. A comment or
       // collected definition between two lists renders nothing but still means
@@ -495,12 +526,27 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   }
 }
 
+/** Whether two adjacent blocks were written on consecutive source lines, with
+ *  no blank line between them - true only for the bibliography definition,
+ *  whose line-per-node shape is the one the parser splits out of a paragraph. */
+function writtenAsOneRun(previous: BlockNode, block: BlockNode): boolean {
+  if (previous.type !== 'citation_definition' || block.type !== 'citation_definition') return false
+  const before = previous.pos
+  const after = block.pos
+  if (!before || !after) return false
+  return after.startLine === before.endLine + 1
+}
+
 function hostsCaption(block: BlockNode): boolean {
+  // A figure group's CLOSING fence hosts a caption (PART 9 §4c), so a literal
+  // `^ …` paragraph written after one must have its caret escaped or it would
+  // re-attach as the group caption on the way back (the F6 detached shape).
   if (
     block.type === 'table' ||
     block.type === 'code_block' ||
     block.type === 'block_quote' ||
-    block.type === 'image'
+    block.type === 'image' ||
+    block.type === 'figure_group'
   )
     return true
   if (block.type !== 'paragraph' || block.children.length !== 1) return false
@@ -569,12 +615,41 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
 
       return withAttrs(headingBody)
     }
-    case 'paragraph':
-      return withAttrs(
-        guardThematicBreakLines(
-          renderInlines(node.children, ctx, attrs === '' && ctx.paragraphStartsAfterCaptionHost),
+    case 'paragraph': {
+      const text = guardThematicBreakLines(
+        renderInlines(
+          node.children,
+          ctx,
+          attrs === '' && ctx.paragraphStartsAfterCaptionHost,
+          ctx.lineBlockDepth > 0,
         ),
       )
+      // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
+      // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
+      // return one stanza as two; a comment-only line is the one construct that
+      // leaves an empty verse line instead of rewriting it, and the block layer
+      // removes it before the inline run exists - so `%%` re-reads to exactly
+      // the empty line it was written for.
+      //
+      // It reaches here from a verbatim run that swallowed such a line: the run
+      // keeps the emptied line as a NEWLINE in its value, and that newline has
+      // to come back out as an empty line. §7c already spells the OTHER source
+      // of one, the empty-content `hard_break`, with a backslash, so no line
+      // arriving here is a break.
+      //
+      // A line block's children are its stanzas, so the guard is the whole
+      // scope: every empty line in this string is interior to one stanza.
+      //
+      // The lookahead is what keeps the LAST newline out of it. §7c writes the
+      // trailing `hard_break` of a last body line as `\` plus the newline it
+      // consumes, so the stanza ends in one - and the position after it is the
+      // closing fence, not an empty verse line.
+      if (ctx.lineBlockDepth > 0) {
+        return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
+      }
+
+      return withAttrs(text)
+    }
     case 'code_block': {
       const fence = safeFence(node.content, 3)
       const info = codeFenceInfo(node.lang, node.header, node.label)
@@ -603,7 +678,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
     case 'thematic_break':
       return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
     case 'table':
-      return withAttrs(renderTable(node, ctx))
+      return renderTableWithColumns(node, ctx)
     case 'admonition': {
       // The quoted title is re-parsed as a quoted_title token (which admits
       // no escapes and cannot contain a quote), so the inline serialization
@@ -611,7 +686,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // backslashes renderInlines already produced and compounds on every
       // fmt pass (issue 295).
       const title = node.title !== undefined ? ` "${renderInlines(node.title, ctx)}"` : ''
-      const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
+      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
       const fence = colonFenceFor(ctx)
       const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence} ${node.kind}${title}${label}\n${body}\n${fence}`)
@@ -635,7 +710,14 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
         ctx.colonFenceDepth--
         ctx.lineBlockDepth--
       }
-      return withAttrs(fence + ' |\n' + lineBlockLayoutWhitespace(body) + '\n' + fence)
+      // A BODY THAT ALREADY ENDS ITS LINE DOES NOT GET A SECOND NEWLINE. The
+      // last body line can end in a `hard_break`, which under §7c is written
+      // `\` plus the newline it consumes (PART 3); adding the closer's newline
+      // on top of that leaves a BLANK line before the fence, which ends the
+      // stanza and takes the trailing `<br>` - and the space it was holding -
+      // with it (markup-carve/carve#1334).
+      const layout = lineBlockLayoutWhitespace(body)
+      return withAttrs(fence + ' |\n' + layout + (layout.endsWith('\n') ? '' : '\n') + fence)
     }
     case 'div': {
       // Divs render generically (`::: {.class}`), never the `::: \` hardbreaks
@@ -644,7 +726,7 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       // attrs - only the child break nodes differ - so we let those break nodes
       // serialize themselves, which round-trips both. (A line block is its own
       // node type and is handled above.)
-      const label = node.label !== undefined ? ` [${escapeBracketText(node.label)}]` : ''
+      const label = node.label !== undefined ? ` [${writeFlatBracketRun(node.label)}]` : ''
       const fence = colonFenceFor(ctx)
       const body = renderColonFenceBody(node.children, ctx)
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
@@ -653,11 +735,29 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(renderDefinitionList(node.items, ctx))
     case 'figure':
       return withAttrs(renderFigure(node, ctx))
+    case 'figure_group': {
+      // The canonical spelling is the authored form (PART 9 §4c): a bare
+      // `::: figure` fence, the children as an ordinary fence body, and the
+      // group caption as a `^ ` line after the CLOSING fence - unescaped,
+      // because the writer knows the closer hosts it. The `#` placeholder is
+      // written back by the caption_number arm like every numbered caption.
+      const fence = colonFenceFor(ctx)
+      const body = renderColonFenceBody(node.children, ctx)
+      const caption = node.caption !== undefined ? `\n^ ${renderInlines(node.caption, ctx)}` : ''
+      return withAttrs(`${fence} figure\n${body}\n${fence}${caption}`)
+    }
     case 'image':
       return renderImage(node)
     case 'raw_block': {
       const fence = safeFence(node.content, 3)
-      return withAttrs(`${fence}=${escapeFormat(node.format)}\n${protectVerbatim(node.content)}\n${fence}`)
+      const content = protectVerbatim(node.content)
+      // Empty content means zero payload lines, while an all-newline content
+      // value records exactly that many blank payload lines. In both cases an
+      // extra separator before the closer would change the AST on every
+      // format pass. Non-blank content still needs the ordinary closing-line
+      // separator (including content with a trailing blank line).
+      const closerSeparator = node.content === '' || /^\n+$/.test(node.content) ? '' : '\n'
+      return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
     }
     case 'abbreviation_def':
       return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
@@ -673,13 +773,47 @@ function renderBlock(node: BlockNode, ctx: CarveContext): string {
       const attrs = renderAttrs(node.attrs)
       return `[${node.label}]: ${node.href}${title}${attrs === '' ? '' : ` ${attrs}`}`
     }
+    case 'citation_definition': {
+      // PART 12 §18 gave the bibliography line a node for the same reason §10
+      // gave one to the reference definition: so the writer can put the line
+      // back. The metadata block leads the entry, where the author wrote it.
+      const metadata = renderCitationMetadata(node.attrs)
+      const entry = renderInlines(node.children, ctx)
+      const tail = [metadata, entry].filter((part) => part !== '').join(' ')
+      return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
+    }
     case 'comment':
-      return node.block ? renderBlockComment(node.content) : `%% ${node.content}`
+      return node.block
+        ? renderBlockComment(node.content)
+        : node.delimited
+          ? `{% ${node.content} %}`
+          : `%% ${node.content}`
     default: {
       const t: never = node
       throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
     }
   }
+}
+
+function renderTableWithColumns(node: Table, ctx: CarveContext): string {
+  if (!node.columns?.length) {
+    const attrs = renderBlockAttrs(node.attrs)
+    const body = renderTable(node, ctx)
+    return attrs ? `${attrs}\n${body}` : body
+  }
+  const keyValues = { ...(node.attrs?.keyValues ?? {}) }
+  const join = (field: 'align' | 'valign', key: string) => {
+    if (keyValues[key] === undefined && node.columns!.some((column) => column[field] !== undefined)) {
+      keyValues[key] = node.columns!.map((column) => column[field] ?? '').join(',')
+    }
+  }
+  join('align', 'aligns')
+  join('valign', 'valigns')
+  if (keyValues.widths === undefined && node.columns.some((column) => column.width !== undefined)) {
+    keyValues.widths = node.columns.map((column) => column.width === undefined ? '' : String(column.width * 100)).join(',')
+  }
+  const attrs = renderBlockAttrs({ ...(node.attrs ?? {}), keyValues })
+  return `${attrs}\n${renderTable(node, ctx)}`
 }
 
 function renderList(node: List, ctx: CarveContext): string {
@@ -861,6 +995,33 @@ const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set<BlockNode['type']>([
   'link_reference_definition',
 ])
 
+/** A written block-attributes line: `{` … `}` alone on its line (PART 2). */
+const A_BLOCK_ATTRIBUTES_LINE = /^\{.*\}$/
+
+/**
+ * Does the written form of a block OPEN with a block-attributes line?
+ *
+ * The three kinds above fold into an open paragraph one column in because their
+ * canonical source is a bare inline run. That stops being true the moment the
+ * writer has to put the block's attributes on a line of their own ahead of it:
+ * `block_attributes` is one of PART 9 §10's INVISIBLE CONSTRUCTS, so it
+ * INTERRUPTS the open paragraph, and the block below it opens its own.
+ *
+ * So this is not a preference between two spellings. Where the attribute line is
+ * written, the fold this rule exists to prevent cannot happen, and the `+` costs
+ * a construct the document did not have. `- a` / `{.x}` / `para` and
+ * `- a` / `  {.x}` / `  para` render the same document in carve-js, carve-php
+ * and carve-rs alike - and the indented one is what the corpus source and
+ * carve-rs write, so writing the marker was this engine disagreeing with the
+ * other two (markup-carve/carve#1275).
+ *
+ * A paragraph whose own text is `{…}` does not reach this: the writer escapes
+ * that leading brace (`\{.c\}`), precisely so it cannot come back as attributes.
+ */
+function opensWithAnAttributeLine(rendered: string): boolean {
+  return A_BLOCK_ATTRIBUTES_LINE.test(rendered.split('\n', 1)[0])
+}
+
 function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
   if (left.type === 'list' && right.type === 'list') {
@@ -896,6 +1057,37 @@ function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): stri
 }
 
 function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  // A definition collected from the ONLY line of an item leaves no child
+  // behind.  Do not spell that empty item with `+`: at nested marker depth the
+  // marker attaches the outer item's following block to the empty INNER item.
+  // The definition's retained source position is the only record of what
+  // occupied the item, so put it back there just as definitionInGap puts one
+  // back between two surviving children.
+  if (ctx.listDepth > 1 && item.children.length === 0) {
+    const from = item.pos?.startLine
+    const to = item.pos?.endLine
+    if (from !== undefined && to !== undefined) {
+      for (const [line, definition] of definitionsByLine) {
+        if (
+          line >= from &&
+          line <= to &&
+          !definitionsWrittenInPlace.has(definition as unknown as object)
+        ) {
+          const written = renderBlock(definition, ctx)
+          definitionsWrittenInPlace.add(definition as unknown as object)
+          return written
+        }
+      }
+      for (const [line, label] of footnoteDefsByLine) {
+        if (line < from || line > to || footnotesWrittenInPlace.has(label)) continue
+        const blocks = ownValue(documentFootnoteDefs, label)
+        if (blocks === undefined) continue
+        const written = renderOneFootnoteDef(label, blocks, ctx)
+        footnotesWrittenInPlace.add(label)
+        return written
+      }
+    }
+  }
   // A loose item separates its blocks with a blank line; a tight item joins
   // them with a single newline so the re-parse stays tight. Using the generic
   // blank-line join here would loosen a tight item that has more than one child
@@ -967,7 +1159,10 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       if (
         previousAtMarkerColumn ||
         (next !== undefined && adjacentBlocksMerge(b, next)) ||
-        (!separated && previous?.type === 'paragraph' && FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type))
+        (!separated &&
+          previous?.type === 'paragraph' &&
+          FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
+          !opensWithAnAttributeLine(rendered))
       ) {
         parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
         previousAtMarkerColumn = true
@@ -1089,7 +1284,11 @@ function colonFenceFor(ctx: CarveContext): string {
 function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string {
   ctx.colonFenceDepth++
   try {
-    return renderBlocks(children, ctx)
+    const body = renderBlocks(children, ctx)
+    // A host boundary closes the final list before the enclosing fence. Without
+    // this blank, the bare closer can be consumed by the last tight item under
+    // the 0.2 paragraph-extent rule and re-open as an empty sibling div.
+    return children.at(-1)?.type === 'list' ? `${body}\n` : body
   } finally {
     ctx.colonFenceDepth--
   }
@@ -1120,27 +1319,32 @@ function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
  * cells - brought every body cell back aligned, so `parse(fmt(x)) == parse(x)`
  * did not hold (issue 359).
  *
- * Two header shapes have no native spelling, because `header_cell` in the
- * grammar is `'=' [alignment_marker] content` and admits neither an attribute
- * block nor a span marker:
+ * ONE header shape has no native spelling: a SPAN marker promoted to a header
+ * cell (`| < | b |`), which `header_cell` does not admit.
  *
  *   | < | b |     a span marker promoted to a header cell
- *   |{.x} a | b | a header cell carrying attributes
  *
- * Those still need a delimiter row to promote the first row. It is emitted BARE
+ * That still needs a delimiter row to promote the first row. It is emitted BARE
  * (`|---|---|`), never with colons: the cells keep their own alignment markers,
  * so the delimiter contributes structure only and cannot spill alignment down
  * the column.
+ *
+ * An ATTRIBUTED header cell used to be in that list, for the reason the whole
+ * order changed: `header_cell` had no attributes slot, so the only shape
+ * available was `|{.x}=a |`, which the grammar reads as a data cell whose
+ * content starts with `=`. Falling back to a delimiter row avoided writing it,
+ * at the cost of promoting the row with syntax the AST did not ask for. §5 T10
+ * gives `header_cell` the slot, after the markers, so `|={.x} a |` is a real
+ * spelling now and the fallback is not needed for it.
  */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
   const first = node.rows[0]
   const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
-  const needsDelimiter =
-    headerRow && first.cells.some((c) => c.span !== undefined || c.attrs !== undefined)
+  const needsDelimiter = headerRow && first.cells.some((c) => c.span !== undefined)
 
   node.rows.forEach((row, rowIndex) => {
-    const cells: RenderedCell[] = []
+    const cells: string[] = []
     for (const cell of row.cells) {
       // In the delimiter form the promoted row is written as ordinary data
       // cells - the row after it is what makes them headers.
@@ -1156,16 +1360,30 @@ function renderTable(node: Table, ctx: CarveContext): string {
   return rows.join('\n')
 }
 
-interface RenderedCell {
-  text: string
-  tight: boolean
+/**
+ * A cell's written form: its PREFIX glued to the opening pipe, then one space,
+ * then the content, then one space before the closing pipe.
+ *
+ * The prefix has to touch the pipe - a space in front of `=` or of an
+ * attribute block makes it literal content - but the CONTENT does not, and the
+ * padded form is the readable one. It is also the safe one: the parser's
+ * alignment scan runs at the position right after `|` or `|=` and consumes one
+ * `<`, `>` or `~`, so a glued content sigil was read as a marker the author
+ * never wrote (markup-carve/carve-js#903, corpus 319-4). A space stops that
+ * scan for every cell rather than for the shapes someone enumerated.
+ *
+ * An EMPTY cell takes a single space, not two, so a column does not grow a
+ * space each time the document is formatted.
+ */
+function padCell(prefix: string, content: string): string {
+  return content === '' ? `${prefix} ` : `${prefix} ${content} `
 }
 
-function renderTableRow(cells: RenderedCell[], attrs: string): string {
-  return `|${cells.map((cell) => (cell.tight ? cell.text : ` ${cell.text} `)).join('|')}|${attrs}`
+function renderTableRow(cells: string[], attrs: string): string {
+  return `|${cells.join('|')}|${attrs}`
 }
 
-function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): RenderedCell {
+function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true): string {
   const attrs = renderAttrs(cell.attrs)
   // A lone span marker keeps a SPACE before it. Glued to the opening pipe, `<`
   // is also the left-alignment sigil, and the two readings differ: the
@@ -1180,34 +1398,27 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // grammar puts it, and the space goes between it and the marker.
   const spanMarker = cell.span === 'rowspan' ? '^' : '<'
   if (cell.span === 'rowspan' || cell.span === 'colspan') {
-    return attrs === ''
-      ? { text: spanMarker, tight: false }
-      : { text: `${attrs} ${spanMarker}`, tight: true }
+    return padCell(attrs, spanMarker)
   }
   const align = alignMarker(cell.align)
-  const prefix = `${attrs}${cell.header && markHeader ? '=' : ''}${align}`
-  const rendered = renderInlines(cell.children, ctx)
-  // A PREFIXED CELL IS TIGHT, so the first character of the content is the
-  // character the parser's alignment scan reads. That scan runs at the position
-  // right after `|` or `|=` and consumes exactly one `<`, `>` or `~`, so a
-  // header cell whose content opens with one lost it: `| ~x~ |` was written
-  // `|=~x~|`, which reads back as CENTER alignment with the text `x~` - the
-  // strikethrough gone, and every cell in the column centered by a marker the
-  // author never wrote. `| <https://e.example> |` lost its anchor the same way
-  // through the LEFT marker (markup-carve/carve-js#903).
-  //
-  // ONE SPACE is the whole fix, and it costs nothing: the scan only fires on a
-  // GLUED sigil, and the content is trimmed after the prefix is consumed, so
-  // `|= ~x~ |` is a header cell holding `~x~` again.
-  //
-  // The set comes from the parser rather than from a list here. Measured, `>`
-  // does not currently reach this: the escape pass writes it `\>` because it
-  // also opens a blockquote. That is a different rule's decision, and a guard
-  // that relied on it would break the day that rule narrowed - so all three
-  // sigils are guarded and only two of them were ever observed failing.
-  const separator =
-    prefix !== '' && align === '' && TABLE_ALIGNMENT_MARKERS.has(rendered[0] ?? '') ? ' ' : ''
-  return { text: `${prefix}${separator}${rendered}`, tight: prefix !== '' }
+  const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
+  const inheritedHorizontal = !align && valign ? '?' : ''
+  // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
+  // after the kind marker and after the alignment marker, so `|={.x} h |` is
+  // an attributed header cell. Writing the block ahead of the markers instead
+  // produced `|{.x}=h |`, which is the one shape the grammar cannot tell from
+  // a data cell whose content starts with `=` - and reads it as that, so an
+  // attributed header cell round-tripped into `<td class="x">=h</td>` and
+  // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
+  const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
+  // The space `padCell` writes after the prefix is what keeps a content sigil
+  // content: the alignment scan runs right after `|` or `|=` and consumes one
+  // `<`, `>` or `~`, so `| ~x~ |` written glued came back as CENTER alignment
+  // holding `x~` - the strikethrough gone and the column centered by a marker
+  // nobody wrote (markup-carve/carve-js#903). This used to be a guard that
+  // fired only on those three characters and only where the prefix was a bare
+  // `=`; padding every cell covers it without enumerating anything.
+  return padCell(prefix, renderInlines(cell.children, ctx))
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {
@@ -1263,10 +1474,10 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
   // is not recorded anywhere in the tree - so it is spelled to say what it is
   // rather than to carry anything.
   if (body === '') {
-    return `[^${escapeFootnoteLabel(label)}]: ${EMPTY_FOOTNOTE_BODY}`
+    return `[^${writeFlatBracketRun(label)}]: ${EMPTY_FOOTNOTE_BODY}`
   }
   const lines = body.split('\n')
-  const defLines = [`[^${escapeFootnoteLabel(label)}]: ${lines.shift() ?? ''}`]
+  const defLines = [`[^${writeFlatBracketRun(label)}]: ${lines.shift() ?? ''}`]
   // TWO spaces, the body's own column (PART 9 §16). Three is legal
   // continuation, but it leaves the body's blocks at a relative column above
   // zero - and a reader that takes the body's column as two then sees an
@@ -1369,7 +1580,18 @@ function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
   }
 }
 
-function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = false): string {
+function renderInlines(
+  nodes: InlineNode[],
+  ctx: CarveContext,
+  captionCanOpen = false,
+  /**
+   * These nodes are a line block's STANZA, so the newline after the last of
+   * them ends the stanza rather than a line inside it (PART 11 §7c). Set only
+   * by the paragraph arm: a nested inline container inside a line block is not
+   * a stanza, and its last node is not at a stanza boundary.
+   */
+  isStanza = false,
+): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
@@ -1377,14 +1599,102 @@ function renderInlines(nodes: InlineNode[], ctx: CarveContext, captionCanOpen = 
     let firstLine = true
     let lineNodeCount = 0
     let lineHostsCaption = false
+    // THE CURRENT OUTPUT LINE, CARRIED FORWARD instead of read back off `out`.
+    // The two decisions below are properties of the line written so far, and
+    // `out` is the wrong place to ask: it grows with every node, and probing a
+    // growing accumulator per node is the quadratic shape this engine's scaling
+    // guards exist to keep out. Two counters answer both questions in O(piece).
+    let lineLength = 0
+    /** The last up-to-two characters of the current output line. */
+    let lineTail = ''
     nodes.forEach((node, idx) => {
-      out += renderInline(
+      let piece = renderInline(
         node,
         ctx,
         lastBoundary(nodes[idx - 1]),
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
+        opensBacktickRun(nodes[idx + 1]),
       )
+      // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
+      // live here and not in `renderInline`: the answer is a property of the
+      // output line, not of the neighbouring nodes. `lastBoundary` cannot stand
+      // in for it - after a code span it reports the span's last CONTENT
+      // character, not the backtick that actually ends the line.
+      const atLineStart = lineLength === 0
+
+      // THE SEPARATOR SPACE IS ONLY A SEPARATOR (PART 11 §1; §21). `%%` is
+      // recognized after whitespace OR at the start of its line, so a comment
+      // that already STARTS its line has nothing to separate from and must not
+      // be given a space it did not have.
+      //
+      // Everywhere else the space was cosmetic - leading whitespace is stripped
+      // on the way back in - which is why it went unnoticed. A LINE BLOCK is
+      // the one place it is not: there leading whitespace is preserved CONTENT
+      // (PART 9 §23), so the space pushed the marker off column 0, the reparse
+      // read `%%` as ordinary verse, and `carve fmt` PUBLISHED the text the
+      // author hid (carve-js#1170; carve-php fixed the same defect in
+      // markup-carve/carve-php#1394, carve-rs never had it).
+      if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
+
+      // A LINE BLOCK'S HARD BREAK KEEPS ITS BACKSLASH WHERE THE BARE NEWLINE
+      // WOULD BE RE-READ (PART 11 §7c, NORMATIVE). The container hardens every
+      // line boundary of its own accord, so the bare newline is right for most
+      // lines and wrong for exactly two - the two where §7's precondition
+      // fails, because the parser does NOT discard the trailing run when a
+      // backslash follows it (PART 7 makes that run INTERIOR).
+      //
+      //   - the line's content is EMPTY. A bare newline is a BLANK line, which
+      //     ends the stanza, so one stanza comes back as two.
+      //   - the line's content ends in a LONE space. A bare newline makes that
+      //     space line-trailing, where PART 2 drops it. A run of TWO OR MORE
+      //     columns is already NBSP content (§23 MEDIAL GAPS) and needs none -
+      //     it reaches here sentinel-encoded, so it is not a space to this
+      //     test either.
+      //   - the break ENDS THE STANZA. §7c's third sentence excuses a line with
+      //     no trailing whitespace because its "tree is identical either way",
+      //     and on a line INSIDE a stanza it is: the boundary hardens whether or
+      //     not a backslash spells it. At the stanza's end there is no boundary
+      //     to harden - the next newline belongs to the blank line or the
+      //     closing fence - so the bare spelling drops the break outright. The
+      //     ruling measured this as "a last body line loses a trailing `<br>`
+      //     WITH ITS SPACE"; the space is incidental, the loss is the break, and
+      //     `a\` and `a  \` lose it with no space involved.
+      //
+      // This is PART 11 §1a, not an exemption from it: the per-construct
+      // spelling emits bytes that do not re-parse to the tree they came from,
+      // so §1 wins and the spelling yields to another spelling of the SAME
+      // construct - which for a `hard_break` is its own PART 3 form
+      // (markup-carve/carve#1334).
+      //
+      // A LINE THAT ENDS IN A COMMENT IS EXEMPT. `%%` runs to end of line, so a
+      // trailing space there is INSIDE the comment, not content the parser is
+      // about to lose - stripping it leaves the same node. Protecting it with a
+      // backslash does not: the `\` lands inside the comment's own content, and
+      // the block layer, which takes the whole line before the inline parser
+      // sees it, reads the note back as `\`. A comment is always the last thing
+      // on its line, so the node before the break is the whole test.
+      if (
+        ctx.lineBlockDepth > 0 &&
+        node.type === 'hard_break' &&
+        piece === '\n' &&
+        nodes[idx - 1]?.type !== 'comment' &&
+        (atLineStart ||
+          /(?:^|[^ \t]) $/.test(lineTail) ||
+          (isStanza && idx === nodes.length - 1))
+      ) {
+        piece = '\\\n'
+      }
+
+      out += piece
+      const lastNewline = piece.lastIndexOf('\n')
+      if (lastNewline === -1) {
+        lineLength += piece.length
+        lineTail = (lineTail + piece).slice(-2)
+      } else {
+        lineLength = piece.length - lastNewline - 1
+        lineTail = piece.slice(lastNewline + 1).slice(-2)
+      }
       if (node.type === 'soft_break') {
         captionCanOpen = firstLine && lineNodeCount === 1 && lineHostsCaption
         firstLine = false
@@ -1412,6 +1722,15 @@ function renderInline(
   prevChar = '',
   nextChar = '',
   captionCanOpen = false,
+  /**
+   * Whether the node AFTER this one is written starting with a backtick run.
+   *
+   * `firstBoundary` cannot answer it: for a code span it reports the span's
+   * first CONTENT character, not the backtick that actually starts the piece.
+   * §27 binds `!` to a FOLLOWING BACKTICK RUN, so a text node ending in `!`
+   * needs to know (carve-js#1175).
+   */
+  nextOpensBacktickRun = false,
 ): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
@@ -1420,7 +1739,7 @@ function renderInline(
   const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
   switch (node.type) {
     case 'text':
-      return escapeText(cleanEscapedText(node), captionCanOpen)
+      return escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
     case 'escaped_text':
       // The author escaped this character; the writer says so again. No
       // minimal/conservative decision applies - the node IS the decision.
@@ -1463,6 +1782,12 @@ function renderInline(
     case 'math':
       return withAttrs(renderMath(node.display, node.content))
     case 'raw_inline':
+      if (node.content === '') {
+        throw new SourceUnspellableError(
+          'raw_inline',
+          'an empty raw inline has no Carve source spelling',
+        )
+      }
       return `${renderCode(node.content)}{=${escapeFormat(node.format)}}`
     case 'literal_inline':
       // §27: `!` prefix on a verbatim span. A trailing attribute block is the
@@ -1487,7 +1812,7 @@ function renderInline(
     case 'inline_footnote':
       return withAttrs(node.inline
         ? `^[${renderInlines(node.inline, ctx)}]`
-        : `[^${escapeFootnoteLabel(node.id ?? '')}]`)
+        : `[^${writeFlatBracketRun(node.id ?? '')}]`)
     case 'soft_break':
       return '\n'
     case 'hard_break':
@@ -1507,6 +1832,7 @@ function renderInline(
     case 'citation_group':
       return node.raw
     case 'comment':
+      if (node.delimited) return `{% ${node.content} %}`
       // THE UNIT IS THE OPENER (PART 11 §2). A content run that begins with `%`
       // joins the opener rather than being separated from it by a space: a
       // comment whose content is `%` is written ` %%%`, not ` %% %`, which
@@ -1671,8 +1997,17 @@ function codeFenceInfo(lang: string | undefined, header: string | undefined, lab
   // on parse, and it cannot contain a quote. Emit it verbatim - escaping a
   // backslash here would round-trip to a doubled backslash (issue 295).
   if (header !== undefined) parts.push(`"${header}"`)
-  if (label !== undefined) parts.push(`[${escapeBracketText(label)}]`)
-  return parts.length ? ` ${parts.join(' ')}` : ''
+  if (label !== undefined) parts.push(`[${writeFlatBracketRun(label)}]`)
+  // NO SPACE between the fence run and the info string. `fenced_code_block`
+  // names the slot OPTIONAL and the no-space form CANONICAL: "The no-space form
+  // (```php) is canonical and is what the X->Carve converters emit." The reader
+  // stays lenient and accepts both, which is why a single-pass output check
+  // never caught this - `` ``` js `` re-parses to the same tree.
+  //
+  // The separators BETWEEN the parts are a different slot and stay: inside
+  // `code_fence_info` they are `space+`, mandatory, so ```js"t" is not a fence
+  // opener at all and joining without one would lose the header.
+  return parts.join(' ')
 }
 
 function safeFence(content: string, min: number): string {
@@ -1702,7 +2037,18 @@ function renderAttrs(attrs: Attrs | undefined): string {
   }
   const emitKey = (key: string) => {
     if (kv[key] === undefined) return
-    parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(kv[key]!)}`)
+    const value = kv[key]!
+    // EXACT key match, not case-insensitive. `LANG` and `lang` are different
+    // attribute names - the parser keeps the authored case and the HTML shows
+    // it - so folding here rewrote `[x]{LANG=fr}` into `[x]{:fr}` and changed
+    // the name, which breaks PART 11 §1 (carve#1137).
+    if (key === 'lang' && isLanguageTag(value)) parts.push(`:${value}`)
+    // PART 11 §6c: a value-less attribute comes back as the bare name, which is
+    // the production the language has for it. Guarded on the key being a valid
+    // attribute identifier, because that is what `boolean_attribute` is - a key
+    // that needs escaping has no bare spelling to fall back to.
+    else if (value === '' && isAttrIdentifier(key)) parts.push(escapeAttrKey(key))
+    else parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(value)}`)
   }
 
   // Honor the author's source slot order so the reparsed Attrs - and therefore
@@ -1731,6 +2077,10 @@ function renderAttrs(attrs: Attrs | undefined): string {
   return parts.length ? `{${parts.join(' ')}}` : ''
 }
 
+function isLanguageTag(value: string): boolean {
+  return value === '' || /^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value)
+}
+
 function quoteAttrValue(value: string): string {
   // A value may stay UNQUOTED when it holds no `whitespace` and no delimiter --
   // PART 7's four characters, not `\s`. With `\s` a value carrying a vertical
@@ -1738,6 +2088,24 @@ function quoteAttrValue(value: string): string {
   // tripped to the shorter spelling the parser accepts.
   if (/^[^ \t\n\r"'{}]+$/.test(value)) return value
   return `"${value.replace(/[\\"]/g, '\\$&')}"`
+}
+
+/**
+ * The `{author="Smith" year="2020"}` block leading a bibliography entry.
+ *
+ * ALWAYS QUOTED, which is why this is not `renderAttrs`: that writer drops the
+ * quotes a value does not strictly need, and the citations extension reads the
+ * block back with a QUOTED-value pattern. `{author=Smith}` therefore reparses
+ * as an attribute the entry no longer feeds to author-date mode, and the
+ * formatter would have silently emptied the reference list's labels.
+ */
+function renderCitationMetadata(attrs: Attrs | undefined): string {
+  const keyValues = attrs?.keyValues
+  if (!keyValues) return ''
+  const parts = Object.entries(keyValues).map(
+    ([key, value]) => `${escapeAttrKey(key)}="${value.replace(/[\\"]/g, '\\$&')}"`,
+  )
+  return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
 
 function alignMarker(align: TableCell['align']): string {
@@ -2185,18 +2553,50 @@ function guardThematicBreakLines(body: string): string {
  */
 const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
-function escapeText(text: string, captionCanOpen = false): string {
+function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
   const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
-  const out = text
+  let out = text
     .replace(UNWRITABLE_CONTROLS, '')
     .replace(escapes, (char, offset: number) => {
       if (char !== '^') return `\\${char}`
       const next = text[offset + 1] ?? ''
-      const opensCaption =
-        captionCanOpen && offset === 0 && (next === ' ' || next === '\t')
+      // A TAB after the marker is not a caption opener: PART 10 §231 leaves
+      // that line as prose, which is why the corpus renders `^<TAB>Figure 1`
+      // as a paragraph. Escaping it wrote `\^` where carve-php and carve-rs
+      // write the caret bare, and an escape that guards a channel the
+      // character cannot open is exactly what corpus 304 refuses.
+      const opensCaption = captionCanOpen && offset === 0 && next === ' '
       const opensInline = next === '[' || (text[offset - 1] ?? '') === '{' || next === '}'
       return opensCaption || opensInline ? '\\^' : '^'
     })
+  // The caption-opening caret is escaped in EVERY mode, not only when `^` is
+  // in the candidate class: after a caption host (a figure group, an image, a
+  // table...) an unescaped `^ ` line re-attaches as the caption on re-parse,
+  // so the minimal form always failed the redundancy check and the WHOLE
+  // document escalated to conservative escaping - `\(a\)` and `\#` where
+  // carve-php and carve-rs write the characters bare. One structural escape
+  // keeps the minimal pass winnable (cross-engine fmt parity, PART 11 §4).
+  if (
+    escapeMode === 'minimal' &&
+    captionCanOpen &&
+    out.startsWith('^') &&
+    out[1] === ' '
+  ) {
+    out = '\\' + out
+  }
+  // A TRAILING `!` BEFORE A BACKTICK RUN is escaped in EVERY mode too, for the
+  // same reason and with the same shape. §27 makes `!` immediately before a
+  // verbatim run an INLINE LITERAL, and names this as the single case the
+  // construct reinterprets: "A literal `!` immediately before a backtick run is
+  // therefore written `\!`". So the escape is not optional - it is the only
+  // spelling of this tree - and leaving the minimal pass to discover that by
+  // failing its redundancy check escalated the WHOLE DOCUMENT to conservative
+  // escaping. `foo (bar) 50% a-b` in a document that also holds a `!` before a
+  // code span came out `foo \(bar\) 50\% a\-b`, which is the over-escaping PART
+  // 11 §4 forbids, while carve-rs wrote the whole line bare (carve-js#1175).
+  if (escapeMode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
+    out = out.slice(0, -1) + '\\!'
+  }
   if (escapeMode === 'minimal') return out
   // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
   // single character: `:::` needs only its first colon neutralized to stop
@@ -2209,8 +2609,32 @@ function escapePlainLine(text: string): string {
   return text.replace(/\n/g, ' ')
 }
 
+/**
+ * An image's ALT TEXT, written between `![` and `]`.
+ *
+ * ALT IS RAW. It is an HTML attribute, so nothing inside is inline-parsed and
+ * no escape inside it is resolved: `![t\]z](/i.png)` gives `alt="t\]z"`, with
+ * the backslash in the value. That is what makes escaping the wrong tool here -
+ * a `\]` the writer emits is not a neutralized bracket, it is two more
+ * characters of alt text, and the document says something else on the next
+ * read. It compounded, too: each pass escaped the backslash the last pass
+ * wrote (markup-carve/carve#1197).
+ *
+ * The run closes at the MATCHING `]`, by the balanced, escape- and
+ * literal-span-aware scan a link's text closes by - so the alt an author can
+ * write is exactly the alt that re-reads as itself, and the writer's job is to
+ * put it back verbatim rather than to neutralize anything
+ * (markup-carve/carve#1206).
+ *
+ * The fallback covers an alt that has NO Carve spelling - a bare unbalanced
+ * `]`, or a run ending inside an unclosed code span. `parse` cannot produce
+ * one; an ingested AST can. Escaping is not a representation of that value
+ * either, but it keeps the image a well-formed image instead of letting a
+ * stray `]` split the line, and it settles: the escaped alt IS representable,
+ * so the pass after it writes the same bytes.
+ */
 function escapeImageAlt(text: string): string {
-  return text.replace(/[\\[\]]/g, '\\$&')
+  return rawBracketRunCloses(text) ? text : text.replace(/[\\[\]]/g, '\\$&')
 }
 
 /**
@@ -2268,14 +2692,40 @@ function escapeQuoted(text: string): string {
   return text.replace(/[\\"]/g, '\\$&')
 }
 
-function escapeBracketText(text: string): string {
-  return text.replace(/[\\\]]/g, '\\$&')
+/**
+ * A FLAT raw bracketed run: a colon-fence or code-fence `[label]`, and a
+ * footnote's `[^id]` in both its definition and its references.
+ *
+ * Same rule as an alt text and the same reason - the value is raw, so an
+ * escape the writer emits reaches the reader as two characters of content
+ * rather than as a neutralized bracket - but a narrower close. These readers
+ * scan `[^\]]*` and stop at the first `]`, with no balance and no escape, so a
+ * run is representable exactly when it holds neither a `]` nor a line break.
+ *
+ * One function for one rule. It was written twice, and both spellings escaped,
+ * so `::: [a\b]` and `[^n\m]` grew a backslash on every format pass.
+ *
+ * WRITTEN AS AUTHORED WITH NO FALLBACK, unlike an alt text. A value holding a
+ * `]` has no spelling here either, but the escape is not a spelling of it: the
+ * label regexes require the run to be the whole of what follows, so `[a\]b]`
+ * fails to match exactly as `[a]b]` does, and `::: [a\]b]` and `::: [a]b]`
+ * render the same paragraph, container and all. Where the construct instead
+ * survives as text - a code fence, a footnote definition - the escape only
+ * adds a backslash a reader can see. So the branch would change no output
+ * anywhere, which is a branch that cannot fail, and it is not written.
+ */
+function writeFlatBracketRun(text: string): string {
+  return text
 }
 
-function escapeFootnoteLabel(text: string): string {
-  return text.replace(/[\\\]]/g, '\\$&')
-}
-
+/**
+ * NOT the same rule, deliberately. `RE_ABBR_DEF` reads the abbreviation as
+ * `[A-Za-z0-9]+`, so neither character this would escape can reach it from a
+ * parse, and an ingested abbreviation carrying one has no `*[…]:` spelling
+ * with or without the backslash. Left as it stands rather than folded into the
+ * function above, which would claim a shared rule where there is only a shared
+ * shape.
+ */
 function escapeAbbr(text: string): string {
   return text.replace(/[\\\]]/g, '\\$&')
 }
@@ -2315,7 +2765,18 @@ function escapeAttrNameValue(text: string): string {
   return text.replace(/[^\w-]/g, '-')
 }
 
-function isAttrIdentifier(text: string): boolean {
+/**
+ * Whether a name is a grammar `identifier` - `(letter | '_'), {letter | digit |
+ * '_' | '-'}` - and so survives `escapeAttrKey` unchanged.
+ *
+ * Exported because `html-import.ts` has to know which attribute names this
+ * writer can spell BACK: `escapeAttrKey` silently deletes the characters an
+ * identifier may not hold, so a kept `~onclick` would be written as `onclick`
+ * and a kept `xlink:href` as `xlinkhref` - a different attribute than the one
+ * the source carried. The importer refuses those names rather than owning a
+ * second copy of the rule (markup-carve/carve-js#1156).
+ */
+export function isAttrIdentifier(text: string): boolean {
   return /^[A-Za-z_][\w-]*$/.test(text)
 }
 
@@ -2329,6 +2790,27 @@ function escapeCrossrefTarget(text: string): string {
 
 function escapeCriticText(text: string): string {
   return text.replace(/[\\{}]/g, '\\$&')
+}
+
+/**
+ * Whether this node's written form STARTS with a backtick run.
+ *
+ * The two that do are the code span and the raw inline, both of which go
+ * through `renderCode`. Inline math opens with `$` and an inline literal with
+ * `!`, so neither is one - the `!` that §27 binds has to reach the backtick
+ * itself, with nothing between.
+ *
+ * EMPTY CONTENT IS NOT ONE OF THEM. `renderCode('')` writes the fence twice
+ * with nothing between, so the two backticks read back as a single UNCLOSED
+ * run of two rather than a closed span - and §27 binds `!` to a run that
+ * closes. `` !`` `` is a `text` beside an empty `code` on the way in and on the
+ * way out, so the channel never opens and escaping the `!` would be exactly the
+ * guard corpus 304 refuses.
+ */
+function opensBacktickRun(node: InlineNode | undefined): boolean {
+  if (node?.type === 'code') return node.value !== ''
+  if (node?.type === 'raw_inline') return node.content !== ''
+  return false
 }
 
 function firstBoundary(node: InlineNode | undefined): string {

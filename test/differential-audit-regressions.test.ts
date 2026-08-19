@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { carveToAstJson, carveToHtml } from '../src/index.js'
 
 describe('differential audit regressions', () => {
-  it('keeps an empty marker separator when it is term continuation content', () => {
-    expect(carveToHtml(':: t\n* \n')).toContain('<dt>t\n* </dt>')
-    expect(carveToHtml(':: t\n- \n')).toContain('<dt>t\n- </dt>')
-    expect(carveToHtml(':: t\n. \n')).toContain('<dt>t\n. </dt>')
-    expect(carveToHtml(':: t\n] \n')).toContain('<dt>t\n] </dt>')
+  it('keeps a content-less marker line as term continuation content', () => {
+    // The marker is content because nothing follows it - a `* ` with a payload
+    // opens a list and ends the term instead. Its separator space is trailing
+    // whitespace like any other, dropped on a folded line as on the marker line
+    // (markup-carve/carve-js#1145).
+    expect(carveToHtml(':: t\n* \n')).toContain('<dt>t\n*</dt>')
+    expect(carveToHtml(':: t\n- \n')).toContain('<dt>t\n-</dt>')
+    expect(carveToHtml(':: t\n. \n')).toContain('<dt>t\n.</dt>')
+    expect(carveToHtml(':: t\n] \n')).toContain('<dt>t\n]</dt>')
     expect(carveToHtml(':: . \n')).toContain('<dt>.</dt>')
+    // The marker still has to be content-less to fold in at all.
+    expect(carveToHtml(':: t\n* x\n')).toContain('<li>x</li>')
   })
 
   it('does not promote a one-cell whitespace row to a table', () => {
@@ -28,16 +34,28 @@ describe('differential audit regressions', () => {
     expect(carveToHtml('- \tb\n')).toContain('<li>b</li>')
   })
 
-  it('keeps a marker-line attribute with the block it floats onto', () => {
-    expect(carveToHtml('* {i}\n|\n')).toContain('<li><p i="">|</p></li>')
+  it('ends the item on a marker-line attribute, which floats onto nothing', () => {
+    // Was `<li><p i="">|</p></li>`. markup-carve/carve#1280 ruled the other way:
+    // an attribute block leaves no open paragraph, so PART 1 S4 ends the item at
+    // the column-0 line and the attribute reaches no block at all (corpus
+    // 326-…-no-paragraph-open-9). carve-rs `b6ff319c` produces this.
+    expect(carveToHtml('* {i}\n|\n')).toBe('<ul>\n  <li></li>\n</ul>\n<p>|</p>')
   })
 
   it('strips closed verbatim padding across physical lines', () => {
     expect(carveToHtml('H``` x\n* ```\n')).toBe('<p>H<code>x\n*</code></p>')
   })
 
-  it('does not let an unclosed line-block code span consume the next verse line', () => {
-    expect(carveToHtml('::: |\n`\n}\n')).toContain('<p><code></code><br>\n}</p>')
+  it('lets an unclosed line-block code span reach the end of the stanza', () => {
+    // markup-carve/carve#1282 (carve-js#1116) ruled the other way round from
+    // what this row pinned: `edge-cases.md:2205` says an unclosed verbatim run
+    // renders to the end of the BLOCK, and a line block is a block. The run
+    // therefore swallows the newline - literally, as a newline - and no `<br>`
+    // is left to render. carve-rs `9b0bc779` produces exactly this, including
+    // for an UNTERMINATED line block as here.
+    expect(carveToHtml('::: |\n`\n}\n')).toBe(
+      '<div class="line-block">\n  <p><code>\n}</code></p>\n</div>',
+    )
   })
 
   it('absorbs a bare colon run after an indented malformed opener', () => {

@@ -2,12 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /*
- * Trailing flush-left plain text after a heading stays INSIDE the item the
- * heading belongs to, no matter how deeply that heading is nested — it used to
- * escape to a top-level paragraph, or attach as stray item text (carve#326).
- * What it no longer does is fold into the heading itself: a heading ends at its
- * newline (carve#451), so the line lands beside the heading as the item's own
- * content. Matches carve-php / carve-rs.
+ * A heading at an item's content column is a bounded block and leaves no
+ * paragraph open. PART 1 S4 therefore closes that item before a flush-left line
+ * (markup-carve/carve#1377), just as it already did for a marker-line heading.
  */
 describe('a heading keeps trailing lazy text in its item', () => {
   it('an indented item heading after a blank keeps the lazy line', () => {

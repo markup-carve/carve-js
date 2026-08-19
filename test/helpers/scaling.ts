@@ -109,15 +109,22 @@ export function expectScansLinearly(
  * repeated one closes on its successor and reads linear no matter what the
  * scan does. `build(repeats)` gets to vary the units; everything else about
  * the measurement is `expectScansLinearly`'s and is shared with it.
+ *
+ * `largeRepeats` is for the shapes where a UNIT IS NOT A FIXED NUMBER OF BYTES.
+ * The default doubles twice because a repeated fragment makes the input 4x
+ * longer, which is the separation the threshold is set for. A staircase whose
+ * line `i` carries `i` spaces grows its bytes with the SQUARE of the unit
+ * count, so the same 4x there is 16x the input, and the caller says so rather
+ * than the helper guessing.
  */
 export function expectBuiltInputScansLinearly(
   convert: (input: string) => void,
   build: (repeats: number) => string,
-  options: { label?: string; smallRepeats?: number } = {},
+  options: { label?: string; smallRepeats?: number; largeRepeats?: number } = {},
 ): void {
   const label = options.label ?? 'input'
   const smallRepeats = options.smallRepeats ?? SMALL_REPEATS
-  const largeRepeats = smallRepeats * (LARGE_REPEATS / SMALL_REPEATS)
+  const largeRepeats = options.largeRepeats ?? smallRepeats * (LARGE_REPEATS / SMALL_REPEATS)
 
   const small = build(smallRepeats)
   const large = build(largeRepeats)
@@ -161,12 +168,16 @@ export function expectBuiltInputScansLinearly(
   const medianSmall = median(smallPerByte)
   const medianLarge = median(largePerByte)
   const ratio = medianLarge / Math.max(medianSmall, Number.EPSILON)
-  const multiple = largeRepeats / smallRepeats
+  // THE MULTIPLE A QUADRATIC PATH WOULD READ IS THE BYTE ONE, not the unit one.
+  // The two are the same wherever a unit is a fixed fragment, and they are not
+  // for a builder whose units grow, where the unit ratio understated the signal
+  // the reader is being asked to compare against.
+  const multiple = large.length / small.length
 
   expect(
     ratio,
-    `Per-byte cost grew ${ratio.toFixed(2)}x for ${label} at ${multiple}x the input ` +
-      `(linear ~1x, quadratic ~${multiple}x): ` +
+    `Per-byte cost grew ${ratio.toFixed(2)}x for ${label} at ${multiple.toFixed(1)}x the input ` +
+      `(linear ~1x, quadratic ~${multiple.toFixed(1)}x): ` +
       `small=${(medianSmall * 1000).toFixed(4)}us/byte large=${(medianLarge * 1000).toFixed(4)}us/byte`,
   ).toBeLessThan(MAX_PER_BYTE_RATIO)
 }
