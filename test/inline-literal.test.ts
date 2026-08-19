@@ -95,9 +95,7 @@ describe('inline literal: regression guards (unchanged constructs)', () => {
 
   it('keeps a bare `!` literal when it does not open a span or image', () => {
     expect(h('a ! b')).toBe('<p>a ! b</p>')
-    // `!` before an unclosed run stays literal; the run is an ordinary
-    // (unclosed) code span, exactly as `$` before an unclosed run behaves.
-    expect(h('!`unclosed')).toBe('<p>!<code>unclosed</code></p>')
+    expect(h('!`unclosed')).toBe('<p>unclosed</p>')
   })
 
   it('escapes to a literal `!` immediately before a code span', () => {

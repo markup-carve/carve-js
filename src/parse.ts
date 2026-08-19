@@ -5268,7 +5268,12 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // in a continuation line are measured from where that line actually starts,
     // and the break's own `startLine` is what names which boundary it is once
     // some boundaries no longer produce one.
-    const joined = lines.map((line) => line.text).join('\n')
+    // Keep the boundary before a terminal emptied comment visible to an open
+    // verbatim run. Inline parsing normally trims trailing whitespace from an
+    // unclosed run; a private non-whitespace guard lets it retain this newline,
+    // then is removed from the one leaf that claimed it immediately below.
+    const terminalCommentGuard = lines.at(-1)?.comment ? '\uE001' : ''
+    const joined = lines.map((line) => line.text).join('\n') + terminalCommentGuard
     const firstLineNumber = lexer.lineNumber(lines[0]!.lineIndex)
     // The break BETWEEN line `index` and the one after it, from line geometry.
     // Unchanged from when each break was built during the per-line walk, down to
@@ -5321,6 +5326,26 @@ function parseLineBlock(lexer: Lexer): LineBlock {
           })
         : inlineSource({ anchored: false }),
     )
+    if (terminalCommentGuard) {
+      const removeGuard = (nodes: InlineNode[]): boolean => {
+        for (const node of nodes) {
+          const record = node as unknown as Record<string, unknown>
+          for (const key of ['value', 'content'] as const) {
+            const value = record[key]
+            if (typeof value === 'string' && value.endsWith(terminalCommentGuard)) {
+              record[key] = value.slice(0, -terminalCommentGuard.length)
+              return true
+            }
+          }
+          for (const key of ['children', 'inline', 'content'] as const) {
+            const value = record[key]
+            if (Array.isArray(value) && removeGuard(value as InlineNode[])) return true
+          }
+        }
+        return false
+      }
+      removeGuard(parsed)
+    }
     // Read the boundary each break belongs to BEFORE any stripping takes the
     // position that says so.
     const breakIndex = new Map<InlineNode, number>()
@@ -6212,6 +6237,14 @@ function classifyQuotedLine(
   // `trackItemLazyState` has read it this way for an item all along; the quote
   // did not, and kept the line inside.
   if (isBlockAttributeLine(content)) {
+    closeBlockQuoteParagraph(state)
+    return null
+  }
+  // A quoted line comment is an invisible block, not paragraph content. Once
+  // it is the quote's last block there is no paragraph for an unmarked line to
+  // continue, so that line belongs outside the quote. A 3+ run is excluded:
+  // without a matching closer it degrades to paragraph text below.
+  if (RE_COMMENT_LINE.test(content) && commentFenceRun(content) === undefined) {
     closeBlockQuoteParagraph(state)
     return null
   }
@@ -10882,18 +10915,17 @@ function scanInlineInner(
     // the `$`-math prefix above. The span content is captured verbatim, later
     // HTML-escaped and emitted by every renderer with the `<code>` wrapper
     // dropped; a trailing `{…}` attaches below as an ordinary inline attribute
-    // block (no special first-token sigil). Like math it requires a CLOSED
-    // span — a bare `!` before an unclosed run stays literal text and the run
-    // becomes an ordinary (unclosed) code span.
+    // block (no special first-token sigil). Like code and math, an unclosed
+    // span reaches the end of the containing block.
     if (c === '!' && text[i + 1] === '`') {
       const { end, closed, openLen } = verbatimSpanEnd(text, i + 1)
-      if (closed) {
-        flush()
-        const content = stripVerbatimPadding(text.slice(i + 1 + openLen, end - openLen))
-        out.push(withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
-        i = end
-        continue
-      }
+      flush()
+      const content = closed
+        ? stripVerbatimPadding(text.slice(i + 1 + openLen, end - openLen))
+        : text.slice(i + 1 + openLen).replace(/[ \t\n\r]+$/, '')
+      out.push(withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
+      i = end
+      continue
     }
 
     // Image ![alt](src) — the alt text allows nested balanced [...], so the

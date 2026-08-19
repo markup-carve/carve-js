@@ -39,8 +39,8 @@ describe('a `!` before a code span does not escalate the document', () => {
     expect(carveToCarve(`${PROSE}\n`)).toBe(`${PROSE}\n`)
   })
 
-  it('the `!` itself is still escaped - §27 leaves no other spelling', () => {
-    expect(carveToCarve('!`l\na\n')).toBe('\\!`l\na`\n')
+  it('an unclosed literal is written back in its canonical closed form', () => {
+    expect(carveToCarve('!`l\na\n')).toBe('!`l\na`\n')
     expect(carveToHtml(carveToCarve('!`l\na\n'))).toBe(carveToHtml('!`l\na\n'))
   })
 

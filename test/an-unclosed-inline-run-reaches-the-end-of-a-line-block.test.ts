@@ -38,10 +38,8 @@ describe('an unclosed inline run reaches the end of a line block', () => {
   })
 
   it('carries a literal inline run across it', () => {
-    // The `!` prefix stays literal text on an UNCLOSED run, in a line block
-    // exactly as in a paragraph - the control below pins the same shape.
     expect(carveToHtml('::: |\na !`b\nc d\n:::\n')).toBe(
-      '<div class="line-block">\n  <p>a !<code>b\nc d</code></p>\n</div>',
+      '<div class="line-block">\n  <p>a b\nc d</p>\n</div>',
     )
   })
 
@@ -96,7 +94,7 @@ describe('an unclosed inline run reaches the end of a line block', () => {
   })
 
   it('CONTROL: the paragraph form is unchanged for literal inline', () => {
-    expect(carveToHtml('a !`b\nc d\n')).toBe('<p>a !<code>b\nc d</code></p>')
+    expect(carveToHtml('a !`b\nc d\n')).toBe('<p>a b\nc d</p>')
   })
 
   it('CONTROL: a CLOSED run still ends its line with a break', () => {

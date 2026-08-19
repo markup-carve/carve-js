@@ -70,6 +70,12 @@ describe("a comment-only line in a line block is removed before any inline run",
     )
   })
 
+  it('preserves the empty verse line before a terminal comment after an open run', () => {
+    expect(carveToHtml('::: |\n`\n%%\n:::\n')).toBe(
+      '<div class="line-block">\n  <p><code>\n</code></p>\n</div>',
+    )
+  })
+
   it('keeps the author’s line, at the author’s column, on the first body line', () => {
     // carve-js#1170. The renderer wrote every inline comment with an
     // unconditional leading separator space; in verse a leading run is CONTENT,
