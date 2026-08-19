@@ -83,15 +83,11 @@ describe('a link definition behind a lazy list marker', () => {
 })
 
 // ---------------------------------------------------------------------------
-// THE DECLARED IMPRECISION, pinned so it cannot drift quietly (#1231).
+// THE EXTENSION-AWARE ANSWER (#1231).
 //
-// `collectLinkDefs` switches its lazy guard off whenever ANY block matcher is
-// registered, because the pre-pass cannot know which lines an extension claims.
-// Grammar PART 9R R1a permits that: an engine which cannot answer MUST fail
-// toward COLLECTING rather than delete the author's line, and this is that
-// direction. It is imprecise rather than wrong, and the rows below say exactly
-// how far the imprecision reaches, so fixing #1231 flips them loudly instead of
-// leaving a silent behavior change.
+// The definition pre-pass probes the block layer with the caller's matchers, so
+// an unrelated matcher cannot disable the lazy guard. A matcher that consumes
+// the preceding line still changes the answer: there is then no open paragraph.
 // ---------------------------------------------------------------------------
 
 describe('the lazy guard with a block matcher registered', () => {
@@ -108,23 +104,41 @@ describe('the lazy guard with a block matcher registered', () => {
     },
   }
 
-  it('collects from a lazy marker line - the fail-open direction R1a requires', () => {
-    // Without the extension this resolves nothing. With ANY matcher registered
-    // the guard is off, so the definition is collected even though the line
-    // renders as paragraph text. carve-rs and carve-php answer this precisely by
-    // probing the block parser, which R1a explicitly allows them to do.
+  it('leaves a definition on a lazy marker line as text', () => {
     expect(carveToHtml('para\n* [d]: u\n\n[go][d]\n')).toContain('[go][d]')
-    expect(carveToHtml('para\n* [d]: u\n\n[go][d]\n', { extensions: [claiming] })).toContain(
-      '<a href="u">go</a>',
-    )
+    expect(carveToHtml('para\n* [d]: u\n\n[go][d]\n', { extensions: [claiming] })).toContain('[go][d]')
   })
 
-  it('gets the extension-consumed line right, which is why the fallback is collect', () => {
-    // Here collecting is the CORRECT answer: the matcher consumes `@@@ x`, so no
-    // paragraph is open and the marker below opens a real item. An engine that
-    // guessed "suppress" instead would lose this definition.
+  it('collects where the matcher consumed the line above', () => {
+    // Collecting is the CORRECT answer here, and only the matcher knows it: it
+    // consumes `@@@ x`, so no paragraph is open and the marker below opens a
+    // real item. This is the row that makes the probe worth its cost - an
+    // enumeration cannot see an extension's syntax, and guessing "suppress"
+    // would lose the definition.
     const html = carveToHtml('@@@ x\n- [d]: u\n\n[go][d]\n', { extensions: [claiming] })
     expect(html).toContain('<a href="u">go</a>')
     expect(html).not.toContain('[d]: u')
+  })
+
+  it('does not recurse when the matcher is registered', () => {
+    let calls = 0
+    const counting: CarveExtension = {
+      name: 'counting',
+      matchBlock() {
+        calls++
+        if (calls > 100) throw new Error('recursive lazy probe')
+        return null
+      },
+    }
+    expect(carveToHtml('para\n- [d]: u\n\n[go][d]\n', { extensions: [counting] })).toContain('[go][d]')
+    expect(calls).toBeLessThan(100)
+  })
+
+  it('collects after the byte budget is exhausted', () => {
+    const inert: CarveExtension = { name: 'inert', matchBlock: () => null }
+    const lines = ['x'.repeat(5000)]
+    for (let i = 0; i < 20; i++) lines.push(`- [d${i}]: /${i}`)
+    lines.push('', '[go][d19]')
+    expect(carveToHtml(lines.join('\n'), { extensions: [inert] })).toContain('<a href="/19">go</a>')
   })
 })

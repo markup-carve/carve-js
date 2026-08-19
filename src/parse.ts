@@ -137,6 +137,11 @@ let activeMatcherCtx: MatcherContext | null = null
  */
 let activeDocument: string | null = null
 
+// A definition pre-pass probe parses a source fragment through the block layer.
+// Matchers remain active during that parse, but its own definition scan must not
+// start another probe (a matcher may recursively call ctx.parseBlocks too).
+let probingLazyParagraph = false
+
 // Content must carry at least one non-ASCII-whitespace character, mirroring
 // RE_CAPTION: `# ` / `#   ` (marker + whitespace only) and `#\t…` are NOT
 // headings, exactly like the caption rule. Leading spaces are folded into the
@@ -2597,6 +2602,115 @@ function composeContainerPrefix(
   }
 }
 
+interface LazyProbeFrame {
+  levels: string[]
+  endsInParagraph: boolean
+}
+
+function lazyProbeFrame(blocks: BlockNode[]): LazyProbeFrame {
+  const levels: string[] = []
+  let current = blocks
+  let endsInParagraph = false
+  for (;;) {
+    const last = current[current.length - 1]
+    if (!last) return { levels, endsInParagraph }
+    levels.push(`blocks:${last.type}:${current.length}`)
+    endsInParagraph = last.type === 'paragraph'
+    if (
+      last.type === 'block_quote' || last.type === 'div' ||
+      last.type === 'admonition' || last.type === 'figure_group' ||
+      last.type === 'line_block'
+    ) {
+      current = last.children
+      continue
+    }
+    if (last.type === 'list') {
+      endsInParagraph = false
+      const item = last.items[last.items.length - 1]
+      if (!item) return { levels, endsInParagraph }
+      levels.push(`items:${last.items.length}`)
+      current = item.children
+      continue
+    }
+    if (last.type === 'definition_list') {
+      endsInParagraph = false
+      const item = last.items[last.items.length - 1]
+      if (!item) return { levels, endsInParagraph }
+      levels.push(`definitions:${last.items.length}`)
+      const definition = item.definitions[item.definitions.length - 1]
+      if (!definition) return { levels, endsInParagraph }
+      current = definition
+      continue
+    }
+    return { levels, endsInParagraph }
+  }
+}
+
+function lazyProbeCost(lexer: Lexer, candidate: number): { start: number; cost: number } | null {
+  let start = candidate - 1
+  while (start >= 0 && !isBlankLine(lexer.lines[start]!)) start--
+  start++
+  if (start === candidate) return null
+  let runBytes = 0
+  for (let i = start; i < candidate; i++) runBytes += utf8ByteLength(lexer.lines[i]!) + 1
+  return { start, cost: runBytes * 2 + utf8ByteLength(lexer.lines[candidate]!) }
+}
+
+function spendLazyProbeBudget(lexer: Lexer, candidate: number, budget: number): number {
+  const priced = lazyProbeCost(lexer, candidate)
+  return priced && priced.cost <= budget ? budget - priced.cost : budget
+}
+
+/**
+ * Does the block layer fold `candidate` into a paragraph that was already open?
+ *
+ * THE PROBE IS ALLOWED TO RUN MATCHERS. Grammar PART 9R R1a makes a matcher a
+ * pure predicate precisely so a processor may invoke one speculatively, more
+ * than once at a position, and discard the result - which core parsing already
+ * does when a matcher reports a consumption the parser rejects. Without running
+ * them the pre-pass cannot know an extension consumed the line above, and would
+ * suppress a definition that is real metadata.
+ *
+ * WHAT IT HANDS THE MATCHER IS A FRAGMENT, NOT THE DOCUMENT: the run back to
+ * the last blank line, rebased to index 0. A matcher keyed on its absolute
+ * `start`, or one that reads lines above that blank, therefore sees a different
+ * question than it will during the real parse and can answer it differently.
+ * Preserving the coordinates means parsing from the top of the document per
+ * candidate, which is the quadratic shape the byte budget exists to prevent, and
+ * carve-rs and carve-php probe the same fragment - so the limitation is shared
+ * rather than an engine quirk (markup-carve/carve#1437).
+ */
+function lineFoldsIntoOpenParagraph(lexer: Lexer, candidate: number, budget: number): boolean {
+  if (probingLazyParagraph) return false
+  const priced = lazyProbeCost(lexer, candidate)
+  if (!priced || priced.cost > budget) return false
+  const before = lexer.lines.slice(priced.start, candidate).join('\n')
+  const after = `${before}\n${lexer.lines[candidate]!}`
+  const probe = (source: string): LazyProbeFrame => {
+    const { onUnclosedContainer: _ignored, ...callerOptions } = lexer.parseOptions
+    const options: ParseOptions = { ...callerOptions, positions: false }
+    const sub = new Lexer(source, options)
+    sub.atDocumentLevel = true
+    sub.suppressPositions = true
+    const previousCtx = activeMatcherCtx
+    activeMatcherCtx = activeMatchers.length ? makeMatcherCtx(sub, options) : null
+    try {
+      collectLinkDefs(sub)
+      return lazyProbeFrame(parseBlocks(sub, 0))
+    } finally {
+      activeMatcherCtx = previousCtx
+    }
+  }
+  probingLazyParagraph = true
+  try {
+    const a = probe(before)
+    const b = probe(after)
+    return b.endsInParagraph && a.levels.join('\0') === b.levels.join('\0')
+  } finally {
+    probingLazyParagraph = false
+  }
+}
+
 function collectLinkDefs(lexer: Lexer) {
   // `divWidth` is the width of the innermost `:::` that was OPEN when the fence
   // opened, or null when there was none. A fence inside a div ends at that div's
@@ -2718,14 +2832,11 @@ function collectLinkDefs(lexer: Lexer) {
   // block parser consumes whole (raised by codex review). `peekBlockAttributes`
   // is the real reader and ends the run at the first `}` or a blank line.
   let attrRun = false
-  // NO PARAGRAPH STATE AT ALL WHEN A BLOCK MATCHER IS REGISTERED. An
-  // extension's `matchBlock` may claim any line at a block boundary and this
-  // pass cannot know which, so a claimed line reads as prose, the paragraph
-  // stays open, and a real fence below it would be suppressed with its code
-  // sample collected. Falling back to the behavior before carve-js#1136 costs
-  // the fix on those documents and can never activate a definition written
-  // inside code, which is the direction that matters.
   const hasBlockMatchers = activeMatchers.some((e) => e.matchBlock)
+  // Parsing every growing blank-free prefix would be quadratic. Price the two
+  // parses in UTF-8 bytes and fail toward collecting when the allowance is
+  // exhausted (PART 9R R1a).
+  let lazyProbeBudget = utf8ByteLength(lexer.lines.join('\n')) * 4 + 4096
   // `codeCloserPossible` over the prepass's own view of a closer, built once per
   // document and only when a paragraph is actually open under a fence-shaped
   // line. A scan per opener is the quadratic shape this index exists to close.
@@ -3212,11 +3323,25 @@ function collectLinkDefs(lexer: Lexer) {
       if (!one.quote && one.matched && depth < paraDepthAbove) markerInterruptsParagraph = true
       if (!one.matched) prefixOwnedByParagraph = false
     }
+    // Only a definition behind a list marker and a fence-shaped line consume
+    // this answer. Scoping the probe to those questions avoids observable
+    // matcher calls on unrelated lines and keeps the byte allowance useful.
+    const matcherProbeCandidate =
+      hasBlockMatchers &&
+      !probingLazyParagraph &&
+      ((composed.peeled.some((one) => !one.quote) &&
+        RE_LINK_DEF.test(splitTrailingAttrBlock(line)[0])) ||
+        RE_FENCE.test(line) ||
+        RE_RAW_FENCE.test(line))
     const paragraphReallyOpen =
       paraWasOpen &&
       !markerInterruptsParagraph &&
-      !hasBlockMatchers &&
-      (!paraAsk || !prepassOpensBlock(paraLineAbove))
+      (matcherProbeCandidate
+        ? lineFoldsIntoOpenParagraph(lexer, idx, lazyProbeBudget)
+        : !paraAsk || !prepassOpensBlock(paraLineAbove))
+    if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
+      lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
+    }
     const inAttrRun = attrRun
     attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
     paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
@@ -3308,9 +3433,7 @@ function collectLinkDefs(lexer: Lexer) {
       // open under a fence-shaped line - the short circuit keeps every ordinary
       // document from paying for it.
       if (
-        !paraWasOpen ||
-        (paraAsk && prepassOpensBlock(paraLineAbove)) ||
-        hasBlockMatchers ||
+        !paragraphReallyOpen ||
         codeCloserPossibleIn(
           (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
           run,
