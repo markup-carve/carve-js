@@ -76,6 +76,14 @@ describe("a comment-only line in a line block is removed before any inline run",
     )
   })
 
+  it('does not leave a synthesized empty text node over a terminal comment', () => {
+    const paragraph = (parse('::: |\na\n%%\n:::\n').children[0] as never as {
+      children: { children: { type: string; value?: string }[] }[]
+    }).children[0]!
+
+    expect(paragraph.children.some((node) => node.type === 'text' && node.value === '')).toBe(false)
+  })
+
   it('keeps the author’s line, at the author’s column, on the first body line', () => {
     // carve-js#1170. The renderer wrote every inline comment with an
     // unconditional leading separator space; in verse a leading run is CONTENT,

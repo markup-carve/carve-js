@@ -5328,12 +5328,18 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     )
     if (terminalCommentGuard) {
       const removeGuard = (nodes: InlineNode[]): boolean => {
-        for (const node of nodes) {
+        for (let index = 0; index < nodes.length; index++) {
+          const node = nodes[index]!
           const record = node as unknown as Record<string, unknown>
           for (const key of ['value', 'content'] as const) {
             const value = record[key]
             if (typeof value === 'string' && value.endsWith(terminalCommentGuard)) {
               record[key] = value.slice(0, -terminalCommentGuard.length)
+              // The guard may be the entire final text leaf when no verbatim
+              // run claims it. Leaving that synthesized empty node behind also
+              // leaves its source span over the comment bytes, overlapping the
+              // real comment node reinserted below.
+              if (node.type === 'text' && record.value === '') nodes.splice(index, 1)
               return true
             }
           }
