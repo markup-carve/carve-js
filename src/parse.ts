@@ -2232,13 +2232,12 @@ export function stripContainerPrefixes(raw: string, afterTerm = false): string {
  * the implicit-ref key always agrees with the heading slug — no regex
  * pre-pass can mirror the inline parser perfectly.
  *
- * Deliberate limitation: this flat pre-pass is the price of
- * order-independent resolution (§6) without a second structural parse.
- * A definition jammed into a hard-wrapped paragraph with no surrounding
- * blank line (e.g. `Intro\n- [r]: /u`) is still collected here even
- * though parseParagraph keeps that line as prose. Reference definitions
- * are conventionally blank-line-separated; the jammed-in form is
- * pathological and intentionally not special-cased.
+ * A marker-shaped definition is collected only when that marker really opens
+ * or continues a container. PART 9 §10 does not let a list interrupt an open
+ * paragraph, so `Intro\n- [r]: /u` remains paragraph text and must not enter
+ * the reference table. The paragraph state below also remembers which open
+ * container owns it: a column-0 sibling marker after item prose does open a
+ * new item, while the same marker below document or quoted prose folds in.
  */
 // The list marker the definition pre-pass tracks content columns with. Applied
 // REPEATEDLY along a line, so `- - a` contributes both of its columns.
@@ -2709,6 +2708,10 @@ function collectLinkDefs(lexer: Lexer) {
   // line costs one blank test and one assignment.
   let paraState: 'no' | 'yes' | 'ask' = 'no'
   let paraLine = ''
+  // Number of composed quote/list containers that own the open paragraph.
+  // This separates a real sibling marker after item prose from a marker that
+  // merely looks like a new item while folding into document/quote prose.
+  let paraDepth = 0
   // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
   // is invisible. `prepassOpensBlock` sees only the leading brace, so the
   // continuation lines read as prose and reopened a paragraph over a run the
@@ -3187,9 +3190,31 @@ function collectLinkDefs(lexer: Lexer) {
       paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
     const paraAsk = paraState === 'ask'
     const paraLineAbove = paraLine
+    const paraDepthAbove = paraDepth
+    // Lists do not interrupt an open paragraph. A matched marker interrupts
+    // only when it replaces a container that OWNS that paragraph; a marker
+    // deeper than the owner is itself a lazy paragraph line. A newly opened
+    // quote interrupts only when every marker before it continues the open
+    // paragraph's containers: `para` / `> - [d]: u` does, but `para` /
+    // `- > [d]: u` does not because the lazy list marker owns the quote too.
+    let markerInterruptsParagraph = false
+    let prefixOwnedByParagraph = true
+    for (let depth = 0; depth < composed.peeled.length; depth++) {
+      const one = composed.peeled[depth]!
+      if (one.quote && !one.matched && prefixOwnedByParagraph) markerInterruptsParagraph = true
+      if (!one.quote && one.matched && depth < paraDepthAbove) markerInterruptsParagraph = true
+      if (!one.matched) prefixOwnedByParagraph = false
+    }
+    const paragraphReallyOpen =
+      paraWasOpen &&
+      !markerInterruptsParagraph &&
+      !hasBlockMatchers &&
+      (!paraAsk || !prepassOpensBlock(paraLineAbove))
     const inAttrRun = attrRun
     attrRun = !isBlankLine(raw) && !line.includes('}') && (attrRun || line.startsWith('{'))
     paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
+    paraDepth =
+      paraState === 'no' ? 0 : paragraphReallyOpen ? paraDepthAbove : openCols.length
     paraLine = line
     // OPENER: strip container prefixes (blockquote AND list marker) and re-base
     // to the content column, so a fence on a list item marker line (`- ```) or a
@@ -3440,7 +3465,15 @@ function collectLinkDefs(lexer: Lexer) {
     // The trailing attribute block comes off BEFORE the regex runs: the
     // pattern's `.*$` tail would otherwise swallow it (carve#604).
     const [defLine, defAttrText] = splitTrailingAttrBlock(line)
-    const m = topLevelIndentedDef || notAtContentColumn ? null : RE_LINK_DEF.exec(defLine)
+    // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0). Once the block parser would
+    // fold this marker into the paragraph above, its definition-shaped content
+    // is visible text and cannot also define a reference.
+    const m =
+      topLevelIndentedDef ||
+      notAtContentColumn ||
+      (paragraphReallyOpen && composed.peeled.some((one) => !one.quote))
+        ? null
+        : RE_LINK_DEF.exec(defLine)
     if (m) {
       const def: LinkDef = { href: m[2]! }
       const title = m[3] ?? m[4]
