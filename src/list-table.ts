@@ -142,6 +142,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   for (const cells of rows) {
     if (cells.length === 0) return null
     if (cells.some((entry) => structuralMarker(entry.cell.attrs, 'header') === null)) return null
+    if (cells.some((entry) => !validCellAlignment(entry.cell.attrs))) return null
   }
 
   // DoS guard: span resolution rescans prior rows, so a pathologically large
@@ -234,7 +235,7 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
       if (isHeaderCell) attrHtml += ` scope="${isHeaderRow ? 'col' : 'row'}"`
       if (entry.rowspan > 1) attrHtml += ` rowspan="${entry.rowspan}"`
       if (entry.colspan > 1) attrHtml += ` colspan="${entry.colspan}"`
-      attrHtml += columnStyle(columns[col])
+      attrHtml += cellStyle(entry.cell.attrs, columns[col])
       // Carry the cell's own list-item attributes (e.g. `{.x}`) onto the
       // <td>/<th> so authored cell styling is not dropped. The structural span
       // attributes above always win on conflict.
@@ -584,6 +585,23 @@ function columnStyle(column: ListTableColumn | undefined): string {
   return ` style="${style}"`
 }
 
+/** Resolve a cell's semantic alignment over its column defaults. */
+function validCellAlignment(attrs: Attrs | undefined): boolean {
+  const align = attrs?.keyValues?.align
+  const valign = attrs?.keyValues?.valign
+  return (align === undefined || align === 'left' || align === 'right' || align === 'center') &&
+    (valign === undefined || valign === 'top' || valign === 'middle' || valign === 'bottom')
+}
+
+function cellStyle(attrs: Attrs | undefined, column: ListTableColumn | undefined): string {
+  const align = attrs?.keyValues?.align as ListTableColumn['align'] | undefined
+  const valign = attrs?.keyValues?.valign as ListTableColumn['valign'] | undefined
+  const resolved: ListTableColumn = {}
+  if (align ?? column?.align) resolved.align = (align ?? column?.align)!
+  if (valign ?? column?.valign) resolved.valign = (valign ?? column?.valign)!
+  return columnStyle(resolved)
+}
+
 /**
  * Build the `<table>` tag attributes.
  *
@@ -625,21 +643,21 @@ function stripStructuralCellAttrs(attrs: Attrs): Attrs {
   if (!attrs.keyValues) return attrs
   const has = Object.keys(attrs.keyValues).some((k) => {
     const l = k.toLowerCase()
-    return l === 'rowspan' || l === 'colspan' || l === 'header' || l === 'header-row'
+    return l === 'rowspan' || l === 'colspan' || l === 'header' || l === 'header-row' || l === 'align' || l === 'valign'
   })
   if (!has) return attrs
 
   const keyValues = Object.fromEntries(
     Object.entries(attrs.keyValues).filter(([k]) => {
       const l = k.toLowerCase()
-      return l !== 'rowspan' && l !== 'colspan' && l !== 'header' && l !== 'header-row'
+      return l !== 'rowspan' && l !== 'colspan' && l !== 'header' && l !== 'header-row' && l !== 'align' && l !== 'valign'
     }),
   )
   const out: Attrs = { ...attrs, keyValues }
   if (attrs.order) {
     out.order = attrs.order.filter((s) => {
       const l = s.toLowerCase()
-      return l !== 'rowspan' && l !== 'colspan' && l !== 'header' && l !== 'header-row'
+      return l !== 'rowspan' && l !== 'colspan' && l !== 'header' && l !== 'header-row' && l !== 'align' && l !== 'valign'
     })
   }
 
