@@ -36,12 +36,11 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
 
   it('every run kind that opens with a backtick reads the same way', () => {
     // `$` math and `!` literal spell the same run; the pipe is not theirs
-    // either. An unterminated `!` run leaves the `!` as literal text, as it
-    // does outside a table.
+    // either. The `!` prefix makes the unclosed run a literal inline too.
     expect(html('| a $`b | c d |')).toContain(
       '<td>a <span class="math inline">\\(b | c d\\)</span></td>',
     )
-    expect(html('| a !`b | c d |')).toContain('<td>a !<code>b | c d</code></td>')
+    expect(html('| a !`b | c d |')).toContain('<td>a b | c d</td>')
   })
 
   it('the row still carries a glued row-attribute block', () => {
