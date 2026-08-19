@@ -1065,6 +1065,37 @@ function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): stri
 }
 
 function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): string {
+  // A definition collected from the ONLY line of an item leaves no child
+  // behind.  Do not spell that empty item with `+`: at nested marker depth the
+  // marker attaches the outer item's following block to the empty INNER item.
+  // The definition's retained source position is the only record of what
+  // occupied the item, so put it back there just as definitionInGap puts one
+  // back between two surviving children.
+  if (ctx.listDepth > 1 && item.children.length === 0) {
+    const from = item.pos?.startLine
+    const to = item.pos?.endLine
+    if (from !== undefined && to !== undefined) {
+      for (const [line, definition] of definitionsByLine) {
+        if (
+          line >= from &&
+          line <= to &&
+          !definitionsWrittenInPlace.has(definition as unknown as object)
+        ) {
+          const written = renderBlock(definition, ctx)
+          definitionsWrittenInPlace.add(definition as unknown as object)
+          return written
+        }
+      }
+      for (const [line, label] of footnoteDefsByLine) {
+        if (line < from || line > to || footnotesWrittenInPlace.has(label)) continue
+        const blocks = ownValue(documentFootnoteDefs, label)
+        if (blocks === undefined) continue
+        const written = renderOneFootnoteDef(label, blocks, ctx)
+        footnotesWrittenInPlace.add(label)
+        return written
+      }
+    }
+  }
   // A loose item separates its blocks with a blank line; a tight item joins
   // them with a single newline so the re-parse stays tight. Using the generic
   // blank-line join here would loosen a tight item that has more than one child
