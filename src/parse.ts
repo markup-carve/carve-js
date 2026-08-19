@@ -10721,6 +10721,43 @@ function scanInlineInner(
 
   while (i < text.length) {
     const c = text[i]!
+
+    // Core inline constructs all begin with punctuation. When no extension
+    // matcher can claim an arbitrary offset, append ordinary ASCII prose as a
+    // run instead of asking smart typography, emphasis and every other inline
+    // recognizer about each letter and space individually.
+    const code = text.charCodeAt(i)
+    if (
+      activeMatchers.length === 0 &&
+      ((code >= 48 && code <= 57) ||
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        code === 32 ||
+        code === 9)
+    ) {
+      const start = i
+      do {
+        i++
+        if (i >= text.length) break
+        const next = text.charCodeAt(i)
+        if (
+          !(
+            (next >= 48 && next <= 57) ||
+            (next >= 65 && next <= 90) ||
+            (next >= 97 && next <= 122) ||
+            next === 32 ||
+            next === 9
+          )
+        ) {
+          break
+        }
+      } while (true)
+      const value = text.slice(start, i)
+      if (!buf) bufStart = start
+      buf += value
+      bufLast = value[value.length - 1]!
+      continue
+    }
     const rest = text.slice(i)
 
     // Hard line break: a backslash at end of line (before a newline).
