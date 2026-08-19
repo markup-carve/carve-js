@@ -65,7 +65,12 @@ export function collectDocumentIds(doc: Document): DocumentIdRegistry {
     if (value === null || typeof value !== 'object') continue
     const attrs = (value as { attrs?: { id?: unknown } }).attrs
     if (attrs && typeof attrs.id === 'string') registry.reserve(attrs.id)
-    for (const v of Object.values(value)) {
+    // `attrs` was consumed above and `pos` contains only numeric source
+    // metadata. Avoid enumerating/pushing either: together they account for a
+    // large fraction of the short-lived objects on an ordinary resolved AST.
+    for (const key in value as Record<string, unknown>) {
+      if (key === 'attrs' || key === 'pos') continue
+      const v = (value as Record<string, unknown>)[key]
       if (v !== null && typeof v === 'object') stack.push(v)
     }
   }
