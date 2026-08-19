@@ -108,9 +108,11 @@ describe('a continuation marker attaches one block', () => {
   })
 
   it('no extension matcher runs for a measurement', () => {
-    // `matchBlock` is a public callback and nothing requires it to be pure. A
-    // probe that called it would number a matcher's first authored block 2, for
-    // a parse whose result is thrown away.
+    // R1a now REQUIRES a matcher to be pure, so a probe calling it would be
+    // permitted (markup-carve/carve#1432). This probe still does not need to:
+    // the count says so, and it says it deliberately rather than because calling
+    // would be illegal. A matcher numbering its own authored blocks would see 2
+    // rather than 1 if that ever changes, which is the point of asserting it.
     let calls = 0
     const counting: CarveExtension = {
       name: 'counting',
