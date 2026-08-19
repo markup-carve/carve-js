@@ -280,11 +280,11 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
     lines.push(`${pad}  <tbody>\n${body.join('\n')}\n${pad}  </tbody>`)
   }
   if (footGrid.length > 0) {
-    let tfoot = ''
+    const foot: string[] = []
     footGrid.forEach((gridRow, offset) => {
-      tfoot += renderRow(gridRow, footerStart + offset)
+      foot.push(`${pad}    ${renderRow(gridRow, footerStart + offset)}`)
     })
-    lines.push(`${pad}  <tfoot>${tfoot}</tfoot>`)
+    lines.push(`${pad}  <tfoot>\n${foot.join('\n')}\n${pad}  </tfoot>`)
   }
 
   const attrs = renderTableAttributes(node, ctx)
