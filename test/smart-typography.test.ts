@@ -8,10 +8,33 @@ describe('smart typography (grammar.ebnf §Smart Typography, PART 9 §8)', () =>
     expect(h('a -- b --- c ...')).toBe('<p>a – b — c …</p>')
   })
 
-  it('converts arrows and comparisons', () => {
-    expect(h('-> <- <-> => != <= >= +-')).toBe(
-      '<p>→ ← ↔ ⇒ ≠ ≤ ≥ ±</p>',
-    )
+  it('converts the canonical doubled-run arrows, in both families', () => {
+    expect(h('<-- --> <--> <== ==> <=>')).toBe('<p>← → ↔ ⇐ ⇒ ⇔</p>')
+  })
+
+  it('still converts the deprecated single-hyphen forms', () => {
+    // Deprecated by markup-carve/carve#1442, not removed: a document written
+    // before the rule goes on working.
+    expect(h('-> <- <->')).toBe('<p>→ ← ↔</p>')
+  })
+
+  it('leaves `=>` literal, because it is code rather than an arrow', () => {
+    // The one form removed rather than deprecated. `key => value`,
+    // `x => x + 1` and `Some(x) => x` are ordinary prose about code, and each
+    // silently became ⇒ in the rendered output only.
+    expect(h('key => value')).toBe('<p>key =&gt; value</p>')
+    expect(h('x => x + 1')).toBe('<p>x =&gt; x + 1</p>')
+  })
+
+  it('keeps the comparisons, which is what forces `<==` to exist', () => {
+    expect(h('!= <= >= +-')).toBe('<p>≠ ≤ ≥ ±</p>')
+  })
+
+  it('matches longest-first, so a doubled run beats its shorter neighbour', () => {
+    // `<-->` over `<->` and `<--`; `-->` over the hyphen run; `<==` over `<=`.
+    expect(h('<-->')).toBe('<p>↔</p>')
+    expect(h('-->')).toBe('<p>→</p>')
+    expect(h('<==')).toBe('<p>⇐</p>')
   })
 
   it('converts symbols', () => {

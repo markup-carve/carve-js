@@ -356,7 +356,11 @@ function transliterate(s: string): string {
  * recovered ASCII punctuation then collapses to hyphens like any other.
  */
 const SMART_TO_ASCII: Record<string, string> = {
-  '↔': '<->', '™': '(tm)', '…': '...', '→': '->', '←': '<-', '⇒': '=>',
+  // The canonical spellings, not the deprecated ones: `=>` no longer parses
+  // as an arrow at all, so recovering it would produce ASCII that does not
+  // round-trip (markup-carve/carve#1442).
+  '↔': '<-->', '™': '(tm)', '…': '...', '→': '-->', '←': '<--',
+  '⇔': '<=>', '⇒': '==>', '⇐': '<==',
   '≤': '<=', '≥': '>=', '≠': '!=', '±': '+-', '©': '(c)', '®': '(r)',
   '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"',
 }
