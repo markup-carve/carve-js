@@ -22,7 +22,10 @@ describe('the Markdown delimiter row carries the column alignment', () => {
   })
 
   it('reads the doubled marker form', () => {
-    expect(delimiterRow('|=<< Note |= Plain |\n| a | b |\n')).toBe('| --- | --- |')
+    // The run is written with its terminating space so the row is still a
+    // header row; the doubled marker inside it is content, and contributes no
+    // alignment (spec §5 T11 made the glued spelling a data cell entirely).
+    expect(delimiterRow('|= << Note |= Plain |\n| a | b |\n')).toBe('| --- | --- |')
   })
 
   it('does not let a per-cell override speak for the column', () => {

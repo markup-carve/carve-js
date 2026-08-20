@@ -1118,7 +1118,9 @@ function collectSilentFailures(
   // 6. A cell attribute block written BEFORE an alignment marker, which is the
   //    order §5 T10 retired. `|{#x}< content |` used to be read as attributes
   //    plus a left-alignment marker; the marker run now comes first, so the `<`
-  //    is literal content and the cell is not aligned.
+  //    is literal content. Under §5 T11 the block is part of that run and ends
+  //    at a space, so this spelling has no run at all and the braces reach the
+  //    output too - which is what the message now says.
   //
   //    REPORTED, NOT REWRITTEN. `fmt` must not turn `|{#x}< content |` into
   //    `|<{#x} content |` in its default path: that ADDS `text-align: left` and
@@ -1152,16 +1154,24 @@ function collectSilentFailures(
     if (!isTableRow(row)) continue
     const { body } = rowAttrsFromLine(row)
     for (const { text, start } of splitTableRowSpans(body)) {
-      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?{\s])/.exec(text)
+      // The run's terminator is a space, and the attribute block is INSIDE the
+      // run rather than after it (§5 T11) - so `|>{#x}value |` is as unpadded as
+      // `|>value |` is, and reporting only the second left the first silent.
+      const unpadded = /^(?:=)?([<>~^v?]{1,2})(?![<>~^v?\s])/.exec(text)
       if (unpadded) {
         const at = text.startsWith('=') ? 1 : 0
-        push(
-          i + 1,
-          prefixWidth + indent + start + at + 1,
-          unpadded[1]!.length,
-          'table-alignment-run-padding',
-          `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. Add a space after the run to make it alignment.`,
-        )
+        const marksEnd = at + unpadded[1]!.length
+        const block = text[marksEnd] === '{' ? readCellAttributeBlock(text, marksEnd) : undefined
+        const runEnd = marksEnd + (block?.length ?? 0)
+        if (text[runEnd] !== ' ') {
+          push(
+            i + 1,
+            prefixWidth + indent + start + at + 1,
+            unpadded[1]!.length,
+            'table-alignment-run-padding',
+            `The table alignment run "${unpadded[1]}" has no terminating space, so it is literal cell content. A cell's marker run - the kind marker, the alignment run and the attribute block - ends at a space (§5 T11). Add a space after the run${block ? ' and its attribute block' : ''} to make it alignment.`,
+          )
+        }
       }
       const block = readCellAttributeBlock(text)
       if (!block) continue
@@ -1174,9 +1184,11 @@ function collectSilentFailures(
         block.length + 1,
         'table-cell-attribute-before-marker',
         `"${spelling}" writes a cell's attribute block before its alignment marker, ` +
-          `which Carve no longer reads as one: the "${marker}" is literal content and the ` +
-          `cell is not aligned. Write "${marker}${text.slice(0, block.length)}" to align it, ` +
-          `or put a space after the block to keep the "${marker}" as content deliberately.`,
+          `which Carve no longer reads as one. The block is part of the cell's marker run ` +
+          `and the run ends at a space, so with the "${marker}" glued to it there is no run: ` +
+          `the braces are content and the cell is neither attributed nor aligned. Write ` +
+          `"${marker}${text.slice(0, block.length)} " to align it, or "${text.slice(0, block.length)} ` +
+          `${marker}" to keep the "${marker}" as content deliberately.`,
       )
     }
   }

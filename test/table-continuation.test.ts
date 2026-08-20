@@ -64,7 +64,7 @@ describe('table `+` multi-line cell continuation', () => {
   })
 
   it('puts a header rowspan continuation row in tbody', () => {
-    expect(h('|=A|\n|^|')).toBe(
+    expect(h('|= A |\n| ^ |')).toBe(
       [
         '<table>',
         '  <thead><tr><th scope="col" rowspan="2">A</th></tr></thead>',

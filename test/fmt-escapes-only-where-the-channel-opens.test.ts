@@ -16,14 +16,19 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  */
 describe('fmt escapes only where the channel actually opens', () => {
   it('pads an attributed cell whose content opens with an alignment sigil', () => {
+    // Spec §5 T11: glued, the block is not a block - the cell is all content,
+    // and the writer pads the content side so it stays that way.
     const src = '|{#x}< content |\n'
-    expect(carveToCarve(src)).toBe('|{#x} < content |\n')
+    expect(carveToCarve(src)).toBe('| {#x}< content |\n')
+    expect(carveToCarve('|{#x} < content |\n')).toBe('|{#x} < content |\n')
     expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
   })
 
   it('the same holds for the right and center sigils', () => {
-    expect(carveToCarve('|{#x}>b|\n')).toBe('|{#x} >b |\n')
-    expect(carveToCarve('|={#x}~x~|\n')).toBe('|={#x} ~x~ |\n')
+    expect(carveToCarve('|{#x}>b|\n')).toBe('| {#x}>b |\n')
+    expect(carveToCarve('|{#x} >b |\n')).toBe('|{#x} >b |\n')
+    expect(carveToCarve('|={#x}~x~|\n')).toBe('| ={#x}~x~ |\n')
+    expect(carveToCarve('|={#x} ~x~ |\n')).toBe('|={#x} ~x~ |\n')
     expect(carveToHtml(carveToCarve('|={#x}~x~|\n'))).toBe(carveToHtml('|={#x}~x~|\n'))
   })
 

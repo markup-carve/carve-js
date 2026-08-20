@@ -130,7 +130,10 @@ describe('an inline attribute block interior is space-only', () => {
       autolink: (w) => '<https://e.com/>{.a' + w + '.b}\n',
       'footnote reference': (w) => 'x[^f]{.a' + w + '.b}\n\n[^f]: n\n',
       'list item attributes': (w) => '-{.a' + w + '.b} item\n',
-      'table cell attributes': (w) => '|{.a' + w + '.b}c | d |\n|---|---|\n| e | f |\n',
+      // The block takes the space that ends the cell's marker run (spec §5 T11),
+      // so the surface under test is the block's own interior, not the run's
+      // terminator.
+      'table cell attributes': (w) => '|{.a' + w + '.b} c | d |\n|---|---|\n| e | f |\n',
       'table row attributes': (w) => '| a |\n|---|\n| b |{.a' + w + '.b}\n',
       'link definition attributes': (w) => '[t][r]\n\n[r]: /u {.a' + w + '.b}\n',
       'image definition attributes': (w) => '![a][r]\n\n[r]: /i {.a' + w + '.b}\n',

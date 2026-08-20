@@ -9184,8 +9184,26 @@ function parseCellMarkers(src: string): {
   // has committed the cell to header, everything after it is unambiguous
   // (spec §5 T10, corpus 319).
   const block = readCellAttributeBlock(src, i)
-  const attrs = block?.attrs
+  let attrs = block?.attrs
   if (block) i += block.length
+
+  // Spec §5 T11: THE MARKER RUN ENDS AT A SPACE. The kind marker, the alignment
+  // run and the attribute block are ONE run, and a cell carrying any of them
+  // must follow it with one literal space. Without that space there is no run
+  // and every character of it is content, so `|=hot= |` is the highlight its
+  // author wrote rather than a header cell holding `hot=`. The closing pipe is
+  // not a terminator (`|= |` is the empty header cell) and neither is a tab,
+  // which PART 7 gives no padding role inline. The run is ATOMIC: a rejected
+  // alignment run takes the `=` with it, which is why the reset below clears
+  // `header` as well.
+  if (i > 0 && src[i] !== ' ') {
+    i = 0
+    header = false
+    align = undefined
+    valign = undefined
+    inheritedHorizontal = false
+    attrs = undefined
+  }
 
   if (i > 0) {
     // A tight prefix was consumed; the rest is content.

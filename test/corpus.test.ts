@@ -444,6 +444,7 @@ const IMPLEMENTED = new Set([
   // not match; the other two (the retired order, and the ambiguous `|{#x}=R|`)
   // matched then and still do. All six match now.
   'cell-attributes-bind-after-the-kind-and-alignment-markers',
+  'a-table-cell-s-marker-run-ends-at-a-space',
   // Category 320 arrives with the same submodule bump and needed no code: both
   // documents were rendered against this engine's HTML and `.fmt` outputs
   // before anything here changed, and both already matched.
