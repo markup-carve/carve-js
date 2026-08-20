@@ -1281,6 +1281,22 @@ class Lexer {
    * `> ` and `>  ` are all valid.
    */
   linePrefixWidths?: number[]
+  /**
+   * The DOCUMENT's own lines, carried unchanged into every sub-lexer.
+   *
+   * A container's body reaches a sub-lexer DEDENTED, so a line's document
+   * column is not recoverable from the view: `* * +` / `x` and `* * +` / `  x`
+   * both arrive as `["* +", "x"]` and are byte-identical here. §17 L3 asks for
+   * the document column - a continuation marker attaches a block that begins at
+   * column 0 and nothing else (markup-carve/carve#1436) - so the question has to
+   * be asked of the original line, which `lineNumber` still names.
+   *
+   * NOT `linePrefixWidths`, which would otherwise answer this: that map is
+   * position bookkeeping and is allowed to DECLINE for reassembled content, so
+   * parsing through it would make the tree depend on whether positions could be
+   * anchored.
+   */
+  rootLines?: readonly string[]
   suppressPositions = false
   pos = 0
   // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
@@ -1575,6 +1591,7 @@ function nestedSubLexer(
   sub.footnoteDefs = parent.footnoteDefs
   sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
+  sub.rootLines = parent.rootLines ?? parent.lines
   sub.depth = parent.depth + 1
   sub.inFigureGroup = parent.inFigureGroup
   attachDocumentOffsets(sub, parent, startLineIndex)
@@ -7423,6 +7440,36 @@ function attachedBlockExtent(
   return Math.min(Math.max(probe.pos, 1), limit)
 }
 
+/**
+ * §17 L3: does the marker's candidate block begin at DOCUMENT column 0?
+ *
+ * "Flush-left" is the reach, not a description of the usual case: a line at any
+ * other column is not attached at all, and falls through to the ordinary column
+ * rules that give it to whichever container its own column names
+ * (markup-carve/carve#1436).
+ *
+ * Asked of the ORIGINAL line, because the view is dedented - see `rootLines`.
+ * A quote prefix is stripped first: inside a quote the marker's column 0 is the
+ * quote's content column, which is what the executable spec measures there too.
+ *
+ * Returns TRUE when the answer cannot be recovered, so a synthetic or
+ * reassembled line keeps the behavior it had rather than silently losing its
+ * attachment.
+ */
+function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
+  const root = lexer.rootLines
+  if (!root) return true
+  const line = root[lexer.lineNumber(lexer.pos) - 1]
+  if (line === undefined) return true
+  let rest = line
+  for (;;) {
+    const m = /^[ \t]*>[ \t]?/.exec(rest)
+    if (!m) break
+    rest = rest.slice(m[0].length)
+  }
+  return leadingWhitespace(rest) === 0
+}
+
 function collectAttachedBlock(
   lexer: Lexer,
   isBoundary: (line: string) => boolean,
@@ -7694,6 +7741,7 @@ function markerLineBottomBlock(content: string): string {
 function markerLineState(content: string): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
+  bottomIsContinuationMarker: boolean
   quote: BlockQuoteLazyState | null
 } {
   const bottom = markerLineBottomBlock(content)
@@ -7702,6 +7750,11 @@ function markerLineState(content: string): {
   return {
     leavesParagraphOpen: bottomBlockLeavesParagraphOpen(bottom),
     endsOnTableRow: quote === null && isTableRow(bottom),
+    // A bare `+` at the bottom of the marker line is the CONTINUATION MARKER
+    // (§17 L3), and what it names is a document-column-0 block. It is not
+    // prose, so it opens no paragraph an INDENTED line could fold into - see
+    // the fold branch that reads this (markup-carve/carve#1436).
+    bottomIsContinuationMarker: quote === null && isContinuationMarker(bottom),
     quote,
   }
 }
@@ -8252,6 +8305,13 @@ function parseList(lexer: Lexer): List {
     // (`- + text` keeps `+ text` as literal content). Lets an item start
     // directly with a table, code block, quote or div at column 0.
     if (isContinuationMarker(content)) {
+      // AND ONLY A FLUSH-LEFT ONE (§17 L3, markup-carve/carve#1436). A candidate
+      // at any other column is not attached: it falls through to the ordinary
+      // column rules, exactly as if this marker line had been a comment. Under a
+      // NESTED marker that is the whole difference - `* * +` used to swallow a
+      // line written at the OUTER item's content column, so outer content could
+      // not be written after a nested marker at all.
+      const attachesHere = attachesAtDocumentColumnZero(lexer)
       // The attached block is a block: a boundary line inside a fence it opened
       // is that fence's body, not a boundary (see the indented loop's note on
       // carve#975 and corpus category 279). Without this the opener came out an
@@ -8261,7 +8321,10 @@ function parseList(lexer: Lexer): List {
         lines: attached,
         lineNumbers: attachedLineNumbers,
         startLineIndex: attachedStartLineIndex,
-      } = collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
+      } =
+        attachesHere ?
+          collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
+        : { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
       // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
       // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
       // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
@@ -8276,6 +8339,7 @@ function parseList(lexer: Lexer): List {
       while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
         const plusLineIndex = lexer.pos
         lexer.consume()
+        if (!attachesAtDocumentColumnZero(lexer)) break
         const more = collectAttachedBlock(lexer, isItemAttachBoundary, (a) =>
           sliceColumns(a, baseIndent),
         )
@@ -8393,6 +8457,11 @@ function parseList(lexer: Lexer): List {
         // block parse on its own but must NOT loosen the list (Bug B). A real
         // internal blank before a plain paragraph still loosens; a `+` one
         // never does, matching carve-php.
+        // ONLY A FLUSH-LEFT BLOCK (§17 L3, markup-carve/carve#1436) - see the
+        // first-block form above. Nothing is attached from another column, and
+        // the marker line itself is still consumed, so the candidate falls
+        // through to the ordinary rules on the next turn of this loop.
+        if (!attachesAtDocumentColumnZero(lexer)) continue
         plusSeparators.add(nested.length)
         nested.push('')
         nestedLineNumbers.push(plusLineNumber)
@@ -8532,6 +8601,15 @@ function parseList(lexer: Lexer): List {
         // and nowhere else, so a column-0 line below it reaches no container
         // (§24 C3) and ends the item, the same answer `- %% c` gives one
         // spelling over (PART 1 S4, markup-carve/carve#1280).
+        // A BARE CONTINUATION MARKER FOLDS ONLY COLUMN 0 (§17 L3,
+        // markup-carve/carve#1436). While the item has collected nothing, its
+        // lead is an empty first-block item waiting for a flush-left block: a
+        // column-0 line is the block the marker names and belongs here, and an
+        // INDENTED line is not attached at all - it falls through to the
+        // ordinary column rules. `* * +` / ` x` folded a column-1 line into the
+        // outer item, which is below that item's content column and reaches no
+        // container.
+        !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
         (((lazyState.lazyFoldable ||
           (lazyState.inComment && lazyState.lazyFoldableBeforeComment) ||
           // AN INVISIBLE BLOCK AT THE COLUMN ENDED THE PARAGRAPH, NOT THE ITEM
