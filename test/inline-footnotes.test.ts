@@ -11,7 +11,7 @@ describe('inline footnotes ^[content]', () => {
     )
     expect(out).toContain('<section role="doc-endnotes">')
     expect(out).toContain(
-      '<li id="fn1">\n      <p>a quick aside<a href="#fnref1" role="doc-backlink">↩</a></p>\n    </li>',
+      '<li id="fn1">\n      <p>a quick aside<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>',
     )
   })
 

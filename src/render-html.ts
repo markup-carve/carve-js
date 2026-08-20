@@ -88,6 +88,21 @@ export interface RenderOptions {
   tagUrl?: string
   /** Symbol shortcode -> trusted raw output map. `:name:` with no entry renders literally. */
   symbols?: Record<string, string>
+  /**
+   * The strings the ENGINE writes rather than the author (PART 9 §16a). A key
+   * left out keeps its English default; `LABEL_DEFAULTS` is the whole set.
+   *
+   * Not the `symbols` map's twin: a symbol is emitted RAW because processor
+   * config is trusted, a label is TEXT and is escaped where it lands - a host
+   * feeding these from a translation catalog is not handing us an injection
+   * vector, and a label is never markup, so nothing is lost.
+   *
+   * Almost nothing is in here, and that is the point: a caption's label is the
+   * author's word (`^ Figure #: …`), and extension-written strings stay options
+   * on the extension that writes them (`headingPermalinks({ ariaLabel })`,
+   * `tableOfContents({ summary })`).
+   */
+  labels?: Partial<Record<LabelKey, string>>
   /** Registered extensions (renderers consulted; transforms run by carveToHtml). */
   extensions?: CarveExtension[]
   /**
@@ -720,6 +735,17 @@ function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOpt
   return outsideLink(() => renderFootnoteSectionInner(ast, st, opts))
 }
 
+/** The keys of the `labels` render option (PART 9 §16a). */
+export type LabelKey = 'footnoteBacklink'
+
+/** The English defaults every key falls back to. */
+export const LABEL_DEFAULTS: Record<LabelKey, string> = {
+  footnoteBacklink: 'Back to reference',
+}
+
+const label = (opts: RenderOptions, key: LabelKey): string =>
+  opts.labels?.[key] ?? LABEL_DEFAULTS[key]
+
 function renderFootnoteSectionInner(
   ast: Document,
   st: FootnoteState,
@@ -736,11 +762,17 @@ function renderFootnoteSectionInner(
     // one numbered backlink per reference (`↩<sup>k</sup>`, space-separated) so
     // each return arrow is distinct (matches carve-php + pandoc).
     const multiRef = entry.backrefs.length > 1
+    // The accessible name is the label plus WHAT THE LINK VISIBLY SAYS (PART 9
+    // §16, carve#1455): the label alone for a lone `↩`, the label plus k for
+    // the k-th of several (`↩<sup>k</sup>`). Matching the visible text is WCAG
+    // 2.5.3, and it is why the number is the REFERENCE ORDINAL rather than the
+    // note's - the note number is nowhere in this link's text.
+    const backlinkLabel = label(opts, 'footnoteBacklink')
     const blink = entry.backrefs
-      .map(
-        (rid, k) =>
-          `<a href="#${rid}" role="doc-backlink">↩${multiRef ? `<sup>${k + 1}</sup>` : ''}</a>`,
-      )
+      .map((rid, k) => {
+        const name = escapeAttr(multiRef ? `${backlinkLabel} ${k + 1}` : backlinkLabel)
+        return `<a href="#${rid}" role="doc-backlink" aria-label="${name}">↩${multiRef ? `<sup>${k + 1}</sup>` : ''}</a>`
+      })
       .join(multiRef ? ' ' : '')
     const last = body.length - 1
     if (last >= 0 && /<\/p>\s*$/.test(body[last]!)) {

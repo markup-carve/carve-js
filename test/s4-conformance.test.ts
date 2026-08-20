@@ -64,8 +64,8 @@ describe('S4 cross-impl conformance', () => {
           '  <hr>\n' +
           '  <ol>\n' +
           '    <li id="fn1">\n' +
-          '      <p>x<a href="#fnref1" role="doc-backlink">↩<sup>1</sup></a> ' +
-          '<a href="#fnref1-2" role="doc-backlink">↩<sup>2</sup></a></p>\n' +
+          '      <p>x<a href="#fnref1" role="doc-backlink" aria-label="Back to reference 1">↩<sup>1</sup></a> ' +
+          '<a href="#fnref1-2" role="doc-backlink" aria-label="Back to reference 2">↩<sup>2</sup></a></p>\n' +
           '    </li>\n' +
           '  </ol>\n' +
           '</section>',
