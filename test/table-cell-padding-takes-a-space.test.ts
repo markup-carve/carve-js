@@ -95,13 +95,16 @@ describe('each of the five productions loses the tab as padding', () => {
     expect(cells(html)).toEqual(['a', 'b', '\t—', '\t—', '1', '2'])
   })
 
-  it('a header cell keeps the tab and stays a header cell', () => {
-    // `=` is the tight marker, so the header survives; only the padding after
-    // it stops being padding.
+  it('a header cell keeps the tab and loses the marker with it', () => {
+    // A tab is not padding, and under spec §5 T11 it is not the space that ends
+    // the cell's marker run either - so the `=` has nothing to terminate it and
+    // is content along with the tab.
     const html = carveToHtml('|=\th |=\ti |\n| 1 | 2 |\n')
 
-    expect(html).toContain('<thead')
-    expect(cells(html)).toEqual(['\th', '\ti', '1', '2'])
+    expect(html).not.toContain('<thead')
+    expect(cells(html)).toEqual(['=\th', '=\ti', '1', '2'])
+    // The spaced spelling is the header cell, and keeps the tab as content.
+    expect(carveToHtml('|= \th |\n')).toContain('<th')
   })
 
   it('a rowspan marker beside a tab is content, not a span', () => {
@@ -129,10 +132,15 @@ describe('each of the five productions loses the tab as padding', () => {
 
   it('a cell attribute block pads with a space after the closing brace', () => {
     // The attribute-block path trims the remainder separately from the two
-    // marker paths, so it is a producer of its own.
+    // marker paths, so it is a producer of its own. A tab there is not padding
+    // AND not the run's terminator (§5 T11), so the braces are content too.
     const html = carveToHtml('|{.x}\ta | b |\n')
 
-    expect(html).toContain('class="x"')
-    expect(cells(html)).toEqual(['\ta', 'b'])
+    expect(html).not.toContain('class="x"')
+    expect(cells(html)).toEqual(['{.x}\ta', 'b'])
+    // With the space, the block is a block and the tab stays in the content.
+    const spaced = carveToHtml('|{.x} \ta | b |\n')
+    expect(spaced).toContain('class="x"')
+    expect(cells(spaced)).toEqual(['\ta', 'b'])
   })
 })

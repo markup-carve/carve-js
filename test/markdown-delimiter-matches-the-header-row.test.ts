@@ -29,7 +29,7 @@ describe('the Markdown delimiter row is sized from the header row', () => {
   })
 
   it('reaches the span-free shape too', () => {
-    const out = lines('|=a|\n| x | y |\n')
+    const out = lines('|= a |\n| x | y |\n')
     expect(out[0]).toBe('| a |')
     expect(out[1]).toBe('| --- |')
     expect(out[2]).toBe('| x | y |')
@@ -52,7 +52,7 @@ describe('the Markdown delimiter row is sized from the header row', () => {
   it('always matches the delimiter to the header it promotes', () => {
     for (const src of [
       '| h |\n|---|\n| |x |\n',
-      '|=a|\n| x | y |\n',
+      '|= a |\n| x | y |\n',
       '| |x |\n|---|\n| y |\n',
       '|= A |= B |\n| 1 | 2 |\n',
       '|=> h |\n| x | y | z |\n',

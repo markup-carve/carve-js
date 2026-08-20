@@ -63,17 +63,26 @@ describe('a cell attribute block binds after the markers', () => {
 describe('the two shapes the retired order owned', () => {
   // These are the measurement behind "this rule adds a position rather than
   // retiring one anybody implemented": both already read this way before the
-  // change, in this engine and in the spec's own oracle.
+  // change, in this engine and in the spec's own oracle. Spec §5 T11 then made
+  // the attribute block part of the cell's marker run, so the GLUED spellings
+  // below carry no block either - written with the run's terminating space they
+  // still read the way T10 fixed.
   it('reads a marker after the block as CONTENT, not alignment', () => {
-    expect(html('|{#x}< content |')).toBe(
+    expect(html('|{#x} < content |')).toBe(
       '<table> <tbody> <tr><td id="x">&lt; content</td></tr> </tbody> </table>',
     )
   })
 
   it('reads the ambiguous shape as a data cell', () => {
-    expect(html('|{#x}=R|')).toBe(
+    expect(html('|{#x} =R |')).toBe(
       '<table> <tbody> <tr><td id="x">=R</td></tr> </tbody> </table>',
     )
+  })
+
+  it('carries no block at all when the run has no terminating space', () => {
+    const out = html('|{#x}=R|')
+    expect(out).not.toContain('id="x"')
+    expect(out).not.toContain('<th')
   })
 })
 
@@ -102,6 +111,8 @@ describe('the canonical writer emits the markers first', () => {
       '|={.total} Total |= 99 |\n| a | b |',
       '|=~{#score} Score |\n| 9 |',
       '|= Item |= Cost |\n| Pen |>{.num} 9 |',
+      '|{#x} < content |',
+      '|{#x} =R |',
       '|{#x}< content |',
       '|{#x}=R|',
       '|={scope="colgroup"} a |',
@@ -129,8 +140,9 @@ describe('the lint rule for the retired order', () => {
     // The message names BOTH spellings, because the author is the one who has to
     // choose: the two render differently and the linter cannot know which was
     // meant.
-    expect(warning?.message).toContain('"<{#x}"')
-    expect(warning?.message).toContain('literal content')
+    // The message names BOTH spellings with the space the run now needs.
+    expect(warning?.message).toContain('"<{#x} "')
+    expect(warning?.message).toContain('"{#x} <"')
   })
 
   it('reports each of the three markers, in every cell of the row', () => {
@@ -193,10 +205,14 @@ describe('the lint rule for the retired order', () => {
   // `text-align: left` and REMOVES a literal `<` from the content, so a
   // formatter doing it in its default path would break the round-trip invariant
   // on a document that is currently correct.
-  // An attribute block ends the alignment scan by itself, so the `<` remains
-  // content; canonical padding is applied without promoting it to a marker.
+  // Under spec §5 T11 the glued spelling carries no block either, so the whole
+  // cell is content and the writer pads the CONTENT side - which keeps the
+  // braces literal instead of promoting them to a block.
   it('applies canonical padding without changing the cell meaning', () => {
-    expect(fmt('|{#x}< content |')).toBe('|{#x} < content |\n')
+    expect(fmt('|{#x}< content |')).toBe('| {#x}< content |\n')
     expect(html(fmt('|{#x}< content |'))).toBe(html('|{#x}< content |'))
+    // With the run's space, the block is a block and the writer keeps it there.
+    expect(fmt('|{#x} < content |')).toBe('|{#x} < content |\n')
+    expect(html(fmt('|{#x} < content |'))).toBe(html('|{#x} < content |'))
   })
 })

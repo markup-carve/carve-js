@@ -5,20 +5,26 @@ const rules = (source: string) => lintCarve(source).map((warning) => warning.rul
 
 describe('table column metadata', () => {
   it('rejects duplicate axes and reverse-order pairs as a whole', () => {
-    expect(carveToHtml('|=<< Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
+    // Written with the space that ends the marker run, the doubled marker is
+    // content and the cell is still a header.
+    expect(carveToHtml('|= << Note |\n')).toContain('<th scope="col">&lt;&lt; Note</th>')
+    // Glued, there is no run at all and the `=` is content too (spec §5 T11).
+    expect(carveToHtml('|=<< Note |\n')).toContain('<td>=&lt;&lt; Note</td>')
     expect(parse('|=~> H |\n').children[0]).toMatchObject({
-      rows: [{ cells: [{ children: [{ type: 'text', value: '~> H' }] }] }],
+      rows: [{ cells: [{ header: false, children: [{ type: 'text', value: '=~> H' }] }] }],
     })
   })
 
   it('requires a horizontal partner for every vertical marker', () => {
+    // A rejected run takes the kind marker with it, so only the paired cell is
+    // a header (spec §5 T11).
     const table = parse('|=^ Top |=v Bottom |=<^ Paired |=v> Reverse |\n').children[0]
     expect(table).toMatchObject({
       rows: [{ cells: [
-        { header: true, children: [{ type: 'text', value: '^ Top' }] },
-        { header: true, children: [{ type: 'text', value: 'v Bottom' }] },
+        { header: false, children: [{ type: 'text', value: '=^ Top' }] },
+        { header: false, children: [{ type: 'text', value: '=v Bottom' }] },
         { header: true, align: 'left', valign: 'top' },
-        { header: true, children: [{ type: 'text', value: 'v> Reverse' }] },
+        { header: false, children: [{ type: 'text', value: '=v> Reverse' }] },
       ] }],
     })
   })

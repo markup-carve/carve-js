@@ -9,7 +9,7 @@ import { carveToMarkdown, carveToPlainText, carveToAnsi } from '../src/index.js'
 const stripSgr = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 
 describe('non-HTML table column count (header-rowspan)', () => {
-  const src = '|=A|\n|^|x|\n'
+  const src = '|= A |\n| ^ | x |\n'
 
   it('markdown gives the delimiter the header row cell count', () => {
     expect(carveToMarkdown(src)).toBe('| A |\n| --- |\n|  | x |\n')
@@ -27,6 +27,6 @@ describe('non-HTML table column count (header-rowspan)', () => {
   })
 
   it('a normal full-width header is unaffected', () => {
-    expect(carveToPlainText('|=A|=B|\n|1|2|\n')).toBe('A | B\n1 | 2\n')
+    expect(carveToPlainText('|= A |= B |\n| 1 | 2 |\n')).toBe('A | B\n1 | 2\n')
   })
 })
