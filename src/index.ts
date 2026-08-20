@@ -52,6 +52,7 @@ import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 import { coalesceTextRuns } from './coalesce-text-runs.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
+import { tryFastHtml } from './fast-html.js'
 
 export * from './ast.js'
 export {
@@ -413,6 +414,8 @@ export function carveToHtml(
   opts: ParseOptions & RenderOptions & ProfileOptions = {},
 ): string {
   enforceProfileMaxLength(source, opts)
+  const fast = tryFastHtml(source, opts)
+  if (fast !== undefined) return fast
   const exts: CarveExtension[] = opts.extensions ?? []
   // `sourceLine` rendering needs block positions, so enable parsing them.
   // Extensions are forwarded to the parse so their matchers add syntax.
