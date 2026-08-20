@@ -41,7 +41,9 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <caption>Quarterly results</caption>',
-        '  <thead><tr><th scope="col">Region</th><th scope="col">Notes</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">Region</th><th scope="col">Notes</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td>EMEA</td><td>Strong quarter.</td></tr>',
         '  </tbody>',
@@ -113,7 +115,9 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col">Region</th><th scope="col">Notes</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">Region</th><th scope="col">Notes</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td>EMEA</td><td>ok</td></tr>',
         '  </tbody>',
@@ -160,7 +164,9 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col">Metric</th><th scope="col">Q1</th><th scope="col">Q2</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">Metric</th><th scope="col">Q1</th><th scope="col">Q2</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><th scope="row">EMEA</th><td>1.0</td><td>1.2</td></tr>',
         '  </tbody>',
@@ -363,7 +369,9 @@ describe('list-table Tier-3 extension', () => {
       [
         '<table>',
         '  <caption>Sales</caption>',
-        '  <thead><tr><th scope="col">Region</th><th scope="col">Q1</th><th scope="col">Q2</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">Region</th><th scope="col">Q1</th><th scope="col">Q2</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td rowspan="2">EMEA</td><td>10</td><td>12</td></tr>',
         '    <tr><td>14</td><td>16</td></tr>',
@@ -417,7 +425,9 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td></td><td>E</td><td>F</td></tr>',
         '  </tbody>',
@@ -441,7 +451,9 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col" colspan="2">A</th><th scope="col">C</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col" colspan="2">A</th><th scope="col">C</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td>x</td><td></td><td>y</td></tr>',
         '  </tbody>',
@@ -466,7 +478,9 @@ describe('list-table Tier-3 extension', () => {
     expect(h(src)).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col">H1</th><th scope="col">H2</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">H1</th><th scope="col">H2</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td rowspan="2">A</td><td>B</td></tr>',
         '    <tr><td>C</td></tr>',
@@ -623,7 +637,9 @@ describe('list-table Tier-3 extension', () => {
     expect(html).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col">H1</th><th scope="col">H2</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">H1</th><th scope="col">H2</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td></td><td>x</td></tr>',
         '  </tbody>',

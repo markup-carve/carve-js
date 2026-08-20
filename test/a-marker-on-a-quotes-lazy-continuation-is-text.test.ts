@@ -99,7 +99,7 @@ describe('a marker on a block quote lazy continuation is text', () => {
 
   it('still opens a sub-list when the quote ends on a table', () => {
     expect(flat(carveToHtml('- > | a |\n  > | - |\n  - s\n'))).toBe(
-      '<ul> <li> <blockquote> <table> <thead><tr><th scope="col">a</th></tr></thead> </table>' +
+      '<ul> <li> <blockquote> <table> <thead> <tr><th scope="col">a</th></tr> </thead> </table>' +
         ' </blockquote> <ul> <li>s</li> </ul> </li> </ul>',
     )
   })

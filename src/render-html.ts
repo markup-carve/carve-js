@@ -1547,9 +1547,16 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
       if (v) grid[r]![c]!.valign = v
     }
   }
+  // A ROW IS A ROW, IN EVERY SECTION (PART 10 §7, carve#1459). `thead` and
+  // `tfoot` used to put their rows on the section's own line while `tbody` gave
+  // each row a line, and nothing said why one element had two layouts - which
+  // is how two corpus fixtures came to demand different `tfoot` shapes.
   if (headerEnd > 0) {
-    const rows = grid.slice(0, headerEnd).map((r) => renderTableRowFlat(r, opts, true, true))
-    lines.push(`${pad}  <thead>${rows.join('')}</thead>`)
+    lines.push(`${pad}  <thead>`)
+    for (let r = 0; r < headerEnd; r++) {
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts, true, true)}`)
+    }
+    lines.push(`${pad}  </thead>`)
   }
   if (headerEnd < footerStart) {
     lines.push(`${pad}  <tbody>`)
@@ -1559,8 +1566,11 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     lines.push(`${pad}  </tbody>`)
   }
   if (footerStart < grid.length) {
-    const rows = grid.slice(footerStart).map((r) => renderTableRowFlat(r, opts))
-    lines.push(`${pad}  <tfoot>${rows.join('')}</tfoot>`)
+    lines.push(`${pad}  <tfoot>`)
+    for (let r = footerStart; r < grid.length; r++) {
+      lines.push(`${pad}    ${renderTableRowFlat(grid[r]!, opts)}`)
+    }
+    lines.push(`${pad}  </tfoot>`)
   }
   lines.push(`${pad}</table>`)
   return lines.join('\n')

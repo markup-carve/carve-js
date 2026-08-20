@@ -6,9 +6,12 @@ describe('pipe-table row counts', () => {
 
   it('partitions explicit head, body, and foot rows', () => {
     const html = carveToHtml(source)
-    expect(html).toContain('<thead><tr><th scope="col">A</th><th scope="col">B</th></tr><tr><th scope="col">C</th><th scope="col">D</th></tr></thead>')
+    expect(html).toContain(
+      '<thead>\n    <tr><th scope="col">A</th><th scope="col">B</th></tr>\n' +
+        '    <tr><th scope="col">C</th><th scope="col">D</th></tr>\n  </thead>',
+    )
     expect(html).toContain('<tbody>\n    <tr><td>E</td><td>F</td></tr>\n  </tbody>')
-    expect(html).toContain('<tfoot><tr><td>G</td><td>H</td></tr></tfoot>')
+    expect(html).toContain('<tfoot>\n    <tr><td>G</td><td>H</td></tr>\n  </tfoot>')
     expect(html).not.toContain('header-rows=')
     expect(html).not.toContain('footer-rows=')
   })

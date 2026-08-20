@@ -29,7 +29,7 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
 
   it('the separator-bearing form reads the same way', () => {
     expect(html('| a | b |\n|---|---|\n| x `y | z |')).toBe(
-      '<table>\n  <thead><tr><th scope="col">a</th><th scope="col">b</th></tr></thead>\n' +
+      '<table>\n  <thead>\n    <tr><th scope="col">a</th><th scope="col">b</th></tr>\n  </thead>\n' +
         '  <tbody>\n    <tr><td>x <code>y | z</code></td></tr>\n  </tbody>\n</table>',
     )
   })
@@ -75,7 +75,7 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
 
   it('an ordinary headered table is unchanged', () => {
     expect(html('| a | b |\n|---|---|\n| x | y |')).toBe(
-      '<table>\n  <thead><tr><th scope="col">a</th><th scope="col">b</th></tr></thead>\n' +
+      '<table>\n  <thead>\n    <tr><th scope="col">a</th><th scope="col">b</th></tr>\n  </thead>\n' +
         '  <tbody>\n    <tr><td>x</td><td>y</td></tr>\n  </tbody>\n</table>',
     )
   })

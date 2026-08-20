@@ -12,21 +12,23 @@ const h = (s: string) => carveToHtml(s).trim()
 describe('GFM table header separator', () => {
   it('makes the first row a header', () => {
     expect(h('| x | y |\n|---|---|')).toBe(
-      '<table>\n  <thead><tr><th scope="col">x</th><th scope="col">y</th></tr></thead>\n</table>',
+      '<table>\n  <thead>\n    <tr><th scope="col">x</th><th scope="col">y</th></tr>\n  </thead>\n</table>',
     )
   })
 
   it('accepts spaces in the delimiter row', () => {
     expect(h('| x | y |\n| --- | --- |')).toBe(
-      '<table>\n  <thead><tr><th scope="col">x</th><th scope="col">y</th></tr></thead>\n</table>',
+      '<table>\n  <thead>\n    <tr><th scope="col">x</th><th scope="col">y</th></tr>\n  </thead>\n</table>',
     )
   })
 
   it('sets per-column alignment from colons, on header and body', () => {
     expect(h('| x | y |\n|:--|--:|\n| a | b |')).toBe(
       '<table>\n' +
-        '  <thead><tr><th scope="col" style="text-align: left;">x</th>' +
-        '<th scope="col" style="text-align: right;">y</th></tr></thead>\n' +
+        '  <thead>\n' +
+        '    <tr><th scope="col" style="text-align: left;">x</th>' +
+        '<th scope="col" style="text-align: right;">y</th></tr>\n' +
+        '  </thead>\n' +
         '  <tbody>\n' +
         '    <tr><td style="text-align: left;">a</td>' +
         '<td style="text-align: right;">b</td></tr>\n' +
@@ -38,7 +40,7 @@ describe('GFM table header separator', () => {
   it('centers with colons on both sides', () => {
     expect(h('| x |\n|:-:|\n| a |')).toBe(
       '<table>\n' +
-        '  <thead><tr><th scope="col" style="text-align: center;">x</th></tr></thead>\n' +
+        '  <thead>\n    <tr><th scope="col" style="text-align: center;">x</th></tr>\n  </thead>\n' +
         '  <tbody>\n    <tr><td style="text-align: center;">a</td></tr>\n  </tbody>\n' +
         '</table>',
     )

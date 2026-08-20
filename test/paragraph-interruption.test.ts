@@ -54,7 +54,7 @@ describe('top-level paragraph interruption (§10)', () => {
   it('a captioned one-row table after prose interrupts', () => {
     const html = carveToHtml('Intro\n|= A |\n^ caption')
     expect(html).toBe(
-      '<p>Intro</p>\n<table>\n  <caption>caption</caption>\n  <thead><tr><th scope="col">A</th></tr></thead>\n</table>',
+      '<p>Intro</p>\n<table>\n  <caption>caption</caption>\n  <thead>\n    <tr><th scope="col">A</th></tr>\n  </thead>\n</table>',
     )
   })
 
