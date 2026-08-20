@@ -348,7 +348,13 @@ function renderTable(lines: string[], start: number, depth: number, defs: Map<st
     rows.push(row); i++
   }
   if (!rows.length) return undefined
-  const out = [indent(depth), '<table>\n', indent(depth + 1), '<thead><tr>', header.join(''), '</tr></thead>\n', indent(depth + 1), '<tbody>']
+  const out = [
+    indent(depth), '<table>\n',
+    indent(depth + 1), '<thead>\n',
+    indent(depth + 2), '<tr>', header.join(''), '</tr>\n',
+    indent(depth + 1), '</thead>\n',
+    indent(depth + 1), '<tbody>',
+  ]
   for (const row of rows) {
     const rendered = row.map((cell, index) => renderCell('td', cell, index))
     if (rendered.some((cell) => cell === undefined)) return undefined

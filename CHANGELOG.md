@@ -9,6 +9,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A row is a row, in every table section** (markup-carve/carve#1459, PART 10
+  §7). `<thead>` and `<tfoot>` now write one row per line, as `<tbody>` always
+  did. Nothing renders differently - whitespace between rows in table context is
+  not rendered - but the emitted HTML is consistent and diffs read cleanly. Both
+  table paths move: pipe tables and the list-table extension.
+
 - **A table cell's marker run ends at a space** (markup-carve/carve#1259, PART 9
   §5 T11). The kind marker `=`, the alignment run and the attribute block are
   one run, and a cell carrying any of them must follow it with a space; without

@@ -450,7 +450,7 @@ const PHP_GOLDEN: { preset: 'full' | 'article' | 'comment' | 'minimal'; src: str
     preset: 'article',
     src: '| a | b |\n|---|---|\n| 1 | 2 |',
     out:
-      '<table>\n  <thead><tr><th scope="col">a</th><th scope="col">b</th></tr></thead>\n' +
+      '<table>\n  <thead>\n    <tr><th scope="col">a</th><th scope="col">b</th></tr>\n  </thead>\n' +
       '  <tbody>\n    <tr><td>1</td><td>2</td></tr>\n  </tbody>\n</table>',
   },
   // --- comment: headings/images/tables -> to_text, links get nofollow ugc ---

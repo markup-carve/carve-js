@@ -98,17 +98,20 @@ describe('bare boolean id', () => {
 })
 
 describe('glued cell attributes', () => {
-  const td = (s: string) => carveToHtml(s).split('\n')[1]
+  // The header ROW line. Line 1 is now `  <thead>` on its own - every table
+  // section writes one row per line since carve#1459 - so the row this suite is
+  // about moved down one.
+  const td = (s: string) => carveToHtml(s).split('\n')[2]
   it('a {…} glued to the opening pipe is the cell attribute block', () => {
     expect(td('|{.x} hi | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col" class="x">hi</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col" class="x">hi</th><th scope="col">b</th></tr>')
     // multiple attrs, source order
     expect(td('|{#id .a key=v} hi | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col" id="id" class="a" key="v">hi</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col" id="id" class="a" key="v">hi</th><th scope="col">b</th></tr>')
   })
   it('a SPACE before the brace is ordinary content, not attributes', () => {
     expect(td('| {.x} hi | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col">{.x} hi</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col">{.x} hi</th><th scope="col">b</th></tr>')
   })
   it('computed span wins over an author-supplied rowspan (no duplicate attr)', () => {
     const html = carveToHtml('|{rowspan=9} a | b |\n|---|---|\n| ^ | d |')
@@ -122,7 +125,7 @@ describe('glued cell attributes', () => {
   })
   it('keeps an author style when no alignment is computed', () => {
     expect(td('|{style="color:red"} a | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col" style="color:red">a</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col" style="color:red">a</th><th scope="col">b</th></tr>')
   })
   it('an attributed dash row is not a GFM header delimiter', () => {
     const html = carveToHtml('| h | i |\n|{.x} --- | --- |\n| c | d |')
@@ -131,14 +134,14 @@ describe('glued cell attributes', () => {
   })
   it('handles a quoted brace in a cell attribute value', () => {
     expect(td('|{key="{y}"} hi | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col" key="{y}">hi</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col" key="{y}">hi</th><th scope="col">b</th></tr>')
   })
   it('a partially-invalid attribute payload stays literal', () => {
     expect(td('|{.x 1bad} hi | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col">{.x 1bad} hi</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col">{.x 1bad} hi</th><th scope="col">b</th></tr>')
   })
   it('an attributed cell is not a bare span marker (content stays literal)', () => {
     expect(td('|{.x} < | b |\n|---|---|\n| c | d |'))
-      .toBe('  <thead><tr><th scope="col" class="x">&lt;</th><th scope="col">b</th></tr></thead>')
+      .toBe('    <tr><th scope="col" class="x">&lt;</th><th scope="col">b</th></tr>')
   })
 })

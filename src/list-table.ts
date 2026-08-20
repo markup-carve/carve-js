@@ -265,11 +265,12 @@ function renderListTable(node: Admonition, ctx: BlockExtensionRenderContext): st
   const footGrid = grid.slice(footerStart)
 
   if (headGrid.length > 0) {
-    let thead = ''
+    // One row per line, as in every other section (PART 10 §7, carve#1459).
+    const head: string[] = []
     headGrid.forEach((gridRow, rowIndex) => {
-      thead += renderRow(gridRow, rowIndex)
+      head.push(`${pad}    ${renderRow(gridRow, rowIndex)}`)
     })
-    lines.push(`${pad}  <thead>${thead}</thead>`)
+    lines.push(`${pad}  <thead>\n${head.join('\n')}\n${pad}  </thead>`)
   }
 
   for (const group of bodyGroups) {

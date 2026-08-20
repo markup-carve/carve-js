@@ -134,7 +134,9 @@ describe('PART 9R R2: a footnote inside an unresolved reference is not a referen
     expect(carveToHtml('| a |\n| --- |\n| [t[^1]][nope] |\n\n[^1]: n\n')).toBe(
       [
         '<table>',
-        '  <thead><tr><th scope="col">a</th></tr></thead>',
+        '  <thead>',
+        '    <tr><th scope="col">a</th></tr>',
+        '  </thead>',
         '  <tbody>',
         '    <tr><td>[t[^1]][nope]</td></tr>',
         '  </tbody>',
