@@ -2046,7 +2046,13 @@ function renderAttrs(attrs: Attrs | undefined): string {
     // the production the language has for it. Guarded on the key being a valid
     // attribute identifier, because that is what `boolean_attribute` is - a key
     // that needs escaping has no bare spelling to fall back to.
-    else if (value === '' && isAttrIdentifier(key)) parts.push(escapeAttrKey(key))
+    //
+    // A `_`-FIRST NAME KEEPS ITS `=""`. `boolean_attribute` refuses the leading
+    // underscore (markup-carve/carve#1450), so the bare spelling is not a
+    // fallback here at all: `{_u=""}` written as `{_u}` is text and `{_x_=""}`
+    // is a forced underline. Either way the writer would change the document,
+    // which PART 11 §1 forbids.
+    else if (value === '' && isBooleanAttrName(key)) parts.push(escapeAttrKey(key))
     else parts.push(`${escapeAttrKey(key)}=${quoteAttrValue(value)}`)
   }
 
@@ -2772,6 +2778,16 @@ function escapeAttrNameValue(text: string): string {
  */
 export function isAttrIdentifier(text: string): boolean {
   return /^[A-Za-z_][\w-]*$/.test(text)
+}
+
+/**
+ * Whether a name can be written as a BOOLEAN attribute - a bare word with no
+ * value. Narrower than `isAttrIdentifier` by exactly one character: a leading
+ * `_` is legal in an id, a class and a key, and refused here, because `{_x_}`
+ * is a forced underline (markup-carve/carve#1450).
+ */
+export function isBooleanAttrName(text: string): boolean {
+  return /^[A-Za-z][\w-]*$/.test(text)
 }
 
 function escapeAutolinkHref(text: string): string {

@@ -39,15 +39,23 @@ describe('a flag-shaped hyphen run is literal', () => {
 
   it('does not leave a tail of the run for the arrow token', () => {
     // Declining the run one hyphen at a time left `-->` as a stray `-` plus a
-    // live `->`, which rendered `-→`. The whole run is consumed as text.
-    expect(h('x -->')).toBe('<p>x --&gt;</p>')
+    // live `->`, which rendered `-→`. The whole run is consumed - as an ARROW
+    // since markup-carve/carve#1442 made the doubled run canonical, and the
+    // arrow token is reached before the dash rule. Either way, never as a
+    // hyphen plus a separate arrow.
+    expect(h('x -->')).toBe('<p>x →</p>')
     expect(h('x ---foo')).toBe('<p>x ---foo</p>')
   })
 
-  it('repairs the closing half of an HTML comment, and only that half', () => {
-    // A known and stated limit: the opening run is preceded by `!` rather than
-    // whitespace, so it still converts.
-    expect(h('<!-- c -->')).toBe('<p>&lt;!– c --&gt;</p>')
+  it('leaves an HTML comment converted at both halves', () => {
+    // The flanking rule repaired the CLOSING half of this while it was a dash
+    // question: `-->` was preceded by whitespace and followed by `>`, so it was
+    // flag-shaped and stayed literal. markup-carve/carve#1442 then made `-->`
+    // the canonical right arrow, which is a token, so it never reaches the dash
+    // rule to be spared by it. The opening `<!--` was always converted - it is
+    // preceded by `!` rather than whitespace. Recognising the construct is what
+    // this shape wants; no dash rule reaches it.
+    expect(h('<!-- c -->')).toBe('<p>&lt;!– c →</p>')
   })
 
   it('reads PART 7 spaces, not the host regex class', () => {

@@ -10440,10 +10440,24 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
 // span of a DIFFERENT type whose `}` would otherwise abort an `[^}]*` class is
 // kept inside and recursed into: `{+a {-b-} c+}` -> ins(a, del(b), c). Matches
 // carve-php / carve-rs.
-const RE_CRITIC_INS = /^\{\+((?:[^+]|\+(?!\}))*)\+\}/
-const RE_CRITIC_DEL = /^\{-((?:[^-]|-(?!\}))*)-\}/
+// AN EMPTY BRACE PAIR IS NOT A CONSTRUCT (markup-carve/carve#1447): the content
+// slots are `+`, not `*`, so an opener meeting its own closer opened nothing and
+// its characters are text. `{++}` was an `<ins>` inserting nothing and `{##}` a
+// comment saying nothing; the empty `<del>` spelled `{--}`, which is now the
+// braced en dash below. `RE_FORCED_EMPHASIS` already required content.
+//
+// `RE_CRITIC_SUB` is deliberately left alone. Its halves are independent and a
+// half-empty substitution is an ordinary edit - `{~a~>~}` deletes, `{~~>b~}`
+// inserts - so the same requirement per half would refuse real documents.
+const RE_CRITIC_INS = /^\{\+((?:[^+]|\+(?!\}))+)\+\}/
+const RE_CRITIC_DEL = /^\{-((?:[^-]|-(?!\}))+)-\}/
 const RE_CRITIC_SUB = /^\{~([^}]*)~>([^}]*)~\}/
-const RE_CRITIC_CMT = /^\{#([^}]*)#\}/
+const RE_CRITIC_CMT = /^\{#([^}]+)#\}/
+// A BRACED HYPHEN PAIR IS AN EN DASH (markup-carve/carve#1447). The bare run
+// carries a flanking guard, so `x --verbose y` stays literal and an author who
+// MEANT a dash in that position had no way to say so. This is that way, and it
+// cost nothing: the string it took was an empty `<del>`.
+const RE_BRACED_EN_DASH = /^\{--\}/
 // Forced intraword emphasis (§22): a brace pair around a bare delimiter forces
 // a span with no word-boundary condition. Group 1 is the delimiter; the
 // backreference closes it before `}`, non-greedy so the nearest `delim}` wins.
@@ -11560,6 +11574,11 @@ function scanInlineInner(
         i += del[0].length
         continue
       }
+      if (hasBrace && RE_BRACED_EN_DASH.test(rest)) {
+        buf += '\u2013'
+        i += 4
+        continue
+      }
       const cmt = hasBrace ? RE_CRITIC_CMT.exec(rest) : null
       if (cmt) {
         flush()
@@ -12361,9 +12380,14 @@ function isValidAttrPayload(inner: string): boolean {
 /**
  * `^ ws* item (ws+ item)* ws*$`, spelled once. Anchored rather than stripped,
  * because stripping cannot express "these two may not touch".
+ *
+ * The BAREWORD alternative is the one name here that may not begin with `_`
+ * (markup-carve/carve#1450). This is the SECOND spelling of that rule - the
+ * first is `parseAttrs`'s `re` - and they have to move together, or the payload
+ * validates as an attribute block that then parses to nothing.
  */
 const ATTR_ITEM_SRC =
-  '(?:#[a-zA-Z_][\\w-]*)|(?:\\.[a-zA-Z_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z_][\\w-]*)'
+  '(?:#[a-zA-Z_][\\w-]*)|(?:\\.[a-zA-Z_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
 const ATTR_PAYLOAD = new RegExp(
   `^[ \\t\\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\t\\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\t\\n\\r]*)?$`,
 )
@@ -12457,7 +12481,13 @@ export function parseAttrs(src: string): Attrs {
   // The bareword alternative (m[7]) is LAST so `key=value` matches as a
   // key/value, not as a bareword `key` with a leftover `=value`. A bareword is
   // a value-less (boolean) attribute -> rendered `name=""` (djot-php form).
-  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z_][\w-]*))/g
+  // IT MAY NOT START WITH `_`, unlike every other name here
+  // (markup-carve/carve#1450): `{_x_}` is also a forced underline, and alone on
+  // a line the attribute reading won and rendered NOTHING, since there was no
+  // block beneath it to attach to. HTML has no underscore-first boolean
+  // attribute to lose, and `{#_id}`, `{._c}` and `{_k=1}` are untouched -
+  // none of them ends `_}`, so none of them collides.
+  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {
