@@ -5,8 +5,51 @@ import type { ParseOptions } from './parse.js'
 type Options = ParseOptions & RenderOptions & { profile?: unknown }
 type LinkDef = { href: string; title?: string }
 
+export type FastHtmlStats = {
+  headings: number
+  paragraphs: number
+  blockQuotes: number
+  codeFences: number
+  thematicBreaks: number
+  unorderedListItems: number
+  orderedListItems: number
+  tableRows: number
+  linkDefinitions: number
+  consumedLines: number
+  activeDefinitions: number
+}
+
+type LayoutEvent = keyof Omit<FastHtmlStats, 'consumedLines' | 'activeDefinitions'>
+export type FastHtmlResult = { html: string; accepted: FastHtmlStats }
+
+function emptyStats(): FastHtmlStats {
+  return {
+    headings: 0, paragraphs: 0, blockQuotes: 0, codeFences: 0,
+    thematicBreaks: 0, unorderedListItems: 0, orderedListItems: 0,
+    tableRows: 0, linkDefinitions: 0, consumedLines: 0, activeDefinitions: 0,
+  }
+}
+
+function accept(stats: FastHtmlStats | undefined, event: LayoutEvent, start: number, end: number, activeDefinition = false): void {
+  if (!stats) return
+  stats[event]++
+  stats.consumedLines += end - start
+  if (activeDefinition) stats.activeDefinitions++
+}
+
 /** Conservative borrowed renderer for the common stateless HTML subset. */
 export function tryFastHtml(source: string, opts: Options): string | undefined {
+  return tryFastHtmlAttempt(source, opts)
+}
+
+/** Test/benchmark observer; normal rendering does not allocate counters. */
+export function tryFastHtmlWithStats(source: string, opts: Options): FastHtmlResult | undefined {
+  const accepted = emptyStats()
+  const html = tryFastHtmlAttempt(source, opts, accepted)
+  return html === undefined ? undefined : { html, accepted }
+}
+
+function tryFastHtmlAttempt(source: string, opts: Options, stats?: FastHtmlStats): string | undefined {
   if (
     opts.extensions?.length || opts.profile !== undefined || opts.sourceLine ||
     (opts as RenderOptions & { mode?: unknown }).mode !== undefined ||
@@ -20,9 +63,10 @@ export function tryFastHtml(source: string, opts: Options): string | undefined {
   const lines = source.split('\n')
   if (lines.at(-1) === '') lines.pop()
   if (lines.some((line) => / +$/.test(line))) return undefined
-  const defs = collectDefs(lines)
-  if (!defs) return undefined
-  return renderBlocks(lines, defs, opts)
+  const collected = collectDefs(lines, stats !== undefined)
+  if (!collected) return undefined
+  if (stats) for (const line of collected.definitionLines ?? []) accept(stats, 'linkDefinitions', line, line + 1, true)
+  return renderBlocks(lines, collected.defs, opts, stats)
 }
 
 function isAscii(source: string): boolean {
@@ -30,13 +74,14 @@ function isAscii(source: string): boolean {
   return true
 }
 
-function collectDefs(lines: string[]): Map<string, LinkDef> | undefined {
+function collectDefs(lines: string[], observe: boolean): { defs: Map<string, LinkDef>; definitionLines?: number[] } | undefined {
   const defs = new Map<string, LinkDef>()
+  const definitionLines = observe ? [] as number[] : undefined
   let last = -1
   for (let i = lines.length - 1; i >= 0; i--) {
     if (lines[i]!.includes(']:')) { last = i; break }
   }
-  if (last < 0) return defs
+  if (last < 0) return { defs, ...(definitionLines ? { definitionLines } : {}) }
   let fence: { char: string; len: number } | undefined
   for (let i = 0; i <= last; i++) {
     const line = lines[i]!
@@ -52,11 +97,12 @@ function collectDefs(lines: string[]): Map<string, LinkDef> | undefined {
     if (i > 0 && lines[i - 1]!.trim() !== '') return undefined
     if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') return undefined
     defs.set(match[1]!, { href: match[2]!, ...(match[3] === undefined ? {} : { title: match[3] }) })
+    definitionLines?.push(i)
   }
-  return defs
+  return { defs, ...(definitionLines ? { definitionLines } : {}) }
 }
 
-function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options): string | undefined {
+function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): string | undefined {
   const out: string[] = []
   const sections: number[] = []
   const ids = new Map<string, number>()
@@ -81,6 +127,7 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       const id = count === 1 ? base : `${base}-${count}`
       out.push(indent(sections.length), '<section id="', escapeAttrValue(id), '">\n',
         indent(sections.length + 1), `<h${level}>`, escapeHtml(title), `</h${level}>`)
+      if (stats) accept(stats, 'headings', i, i + 1)
       sections.push(level); wrote = true; i++; continue
     }
     if (wrote) out.push('\n')
@@ -98,32 +145,54 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       out.push(indent(depth), '<pre><code', info ? ` class="language-${info}"` : '', '>')
       for (let j = i + 1; j < close; j++) out.push(escapeHtml(lines[j]!), '\n')
       out.push('</code></pre>')
+      if (stats) accept(stats, 'codeFences', i, close + 1)
       i = close + 1; wrote = true; continue
     }
     if (line.startsWith('- ')) {
-      const rendered = renderList(lines, i, 0, depth, defs, opts)
+      const rendered = renderList(lines, i, 0, depth, defs, opts, stats)
+      if (!rendered) return undefined
+      out.push(rendered.html); i = rendered.next; wrote = true; continue
+    }
+    if (thematicBreak(line)) {
+      out.push(indent(depth), '<hr>')
+      if (stats) accept(stats, 'thematicBreaks', i, i + 1)
+      i++; wrote = true; continue
+    }
+    if (decimalListItem(line)) {
+      const rendered = renderOrderedList(lines, i, depth, defs, opts, stats)
       if (!rendered) return undefined
       out.push(rendered.html); i = rendered.next; wrote = true; continue
     }
     if (line.startsWith('> ')) {
-      if (lines[i + 1] !== undefined && lines[i + 1]!.trim() !== '') return undefined
-      const text = line.slice(2)
-      if (blockish(text)) return undefined
-      const html = renderInline(text, defs, opts)
-      if (html === undefined) return undefined
-      out.push(indent(depth), '<blockquote><p>', html, '</p></blockquote>')
-      i++; wrote = true; continue
+      const start = i, quote: string[] = []
+      while (lines[i]?.startsWith('> ')) {
+        const text = lines[i]!.slice(2)
+        if (blockish(text)) return undefined
+        const html = renderInline(text, defs, opts)
+        if (html === undefined) return undefined
+        quote.push(html); i++
+      }
+      if (lines[i] !== undefined && lines[i]!.trim() !== '') return undefined
+      out.push(indent(depth), '<blockquote><p>', quote.join('\n'), '</p></blockquote>')
+      if (stats) accept(stats, 'blockQuotes', start, i)
+      wrote = true; continue
     }
     if (line.startsWith('|')) {
-      const rendered = renderTable(lines, i, depth, defs, opts)
+      const rendered = renderTable(lines, i, depth, defs, opts, stats)
       if (!rendered) return undefined
       out.push(rendered.html); i = rendered.next; wrote = true; continue
     }
-    if (blockish(line) || (lines[i + 1] !== undefined && lines[i + 1]!.trim() !== '')) return undefined
-    const html = renderInline(line, defs, opts)
-    if (html === undefined) return undefined
-    out.push(indent(depth), '<p>', html, '</p>')
-    i++; wrote = true
+    if (blockish(line)) return undefined
+    const start = i, paragraph: string[] = []
+    while (lines[i] !== undefined && lines[i]!.trim() !== '') {
+      if (blockish(lines[i]!)) return undefined
+      const html = renderInline(lines[i]!, defs, opts)
+      if (html === undefined) return undefined
+      paragraph.push(html); i++
+    }
+    out.push(indent(depth), '<p>', paragraph.join('\n'), '</p>')
+    if (stats) accept(stats, 'paragraphs', start, i)
+    wrote = true
   }
   while (sections.length) out.push('\n', indent(sections.length - 1), '</section>'), sections.pop()
   return out.join('')
@@ -194,7 +263,7 @@ function inlineComplex(text: string): boolean {
   return false
 }
 
-function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options): { html: string; next: number } | undefined {
+function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
   const out: string[] = [indent(depth), '<ul>']
   let i = start
   while (i < lines.length) {
@@ -205,12 +274,13 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
     if (!text || text.startsWith(' ') || text === '+' || blockish(text)) return undefined
     const inline = renderInline(text, defs, opts)
     if (inline === undefined) return undefined
+    if (stats) accept(stats, 'unorderedListItems', i, i + 1)
     out.push('\n', indent(depth + 1), '<li>', inline); i++
     if (lines[i] !== undefined) {
       const nextIndent = lines[i]!.length - lines[i]!.trimStart().length
       if (nextIndent > offset) {
         if (nextIndent !== offset + 2 || !lines[i]!.slice(nextIndent).startsWith('- ')) return undefined
-        const nested = renderList(lines, i, offset + 2, depth + 2, defs, opts)
+        const nested = renderList(lines, i, offset + 2, depth + 2, defs, opts, stats)
         if (!nested) return undefined
         out.push('\n', nested.html, '\n', indent(depth + 1)); i = nested.next
       }
@@ -227,7 +297,34 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
   return { html: out.join(''), next: i }
 }
 
-function renderTable(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options): { html: string; next: number } | undefined {
+function decimalListItem(line: string): { number: number; text: string } | undefined {
+  const match = /^(\d+)\. ([^ ].*)$/.exec(line)
+  if (!match) return undefined
+  const number = Number(match[1])
+  return Number.isSafeInteger(number) && number > 0 ? { number, text: match[2]! } : undefined
+}
+
+function renderOrderedList(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
+  const first = decimalListItem(lines[start]!)
+  if (!first) return undefined
+  const out: string[] = [indent(depth), '<ol', first.number === 1 ? '' : ` start="${first.number}"`, '>']
+  let i = start, expected = first.number
+  while (i < lines.length) {
+    const item = decimalListItem(lines[i]!)
+    if (!item) break
+    if (item.number !== expected || blockish(item.text)) return undefined
+    const inline = renderInline(item.text, defs, opts)
+    if (inline === undefined) return undefined
+    out.push('\n', indent(depth + 1), '<li>', inline, '</li>')
+    if (stats) accept(stats, 'orderedListItems', i, i + 1)
+    expected++; i++
+  }
+  if (lines[i] !== undefined && lines[i]!.trim() !== '') return undefined
+  out.push('\n', indent(depth), '</ol>')
+  return { html: out.join(''), next: i }
+}
+
+function renderTable(lines: string[], start: number, depth: number, defs: Map<string, LinkDef>, opts: Options, stats?: FastHtmlStats): { html: string; next: number } | undefined {
   const heads = cells(lines[start]!), delimiter = cells(lines[start + 1] ?? '')
   if (!heads || !delimiter || !heads.length || heads.length !== delimiter.length) return undefined
   const aligns = delimiter.map((cell) => alignment(cell))
@@ -241,11 +338,13 @@ function renderTable(lines: string[], start: number, depth: number, defs: Map<st
   }
   const header = heads.map((cell, index) => renderCell('th', cell, index))
   if (header.some((cell) => cell === undefined)) return undefined
+  if (stats) accept(stats, 'tableRows', start, start + 2)
   let i = start + 2
   const rows: string[][] = []
   while (lines[i]?.trimStart().startsWith('|')) {
     const row = cells(lines[i]!)
     if (!row || row.length !== heads.length) return undefined
+    if (stats) accept(stats, 'tableRows', i, i + 1)
     rows.push(row); i++
   }
   if (!rows.length) return undefined
@@ -274,6 +373,9 @@ function alignment(cell: string): string | undefined | false {
 
 function blockish(text: string): boolean {
   return /^(?:\s|#|\* |\+ |- |>|\||\{|:::|```|~~~|\.{1,9} |[A-Za-z0-9]+[.)] )/.test(text) || /^(?:---+|\*\*\*+)$/.test(text)
+}
+function thematicBreak(line: string): boolean {
+  return /^(?:-{3,}|\*{3,}|_{3,})$/.test(line)
 }
 function fenceOpen(line: string): { char: string; len: number } | undefined {
   const match = /^(`{3,}|~{3,})/.exec(line)
