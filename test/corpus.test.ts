@@ -562,6 +562,28 @@ const IMPLEMENTED = new Set([
   // markup-carve/carve#1377. A heading at an item's content column is a
   // bounded block and leaves no paragraph open for a flush-left line.
   'a-heading-at-an-item-s-content-column-leaves-no-paragraph-open',
+  // markup-carve/carve#1442, the canonical doubled arrow.
+  'the-doubled-run-is-the-canonical-arrow-in-both-families',
+  // markup-carve/carve#1443, a flag-shaped hyphen run.
+  'a-hyphen-run-opening-a-word-after-whitespace-is-a-flag',
+  // markup-carve/carve#1447. An empty brace pair is text, and the string the
+  // empty deletion freed is the braced en dash.
+  'a-braced-hyphen-pair-is-an-en-dash',
+  'an-empty-brace-pair-is-not-a-construct',
+  // markup-carve/carve#1450. A boolean attribute may not start with `_`.
+  'a-boolean-attribute-does-not-start-with-an-underscore',
+  // markup-carve/carve#1436. A continuation marker attaches a document-column-0
+  // block and nothing else.
+  'a-continuation-marker-attaches-only-a-flush-left-block',
+  // Categories this engine already reproduced when the pin moved to them.
+  'a-lazy-marker-line-s-definition-defines-nothing-in-any-container',
+  'a-marker-line-link-definition-is-collected-where-no-paragraph-is-open',
+  'a-reference-definition-cannot-take-its-destination-from-the-next-line',
+  'a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item',
+  'a-terminal-comment-in-a-quote-leaves-no-paragraph-open',
+  'a-terminal-comment-line-still-leaves-an-empty-verse-line',
+  'an-unclosed-inline-literal-reaches-the-end-of-its-block',
+  'pipe-tables-can-state-head-and-foot-row-counts',
 ])
 
 /**
@@ -582,11 +604,9 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['20-smart-typography-arrows-and-symbols', {
-    reason: 'carve#1442 makes the doubled run canonical and removes `=>` as an arrow',
-    html: `<p>Flow: a → b ← c ↔ d =&gt; e; x ≠ y, p ≤ q, r ≥ s, ±1.
-© 2024, ®, ™. Dates like 1/2/2024 stay literal.</p>`,
-  }],
+  // Empty: the pin moved past its one entry (the canonical doubled arrow), and
+  // the file's own rule is that such an entry is DELETED in the commit that
+  // moves the pin rather than left to rot.
 ])
 
 
