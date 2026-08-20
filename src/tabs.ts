@@ -19,6 +19,16 @@ export interface TabsOptions {
   radioClass?: string
   /** Prefix for generated ids. Default `'tabset'`. */
   idPrefix?: string
+  /**
+   * Accessible name for the tab set AS A WHOLE.
+   *
+   * Each tab was already named by its own `<label>`; the GROUP was anonymous,
+   * so a reader could hear the parts and never the thing they belong to
+   * (carve#1468). Left unset the string comes from the render's `labels` map
+   * under `tabsGroup` (default `'Tabs'`), so one map localizes the whole
+   * document; set here to override the map for this instance.
+   */
+  groupLabel?: string
 }
 
 interface TabItem {
@@ -117,10 +127,22 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
     return items
   }
 
+  // The wrapper's role defaults to `group` - a plain grouping, which is all the
+  // CSS mode can honestly claim, since it has no tab/panel roles to associate.
+  // The `aria` mode passes `tablist` instead. Either way the wrapper takes an
+  // accessible NAME, which is the half that was missing (carve#1468).
+  //
+  // An author who wrote their own `role` or `aria-label` on the block keeps it:
+  // a second one beside theirs leaves the value undefined, and theirs is the
+  // more specific statement. Attribute names are compared ASCII-case-insensitively
+  // because HTML attribute names are.
+  const authored = (wrapper: Admonition | Div, name: string): boolean =>
+    Object.keys(wrapper.attrs?.keyValues ?? {}).some((k) => k.toLowerCase() === name)
+
   const buildWrapperAttributes = (
     wrapper: Admonition | Div,
     ctx: BlockExtensionRenderContext,
-    role?: string,
+    role = 'group',
   ): string => {
     const classes = [
       wrapperClass,
@@ -129,15 +151,22 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
     const attrs: Attrs = { classes }
     const id = wrapper.attrs?.id
     if (id !== undefined) attrs.id = id
-    if (wrapper.attrs?.keyValues || role) {
+    // Precedence: the extension's own option, then the render's `labels` map.
+    const groupLabel = opts.groupLabel ?? ctx.labels.tabsGroup
+    const writeRole = !authored(wrapper, 'role')
+    const writeName = groupLabel !== '' && !authored(wrapper, 'aria-label') && !authored(wrapper, 'aria-labelledby')
+    if (wrapper.attrs?.keyValues || writeRole || writeName) {
       attrs.keyValues = { ...(wrapper.attrs?.keyValues ?? {}) }
-      if (role) attrs.keyValues.role = role
+      if (writeRole) attrs.keyValues.role = role
+      if (writeName) attrs.keyValues['aria-label'] = groupLabel
     }
     const authorOrder = (wrapper.attrs?.order ?? []).filter((s) => s !== '.class')
+    // APPENDED: naming the set must not move an attribute the author placed.
     attrs.order = [
       '.class',
-      ...(role ? ['role'] : []),
-      ...authorOrder.filter((s) => s !== 'role'),
+      ...authorOrder.filter((s) => s !== 'role' && s !== 'aria-label'),
+      ...(writeRole ? ['role'] : []),
+      ...(writeName ? ['aria-label'] : []),
     ]
     return ctx.renderAttrs(attrs)
   }

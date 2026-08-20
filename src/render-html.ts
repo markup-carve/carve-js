@@ -736,11 +736,23 @@ function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOpt
 }
 
 /** The keys of the `labels` render option (PART 9 §16a). */
-export type LabelKey = 'footnoteBacklink'
+export type LabelKey = 'footnoteBacklink' | 'indexBackref' | 'tabsGroup' | 'codeGroup'
 
-/** The English defaults every key falls back to. */
+/**
+ * The English defaults every key falls back to.
+ *
+ * The EXTENSION keys are here rather than only on their extensions so that ONE
+ * `labels` map localizes a whole document. §16a's rule is that an extension MUST
+ * NOT require the host to configure the same text twice - and with a per-option
+ * spelling alone, switching a document to German meant finding four separate
+ * call sites and silently missing any one of them. The per-extension option
+ * still wins where it is set, so nothing that already passes one changes.
+ */
 export const LABEL_DEFAULTS: Record<LabelKey, string> = {
   footnoteBacklink: 'Back to reference',
+  indexBackref: 'Back to',
+  tabsGroup: 'Tabs',
+  codeGroup: 'Code examples',
 }
 
 const label = (opts: RenderOptions, key: LabelKey): string =>
@@ -1012,6 +1024,7 @@ function blockCtx(opts: RenderOptions, level: number): BlockExtensionRenderConte
     uniqueId,
     mode: opts.mode ?? 'interactive',
     renderers: opts.renderers ?? {},
+    labels: resolvedLabels(opts),
     sections: opts.sections !== false,
   }
 }
@@ -1026,7 +1039,19 @@ function inlineCtx(opts: RenderOptions): ExtensionRenderContext {
     uniqueId,
     mode: opts.mode ?? 'interactive',
     renderers: opts.renderers ?? {},
+    labels: resolvedLabels(opts),
   }
+}
+
+/** Every label key with the host's overrides applied, for an extension to read. */
+function resolvedLabels(opts: RenderOptions): Record<LabelKey, string> {
+  const out = { ...LABEL_DEFAULTS }
+  for (const key of Object.keys(LABEL_DEFAULTS) as LabelKey[]) {
+    const v = opts.labels?.[key]
+    if (v !== undefined) out[key] = v
+  }
+
+  return out
 }
 
 /** Reserve an id in the per-render document id namespace (ctx.uniqueId). A

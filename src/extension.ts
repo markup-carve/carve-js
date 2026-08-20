@@ -2,7 +2,7 @@ import type { Attrs, BlockNode, Document, Extension, InlineNode } from './ast.js
 // Type-only, and deliberately circular: `render-html.ts` imports this module's
 // `CarveExtension`. `import type` is erased, so nothing of the cycle survives
 // into the emitted JavaScript.
-import type { RenderOptions } from './render-html.js'
+import type { LabelKey, RenderOptions } from './render-html.js'
 
 /**
  * Build-time renderers for client-script extensions, supplied for a
@@ -47,6 +47,15 @@ export interface ExtensionRenderContext {
   mode: 'interactive' | 'static'
   /** Build-time renderers supplied for a static render (else empty). */
   renderers: StaticRenderers
+  /**
+   * The strings the ENGINE writes rather than the author (PART 9 §16a), with
+   * the host's `labels` overrides already applied.
+   *
+   * An extension reads its own key from here so that one `labels` map localizes
+   * the whole document - §16a forbids making the host configure the same text
+   * twice. An option passed to the extension itself still wins over this.
+   */
+  labels: Record<LabelKey, string>
 }
 
 /** Renderer for a `:name[…]` extension node, keyed by extension name. */

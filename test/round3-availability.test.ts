@@ -259,9 +259,15 @@ describe('Fix 5: index ::: block re-emission is byte-budgeted', () => {
       'A :index[parser] and :index[lexer], then :index[parser].\n\n::: index\n:::',
       { extensions: [index()] },
     )
-    expect(out).toContain('<li>parser <a href="#idx-parser-1" class="index-backref">↩</a> ')
-    expect(out).toContain('<a href="#idx-parser-2" class="index-backref">↩</a>')
-    expect(out).toContain('<li>lexer <a href="#idx-lexer-1" class="index-backref">↩</a></li>')
+    expect(out).toContain(
+      '<li>parser <a href="#idx-parser-1" class="index-backref" aria-label="Back to parser 1">↩<sup>1</sup></a> ',
+    )
+    expect(out).toContain(
+      '<a href="#idx-parser-2" class="index-backref" aria-label="Back to parser 2">↩<sup>2</sup></a>',
+    )
+    expect(out).toContain(
+      '<li>lexer <a href="#idx-lexer-1" class="index-backref" aria-label="Back to lexer">↩</a></li>',
+    )
   })
 
   it('resets the budget per render call', () => {
@@ -270,6 +276,8 @@ describe('Fix 5: index ::: block re-emission is byte-budgeted', () => {
     const blocks = Array.from({ length: 200 }, () => '::: index\n:::').join('\n\n')
     carveToHtml(`${markers}\n\n${blocks}`, { extensions: [index()] })
     const out = carveToHtml('A :index[parser].\n\n::: index\n:::', { extensions: [index()] })
-    expect(out).toContain('<li>parser <a href="#idx-parser-1" class="index-backref">↩</a></li>')
+    expect(out).toContain(
+      '<li>parser <a href="#idx-parser-1" class="index-backref" aria-label="Back to parser">↩</a></li>',
+    )
   })
 })

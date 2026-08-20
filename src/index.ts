@@ -167,7 +167,7 @@ export {
   type QuoteCharacters,
   type SmartQuotesOptions,
 } from './smart-quotes.js'
-export { index } from './index-terms.js'
+export { index, type IndexOptions } from './index-terms.js'
 export {
   citations,
   type CitationsOptions,

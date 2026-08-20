@@ -7,6 +7,36 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The index back-link says where it goes** (markup-carve/carve#1469). A
+  `↩` with no accessible name is announced as "leftwards arrow with hook", or
+  skipped - and an index entry has one per occurrence, so a reader met a row of
+  identical unnamed arrows. The k-th back-link is now named `Back to {term} {k}`
+  and shows `↩<sup>k</sup>`, mirroring PART 9 §16's footnote rule. The leading
+  words are the new `backrefLabel` option on `index()`.
+
+### Changed
+
+- **A tab set, a code group and a rendered diagram carry an accessible name**
+  (markup-carve/carve#1468). Each tab was already named by its own `<label>`
+  and the GROUP was anonymous; a diagram fence emitted its source with no role,
+  so a reader heard the markup as prose. `tabs()` and `codeGroup()` take a
+  `groupLabel` (defaults `Tabs` / `Code examples`) and write
+  `role="group"` plus that name - `aria` mode keeps `role="tablist"`. A
+  `fencedRender()` element takes `role="img"` and a `label`, defaulting to the
+  fence word. In every case an `aria-label`, `aria-labelledby` or `role` the
+  author wrote on the block wins, and the engine's attributes are APPENDED so
+  they never move one the author placed.
+
+- **One `labels` map localizes every engine-written string.** The map grows the
+  `indexBackref`, `tabsGroup` and `codeGroup` keys, and the extensions that
+  write those strings read it, so a German document sets `labels` once instead
+  of finding four separate call sites and silently missing one. An option
+  passed to an extension still wins over the map. PART 9 §16a already required
+  this - "an extension MUST NOT require the host to configure the same text
+  twice" - and nothing had walked through it.
+
 ### Changed
 
 - **A row is a row, in every table section** (markup-carve/carve#1459, PART 10

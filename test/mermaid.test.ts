@@ -3,17 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml, mermaid, type CarveExtension, type CodeBlock } from '../src/index.js'
 
 describe('mermaid extension', () => {
-  it('renders a mermaid code block as <pre class="mermaid">', () => {
+  it('renders a mermaid code block as <pre class="mermaid" role="img" aria-label="mermaid">', () => {
     const src = '``` mermaid\ngraph TD; A-->B\n```'
     expect(carveToHtml(src, { extensions: [mermaid()] })).toBe(
-      '<pre class="mermaid">graph TD; A-->B</pre>',
+      '<pre class="mermaid" role="img" aria-label="mermaid">graph TD; A-->B</pre>',
     )
   })
 
   it('keeps > but escapes < and &', () => {
     const src = '``` mermaid\nA & B < C --> D\n```'
     expect(carveToHtml(src, { extensions: [mermaid()] })).toBe(
-      '<pre class="mermaid">A &amp; B &lt; C --> D</pre>',
+      '<pre class="mermaid" role="img" aria-label="mermaid">A &amp; B &lt; C --> D</pre>',
     )
   })
 
@@ -34,14 +34,14 @@ describe('mermaid extension', () => {
   it('carries a preceding block-attribute line onto the pre and merges the mermaid class', () => {
     const src = '{#d1 .bordered}\n``` mermaid\ngraph TD; A-->B\n```'
     expect(carveToHtml(src, { extensions: [mermaid()] })).toBe(
-      '<pre id="d1" class="mermaid bordered">graph TD; A-->B</pre>',
+      '<pre id="d1" class="mermaid bordered" role="img" aria-label="mermaid">graph TD; A-->B</pre>',
     )
   })
 
   it('honors a custom cssClass', () => {
     const src = '``` mermaid\nx\n```'
     expect(carveToHtml(src, { extensions: [mermaid({ cssClass: 'diagram' })] })).toBe(
-      '<pre class="diagram">x</pre>',
+      '<pre class="diagram" role="img" aria-label="diagram">x</pre>',
     )
   })
 
@@ -53,15 +53,15 @@ describe('mermaid extension', () => {
       blockRenderers: {
         'code_block': (node) => {
           const code = node as CodeBlock
-          return code.lang === 'js' ? `<pre class="hl">${code.content}</pre>` : undefined
+          return code.lang === 'js' ? `<pre class="hl" role="img" aria-label="hl">${code.content}</pre>` : undefined
         },
       },
     }
     expect(
       carveToHtml('``` js\nconst x = 1\n```', { extensions: [mermaid(), highlight] }),
-    ).toBe('<pre class="hl">const x = 1</pre>')
+    ).toBe('<pre class="hl" role="img" aria-label="hl">const x = 1</pre>')
     expect(
       carveToHtml('``` mermaid\ngraph TD; A-->B\n```', { extensions: [mermaid(), highlight] }),
-    ).toBe('<pre class="mermaid">graph TD; A-->B</pre>')
+    ).toBe('<pre class="mermaid" role="img" aria-label="mermaid">graph TD; A-->B</pre>')
   })
 })

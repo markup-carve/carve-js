@@ -14,6 +14,15 @@ export interface CodeGroupOptions {
   /** Prefix for generated ids/names. Default `'codegroup'`. */
   idPrefix?: string
   /**
+   * Accessible name for the code group AS A WHOLE.
+   *
+   * Each tab was already named by its own `<label>`; the GROUP was anonymous
+   * (carve#1468). Left unset the string comes from the render's `labels` map
+   * under `codeGroup` (default `'Code examples'`), so one map localizes the
+   * whole document; set here to override the map for this instance.
+   */
+  groupLabel?: string
+  /**
    * Optional syntax highlighter. Receives the code text and language; returns
    * the full HTML for the code (replacing the default `<pre><code>` markup).
    */
@@ -72,6 +81,30 @@ function withoutSelected(attrs: Attrs | undefined): Attrs | undefined {
 
 export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
   const wrapperClass = opts.wrapperClass ?? 'code-group'
+  // An author who wrote their own `role` / `aria-label` keeps it: a second one
+  // beside theirs leaves the value undefined. HTML attribute names are
+  // ASCII-case-insensitive, so the comparison is too.
+  const authored = (node: Admonition | Div, name: string): boolean =>
+    Object.keys(node.attrs?.keyValues ?? {}).some((k) => k.toLowerCase() === name)
+  // The wrapper is a plain GROUP: the CSS mode has no tab/panel roles to
+  // associate, so `group` is all it can honestly claim - and the name is the
+  // half that was missing (carve#1468).
+  const groupAttrs = (node: Admonition | Div, attrs: Attrs, groupLabel: string): void => {
+    const writeRole = !authored(node, 'role')
+    const writeName =
+      groupLabel !== '' && !authored(node, 'aria-label') && !authored(node, 'aria-labelledby')
+    if (!writeRole && !writeName) return
+    attrs.keyValues = { ...(attrs.keyValues ?? {}) }
+    if (writeRole) attrs.keyValues.role = 'group'
+    if (writeName) attrs.keyValues['aria-label'] = groupLabel
+    // APPENDED: naming the group must not move an attribute the author placed,
+    // so role/aria-label go at the END of the existing order.
+    attrs.order = [
+      ...(attrs.order ?? ['.class']).filter((x) => x !== 'role' && x !== 'aria-label'),
+      ...(writeRole ? ['role'] : []),
+      ...(writeName ? ['aria-label'] : []),
+    ]
+  }
   const panelClass = opts.panelClass ?? 'code-group-panel'
   const labelClass = opts.labelClass ?? 'code-group-label'
   const radioClass = opts.radioClass ?? 'code-group-radio'
@@ -103,6 +136,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     if (node.attrs?.id !== undefined) attrs.id = node.attrs.id
     if (node.attrs?.keyValues) attrs.keyValues = { ...node.attrs.keyValues }
     attrs.order = ['.class', ...(node.attrs?.order ?? []).filter((s) => s !== '.class')]
+    groupAttrs(node, attrs, opts.groupLabel ?? ctx.labels.codeGroup)
 
     let html = `${pad}<div${ctx.renderAttrs(attrs)}>\n`
     items.forEach((item, index) => {
@@ -149,6 +183,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     if (node.attrs?.id !== undefined) attrs.id = node.attrs.id
     if (node.attrs?.keyValues) attrs.keyValues = { ...node.attrs.keyValues }
     attrs.order = ['.class', ...(node.attrs?.order ?? []).filter((s) => s !== '.class')]
+    groupAttrs(node, attrs, opts.groupLabel ?? ctx.labels.codeGroup)
     let html = `${pad}<div${ctx.renderAttrs(attrs)}>\n`
     for (const item of items) {
       html += `${innerPad}<section class="${ctx.escapeAttr(panelClass)}">\n`
