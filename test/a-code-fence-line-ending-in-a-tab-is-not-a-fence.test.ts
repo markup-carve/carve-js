@@ -105,7 +105,7 @@ describe('a code fence line ending in a tab is not a fence', () => {
   // The constructs the ruling did NOT move. carve-rs accepts a tab on each.
   it('the colon fence still closes on a tab', () => {
     expect(carveToHtml('::: note\nx\n:::' + TAB + '\n')).toBe(
-      '<aside class="admonition note">\n  <p>x</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>x</p>\n</aside>',
     )
   })
 

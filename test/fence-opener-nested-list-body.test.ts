@@ -18,7 +18,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <ul>',
         '        <li>para text</li>',
         '      </ul>',
@@ -34,7 +34,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <ol>',
         '        <li>para text</li>',
         '      </ol>',
@@ -50,7 +50,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <ul>',
         '        <li>one</li>',
         '        <li>two</li>',
@@ -67,7 +67,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <ul>',
         '        <li>para text</li>',
         '      </ul>',
@@ -83,7 +83,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <ul>',
         '        <li>para text</li>',
         '      </ul>',
@@ -101,7 +101,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <ul>',
         '        <li>para text</li>',
         '      </ul>',
@@ -123,7 +123,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '',
         '    </aside>',
         '  </li>',
@@ -137,7 +137,7 @@ describe('a list-item colon-fence opener captures a nested-list body (§10/§12)
       [
         '<ul>',
         '  <li>',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <p>para</p>',
         '    </aside>',
         '  </li>',

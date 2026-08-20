@@ -55,7 +55,7 @@ describe('generic divs', () => {
 
   it('still renders canonical admonitions as <aside>', () => {
     expect(h('::: note\nz\n:::')).toBe(
-      '<aside class="admonition note">\n  <p>z</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>z</p>\n</aside>',
     )
   })
 
@@ -94,7 +94,7 @@ describe('hard-break block (::: \\)', () => {
     expect(h(':::: \\\n  indented\nnext\n\n::: note\na\nb\n:::\n::::')).toBe(
       '<div class="hardbreaks">\n' +
         '  <p>indented<br>\nnext</p>\n' +
-        '  <aside class="admonition note">\n    <p>a\nb</p>\n  </aside>\n' +
+        '  <aside class="admonition note" aria-label="Note">\n    <p>a\nb</p>\n  </aside>\n' +
         '</div>',
     )
   })

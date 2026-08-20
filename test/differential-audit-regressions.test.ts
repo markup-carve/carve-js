@@ -21,7 +21,7 @@ describe('differential audit regressions', () => {
   })
 
   it('reads an unclosed dollar-prefixed verbatim run as math', () => {
-    expect(carveToHtml('$`x\n')).toBe('<p><span class="math inline">\\(x\\)</span></p>')
+    expect(carveToHtml('$`x\n')).toBe('<p><span class="math inline" role="math">\\(x\\)</span></p>')
     expect(carveToHtml('$`\n')).toBe('<p>$<code></code></p>')
   })
 

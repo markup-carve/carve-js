@@ -10,17 +10,17 @@ const h = (s: string) => carveToHtml(s)
  */
 describe('task-list states', () => {
   it('renders [x]/[X] as checked', () => {
-    expect(h('- [x] a')).toContain('<input type="checkbox" checked disabled> a')
-    expect(h('- [X] b')).toContain('<input type="checkbox" checked disabled> b')
+    expect(h('- [x] a')).toContain('<input type="checkbox" checked disabled aria-label="a"> a')
+    expect(h('- [X] b')).toContain('<input type="checkbox" checked disabled aria-label="b"> b')
   })
 
   it('renders [ ] as an unchecked checkbox', () => {
-    expect(h('- [ ] a')).toContain('<input type="checkbox" disabled> a')
+    expect(h('- [ ] a')).toContain('<input type="checkbox" disabled aria-label="a"> a')
   })
 
   it.each(['-', '_', '>', '?'])('renders [%s] as an unchecked checkbox', (s) => {
     const html = h(`- [${s}] item`)
-    expect(html).toContain('<input type="checkbox" disabled> item')
+    expect(html).toContain('<input type="checkbox" disabled aria-label="item"> item')
     expect(html).not.toContain('checked')
   })
 

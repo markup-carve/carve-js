@@ -285,7 +285,7 @@ describe('list-table Tier-3 extension', () => {
   it('does not claim other admonition types', () => {
     const src = ['::: note', 'Hello.', ':::'].join('\n')
     expect(h(src)).toBe(
-      ['<aside class="admonition note">', '  <p>Hello.</p>', '</aside>'].join('\n'),
+      ['<aside class="admonition note" aria-label="Note">', '  <p>Hello.</p>', '</aside>'].join('\n'),
     )
   })
 

@@ -60,7 +60,7 @@ describe('an attribute block before a nested list (carve#1238)', () => {
 
   it('attaches to a TASK sub-list', () => {
     expect(h('- a\n\n  {.x}\n  - [ ] b\n')).toBe(
-      '<ul>\n  <li>a\n    <ul class="x">\n      <li><input type="checkbox" disabled> b</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ul class="x">\n      <li><input type="checkbox" disabled aria-label="b"> b</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 

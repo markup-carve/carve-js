@@ -16,7 +16,7 @@ describe('a block that renders to nothing contributes no line', () => {
 
   it('a comment block inside an admonition', () => {
     expect(h('::: note\n%%%\nx\n%%%\nbody\n:::')).toBe(
-      ['<aside class="admonition note">', '  <p>body</p>', '</aside>'].join('\n'),
+      ['<aside class="admonition note" aria-label="Note">', '  <p>body</p>', '</aside>'].join('\n'),
     )
   })
 

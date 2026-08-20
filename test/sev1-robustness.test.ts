@@ -33,13 +33,13 @@ describe('Severity-1 robustness', () => {
     // An opener always opens; without a closer it deliberately extends to EOF.
     // This pins that the resulting document stays well-formed.
     expect(carveToHtml('intro\n\n::: note\nbody\n\nmore\n')).toBe(
-      '<p>intro</p>\n<aside class="admonition note">\n  <p>body</p>\n  <p>more</p>\n</aside>',
+      '<p>intro</p>\n<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n  <p>more</p>\n</aside>',
     )
   })
 
   it('a terminated admonition still opens', () => {
     expect(carveToHtml('::: note\nbody\n:::\n')).toBe(
-      '<aside class="admonition note">\n  <p>body</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>',
     )
   })
 

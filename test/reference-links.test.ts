@@ -133,7 +133,7 @@ describe('reference-link resolution (grammar §6)', () => {
 
   it('resolves a ref whose definition is in a later admonition body', () => {
     expect(html('Use [x][r].\n\n::: note\n[r]: /u\n:::')).toBe(
-      '<p>Use <a href="/u">x</a>.</p>\n<aside class="admonition note">\n\n</aside>',
+      '<p>Use <a href="/u">x</a>.</p>\n<aside class="admonition note" aria-label="Note">\n\n</aside>',
     )
   })
 })

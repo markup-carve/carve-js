@@ -75,7 +75,7 @@ describe('list lazy continuation', () => {
 
   it('an indented admonition still nests inside the list item', () => {
     expect(html('- ::: note\n  body\n  :::')).toBe(
-      '<ul>\n  <li>\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <aside class="admonition note" aria-label="Note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
     )
   })
   it('folds a below-column marker at every depth, not only one column in', () => {

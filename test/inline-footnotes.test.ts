@@ -9,7 +9,7 @@ describe('inline footnotes ^[content]', () => {
     expect(out).toContain(
       '<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>',
     )
-    expect(out).toContain('<section role="doc-endnotes">')
+    expect(out).toContain('<section role="doc-endnotes" aria-label="Footnotes">')
     expect(out).toContain(
       '<li id="fn1">\n      <p>a quick aside<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>',
     )

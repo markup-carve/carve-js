@@ -148,7 +148,7 @@ describe('block attribute lines (§15)', () => {
 
   it('merges a leading class into an admonition wrapper class', () => {
     expect(h('{.x}\n::: note\nB\n:::')).toBe(
-      '<aside class="admonition note x">\n  <p>B</p>\n</aside>',
+      '<aside class="admonition note x" aria-label="Note">\n  <p>B</p>\n</aside>',
     )
   })
 

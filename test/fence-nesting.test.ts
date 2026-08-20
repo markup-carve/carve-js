@@ -11,9 +11,9 @@ describe('::: fence-length nesting', () => {
   it('nests an admonition inside a longer-fenced admonition', () => {
     expect(h(':::: note\nOuter.\n\n::: warning\nNested.\n:::\n::::')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <p>Outer.</p>',
-        '  <aside class="admonition warning">',
+        '  <aside class="admonition warning" aria-label="Warning">',
         '    <p>Nested.</p>',
         '  </aside>',
         '</aside>',
@@ -39,7 +39,7 @@ describe('::: fence-length nesting', () => {
     // The inner `:::` (len 3) does not close the `::::` (len 4) block.
     const out = h('{#box}\n::::\n::: tip\nuse a longer fence\n:::\n::::')
     expect(out).toContain('<div id="box">')
-    expect(out).toContain('<aside class="admonition tip">')
+    expect(out).toContain('<aside class="admonition tip" aria-label="Tip">')
   })
 
   it('a lone unclosed :::: opens and auto-closes at EOF', () => {
@@ -48,7 +48,7 @@ describe('::: fence-length nesting', () => {
 
   it('a plain 3-colon block is unchanged', () => {
     expect(h('::: note\nhi\n:::')).toBe(
-      '<aside class="admonition note">\n  <p>hi</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>hi</p>\n</aside>',
     )
   })
 })

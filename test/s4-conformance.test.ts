@@ -60,7 +60,7 @@ describe('S4 cross-impl conformance', () => {
       .toBe(
         '<p><a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>' +
           '<a id="fnref1-2" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
-          '<section role="doc-endnotes">\n' +
+          '<section role="doc-endnotes" aria-label="Footnotes">\n' +
           '  <hr>\n' +
           '  <ol>\n' +
           '    <li id="fn1">\n' +

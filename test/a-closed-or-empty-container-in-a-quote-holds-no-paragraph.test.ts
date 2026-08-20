@@ -28,7 +28,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
   it('an EMPTY div opened by a quoted line does not swallow the flush-left line', () => {
     // markup-carve/carve-js#833, document A. The div folded `tail` in.
     expect(html('> quote\n> ::: note\ntail\n')).toBe(
-      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note" aria-label="Note">\n\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
@@ -36,7 +36,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // markup-carve/carve-js#833, document B. `tail` stayed inside the quote,
     // because a colon fence's closer was not tracked at all.
     expect(html('> quote\n> ::: note\n> body\n> :::\ntail\n')).toBe(
-      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n    <p>body</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note" aria-label="Note">\n    <p>body</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
@@ -51,7 +51,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // and the ticket did not name it: the closer, not the opener, is what was
     // missing, so both spellings moved.
     expect(html('> ::: note\n> body\n> :::\ntail\n')).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n    <p>body</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>body</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
@@ -82,7 +82,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // There IS an open paragraph on the stack here, so S4 folds. This is the
     // row that a fix written as "any container ends the quote" would break.
     expect(html('> quote\n> ::: note\n> body\ntail\n')).toBe(
-      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n    <p>body\ntail</p>\n  </aside>\n</blockquote>',
+      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note" aria-label="Note">\n    <p>body\ntail</p>\n  </aside>\n</blockquote>',
     )
   })
 
@@ -111,7 +111,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
 
   it('CONTROL a CLOSED empty div after a blank line still ends the quote', () => {
     expect(html('> quote\n> ::: note\n> :::\n\ntail\n')).toBe(
-      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note">\n\n  </aside>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <p>quote</p>\n  <aside class="admonition note" aria-label="Note">\n\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
   })
 
@@ -123,7 +123,7 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
 
   it('CONTROL the LIST ITEM twin is unchanged', () => {
     expect(html('- item\n  ::: note\n  body\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li>item\n    <aside class="admonition note" aria-label="Note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 
@@ -135,10 +135,10 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // absorption. The TOP LEVEL is the arbiter here and gives this same answer.
     const quoted = '> ::: note\n> body\n> :::\n> :::note\n> x\n> :::\ntail\n'
     expect(html(quoted)).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n    <p>body</p>\n  </aside>\n  <p>:::note\nx\n:::\ntail</p>\n</blockquote>',
+      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>body</p>\n  </aside>\n  <p>:::note\nx\n:::\ntail</p>\n</blockquote>',
     )
     expect(html('::: note\nbody\n:::\n:::note\nx\n:::\ntail\n')).toBe(
-      '<aside class="admonition note">\n  <p>body</p>\n</aside>\n<p>:::note\nx\n:::\ntail</p>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>body</p>\n</aside>\n<p>:::note\nx\n:::\ntail</p>',
     )
   })
 
@@ -166,10 +166,10 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // on. Both branches leave no open paragraph on their own, so this is the
     // one shape that tells them apart. The top level answers the same way.
     expect(html('> ::: note\n> :::x\n> :::\ntail\n')).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n    <p>:::x</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
+      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>:::x</p>\n  </aside>\n</blockquote>\n<p>tail</p>',
     )
     expect(html('::: note\n:::x\n:::\ntail\n')).toBe(
-      '<aside class="admonition note">\n  <p>:::x</p>\n</aside>\n<p>tail</p>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>:::x</p>\n</aside>\n<p>tail</p>',
     )
   })
 
@@ -178,10 +178,10 @@ describe('a closed or empty container inside a quote holds no open paragraph', (
     // passes every shape above. A `::::` inside a `:::` container is not its
     // closer, so §12 absorption takes it and the paragraph stays open.
     expect(html('> ::: note\n> :::x\n> ::::\ntail\n')).toBe(
-      '<blockquote>\n  <aside class="admonition note">\n    <p>:::x\n::::\ntail</p>\n  </aside>\n</blockquote>',
+      '<blockquote>\n  <aside class="admonition note" aria-label="Note">\n    <p>:::x\n::::\ntail</p>\n  </aside>\n</blockquote>',
     )
     expect(html('::: note\n:::x\n::::\ntail\n')).toBe(
-      '<aside class="admonition note">\n  <p>:::x\n::::\ntail</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>:::x\n::::\ntail</p>\n</aside>',
     )
   })
 

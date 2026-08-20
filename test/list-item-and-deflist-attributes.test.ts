@@ -42,7 +42,7 @@ describe('list-item attributes', () => {
 
   it('attaches to a task item, abutting the marker before the checkbox', () => {
     expect(h('-{.c} [ ] task')).toBe(
-      '<ul>\n  <li class="c"><input type="checkbox" disabled> task</li>\n</ul>',
+      '<ul>\n  <li class="c"><input type="checkbox" disabled aria-label="task"> task</li>\n</ul>',
     )
   })
 

@@ -107,7 +107,7 @@ describe('sourceLine render option', () => {
         '<ul data-source-line="3">\n' +
         '  <li data-source-line="3">first</li>\n' +
         '</ul>\n' +
-        '<section role="doc-endnotes">\n' +
+        '<section role="doc-endnotes" aria-label="Footnotes">\n' +
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1" data-source-line="6">\n' +
@@ -135,7 +135,7 @@ describe('sourceLine render option', () => {
   it('stamps footnote list items and content blocks', () => {
     expect(h('ref[^a]\n\n[^a]: note\n\n  more')).toBe(
       '<p data-source-line="1">ref<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
-        '<section role="doc-endnotes">\n' +
+        '<section role="doc-endnotes" aria-label="Footnotes">\n' +
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1" data-source-line="3">\n' +

@@ -33,7 +33,7 @@ describe('an unclosed inline run reaches the end of a line block', () => {
 
   it('carries an inline math run across it', () => {
     expect(carveToHtml('::: |\na $`b\nc d\n:::\n')).toBe(
-      '<div class="line-block">\n  <p>a <span class="math inline">\\(b\nc d\\)</span></p>\n</div>',
+      '<div class="line-block">\n  <p>a <span class="math inline" role="math">\\(b\nc d\\)</span></p>\n</div>',
     )
   })
 
@@ -62,7 +62,7 @@ describe('an unclosed inline run reaches the end of a line block', () => {
       '<div class="line-block">\n' +
         '  <p>a <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> b</p>\n' +
         '</div>\n' +
-        '<section role="doc-endnotes">\n' +
+        '<section role="doc-endnotes" aria-label="Footnotes">\n' +
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1">\n' +
@@ -89,7 +89,7 @@ describe('an unclosed inline run reaches the end of a line block', () => {
 
   it('CONTROL: the paragraph form is unchanged for math', () => {
     expect(carveToHtml('a $`b\nc d\n')).toBe(
-      '<p>a <span class="math inline">\\(b\nc d\\)</span></p>',
+      '<p>a <span class="math inline" role="math">\\(b\nc d\\)</span></p>',
     )
   })
 

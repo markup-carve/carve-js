@@ -130,7 +130,7 @@ describe('details disclosure extension', () => {
   })
 
   it('leaves canonical admonitions untouched', () => {
-    expect(h('::: note\nhi\n:::')).toContain('<aside class="admonition note">')
+    expect(h('::: note\nhi\n:::')).toContain('<aside class="admonition note" aria-label="Note">')
   })
 
   it('leaves other custom admonition types as plain divs', () => {

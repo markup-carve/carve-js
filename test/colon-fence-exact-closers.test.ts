@@ -31,9 +31,9 @@ describe('colon fences with exact-length closers', () => {
   it('equal-length fences nest', () => {
     expect(h('::: note\nOuter.\n\n::: tip\nNested.\n:::\n:::')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <p>Outer.</p>',
-        '  <aside class="admonition tip">',
+        '  <aside class="admonition tip" aria-label="Tip">',
         '    <p>Nested.</p>',
         '  </aside>',
         '</aside>',
@@ -44,9 +44,9 @@ describe('colon fences with exact-length closers', () => {
   it('a wider inner fence nests', () => {
     expect(h('::: note\nOuter.\n\n:::: tip\nNested.\n::::\n:::')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <p>Outer.</p>',
-        '  <aside class="admonition tip">',
+        '  <aside class="admonition tip" aria-label="Tip">',
         '    <p>Nested.</p>',
         '  </aside>',
         '</aside>',
@@ -83,9 +83,9 @@ describe('colon fences with exact-length closers', () => {
   it('existing well-formed longer-outer documents still nest exactly as before', () => {
     expect(h(':::: note\nOuter.\n\n::: warning\nNested.\n:::\n::::')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <p>Outer.</p>',
-        '  <aside class="admonition warning">',
+        '  <aside class="admonition warning" aria-label="Warning">',
         '    <p>Nested.</p>',
         '  </aside>',
         '</aside>',
@@ -96,7 +96,7 @@ describe('colon fences with exact-length closers', () => {
   it('ignores a non-bare colon-fence opener inside a code fence', () => {
     expect(h('::: note\n```text\n::: tip\n```\n:::\nafter')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <pre><code class="language-text">::: tip',
         '</code></pre>',
         '</aside>',
@@ -108,7 +108,7 @@ describe('colon fences with exact-length closers', () => {
   it('ignores a bare colon-fence closer inside a code fence', () => {
     expect(h('::: note\n```text\n:::\n```\nbody\n:::\nafter')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <pre><code class="language-text">:::',
         '</code></pre>',
         '  <p>body</p>',
@@ -123,7 +123,7 @@ describe('colon fences with exact-length closers', () => {
       [
         '<ul>',
         '  <li>item',
-        '    <aside class="admonition note">',
+        '    <aside class="admonition note" aria-label="Note">',
         '      <pre><code class="language-text">:::',
         '</code></pre>',
         '      <p>body</p>',
@@ -138,7 +138,7 @@ describe('colon fences with exact-length closers', () => {
   it('ignores a colon fence inside a tilde code fence', () => {
     expect(h('::: note\n~~~text\n::: tip\n~~~\n:::\nafter')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <pre><code class="language-text">::: tip',
         '</code></pre>',
         '</aside>',
@@ -152,7 +152,7 @@ describe('colon fences with exact-length closers', () => {
     // note's body is `body` alone - what this pins is where the note ends.
     expect(h('::: note\n%%%\n::: tip\n%%%\nbody\n:::\nafter')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <p>body</p>',
         '</aside>',
         '<p>after</p>',
@@ -163,8 +163,8 @@ describe('colon fences with exact-length closers', () => {
   it('ignores a code-fence colon opener inside a one-level-deeper container', () => {
     expect(h('::: note\n::: tip\n```text\n::: warning\n```\n:::\n:::\nafter')).toBe(
       [
-        '<aside class="admonition note">',
-        '  <aside class="admonition tip">',
+        '<aside class="admonition note" aria-label="Note">',
+        '  <aside class="admonition tip" aria-label="Tip">',
         '    <pre><code class="language-text">::: warning',
         '</code></pre>',
         '  </aside>',
@@ -177,7 +177,7 @@ describe('colon fences with exact-length closers', () => {
   it('does not treat an unterminated paragraph-interrupting code-fence shape as opaque', () => {
     expect(h('::: note\npara\n```text\n:::\nafter')).toBe(
       [
-        '<aside class="admonition note">',
+        '<aside class="admonition note" aria-label="Note">',
         '  <p>para',
         '<code>text</code></p>',
         '</aside>',
