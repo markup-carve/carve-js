@@ -50,7 +50,7 @@ describe("a line block's footnotes are numbered like any other block's", () => {
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1">\n' +
-        '      <p>note text<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        '      <p>note text<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
         '    </li>\n' +
         '  </ol>\n' +
         '</section>',
@@ -136,7 +136,7 @@ describe("a line block's footnotes are numbered like any other block's", () => {
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1">\n' +
-        '      <p>note text<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        '      <p>note text<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
         '    </li>\n' +
         '  </ol>\n' +
         '</section>',

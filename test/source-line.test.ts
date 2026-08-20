@@ -111,7 +111,7 @@ describe('sourceLine render option', () => {
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1" data-source-line="6">\n' +
-        '      <p data-source-line="6">note<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        '      <p data-source-line="6">note<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
         '    </li>\n' +
         '  </ol>\n' +
         '</section>',
@@ -140,7 +140,7 @@ describe('sourceLine render option', () => {
         '  <ol>\n' +
         '    <li id="fn1" data-source-line="3">\n' +
         '      <p data-source-line="3">note</p>\n' +
-        '      <p data-source-line="5">more<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        '      <p data-source-line="5">more<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
         '    </li>\n' +
         '  </ol>\n' +
         '</section>',

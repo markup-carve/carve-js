@@ -52,7 +52,7 @@ const CODE_HTML = '<pre><code>a b </code></pre>'
 const COLON_HTML = '<aside class="admonition note"><p>a</p><p>b</p></aside>'
 
 const REF = '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
-const BACKLINK = '<a href="#fnref1" role="doc-backlink">↩</a>'
+const BACKLINK = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
 const note = (body: string): string =>
   `${REF}<section role="doc-endnotes"><hr><ol><li id="fn1"><p>n</p>${body}<p>${BACKLINK}</p></li></ol></section>`
 

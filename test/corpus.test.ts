@@ -34,6 +34,20 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-boolean-attribute-does-not-start-with-an-underscore',
+  'a-braced-hyphen-pair-is-an-en-dash',
+  'a-continuation-marker-attaches-only-a-flush-left-block',
+  'a-hyphen-run-opening-a-word-after-whitespace-is-a-flag',
+  'a-lazy-marker-line-s-definition-defines-nothing-in-any-container',
+  'a-marker-line-link-definition-is-collected-where-no-paragraph-is-open',
+  'a-reference-definition-cannot-take-its-destination-from-the-next-line',
+  'a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item',
+  'a-terminal-comment-in-a-quote-leaves-no-paragraph-open',
+  'a-terminal-comment-line-still-leaves-an-empty-verse-line',
+  'an-empty-brace-pair-is-not-a-construct',
+  'an-unclosed-inline-literal-reaches-the-end-of-its-block',
+  'pipe-tables-can-state-head-and-foot-row-counts',
+  'the-doubled-run-is-the-canonical-arrow-in-both-families',
   'a-raw-block-keeps-the-blank-line-at-the-end-of-its-payload-too',
   'an-unterminated-fence-at-a-content-column-opens-no-block-so-the-paragraph-stays-open',
   'table-columns-carry-alignment-vertical-alignment-and-widths',

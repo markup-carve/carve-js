@@ -70,7 +70,7 @@ describe('an unclosed inline run reaches the end of a line block', () => {
         // boundary the author wrote inside it is a break node like any other
         // and hardens with the rest (markup-carve/carve#1351). The rule is node
         // kind at every depth, not a list of container types.
-        '      <p>note<br>\nmore<a href="#fnref1" role="doc-backlink">↩</a></p>\n' +
+        '      <p>note<br>\nmore<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
         '    </li>\n' +
         '  </ol>\n' +
         '</section>',
