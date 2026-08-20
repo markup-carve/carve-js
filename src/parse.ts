@@ -11581,7 +11581,22 @@ function scanInlineInner(
         continue
       }
       if (hasBrace && RE_BRACED_EN_DASH.test(rest)) {
-        buf += '\u2013'
+        // The SAME node the bare run produces, carrying the authored spelling
+        // in `value` - so the AST says "an en dash was written here" rather
+        // than holding a glyph in a text run, and `fmt` writes `{--}` back
+        // instead of the literal character. PART 12's vocabulary already has
+        // the kind; the braced form is a second spelling of it, not a second
+        // construct.
+        flush()
+        out.push(
+          withPos(
+            { type: 'smart_punctuation', kind: 'en_dash', value: '{--}' } as SmartPunctuation,
+            source,
+            text,
+            i,
+            i + 4,
+          ),
+        )
         i += 4
         continue
       }

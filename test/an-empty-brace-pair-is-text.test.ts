@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToCarve, carveToHtml } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml } from '../src/index.js'
 
 const h = (s: string) => carveToHtml(s)
 
@@ -91,7 +91,20 @@ describe('a braced hyphen pair is an en dash', () => {
     expect(h('`{--}`')).toBe('<p><code>{--}</code></p>')
   })
 
-  it('round-trips through the writer', () => {
+  it('is the same node the bare run produces, so the writer keeps it', () => {
+    // Not a glyph in a text run: `fmt` preserves `--` and `...` because they
+    // are `smart_punctuation` carrying the authored spelling, and the braced
+    // form is a second spelling of the same kind rather than a second
+    // construct. Written as text it formatted to a literal en dash and the
+    // author's `{--}` was gone.
+    const inlines = (carveToAstJson('a {--} b\n') as any).children[0].children
+    expect(inlines[1].type).toBe('smart_punctuation')
+    expect(inlines[1].kind).toBe('en_dash')
+    expect(inlines[1].value).toBe('{--}')
+    expect(inlines[1].pos.startOffset).toBe(2)
+    expect(inlines[1].pos.endOffset).toBe(6)
+
+    expect(carveToCarve('a {--} b\n')).toBe('a {--} b\n')
     for (const src of ['a {--} b\n', '{--}start\n', '{---} and {-x-}\n']) {
       expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
     }
