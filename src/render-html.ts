@@ -493,7 +493,11 @@ function sourceLineAttr(
 /** Allowed render modes. `"print"` / `"email"` are reserved, not yet valid. */
 const RENDER_MODES = new Set(['interactive', 'static'])
 
-export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
+export function renderHtml(
+  ast: Document,
+  opts: RenderOptions = {},
+  seededDocumentIds?: DocumentIdRegistry,
+): string {
   // PART 9 §10: an extension may add semantic span names. Core renders them,
   // so the order below is the union in the canonical order rather than
   // whatever sequence the extensions were registered in.
@@ -521,7 +525,7 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   const prevDocIds = docIds
   const prevOptions = activeRenderOptions
   abbrBudget = budgetForDocument(ast)
-  docIds = collectDocumentIds(ast)
+  docIds = seededDocumentIds ?? collectDocumentIds(ast)
   activeRenderOptions = opts
   try {
     return renderDocumentBody(ast, opts)
