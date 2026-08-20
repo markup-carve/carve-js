@@ -29,6 +29,19 @@ describe('an empty brace pair is text', () => {
     expect(h('{##}')).toBe('<p>{##}</p>')
   })
 
+  it('does not swallow the next construct of the same kind', () => {
+    // The empty pair being text has to mean it STOPS there. The forced-span
+    // pattern's lazy run grew past its own closer instead, so `{//} x {/y/}`
+    // came back as one `<em>` holding `/} x {/y` - the empty pair eating the
+    // construct after it, which is worse than the empty element it replaced.
+    expect(h('{//} x {/y/}')).toBe('<p>{//} x <em>y</em></p>')
+    expect(h('{**} x {*b*}')).toBe('<p>{**} x <strong>b</strong></p>')
+    expect(h('{~~} x {~s~}')).toBe('<p>{~~} x <s>s</s></p>')
+    expect(h('{==} x {=h=}')).toBe('<p>{==} x <mark>h</mark></p>')
+    expect(h('{++} x {+y+}')).toBe('<p>{++} x <ins>y</ins></p>')
+    expect(h('{--} x {-y-}')).toBe('<p>– x <del>y</del></p>')
+  })
+
   it('still reads a pair that holds something', () => {
     expect(h('{/i/}')).toBe('<p><em>i</em></p>')
     expect(h('{*b*}')).toBe('<p><strong>b</strong></p>')

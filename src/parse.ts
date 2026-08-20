@@ -10465,7 +10465,13 @@ const RE_BRACED_EN_DASH = /^\{--\}/
 // `{~…~}` (no `~>`) is forced strikethrough. The `=` form requires a trailing
 // `=` before `}`, so the raw-inline `{=format}` attribute (no trailing `=`,
 // e.g. `{=html}`) does not match here.
-const RE_FORCED_EMPHASIS = /^\{([/*_^,~=])([\s\S]+?)\1\}/
+// The content is `+?`, so an EMPTY pair never matched here - but it also never
+// STOPPED here: the lazy run grew past its own closer and took the next
+// construct with it, so `{//} x {/y/}` came back as one `<em>` holding
+// `/} x {/y`. The lookahead refuses the empty pair at its own closer instead,
+// which is what an empty brace pair being text has to mean
+// (markup-carve/carve#1447).
+const RE_FORCED_EMPHASIS = /^\{([/*_^,~=])(?!\1\})([\s\S]+?)\1\}/
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
   '/': 'emphasis',
   '*': 'strong',
