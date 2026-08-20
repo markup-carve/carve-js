@@ -20,6 +20,7 @@ import type {
   Table,
   Text,
 } from './ast.js'
+import type { DocumentIdRegistry } from './document-ids.js'
 import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
@@ -356,7 +357,11 @@ function transliterate(s: string): string {
  * recovered ASCII punctuation then collapses to hyphens like any other.
  */
 const SMART_TO_ASCII: Record<string, string> = {
-  '↔': '<->', '™': '(tm)', '…': '...', '→': '->', '←': '<-', '⇒': '=>',
+  // The canonical spellings, not the deprecated ones: `=>` no longer parses
+  // as an arrow at all, so recovering it would produce ASCII that does not
+  // round-trip (markup-carve/carve#1442).
+  '↔': '<-->', '™': '(tm)', '…': '...', '→': '-->', '←': '<--',
+  '⇔': '<=>', '⇒': '==>', '⇐': '<==',
   '≤': '<=', '≥': '>=', '≠': '!=', '±': '+-', '©': '(c)', '®': '(r)',
   '–': '-', '—': '-', '‘': "'", '’': "'", '“': '"', '”': '"',
 }
@@ -561,9 +566,10 @@ export function inlineText(nodes: InlineNode[]): string {
  * crossrefs (first-occurrence target, link text cloned from the target
  * heading; unresolved -> literal text). Mutates and returns `doc`.
  */
-export function resolveHeadingIds(
+function resolveHeadingIdsImpl(
   doc: Document,
   opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
+  documentIds?: DocumentIdRegistry,
 ): Document {
   const used = new Set<string>()
   const nextCounters = new Map<string, number>()
@@ -606,6 +612,7 @@ export function resolveHeadingIds(
       // slug rather than being treated as absent.
       id = heading.attrs.id
       used.add(id)
+      documentIds?.reserve(id)
     } else {
       const base = slugify(inlineText(heading.children), opts)
       if (!used.has(base)) {
@@ -618,6 +625,7 @@ export function resolveHeadingIds(
         nextCounters.set(base, n + 1)
       }
       used.add(id)
+      documentIds?.reserve(id)
       heading.attrs = { ...heading.attrs, id }
     }
     if (!targets.has(id)) targets.set(id, heading.children)
@@ -666,7 +674,10 @@ export function resolveHeadingIds(
   const reserveExplicitIds = (node: unknown): void => {
     if (!node || typeof node !== 'object') return
     const id = (node as { attrs?: Attrs }).attrs?.id
-    if (typeof id === 'string') used.add(id)
+    if (typeof id === 'string') {
+      used.add(id)
+      documentIds?.reserve(id)
+    }
     for (const key of Object.keys(node as Record<string, unknown>)) {
       if (key === 'pos') continue
       const v = (node as Record<string, unknown>)[key]
@@ -1105,6 +1116,23 @@ export function resolveHeadingIds(
   promoteBlockImages(doc.children)
   for (const body of footnoteBodies) promoteBlockImages(body)
   return doc
+}
+
+export function resolveHeadingIds(
+  doc: Document,
+  opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean } = {},
+): Document {
+  return resolveHeadingIdsImpl(doc, opts)
+}
+
+/** Internal conversion fast path: seed the renderer's id namespace while the
+ * mandatory resolution walk is already visiting every explicit/generated id. */
+export function resolveHeadingIdsWithRegistry(
+  doc: Document,
+  opts: { lowercase?: boolean; asciiFold?: boolean; asciiStrict?: boolean },
+  documentIds: DocumentIdRegistry,
+): Document {
+  return resolveHeadingIdsImpl(doc, opts, documentIds)
 }
 
 // "Content" is any character that is not one of Carve's four whitespace

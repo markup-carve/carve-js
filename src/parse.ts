@@ -10470,15 +10470,33 @@ const FORCED_TYPE: Record<string, Emphasis['type']> = {
 const RE_MENTION = /^@([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 const RE_TAG = /^#([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 
-// Fixed multi-character smart-typography tokens, longest first so
-// `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
+// Fixed multi-character smart-typography tokens, LONGEST FIRST, and the order
+// is the rule rather than a tidiness: `<-->` beats `<->` and `<--`, `-->` beats
+// the hyphen-run branch below, `<==` beats `<=`, `(tm)` beats `(c)`.
+//
+// The doubled run is the canonical arrow in both families (markup-carve/carve#1442).
+// `<--` `-->` `<-->` and `<==` `==>` `<=>` are canonical; `<-` `->` `<->` still
+// match and are DEPRECATED rather than removed, so a document written before
+// the rule goes on working.
+//
+// `=>` IS GONE, and that one is a behavior change rather than a deprecation.
+// It is ubiquitous in prose about code - `key => value`, `x => x + 1`,
+// `Some(x) => x` - and every one of those silently became ⇒, in the rendered
+// output only. `<=` keeps ≤ for the mirror-image reason: in technical prose it
+// is far more often a comparison than a leftward implication, which is what
+// forces the left double arrow to grow a character in the first place.
 const SMART_TOKENS: Array<[string, string, string]> = [
+  ['<-->', '↔', 'left_right_arrow'],
   ['<->', '↔', 'left_right_arrow'],
+  ['-->', '→', 'rightwards_arrow'],
+  ['<--', '←', 'leftwards_arrow'],
+  ['<=>', '⇔', 'left_right_double_arrow'],
+  ['==>', '⇒', 'rightwards_double_arrow'],
+  ['<==', '⇐', 'leftwards_double_arrow'],
   ['(tm)', '™', 'trademark'],
   ['...', '…', 'ellipsis'],
   ['->', '→', 'rightwards_arrow'],
   ['<-', '←', 'leftwards_arrow'],
-  ['=>', '⇒', 'rightwards_double_arrow'],
   ['<=', '≤', 'less_than_or_equal'],
   ['>=', '≥', 'greater_than_or_equal'],
   ['!=', '≠', 'not_equal'],
@@ -10507,6 +10525,17 @@ function allocateDashes(n: number): string {
   return '—'.repeat(em) + '–'.repeat(en)
 }
 const isAlnum = (ch: string) => /[A-Za-z0-9]/.test(ch)
+/*
+ * The space class the hyphen-run flanking test reads (PART 9 §8, carve#1443).
+ *
+ * PART 7's four whitespace characters plus the NO-BREAK SPACE - NOT `\s`. A
+ * VERTICAL TAB and a FORM FEED are CONTENT in Carve, so `---<VT>` has to answer
+ * the way `---!` answers, and `\s` takes both. The nbsp is in for the reason it
+ * is in quote flanking below: the question asked is "does a space stand here",
+ * and a nbsp is a space to the reader - in either of its spellings, so the
+ * internal U+E000 placeholder for an escaped `\ ` counts too.
+ */
+const isFlankSpace = (ch: string) => /[ \t\n\r\u00a0\ue000]/.test(ch)
 // Adjudicated smart-quote opening context (matches carve-rs on these inputs):
 // a straight quote curls OPENING when preceded by start-of-content, Unicode
 // whitespace (incl. NBSP, handled below via the U+E000 placeholder), or one of
@@ -10581,6 +10610,26 @@ function smartToken(
   if (text[i] === '-' && text[i + 1] === '-') {
     let n = 0
     while (text[i + n] === '-') n++
+    // PART 9 §8 (carve#1443): a run PRECEDED by whitespace (or the start of the
+    // content) and FOLLOWED by a non-whitespace character is a long CLI flag,
+    // not a dash, and stays literal. `git log --oneline` rendered `git log
+    // –oneline` before this - silently, and in the output only.
+    //
+    // The run start is scanned back to, not assumed to be `i`: a literal run is
+    // emitted one hyphen at a time, so the next character re-enters here with
+    // hyphens already behind it. Reading only forward would convert the tail of
+    // `---foo` into an en dash.
+    let start = i
+    while (start > 0 && text[start - 1] === '-') start--
+    const before = start > 0 ? text[start - 1]! : ''
+    const after = text[i + n] ?? ''
+    //
+    // The whole run is consumed as literal text rather than declined, so the
+    // arrow token cannot pick up what the dash rule put down: declining left
+    // `-->` as a stray `-` plus a live `->`, and the flag rendered `-→`.
+    if ((before === '' || isFlankSpace(before)) && after !== '' && !isFlankSpace(after)) {
+      return { out: text.slice(i, i + n), len: n, kind: 'literal_hyphen_run' }
+    }
     return { out: allocateDashes(n), len: n, kind: 'dash_run' }
   }
   const c = text[i]!
@@ -10947,6 +10996,15 @@ function scanInlineInner(
           ? lastEmittedGlyph(out)
           : ''
       const st = smartToken(text, i, prevForQuote)
+      if (st && st.kind === 'literal_hyphen_run') {
+        // A flag-shaped hyphen run (carve#1443) is ordinary text: it joins the
+        // buffer rather than becoming a node, so it renders and round-trips as
+        // the hyphens the author wrote.
+        buf += st.out
+        bufLast = st.out[st.out.length - 1]!
+        i += st.len
+        continue
+      }
       if (st) {
         flush()
         // A dash run resolves to one or more glyphs; each consumes a fixed
@@ -11707,6 +11765,14 @@ function matchEmphasis(
       // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
       // forced `{X…X}` family for deliberate intraword emphasis.
       if (before && /[A-Za-z0-9_]/.test(before)) continue
+      // A HIGHLIGHT DOES NOT OPEN BEFORE `>` (markup-carve/carve#1442). `=>`
+      // stopped being an arrow, which exposed its `=` to this machinery for the
+      // first time: `d => e; x != y` opened here and closed on the `=` of `!=`,
+      // rendering `<mark>&gt; e; x !</mark>` out of two things that are not
+      // emphasis at all. The spec's Ohm grammar carries the same guard, and it
+      // costs nothing real - a highlight whose content starts with `>` is a
+      // shape nobody writes, while `=>` in prose about code is everywhere.
+      if (delim === '=' && after === '>') continue
       // Italic/underline additionally can't open after `/` (path protection,
       // e.g. snake_/case/).
       if ((delim === '/' || delim === '_') && before === '/') continue

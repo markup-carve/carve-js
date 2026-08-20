@@ -24,6 +24,7 @@ import type { BeforeRenderContext, CarveExtension } from './extension.js'
 import { parse as parseImpl, type ParseOptions } from './parse.js'
 import {
   resolveHeadingIds,
+  resolveHeadingIdsWithRegistry,
   headingIdSlugOpts,
   promoteBlockImages,
   type AsciiHeadingIdMode,
@@ -49,6 +50,7 @@ import { renderAnsi as renderAnsiImpl, type AnsiRenderOptions } from './render-a
 import { adoptBlockFootnoteDefs } from './legacy-nodes.js'
 import { toAstJson as toAstJsonImpl, type AstJsonDocument } from './ast-json.js'
 import { coalesceTextRuns } from './coalesce-text-runs.js'
+import { DocumentIdRegistry } from './document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 
 export * from './ast.js'
@@ -382,7 +384,18 @@ export function resolve(
   doc: Document,
   opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean } = {},
 ): Document {
-  const resolved = resolveHeadingIds(doc, headingIdSlugOpts(opts))
+  return resolveDocument(doc, opts)
+}
+
+function resolveDocument(
+  doc: Document,
+  opts: { asciiHeadingIds?: AsciiHeadingIdMode; lowercaseHeadingIds?: boolean },
+  documentIds?: DocumentIdRegistry,
+): Document {
+  const slugOpts = headingIdSlugOpts(opts)
+  const resolved = documentIds
+    ? resolveHeadingIdsWithRegistry(doc, slugOpts, documentIds)
+    : resolveHeadingIds(doc, slugOpts)
   // Footnote `number` (PART 12 §5): document reference order, so it is a
   // resolution result rather than a rendering one. `renderHtml()` numbers
   // the same way standalone (carve-js#479) via the same shared pass.
@@ -408,17 +421,24 @@ export function carveToHtml(
     extensions: exts,
     ...(opts.sourceLine ? { positions: true } : {}),
   }
+  // With no transform/profile capable of inserting new ids, resolution can
+  // seed the renderer namespace during its existing mandatory AST walk. Public
+  // parse/resolve/render composition and mutable extension paths keep the
+  // conservative render-time collection.
+  const documentIds = exts.length === 0 && opts.profile === undefined
+    ? new DocumentIdRegistry()
+    : undefined
   let doc = applyTransforms(
-    resolve(parse(source, parseOpts), {
+    resolveDocument(parse(source, parseOpts), {
       asciiHeadingIds: opts.asciiHeadingIds ?? false,
       lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
-    }),
+    }, documentIds),
     exts,
     opts,
     true,
   )
   doc = runProfile(doc, opts)
-  return renderHtml(doc, opts)
+  return renderHtmlImpl(adoptBlockFootnoteDefs(doc), opts, documentIds)
 }
 
 /**

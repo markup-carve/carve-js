@@ -589,7 +589,13 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>()
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['20-smart-typography-arrows-and-symbols', {
+    reason: 'carve#1442 makes the doubled run canonical and removes `=>` as an arrow',
+    html: `<p>Flow: a → b ← c ↔ d =&gt; e; x ≠ y, p ≤ q, r ≥ s, ±1.
+© 2024, ®, ™. Dates like 1/2/2024 stay literal.</p>`,
+  }],
+])
 
 
 

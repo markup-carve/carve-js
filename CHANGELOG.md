@@ -18,6 +18,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A hyphen run that opens a word after whitespace is a flag, not a dash**
+  (markup-carve/carve#1443, PART 9 §8). `git log --oneline` and
+  `--force-with-lease` keep their hyphens; every other position converts as
+  before, including `pages 1--10` and a trailing `text --`.
 - **Definitions collected at a list item's content column close its paragraph**
   (markup-carve/carve#1376). A following line below that column no longer uses
   the comment-only continuation path; bare-dot items use the bullet column.

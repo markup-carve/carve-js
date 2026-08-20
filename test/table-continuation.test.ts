@@ -92,7 +92,10 @@ describe('table `+` multi-line cell continuation', () => {
   })
 
   it('appends content to the first column', () => {
-    const src = ['|= H |', '| v |', '+ => x |'].join('\n')
+    // `==>` rather than `=>` since markup-carve/carve#1442: the point of the
+    // case is that arrow TEXT follows the continuation marker, and `=>` is no
+    // longer an arrow.
+    const src = ['|= H |', '| v |', '+ ==> x |'].join('\n')
     expect(h(src)).toContain('<td>v ⇒ x</td>') // arrow text, not a marker
   })
 
