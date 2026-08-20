@@ -10470,15 +10470,33 @@ const FORCED_TYPE: Record<string, Emphasis['type']> = {
 const RE_MENTION = /^@([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 const RE_TAG = /^#([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/
 
-// Fixed multi-character smart-typography tokens, longest first so
-// `<->` beats `<-`, `---` beats `--`, `(tm)` beats `(c)`.
+// Fixed multi-character smart-typography tokens, LONGEST FIRST, and the order
+// is the rule rather than a tidiness: `<-->` beats `<->` and `<--`, `-->` beats
+// the hyphen-run branch below, `<==` beats `<=`, `(tm)` beats `(c)`.
+//
+// The doubled run is the canonical arrow in both families (markup-carve/carve#1442).
+// `<--` `-->` `<-->` and `<==` `==>` `<=>` are canonical; `<-` `->` `<->` still
+// match and are DEPRECATED rather than removed, so a document written before
+// the rule goes on working.
+//
+// `=>` IS GONE, and that one is a behavior change rather than a deprecation.
+// It is ubiquitous in prose about code - `key => value`, `x => x + 1`,
+// `Some(x) => x` - and every one of those silently became ⇒, in the rendered
+// output only. `<=` keeps ≤ for the mirror-image reason: in technical prose it
+// is far more often a comparison than a leftward implication, which is what
+// forces the left double arrow to grow a character in the first place.
 const SMART_TOKENS: Array<[string, string, string]> = [
+  ['<-->', '↔', 'left_right_arrow'],
   ['<->', '↔', 'left_right_arrow'],
+  ['-->', '→', 'rightwards_arrow'],
+  ['<--', '←', 'leftwards_arrow'],
+  ['<=>', '⇔', 'left_right_double_arrow'],
+  ['==>', '⇒', 'rightwards_double_arrow'],
+  ['<==', '⇐', 'leftwards_double_arrow'],
   ['(tm)', '™', 'trademark'],
   ['...', '…', 'ellipsis'],
   ['->', '→', 'rightwards_arrow'],
   ['<-', '←', 'leftwards_arrow'],
-  ['=>', '⇒', 'rightwards_double_arrow'],
   ['<=', '≤', 'less_than_or_equal'],
   ['>=', '≥', 'greater_than_or_equal'],
   ['!=', '≠', 'not_equal'],
@@ -11707,6 +11725,14 @@ function matchEmphasis(
       // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
       // forced `{X…X}` family for deliberate intraword emphasis.
       if (before && /[A-Za-z0-9_]/.test(before)) continue
+      // A HIGHLIGHT DOES NOT OPEN BEFORE `>` (markup-carve/carve#1442). `=>`
+      // stopped being an arrow, which exposed its `=` to this machinery for the
+      // first time: `d => e; x != y` opened here and closed on the `=` of `!=`,
+      // rendering `<mark>&gt; e; x !</mark>` out of two things that are not
+      // emphasis at all. The spec's Ohm grammar carries the same guard, and it
+      // costs nothing real - a highlight whose content starts with `>` is a
+      // shape nobody writes, while `=>` in prose about code is everywhere.
+      if (delim === '=' && after === '>') continue
       // Italic/underline additionally can't open after `/` (path protection,
       // e.g. snake_/case/).
       if ((delim === '/' || delim === '_') && before === '/') continue
