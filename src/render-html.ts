@@ -288,7 +288,7 @@ export const DANGEROUS_URL_SCHEMES = [
  */
 export const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\s]+/gu
 
-function sanitizeUrl(url: string, opts: RenderOptions): string {
+export function sanitizeUrl(url: string, opts: RenderOptions): string {
   if (opts.sanitizeUrls === false) return url
   // Browsers ignore C0 controls and whitespace when reading the scheme;
   // strip them for detection so obfuscated schemes can't slip through.
@@ -2217,7 +2217,7 @@ const HTML_ESCAPE: Record<string, string> = {
  * overrides/isolates do. Zero-width characters are likewise left as-is in text
  * (they are only stripped from generated ids; see heading-ids.ts).
  */
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   // Strip the Trojan-Source bidi controls, then escape the structural HTML
   // metacharacters.
   return stripBidiControls(s).replace(/[&<>\u00a0\ue000]/g, (c) => HTML_ESCAPE[c]!)
