@@ -14,7 +14,12 @@ import type {
   TableRowGroups,
 } from './ast.js'
 import { isAttrIdentifier, renderCarve } from './render-carve.js'
-import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE, isDangerousAttrName } from './render-html.js'
+import {
+  DANGEROUS_URL_SCHEMES,
+  LABEL_DEFAULTS,
+  SCHEME_PROBE_STRIP_RE,
+  isDangerousAttrName,
+} from './render-html.js'
 import { hasOwnKey, setOwn } from './own-property.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -296,6 +301,13 @@ class Importer {
   private nodes = 0
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
   private quoteDepth = 0
+  /**
+   * The id PART 9 §16a's counter derives for each `<p class="admonition-title">`,
+   * keyed by the node, so the drop is an equality match on the value the
+   * renderer would write at that position. Built on first use, off `root`.
+   */
+  private admonitionTitleIds: Map<P5Node, string> | undefined
+  private root: P5Node | undefined
   private readonly maxDepth: number
   private readonly maxNodes: number
   private readonly maxDiagnostics: number
@@ -311,6 +323,7 @@ class Importer {
 
   import(html: string): Document {
     const fragment = parseFragment(html, { sourceCodeLocationInfo: true }) as unknown as P5Node
+    this.root = fragment
     // Rewrite footnote-shaped HTML before the core policy reads the tree.
     // Under the word-processor adapters the full anchor-pair heuristic runs
     // ("Adapters may normalize editor-specific markup before the core
@@ -425,7 +438,231 @@ class Importer {
     }
     if (classes.length) attrs.classes = classes
     if (Object.keys(keyValues).length) attrs.keyValues = keyValues
+    this.dropDerived(node, classes, attrs)
+    if (attrs.keyValues && Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
     return attrs.id || attrs.classes || attrs.keyValues ? attrs : undefined
+  }
+
+  /**
+   * The attributes whose value EQUALS what the renderer derives for this
+   * element, removed (PART 9 §16a, markup-carve/carve#1500, reconciled with
+   * Extensions §1.5 in markup-carve/carve#1511).
+   *
+   * THE RULE IS VALUE-MATCHED, NOT NAME-MATCHED. Nothing in the HTML says who
+   * wrote an attribute, so provenance cannot be the test and is not one. Where
+   * the value equals the generated one the output is identical whichever side
+   * wrote it, so the drop is a no-op for what a reader hears; where it differs
+   * the attribute is kept, always. That second half is what a blanket
+   * `aria-label` drop cost before (carve-php#1337, carve-rs#1060), and this
+   * rule does not spend it again.
+   *
+   * WHAT IT BUYS is the only thing keeping a `labels` map alive across an
+   * import. A kept `aria-label="Tabs"` is indistinguishable from an authored
+   * one, and the author-wins precedence then makes the imported copy WIN on
+   * every later render: the same source re-rendered with `tabsGroup` set to
+   * `Registerkarten` still says `Tabs`. The document has been permanently
+   * unlocalized while no byte of today's output moved - which is also why a
+   * round trip cannot detect this and the test asserts ABSENCE instead.
+   *
+   * NOTHING IS DIAGNOSED. The renderer writes the value back, so this is not a
+   * lossy decision and emits no `attribute-dropped` - the same reason the
+   * `<figure>` and `<blockquote cite>` imports report nothing. A drop of the
+   * OTHER kind, where the value could not be represented, is diagnosed in
+   * `attrs()` as it always was.
+   *
+   * IT CATCHES THE DEFAULT ONLY, which §16a states as an accepted limit: HTML
+   * rendered with a German map carries a value no default equals, so it is kept
+   * and laundered. An importer cannot know the render's configuration and a
+   * non-default value is indistinguishable from an authored one, so failing
+   * SAFE - keep - is the side to err on.
+   */
+  private dropDerived(node: P5Node, classes: string[], attrs: Attrs): void {
+    const derived = this.derivedAttributes(node, classes)
+    if (!derived) return
+    for (const [name, values] of Object.entries(derived)) {
+      if (name === 'id') {
+        if (attrs.id !== undefined && values.includes(attrs.id)) delete attrs.id
+        continue
+      }
+      const held = attrs.keyValues?.[name]
+      if (held !== undefined && values.includes(held)) delete attrs.keyValues![name]
+    }
+  }
+
+  /**
+   * What the renderer derives for this element, as attribute name to the values
+   * it can produce. A name absent here is one the renderer never writes for
+   * this element, so it is the author's and is kept untouched.
+   *
+   * The classes are the ones the renderers write at their DEFAULT options: an
+   * importer cannot see the host's `wrapperClass` or `tabClass`, the same blind
+   * spot the default-only label match already accepts.
+   */
+  private derivedAttributes(node: P5Node, classes: string[]): Record<string, string[]> | undefined {
+    const tag = node.tagName ?? ''
+    const has = (name: string): boolean => classes.includes(name)
+
+    // A DIAGRAM FENCE names itself after its own class word, which is why
+    // Extensions §1.5 gives it no `labels` key - there is no fixed English
+    // string to translate, so the derived value is readable off the element.
+    // The role travels with the name and is derived whichever side wrote the
+    // name, so it goes even where an authored name stays.
+    //
+    // `<pre>` ONLY, though the json-mode fences wrap in a `<div>`. That mode
+    // puts the payload in a `<script>` the importer drops, so such a div never
+    // comes back as a fence for a renderer to name again - the drop would be a
+    // pure loss there, and a classed `<div role="img">` is far likelier to be
+    // some other producer's than a `<pre>` is. The narrower shape is the one
+    // the spec's `derived-accessible-name` fixture pins.
+    if (tag === 'pre' && classes.length > 0 && this.attr(node, 'role') === 'img') {
+      return { role: ['img'], 'aria-label': [classes[0]!] }
+    }
+
+    // A TAB SET / CODE GROUP takes its name from a `labels` key, so unlike the
+    // fence an author may genuinely have written the same words. Only the
+    // documented English default is dropped; anything else is kept.
+    if (tag === 'div' && has('tabs')) {
+      return { role: ['group', 'tablist'], 'aria-label': [LABEL_DEFAULTS.tabsGroup] }
+    }
+    if (tag === 'div' && has('code-group')) {
+      return { role: ['group'], 'aria-label': [LABEL_DEFAULTS.codeGroup] }
+    }
+
+    // A `css`-MODE PANEL is named by its own tab's `[label]` - a string the
+    // author already wrote once, in the document, which is why §16a keeps it
+    // out of the map. The importer reads that same string off the control
+    // beside the panel rather than inventing it.
+    if (tag === 'div' && (has('tabs-panel') || has('code-group-panel'))) {
+      const control = this.precedingLabelText(node, has('tabs-panel') ? 'tabs-label' : 'code-group-label')
+      return { role: ['group'], ...(control === undefined ? {} : { 'aria-label': [control] }) }
+    }
+
+    // A TITLED ADMONITION's title paragraph carries the renderer's own
+    // document-order counter, and the `<aside>`'s `aria-labelledby` points at
+    // it. Baked into source the id is authored, so the next render's counter
+    // collides with it. The Nth such paragraph derives exactly `adm-N`, so this
+    // stays an equality match rather than a guess at the shape.
+    if (tag === 'p' && has('admonition-title')) {
+      const derivedId = this.admonitionTitleId(node)
+      return derivedId === undefined ? undefined : { id: [derivedId] }
+    }
+
+    // AN INDEX BACK-LINK is named `{indexBackref} {term}`, or with the
+    // occurrence ordinal appended for the kth of several. Both halves are on
+    // the page - the term is the entry's own text, the ordinal is the link's
+    // position among its siblings - so the whole value is reconstructable.
+    if (tag === 'a' && has('index-backref')) {
+      const name = this.indexBackrefNames(node)
+      return name === undefined ? undefined : { 'aria-label': name }
+    }
+
+    return undefined
+  }
+
+  /**
+   * The text of the tab control that names the panel `node`: the nearest
+   * preceding ELEMENT sibling, when it is the one carrying `labelClass`.
+   * Nearest-and-only, because a panel with no control before it - a fragment
+   * cut mid-set - derives no name, and guessing one there would drop a label
+   * nothing writes back.
+   */
+  private precedingLabelText(node: P5Node, labelClass: string): string | undefined {
+    const siblings = node.parentNode?.childNodes ?? []
+    const at = siblings.indexOf(node)
+    for (let i = at - 1; i >= 0; i--) {
+      const previous = siblings[i]!
+      if (previous.nodeName === '#text' && (previous.value ?? '').trim() === '') continue
+      if (previous.tagName === undefined) continue
+      const classes = (this.attr(previous, 'class') ?? '').split(/\s+/)
+      return classes.includes(labelClass) ? this.text(previous) : undefined
+    }
+    return undefined
+  }
+
+  /**
+   * The names the index extension can derive for one back-link: the label plus
+   * the entry's term, and the same with this link's occurrence ordinal. Both
+   * spellings are accepted for a lone link because the extension's byte budget
+   * can truncate a numbered run down to one, leaving `… 1` on the survivor.
+   */
+  private indexBackrefNames(node: P5Node): string[] | undefined {
+    const parent = node.parentNode
+    if (!parent) return undefined
+    const isBackref = (child: P5Node): boolean =>
+      child.tagName === 'a' && (this.attr(child, 'class') ?? '').split(/\s+/).includes('index-backref')
+    const backrefs = (parent.childNodes ?? []).filter(isBackref)
+    const ordinal = backrefs.indexOf(node) + 1
+    if (ordinal === 0) return undefined
+    const term = (parent.childNodes ?? [])
+      .filter((child) => !isBackref(child))
+      .map((child) => this.text(child))
+      .join('')
+      .trim()
+    if (term === '') return undefined
+    const label = LABEL_DEFAULTS.indexBackref
+    return [`${label} ${term}`, `${label} ${term} ${ordinal}`]
+  }
+
+  /**
+   * The id the renderer derives for this `<p class="admonition-title">` -
+   * `adm-1`, `adm-2`, … in document order, which is the order the renderer's
+   * own counter runs in.
+   *
+   * WHICH PARAGRAPHS THE COUNTER COUNTS is the renderer's condition, not the
+   * class alone. It increments for a CANONICAL admonition with a title and no
+   * authored name, and that is exactly when it emits the id and points the
+   * `<aside>`'s `aria-labelledby` at it - so a paragraph qualifies here when
+   * its parent aside names it back. Counting every `admonition-title` instead
+   * would desync on the two shapes that carry the class and no counter: a
+   * NON-canonical `::: custom "T"` (a `<div>`, title with no id) and a
+   * canonical one the author named (`aria-label` wins, title with no id).
+   * Either one ahead of a real title shifted every later ordinal by one, and
+   * the mismatch then KEPT a genuinely derived id - the safe direction, but a
+   * missed drop rather than a correct one.
+   *
+   * Built in ONE walk on first use rather than counted per element: counting
+   * upward from each title would be quadratic on a document that is mostly
+   * titled admonitions, which is an input an importer runs on rather than a
+   * hypothetical. Deferred to first use so a document with no such paragraph -
+   * every document that never came from a Carve renderer - walks nothing.
+   *
+   * ITERATIVE, NOT RECURSIVE. The importer's depth limit is a COUNTER, and a
+   * caller may raise it past what the JS stack holds; a recursive prewalk would
+   * hit `Maximum call stack size exceeded` before the counter ever spoke, which
+   * is the contract `maxDepth` exists to keep.
+   */
+  private admonitionTitleId(node: P5Node): string | undefined {
+    if (!this.admonitionTitleIds) {
+      const ids = new Map<P5Node, string>()
+      const stack: P5Node[] = this.root ? [this.root] : []
+      while (stack.length > 0) {
+        const current = stack.pop()!
+        if (this.isCountedAdmonitionTitle(current)) ids.set(current, `adm-${ids.size + 1}`)
+        const children = current.childNodes ?? []
+        for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!)
+      }
+      this.admonitionTitleIds = ids
+    }
+    return this.admonitionTitleIds.get(node)
+  }
+
+  /**
+   * Whether this node is a title paragraph the renderer's admonition counter
+   * counted: an id, inside an `<aside class="admonition …">`, with the aside's
+   * `aria-labelledby` naming it back. A `docIds` collision suffix (`adm-1-2`)
+   * is not reconstructable from here, so such a title matches no derived value
+   * and its id is kept - the safe side of the same accepted limit §16a states
+   * for a non-default label.
+   */
+  private isCountedAdmonitionTitle(node: P5Node): boolean {
+    if (node.tagName !== 'p') return false
+    if (!(this.attr(node, 'class') ?? '').split(/\s+/).includes('admonition-title')) return false
+    const id = this.attr(node, 'id')
+    if (id === undefined) return false
+    const parent = node.parentNode
+    if (!parent || parent.tagName !== 'aside') return false
+    if (!(this.attr(parent, 'class') ?? '').split(/\s+/).includes('admonition')) return false
+    return this.attr(parent, 'aria-labelledby') === id
   }
 
   /**
