@@ -43,7 +43,6 @@ const shape = (src: string): string => {
       const out: Record<string, unknown> = {}
       for (const key of Object.keys(value as Record<string, unknown>).sort()) {
         if (key === 'pos' || key === 'footnoteDefPos' || key === 'srcByteLength') continue
-        if (key === 'escapedLeadingCaret') continue
         out[key] = merge((value as Record<string, unknown>)[key])
       }
       return out

@@ -1250,6 +1250,13 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       ((b.children[0] as Image).pos === undefined ||
         (b.children[0] as Image).pos!.startColumn === 1) &&
       b.children[1]!.type === 'soft_break' &&
+      // This `text` test is also what keeps an ESCAPED caret literal: `\^`
+      // parses to an `escaped_text` node, and coalesceTextRuns never merges one
+      // into a text node, so `![a](/u)\n\^ cap` arrives here with an
+      // `escaped_text` in this slot and stays a paragraph (carve-rs/-php). It
+      // used to be re-checked below through a parser-internal
+      // `escapedLeadingCaret` flag, which could not fire and was removed with it
+      // (carve-js#1259).
       b.children[2]!.type === 'text' &&
       // Mirror the caption delimiter (§4/§553): `^` + one-or-more spaces (a
       // space, not a tab). The FIRST line must carry content -- either text
@@ -1258,9 +1265,6 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // on a later folded line is not a caption, matching a heading's `#` +
       // space + non-empty rule.
       /^\^ +/.test((b.children[2] as Text).value) &&
-      // A leading caret that was ESCAPED in the source (`\^`) is literal, not a
-      // caption marker -- `![a](/u)\n\^ cap` stays a paragraph (carve-rs/-php).
-      !(b.children[2] as Text).escapedLeadingCaret &&
       captionFirstLineHasContent(b.children)
     ) {
       const caption = b.children.slice(2)

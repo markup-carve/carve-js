@@ -431,12 +431,6 @@ function canonical(value: unknown): unknown {
         key === 'srcByteLength'
       )
         continue
-      // `escapedLeadingCaret` records that a leading caret was escaped, which
-      // is the escape itself rather than a consequence of it - comparing it
-      // would escalate every document whose text starts with a caret. Where
-      // the escape is load-bearing, dropping it promotes an image to a FIGURE,
-      // and that is a structural difference this comparison sees anyway.
-      if (key === 'escapedLeadingCaret') continue
       out[key] = canonical((value as Record<string, unknown>)[key])
     }
     return out
@@ -2439,13 +2433,12 @@ function cleanEscapedText(node: Text): string {
 // keeps an unrelated orphan caret bare when another caret in the document is
 // load-bearing (carve#1028).
 //
-// It used to be unconditional because a text node whose LEADING caret came
-// from an escape is flagged (`escapedLeadingCaret`), so an image followed by a
-// caret line is not promoted to a figure - and comparing that flag escalated
-// any document whose text starts with a caret. The flag is now dropped from
-// the comparison instead (see `canonical`): where the escape actually matters,
-// the two renders differ by a FIGURE node rather than by a boolean, and that
-// difference the comparison already sees.
+// It used to be unconditional because the parser carried a boolean recording
+// that a text node's leading caret came from an escape, and comparing that
+// boolean escalated any document whose text started with a caret. The boolean
+// is gone (carve-js#1259): where the escape actually matters, the two renders
+// differ by a FIGURE node rather than by a flag, and that difference this
+// comparison already sees.
 const UNCONDITIONAL_ESCAPES = /[\\`"']/g
 const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=;"']/g
 // A colon is a candidate only where it can OPEN something: at the start of a

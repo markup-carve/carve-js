@@ -68,6 +68,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **The single-hyphen arrows `<-`, `->` and `<->`** (#1241). They still render, so documents written before the doubled-run rule keep working; prefer `<--`, `-->` and `<-->`.
 
+### Removed
+
+- **`escapedLeadingCaret` is gone from the parse tree** (#1259). The
+  parser-internal flag had no reader left - the one guard that consulted it
+  could not fire - and it was set after any two adjacent escaped carets, where
+  no caret leads. An escaped caret is still literal: the `escaped_text` node
+  holding `"^"` states it. It never crossed the wire (#735), so no published
+  output moves.
+
 ### Fixed
 
 - **`package.json` is importable, so the installed version can be read back**
