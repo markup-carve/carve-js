@@ -10987,17 +10987,12 @@ function scanInlineInner(
   const insSuf = text.includes('+}') ? suffixHasPair(text, '+', '}') : null
   const delSuf = text.includes('-}') ? suffixHasPair(text, '-', '}') : null
 
-  // Whether the current buffer's FIRST character is an escaped caret (`\^`),
-  // which is literal and must not be read as a caption marker downstream.
-  let bufEscapedCaret = false
   const flush = () => {
     if (buf) {
       const node = { type: 'text', value: buf } as Text
-      if (bufEscapedCaret) node.escapedLeadingCaret = true
       out.push(withPos(node, source, text, bufStart, i))
       buf = ''
       bufLast = ''
-      bufEscapedCaret = false
     }
   }
 
@@ -11080,9 +11075,6 @@ function scanInlineInner(
     if (c === '\\' && i + 1 < text.length) {
       const nxt = text[i + 1]!
       if (/[\\`*_{}\[\]()#+\-.!~^/<>@%|=,"'$&:;?]/.test(nxt)) {
-        // Remember a leading escaped caret so it is never mistaken for a caption
-        // marker (`\^ cap` after an image stays a paragraph, not a figure).
-        if (nxt === '^' && buf === '') bufEscapedCaret = true
         // The escape is its own node: the backslash carries intent the literal
         // character does not. `\-\-` was written precisely so a downstream
         // processor would not read an en dash, and flattening it into text lost
@@ -11182,15 +11174,10 @@ function scanInlineInner(
       const trimmed = buf.replace(/[ \t]+$/, '')
       const commentStart = i - (buf.length - trimmed.length)
       if (trimmed) {
-        // Carry the escaped-leading-caret flag (this path flushes the buffer
-        // directly instead of via flush()), so `\^ cap %% note` is not misread
-        // as a caption.
         const node = { type: 'text', value: trimmed } as Text
-        if (bufEscapedCaret) node.escapedLeadingCaret = true
         out.push(withPos(node, source, text, bufStart, commentStart))
       }
       buf = ''
-      bufEscapedCaret = false
       const nl = text.indexOf('\n', i)
       const end = nl === -1 ? text.length : nl
       const content = text.slice(i + 2, end).replace(/^[ \t]/, '')
@@ -12312,10 +12299,6 @@ function applyAbbreviations(
         const frag = { type: 'text', value: value.slice(last, m.index) } as Text
         const fragSpan = fragmentPos(node.pos, last, m.index)
         if (fragSpan) frag.pos = fragSpan
-        // The leading fragment (starting at offset 0) inherits the
-        // escaped-leading-caret flag, so an escaped caption whose text is an
-        // abbreviation (`\^ ABC`) is not misread as a caption after splitting.
-        if (last === 0 && node.escapedLeadingCaret) frag.escapedLeadingCaret = true
         out.push(frag)
       }
       const abbr = m[1]!
