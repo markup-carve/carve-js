@@ -99,6 +99,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Markdown importer replaces an authored U+0000 with U+FFFD** (#1291,
+  #1290, markup-carve/carve#678), which CommonMark 2.3 requires and `parse`
+  already did for Carve source. A raw NUL used to reach the output while `&#0;`
+  was replaced, and it answered the converter's own NUL-wrapped placeholders: a
+  document carrying one came back with a code span from elsewhere in it spliced
+  over the author's characters, and one authored inside a code span never
+  returned at all.
 - **The BBCode importer's stash key is picked per post, not a fixed
   U+E001/U+E002 pair** (#1290, #1289, markup-carve/carve-rs#1210,
   markup-carve/carve#678). A post carrying those two code points around a number

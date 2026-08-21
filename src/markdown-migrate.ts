@@ -933,8 +933,12 @@ function escapeAttributeListsThatAttach(input: string): string {
 
 function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM): string {
   // Protect inline code spans so their delimiters are never rewritten.
-  // Placeholders are wrapped in NUL bytes — which cannot occur in the source
-  // text — so ordinary text like "P0" is never mistaken for a placeholder.
+  // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
+  // mistaken for one. NUL cannot occur in the text this sees because
+  // `markdownToCarve` replaced every authored one with U+FFFD on the way in
+  // (CommonMark 2.3); the comment here used to claim the source could not
+  // contain one, which is an assumption about a file rather than about the
+  // string a host passes, and carve-js#1291 measured what an authored one did.
   const protectedSpans: string[] = []
   const protect = (s: string) => {
     protectedSpans.push(s)
@@ -1141,17 +1145,31 @@ function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM)
   // Restore stashes and protected spans until stable: a protected/stashed
   // span may itself contain placeholders (e.g. a reference-definition line
   // that wrapped an already-protected URL), so a single pass is not enough.
-  let prev: string
-  do {
-    prev = line
+  //
+  // BOUNDED. A slot only ever holds placeholders that were allocated before it,
+  // so the nesting a legitimate document produces is at most one level per slot
+  // and this many passes always reaches the fixed point. The bound is what turns
+  // the one shape that does not terminate into a return: a slot holding its OWN
+  // key is a cycle, and the loop spun on it forever rather than finishing
+  // (carve-js#1291, ``a `b<NUL>P0<NUL>c` d `code` e``). The NUL replacement in
+  // `markdownToCarve` is what stops such a slot being built at all; this is the
+  // second lock, so a future path into `convertInline` that skipped the
+  // replacement would emit the text unrestored instead of hanging the host.
+  const maxRestorePasses = protectedSpans.length + stash.length + 1
+  for (let pass = 0; pass < maxRestorePasses; pass++) {
+    const prev = line
     line = line
       // A stash/protect index that has no stored value means the NUL-wrapped
       // sentinel came from the input itself (not one we emitted), so keep the
       // matched text verbatim rather than splicing the literal string
-      // "undefined" into the output.
+      // "undefined" into the output. Unreachable from an input NUL since the
+      // replacement above - kept because it is the post-condition of the whole
+      // restore, and the cost of being wrong about that is a document with
+      // "undefined" written into it.
       .replace(/\x00S(\d+)\x00/g, (m, i) => stash[Number(i)] ?? m)
       .replace(/\x00P(\d+)\x00/g, (m, i) => protectedSpans[Number(i)] ?? m)
-  } while (line !== prev)
+    if (line === prev) break
+  }
   return line
 }
 
@@ -1948,12 +1966,43 @@ function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bo
  *
  * The dialect is CommonMark + GFM. Pass a {@link MarkdownDialect} to opt into
  * constructs that exist only in a wider flavour.
+ *
+ * A U+0000 IN THE INPUT IS REPLACED BY U+FFFD, before anything reads the text.
+ * That is CommonMark 2.3's own rule for the flavour this converter reads, and it
+ * is what `parse` already does for Carve source (`parse.ts`, "decided cross-impl
+ * behavior"), and what {@link decodeCodePoint} already did for a NUL spelled as
+ * a numeric entity - a raw one was the only spelling that reached the output, so
+ * the converter disagreed with both the spec it converts FROM and the engine it
+ * converts FOR.
+ *
+ * It is also what makes this file's placeholders safe. `convertInline` protects
+ * code spans, escapes and converted emphasis behind `\x00P<n>\x00` /
+ * `\x00S<n>\x00` under a comment claiming NUL "cannot occur in the source
+ * text" - an assumption about a SOURCE FILE, while the node API hands this
+ * function whatever string a host has. An authored `\x00P0\x00` answered the
+ * restore pass and came back as the code span stored in slot 0, so text from
+ * elsewhere in the document landed where the author's characters were; an
+ * authored placeholder INSIDE a code span made that span hold its own key, and
+ * the restore loop - which repeats until the text stops changing - never
+ * terminated (carve-js#1291).
+ *
+ * Normalizing here rather than picking a private-use run, the way the BBCode
+ * importer's stash key is picked (carve-js#1290, carve-js#1292): the two are not
+ * equivalent. A picked run is drawn from characters the input MAY legitimately
+ * carry, so it needs a scan, a refusal when the private-use area is full, and an
+ * exported error for it. NUL is not text this converter may emit at all - the
+ * engine downstream replaces it, and this converter now does the same - so after
+ * the replacement the wrapper's alphabet is provably absent from the text it
+ * wraps, with no failure mode to expose.
  */
 export function markdownToCarve(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
 ): string {
-  const allLines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const allLines = markdown
+    .replace(/\0/g, '\ufffd')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
   const { frontmatter, bodyStart } = splitFrontmatter(allLines)
   const lines = allLines.slice(bodyStart)
   const out: string[] = []
