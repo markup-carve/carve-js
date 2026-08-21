@@ -9,6 +9,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`package.json` is importable, so the installed version can be read back**
+  (#1257). The subpath was not in `exports`, so reading it threw
+  `ERR_PACKAGE_PATH_NOT_EXPORTED` - which reads as the package being absent
+  rather than the subpath being closed. Only that one file is opened; every
+  other path stays refused.
+
 - **The index back-link says where it goes** (markup-carve/carve#1469). A
   `↩` with no accessible name is announced as "leftwards arrow with hook", or
   skipped - and an index entry has one per occurrence, so a reader met a row of

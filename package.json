@@ -37,7 +37,8 @@
     "./prettier": {
       "import": "./dist/prettier.js",
       "types": "./dist/prettier.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

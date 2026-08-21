@@ -1,10 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import prettier from 'prettier'
 import { parse as parseYaml } from 'yaml'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { carveToCarve } from '../src/index.js'
 
@@ -212,5 +214,84 @@ describe('package metadata', () => {
     // warning instead of a surprise at the first parse difference.
     expect(pkg.peerDependencies?.['@djot/djot']).toBeTypeOf('string')
     expect(pkg.peerDependenciesMeta?.['@djot/djot']?.optional).toBe(true)
+  })
+})
+
+describe('resolving a subpath from a consumer position', () => {
+  /**
+   * Everything in `package metadata` above reads this repository's own
+   * manifest off disk with `readFileSync`. That answers "what does the file
+   * say", which is NOT the question an `exports` map decides - the map is
+   * enforced by the resolver, against an installed package, and a `readFileSync`
+   * assertion on it passes just as happily with the entry deleted.
+   *
+   * So this block asks the resolver instead. A scratch directory gets the
+   * `node_modules` layout an install produces, the package is linked into it,
+   * and a real `node` reads the specifier back the way a consumer's CI step
+   * would. What is under test is Node's resolution, not this file's opinion
+   * of it.
+   */
+  let consumer: string
+
+  beforeAll(() => {
+    consumer = mkdtempSync(join(tmpdir(), 'carve-consumer-'))
+    mkdirSync(join(consumer, 'node_modules', '@markup-carve'), { recursive: true })
+    symlinkSync(root, join(consumer, 'node_modules', '@markup-carve', 'carve'), 'dir')
+  })
+
+  afterAll(() => rmSync(consumer, { recursive: true, force: true }))
+
+  const resolve = (script: string): string =>
+    execFileSync('node', ['-e', script], {
+      cwd: consumer,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+
+  // Probed with `import`, not `require`: this package is ESM-only, so `.` and
+  // `./prettier` name no `require` condition and a require probe would report
+  // the same ERR_PACKAGE_PATH_NOT_EXPORTED for a subpath that is wide open.
+  const codeOf = (specifier: string): string =>
+    resolve(
+      `import(${JSON.stringify(specifier)}).then(() => console.log('RESOLVED'),` +
+        ` (e) => console.log(e.code ?? String(e)))`,
+    )
+
+  it('reads the installed version back through the package specifier', () => {
+    // The question a version-pinning CI step asks. Closed, it throws
+    // ERR_PACKAGE_PATH_NOT_EXPORTED, which reads as "this package is not
+    // installed" rather than "this subpath is closed" - so whoever hits it
+    // goes and audits their install first.
+    const version = resolve(
+      `console.log(require('@markup-carve/carve/package.json').version)`,
+    )
+
+    expect(version).toBe((JSON.parse(read('package.json')) as { version: string }).version)
+  })
+
+  it('reads it back under import as well as require', () => {
+    // Both resolvers consult the same map, but a consumer on either side of
+    // the divide should get the same answer, and only one of them is what a
+    // shell one-liner in CI happens to use.
+    const version = resolve(
+      `import('@markup-carve/carve/package.json', { with: { type: 'json' } })` +
+        `.then((m) => console.log(m.default.version))`,
+    )
+
+    expect(version).toBe((JSON.parse(read('package.json')) as { version: string }).version)
+  })
+
+  it('opens that one file and not the directory holding it', () => {
+    // The failure this guards: widening the map with a wildcard, or dropping
+    // it, to fix the line above. Either would publish the whole checkout as
+    // importable API - `src/` included - and nothing else here would notice.
+    expect(codeOf('@markup-carve/carve/tsconfig.json')).toBe('ERR_PACKAGE_PATH_NOT_EXPORTED')
+    expect(codeOf('@markup-carve/carve/src/index.ts')).toBe('ERR_PACKAGE_PATH_NOT_EXPORTED')
+    expect(codeOf('@markup-carve/carve/dist/index.js')).toBe('ERR_PACKAGE_PATH_NOT_EXPORTED')
+  })
+
+  it('still resolves the entry points the map already named', () => {
+    expect(codeOf('@markup-carve/carve')).toBe('RESOLVED')
+    expect(codeOf('@markup-carve/carve/prettier')).toBe('RESOLVED')
   })
 })
