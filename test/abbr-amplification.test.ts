@@ -47,13 +47,20 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
     // vector under the same budget.
     ['plain text', carveToPlainText],
   ] as const) {
-    it(`${name}: renders without throwing, bounded near the budget, fast`, () => {
-      const t0 = Date.now()
+    it(`${name}: renders without throwing, bounded near the budget`, () => {
+      // NO TIME BOUND, and this one could not have caught the defect it sat
+      // next to. It carried `expect(ms).toBeLessThan(2000)` on top of the byte
+      // bounds below; measured by disabling the budget entirely, every target
+      // emits ~50MB - the byte bounds fail at `50025006 to be less than
+      // 3000000` - while the render still finishes in 110 to 400ms, far inside
+      // the 2000ms the clock allowed. An amplification blowup is a blowup in
+      // OUTPUT SIZE, which is what the assertions below measure; the clock
+      // could only ever have gone red on ambient load, at a reading of 91 to
+      // 146ms against 2000 (carve-js#1268).
       let out: string | undefined
       expect(() => {
         out = api(src)
       }).not.toThrow()
-      const ms = Date.now() - t0
       expect(typeof out).toBe('string')
       // Output stays near the budget (expansion bytes + per-occurrence wrapper
       // and key bytes), nowhere near the ~100MB naive blowup. A loose 3x-budget
@@ -68,8 +75,6 @@ describe('abbreviation-expansion amplification (DoS guard)', () => {
       // because this definition's expansion IS emitted.
       const fullExpansions = out!.split(expansion).length - 1
       expect(fullExpansions).toBeLessThanOrEqual(Math.ceil(budget / EXPANSION_LEN) + 1)
-      // Fast: a real document is far below budget; even this worst case is quick.
-      expect(ms).toBeLessThan(2000)
     })
   }
 

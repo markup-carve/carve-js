@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { applyAstPatch, carveToAstJson, mergeAst } from '../src/index.js'
+import { mergeMatchDpCells } from '../src/merge.js'
 
 const clean = (source: string) => applyAstPatch(carveToAstJson(source), [])
 
@@ -38,12 +39,42 @@ describe('three-way merge properties', () => {
   })
 
   it('bounds a large ambiguous sibling list', () => {
+    // COUNTED, not timed. This asserted `elapsed < 2_500` and the reading it
+    // compared was 429ms on a box at loadavg 10 - 5.8x of headroom, against a
+    // suite where ambient load alone has inflated a reading 10.4x on unchanged
+    // code (carve-js#1268). So the bound described the runner.
+    //
+    // What it was really asking is countable. `matchSide` refuses to build its
+    // longest-common-kind DP table once `bs.length * ss.length` passes
+    // 1_000_000 and pairs the remaining kinds monotonically instead; that
+    // refusal is the entire bound on an ambiguous mass edit. 2000 siblings on
+    // each side is 4_000_000, so the table must never be built at all.
     const base = document(1, 2_000)
     const ours = base.replaceAll(' value ', ' ours ')
     const theirs = base.replaceAll(' value ', ' theirs ')
-    const started = performance.now()
+
+    mergeMatchDpCells.count = 0
     const result = mergeAst(carveToAstJson(base), carveToAstJson(ours), carveToAstJson(theirs))
-    expect(performance.now() - started).toBeLessThan(2_500)
+
+    expect(mergeMatchDpCells.count).toBe(0)
     expect(result.ok).toBe(false)
+  }, 10_000)
+
+  it('still builds the DP table for a list small enough to afford it', () => {
+    // The hole a bare `toBe(0)` above would leave: a counter that never
+    // increments reads 0 for every input, so the guard would pass while
+    // measuring nothing. 500 siblings is 250_000 pairs per side, inside the
+    // threshold, so the table IS built - measured 500_000 cells across the two
+    // sides. That is what makes the zero at 2000 mean the refusal fired.
+    const base = document(1, 500)
+    const ours = base.replaceAll(' value ', ' ours ')
+    const theirs = base.replaceAll(' value ', ' theirs ')
+
+    mergeMatchDpCells.count = 0
+    mergeAst(carveToAstJson(base), carveToAstJson(ours), carveToAstJson(theirs))
+
+    expect(mergeMatchDpCells.count).toBeGreaterThan(0)
+    // Two sides, each capped at 1_000_000 pairs by the threshold.
+    expect(mergeMatchDpCells.count).toBeLessThanOrEqual(2_000_000)
   }, 10_000)
 })

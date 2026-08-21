@@ -3,6 +3,7 @@ import {
   djotMigrationWarnings,
   applyMigrationFixes,
   migrateScanSteps,
+  migrateCrossSteps,
 } from '../src/djot-migrate.js'
 import { carveToHtml } from '../src/index.js'
 
@@ -361,28 +362,94 @@ describe('djot-migrate — overlap/cross detection performance (no O(n^2))', () 
   // `applyMigrationFixes` ran a full all-pairs `hits.some(crosses)` loop, both
   // O(n^2). A 96KB input of `**a** ` repeated took ~6s; the sorted single
   // sweep must keep both near-linear.
-  it('scans a 16000-construct document quickly', () => {
+  it('scans a 16000-construct document and finds every construct', () => {
+    // NO TIME BOUND. This used to assert under 800ms, and the reading it was
+    // comparing moved from 61ms to 634ms - 79% of the bound - purely on how
+    // busy the box was (carve-js#1268). What is left is the part that does not
+    // depend on the machine: the scan has to find all 16000 constructs in a
+    // ~96KB input. Its COST is guarded by the counted per-construct ratio
+    // below, which reads the same on any machine.
     const src = '**a** '.repeat(16000) // ~96KB, ~16000 family-* matches
-    const t0 = performance.now()
-    const w = djotMigrationWarnings(src)
-    const ms = performance.now() - t0
-    expect(w).toHaveLength(16000)
-    expect(ms).toBeLessThan(800)
+    expect(djotMigrationWarnings(src)).toHaveLength(16000)
   })
 
-  it('applies fixes on a 16000-construct document without quadratic blow-up', () => {
-    // This budget is a generous DoS ceiling, NOT a micro-benchmark. It still
-    // includes applyMigrationFixes' per-edit full-string splice (a separate,
-    // pre-existing O(edits x length) cost, sensitive to VM jitter), so the
-    // bound is loose: the old all-pairs cross scan pushed this input to seconds
-    // (~2.8s), and the near-linear scan guarantee is asserted separately below.
+  it('applies fixes on a 16000-construct document, every hit applied', () => {
+    // THIS IS THE ASSERTION carve-js#1268 WAS FILED FOR. It read
+    // `expect(ms).toBeLessThan(2500)`, and on unchanged `main` the value it
+    // compared was 417ms at loadavg 10, 1870ms at ~26, and 2651ms at 36 rising
+    // to 50 on 16 cores - a 6.4x spread from ambient load alone, which put the
+    // default branch red for a reason no ticket described.
+    //
+    // The bound could not simply be raised, because most of what it measured
+    // was never the regression it guarded. `applyMigrationFixes` splices the
+    // whole output string once per edit, so 32000 edits over ~96KB is
+    // O(edits x length) - a real quadratic, but a separate one from the
+    // all-pairs cross scan this test exists to keep out. A loose bound on that
+    // jittery dominant term is what load walked across.
+    //
+    // So the cost question moved to the counted guards below and this test
+    // keeps the machine-independent half: every hit is applied, none skipped.
     const src = '**a** '.repeat(16000)
-    const t0 = performance.now()
     const r = applyMigrationFixes(src)
-    const ms = performance.now() - t0
     expect(r.applied).toHaveLength(16000)
     expect(r.skipped).toEqual([])
-    expect(ms).toBeLessThan(2500)
+  })
+
+  it('the cross sweep scales near-linearly with the number of constructs', () => {
+    // COUNTED, not timed, exactly as the scan guard below is. The regression is
+    // the all-pairs `hits.some(crosses)` loop the active-list sweep replaced:
+    // that compares every hit against every earlier one, so comparisons PER HIT
+    // grow like n and quadruple across a 4x input. The sweep compares a hit only
+    // against the intervals still open at its own start, so its per-hit count
+    // stays flat.
+    //
+    // Measured on this commit: healthy gives 1.00 (0.99975 comparisons per
+    // construct at n=4000 against 0.9999 at n=16000). Reinstating the all-pairs
+    // scan gives exactly 4.00 - 4000 comparisons per construct against 16000,
+    // which IS n, which is what quadratic means. A bound of 2 sits 2x above the
+    // healthy reading and 2x below the regression, and neither number depends
+    // on the machine.
+    const stepsPerConstruct = (n: number): number => {
+      migrateCrossSteps.count = 0
+      applyMigrationFixes('**a** '.repeat(n))
+
+      return migrateCrossSteps.count / n
+    }
+
+    const small = stepsPerConstruct(4000)
+    const large = stepsPerConstruct(16000) // 4x the constructs
+
+    expect(small).toBeGreaterThan(0)
+    expect(large / small).toBeLessThan(2)
+  })
+
+  it('the cross-sweep counter tracks the sweep, not a constant', () => {
+    // Same hole the scan counter's companion test closes, for the same reason:
+    // a counter pinned to a fixed number is deterministic AND its per-construct
+    // figure shrinks as the input grows, so it would sail through the ratio
+    // bound above while measuring nothing. More constructs, more comparisons.
+    const count = (n: number): number => {
+      migrateCrossSteps.count = 0
+      applyMigrationFixes('**a** '.repeat(n))
+
+      return migrateCrossSteps.count
+    }
+
+    expect(count(100)).toBeGreaterThan(0)
+    expect(count(1000)).toBeGreaterThan(count(100))
+    expect(count(4000)).toBeGreaterThan(count(1000))
+  })
+
+  it('the cross-sweep counter is deterministic across runs', () => {
+    const count = (): number => {
+      migrateCrossSteps.count = 0
+      applyMigrationFixes('**a** '.repeat(2000))
+
+      return migrateCrossSteps.count
+    }
+
+    expect(count()).toBe(count())
+    expect(count()).toBe(count())
   })
 
   it('scales near-linearly with the number of constructs (scan)', () => {

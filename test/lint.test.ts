@@ -267,19 +267,24 @@ describe('lintCarve — verbatim-scan performance (no O(n^2))', () => {
   // line against it with `.some(...)`, an O(lines x regions) scan run twice.
   // The shared O(1) line set must keep lint near-linear: a document with
   // thousands of fenced blocks must lint quickly, not in seconds.
-  it('lints a 10000-fence document without quadratic blow-up', () => {
-    // The budget is a generous DoS ceiling, not a micro-benchmark: the old
-    // O(n^2) scan took ~1.7s on this input, so a re-regression would blow far
-    // past 1000ms. The near-linear scaling guarantee lives in the next test;
-    // this one only guards against returning to seconds-scale behavior under
-    // shared CI load.
+  it('lints a 10000-fence document and warns about none of them', () => {
+    // NO TIME BOUND, and the reason is that the one that was here could not be
+    // the guard it claimed to be. It asserted under 1000ms "against returning
+    // to seconds-scale behavior under shared CI load" - but the value it
+    // compared read 185ms on a box at loadavg 10, only 5.4x below the bound, in
+    // a suite where ambient load alone has inflated a reading 10.4x on
+    // unchanged code (carve-js#1268). A ceiling a busy runner can reach is not
+    // a ceiling on the algorithm.
+    //
+    // The near-linear guarantee is asserted in the next test, per region and
+    // interleaved, which is the load-cancelling form. What is left here is the
+    // half that does not depend on the machine: 10000 fenced blocks are all
+    // recognized as verbatim, so none of them produces a warning. A collector
+    // that stopped suppressing inside verbatim regions fails this on content,
+    // not on the clock.
     let src = ''
     for (let i = 0; i < 10000; i++) src += '```\ncode\n```\n\n'
-    const t0 = performance.now()
-    const w = lintCarve(src)
-    const ms = performance.now() - t0
-    expect(w).toEqual([])
-    expect(ms).toBeLessThan(1000)
+    expect(lintCarve(src)).toEqual([])
   })
 
   it('scales near-linearly with the number of verbatim regions', () => {

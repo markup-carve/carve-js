@@ -26,6 +26,20 @@ export type MergeResult =
   | { ok: false; ast: null; conflicts: MergeConflict[] }
 
 const MISSING = Symbol('missing')
+
+/**
+ * Cells filled in `matchSide`'s longest-common-kind DP table.
+ *
+ * `matchSide` refuses to run that table when `bs.length * ss.length` passes
+ * 1_000_000 and pairs the remaining kinds monotonically instead, which is the
+ * only thing standing between a large ambiguous sibling edit and a quadratic
+ * merge. That refusal is COUNTABLE - the table is either built or it is not -
+ * so the guard on it does not need a clock, and should not have one: the wall
+ * clock reading for 2000 ambiguous siblings sat 5.8x under its 2500 ms bound on
+ * an idle box and ambient load alone inflates readings in this suite by more
+ * than 10x (carve-js#1268).
+ */
+export const mergeMatchDpCells = { count: 0 }
 type Value = unknown | typeof MISSING
 
 function pointer(path: string, key: string | number): string {
@@ -220,6 +234,7 @@ function matchSide(base: unknown[], side: unknown[], nodePosition: boolean): Sid
   )
   for (let i = bs.length - 1; i >= 0; i--) {
     for (let j = ss.length - 1; j >= 0; j--) {
+      mergeMatchDpCells.count++
       table[i]![j] =
         kind(base[bs[i]!]) === kind(side[ss[j]!])
           ? table[i + 1]![j + 1]! + 1
