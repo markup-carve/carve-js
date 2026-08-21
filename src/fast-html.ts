@@ -320,6 +320,23 @@ function renderOrderedList(lines: string[], start: number, depth: number, defs: 
     expected++; i++
   }
   if (lines[i] !== undefined && lines[i]!.trim() !== '') return undefined
+  // A BLANK BEFORE THE NEXT SIBLING MARKER LOOSENS THIS LIST, IT DOES NOT END IT
+  // (§11 N1/N2 and §17 L1). Two adjacent items are the same list when they match
+  // on the marker axes, and a blank line is not one of them; it decides tight
+  // versus loose and nothing else. Emitting `</ol>` here rendered `1. a` / blank
+  // / `2. b` - the single most common shape a numbered list takes - as two lists,
+  // the second carrying `start="2"`, where carve-php and carve-rs both produce
+  // one loose list.
+  //
+  // The bullet renderer above already bails on exactly this shape and this is the
+  // same check spelled for the ordered marker, which is the whole of the defect:
+  // one rule, two implementations, and only one of them written. Looseness is not
+  // expressible in the borrowed layout - a loose item wraps its content in `<p>` -
+  // so the fast path hands the document back rather than trying to render it.
+  if (lines[i] !== undefined) {
+    const next = lines.slice(i + 1).find((candidate) => candidate.trim() !== '')
+    if (next !== undefined && decimalListItem(next) !== undefined) return undefined
+  }
   out.push('\n', indent(depth), '</ol>')
   return { html: out.join(''), next: i }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { parse, renderHtml, resolve } from '../src/index.js'
+import { carveToHtml, parse, renderHtml, resolve } from '../src/index.js'
 import { tryFastHtml, tryFastHtmlWithStats } from '../src/fast-html.js'
 
 function authoritative(source: string): string {
@@ -71,6 +71,34 @@ describe('borrowed HTML layout', () => {
       '> a\nb\n', '-   x\n', '=marked= here\n', '- apples\n\n- oranges\n',
       '# a :smile: b\n', 'A #tag here.\n', '(c) 2026\n', '| h |\n|---|\v\n| a |\n',
       'a. only one\n', '````  js\nx\n````\n',
+      // A blank line before the next sibling marker LOOSENS the list (§17 L1); it
+      // is not one of §11 N1's axes, so the items stay one list. Looseness is not
+      // expressible in the borrowed layout, so the document is handed back. The
+      // bullet spelling two lines up was listed here from the start and the
+      // ordered one never was, which is the whole of carve-js#1270.
+      '1. a\n\n2. b\n', '1. a\n\n1. b\n', '1. a\n\n\n2. b\n',
     ]) expect(tryFastHtml(source, {}), source).toBeUndefined()
+  })
+
+  it('renders a blank-separated list the same in both spellings', () => {
+    // The end-to-end assertion behind the fallback above: whatever the fast path
+    // decides, `carveToHtml` has to agree with the authoritative pipeline. The
+    // ordered case rendered as TWO lists, the second carrying `start="2"`, where
+    // carve-php and carve-rs produce one loose list - and the corpus has no
+    // ordered-blank-ordered fixture, so shadow parity over the corpus could not
+    // see it.
+    for (const source of [
+      '1. a\n\n2. b\n', '1. a\n\n1. b\n', '1. a\n\n\n2. b\n',
+      '- a\n\n- b\n', '1) a\n\n2) b\n', 'i. a\n\nii. b\n',
+      '1. a\n2. b\n', '1. a\n\n- b\n', '3. c\n4. d\n',
+    ]) {
+      expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+  })
+
+  it('pins the loose ordered list the corpus has no fixture for', () => {
+    expect(carveToHtml('1. a\n\n2. b\n')).toBe(
+      ['<ol>', '  <li><p>a</p></li>', '  <li><p>b</p></li>', '</ol>'].join('\n'),
+    )
   })
 })
