@@ -91,12 +91,21 @@ const featureRunners: Record<string, (source: string, render: Render) => string>
   spoiler: (source, render) => render(source, { extensions: [spoiler()] }),
   tabs: (source, render) => render(source, { extensions: [tabs()] }),
   /*
-   * AHEAD OF THE PIN, deliberately. `47-tabs-aria-panel-binding` arrives with
-   * the next bump and its manifest feature is `tabs-aria`, so without a runner
-   * that bump would fail with "no runner ... and no entry in
-   * DECLARED_UNIMPLEMENTED" - a corpus case reading as unimplemented when the
-   * engine implements it (carve-js#1265). A runner with no case yet compares
-   * nothing and asserts nothing, which is the harmless direction.
+   * AHEAD OF THE PIN, deliberately. `47-tabs-aria-panel-binding` and
+   * `48-tabs-aria-single-selection` arrive with the next bump and their
+   * manifest feature is `tabs-aria`, so without a runner that bump would fail
+   * with "no runner ... and no entry in DECLARED_UNIMPLEMENTED" - a corpus case
+   * reading as unimplemented when the engine implements it (carve-js#1265). A
+   * runner with no case yet compares nothing and asserts nothing, which is the
+   * harmless direction.
+   *
+   * They cannot go in `AHEAD_OF_PIN` below either: its own guard refuses a slug
+   * the PINNED manifest does not state, and this pin predates all of `46`-`49`.
+   * So their bytes are inlined in the unit suites instead - 46/47 in
+   * `a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts`, 48/49 in
+   * `a-tab-control-is-a-button-and-one-item-is-selected.test.ts` - and the pin
+   * bump that catches up hands the comparison back to this runner.
+   * `49-tabs-css-single-selection` is feature `tabs`, which already has one.
    */
   'tabs-aria': (source, render) => render(source, { extensions: [tabs({ mode: 'aria' })] }),
   /*

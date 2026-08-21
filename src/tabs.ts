@@ -84,6 +84,40 @@ export function resolveTabsMode(mode: TabsMode | undefined, extension: string): 
   return mode
 }
 
+/**
+ * The selection step both tab-shaped extensions share (Extensions §13.5).
+ *
+ * A tab set is SINGLE-SELECT, so exactly one item is selected: the first one
+ * the document marks `{selected}`, and the first item where the document marks
+ * none. Later marks are ignored. Both branches are the same statement, which is
+ * why they are one - the default is just "no mark won".
+ *
+ * FIRST-WINS, NOT LAST-WINS. The `css` mode is a radio group, and a radio group
+ * cannot have two checked members - the browser resolves it to one and the
+ * document's intent is already lost. `aria` mode emitting two
+ * `aria-selected="true"` tabs is not more expressive, it is a shape a
+ * single-select `tablist` has no state for. First-wins is also what the `css`
+ * default already does with `checked`, so the two modes agree, which is the
+ * whole point of §13 mirroring them. Last-wins would mean an author scrolling a
+ * long tab set and marking the item in front of them silently unselects one
+ * above.
+ *
+ * Over-specifying is NOT an error and gets no diagnostic: §13 has no diagnostic
+ * channel, and the document is not wrong, only redundant.
+ *
+ * It lives here, beside {@link resolveTabsMode} and imported by CodeGroup,
+ * rather than in either renderer, because §13 binds both constructs and a rule
+ * copied into two renderers is a rule that drifts - the exact divergence
+ * carve#1468 wrote the mirroring clause to prevent.
+ */
+export function applySingleSelection<T extends { selected: boolean }>(items: T[]): void {
+  const winner = items.findIndex((item) => item.selected)
+  const selected = winner === -1 ? 0 : winner
+  items.forEach((item, index) => {
+    item.selected = index === selected
+  })
+}
+
 export function tabs(opts: TabsOptions = {}): CarveExtension {
   const mode: TabsMode = resolveTabsMode(opts.mode, 'Tabs')
   const wrapperClass = opts.wrapperClass ?? 'tabs'
@@ -149,7 +183,9 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
         id: tab.attrs?.id,
       })
     }
-    if (items.length && !items.some((i) => i.selected)) items[0]!.selected = true
+    // EXACTLY ONE TAB IS SELECTED (Extensions §13.5): the first one the
+    // document marks, or the first tab where it marks none.
+    applySingleSelection(items)
     return items
   }
 
@@ -267,8 +303,12 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       const panelId = pairIds[index]!.panel
       const selected = tab.selected ? 'true' : 'false'
       const tabindex = tab.selected ? '' : ' tabindex="-1"'
+      // `type="button"`, NOT the implicit `submit` (Extensions §13.3). A bare
+      // `<button>` is a submit button, so a tab set inside a `<form>` submitted
+      // the form instead of switching panels - the one interaction this mode
+      // exists to provide, traded for the one thing the page never asked for.
       html +=
-        `<button role="tab" id="${tabId}" ` +
+        `<button type="button" role="tab" id="${tabId}" ` +
         `aria-selected="${selected}" ` +
         `aria-controls="${panelId}" ` +
         `class="${ctx.escapeAttr(labelClass)}"${tabindex}>${ctx.escapeHtml(tab.label)}</button>\n`
@@ -279,7 +319,8 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       const hidden = tab.selected ? '' : ' hidden'
       // NEITHER `role="group"` NOR A NAME, and that is a rule rather than an
       // omission (PART 11 §13.3). The panel is already bound to its
-      // `<button role="tab">` by `aria-labelledby`, so naming it as well would
+      // `<button type="button" role="tab">` by `aria-labelledby`, so naming it
+      // as well would
       // give one element two accessible names and pull it out of the `tablist`
       // relationship that is the only reason to be in this mode. §13.2's rule
       // is a `css`-mode rule specifically, not "every panel gets a name".
