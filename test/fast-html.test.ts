@@ -77,6 +77,14 @@ describe('borrowed HTML layout', () => {
       // bullet spelling two lines up was listed here from the start and the
       // ordered one never was, which is the whole of carve-js#1270.
       '1. a\n\n2. b\n', '1. a\n\n1. b\n', '1. a\n\n\n2. b\n',
+      // A lone `+` is the list continuation marker (§17 L3): it renders nothing
+      // and attaches the block below to the item above, which the borrowed
+      // layout has no model for. It used to come out as a literal `<p>+</p>`.
+      '- a\n\n+\n\n- b\n', '+\n', '- a\n\n+\n\ntext\n',
+      // Two spaces before the title is NOT a definition (corpus 265) - it is a
+      // paragraph. The borrowed layout collected it and emitted nothing, so the
+      // line vanished.
+      '[a]: /u  "T"\n',
     ]) expect(tryFastHtml(source, {}), source).toBeUndefined()
   })
 
@@ -91,9 +99,32 @@ describe('borrowed HTML layout', () => {
       '1. a\n\n2. b\n', '1. a\n\n1. b\n', '1. a\n\n\n2. b\n',
       '- a\n\n- b\n', '1) a\n\n2) b\n', 'i. a\n\nii. b\n',
       '1. a\n2. b\n', '1. a\n\n- b\n', '3. c\n4. d\n',
+      '```\n```\n', '```python\n```\n', '[a]: /u  "T"\n', '- a\n\n+\n\n- b\n',
     ]) {
       expect(carveToHtml(source), source).toBe(authoritative(source))
     }
+  })
+
+  it('agrees with the authoritative pipeline across the construct matrix', () => {
+    // THE GUARD FOR THE WHOLE CLASS, not for the four defects that prompted it.
+    // Every divergence here has the same shape: the borrowed layout models a
+    // construct the authoritative pipeline models differently, and the corpus
+    // cannot see it because shadow parity SKIPS every document the fast path
+    // hands back. Crossing each construct with every other at each separator
+    // width reaches the shapes no fixture happens to contain - it found the
+    // continuation marker, the empty fence and the two-space definition slot.
+    const bodies = [
+      '# H', 'text', 'text\nmore', '> q', '> q\n> r', '```\nx\n```', '```\n```',
+      '***', '- a', '- a\n- b', '1. a', '1. a\n2. b', '| A |\n| --- |\n| x |',
+      '[s]: https://e.com', '[s]: https://e.com "T"', '+',
+    ]
+    const separators = ['\n', '\n\n', '\n\n\n']
+    const documents = new Set<string>()
+    for (const body of bodies) documents.add(`${body}\n`)
+    for (const a of bodies) for (const b of bodies) for (const sep of separators) {
+      documents.add(`${a}${sep}${b}\n`)
+    }
+    for (const source of documents) expect(carveToHtml(source), source).toBe(authoritative(source))
   })
 
   it('pins the loose ordered list the corpus has no fixture for', () => {
