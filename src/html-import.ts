@@ -7,6 +7,7 @@ import type {
   FigureGroup,
   InlineNode,
   List,
+  Math,
   TableBodyGroup,
   TableCell,
   TableRow,
@@ -544,6 +545,27 @@ class Importer {
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
     if (tag === 'details') return [this.disclosure(node, path, depth, attrs)]
+    if (tag === 'div') {
+      /*
+       * The block spelling of the same shape, which pandoc and the `math`
+       * fence both write as `<div class="math display">\[…\]</div>`. It reads
+       * back as the CORE display form, a paragraph holding one display math
+       * node (`$$`…``, §18) - not as a ` ```math ` fence, which is an
+       * extension: without that extension loaded a fence renders as an
+       * ordinary `language-math` code block, so importing to it would hand
+       * back an equation that only stays an equation for some readers.
+       */
+      const math = this.carveMath(node, attrs)
+      if (math) {
+        // Charged because this arm returns without walking the children, which
+        // `blocks()` would have counted one by one. Which arm an element takes
+        // must not change what `maxNodes` / `maxDepth` see. Only a div whose
+        // classes already carry the pair reaches here - `carveMath` tests them
+        // before it reads any text - so a plain div pays for nothing.
+        this.budget(node, depth)
+        return [{ type: 'paragraph', children: [math] }]
+      }
+    }
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
       if (tag !== 'div') {
         this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
@@ -1586,6 +1608,10 @@ class Importer {
       return [{ type: 'footnote_ref', id: this.attr(node, 'label') ?? '' }]
     }
     if (SEMANTIC_SPAN_TAGS.has(tag)) return [this.semanticSpan(tag, node, children, path, attrs)]
+    if (tag === 'span') {
+      const math = this.carveMath(node, attrs)
+      if (math) return [math]
+    }
     if (tag === 'span' && attrs) return [{ type: 'span', children, attrs }]
     /*
      * THE EMBEDS END HERE, AND THAT IS THE POLICY (carve#1210 P10).
@@ -1648,6 +1674,106 @@ class Importer {
    *
    * Returns `undefined` for tier 3, whose two answers are the caller's.
    */
+  /**
+   * Carve's OWN HTML spelling of math, read back as a `math` node.
+   *
+   * `<span class="math inline">\(x\)</span>` and its `math display` twin are
+   * what `carveToHtml` writes for `` $`x` `` / `` $$`x` `` (PART 9 §18:
+   * `math_inline = '$', code_span`) - and what djot.js and pandoc write as
+   * well, so this is the shape an importer meets rather than one engine's
+   * convention.
+   *
+   * Without this arm the element fell through to the generic attributed-span
+   * writer and an equation came back as `[\\(x\\)]{.math .inline}`. That is
+   * the worst kind of loss to catch: the re-rendered HTML is byte-identical,
+   * because a span carrying the same classes renders the same tag - so an
+   * HTML-to-HTML check reports success. What is gone is the NODE. The AST says
+   * `span`, and every non-HTML target then writes the TeX delimiters as prose:
+   * the Markdown, plain and ANSI writers have a math case and never reach it.
+   *
+   * TWO INDEPENDENT SIGNALS HAVE TO AGREE - the `math inline` / `math display`
+   * class PAIR, and a payload delimited to match it. Either alone is not
+   * evidence. A stylesheet is free to name a class `math`, and `\(x\)` in
+   * running prose is an escaped paren: §18 dropped the bare `\(…\)` INPUT
+   * form for exactly that reason, so the delimiters are output convention, not
+   * syntax. Requiring both also lets the class say which delimiter to expect,
+   * so a `math display` span holding `\(…\)` is left alone rather than
+   * quietly re-labeled as display math.
+   *
+   * The `math` / `inline` / `display` classes and a `role="math"` are consumed
+   * by the recognition itself, the way `xmlns` is on a `<math>`: the renderer
+   * writes all four back from the node. Anything else the author put on the
+   * element - `id`, further classes, `data-*` - rides along in `attrs` and
+   * survives the round trip.
+   *
+   * The payload is read off the DIRECT children only (`directText`), never
+   * through the recursive `text()`. The block arm reaches this before it has
+   * charged the subtree, and a recursive read there would let crafted HTML
+   * overflow the stack ahead of the limit that exists to stop it - the reason
+   * the `<math>` arm charges its budget before reading, too. An element child
+   * ends the read regardless: a delimiter payload is text.
+   */
+  private carveMath(node: P5Node, attrs: Attrs | undefined): Math | undefined {
+    const classes = attrs?.classes
+    if (!classes?.includes('math')) return undefined
+    const display = classes.includes('display')
+    // Not one element in both states: `math inline display` names no shape the
+    // renderer can write, so it is a span with two classes, not an equation.
+    if (display === classes.includes('inline')) return undefined
+    const open = display ? '\\[' : '\\('
+    const close = display ? '\\]' : '\\)'
+    const text = this.directText(node)?.trim()
+    if (text === undefined) return undefined
+    if (text.length < open.length + close.length) return undefined
+    if (!text.startsWith(open) || !text.endsWith(close)) return undefined
+    /*
+     * Carve's math content is a `code_span`, which is one line by construction,
+     * so a payload folded across source lines has exactly one spelling: the
+     * whitespace run collapsed the way `inline()` collapses every other
+     * imported text run. TeX reads a newline as whitespace, so the equation is
+     * the same equation; a `math` node holding a newline would not be
+     * writable at all.
+     */
+    const content = text.slice(open.length, text.length - close.length).replace(/\s+/g, ' ').trim()
+    // `\(\)` carries the delimiters and no equation. There is no empty math.
+    if (content === '') return undefined
+    return { type: 'math', display, content, ...(this.mathAttrs(attrs!, display) ?? {}) }
+  }
+
+  /**
+   * The concatenated text of a node's DIRECT children, or `undefined` as soon as
+   * one of them is an element. Bounded and non-recursive, unlike `text()`.
+   */
+  private directText(node: P5Node): string | undefined {
+    let out = ''
+    for (const child of node.childNodes ?? []) {
+      if (child.nodeName !== '#text') return undefined
+      out += child.value ?? ''
+    }
+    return out
+  }
+
+  /** What is left of a math element's attributes once recognition has eaten its own. */
+  private mathAttrs(attrs: Attrs, display: boolean): { attrs: Attrs } | undefined {
+    const classes = [...(attrs.classes ?? [])]
+    // The FIRST of each: `class="math math"` keeps the second as an author
+    // class, because the renderer only writes the base pair once.
+    classes.splice(classes.indexOf('math'), 1)
+    classes.splice(classes.indexOf(display ? 'display' : 'inline'), 1)
+    const keyValues = { ...(attrs.keyValues ?? {}) }
+    // `role="math"` is what the HTML renderer puts on every math node it emits.
+    // Keeping it would spell the same attribute twice - once from the node's
+    // type and once as `{role=math}` in the source - so it is consumed by
+    // having been recognized. A role saying anything else is the author's and
+    // stays.
+    if (keyValues.role === 'math') delete keyValues.role
+    const rest: Attrs = {}
+    if (attrs.id) rest.id = attrs.id
+    if (classes.length) rest.classes = classes
+    if (Object.keys(keyValues).length) rest.keyValues = keyValues
+    return rest.id || rest.classes || rest.keyValues ? { attrs: rest } : undefined
+  }
+
   private mathml(node: P5Node, path: string): InlineNode | undefined {
     const annotated = this.texAnnotation(node)
     const content = (annotated ?? this.attr(node, 'alttext') ?? '').trim()
