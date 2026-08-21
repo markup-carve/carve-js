@@ -200,8 +200,21 @@ function buildList(
  *
  * ```ts
  * carveToHtml(src, { extensions: [tableOfContents()] })
- * // <nav class="toc"><ul><li><a href="#intro">Intro</a> … </ul></nav> … document …
  * ```
+ *
+ * The nav is emitted at column 0 with ONE TAG PER LINE, which extensions §8b.1
+ * requires so the list fragment stays byte-identical to the `::: toc`
+ * directive's:
+ *
+ * ```html
+ * <nav class="toc">
+ * <ul>
+ * <li><a href="#intro">Intro</a></li>
+ * </ul>
+ * </nav>
+ * ```
+ *
+ * ...followed by the document.
  *
  * Configurable `minLevel`, `maxLevel`, `listType`, `cssClass`, and `position`.
  * Set `collapsible: true` to wrap the TOC in a `<details>`/`<summary>` disclosure
@@ -378,8 +391,33 @@ function renderToc(
  * ```
  *
  * Reads the resolved (dedup-aware) heading ids from `heading.attrs.id`, so
- * links always match the emitted `<h*>` anchors. If the extension is absent the
- * block degrades to a plain `<aside class="admonition toc">` placeholder.
+ * links always match the emitted `<h*>` anchors.
+ *
+ * DEGRADATION. Without THIS extension registered, `::: toc` renders as the
+ * ordinary non-canonical admonition it parsed as: an EMPTY `<div class="toc">`
+ * where the author wrote the block, per extensions §8b.3's "labeled `<div>`
+ * floor". Not an `<aside>`, and the class carries no `admonition` prefix and no
+ * `aria-label` - `renderAdmonition` reads both the tag and the class off
+ * `CANONICAL_ADMONITION_KINDS`, and `toc` is not in it.
+ *
+ * "Without this extension" means without `tocPlacement()` specifically, which
+ * is worth spelling out because {@link tableOfContents} does NOT stand in for
+ * it. Registering that one instead puts a `<nav class="toc">` at the document
+ * top and STILL leaves the empty floor in place, so a document ends up with a
+ * TOC that is not where the `::: toc` block is:
+ *
+ * | registered | `::: toc` written | output |
+ * | --- | --- | --- |
+ * | neither | yes | the empty `<div class="toc">` floor, in place |
+ * | `tocPlacement` | yes | `<nav class="toc">` in place |
+ * | `tableOfContents` | yes | nav at the top, PLUS the empty floor in place |
+ * | both | yes | two navs, one at the top and one in place |
+ * | `tocPlacement` | no | nothing |
+ * | `tableOfContents` | no | nav at the top |
+ *
+ * A separate empty case is NOT the floor: with this extension registered and no
+ * heading inside the level window, the block renders `<nav class="toc"></nav>`.
+ * Both are empty; only one means the extension is missing.
  */
 export function tocPlacement(): CarveExtension {
   let entries: TocEntry[] = []

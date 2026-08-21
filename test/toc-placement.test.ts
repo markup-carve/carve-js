@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { carveToHtml } from '../src/index.js'
-import { tocPlacement } from '../src/table-of-contents.js'
+import { tableOfContents, tocPlacement } from '../src/table-of-contents.js'
 
 const h = (s: string) => carveToHtml(s, { extensions: [tocPlacement()] }).trim()
 
@@ -74,6 +74,56 @@ describe('::: toc placement directive', () => {
     const out = carveToHtml('# A\n\n::: toc\n:::\n').trim()
     expect(out).toContain('class="toc"')
     expect(out).not.toContain('<nav')
+  })
+
+  it('degrades to a DIV, which is the element extensions §8b.3 names', () => {
+    // THE ASSERTIONS ABOVE CANNOT SEE THE ELEMENT. They pin the class and the
+    // absence of a nav, so mutating only the tag - `canonical || node.kind ===
+    // 'toc' ? 'aside' : 'div'` in `renderAdmonition`, class untouched - leaves
+    // all 38 tests across the three TOC files green while the floor emits
+    // `<aside class="toc">`. That is how `tocPlacement`'s docblock came to name
+    // an `<aside class="admonition toc">` nobody emits (carve-js#1267), and
+    // nothing in `test/`, `docs/` or the spec resources held the string
+    // `<div class="toc">`.
+    //
+    // §8b.3 calls it "a labeled `<div>` floor" and requires each implementation
+    // to pin its own degradation, so the element is part of the contract:
+    // `toc` is not a canonical admonition kind, so `renderAdmonition` takes the
+    // non-canonical branch for the tag AND the class - a `<div>`, the bare kind
+    // as its class, no `admonition` prefix, no `aria-label`.
+    const out = carveToHtml('# A\n\n::: toc\n:::\n').trim()
+    expect(out).toContain('<div class="toc">')
+    expect(out).not.toContain('<aside')
+    expect(out).not.toContain('admonition')
+    expect(out).not.toContain('aria-label')
+  })
+
+  it('still degrades when the OTHER toc extension is registered instead', () => {
+    // The near-miss, and the case a reader is most likely to be in when they go
+    // looking: `tableOfContents()` does not stand in for `tocPlacement()`. It
+    // injects its own nav at the document top and the floor stays exactly where
+    // the directive is, so "the extension is absent" has to mean this one
+    // specifically. A document configured this way gets a TOC that is not where
+    // its author put the block.
+    const out = carveToHtml('Intro.\n\n::: toc\n:::\n\n# A\n', {
+      extensions: [tableOfContents()],
+    }).trim()
+
+    expect(out).toContain('<div class="toc">')
+    expect(out).toContain('<nav class="toc">')
+    // The nav is at the top, ahead of the intro paragraph; the floor is after it.
+    expect(out.indexOf('<nav')).toBeLessThan(out.indexOf('Intro.'))
+    expect(out.indexOf('Intro.')).toBeLessThan(out.indexOf('<div class="toc">'))
+  })
+
+  it('an empty nav is not the floor: the extension IS registered', () => {
+    // Two different empties, and only one of them means a missing extension.
+    // Registered with no heading in range gives `<nav class="toc"></nav>`;
+    // unregistered gives the `<div>`. A reader who conflates them debugs the
+    // wrong thing.
+    const registered = h('::: toc\n:::\n\nplain paragraph\n')
+    expect(registered).toContain('<nav class="toc"></nav>')
+    expect(registered).not.toContain('<div class="toc">')
   })
 
   it('includes headings nested in containers (they render with id anchors)', () => {
