@@ -19,7 +19,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { collectStrings, pickSentinelRun } from './sentinel-run.js'
+import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -1255,10 +1255,10 @@ function setCarriers(run: string[]): void {
 
 /** Pick this document's carriers. Called once, before anything is rendered. */
 function chooseCarriers(ast: Document): void {
-  setCarriers(pickSentinelRun(collectStrings(ast), CARRIER_BASE, CARRIER_COUNT))
+  setCarriers(pickSentinelRun(occupiedPrivateUse(ast), CARRIER_BASE, CARRIER_COUNT))
 }
 
-setCarriers(pickSentinelRun('', CARRIER_BASE, CARRIER_COUNT))
+setCarriers(pickSentinelRun(new Set(), CARRIER_BASE, CARRIER_COUNT))
 
 /** The bare character a sentinel stands for, for both passes that build a line view. */
 function sentinelCharacter(s: string): string {

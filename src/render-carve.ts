@@ -22,7 +22,7 @@ import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
-import { collectStrings, pickSentinelRun } from './sentinel-run.js'
+import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 export interface CarveRenderOptions {}
 
@@ -120,7 +120,7 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // as the grammar grows.
   // Choose the verbatim sentinels before anything is rendered, so both escape
   // passes below agree on them.
-  sentinels = pickSentinelRun(collectStrings(ast), SENTINEL_BASE, SENTINEL_COUNT)
+  sentinels = pickSentinelRun(occupiedPrivateUse(ast), SENTINEL_BASE, SENTINEL_COUNT)
   redundantIds = findRedundantHeadingIds(ast)
   // The two "written in place" sets are NOT reset here: they are per-PASS, and
   // renderWithEscapes owns them. Resetting them here as well would be the same
@@ -2320,7 +2320,7 @@ function normalize(text: string): string {
  */
 const SENTINEL_BASE = 0xe001
 const SENTINEL_COUNT = 6
-let sentinels: string[] = pickSentinelRun('', SENTINEL_BASE, SENTINEL_COUNT)
+let sentinels: string[] = pickSentinelRun(new Set(), SENTINEL_BASE, SENTINEL_COUNT)
 
 /**
  * Whole-document normalization (trailing-whitespace strip, blank-line

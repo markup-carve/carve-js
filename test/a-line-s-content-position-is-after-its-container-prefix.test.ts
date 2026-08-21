@@ -215,27 +215,29 @@ describe('the position is settled after the trim that shapes the line', () => {
   })
 })
 
-describe('the sentinels M2b decides on never come from the author', () => {
-  it('strips a private-use character that would forge a decision', () => {
-    // The scheme's own contract is that author content never carries a
-    // sentinel, because the strip on the way in drops the whole range. The
-    // range stopped one character short of the authored-hash sentinel, so a
-    // document holding U+E007 emitted a hash this renderer had decided about -
-    // bare mid-line and escaped at a line start, neither of them the author's.
-    // Both new sentinels are inside the range now.
-    expect(md('a \ue007 b')).toBe('a  b')
-    expect(md('\ue007 x')).toBe('x')
-    expect(md('a \ue008 b')).toBe('a  b')
-    // The characters below it were always stripped; asserted alongside so the
-    // range is pinned at both ends rather than at the end that moved.
-    expect(md('a \ue005 b')).toBe('a  b')
+describe('the carriers M2b decides on never come from the author', () => {
+  it('keeps a private-use character that would otherwise forge a decision', () => {
+    // The scheme's contract is that author content never carries a carrier. It
+    // used to be kept true by DELETING the range on the way in, which cost the
+    // author the character (carve-js#1281); it is kept true by PICKING the
+    // carriers now, so the character both survives and decides nothing.
+    //
+    // What must not come back is a hash this renderer decided about - bare
+    // mid-line, escaped at a line start - neither of them the author's.
+    for (const code of ['\ue005', '\ue007', '\ue008']) {
+      expect(md(`a ${code} b`)).toBe(`a ${code} b`)
+      expect(md(`${code} x`)).toBe(`${code} x`)
+      expect(md(`a ${code} b`)).not.toContain('#')
+      expect(md(`${code} x`)).not.toContain('\\')
+    }
   })
 
-  it('strips one carried on a stored smart-punctuation node', () => {
+  it('keeps one carried on a stored smart-punctuation node', () => {
     // The other way in. Both branches of that node emit a value straight off
-    // the tree, so a stored document could hand the resolve pass a sentinel it
+    // the tree, so a stored document could hand the resolve pass a character it
     // would read as an escape decision and write out as a backslash the
-    // document never held.
+    // document never held. The carriers are picked from the whole tree, so a
+    // value only reachable through this node is seen too.
     const withSentinel = (value: string): Document => ({
       type: 'document',
       children: [
@@ -252,7 +254,7 @@ describe('the sentinels M2b decides on never come from the author', () => {
 
     for (const code of ['\ue005', '\ue007', '\ue008']) {
       expect(renderMarkdown(withSentinel(`x${code}y`), { smartTypography: 'source' })).toBe(
-        'a xy b\n',
+        `a x${code}y b\n`,
       )
     }
   })

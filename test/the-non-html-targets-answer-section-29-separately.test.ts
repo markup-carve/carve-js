@@ -202,11 +202,14 @@ describe('the non-HTML targets answer section 29 separately', () => {
     }
   })
 
-  it('CONTROL: the section 8a sentinels are still not author-writable', () => {
-    // The Markdown writer's own private-use sentinels are dropped from author
-    // content, which is a different rule from section 29 and is untouched.
+  it('CONTROL: the section 8a carriers are author-writable like any other character', () => {
+    // The Markdown writer's own private-use carriers used to be DROPPED from
+    // author content, which made this target the one that answered section 29
+    // by deleting more than section 29 asks for (carve-js#1281). They are picked
+    // per document now, so an authored one is content here as it is everywhere
+    // else, and this row reads the same way as the rows above it.
     for (const cp of [0xe004, 0xe005, 0xe006]) {
-      expect(has(carveToMarkdown(`a${String.fromCodePoint(cp)}b\n`), cp)).toBe(false)
+      expect(has(carveToMarkdown(`a${String.fromCodePoint(cp)}b\n`), cp)).toBe(true)
     }
   })
 })
