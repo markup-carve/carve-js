@@ -49,12 +49,12 @@ const html = (src: string): string =>
     .trim()
 
 const CODE_HTML = '<pre><code>a b </code></pre>'
-const COLON_HTML = '<aside class="admonition note"><p>a</p><p>b</p></aside>'
+const COLON_HTML = '<aside class="admonition note" aria-label="Note"><p>a</p><p>b</p></aside>'
 
 const REF = '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
 const BACKLINK = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
 const note = (body: string): string =>
-  `${REF}<section role="doc-endnotes"><hr><ol><li id="fn1"><p>n</p>${body}<p>${BACKLINK}</p></li></ol></section>`
+  `${REF}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n</p>${body}<p>${BACKLINK}</p></li></ol></section>`
 
 describe('a boundary line inside an open fence does not end the container', () => {
   describe('the list item `+` collector', () => {
@@ -131,7 +131,7 @@ describe('a boundary line inside an open fence does not end the container', () =
       // analogue of the list's `+`-separator looseness exemption. Recorded on
       // markup-carve/carve-php#1047 rather than folded into this fix.
       expect(html(doc('[^f]: n', '+', ...COMMENT, '', 'see[^f]'))).toBe(
-        `${REF}<section role="doc-endnotes"><hr><ol><li id="fn1"><p>n</p><p>${BACKLINK}</p></li></ol></section>`,
+        `${REF}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n</p><p>${BACKLINK}</p></li></ol></section>`,
       )
     })
   })

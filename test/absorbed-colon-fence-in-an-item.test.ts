@@ -41,7 +41,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // admonition opens, its closer completes it, and a closed block leaves no
     // open paragraph - so `tail` ends the item.
     expect(html('- item\n  ::: note\n  body\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li>item\n    <aside class="admonition note" aria-label="Note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 
@@ -93,7 +93,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // - that fence is its closer, not more absorbed text - and a closed block
     // leaves no open paragraph, so `tail` ends the item.
     expect(html('- item\n  :::note\n  ::: note\n  body\n  :::\ntail\n')).toBe(
-      '<ul>\n  <li>item\n:::note\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
+      '<ul>\n  <li>item\n:::note\n    <aside class="admonition note" aria-label="Note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>\n<p>tail</p>',
     )
   })
 
@@ -115,7 +115,7 @@ describe('an absorbed colon fence leaves the item paragraph open', () => {
     // The control for the absorbing flag: a paragraph that never met a
     // malformed fence still gets interrupted by a real opener.
     expect(html('- item\n  ::: note\n  body\n  :::\n')).toBe(
-      '<ul>\n  <li>item\n    <aside class="admonition note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
+      '<ul>\n  <li>item\n    <aside class="admonition note" aria-label="Note">\n      <p>body</p>\n    </aside>\n  </li>\n</ul>',
     )
   })
 })

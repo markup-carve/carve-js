@@ -41,6 +41,7 @@ import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+import { inlineText } from './heading-ids.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -53,6 +54,7 @@ let suppressAutomaticAbbreviation = false
 // every explicit / heading id in the resolved AST, consumed by extensions via
 // ctx.uniqueId(). Same save/restore discipline as abbrBudget above.
 let docIds: DocumentIdRegistry | null = null
+let admonitionCount = 0
 
 export interface RenderOptions {
   /**
@@ -539,15 +541,18 @@ export function renderHtml(
   const prevBudget = abbrBudget
   const prevDocIds = docIds
   const prevOptions = activeRenderOptions
+  const prevAdmonitionCount = admonitionCount
   abbrBudget = budgetForDocument(ast)
   docIds = seededDocumentIds ?? collectDocumentIds(ast)
   activeRenderOptions = opts
+  admonitionCount = 0
   try {
     return renderDocumentBody(ast, opts)
   } finally {
     abbrBudget = prevBudget
     docIds = prevDocIds
     activeRenderOptions = prevOptions
+    admonitionCount = prevAdmonitionCount
   }
 }
 
@@ -736,7 +741,20 @@ function renderFootnoteSection(ast: Document, st: FootnoteState, opts: RenderOpt
 }
 
 /** The keys of the `labels` render option (PART 9 §16a). */
-export type LabelKey = 'footnoteBacklink' | 'indexBackref' | 'tabsGroup' | 'codeGroup'
+export type LabelKey =
+  | 'footnoteBacklink'
+  | 'indexBackref'
+  | 'tabsGroup'
+  | 'codeGroup'
+  | 'endnotes'
+  | 'admonitionNote'
+  | 'admonitionTip'
+  | 'admonitionWarning'
+  | 'admonitionDanger'
+  | 'admonitionInfo'
+  | 'admonitionSuccess'
+  | 'admonitionExample'
+  | 'admonitionQuote'
 
 /**
  * The English defaults every key falls back to.
@@ -753,6 +771,15 @@ export const LABEL_DEFAULTS: Record<LabelKey, string> = {
   indexBackref: 'Back to',
   tabsGroup: 'Tabs',
   codeGroup: 'Code examples',
+  endnotes: 'Footnotes',
+  admonitionNote: 'Note',
+  admonitionTip: 'Tip',
+  admonitionWarning: 'Warning',
+  admonitionDanger: 'Danger',
+  admonitionInfo: 'Info',
+  admonitionSuccess: 'Success',
+  admonitionExample: 'Example',
+  admonitionQuote: 'Quote',
 }
 
 const label = (opts: RenderOptions, key: LabelKey): string =>
@@ -764,7 +791,11 @@ function renderFootnoteSectionInner(
   opts: RenderOptions,
 ): string {
   const defs = ast.footnoteDefs ?? {}
-  const lines: string[] = ['<section role="doc-endnotes">', `${indent(1)}<hr>`, `${indent(1)}<ol>`]
+  const lines: string[] = [
+    `<section role="doc-endnotes" aria-label="${escapeAttr(label(opts, 'endnotes'))}">`,
+    `${indent(1)}<hr>`,
+    `${indent(1)}<ol>`,
+  ]
   st.order.forEach((entry, idx) => {
     const number = idx + 1
     const body = entry.inline
@@ -1374,12 +1405,17 @@ function renderListItem(
   tight: boolean,
 ): string {
   const pad = indent(level)
+  const first = item.children[0]
+  const taskName = first?.type === 'paragraph'
+    ? inlineText(first.children).replace(/[ \t\n\r\f\v]+/g, ' ').trim()
+    : ''
+  const taskNameAttr = taskName === '' ? '' : ` aria-label="${escapeAttr(taskName)}"`
   const checkbox =
     item.checked === undefined
       ? ''
       : item.checked
-        ? '<input type="checkbox" checked disabled> '
-        : '<input type="checkbox" disabled> '
+        ? `<input type="checkbox" checked disabled${taskNameAttr}> `
+        : `<input type="checkbox" disabled${taskNameAttr}> `
 
   // `isLead` is the item's FIRST paragraph. In a tight item only the lead
   // paragraph is unwrapped (it sits on the <li> line); a SUBSEQUENT paragraph
@@ -1700,11 +1736,28 @@ function labelFloor(label: string | undefined, level: number): string {
 
 function renderAdmonition(node: Admonition, opts: RenderOptions, level: number): string {
   const pad = indent(level)
+  const canonical = CANONICAL_ADMONITION_KINDS.has(node.kind)
+  const authoredName = Object.keys(node.attrs?.keyValues ?? {}).some((name) => {
+    const folded = name.toLowerCase()
+    return folded === 'aria-label' || folded === 'aria-labelledby'
+  })
+  let titleId: string | undefined
+  let accessibleName = ''
+  if (canonical && !authoredName) {
+    if (node.title !== undefined) {
+      const baseId = `adm-${++admonitionCount}`
+      titleId = docIds?.uniqueId(baseId) ?? baseId
+      accessibleName = ` aria-labelledby="${escapeAttr(titleId)}"`
+    } else {
+      const key = `admonition${node.kind[0]!.toUpperCase()}${node.kind.slice(1)}` as LabelKey
+      if (key in LABEL_DEFAULTS) accessibleName = ` aria-label="${escapeAttr(label(opts, key))}"`
+    }
+  }
   // `node.title` undefined => no title supplied; an empty-but-defined
   // title (`::: note ""`) still emits an (empty) title element.
   const titleLine =
     node.title !== undefined
-      ? `${pad}  <p class="admonition-title">${renderInlines(node.title, opts)}</p>\n`
+      ? `${pad}  <p class="admonition-title"${titleId ? ` id="${escapeAttr(titleId)}"` : ''}>${renderInlines(node.title, opts)}</p>\n`
       : ''
   // Core caption floor: surface an unconsumed `[label]` after the title (the
   // title is rendered first when a block carries both).
@@ -1713,7 +1766,6 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   const body = renderBlocks(node.children, opts, level + 1)
   // Leading block attributes (§15) merge with the admonition's own
   // wrapper class: extra classes append, id/key attach to the wrapper.
-  const canonical = CANONICAL_ADMONITION_KINDS.has(node.kind)
   const baseClass = canonical ? `admonition ${node.kind}` : node.kind
   const classValue = [baseClass, ...(node.attrs?.classes ?? [])].map(escapeAttr).join(' ')
   const restAttrs: Attrs = {}
@@ -1724,7 +1776,7 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   if (node.attrs?.order) restAttrs.order = node.attrs.order.filter((s) => s !== '.class')
   const rest = renderAttrs(restAttrs)
   const tag = canonical ? 'aside' : 'div'
-  return `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}>\n${titleLine}${labelLine}${body}\n${pad}</${tag}>`
+  return `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}${accessibleName}>\n${titleLine}${labelLine}${body}\n${pad}</${tag}>`
 }
 
 function renderFigure(node: Figure, opts: RenderOptions, level: number, leadClass?: string): string {
@@ -1988,14 +2040,18 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // server-side output (MathML/HTML) inside the math span so the page needs
       // no client KaTeX/MathJax. Absent a renderer, fall back to the same
       // delimiter-wrapped source the interactive path emits (never blank).
+      const authoredRole = Object.keys(node.attrs?.keyValues ?? {}).some(
+        (name) => name.toLowerCase() === 'role',
+      )
+      const role = authoredRole ? '' : ' role="math"'
       if (opts.mode === 'static' && opts.renderers?.math) {
         const ssr = opts.renderers.math(node.content, node.display)
-        return `<span${renderAttrs2(node.attrs, { baseClass: base })}>${ssr}</span>`
+        return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${ssr}</span>`
       }
       const body = node.display
         ? `\\[${escapeHtml(node.content)}\\]`
         : `\\(${escapeHtml(node.content)}\\)`
-      return `<span${renderAttrs2(node.attrs, { baseClass: base })}>${body}</span>`
+      return `<span${renderAttrs2(node.attrs, { baseClass: base })}${role}>${body}</span>`
     }
     case 'raw_inline':
       // Verbatim only when the format matches this output; else dropped.

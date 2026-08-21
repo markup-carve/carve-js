@@ -421,7 +421,7 @@ describe('defaultAttributes extension (carve-php parity)', () => {
       carveToHtml('::: note\nc\n:::', {
         extensions: [defaultAttributes({ defaults: { div: { class: 'X' } } })],
       }),
-    ).toContain('<aside class="admonition note X">')
+    ).toContain('<aside class="admonition note X" aria-label="Note">')
     expect(
       carveToHtml(':::\nc\n:::', {
         extensions: [defaultAttributes({ defaults: { div: { class: 'X' } } })],

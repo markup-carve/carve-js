@@ -558,6 +558,9 @@ const IMPLEMENTED = new Set([
   // markup-carve/carve#1385 - one document. An item's checkbox is decided by the
   // marker, not by whatever its first block turns out to be.
   'a-task-item-s-checkbox-is-not-decided-by-its-first-block',
+  'an-attribute-line-below-a-list-item-interrupts-it',
+  'an-attributed-cell-keeps-its-attributes-and-its-literal-marker',
+  'an-engine-written-shape-says-what-it-is-called',
   // markup-carve/carve#1386 - two documents. A marker-line colon opener is
   // demoted by LAZY FOLDING and by nothing else, so an opener that reaches its
   // container stays an opener whatever sits below it.

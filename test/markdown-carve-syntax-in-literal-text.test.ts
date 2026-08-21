@@ -86,7 +86,7 @@ describe('markdownToCarve — flavour constructs Carve spells the same way', () 
       off: 'x\n\n\\::: note\nbody\n\\:::',
       offHtml: '<p>x</p>\n<p>::: note\nbody\n:::</p>',
       dialect: { fencedDivs: true },
-      onHtml: '<aside class="admonition note">',
+      onHtml: '<aside class="admonition note" aria-label="Note">',
     },
     {
       name: 'an attributed span (Pandoc, kramdown)',

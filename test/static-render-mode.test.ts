@@ -294,12 +294,12 @@ describe('static render mode — open map: a custom fence word is static-capable
 describe('static render mode — math (SSR via renderer vs source)', () => {
   it('interactive display math keeps \\[…\\] for client KaTeX', () => {
     const html = carveToHtml('$$`\\frac{a}{b}`', { extensions: exts(), mode: 'interactive' })
-    expect(html).toContain('<span class="math display">\\[\\frac{a}{b}\\]</span>')
+    expect(html).toContain('<span class="math display" role="math">\\[\\frac{a}{b}\\]</span>')
   })
 
   it('static inline math without a renderer keeps the \\(…\\) source', () => {
     const html = carveToHtml('Euler: $`e^{i\\pi}`.', { extensions: exts(), mode: 'static' })
-    expect(html).toContain('<span class="math inline">\\(e^{i\\pi}\\)</span>')
+    expect(html).toContain('<span class="math inline" role="math">\\(e^{i\\pi}\\)</span>')
   })
 
   it('static inline math WITH a stub renderer emits server-side MathML', () => {
@@ -308,7 +308,7 @@ describe('static render mode — math (SSR via renderer vs source)', () => {
       mode: 'static',
       renderers: { math: (tex, display) => `<math data-display="${display}">${tex}</math>` },
     })
-    expect(html).toContain('<span class="math inline"><math data-display="false">e^{i\\pi}</math></span>')
+    expect(html).toContain('<span class="math inline" role="math"><math data-display="false">e^{i\\pi}</math></span>')
   })
 
   it('static math-block fence with a stub renderer emits SSR inside the math div', () => {

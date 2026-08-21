@@ -145,14 +145,14 @@ describe('equation captions (caption on standalone display math)', () => {
   it('wraps a captioned display-math block in a figure', () => {
     const out = h(`${eq}\n^ Equation 1: mass-energy`)
     expect(out).toContain('<figure>')
-    expect(out).toContain('<span class="math display">\\[E = mc^2\\]</span>')
+    expect(out).toContain('<span class="math display" role="math">\\[E = mc^2\\]</span>')
     expect(out).toContain('<figcaption>Equation 1: mass-energy</figcaption>')
   })
 
   it('leaves display math without a caption as a bare paragraph (no figure)', () => {
     const out = h(eq)
     expect(out).not.toContain('<figure>')
-    expect(out).toContain('<span class="math display">\\[E = mc^2\\]</span>')
+    expect(out).toContain('<span class="math display" role="math">\\[E = mc^2\\]</span>')
   })
 
   it('does NOT wrap inline math or math with trailing prose', () => {
@@ -181,6 +181,6 @@ describe('equation captions (caption on standalone display math)', () => {
   it('recognizes an indented standalone equation (leading whitespace stripped)', () => {
     const out = h(`   ${eq}\n^ Equation #: indented`)
     expect(out).toContain('<figcaption>Equation 1: indented</figcaption>')
-    expect(out).toContain('<span class="math display">\\[E = mc^2\\]</span>')
+    expect(out).toContain('<span class="math display" role="math">\\[E = mc^2\\]</span>')
   })
 })

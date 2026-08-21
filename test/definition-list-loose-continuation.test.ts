@@ -93,7 +93,7 @@ describe('footnote definitions accept the `+` pull-left continuation', () => {
   it('a lone `+` attaches a flush-left paragraph to the note body', () => {
     expect(html('X.[^a]\n\n[^a]: First.\n+\nSecond.')).toBe(
       '<p>X.<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
-        '<section role="doc-endnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n' +
+        '<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n' +
         '      <p>First.</p>\n      <p>Second.<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
         '    </li>\n  </ol>\n</section>',
     )

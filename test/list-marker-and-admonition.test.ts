@@ -84,8 +84,8 @@ describe('admonition title (§12)', () => {
   it('renders a quoted title with the delimiters stripped', () => {
     expect(h('::: note "Heads up"\nBody.\n:::')).toBe(
       [
-        '<aside class="admonition note">',
-        '  <p class="admonition-title">Heads up</p>',
+        '<aside class="admonition note" aria-labelledby="adm-1">',
+        '  <p class="admonition-title" id="adm-1">Heads up</p>',
         '  <p>Body.</p>',
         '</aside>',
       ].join('\n'),
@@ -100,7 +100,7 @@ describe('admonition title (§12)', () => {
 
   it('renders no title element when the opener has only a type', () => {
     expect(h('::: note\nBody.\n:::')).toBe(
-      '<aside class="admonition note">\n  <p>Body.</p>\n</aside>',
+      '<aside class="admonition note" aria-label="Note">\n  <p>Body.</p>\n</aside>',
     )
   })
 
@@ -123,8 +123,8 @@ describe('admonition title (§12)', () => {
   it('a quoted title still renders, with braces preserved (no attributes)', () => {
     expect(h('::: note "Use {x}"\nBody.\n:::')).toBe(
       [
-        '<aside class="admonition note">',
-        '  <p class="admonition-title">Use {x}</p>',
+        '<aside class="admonition note" aria-labelledby="adm-1">',
+        '  <p class="admonition-title" id="adm-1">Use {x}</p>',
         '  <p>Body.</p>',
         '</aside>',
       ].join('\n'),
@@ -135,7 +135,7 @@ describe('admonition title (§12)', () => {
     // The only way to attribute an admonition: a {...} line before the
     // opener (§15). Works for Tier-1 and Tier-2 types.
     expect(h('{#x .lead}\n::: note\nBody.\n:::')).toBe(
-      '<aside class="admonition note lead" id="x">\n  <p>Body.</p>\n</aside>',
+      '<aside class="admonition note lead" id="x" aria-label="Note">\n  <p>Body.</p>\n</aside>',
     )
     expect(h('{.lead}\n::: hint\nBody.\n:::')).toBe(
       '<div class="hint lead">\n  <p>Body.</p>\n</div>',
@@ -145,8 +145,8 @@ describe('admonition title (§12)', () => {
   it('emits an empty title element for an explicitly empty quoted title', () => {
     expect(h('::: note ""\nBody.\n:::')).toBe(
       [
-        '<aside class="admonition note">',
-        '  <p class="admonition-title"></p>',
+        '<aside class="admonition note" aria-labelledby="adm-1">',
+        '  <p class="admonition-title" id="adm-1"></p>',
         '  <p>Body.</p>',
         '</aside>',
       ].join('\n'),

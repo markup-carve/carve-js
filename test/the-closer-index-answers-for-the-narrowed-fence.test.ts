@@ -49,7 +49,7 @@ describe('a fence line ending in a tab is not a closer candidate either', () => 
     expect(carveToHtml('- a\n+\n::: note\n```\n\n```\t\n:::\n- b\n')).toBe(
       '<ul>\n' +
         '  <li>a\n' +
-        '    <aside class="admonition note">\n' +
+        '    <aside class="admonition note" aria-label="Note">\n' +
         '      <pre><code>\n' +
         '</code></pre>\n' +
         '    </aside>\n' +
@@ -65,7 +65,7 @@ describe('a fence line ending in a tab is not a closer candidate either', () => 
     expect(carveToHtml('- a\n+\n::: note\n~~~\n\n~~~ \t\n:::\n- b\n')).toBe(
       '<ul>\n' +
         '  <li>a\n' +
-        '    <aside class="admonition note">\n' +
+        '    <aside class="admonition note" aria-label="Note">\n' +
         '      <pre><code>\n' +
         '</code></pre>\n' +
         '    </aside>\n' +
@@ -81,7 +81,7 @@ describe('a fence line ending in a tab is not a closer candidate either', () => 
     expect(carveToHtml('- a\n+\n::: note\n```\n\n```\n:::\n- b\n')).toBe(
       '<ul>\n' +
         '  <li>a\n' +
-        '    <aside class="admonition note">\n' +
+        '    <aside class="admonition note" aria-label="Note">\n' +
         '      <pre><code>\n' +
         '</code></pre>\n' +
         '    </aside>\n' +
@@ -111,7 +111,7 @@ describe('a fence line ending in a tab is not a closer candidate either', () => 
     expect(carveToHtml('- a\n+\n::: note\n%%%\n\nx\n%%%\t\n:::\n- b\n')).toBe(
       '<ul>\n' +
         '  <li>a\n' +
-        '    <aside class="admonition note">\n' +
+        '    <aside class="admonition note" aria-label="Note">\n' +
         '\n' +
         '    </aside>\n' +
         '  </li>\n' +

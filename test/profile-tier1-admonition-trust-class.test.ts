@@ -60,7 +60,7 @@ describe('profile: Tier-1 admonition trust class (carve#431)', () => {
   })
 
   it('rendering is unchanged for a Tier-1, a non-Tier-1, and a bare fence', () => {
-    expect(carveToHtml(note)).toBe('<aside class="admonition note">\n  <p>callout</p>\n</aside>')
+    expect(carveToHtml(note)).toBe('<aside class="admonition note" aria-label="Note">\n  <p>callout</p>\n</aside>')
     expect(carveToHtml(sidebar)).toBe('<div class="sidebar">\n  <p>content</p>\n</div>')
     expect(carveToHtml(bare)).toBe('<div>\n  <p>generic</p>\n</div>')
   })

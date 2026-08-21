@@ -51,7 +51,7 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
 
   it('a flush-left typed div fence ends lazy quote continuation and auto-closes at EOF', () => {
     expect(html('> a\n::: note')).toBe(
-      '<blockquote><p>a</p></blockquote>\n<aside class="admonition note">\n\n</aside>',
+      '<blockquote><p>a</p></blockquote>\n<aside class="admonition note" aria-label="Note">\n\n</aside>',
     )
   })
 

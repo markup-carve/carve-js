@@ -46,7 +46,7 @@ describe("a line block's footnotes are numbered like any other block's", () => {
       '<div class="line-block">\n' +
         '  <p>a <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> b</p>\n' +
         '</div>\n' +
-        '<section role="doc-endnotes">\n' +
+        '<section role="doc-endnotes" aria-label="Footnotes">\n' +
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1">\n' +
@@ -64,7 +64,7 @@ describe("a line block's footnotes are numbered like any other block's", () => {
     // an engine that discards the footnote entirely.
     const out = carveToHtml('::: |\na ^[note text] b\n:::\n')
     expect(out).toContain('note text')
-    expect(out).toContain('<section role="doc-endnotes">')
+    expect(out).toContain('<section role="doc-endnotes" aria-label="Footnotes">')
     expect(endnotes('::: |\na ^[note text] b\n:::\n')).toEqual(['fn1'])
   })
 
@@ -132,7 +132,7 @@ describe("a line block's footnotes are numbered like any other block's", () => {
     // the defect to the line block.
     expect(carveToHtml('a ^[note text] b\n')).toBe(
       '<p>a <a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> b</p>\n' +
-        '<section role="doc-endnotes">\n' +
+        '<section role="doc-endnotes" aria-label="Footnotes">\n' +
         '  <hr>\n' +
         '  <ol>\n' +
         '    <li id="fn1">\n' +

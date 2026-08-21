@@ -20,7 +20,7 @@ const squash = (html: string) => html.replace(/\s+/g, ' ').trim()
 describe('an unterminated fence inside a ::: body', () => {
   it('does not swallow the closing :::', () => {
     expect(squash(carveToHtml('::: note\n```\nx\n:::\nafter\n'))).toBe(
-      '<aside class="admonition note"> <pre><code>x </code></pre> </aside> <p>after</p>',
+      '<aside class="admonition note" aria-label="Note"> <pre><code>x </code></pre> </aside> <p>after</p>',
     )
   })
 
@@ -33,7 +33,7 @@ describe('an unterminated fence inside a ::: body', () => {
 
   it('leaves a closed fence opaque, so ::: inside one is literal', () => {
     expect(squash(carveToHtml('::: note\n````\n:::\n````\nafter\n:::\n'))).toBe(
-      '<aside class="admonition note"> <pre><code>::: </code></pre> <p>after</p> </aside>',
+      '<aside class="admonition note" aria-label="Note"> <pre><code>::: </code></pre> <p>after</p> </aside>',
     )
   })
 

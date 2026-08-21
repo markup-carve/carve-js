@@ -91,7 +91,7 @@ describe('task list content column (the bullet, not the checkbox)', () => {
 
   it('nests a child indented to the bullet column (2), not the checkbox column', () => {
     expect(h('- [ ] a\n  - b')).toBe(
-      '<ul>\n  <li><input type="checkbox" disabled> a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li><input type="checkbox" disabled aria-label="a"> a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 })

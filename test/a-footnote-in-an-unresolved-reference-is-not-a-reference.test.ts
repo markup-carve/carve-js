@@ -30,7 +30,7 @@ import type { FootnoteRef, InlineFootnote, InlineNode, Paragraph } from '../src/
 /** The endnotes region, byte for byte, holding a single note with one backlink. */
 const loneEndnote = (body: string): string =>
   [
-    '<section role="doc-endnotes">',
+    '<section role="doc-endnotes" aria-label="Footnotes">',
     '  <hr>',
     '  <ol>',
     '    <li id="fn1">',

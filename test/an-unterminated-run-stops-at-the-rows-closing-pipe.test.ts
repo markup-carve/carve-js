@@ -38,7 +38,7 @@ describe('an unterminated verbatim run stops at the row closing pipe', () => {
     // `$` math and `!` literal spell the same run; the pipe is not theirs
     // either. The `!` prefix makes the unclosed run a literal inline too.
     expect(html('| a $`b | c d |')).toContain(
-      '<td>a <span class="math inline">\\(b | c d\\)</span></td>',
+      '<td>a <span class="math inline" role="math">\\(b | c d\\)</span></td>',
     )
     expect(html('| a !`b | c d |')).toContain('<td>a b | c d</td>')
   })

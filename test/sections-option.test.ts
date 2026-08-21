@@ -93,7 +93,7 @@ describe('sections: false', () => {
   it('still emits the endnotes region, which is a different construct', () => {
     const out = flat('# A\n\nText[^n].\n\n[^n]: Note.\n')
     expect(out).toContain('<h1 id="A">A</h1>')
-    expect(out).toContain('<section role="doc-endnotes">')
+    expect(out).toContain('<section role="doc-endnotes" aria-label="Footnotes">')
     expect(out).not.toContain('<section id=')
   })
 
