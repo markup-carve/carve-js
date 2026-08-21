@@ -19,10 +19,12 @@ describe('index terms', () => {
     // sorted: lexer before parser
     expect(out.indexOf('>lexer ')).toBeLessThan(out.indexOf('>parser '))
     expect(out).toContain(
-      '<li>parser <a href="#idx-parser-1" class="index-backref">↩</a> ' +
-        '<a href="#idx-parser-2" class="index-backref">↩</a></li>',
+      '<li>parser <a href="#idx-parser-1" class="index-backref" aria-label="Back to parser 1">↩<sup>1</sup></a> ' +
+        '<a href="#idx-parser-2" class="index-backref" aria-label="Back to parser 2">↩<sup>2</sup></a></li>',
     )
-    expect(out).toContain('<li>lexer <a href="#idx-lexer-1" class="index-backref">↩</a></li>')
+    expect(out).toContain(
+      '<li>lexer <a href="#idx-lexer-1" class="index-backref" aria-label="Back to lexer">↩</a></li>',
+    )
   })
 
   it('numbers occurrences per slug in document order', () => {
@@ -75,6 +77,8 @@ describe('index terms', () => {
   it('renders a ::: index nested inside a blockquote', () => {
     const out = h('A :index[parser].\n\n> ::: index\n> :::')
     expect(out).toContain('<ul class="index">')
-    expect(out).toContain('<li>parser <a href="#idx-parser-1" class="index-backref">↩</a></li>')
+    expect(out).toContain(
+      '<li>parser <a href="#idx-parser-1" class="index-backref" aria-label="Back to parser">↩</a></li>',
+    )
   })
 })

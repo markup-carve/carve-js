@@ -22,7 +22,7 @@ describe('codeGroup extension (carve-php parity)', () => {
     const src =
       '::: code-group\n``` php\necho "Hello";\n```\n\n``` javascript\nconsole.log("Hello");\n```\n:::'
     expect(carveToHtml(src, { extensions: [codeGroup()] })).toBe(
-      '<div class="code-group">\n' +
+      '<div class="code-group" role="group" aria-label="Code examples">\n' +
         '<input type="radio" name="codegroup-1" id="codegroup-1-tab-1" class="code-group-radio" checked>\n' +
         '<label for="codegroup-1-tab-1" class="code-group-label">php</label>\n' +
         '<input type="radio" name="codegroup-1" id="codegroup-1-tab-2" class="code-group-radio">\n' +
@@ -70,7 +70,7 @@ describe('codeGroup extension (carve-php parity)', () => {
   it('merges author classes and keeps the id on the wrapper', () => {
     const src = '{.custom-style #my-code}\n::: code-group\n``` php\ntest\n```\n:::'
     const html = carveToHtml(src, { extensions: [codeGroup()] })
-    expect(html).toContain('<div class="code-group custom-style" id="my-code">')
+    expect(html).toContain('<div class="code-group custom-style" id="my-code" role="group" aria-label="Code examples">')
   })
 
   it('numbers groups independently and resets between conversions', () => {
@@ -158,7 +158,7 @@ describe('tabs extension (carve-php parity)', () => {
     const src =
       ':::: tabs\n\n::: tab\n### First Tab\n\nContent for the first tab.\n:::\n\n::: tab\n### Second Tab\n\nContent for the second tab.\n:::\n\n::::'
     expect(carveToHtml(src, { extensions: [tabs()] })).toBe(
-      '<div class="tabs">\n' +
+      '<div class="tabs" role="group" aria-label="Tabs">\n' +
         '<input type="radio" name="tabset-1" id="tabset-1-tab-1" class="tabs-radio" checked>\n' +
         '<label for="tabset-1-tab-1" class="tabs-label">First Tab</label>\n' +
         '<input type="radio" name="tabset-1" id="tabset-1-tab-2" class="tabs-radio">\n' +
@@ -173,7 +173,7 @@ describe('tabs extension (carve-php parity)', () => {
     const src =
       ':::: tabs\n\n{label="First Tab"}\n::: tab\nContent here.\n:::\n\n{label="Second Tab" selected}\n::: tab\nThis tab is selected.\n:::\n\n::::'
     expect(carveToHtml(src, { extensions: [tabs()] })).toBe(
-      '<div class="tabs">\n' +
+      '<div class="tabs" role="group" aria-label="Tabs">\n' +
         '<input type="radio" name="tabset-1" id="tabset-1-tab-1" class="tabs-radio">\n' +
         '<label for="tabset-1-tab-1" class="tabs-label">First Tab</label>\n' +
         '<input type="radio" name="tabset-1" id="tabset-1-tab-2" class="tabs-radio" checked>\n' +
@@ -188,7 +188,7 @@ describe('tabs extension (carve-php parity)', () => {
     const src =
       ':::: tabs\n\n::: tab\n### First\n\nContent one.\n:::\n\n::: tab\n### Second\n\nContent two.\n:::\n\n::::'
     expect(carveToHtml(src, { extensions: [tabs({ mode: 'aria' })] })).toBe(
-      '<div class="tabs" role="tablist">\n' +
+      '<div class="tabs" role="tablist" aria-label="Tabs">\n' +
         '<button role="tab" id="tabset-1-tab-1" aria-selected="true" aria-controls="tabset-1-panel-1" class="tabs-label">First</button>\n' +
         '<button role="tab" id="tabset-1-tab-2" aria-selected="false" aria-controls="tabset-1-panel-2" class="tabs-label" tabindex="-1">Second</button>\n' +
         '<div role="tabpanel" id="tabset-1-panel-1" aria-labelledby="tabset-1-tab-1" class="tabs-panel">\n<p>Content one.</p>\n</div>\n' +

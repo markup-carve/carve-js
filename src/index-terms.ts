@@ -13,7 +13,20 @@ import { deriveDisplayNodes, inlineText, slugify } from './heading-ids.js'
  * per occurrence. Reuses the `:name[…]` inline form; no new syntax. Off by
  * default, never corpus-pinned. See docs/extensions.md §8.
  */
-export function index(): CarveExtension {
+export interface IndexOptions {
+  /**
+   * Leading words of a back-link's accessible name, so the k-th back-link for
+   * `widget` is named `Back to widget 2`.
+   *
+   * Left unset, the string comes from the render's `labels` map under
+   * `indexBackref` (default `'Back to'`), so ONE map localizes the whole
+   * document - §16a forbids making a host configure the same text twice. Set
+   * here to override the map for this extension instance.
+   */
+  backrefLabel?: string
+}
+
+export function index(opts: IndexOptions = {}): CarveExtension {
   const occ = new WeakMap<Extension, number>() // marker node → 1-based occurrence
   const counts = new Map<string, number>() // slug → total occurrences
   const display = new Map<string, InlineNode[]>() // slug → first occurrence's term nodes
@@ -64,7 +77,16 @@ export function index(): CarveExtension {
     blockRenderers: {
       admonition: (node, ctx) =>
         containers.has(node) && counts.size > 0
-          ? renderIndexList(node as Admonition, ctx, counts, display, budget)
+          ? renderIndexList(
+              node as Admonition,
+              ctx,
+              counts,
+              display,
+              budget,
+              // Precedence: the extension's own option, then the render's
+              // `labels` map, then the English default the map carries.
+              opts.backrefLabel ?? ctx.labels.indexBackref,
+            )
           : undefined,
     },
   }
@@ -97,6 +119,7 @@ function renderIndexList(
   counts: Map<string, number>,
   display: Map<string, InlineNode[]>,
   budget: AbbrBudget,
+  backrefLabel: string,
 ): string {
   const pad = ctx.indent(ctx.level)
   const inner = ctx.indent(ctx.level + 1)
@@ -111,8 +134,21 @@ function renderIndexList(
     if (!budget.charge(utf8ByteLength(li))) break
     const links: string[] = []
     let truncated = false
-    for (let m = 1; m <= counts.get(slug)!; m++) {
-      const link = `<a href="#idx-${ctx.escapeAttr(slug)}-${m}" class="index-backref">↩</a>`
+    const total = counts.get(slug)!
+    // THE BACK-LINK SAYS WHERE IT GOES (carve#1469). `↩` alone is announced as
+    // "leftwards arrow with hook", or skipped - the sentence PART 9 §16 exists
+    // to prevent, on the identical element. §16's rule is mirrored rather than
+    // reinvented: the name is the label plus WHAT THE LINK VISIBLY SAYS. One
+    // occurrence shows `↩` and is named by label + term; the k-th of several
+    // shows `↩<sup>k</sup>` and takes that k, so a row of otherwise identical
+    // arrows is distinguishable BOTH by sight and by ear (WCAG 2.5.3).
+    const term = inlineText(display.get(slug)!)
+    for (let m = 1; m <= total; m++) {
+      const name = total === 1 ? `${backrefLabel} ${term}` : `${backrefLabel} ${term} ${m}`
+      const body = total === 1 ? '↩' : `↩<sup>${m}</sup>`
+      const link =
+        `<a href="#idx-${ctx.escapeAttr(slug)}-${m}" class="index-backref"` +
+        ` aria-label="${ctx.escapeAttr(name)}">${body}</a>`
       if (!budget.charge(utf8ByteLength(link))) {
         truncated = true
         break

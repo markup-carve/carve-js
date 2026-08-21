@@ -18,6 +18,24 @@ export interface FencedRenderOptions {
   wrapInFigure?: boolean
   /** Figure class. Default `"{cssClass}-figure"`. */
   figureClass?: string
+  /**
+   * Accessible name for the rendered diagram. Default: the `cssClass` word, so
+   * a `mermaid` fence is named `mermaid` out of the box. That is deliberately
+   * the fence's OWN word rather than invented English: no preset overrides it,
+   * which is what keeps `mermaid()` byte-identical to the factory it is a
+   * preset of. A host that wants a reader to hear something better sets this,
+   * or the author writes `{aria-label=…}` on the fence itself.
+   *
+   * The hydration element carries `role="img"` with this name (carve#1468).
+   * Before the client library runs - and if it never runs - the body is DIAGRAM
+   * SOURCE, and a reader announced it as prose; afterwards the injected `<svg>`
+   * had no name either. `role="img"` plus a name fixes both halves, and the two
+   * travel together: an `img` with no accessible name is skipped entirely,
+   * which is worse than the source being read out.
+   *
+   * Set to `''` to write neither attribute and keep the previous output.
+   */
+  label?: string
 }
 
 // Text mode: escape `&` and `<` (blocking tag injection), but keep `>` so
@@ -78,6 +96,49 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
   const cssClass = opts.cssClass ?? languages[0]
   const tag = opts.tag ?? (mode === 'json' ? 'div' : 'pre')
   const figureClass = opts.figureClass ?? `${cssClass}-figure`
+  const label = opts.label ?? cssClass
+  // The author's own `role` / `aria-label` on the fence wins - a second one
+  // beside theirs leaves the value undefined. HTML attribute names are
+  // ASCII-case-insensitive, so the comparison is too.
+  const authored = (attrs: Attrs | undefined, name: string): boolean =>
+    Object.keys(attrs?.keyValues ?? {}).some((k) => k.toLowerCase() === name)
+  // `role="img"` and the name are written TOGETHER or not at all.
+  const named = (attrs: Attrs): Attrs => {
+    // The ROLE and the NAME are decided INDEPENDENTLY. An author who writes only
+    // `{aria-label="Deploy flow"}` has supplied the name and still needs the
+    // role - suppressing it there would leave exactly the defect this fixes, on
+    // the one fence whose author cared enough to name it.
+    //
+    // The invariant that survives is narrower: the role is never written WITHOUT
+    // a name, from either source, because an `img` with no accessible name is
+    // skipped entirely. So `label: ''` on a fence the author did not name
+    // removes both, which is the documented opt-out.
+    const authoredName = authored(attrs, 'aria-label') || authored(attrs, 'aria-labelledby')
+    const writeName = label !== '' && !authoredName
+    const writeRole = !authored(attrs, 'role') && (authoredName || label !== '')
+    if (!writeName && !writeRole) return attrs
+    // APPENDED, never reordered: the author's own order is left exactly as it
+    // was, so naming a fence cannot move an `{#id}` the author put before the
+    // class. Same rule the core math span follows for `role`.
+    return {
+      ...attrs,
+      keyValues: {
+        ...(attrs.keyValues ?? {}),
+        ...(writeRole ? { role: 'img' } : {}),
+        ...(writeName ? { 'aria-label': label } : {}),
+      },
+      // `.class` is pinned into the order before the appended names, because
+      // renderAttrs emits an omitted class LAST - so appending role/aria-label
+      // to an author order that never mentioned the class would slip them in
+      // ahead of it. Everything the author DID spell keeps its place.
+      order: [
+        ...(attrs.order ?? []),
+        ...((attrs.order ?? []).includes('.class') ? [] : ['.class']),
+        ...(writeRole ? ['role'] : []),
+        ...(writeName ? ['aria-label'] : []),
+      ],
+    }
+  }
 
   return {
     name: 'fenced-render',
@@ -88,7 +149,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         // Merge the cssClass ahead of author classes; renderAttrs hardens the
         // copied author attributes (names + values).
         const attrs: Attrs = { ...code.attrs, classes: [cssClass, ...(code.attrs?.classes ?? [])] }
-        const open = `<${tag}${ctx.renderAttrs(attrs)}>`
+        const open = `<${tag}${ctx.renderAttrs(named(attrs))}>`
         const body =
           mode === 'json'
             ? `<script type="application/json">${guardScriptClose(code.content)}</script>`
@@ -127,7 +188,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
           // the class/attrs survive and the wrapper is identical across engines
           // (carve#302). A `<div>` - not the interactive `<pre>`/`<div>` tag -
           // because the output is a rendered image, not source text.
-          const element = `<div${ctx.renderAttrs(attrs)}>${build(code.content)}</div>`
+          const element = `<div${ctx.renderAttrs(named(attrs))}>${build(code.content)}</div>`
           if (opts.wrapInFigure) {
             return `${pad}<figure class="${ctx.escapeAttr(figureClass)}">\n${pad}${element}\n${pad}</figure>`
           }

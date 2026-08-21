@@ -132,9 +132,9 @@ describe('static render mode — details / spoiler reveal', () => {
 describe('static render mode — mermaid (no-renderer source vs with-renderer image)', () => {
   const SRC = '``` mermaid\ngraph TD; A --> B\n```'
 
-  it('interactive mermaid is the client-hydration <pre class="mermaid">', () => {
+  it('interactive mermaid is the client-hydration <pre class="mermaid" role="img" aria-label="mermaid">', () => {
     const html = carveToHtml(SRC, { extensions: exts(), mode: 'interactive' })
-    expect(html).toBe('<pre class="mermaid">graph TD; A --> B</pre>')
+    expect(html).toBe('<pre class="mermaid" role="img" aria-label="mermaid">graph TD; A --> B</pre>')
   })
 
   it('static mermaid WITHOUT a renderer degrades to escaped source <pre><code>', () => {
@@ -162,9 +162,9 @@ describe('static render mode — mermaid (no-renderer source vs with-renderer im
       renderers: { mermaid: (src) => `<svg data-src="${src.length}"><!--diagram--></svg>` },
     })
     // The renderer receives the verbatim diagram source ("graph TD; A --> B"),
-    // and its output is wrapped in the same `<pre class="mermaid">` element the
+    // and its output is wrapped in the same `<pre class="mermaid" role="img" aria-label="mermaid">` element the
     // interactive / fallback paths use, so author attributes can ride along.
-    expect(html).toBe('<div class="mermaid"><svg data-src="17"><!--diagram--></svg></div>')
+    expect(html).toBe('<div class="mermaid" role="img" aria-label="mermaid"><svg data-src="17"><!--diagram--></svg></div>')
   })
 
   it('static mermaid WITH a renderer carries author fence attributes onto the wrapper', () => {
@@ -176,7 +176,7 @@ describe('static render mode — mermaid (no-renderer source vs with-renderer im
       mode: 'static',
       renderers: { mermaid: () => '<svg><!--d--></svg>' },
     })
-    expect(html).toBe('<div id="diagram" class="mermaid wide"><svg><!--d--></svg></div>')
+    expect(html).toBe('<div id="diagram" class="mermaid wide" role="img" aria-label="mermaid"><svg><!--d--></svg></div>')
   })
 })
 
@@ -198,9 +198,9 @@ describe('static render mode — chart', () => {
       mode: 'static',
       renderers: { chart: () => '<img alt="chart" src="chart.png">' },
     })
-    // json-mode default wrapper is `<div class="chart">`; the image rides inside
+    // json-mode default wrapper is `<div class="chart" role="img" aria-label="chart">`; the image rides inside
     // it so author attributes survive the renderer path.
-    expect(html).toBe('<div class="chart"><img alt="chart" src="chart.png"></div>')
+    expect(html).toBe('<div class="chart" role="img" aria-label="chart"><img alt="chart" src="chart.png"></div>')
   })
 
   it('static chart with a renderer carries author fence attributes onto the wrapper', () => {
@@ -209,7 +209,7 @@ describe('static render mode — chart', () => {
       mode: 'static',
       renderers: { chart: () => '<img alt="chart" src="chart.png">' },
     })
-    expect(html).toBe('<div id="c1" class="chart boxed"><img alt="chart" src="chart.png"></div>')
+    expect(html).toBe('<div id="c1" class="chart boxed" role="img" aria-label="chart"><img alt="chart" src="chart.png"></div>')
   })
 })
 
@@ -229,7 +229,7 @@ describe('static render mode — graphviz', () => {
       mode: 'static',
       renderers: { graphviz: () => '<img alt="graphviz" src="graph.svg">' },
     })
-    expect(html).toBe('<div class="graphviz"><img alt="graphviz" src="graph.svg"></div>')
+    expect(html).toBe('<div class="graphviz" role="img" aria-label="graphviz"><img alt="graphviz" src="graph.svg"></div>')
   })
 
   it('the dot alias consults the same graphviz renderer key', () => {
@@ -238,7 +238,7 @@ describe('static render mode — graphviz', () => {
       mode: 'static',
       renderers: { graphviz: () => '<img alt="graphviz" src="graph.svg">' },
     })
-    expect(html).toBe('<div class="graphviz"><img alt="graphviz" src="graph.svg"></div>')
+    expect(html).toBe('<div class="graphviz" role="img" aria-label="graphviz"><img alt="graphviz" src="graph.svg"></div>')
   })
 })
 
@@ -257,7 +257,7 @@ describe('static render mode — plantuml', () => {
       mode: 'static',
       renderers: { plantuml: () => '<img alt="plantuml" src="uml.svg">' },
     })
-    expect(html).toBe('<div class="plantuml"><img alt="plantuml" src="uml.svg"></div>')
+    expect(html).toBe('<div class="plantuml" role="img" aria-label="plantuml"><img alt="plantuml" src="uml.svg"></div>')
   })
 
   it('the puml alias consults the same plantuml renderer key', () => {
@@ -266,7 +266,7 @@ describe('static render mode — plantuml', () => {
       mode: 'static',
       renderers: { plantuml: () => '<img alt="plantuml" src="uml.svg">' },
     })
-    expect(html).toBe('<div class="plantuml"><img alt="plantuml" src="uml.svg"></div>')
+    expect(html).toBe('<div class="plantuml" role="img" aria-label="plantuml"><img alt="plantuml" src="uml.svg"></div>')
   })
 })
 
@@ -280,7 +280,7 @@ describe('static render mode — open map: a custom fence word is static-capable
       mode: 'static',
       renderers: { myuml: () => '<img alt="myuml" src="my.svg">' },
     })
-    expect(html).toBe('<div class="myuml"><img alt="myuml" src="my.svg"></div>')
+    expect(html).toBe('<div class="myuml" role="img" aria-label="myuml"><img alt="myuml" src="my.svg"></div>')
   })
 
   it('a custom fence with no matching renderer degrades to escaped source', () => {
