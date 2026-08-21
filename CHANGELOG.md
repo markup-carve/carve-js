@@ -32,6 +32,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   byte; it now renders the ARIA shape, mirroring Tabs. `css` remains the default
   in both, and **an unknown `mode` is now rejected rather than falling back to
   `css`** - `tabs({ mode: 'aira' })` threw nothing and rendered the default.
+- **Three blank lines are a hard list boundary** (markup-carve/carve#1430,
+  §11 N1a). A run of three or more before a compatible sibling marker opens a
+  new list instead of loosening the current one, at every level. One and two
+  blank lines are unchanged.
+- **The canonical writer separates two adjacent sibling lists with that
+  boundary** instead of indenting the later one by a space. The old offset was
+  what existed before a separator was spelled; it returned a list at a column
+  the author never wrote, and it could not survive a third list.
 - **The doubled run is the canonical arrow, in both families** (#1241, markup-carve/carve#1442). `<--` `-->` `<-->` and `<==` `==>` `<=>` convert. **BREAKING: `=>` no longer converts** - `key => value` and `x => x + 1` were silently becoming `⇒` in rendered output only. `<=` keeps `≤`, and a highlight no longer opens before `>`.
 - **An empty brace pair is text, and `{--}` is an en dash** (#1242, markup-carve/carve#1447, markup-carve/carve#1450). `{//}`, `{**}`, `{^^}` and the rest render literally; a pair holding content is still the construct.
 - **Admonitions, task checkboxes, the footnote section and math carry accessible names** (#1253). A canonical admonition takes `aria-labelledby` on its title or an `aria-label` for its kind, a task checkbox is named by its item text, the endnotes section is labeled, and a math span takes `role="math"`. An authored `role`, `aria-label` or `aria-labelledby` always wins. The `labels` map grows nine keys for those strings.

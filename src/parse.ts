@@ -8314,6 +8314,10 @@ function parseList(lexer: Lexer): List {
   }
   const items: ListItem[] = []
   let loose = false
+  // §11 N1 hard boundary: a run of three or more blank lines before a
+  // compatible sibling marker ends this list rather than loosening it. Set
+  // where the loose decision is made, acted on after the item is pushed.
+  let hardBoundary = false
 
   /**
    * The boundary set for a `+`-attached block in a list item: a blank, a
@@ -8821,7 +8825,13 @@ function parseList(lexer: Lexer): List {
           ? orderedContinues(nextStripped, orderedKind, orderedDelim)
           : unorderedMarkerChar(nextStripped) === firstMarkerChar)
       ) {
-        loose = true
+        // A run of THREE OR MORE blank lines is a hard boundary (§11 N1): the
+        // sibling marker after it opens a new list instead of joining this
+        // one. One or two blank lines remain the ordinary loose separator
+        // (§17 L1). `blankBeforeInvisible` is deliberately not counted here -
+        // a run broken by a comment is not a run of blank lines.
+        if (pendingBlanks >= 3) hardBoundary = true
+        else loose = true
       }
     }
 
@@ -9111,6 +9121,7 @@ function parseList(lexer: Lexer): List {
     if (checked !== undefined) item.checked = checked
     if (itemAttrs) item.attrs = itemAttrs
     items.push(item)
+    if (hardBoundary) break
   }
 
   const list: List = { type: 'list', ordered: isOrdered, tight: !loose, items }

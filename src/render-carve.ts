@@ -473,14 +473,12 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
   return out
 }
 
-/** Every non-blank line of `text`, prefixed with `columns` spaces. */
-function indentLines(text: string, columns: number): string {
-  const pad = ' '.repeat(columns)
-  return text
-    .split('\n')
-    .map((line) => (line === '' ? line : pad + line))
-    .join('\n')
-}
+/**
+ * §11 N1a's hard list boundary, held as one code point until `normalize` has
+ * run its blank-run squeeze. U+E006 joins the writer-only private-use set; it
+ * is replaced by the four newlines it stands for on the way out.
+ */
+const LIST_BOUNDARY = '\ue006'
 
 /**
  * Whether two adjacent sibling lists would read back as ONE list.
@@ -516,27 +514,33 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
     // marker as authored" - which separates them only while the markers differ;
     // when both are `1.` at column 0 there is nothing left to preserve.
     //
-    // ONE SPACE, CUMULATIVE, RELATIVE TO THE LIST BEFORE IT. One space is the
-    // only offset safe for both kinds: a bullet's content column is 2, so two
-    // spaces already NEST the second list inside the first. And the step is per
-    // list rather than per run - writing every later list at +1 leaves the
-    // second and third at the same column, where they merge with each other.
+    // THE SEPARATOR IS THE HARD BOUNDARY (§11 N1a): three blank lines. That is
+    // the language's own way of saying "these are two lists", so the writer
+    // says it instead of encoding the same fact as layout.
+    //
+    // It REPLACES the one-space cumulative offset this used to emit. That
+    // offset existed because no separator was spelled - it was the only thing
+    // left - and it cost real correctness: the second list came back indented
+    // (`- a` / blank / ` - b`), a third had to go to two spaces, and at two
+    // spaces a bullet's content column NESTS the later list inside the earlier
+    // one. Three blank lines separate any number of sibling lists at the
+    // column the author wrote them.
     let previousList: List | null = null
-    let listOffset = 0
+    let listSeparated = false
     let previousBlock: BlockNode | null = null
     for (const block of blocks) {
       ctx.paragraphStartsAfterCaptionHost = ctx.afterCaptionHost
       const rendered = renderBlock(block, ctx)
       ctx.afterCaptionHost = hostsCaption(block)
       if (block.type === 'list') {
-        listOffset = previousList !== null && listsWouldMerge(previousList, block) ? listOffset + 1 : 0
+        listSeparated = previousList !== null && listsWouldMerge(previousList, block)
         previousList = block
       } else if (rendered.length > 0) {
         previousList = null
-        listOffset = 0
+        listSeparated = false
       }
       if (rendered.length > 0) {
-        const text = listOffset > 0 ? indentLines(rendered, listOffset) : rendered
+        const text = rendered
         // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
         // lines are one paragraph in the source and N nodes in the tree since
         // PART 12 §18, so the default block separator would open a blank line
@@ -546,6 +550,14 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
         // positions falls back to the separator every other block gets.
         if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
           parts[parts.length - 1] += `\n${text}`
+        } else if (listSeparated && parts.length > 0) {
+          // §11 N1a's boundary, written as a SENTINEL rather than as four
+          // literal newlines. `normalize` squeezes every run of three or more
+          // newlines to two - correct for a decorative run, which the rule says
+          // to normalize away, and fatal for this one, which the rule says to
+          // keep. The squeeze cannot tell them apart from the text; only the
+          // writer knows, so the writer says so and `normalize` restores it.
+          parts[parts.length - 1] += `${LIST_BOUNDARY}${text}`
         } else {
           parts.push(text)
         }
@@ -2263,7 +2275,10 @@ function normalize(text: string): string {
     // the restriction for the old parser and it goes with it.
     return dropTrailingWs(line)
   })
-  const cleaned = trimNonNbspKeepingGuard(swept.join('\n').replace(/\n{3,}/g, '\n\n'))
+  // The squeeze runs FIRST, so a decorative run still normalizes; the boundary
+  // sentinel is not a newline yet and passes through it untouched.
+  const squeezed = swept.join('\n').replace(/\n{3,}/g, '\n\n')
+  const cleaned = trimNonNbspKeepingGuard(squeezed.replace(new RegExp(`\\n*${LIST_BOUNDARY}\\n*`, 'g'), '\n\n\n\n'))
 
   return `${guardLeadingBom(restoreVerbatim(cleaned))}\n`
 }
