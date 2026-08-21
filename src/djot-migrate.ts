@@ -434,6 +434,25 @@ function stripHit(h: ScanHit): MigrationWarning {
  */
 export const migrateScanSteps = { count: 0 }
 
+/**
+ * Pair comparisons the cross-detection sweep in `applyMigrationFixes` performs,
+ * for the same reason `migrateScanSteps` exists and with the same contract.
+ *
+ * The regression it guards is the all-pairs `hits.some(crosses)` loop this
+ * sweep replaced: that is O(n^2), so its comparisons PER HIT grow like n and
+ * quadruple across a 4x input. The active-list sweep's comparisons per hit stay
+ * flat, because a hit is compared only against the intervals still open at its
+ * own start.
+ *
+ * A clock cannot ask that question here. What `applyMigrationFixes` spends most
+ * of its time on for a large input is the per-edit whole-string splice below,
+ * which is a separate O(edits x length) cost this sweep has no bearing on - so
+ * a wall-clock bound on the whole call reads mostly that, loosely, and a loose
+ * bound on a jittery dominant term is what carve-js#1268 walked across at
+ * 2651 ms against 2500 ms on unchanged code.
+ */
+export const migrateCrossSteps = { count: 0 }
+
 export function djotMigrationWarnings(source: string): MigrationWarning[] {
   return scanHits(source).map(stripHit)
 }
@@ -625,9 +644,13 @@ export function applyMigrationFixes(source: string): MigrationFixResult {
   for (const b of hits) {
     // Drop intervals that closed at or before b's start: they can't cross b.
     let drop = 0
-    while (drop < active.length && active[drop]!.end <= b.start) drop++
+    while (drop < active.length && active[drop]!.end <= b.start) {
+      migrateCrossSteps.count++
+      drop++
+    }
     if (drop > 0) active.splice(0, drop)
     for (const a of active) {
+      migrateCrossSteps.count++
       // a.start <= b.start (sweep order) and a.end > b.start (still active).
       // Crossing needs a.end strictly inside b and starts distinct.
       if (a.start === b.start) continue
@@ -641,6 +664,7 @@ export function applyMigrationFixes(source: string): MigrationFixResult {
     let lo = 0
     let hi = active.length
     while (lo < hi) {
+      migrateCrossSteps.count++
       const mid = (lo + hi) >> 1
       if (active[mid]!.end < b.end) lo = mid + 1
       else hi = mid

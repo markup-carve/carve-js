@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToAnsi, carveToMarkdown, carveToPlainText } from '../src/index.js'
 import { trimEndNonNbsp, trimNonNbsp, trimStartNonNbsp } from '../src/trim-non-nbsp.js'
+import { perfIt } from './helpers/scaling.js'
 
 // The same defect as `writer-deep-list-perf.test.ts`, in the three targets that
 // were left behind when it was fixed. carve-js#638 made the canonical writer's
@@ -32,7 +33,17 @@ const ladder = (depth: number): string => {
 }
 
 describe('the Markdown target on a deep list ladder', () => {
-  it('renders 80 levels well inside a second', () => {
+  // GATED behind `perfIt`, like every other wall-clock guard in this repo. The
+  // three bounds in this describe survive as wall-clock numbers because their
+  // own comments argue, correctly, that no ratio discriminates here - but a
+  // wall-clock number has no business in the everyday suite, where vitest runs
+  // files concurrently and they measure each other plus whatever else the box
+  // is doing. `npm run test:perf` runs them with `--no-file-parallelism`, and
+  // CI gives that job a runner to itself (carve-js#1268).
+  //
+  // MEASURED CONDITIONS for every bound below: node 22, 16 cores, loadavg
+  // 10.25, warm (each test primes the path at depth 20 first).
+  perfIt('renders 80 levels well inside a second', () => {
     // Warm up: the cold call carries JIT compilation, as every other perf guard
     // in this repo notes.
     carveToMarkdown(ladder(20))
@@ -42,9 +53,16 @@ describe('the Markdown target on a deep list ladder', () => {
     const elapsed = performance.now() - start
 
     expect(out).toContain('- x')
-    // ~0.03s warm. The superlinear form did not return inside 60s, so a generous
-    // bound separates them without timing flakiness.
-    expect(elapsed).toBeLessThan(5000)
+    // 53ms under the stated conditions. The superlinear form did not return
+    // inside 60s, so the bound has ~94x of headroom below and three orders
+    // above.
+    expect(
+      elapsed,
+      `80 levels took ${elapsed.toFixed(0)}ms against a 5000ms bound ` +
+        `(53ms warm at loadavg 10 on 16 cores). A superlinear trim does not ` +
+        `return inside 60s, so a reading in the low thousands is far more ` +
+        `likely to be a loaded runner than a regression - check the load first.`,
+    ).toBeLessThan(5000)
   })
 
   // NO RATIO CASE HERE, deliberately. The obvious one - compare depth 80 against
@@ -54,25 +72,39 @@ describe('the Markdown target on a deep list ladder', () => {
   // separate 0.03s from "did not finish" by three orders, which is the honest
   // version of the same check.
 
-  it('renders the deepest document the parse cap accepts', () => {
+  perfIt('renders the deepest document the parse cap accepts', () => {
     carveToMarkdown(ladder(20))
 
     const start = performance.now()
     carveToMarkdown(ladder(200))
     const elapsed = performance.now() - start
 
-    expect(elapsed).toBeLessThan(15000)
+    // 344ms under the stated conditions: ~44x of headroom.
+    expect(
+      elapsed,
+      `200 levels took ${elapsed.toFixed(0)}ms against a 15000ms bound ` +
+        `(344ms warm at loadavg 10 on 16 cores). Ambient load is a candidate ` +
+        `explanation for anything short of the minutes a superlinear trim costs.`,
+    ).toBeLessThan(15000)
   })
 
 
-  it('leaves plain text and the terminal fast too', () => {
+  perfIt('leaves plain text and the terminal fast too', () => {
     // They share the helper now, so a regression in it would show here first -
     // these two never built a string long enough to expose the old form.
     for (const render of [carveToPlainText, carveToAnsi]) {
       render(ladder(20))
       const start = performance.now()
       render(ladder(200))
-      expect(performance.now() - start).toBeLessThan(15000)
+      const elapsed = performance.now() - start
+
+      // 220ms and 305ms under the stated conditions: ~49x to ~68x of headroom.
+      expect(
+        elapsed,
+        `${render.name} on 200 levels took ${elapsed.toFixed(0)}ms against a ` +
+          `15000ms bound (220ms and 305ms warm at loadavg 10 on 16 cores). ` +
+          `Check the machine's load before reading this as a regression.`,
+      ).toBeLessThan(15000)
     }
   })
 })
@@ -164,7 +196,7 @@ describe('the shared trim', () => {
     expect(trimNonNbsp('')).toBe('')
   })
 
-  it('trims a long indented string in one pass', () => {
+  perfIt('trims a long indented string in one pass', () => {
     // A RATIO does not discriminate here: over 400 -> 1600 lines the regex form
     // grew ~15x, inside any bound loose enough to be stable. A single call on a
     // string big enough separates them by three orders instead - 1.3 million
@@ -178,6 +210,13 @@ describe('the shared trim', () => {
     const elapsed = performance.now() - start
 
     expect(out.startsWith('x')).toBe(true)
-    expect(elapsed).toBeLessThan(100)
+    // 0.7ms under the stated conditions: ~143x of headroom below, and the regex
+    // form took 1375ms, ~14x above.
+    expect(
+      elapsed,
+      `trimming 1.3M characters took ${elapsed.toFixed(1)}ms against a 100ms ` +
+        `bound (0.7ms at loadavg 10 on 16 cores; the regex form took 1375ms). ` +
+        `A reading of a few ms is a loaded runner or a GC pause, not the regex.`,
+    ).toBeLessThan(100)
   })
 })
