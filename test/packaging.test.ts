@@ -49,10 +49,15 @@ describe('prettier plugin', () => {
     await expect(format('[unclosed\n\n::: never-closed\n')).resolves.toBeTypeOf('string')
   })
 
-  it('claims both extensions, so no overrides block is needed', async () => {
+  it('claims the one Carve extension, so no overrides block is needed', async () => {
+    // `.crv` is the only Carve extension: the spec states it and no other, and
+    // `.carve` was dropped in intellij-carve 0.1.2 with an instruction to rename.
+    // jekyll-carve and mkdocs-carve both assert they do NOT match `.carve`, so a
+    // plugin that claimed it formatted files the rest of the ecosystem refuses to
+    // render. The assertion is exact rather than a `toContain` for that reason.
     const plugin = (await import('../src/prettier.js')) as { languages: { extensions: string[] }[] }
 
-    expect(plugin.languages[0]?.extensions).toEqual(['.crv', '.carve'])
+    expect(plugin.languages[0]?.extensions).toEqual(['.crv'])
   })
 })
 
@@ -127,10 +132,14 @@ describe('pre-commit hooks', () => {
     for (const hook of hooks) expect(hook.language).toBe('node')
   })
 
-  it('matches both file extensions', () => {
+  it('matches the one Carve extension and nothing else', () => {
+    // `.crv` is the only Carve extension. `.carve` was dropped in intellij-carve
+    // 0.1.2 with an instruction to rename, and jekyll-carve and mkdocs-carve each
+    // assert they do not match it, so a hook that ran over `.carve` would format
+    // and lint files no other tool in the org reads.
     for (const hook of hooks) {
       expect('doc.crv').toMatch(new RegExp(hook.files))
-      expect('doc.carve').toMatch(new RegExp(hook.files))
+      expect('doc.carve').not.toMatch(new RegExp(hook.files))
       expect('doc.md').not.toMatch(new RegExp(hook.files))
     }
   })

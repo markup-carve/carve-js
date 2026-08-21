@@ -16,7 +16,7 @@
   description: Fail when a Carve document is not in canonical form. Keeps diffs meaningful for stored content.
   entry: carve fmt --check
   language: node
-  files: \.(crv|carve)$
+  files: \.crv$
 
 - id: carve-fmt-write
   name: carve fmt (write)
@@ -25,7 +25,7 @@
     carve-fmt, not both - this one fixes, that one reports.
   entry: carve fmt --write
   language: node
-  files: \.(crv|carve)$
+  files: \.crv$
 
 - id: carve-lint
   name: carve lint
@@ -35,7 +35,7 @@
     that opens like a block and parsed as plain text.
   entry: carve lint
   language: node
-  files: \.(crv|carve)$
+  files: \.crv$
 
 - id: carve-lint-from-djot
   name: carve lint (--from-djot)
@@ -45,7 +45,7 @@
     hand-written Carve; useful while migrating a Djot corpus.
   entry: carve lint --from-djot
   language: node
-  files: \.(crv|carve)$
+  files: \.crv$
 
 - id: carve-lint-portable
   name: carve lint (--portable)
@@ -55,4 +55,4 @@
     either way; useful for a document that has to stay valid Djot source.
   entry: carve lint --portable
   language: node
-  files: \.(crv|carve)$
+  files: \.crv$
