@@ -1,6 +1,6 @@
 import type { Admonition, Attrs, BlockNode, CodeBlock, Div } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
-import { resolveTabsMode, type TabsMode } from './tabs.js'
+import { applySingleSelection, resolveTabsMode, type TabsMode } from './tabs.js'
 
 /** Options for the {@link codeGroup} extension. */
 export interface CodeGroupOptions {
@@ -79,7 +79,10 @@ function extractItems(node: Admonition | Div): GroupItem[] {
     const selected = cb.attrs?.keyValues?.selected !== undefined
     items.push({ block: cb, language, label, selected })
   }
-  if (items.length && !items.some((i) => i.selected)) items[0]!.selected = true
+  // EXACTLY ONE PANEL IS SELECTED (Extensions §13.5): the first one the
+  // document marks, or the first block where it marks none. The SAME step the
+  // Tabs renderer runs, because §13 binds both constructs.
+  applySingleSelection(items)
   return items
 }
 
@@ -200,7 +203,8 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
   /**
    * The `aria` mode, mirroring the Tabs renderer element for element.
    *
-   * A `<button role="tab">` per panel, `role="tabpanel"` panels bound by
+   * A `<button type="button" role="tab">` per panel (§13.3: without the `type`
+   * a `<button>` submits the form it sits in), `role="tabpanel"` panels bound by
    * `aria-labelledby`, and `hidden` on every non-selected one. The panel takes
    * NEITHER `role="group"` NOR a name (§13.3): it is already bound, and naming
    * it as well would give one element two accessible names.
@@ -224,8 +228,11 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
       const { tab: tabId, panel: panelId } = pairIds[index]!
       const selected = item.selected ? 'true' : 'false'
       const tabindex = item.selected ? '' : ' tabindex="-1"'
+      // `type="button"`, NOT the implicit `submit` (Extensions §13.3). A bare
+      // `<button>` is a submit button, so a code group inside a `<form>`
+      // submitted the form instead of switching panels.
       html +=
-        `<button role="tab" id="${ctx.escapeAttr(tabId)}" ` +
+        `<button type="button" role="tab" id="${ctx.escapeAttr(tabId)}" ` +
         `aria-selected="${selected}" ` +
         `aria-controls="${ctx.escapeAttr(panelId)}" ` +
         `class="${ctx.escapeAttr(labelClass)}"${tabindex}>${ctx.escapeHtml(item.label)}</button>\n`

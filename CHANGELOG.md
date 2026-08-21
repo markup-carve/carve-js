@@ -99,6 +99,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A tab control is `type="button"`, and two marked items select one tab**
+  (#1285, markup-carve/carve#1504, Extensions §13.3 and §13.5). An `aria`-mode
+  control carried no `type`, so a tab set or code group inside a `<form>`
+  submitted the form instead of switching panels. And several `{selected}`
+  items each got their own selection - the first mark now wins and later ones
+  are ignored, in both modes and both extensions, with no diagnostic for a
+  document that over-specifies. `css` mode is unaffected by the first half: its
+  control is an `<input type="radio">`.
 - **`ParseOptions.positions` is honored** (#1263). It was declared, documented
   and written by four call sites, and read by none, so `positions: false` still
   came back fully positioned. It now suppresses every position on the returned

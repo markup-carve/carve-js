@@ -197,8 +197,8 @@ describe('tabs extension (carve-php parity)', () => {
       ':::: tabs\n\n::: tab\n### First\n\nContent one.\n:::\n\n::: tab\n### Second\n\nContent two.\n:::\n\n::::'
     expect(carveToHtml(src, { extensions: [tabs({ mode: 'aria' })] })).toBe(
       '<div class="tabs" role="tablist" aria-label="Tabs">\n' +
-        '<button role="tab" id="tabset-1-tab-1" aria-selected="true" aria-controls="tabset-1-panel-1" class="tabs-label">First</button>\n' +
-        '<button role="tab" id="tabset-1-tab-2" aria-selected="false" aria-controls="tabset-1-panel-2" class="tabs-label" tabindex="-1">Second</button>\n' +
+        '<button type="button" role="tab" id="tabset-1-tab-1" aria-selected="true" aria-controls="tabset-1-panel-1" class="tabs-label">First</button>\n' +
+        '<button type="button" role="tab" id="tabset-1-tab-2" aria-selected="false" aria-controls="tabset-1-panel-2" class="tabs-label" tabindex="-1">Second</button>\n' +
         '<div role="tabpanel" id="tabset-1-panel-1" aria-labelledby="tabset-1-tab-1" class="tabs-panel">\n<p>Content one.</p>\n</div>\n' +
         '<div role="tabpanel" id="tabset-1-panel-2" aria-labelledby="tabset-1-tab-2" class="tabs-panel" hidden>\n<p>Content two.</p>\n</div>\n' +
         '</div>',

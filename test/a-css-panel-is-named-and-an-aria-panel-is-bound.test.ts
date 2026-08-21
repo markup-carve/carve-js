@@ -18,6 +18,11 @@ import { codeGroup } from '../src/code-group.js'
  * out here rather than read from `spec/`, because this engine goes first: the
  * pinned submodule does not carry those fixtures yet, and the corpus runner
  * asserts the same bytes once the pin catches up.
+ *
+ * Case 47's control gained `type="button"` in markup-carve/carve#1504
+ * (Extensions §13.3), so the bytes below are spec main's, not the ones that PR
+ * replaced. §13.5, the other half of that ruling, is pinned in
+ * `a-tab-control-is-a-button-and-one-item-is-selected.test.ts`.
  */
 
 const TAB_SOURCE = [
@@ -84,8 +89,8 @@ describe('an aria-mode panel is bound, not named', () => {
   it('renders corpus case 47 byte for byte', () => {
     expect(carveToHtml(TAB_SOURCE, { extensions: [tabs({ mode: 'aria' })] })).toBe([
       '<div class="tabs" role="tablist" aria-label="Tabs">',
-      '<button role="tab" id="tabset-1-tab-1" aria-selected="true" aria-controls="tabset-1-panel-1" class="tabs-label">First</button>',
-      '<button role="tab" id="tabset-1-tab-2" aria-selected="false" aria-controls="tabset-1-panel-2" class="tabs-label" tabindex="-1">R&amp;D "core" &lt;x&gt;</button>',
+      '<button type="button" role="tab" id="tabset-1-tab-1" aria-selected="true" aria-controls="tabset-1-panel-1" class="tabs-label">First</button>',
+      '<button type="button" role="tab" id="tabset-1-tab-2" aria-selected="false" aria-controls="tabset-1-panel-2" class="tabs-label" tabindex="-1">R&amp;D "core" &lt;x&gt;</button>',
       '<div role="tabpanel" id="tabset-1-panel-1" aria-labelledby="tabset-1-tab-1" class="tabs-panel">',
       '<p>Content one.</p>',
       '</div>',
@@ -132,7 +137,7 @@ describe('code-group carries the same mode and the same panel names', () => {
   it('mirrors the Tabs aria shape, and names no panel there either', () => {
     const html = carveToHtml(CODE_GROUP_SOURCE, { extensions: [codeGroup({ mode: 'aria' })] })
     expect(html).toContain('<div class="code-group" role="tablist" aria-label="Code examples">')
-    expect(html).toContain('<button role="tab" id="codegroup-1-tab-1" aria-selected="true" aria-controls="codegroup-1-panel-1" class="code-group-label">Node</button>')
+    expect(html).toContain('<button type="button" role="tab" id="codegroup-1-tab-1" aria-selected="true" aria-controls="codegroup-1-panel-1" class="code-group-label">Node</button>')
     expect(html).toContain('<div role="tabpanel" id="codegroup-1-panel-1" aria-labelledby="codegroup-1-tab-1" class="code-group-panel">')
     expect(html).toContain('class="code-group-panel" hidden>')
     for (const line of html.split('\n').filter((l) => l.includes('role="tabpanel"'))) {
