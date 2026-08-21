@@ -63,6 +63,20 @@ function tryFastHtmlAttempt(source: string, opts: Options, stats?: FastHtmlStats
   const lines = source.split('\n')
   if (lines.at(-1) === '') lines.pop()
   if (lines.some((line) => / +$/.test(line))) return undefined
+  // A LONE `+` IS THE LIST CONTINUATION MARKER (§17 L3), never a paragraph. It
+  // renders NOTHING and attaches the block below it to the item above, which the
+  // borrowed layout has no model for - so the document goes to the authoritative
+  // pipeline, exactly as `%%`, `:::` and the footnote forms above do.
+  //
+  // Without this the marker was rendered as its own literal `<p>+</p>`, visible
+  // in the output, and the item it should have attached to was closed instead:
+  // `- a` / blank / `+` / blank / `- b` came back as two lists with a stray
+  // paragraph between them. Corpus 251 pins the shape - a blank line before the
+  // marker changes nothing about what it is.
+  //
+  // The bullet renderer already refuses `- +` (a marker as an item's content);
+  // this is the same construct standing on its own line, which nothing checked.
+  if (lines.some((line) => /^[ \t]*\+[ \t]*$/.test(line))) return undefined
   const collected = collectDefs(lines, stats !== undefined)
   if (!collected) return undefined
   if (stats) for (const line of collected.definitionLines ?? []) accept(stats, 'linkDefinitions', line, line + 1, true)
@@ -92,7 +106,13 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
     const open = fenceOpen(line)
     if (open) { fence = open; continue }
     if (!line.includes(']:')) continue
-    const match = /^\[([^\]]+)\]:\s*(\S+?)(?:\s+"([^"]*)")?$/.exec(line)
+    // EXACTLY ONE SPACE IN EACH METADATA SLOT (corpus 265). `\s*` and `\s+`
+    // accepted `[a]: /u  "T"`, which is NOT a definition - it renders as an
+    // ordinary paragraph - and the fast path collected it and emitted nothing, so
+    // the line vanished from the output. A definition the borrowed layout does not
+    // recognize is handed back below rather than guessed at, which is why
+    // tightening the pattern is the whole fix.
+    const match = /^\[([^\]]+)\]: (\S+)(?: "([^"]*)")?$/.exec(line)
     if (!match || match[1]!.startsWith('@')) return undefined
     if (i > 0 && lines[i - 1]!.trim() !== '') return undefined
     if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') return undefined
@@ -144,6 +164,11 @@ function renderBlocks(lines: string[], defs: Map<string, LinkDef>, opts: Options
       if (info && !/^[A-Za-z0-9-]+$/.test(info)) return undefined
       out.push(indent(depth), '<pre><code', info ? ` class="language-${info}"` : '', '>')
       for (let j = i + 1; j < close; j++) out.push(escapeHtml(lines[j]!), '\n')
+      // AN EMPTY PAYLOAD IS STILL A LINE. With no body lines the loop above emits
+      // nothing at all, so an empty fence came back `<pre><code></code></pre>`
+      // while the authoritative pipeline renders `<pre><code>\n</code></pre>` -
+      // the shape corpus 276 pins for an empty code block.
+      if (close === i + 1) out.push('\n')
       out.push('</code></pre>')
       if (stats) accept(stats, 'codeFences', i, close + 1)
       i = close + 1; wrote = true; continue
