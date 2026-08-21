@@ -7,23 +7,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- **`package.json` is importable, so the installed version can be read back**
-  (#1257). The subpath was not in `exports`, so reading it threw
-  `ERR_PACKAGE_PATH_NOT_EXPORTED` - which reads as the package being absent
-  rather than the subpath being closed. Only that one file is opened; every
-  other path stays refused.
-
-- **The index back-link says where it goes** (markup-carve/carve#1469). A
-  `↩` with no accessible name is announced as "leftwards arrow with hook", or
-  skipped - and an index entry has one per occurrence, so a reader met a row of
-  identical unnamed arrows. The k-th back-link is now named `Back to {term} {k}`
-  and shows `↩<sup>k</sup>`, mirroring PART 9 §16's footnote rule. The leading
-  words are the new `backrefLabel` option on `index()`.
+- **Table column metadata** (#1206, markup-carve/carve#1391). Positional alignment, vertical alignment and widths reach the AST as `table.columns` and `table_cell.valign`, render as `<colgroup>`, carry through ListTable, and are covered by new lint rules.
+- **Semantic table row partitions** (#1223). Pipe tables take `{header-rows=N footer-rows=N}` for explicit head/body/foot ranges; a ListTable cell takes `{align= valign=}` over the positional column default. The consumed attributes do not leak into the HTML.
+- **Local ListTable headers** (#1220, markup-carve/carve#1248). `header-row` on a row's first cell starts a header-led body group; `header` on any cell emits a single `<th>`.
+- **`?` inherits a column's horizontal alignment** (#1218, markup-carve/carve#1408), so `?^`, `?~` and `?v` set only `valign`. A lone `?` stays visible cell content.
+- **`SourceUnspellableError`, exported** (#1209). The canonical Carve writer refuses an empty `raw_inline` - which has no Carve spelling and reparsed as a different node - instead of emitting one.
+- **A `labels` render option carries the strings the engine writes itself**
+  (markup-carve/carve#1456, PART 9 §16a). Values are text and are escaped where
+  they land, unlike the raw `symbols` map.
 
 ### Changed
 
+- **The doubled run is the canonical arrow, in both families** (#1241, markup-carve/carve#1442). `<--` `-->` `<-->` and `<==` `==>` `<=>` convert. **BREAKING: `=>` no longer converts** - `key => value` and `x => x + 1` were silently becoming `⇒` in rendered output only. `<=` keeps `≤`, and a highlight no longer opens before `>`.
+- **An empty brace pair is text, and `{--}` is an en dash** (#1242, markup-carve/carve#1447, markup-carve/carve#1450). `{//}`, `{**}`, `{^^}` and the rest render literally; a pair holding content is still the construct.
+- **Admonitions, task checkboxes, the footnote section and math carry accessible names** (#1253). A canonical admonition takes `aria-labelledby` on its title or an `aria-label` for its kind, a task checkbox is named by its item text, the endnotes section is labeled, and a math span takes `role="math"`. An authored `role`, `aria-label` or `aria-labelledby` always wins. The `labels` map grows nine keys for those strings.
 - **A tab set, a code group and a rendered diagram carry an accessible name**
   (markup-carve/carve#1468). Each tab was already named by its own `<label>`
   and the GROUP was anonymous; a diagram fence emitted its source with no role,
@@ -34,7 +33,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fence word. In every case an `aria-label`, `aria-labelledby` or `role` the
   author wrote on the block wins, and the engine's attributes are APPENDED so
   they never move one the author placed.
-
 - **One `labels` map localizes every engine-written string.** The map grows the
   `indexBackref`, `tabsGroup` and `codeGroup` keys, and the extensions that
   write those strings read it, so a German document sets `labels` once instead
@@ -42,15 +40,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   passed to an extension still wins over the map. PART 9 §16a already required
   this - "an extension MUST NOT require the host to configure the same text
   twice" - and nothing had walked through it.
-
-### Changed
-
 - **A row is a row, in every table section** (markup-carve/carve#1459, PART 10
   §7). `<thead>` and `<tfoot>` now write one row per line, as `<tbody>` always
   did. Nothing renders differently - whitespace between rows in table context is
   not rendered - but the emitted HTML is consistent and diffs read cleanly. Both
   table paths move: pipe tables and the list-table extension.
-
 - **A table cell's marker run ends at a space** (markup-carve/carve#1259, PART 9
   §5 T11). The kind marker `=`, the alignment run and the attribute block are
   one run, and a cell carrying any of them must follow it with a space; without
@@ -60,40 +54,55 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rejected alignment run takes the `=` with it. A cell with no run is unchanged,
   and the canonical writer already pads every cell, so a formatted document
   needs no migration.
-
-### Added
-
-- **A `labels` render option carries the strings the engine writes itself**
-  (markup-carve/carve#1456, PART 9 §16a). One key today, `footnoteBacklink`,
-  defaulting to `Back to reference`. Values are text and are escaped where they
-  land, unlike the raw `symbols` map.
-
-### Fixed
-
-- **The footnote backlink has an accessible name** (markup-carve/carve#1455,
-  PART 9 §16). `role="doc-backlink"` was right and the name was the `↩` glyph,
-  so a screen reader announced its Unicode name or skipped the link. The name is
-  now the label plus what the link visibly says: `Back to reference` for a lone
-  backlink, `Back to reference 2` for the second of several.
-
-### Changed
-
+- **A table cell's alignment run is horizontal-first** (#1219). Reverse-order pairs such as `^<`, `v>` and `~>` stay literal cell content instead of being normalized silently.
+- **A vertical table-cell marker requires a horizontal partner.** Lone `^` and `v` prefixes remain visible content; paired two-axis runs are unchanged.
+- **Common Tier-1 documents render through a borrowed HTML layout** (#1247). `carveToHtml` probes a conservative fast path before allocating an AST; on the shared 48 KiB Tier-1 comparison document the render time drops from about 23.6 ms to 4.7 ms locally. Anything the probe does not accept takes the ordinary path unchanged.
+- **Document IDs are carried through conversion instead of rebuilt** (#1239), removing one full AST traversal from the source-to-HTML path. Public `parse` / `resolve` / `renderHtml` composition is unchanged.
 - **Core inline parsing skips punctuation dispatch for ordinary prose runs.**
   With no extension matcher active, consecutive ASCII letters, digits and
   horizontal whitespace are appended together instead of probing smart
   typography, emphasis and every other inline recognizer byte by byte. The
   shared 49 KiB Tier-1 benchmark improves by about 25% locally.
-- **A vertical table-cell marker requires a horizontal partner.** Lone `^` and `v` prefixes remain visible content; paired two-axis runs are unchanged.
+
+### Deprecated
+
+- **The single-hyphen arrows `<-`, `->` and `<->`** (#1241). They still render, so documents written before the doubled-run rule keep working; prefer `<--`, `-->` and `<-->`.
 
 ### Fixed
 
+- **`package.json` is importable, so the installed version can be read back**
+  (#1257). The subpath was not in `exports`, so reading it threw
+  `ERR_PACKAGE_PATH_NOT_EXPORTED` - which reads as the package being absent
+  rather than the subpath being closed. Only that one file is opened; every
+  other path stays refused.
+- **The index back-link says where it goes** (markup-carve/carve#1469). A
+  `↩` with no accessible name is announced as "leftwards arrow with hook", or
+  skipped - and an index entry has one per occurrence, so a reader met a row of
+  identical unnamed arrows. The k-th back-link is now named `Back to {term} {k}`
+  and shows `↩<sup>k</sup>`, mirroring PART 9 §16's footnote rule. The leading
+  words are the new `backrefLabel` option on `index()`.
+- **The footnote backlink has an accessible name** (markup-carve/carve#1455,
+  PART 9 §16). `role="doc-backlink"` was right and the name was the `↩` glyph,
+  so a screen reader announced its Unicode name or skipped the link. The name is
+  now the label plus what the link visibly says: `Back to reference` for a lone
+  backlink, `Back to reference 2` for the second of several.
+- **A table alignment run requires a literal space separator** (#1213). Tabs and other JavaScript whitespace now remain visible cell content, matching the grammar and the PHP and Rust engines.
+- **A duplicate table alignment axis rejects the whole run** (#1211, markup-carve/carve#1344), rather than keeping the part that parsed.
+- **A content-column heading leaves no paragraph open** (#1210, markup-carve/carve#1377, markup-carve/carve#1392), so a following line is not swallowed into the item.
+- **An all-blank raw payload renders, and survives `fmt` unchanged** (#1212, #1214, markup-carve/carve#1401).
 - **A hyphen run that opens a word after whitespace is a flag, not a dash**
   (markup-carve/carve#1443, PART 9 §8). `git log --oneline` and
   `--force-with-lease` keep their hyphens; every other position converts as
   before, including `pages 1--10` and a trailing `text --`.
+- **The braced en dash keeps the spelling its author typed** (#1243). It is the same `smart_punctuation` node the bare run produces, so `carve fmt` writes `{--}` back instead of the resolved glyph.
+- **A continuation marker attaches only a flush-left block** (#1244, markup-carve/carve#1436, §17 L3). A line at any other column falls through to the ordinary column rules, as if the marker line had been a comment.
+- **A lazy marker line's definition defines nothing** (#1229 via #1230, markup-carve/carve#1428, markup-carve/carve#1429). A link-reference definition behind a list marker on a line folded into an open paragraph rendered as text and still registered in the link table; the same line inside a block quote both vanished from the paragraph and went active document-wide.
+- **The lazy guard no longer depends on whether an extension is registered** (#1231 via #1234, markup-carve/carve#1435, markup-carve/carve#1437). Registering any block matcher used to bring the defect back, so six executable-spec documents answered differently with and without an extension.
+- **A definition hosted by an emptied marker item is written back into it** (#1233, markup-carve/carve#620, PART 11 §1), instead of the writer spelling the item with a continuation marker.
 - **Definitions collected at a list item's content column close its paragraph**
   (markup-carve/carve#1376). A following line below that column no longer uses
   the comment-only continuation path; bare-dot items use the bullet column.
+- **Three parser seams found by the combinatorial corpus** (#1226, markup-carve/carve#1418, markup-carve/carve#1419, markup-carve/carve#1421): an unclosed inline literal is one literal-inline node to the end of its block rather than a literal bang plus a code span; a quoted line comment closes the block quote's lazy paragraph; and a terminal comment-only verse line keeps the newline an open verbatim run carries. The guard that carries that newline no longer leaves an empty text leaf in the AST (#1227).
 
 ## [0.1.4] - 2026-08-18
 
@@ -152,8 +161,6 @@ HTML import gained, each previously unwrapped, dropped or silently wrong:
 - **A list-valued attribute is probed at every candidate, not at its head** (markup-carve/carve#1320, §25). `srcset`, and the three other list-valued URL attributes, vouched for the whole value from its leading scheme, so `srcset="javascript:alert(1) 1x, safe.png 2x"` passed the probe on its second entry.
 
 ### Fixed
-
-- **A table alignment run requires a literal space separator.** Tabs and other JavaScript whitespace now remain visible cell content, matching the grammar and the PHP and Rust engines.
 
 Block structure and containers:
 
