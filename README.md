@@ -405,9 +405,8 @@ the only thing that makes pinning a rev worth anything.
 { "plugins": ["@markup-carve/carve/prettier"] }
 ```
 
-Prettier then formats `.crv` and `.carve` files, with no `overrides` block
-needed. The plugin does not reimplement anything: it hands the source to the
-same formatter, so `prettier --write` and `carve fmt --write` produce
+Prettier then formats `.crv` files, with no `overrides` block needed. The
+plugin does not reimplement anything: it hands the source to the same formatter, so `prettier --write` and `carve fmt --write` produce
 byte-identical output, down to the trailing newline.
 
 Prettier's layout options are deliberately ignored. `printWidth`, `tabWidth` and

@@ -17,8 +17,12 @@
  *   // .prettierrc
  *   { "plugins": ["@markup-carve/carve/prettier"] }
  *
- * Prettier resolves `.crv` and `.carve` through the language entry below, so no
- * `overrides` block is needed.
+ * Prettier resolves `.crv` through the language entry below, so no `overrides`
+ * block is needed. `.crv` is the ONLY Carve extension - the spec states it and
+ * nothing else, intellij-carve dropped `.carve` in 0.1.2 with an instruction to
+ * rename, and jekyll-carve and mkdocs-carve each carry a test asserting they do
+ * NOT match it. Claiming it here made this plugin the one tool in the org that
+ * formatted a file the rest of the ecosystem refuses to render.
  */
 
 import { carveToCarve } from './index.js'
@@ -35,7 +39,7 @@ export const languages = [
   {
     name: 'Carve',
     parsers: ['carve'],
-    extensions: ['.crv', '.carve'],
+    extensions: ['.crv'],
     linguistLanguageId: 0,
     vscodeLanguageIds: ['carve'],
   },
