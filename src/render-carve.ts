@@ -474,13 +474,6 @@ function mergeTextRuns(nodes: unknown[]): unknown[] {
 }
 
 /**
- * §11 N1a's hard list boundary, held as one code point until `normalize` has
- * run its blank-run squeeze. U+E006 joins the writer-only private-use set; it
- * is replaced by the four newlines it stands for on the way out.
- */
-const LIST_BOUNDARY = '\ue006'
-
-/**
  * Whether two adjacent sibling lists would read back as ONE list.
  *
  * The axes are §11 N1's: a list kind, and for each kind the marker character
@@ -557,7 +550,7 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
           // to normalize away, and fatal for this one, which the rule says to
           // keep. The squeeze cannot tell them apart from the text; only the
           // writer knows, so the writer says so and `normalize` restores it.
-          parts[parts.length - 1] += `${LIST_BOUNDARY}${text}`
+          parts[parts.length - 1] += `${sentinels[4]}${text}`
         } else {
           parts.push(text)
         }
@@ -2278,7 +2271,7 @@ function normalize(text: string): string {
   // The squeeze runs FIRST, so a decorative run still normalizes; the boundary
   // sentinel is not a newline yet and passes through it untouched.
   const squeezed = swept.join('\n').replace(/\n{3,}/g, '\n\n')
-  const cleaned = trimNonNbspKeepingGuard(squeezed.replace(new RegExp(`\\n*${LIST_BOUNDARY}\\n*`, 'g'), '\n\n\n\n'))
+  const cleaned = trimNonNbspKeepingGuard(squeezed.replace(new RegExp(`\\n*${sentinels[4]}\\n*`, 'g'), '\n\n\n\n'))
 
   return `${guardLeadingBom(restoreVerbatim(cleaned))}\n`
 }
@@ -2305,12 +2298,13 @@ function normalize(text: string): string {
  * writer runs. That is the other half of carve#678 and needs a decision about
  * what the parsed text of an nbsp is, not a change here.
  */
-const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004'] as const
-let sentinels: readonly [string, string, string, string] = [
+const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005'] as const
+let sentinels: readonly [string, string, string, string, string] = [
   '\ue001',
   '\ue002',
   '\ue003',
   '\ue004',
+  '\ue005',
 ]
 
 /**
@@ -2339,24 +2333,31 @@ function collectStrings(root: unknown): string {
   return parts.join('\u0000')
 }
 
-function pickSentinels(text: string): readonly [string, string, string, string] {
+function pickSentinels(text: string): readonly [string, string, string, string, string] {
+  // FIVE, not four: the last is §11 N1a's list boundary. It is picked here
+  // rather than fixed for the reason the whole scheme exists - a fixed code
+  // point cannot be told apart from an authored one - and it matters more for
+  // this one than for the others, because it expands to THREE BLANK LINES: an
+  // authored occurrence would be rewritten into a list boundary nobody wrote.
+  //
   // The common case: none of the defaults occur, so keep them and skip the scan
   // of the private-use area entirely.
   if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
-    return ['\ue001', '\ue002', '\ue003', '\ue004']
+    return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005']
   }
-  for (let base = 0xe005; base <= 0xf8fc; base += 4) {
-    const quad = [
+  for (let base = 0xe006; base <= 0xf8fb; base += 5) {
+    const run = [
       String.fromCharCode(base),
       String.fromCharCode(base + 1),
       String.fromCharCode(base + 2),
       String.fromCharCode(base + 3),
+      String.fromCharCode(base + 4),
     ] as const
-    if (!quad.some((c) => text.includes(c))) return quad
+    if (!run.some((c) => text.includes(c))) return run
   }
 
   // Unreachable for any real document; keep the old behaviour rather than throw.
-  return ['\ue001', '\ue002', '\ue003', '\ue004']
+  return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005']
 }
 
 /**
