@@ -195,10 +195,13 @@ describe('fromAstJson (PART 12 §6 round trip)', () => {
 })
 
 describe('carveToAstJson', () => {
-  it('serializes with positions even though parsing them is opt-in', () => {
+  it('serializes with positions even when the caller asked for none', () => {
     // PART 12 §4: tracking MAY be gated behind an option, serialization may not.
-    const json = carveToAstJson('# Title\n')
-    expect(json.children[0]).toHaveProperty('pos')
+    // Parsing them is opt-OUT here, not opt-in - the default is on, and
+    // `positions: false` is what the option suppresses (carve-js#1263) - so the
+    // clause bites on the explicit false, which this call forces back on.
+    expect(carveToAstJson('# Title\n').children[0]).toHaveProperty('pos')
+    expect(carveToAstJson('# Title\n', { positions: false }).children[0]).toHaveProperty('pos')
   })
 
   it('carries resolution results the consumer would have to recompute', () => {

@@ -109,8 +109,9 @@ export interface RenderOptions {
   extensions?: CarveExtension[]
   /**
    * Stamp each block element with `data-source-line="{n}"` (the
-   * 1-based source line it starts on). Requires the AST to carry positions
-   * (parse with `{ positions: true }`; `carveToHtml` enables this for you).
+   * 1-based source line it starts on). Requires the AST to carry positions,
+   * which a parse does by default; `carveToHtml` forces them on regardless of
+   * the `positions` option, so this works there whatever the caller passed.
    * Off by default so canonical output is unchanged. Intended for editor
    * integrations that map rendered blocks back to source lines.
    */

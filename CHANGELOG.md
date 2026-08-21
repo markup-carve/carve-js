@@ -79,6 +79,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`ParseOptions.positions` is honored** (#1263). It was declared, documented
+  and written by four call sites, and read by none, so `positions: false` still
+  came back fully positioned. It now suppresses every position on the returned
+  tree - `pos`, plus `footnoteDefPos`, `termSpans`, `definitionSpans` and
+  `definitionLines`. Default is unchanged (`true`), and `carveToHtml`,
+  `carveToAstJson` and `lintCarve` force it back on because each reads
+  positions; `carveToHtml` now does so even without `sourceLine`, since the
+  strict column-0 figure rule reads an image's `startColumn`.
+
 - **`package.json` is importable, so the installed version can be read back**
   (#1257). The subpath was not in `exports`, so reading it threw
   `ERR_PACKAGE_PATH_NOT_EXPORTED` - which reads as the package being absent
