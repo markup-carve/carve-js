@@ -99,6 +99,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A math span survives an HTML import** (#1277, PART 9 §18). Carve's own
+  `<span class="math inline">\(x\)</span>` - which djot.js and pandoc write
+  too - and the `math display` / `<div class="math display">` block form now
+  read back as `math` nodes rather than as generic attributed spans, so the
+  non-HTML writers see math again. Recognition needs the class pair and a
+  matching payload to agree.
+
 - **The Markdown importer replaces an authored U+0000 with U+FFFD** (#1291,
   #1290, markup-carve/carve#678), which CommonMark 2.3 requires and `parse`
   already did for Carve source. A raw NUL used to reach the output while `&#0;`
