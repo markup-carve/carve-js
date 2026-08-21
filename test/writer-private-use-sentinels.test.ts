@@ -76,3 +76,102 @@ describe('the sentinels still do their job', () => {
     expect(carveToCarve(src)).toBe(src)
   })
 })
+
+/**
+ * THE MECHANISM ITSELF, not one of its consequences.
+ *
+ * Every case above pins a CHARACTER surviving. None of them pins the reason it
+ * survives: that `pickSentinels` chooses a run the document does not contain.
+ * A writer with FIXED sentinels passes the whole file above as long as the
+ * fixed run is the one those cases avoid - which is how a hardcoded U+E006 was
+ * added to this writer while all 12396 tests stayed green, and only carve-php's
+ * `FixedInBandSentinelsCollideWithAuthoredContentTest` caught it
+ * (carve-js#1276).
+ *
+ * So these rows hand the writer documents that OCCUPY the runs it would like to
+ * use, and they are stated on the bytes: every sentinel is a private-use
+ * character, invisible in a rendered-string comparison, which is exactly how the
+ * defect hid.
+ */
+
+/** The code points `from`..`to`, joined. */
+const codePointRun = (from: number, to: number): string => {
+  let text = ''
+  for (let code = from; code <= to; code++) text += String.fromCharCode(code)
+  return text
+}
+
+const PREFERRED_RUN = codePointRun(0xe001, 0xe004)
+const FIRST_FALLBACK_RUN = codePointRun(0xe005, 0xe008)
+const SECOND_FALLBACK_RUN = codePointRun(0xe009, 0xe00c)
+
+/**
+ * A document that OCCUPIES `occupied` and, in the same breath, needs all four
+ * sentinels to do their job: a trailing space, a blank line, a trailing tab and
+ * an authored nbsp marker, all inside verbatim content. Both roles at once is
+ * the point - a run the writer picks has to be free of the authored characters
+ * AND still carry the four things the sentinels exist to carry.
+ */
+const occupying = (occupied: string) =>
+  '```\n' + 'a' + occupied + 'z  \n' + '\n' + 'b\t\n' + '\ue000\n' + '```\n'
+
+describe('the writer picks its sentinels rather than fixing them', () => {
+  it('round-trips a document holding the whole preferred run', () => {
+    // U+E001..U+E004 - every code point the writer reaches for first. A fixed
+    // writer rewrites them here: space, tab, nothing, and a no-break space.
+    const src = occupying(PREFERRED_RUN)
+
+    expect(carveToCarve(src)).toBe(src)
+    expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
+  })
+
+  it('round-trips a document holding the preferred run AND the first fallback run', () => {
+    // THE ROW THAT DOES THE REAL WORK. The row above passes against a writer
+    // that gives up after one attempt and takes U+E005..U+E008 unchecked; this
+    // one occupies that run too, so only a writer that SCANS on to a free run
+    // survives it.
+    const src = occupying(PREFERRED_RUN + FIRST_FALLBACK_RUN)
+
+    expect(carveToCarve(src)).toBe(src)
+    expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
+  })
+
+  it('still takes the preferred run when the document does not contain it', () => {
+    // CONTROL, and an observable one: the document occupies the first TWO
+    // fallback runs and leaves U+E001..U+E004 free. It can only round-trip if
+    // the writer prefers the free preferred run over scanning forward from
+    // U+E005 - so the common case has not moved, and the two rows above did not
+    // pass by making every document take the slow path.
+    const src = occupying(FIRST_FALLBACK_RUN + SECOND_FALLBACK_RUN)
+
+    expect(carveToCarve(src)).toBe(src)
+    expect(carveToHtml(carveToCarve(src))).toBe(carveToHtml(src))
+  })
+
+  it('round-trips the same document with no private-use characters at all', () => {
+    // CONTROL. Passes before and after every mutation of this defect: it says
+    // the four sentinels still carry what they exist to carry, so a run that
+    // satisfied the rows above by DELETING the sentinel mechanism cannot pass.
+    const src = occupying('')
+
+    expect(carveToCarve(src)).toBe(src)
+    expect(src).toContain('  \n')
+  })
+
+  for (const [name, code] of [
+    ['space', 0xe001],
+    ['tab', 0xe002],
+    ['blank-line', 0xe003],
+    ['nbsp-carrier', 0xe004],
+  ] as const) {
+    it(`keeps an authored U+${code.toString(16).toUpperCase()}, the ${name} sentinel, out of its own restore pass`, () => {
+      // One row per sentinel, so a failure names WHICH restore rewrote the
+      // author's character. U+E004 is the one the file above never covered: it
+      // arrived with the fourth sentinel (carve-js#688) and had no row of its
+      // own.
+      const src = occupying(String.fromCharCode(code))
+
+      expect(carveToCarve(src)).toBe(src)
+    })
+  }
+})
