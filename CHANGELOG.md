@@ -20,6 +20,18 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A `css`-mode tabs or code-group panel carries its tab's name**
+  (#1265, markup-carve/carve#1489, PART 11 §13.2). Each panel gains
+  `role="group"` and an `aria-label` holding its tab's own label,
+  attribute-escaped. Under `css` nothing else binds a panel to the radio that
+  reveals it. An `aria`-mode panel is unchanged and takes neither (§13.3): it is
+  already bound by `aria-labelledby`, and a second name would give one element
+  two. A `"static"` render takes neither mode.
+- **`codeGroup()` takes the `mode` option it used to accept and ignore**
+  (#1265). `codeGroup({ mode: 'aria' })` rendered the radio markup byte for
+  byte; it now renders the ARIA shape, mirroring Tabs. `css` remains the default
+  in both, and **an unknown `mode` is now rejected rather than falling back to
+  `css`** - `tabs({ mode: 'aira' })` threw nothing and rendered the default.
 - **The doubled run is the canonical arrow, in both families** (#1241, markup-carve/carve#1442). `<--` `-->` `<-->` and `<==` `==>` `<=>` convert. **BREAKING: `=>` no longer converts** - `key => value` and `x => x + 1` were silently becoming `⇒` in rendered output only. `<=` keeps `≤`, and a highlight no longer opens before `>`.
 - **An empty brace pair is text, and `{--}` is an en dash** (#1242, markup-carve/carve#1447, markup-carve/carve#1450). `{//}`, `{**}`, `{^^}` and the rest render literally; a pair holding content is still the construct.
 - **Admonitions, task checkboxes, the footnote section and math carry accessible names** (#1253). A canonical admonition takes `aria-labelledby` on its title or an `aria-label` for its kind, a task checkbox is named by its item text, the endnotes section is labeled, and a math span takes `role="math"`. An authored `role`, `aria-label` or `aria-labelledby` always wins. The `labels` map grows nine keys for those strings.

@@ -16,6 +16,14 @@ import {
 // modulo the trailing newline carve-php's convert() appends (carve-js's
 // carveToHtml does not emit one). See the task brief for the reproduction
 // commands.
+//
+// WHERE THE SPEC MOVES, THIS ENGINE MOVES FIRST. carve-js is the reference
+// build the spec repo pins, so a rule that lands here before carve-php ships it
+// makes these goldens state carve-js rather than parity for as long as that
+// takes. Two such rules are in the tabs/code-group strings below, both from
+// markup-carve/carve#1468: the wrapper's accessible name (#1254) and each
+// `css` panel's own name (#1265, PART 11 §13.2). The rest of every golden is
+// still byte parity, and the divergence closes when carve-php ports them.
 
 describe('codeGroup extension (carve-php parity)', () => {
   it('renders a basic code group with language labels', () => {
@@ -27,8 +35,8 @@ describe('codeGroup extension (carve-php parity)', () => {
         '<label for="codegroup-1-tab-1" class="code-group-label">php</label>\n' +
         '<input type="radio" name="codegroup-1" id="codegroup-1-tab-2" class="code-group-radio">\n' +
         '<label for="codegroup-1-tab-2" class="code-group-label">javascript</label>\n' +
-        '<div class="code-group-panel"><pre><code class="language-php">echo "Hello";\n</code></pre>\n</div>\n' +
-        '<div class="code-group-panel"><pre><code class="language-javascript">console.log("Hello");\n</code></pre>\n</div>\n' +
+        '<div class="code-group-panel" role="group" aria-label="php"><pre><code class="language-php">echo "Hello";\n</code></pre>\n</div>\n' +
+        '<div class="code-group-panel" role="group" aria-label="javascript"><pre><code class="language-javascript">console.log("Hello");\n</code></pre>\n</div>\n' +
         '</div>',
     )
   })
@@ -163,8 +171,8 @@ describe('tabs extension (carve-php parity)', () => {
         '<label for="tabset-1-tab-1" class="tabs-label">First Tab</label>\n' +
         '<input type="radio" name="tabset-1" id="tabset-1-tab-2" class="tabs-radio">\n' +
         '<label for="tabset-1-tab-2" class="tabs-label">Second Tab</label>\n' +
-        '<div class="tabs-panel">\n<p>Content for the first tab.</p>\n</div>\n' +
-        '<div class="tabs-panel">\n<p>Content for the second tab.</p>\n</div>\n' +
+        '<div class="tabs-panel" role="group" aria-label="First Tab">\n<p>Content for the first tab.</p>\n</div>\n' +
+        '<div class="tabs-panel" role="group" aria-label="Second Tab">\n<p>Content for the second tab.</p>\n</div>\n' +
         '</div>',
     )
   })
@@ -178,8 +186,8 @@ describe('tabs extension (carve-php parity)', () => {
         '<label for="tabset-1-tab-1" class="tabs-label">First Tab</label>\n' +
         '<input type="radio" name="tabset-1" id="tabset-1-tab-2" class="tabs-radio" checked>\n' +
         '<label for="tabset-1-tab-2" class="tabs-label">Second Tab</label>\n' +
-        '<div class="tabs-panel">\n<p>Content here.</p>\n</div>\n' +
-        '<div class="tabs-panel">\n<p>This tab is selected.</p>\n</div>\n' +
+        '<div class="tabs-panel" role="group" aria-label="First Tab">\n<p>Content here.</p>\n</div>\n' +
+        '<div class="tabs-panel" role="group" aria-label="Second Tab">\n<p>This tab is selected.</p>\n</div>\n' +
         '</div>',
     )
   })
@@ -200,7 +208,9 @@ describe('tabs extension (carve-php parity)', () => {
   it('keeps multiple paragraphs in a panel', () => {
     const src = ':::: tabs\n\n::: tab\n### First\n\nPara one.\n\nPara two.\n:::\n\n::::'
     const html = carveToHtml(src, { extensions: [tabs()] })
-    expect(html).toContain('<div class="tabs-panel">\n<p>Para one.</p>\n<p>Para two.</p>\n</div>')
+    expect(html).toContain(
+      '<div class="tabs-panel" role="group" aria-label="First">\n<p>Para one.</p>\n<p>Para two.</p>\n</div>',
+    )
   })
 
   it('is inert without the extension', () => {
