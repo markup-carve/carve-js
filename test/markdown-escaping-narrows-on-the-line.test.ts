@@ -222,15 +222,21 @@ describe("the Markdown target's escaping narrows on the line", () => {
       expect(md('\\__b')).toBe('\\__b')
     })
 
-    it('cannot be steered by a sentinel in author content', () => {
-      // The sentinels are private-use characters, so nothing in `\\p{Cc}` covers
+    it('cannot be steered by a carrier in author content', () => {
+      // The carriers are private-use characters, so nothing in `\\p{Cc}` covers
       // them. Author content carrying one used to reach normalize() and be
       // read as an escape this renderer had emitted, which INVENTS a character
       // the document never had - U+E005 came out as a `#`.
+      //
+      // The answer is not to DELETE the range, which is what this row used to
+      // pin and what made this target lose an authored private-use character
+      // (carve-js#1281). The carriers are picked per document now, so an
+      // authored character is never one of them: it steers nothing AND it
+      // survives.
       for (const [cp, ch] of [[0xe004, '_'], [0xe005, '#'], [0xe006, '[']] as const) {
         const src = 'x' + String.fromCharCode(cp) + 'y'
         expect(src.charCodeAt(1)).toBe(cp)
-        expect(md(src)).toBe('xy')
+        expect(md(src)).toBe(src)
         expect(md(src)).not.toContain(ch)
       }
     })
