@@ -99,6 +99,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The BBCode importer's stash key is picked per post, not a fixed
+  U+E001/U+E002 pair** (#1290, #1289, markup-carve/carve-rs#1210,
+  markup-carve/carve#678). A post carrying those two code points around a number
+  answered the stash's restore pass and was replaced by a span from elsewhere in
+  the same post, while the tag that owned the slot lost its own restore. A post
+  that leaves no private-use run free is now refused with the exported
+  `BbcodeSentinelSpaceExhaustedError` rather than converted with a colliding key.
 - **The writer's marker-column tag and the Markdown target's escape carriers are
   picked per document, not fixed** (#1280, #1281, markup-carve/carve-rs#1210,
   markup-carve/carve#678). An authored U+E005 opening a list item's continuation
