@@ -11,26 +11,37 @@ const topTypes = (source: string): string[] =>
  *
  * carve#286 spent the marker axis - emit the marker as authored - which
  * separates them only while the markers DIFFER. When both are `1.` at column 0
- * there is nothing left to preserve, and indentation is the only axis left.
+ * there is nothing left to preserve.
  *
- * One space is the only offset safe for both list kinds: a bullet's content
- * column is 2, so two spaces already nests. The step is cumulative per list,
- * because writing every later list at +1 leaves the second and third at the
- * same column, merging with each other.
+ * §11 N1a spells the separator: three blank lines. These used to assert a
+ * cumulative one-space indent, which was what the writer had before the
+ * boundary existed. That offset could not survive its own third list - the
+ * second and third landed at the same column - and it handed the reader a list
+ * indented by a space it never wrote.
  */
 describe('adjacent sibling lists stay separate through fmt', () => {
-  it('separates two ordered lists with one space', () => {
+  it('separates two ordered lists with the hard boundary', () => {
     const source = '1. a\n\n  1. b\n'
     expect(topTypes(source)).toEqual(['list', 'list'])
-    expect(carveToCarve(source)).toBe('1. a\n\n 1. b\n')
+    expect(carveToCarve(source)).toBe('1. a\n\n\n\n1. b\n')
     expect(topTypes(carveToCarve(source))).toEqual(['list', 'list'])
   })
 
-  it('steps each further list by one more space', () => {
+  it('separates a THIRD list the same way, at the same column', () => {
+    // The offset this replaced could not do this: stepping +1 per list put the
+    // second at one space and the third at two, where a bullet's content column
+    // is 2 and the third would NEST inside the second.
     const source = '1. a\n\n  1. b\n\n   1. c\n'
     expect(topTypes(source)).toEqual(['list', 'list', 'list'])
-    expect(carveToCarve(source)).toBe('1. a\n\n 1. b\n\n  1. c\n')
+    expect(carveToCarve(source)).toBe('1. a\n\n\n\n1. b\n\n\n\n1. c\n')
     expect(topTypes(carveToCarve(source))).toEqual(['list', 'list', 'list'])
+  })
+
+  it('writes the boundary at column 0, not as indentation', () => {
+    // The reader gets the list back at the column the author wrote it.
+    for (const line of carveToCarve('1. a\n\n  1. b\n').split('\n')) {
+      expect(line).toBe(line.trimStart())
+    }
   })
 
   it('is idempotent across repeated passes', () => {
@@ -64,5 +75,52 @@ describe('adjacent sibling lists stay separate through fmt', () => {
   it('leaves a single list and a separated pair alone', () => {
     expect(carveToCarve('1. a\n1. b\n')).toBe('1. a\n2. b\n')
     expect(carveToCarve('1. a\n\nx\n\n1. b\n')).toBe('1. a\n\nx\n\n1. b\n')
+  })
+})
+
+describe('§11 N1a: three blank lines are a hard list boundary', () => {
+  it('one blank line still loosens', () => {
+    expect(carveToHtml('- a\n\n- b\n')).toBe('<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>')
+  })
+
+  it('TWO blank lines still loosen rather than separate', () => {
+    // The threshold is three precisely so the run documents already contain -
+    // changelog spacing, generator output - keeps meaning what it meant.
+    expect(carveToHtml('- a\n\n\n- b\n')).toBe('<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>')
+  })
+
+  it('three blank lines open a new sibling list', () => {
+    expect(topTypes('- a\n\n\n\n- b\n')).toEqual(['list', 'list'])
+  })
+
+  it('so do four', () => {
+    expect(topTypes('- a\n\n\n\n\n- b\n')).toEqual(['list', 'list'])
+  })
+
+  it('applies inside a quote', () => {
+    expect(carveToHtml('> - a\n>\n>\n>\n> - b\n')).toContain('</ul>\n  <ul>')
+  })
+
+  it('applies to a list NESTED IN AN ITEM', () => {
+    // The clause is stated for every level, and the nested case is the one that
+    // pins it - a boundary that fired only at the top level would make one
+    // spelling mean two things depending on where it sits.
+    const html = carveToHtml('- outer\n\n  - a\n\n\n\n  - b\n')
+    expect(html).toContain('</ul>\n    <ul>')
+  })
+
+  it('closes nothing on its own: a continuation still continues the item', () => {
+    // The run denies a following SIBLING MARKER the right to join. It is not an
+    // item terminator, so content at the content column belongs to the item.
+    expect(topTypes('- a\n\n\n\n  still a\n')).toEqual(['list'])
+  })
+
+  it('a comment between two items separates them for its OWN reason', () => {
+    // Recorded so the next reader does not mistake this for the threshold at
+    // work: an invisible line between two items already opened a second list
+    // before §11 N1a existed, and it still does. The threshold counts BLANK
+    // lines only - `blankBeforeInvisible` is not added to the run - so this
+    // shape is decided elsewhere and is unchanged by the rule.
+    expect(topTypes('- a\n\n%% c\n\n- b\n')).toEqual(['list', 'comment', 'list'])
   })
 })
