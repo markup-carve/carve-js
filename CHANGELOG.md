@@ -39,7 +39,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The canonical writer separates two adjacent sibling lists with that
   boundary** instead of indenting the later one by a space. The old offset was
   what existed before a separator was spelled; it returned a list at a column
-  the author never wrote, and it could not survive a third list.
+  the author never wrote, and it could not survive a third list. It works for a
+  list nested in a tight item too (markup-carve/carve#1501), where the
+  marker-column route it replaces wrote both sub-lists where they merge.
+- **The tight-item column marker is picked per document rather than fixed**
+  (markup-carve/carve#1501). It was `U+E005`, so an authored one opening a line
+  in a list item was eaten. carve-php moved the same marker into its picked run
+  in markup-carve/carve-php#1087; this is that change here.
 - **The doubled run is the canonical arrow, in both families** (#1241, markup-carve/carve#1442). `<--` `-->` `<-->` and `<==` `==>` `<=>` convert. **BREAKING: `=>` no longer converts** - `key => value` and `x => x + 1` were silently becoming `⇒` in rendered output only. `<=` keeps `≤`, and a highlight no longer opens before `>`.
 - **An empty brace pair is text, and `{--}` is an en dash** (#1242, markup-carve/carve#1447, markup-carve/carve#1450). `{//}`, `{**}`, `{^^}` and the rest render literally; a pair holding content is still the construct.
 - **Admonitions, task checkboxes, the footnote section and math carry accessible names** (#1253). A canonical admonition takes `aria-labelledby` on its title or an `aria-label` for its kind, a task checkbox is named by its item text, the endnotes section is labeled, and a math span takes `role="math"`. An authored `role`, `aria-label` or `aria-labelledby` always wins. The `labels` map grows nine keys for those strings.

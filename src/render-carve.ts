@@ -544,13 +544,20 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
         if (previousBlock !== null && parts.length > 0 && writtenAsOneRun(previousBlock, block)) {
           parts[parts.length - 1] += `\n${text}`
         } else if (listSeparated && parts.length > 0) {
-          // §11 N1a's boundary, written as a SENTINEL rather than as four
-          // literal newlines. `normalize` squeezes every run of three or more
-          // newlines to two - correct for a decorative run, which the rule says
-          // to normalize away, and fatal for this one, which the rule says to
-          // keep. The squeeze cannot tell them apart from the text; only the
-          // writer knows, so the writer says so and `normalize` restores it.
-          parts[parts.length - 1] += `${sentinels[4]}${text}`
+          // §11 N1a's boundary, written as a SENTINEL rather than as literal
+          // newlines. `normalize` squeezes every run of three or more newlines
+          // to two - correct for a decorative run, which the rule says to
+          // normalize away, and fatal for this one, which the rule says to keep.
+          // The squeeze cannot tell them apart from the text; only the writer
+          // knows, so the writer says so and `normalize` restores it.
+          //
+          // ON A LINE OF ITS OWN, which is what makes it work inside a list item
+          // too. An item indents each of its content LINES; a sentinel glued to
+          // the front of the next list's first line got indented with it and
+          // then expanded in place, leaving a whitespace-only line and the list
+          // below it at column 0. A line holding nothing else is indented
+          // harmlessly and expands to the blank lines it stands for.
+          parts[parts.length - 1] += `\n${sentinels[5]}\n${text}`
         } else {
           parts.push(text)
         }
@@ -910,13 +917,13 @@ function renderList(node: List, ctx: CarveContext): string {
       // 75-list-nesting-and-looseness-5). The content is unchanged either way,
       // since the reader strips the item's columns back off.
       for (const line of lines) {
-        if (line.startsWith(MARKER_COLUMN)) {
+        if (line.startsWith(markerColumn())) {
           // The continuation marker and the block it attaches sit at the ITEM's
           // marker column, not at its content column: §17 L3 puts the marker at
           // "the current container's MARKER COLUMN" and attaches the following
           // block "with no marker prefix or indentation". Indenting either into
           // the item is what made the attached paragraph fold (carve#861).
-          out += `${indent}${line.slice(MARKER_COLUMN.length)}\n`
+          out += `${indent}${line.slice(markerColumn().length)}\n`
           continue
         }
         out += line ? `${indent}${continuation}${line}\n` : '\n'
@@ -1043,12 +1050,24 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   ]).has(left.type)
 }
 
-const MARKER_COLUMN = '\ue005'
+/**
+ * The column marker the tight-item continuation writes.
+ *
+ * It used to be the FIXED U+E005, parked outside the picked run on the
+ * reasoning that a re-picked run would rewrite it - which is a reason to put it
+ * IN the run, not beside it. carve-php reached that conclusion first
+ * (markup-carve/carve-php#1087) and has had no collision since; this one kept
+ * the fixed character and duly collided with §11 N1a's boundary the moment a
+ * fifth picked slot reached U+E005, which `line.startsWith(markerColumn())` then
+ * stripped (carve#1501). An authored U+E005 opening a line in a list item was
+ * eaten the same way, with no ticket, for as long as it has been fixed.
+ */
+const markerColumn = (): string => sentinels[4]
 
 function atMarkerColumn(text: string): string {
   return text
     .split('\n')
-    .map((line) => MARKER_COLUMN + line)
+    .map((line) => markerColumn() + line)
     .join('\n')
 }
 
@@ -1159,9 +1178,23 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       // columns, and the break was absorbed into the paragraph and folded to an
       // em dash. Mixed indentation inside one attached run is not a form any
       // reader can round-trip, so it is not written.
+      // TWO SIBLING SUB-LISTS IN A TIGHT ITEM (§11 N1a, carve#1501). The `+`
+      // route below cannot separate them: it writes both at the item's MARKER
+      // column, which is exactly where they merge back into one, so the item
+      // came back as a flat list and lost the nesting with the boundary.
+      //
+      // The boundary can, because it is a line of its own: the item's own line
+      // loop indents it like any other content line and it expands to blank
+      // lines afterwards, leaving both sub-lists at the content column the
+      // author wrote. The item stays TIGHT - a blank run before a sub-list is
+      // §17 L2's attach-and-stay-tight case, not a second paragraph.
+      if (previous?.type === 'list' && b.type === 'list' && adjacentBlocksMerge(previous, b)) {
+        parts.push(`${sentinels[5]}\n${rendered}`)
+        return
+      }
       if (
         previousAtMarkerColumn ||
-        (next !== undefined && adjacentBlocksMerge(b, next)) ||
+        (next !== undefined && b.type !== 'list' && adjacentBlocksMerge(b, next)) ||
         (!separated &&
           previous?.type === 'paragraph' &&
           FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
@@ -2271,7 +2304,19 @@ function normalize(text: string): string {
   // The squeeze runs FIRST, so a decorative run still normalizes; the boundary
   // sentinel is not a newline yet and passes through it untouched.
   const squeezed = swept.join('\n').replace(/\n{3,}/g, '\n\n')
-  const cleaned = trimNonNbspKeepingGuard(squeezed.replace(new RegExp(`\\n*${sentinels[4]}\\n*`, 'g'), '\n\n\n\n'))
+  // The boundary line carries whatever the containers around it added before it
+  // got here - an item's indent, a quote's `>` markers - and what it stands for
+  // is three BLANK lines IN THAT CONTEXT. Inside a quote a blank line is `>`,
+  // not nothing, so the prefix is captured and repeated rather than dropped; at
+  // the top level and inside an item the prefix trims to nothing and the three
+  // lines come out empty. One line becomes three, counting the breaks already
+  // on either side of it.
+  const cleaned = trimNonNbspKeepingGuard(
+    squeezed.replace(new RegExp(`^([ \t>]*)${sentinels[5]}[ \t]*$`, 'gm'), (_m, prefix: string) => {
+      const blank = prefix.replace(/[ \t]+$/, '')
+      return `${blank}\n${blank}\n${blank}`
+    }),
+  )
 
   return `${guardLeadingBom(restoreVerbatim(cleaned))}\n`
 }
@@ -2298,14 +2343,8 @@ function normalize(text: string): string {
  * writer runs. That is the other half of carve#678 and needs a decision about
  * what the parsed text of an nbsp is, not a change here.
  */
-const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005'] as const
-let sentinels: readonly [string, string, string, string, string] = [
-  '\ue001',
-  '\ue002',
-  '\ue003',
-  '\ue004',
-  '\ue005',
-]
+const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005', '\ue006'] as const
+let sentinels: readonly [string, string, string, string, string, string] = DEFAULT_SENTINELS
 
 /**
  * Every string in the tree, joined. ITERATIVE on purpose: `JSON.stringify` would
@@ -2333,7 +2372,7 @@ function collectStrings(root: unknown): string {
   return parts.join('\u0000')
 }
 
-function pickSentinels(text: string): readonly [string, string, string, string, string] {
+function pickSentinels(text: string): readonly [string, string, string, string, string, string] {
   // FIVE, not four: the last is §11 N1a's list boundary. It is picked here
   // rather than fixed for the reason the whole scheme exists - a fixed code
   // point cannot be told apart from an authored one - and it matters more for
@@ -2343,21 +2382,22 @@ function pickSentinels(text: string): readonly [string, string, string, string, 
   // The common case: none of the defaults occur, so keep them and skip the scan
   // of the private-use area entirely.
   if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
-    return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005']
+    return DEFAULT_SENTINELS
   }
-  for (let base = 0xe006; base <= 0xf8fb; base += 5) {
+  for (let base = 0xe007; base <= 0xf8fa; base += 6) {
     const run = [
       String.fromCharCode(base),
       String.fromCharCode(base + 1),
       String.fromCharCode(base + 2),
       String.fromCharCode(base + 3),
       String.fromCharCode(base + 4),
+      String.fromCharCode(base + 5),
     ] as const
     if (!run.some((c) => text.includes(c))) return run
   }
 
   // Unreachable for any real document; keep the old behaviour rather than throw.
-  return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005']
+  return DEFAULT_SENTINELS
 }
 
 /**

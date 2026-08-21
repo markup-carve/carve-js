@@ -124,3 +124,52 @@ describe('§11 N1a: three blank lines are a hard list boundary', () => {
     expect(topTypes('- a\n\n%% c\n\n- b\n')).toEqual(['list', 'comment', 'list'])
   })
 })
+
+describe('carve#1501: the writer spells two sibling sub-lists in a tight item', () => {
+  const roundTrips = (source: string): boolean =>
+    carveToHtml(carveToCarve(source)) === carveToHtml(source)
+
+  it('keeps both sub-lists at the column the author wrote', () => {
+    expect(carveToCarve('- o\n\n  - a\n\n\n\n  - b\n')).toBe('- o\n  - a\n\n\n\n  - b\n')
+  })
+
+  it('round-trips the nested boundary', () => {
+    for (const source of [
+      '- o\n\n  - a\n\n\n\n  - b\n',
+      '- o\n\n  - a\n\n\n\n  - b\n\n\n\n  - c\n',
+      '- o\n\n  1. a\n\n\n\n  1. b\n',
+      '- o\n\n  - m\n\n    - a\n\n\n\n    - b\n',
+      '- o\n\n  text\n\n  - a\n\n\n\n  - b\n',
+      '- o\n\n  - a\n\n\n\n  - b\n\n\n\n- p\n',
+    ]) {
+      expect(roundTrips(source), source).toBe(true)
+      expect(carveToCarve(carveToCarve(source)), source).toBe(carveToCarve(source))
+    }
+  })
+
+  it('writes a blank line inside a quote as `>`, not as nothing', () => {
+    // The boundary line carries the container's prefix by the time it expands,
+    // and what it stands for is three blank lines IN THAT CONTEXT. Dropping the
+    // prefix would end the quote instead of spacing inside it.
+    const source = '> - o\n>\n>   - a\n>\n>\n>\n>   - b\n'
+    expect(carveToCarve(source)).toBe('> - o\n>   - a\n>\n>\n>\n>   - b\n')
+    expect(roundTrips(source)).toBe(true)
+  })
+
+  it('leaves the two-blank spelling alone', () => {
+    expect(carveToCarve('- o\n\n  - a\n\n\n  - b\n')).toBe('- o\n  - a\n\n  - b\n')
+  })
+})
+
+describe('a picked sentinel is never one of the reserved characters', () => {
+  it('never hands out MARKER_COLUMN, whatever the document holds', () => {
+    // U+E005 is MARKER_COLUMN and U+E000 is the nbsp marker. Handing either out
+    // makes the writer read its own sentinel as the other thing: the §11 N1a
+    // boundary was stripped by `line.startsWith(MARKER_COLUMN)` and came back as
+    // an unindented blank line before this was reserved (carve#1501).
+    let occupied = ''
+    for (let cp = 0xe001; cp <= 0xe030; cp++) occupied += String.fromCharCode(cp)
+    const source = `- o\n\n  - a\n\n\n\n  - b\n\n${occupied}\n`
+    expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
+  })
+})
