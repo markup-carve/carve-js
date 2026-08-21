@@ -58,8 +58,34 @@ function extraClasses(node: Admonition | Div, structural: string): string[] {
   return (node.attrs?.classes ?? []).filter((c) => c !== structural)
 }
 
+/**
+ * The two values `mode` takes, in both extensions.
+ *
+ * PART 11 §13.1: `css` is the default and an implementation MUST NOT ship
+ * `aria` as the default. The reason is §2.5 rather than compatibility - content
+ * is never dropped, only interaction - and `aria` reveals with `hidden`, so a
+ * page that registers it and ships no script loses every panel but the first.
+ */
+const TAB_MODES: readonly TabsMode[] = ['css', 'aria']
+
+/**
+ * Resolve a `mode` option, REFUSING a value that is neither.
+ *
+ * §13.1 requires the refusal for the reason §2.5 gives about render modes: a
+ * guess turns a typo into silently different output. `tabs({ mode: 'aira' })`
+ * used to render the CSS mode, because the test was `=== 'aria'` and every
+ * other string fell through to the default (carve-js#1265).
+ */
+export function resolveTabsMode(mode: TabsMode | undefined, extension: string): TabsMode {
+  if (mode === undefined) return 'css'
+  if (!TAB_MODES.includes(mode)) {
+    throw new Error(`Invalid ${extension} mode "${mode}"; expected one of: ${TAB_MODES.join(', ')}.`)
+  }
+  return mode
+}
+
 export function tabs(opts: TabsOptions = {}): CarveExtension {
-  const mode: TabsMode = opts.mode === 'aria' ? 'aria' : 'css'
+  const mode: TabsMode = resolveTabsMode(opts.mode, 'Tabs')
   const wrapperClass = opts.wrapperClass ?? 'tabs'
   const tabClass = opts.tabClass ?? 'tabs-panel'
   const labelClass = opts.labelClass ?? 'tabs-label'
@@ -194,7 +220,25 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
         `class="${ctx.escapeAttr(labelClass)}">${ctx.escapeHtml(tab.label)}</label>\n`
     })
     for (const tab of items) {
-      html += `<div class="${ctx.escapeAttr(tabClass)}">\n${tab.content}</div>\n`
+      // NAMED, because nothing else names it. Under `css` there are no tab
+      // roles: all radios and labels are emitted before all panels, so a panel
+      // is not bound to the control that reveals it and carries no name of its
+      // own. PART 11 §13.2 gives it both.
+      //
+      // `role="group"` and not `role="tabpanel"` - the control revealing this
+      // panel is a `radio`, not a `tab`, and `group` is all the CSS mode can
+      // honestly claim. Not a `<section>` either: one landmark per panel is N
+      // landmarks per tab set. And not a bare `aria-labelledby`, because ARIA
+      // marks both naming attributes prohibited on role `generic` and the
+      // `<label>` elements carry `for=`, not `id=`.
+      //
+      // The name is the tab's own label, so it is DERIVED from the document and
+      // gets no `labels` key (§1.5) - an author renames a panel by renaming its
+      // tab. ATTRIBUTE-escaped, which differs from the `<label>` element's own
+      // escaping on the quote characters.
+      html +=
+        `<div class="${ctx.escapeAttr(tabClass)}" role="group" ` +
+        `aria-label="${ctx.escapeAttr(tab.label)}">\n${tab.content}</div>\n`
     }
     html += `${pad}</div>`
     return html
@@ -233,6 +277,12 @@ export function tabs(opts: TabsOptions = {}): CarveExtension {
       const tabId = pairIds[index]!.tab
       const panelId = pairIds[index]!.panel
       const hidden = tab.selected ? '' : ' hidden'
+      // NEITHER `role="group"` NOR A NAME, and that is a rule rather than an
+      // omission (PART 11 §13.3). The panel is already bound to its
+      // `<button role="tab">` by `aria-labelledby`, so naming it as well would
+      // give one element two accessible names and pull it out of the `tablist`
+      // relationship that is the only reason to be in this mode. §13.2's rule
+      // is a `css`-mode rule specifically, not "every panel gets a name".
       html +=
         `<div role="tabpanel" id="${panelId}" ` +
         `aria-labelledby="${tabId}" ` +

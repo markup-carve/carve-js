@@ -91,6 +91,15 @@ const featureRunners: Record<string, (source: string, render: Render) => string>
   spoiler: (source, render) => render(source, { extensions: [spoiler()] }),
   tabs: (source, render) => render(source, { extensions: [tabs()] }),
   /*
+   * AHEAD OF THE PIN, deliberately. `47-tabs-aria-panel-binding` arrives with
+   * the next bump and its manifest feature is `tabs-aria`, so without a runner
+   * that bump would fail with "no runner ... and no entry in
+   * DECLARED_UNIMPLEMENTED" - a corpus case reading as unimplemented when the
+   * engine implements it (carve-js#1265). A runner with no case yet compares
+   * nothing and asserts nothing, which is the harmless direction.
+   */
+  'tabs-aria': (source, render) => render(source, { extensions: [tabs({ mode: 'aria' })] }),
+  /*
    * Features that are a RENDER OPTION rather than an extension: no instance to
    * pass, just the switch. They live in the same table so that an engine
    * without the option shows up as a case nobody compared, rather than
@@ -147,12 +156,12 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; expected: string }>([
     '28-tabs-panel-title',
     {
       reason:
-        'a tab set says what it is (#1254, markup-carve/carve#1468); the engine goes first and the pinned corpus still writes the bare wrapper',
+        'a tab set says what it is (#1254, markup-carve/carve#1468) and a css panel carries its tab name (#1265, markup-carve/carve#1489); the engine goes first and the pinned corpus still writes the bare wrapper and the anonymous panel',
       expected: [
         '<div class="tabs" role="group" aria-label="Tabs">',
         '<input type="radio" name="tabset-1" id="tabset-1-tab-1" class="tabs-radio" checked>',
         '<label for="tabset-1-tab-1" class="tabs-label">First</label>',
-        '<div class="tabs-panel">',
+        '<div class="tabs-panel" role="group" aria-label="First">',
         '<p class="admonition-title">Inner <strong>Title</strong></p>',
         '<p>Content one.</p>',
         '</div>',

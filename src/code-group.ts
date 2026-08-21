@@ -1,8 +1,22 @@
 import type { Admonition, Attrs, BlockNode, CodeBlock, Div } from './ast.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
+import { resolveTabsMode, type TabsMode } from './tabs.js'
 
 /** Options for the {@link codeGroup} extension. */
 export interface CodeGroupOptions {
+  /**
+   * `'css'` (default, no JS) or `'aria'` (semantic roles, requires JS).
+   *
+   * THE SAME OPTION TABS CARRIES, and the same type, because PART 11 §13 binds
+   * both: two constructs of the same shape do not get different accessibility
+   * ceilings because one of them was written second. It was accepted and
+   * SILENTLY IGNORED before this existed - `codeGroup({ mode: 'aria' })`
+   * rendered the radio markup byte for byte (carve-js#1265).
+   *
+   * `css` is the default and an unknown value is refused; see
+   * {@link resolveTabsMode}.
+   */
+  mode?: TabsMode
   /** CSS class on the wrapper. Default `'code-group'`. */
   wrapperClass?: string
   /** CSS class on each code panel. Default `'code-group-panel'`. */
@@ -80,6 +94,7 @@ function withoutSelected(attrs: Attrs | undefined): Attrs | undefined {
 }
 
 export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
+  const mode: TabsMode = resolveTabsMode(opts.mode, 'CodeGroup')
   const wrapperClass = opts.wrapperClass ?? 'code-group'
   // An author who wrote their own `role` / `aria-label` keeps it: a second one
   // beside theirs leaves the value undefined. HTML attribute names are
@@ -89,13 +104,18 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
   // The wrapper is a plain GROUP: the CSS mode has no tab/panel roles to
   // associate, so `group` is all it can honestly claim - and the name is the
   // half that was missing (carve#1468).
-  const groupAttrs = (node: Admonition | Div, attrs: Attrs, groupLabel: string): void => {
+  const groupAttrs = (
+    node: Admonition | Div,
+    attrs: Attrs,
+    groupLabel: string,
+    role: string = 'group',
+  ): void => {
     const writeRole = !authored(node, 'role')
     const writeName =
       groupLabel !== '' && !authored(node, 'aria-label') && !authored(node, 'aria-labelledby')
     if (!writeRole && !writeName) return
     attrs.keyValues = { ...(attrs.keyValues ?? {}) }
-    if (writeRole) attrs.keyValues.role = 'group'
+    if (writeRole) attrs.keyValues.role = role
     if (writeName) attrs.keyValues['aria-label'] = groupLabel
     // APPENDED: naming the group must not move an attribute the author placed,
     // so role/aria-label go at the END of the existing order.
@@ -116,19 +136,8 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
   // (matching carve-php's clear()).
   let groupCounter = 0
 
-  const renderGroup = (
-    node: Admonition | Div,
-    ctx: BlockExtensionRenderContext,
-  ): string | undefined => {
-    const items = extractItems(node)
-    // No code blocks: defer to core div rendering (matches carve-php).
-    if (items.length === 0) return undefined
-
-    groupCounter++
-    // Generated ids join the document id namespace (extensions contract §2.6).
-    const groupId = ctx.uniqueId(`${idPrefix}-${groupCounter}`)
-    const pad = ctx.indent(ctx.level)
-
+  /** The wrapper's attributes, shared by both modes and the static render. */
+  const wrapperAttrs = (node: Admonition | Div, ctx: BlockExtensionRenderContext, role?: string): Attrs => {
     // Wrapper attributes: wrapperClass first, then any extra classes the author
     // added (except 'code-group'), then non-class attributes.
     const classes = [wrapperClass, ...extraClasses(node).filter((c) => c !== wrapperClass)]
@@ -136,9 +145,31 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     if (node.attrs?.id !== undefined) attrs.id = node.attrs.id
     if (node.attrs?.keyValues) attrs.keyValues = { ...node.attrs.keyValues }
     attrs.order = ['.class', ...(node.attrs?.order ?? []).filter((s) => s !== '.class')]
-    groupAttrs(node, attrs, opts.groupLabel ?? ctx.labels.codeGroup)
+    groupAttrs(node, attrs, opts.groupLabel ?? ctx.labels.codeGroup, role)
+    return attrs
+  }
 
-    let html = `${pad}<div${ctx.renderAttrs(attrs)}>\n`
+  const renderGroup = (
+    node: Admonition | Div,
+    ctx: BlockExtensionRenderContext,
+  ): string | undefined => {
+    const items = extractItems(node)
+    // No code blocks: defer to core div rendering (matches carve-php).
+    if (items.length === 0) return undefined
+    return mode === 'aria' ? renderGroupAria(node, items, ctx) : renderGroupCss(node, items, ctx)
+  }
+
+  const renderGroupCss = (
+    node: Admonition | Div,
+    items: GroupItem[],
+    ctx: BlockExtensionRenderContext,
+  ): string => {
+    groupCounter++
+    // Generated ids join the document id namespace (extensions contract §2.6).
+    const groupId = ctx.uniqueId(`${idPrefix}-${groupCounter}`)
+    const pad = ctx.indent(ctx.level)
+
+    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx))}>\n`
     items.forEach((item, index) => {
       const inputId = ctx.uniqueId(`${groupId}-tab-${index + 1}`)
       const checked = item.selected ? ' checked' : ''
@@ -151,10 +182,64 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
         `class="${ctx.escapeAttr(labelClass)}">${ctx.escapeHtml(item.label)}</label>\n`
     })
     for (const item of items) {
-      html += `<div class="${ctx.escapeAttr(panelClass)}">`
+      // PART 11 §13.2, the same treatment a `css` tabs panel gets and for the
+      // same reason: under `css` nothing binds a panel to the radio that
+      // reveals it. Keyed on the panel's OWN label - the tab name where one was
+      // written, otherwise the language word, which is what `extractItems`
+      // already resolved.
+      html +=
+        `<div class="${ctx.escapeAttr(panelClass)}" role="group" ` +
+        `aria-label="${ctx.escapeAttr(item.label)}">`
       html += renderCodeBlock(item, ctx)
       html += '</div>\n'
     }
+    html += `${pad}</div>`
+    return html
+  }
+
+  /**
+   * The `aria` mode, mirroring the Tabs renderer element for element.
+   *
+   * A `<button role="tab">` per panel, `role="tabpanel"` panels bound by
+   * `aria-labelledby`, and `hidden` on every non-selected one. The panel takes
+   * NEITHER `role="group"` NOR a name (§13.3): it is already bound, and naming
+   * it as well would give one element two accessible names.
+   */
+  const renderGroupAria = (
+    node: Admonition | Div,
+    items: GroupItem[],
+    ctx: BlockExtensionRenderContext,
+  ): string => {
+    groupCounter++
+    const groupId = ctx.uniqueId(`${idPrefix}-${groupCounter}`)
+    const pad = ctx.indent(ctx.level)
+    // Both ids computed ONCE and reused across the two loops, so a bumped
+    // generated id keeps the wiring consistent - the same reason Tabs does it.
+    const pairIds = items.map((_item, index) => ({
+      tab: ctx.uniqueId(`${groupId}-tab-${index + 1}`),
+      panel: ctx.uniqueId(`${groupId}-panel-${index + 1}`),
+    }))
+    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx, 'tablist'))}>\n`
+    items.forEach((item, index) => {
+      const { tab: tabId, panel: panelId } = pairIds[index]!
+      const selected = item.selected ? 'true' : 'false'
+      const tabindex = item.selected ? '' : ' tabindex="-1"'
+      html +=
+        `<button role="tab" id="${ctx.escapeAttr(tabId)}" ` +
+        `aria-selected="${selected}" ` +
+        `aria-controls="${ctx.escapeAttr(panelId)}" ` +
+        `class="${ctx.escapeAttr(labelClass)}"${tabindex}>${ctx.escapeHtml(item.label)}</button>\n`
+    })
+    items.forEach((item, index) => {
+      const { tab: tabId, panel: panelId } = pairIds[index]!
+      const hidden = item.selected ? '' : ' hidden'
+      html +=
+        `<div role="tabpanel" id="${ctx.escapeAttr(panelId)}" ` +
+        `aria-labelledby="${ctx.escapeAttr(tabId)}" ` +
+        `class="${ctx.escapeAttr(panelClass)}"${hidden}>`
+      html += renderCodeBlock(item, ctx)
+      html += '</div>\n'
+    })
     html += `${pad}</div>`
     return html
   }
@@ -178,13 +263,10 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     if (items.length === 0) return undefined
     const pad = ctx.indent(ctx.level)
     const innerPad = ctx.indent(ctx.level + 1)
-    const classes = [wrapperClass, ...extraClasses(node).filter((c) => c !== wrapperClass)]
-    const attrs: Attrs = { classes }
-    if (node.attrs?.id !== undefined) attrs.id = node.attrs.id
-    if (node.attrs?.keyValues) attrs.keyValues = { ...node.attrs.keyValues }
-    attrs.order = ['.class', ...(node.attrs?.order ?? []).filter((s) => s !== '.class')]
-    groupAttrs(node, attrs, opts.groupLabel ?? ctx.labels.codeGroup)
-    let html = `${pad}<div${ctx.renderAttrs(attrs)}>\n`
+    // A static render takes NEITHER mode (§13.1): the set flattens to one
+    // `<section>` per panel headed by its label, the heading IS the name, and
+    // no interaction survives to bind. So the wrapper is the plain `group`.
+    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx))}>\n`
     for (const item of items) {
       html += `${innerPad}<section class="${ctx.escapeAttr(panelClass)}">\n`
       html += `${innerPad}<h3 class="${ctx.escapeAttr(labelClass)}">${ctx.escapeHtml(item.label)}</h3>\n`

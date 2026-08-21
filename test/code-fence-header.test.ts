@@ -57,7 +57,13 @@ describe('code-fence header and grouping label', () => {
     )
     expect(html).toContain('>First</label>')
     expect(html).toContain('>Second</label>')
-    expect(html).not.toContain('label="First"')
+    // The opener `[label]` is the tab NAME, so it must not also leak onto the
+    // element as a literal `label=` HTML attribute. Anchored away from
+    // `aria-label`, which is a different attribute and is now written on
+    // purpose: a `css` panel is named by its tab (carve-js#1265). Without the
+    // exclusion this passed only for as long as no attribute ENDED in `label`.
+    expect(html).not.toMatch(/(?<!aria-)label="First"/)
+    expect(html).toContain('aria-label="First"')
   })
 
   it('keeps the quoted opener title inside the tab panel', () => {
