@@ -19,6 +19,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -53,6 +54,9 @@ export interface MarkdownRenderOptions {
  */
 
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
+  // Choose the escape carriers before anything is rendered, so every pass that
+  // introduces one and every pass that resolves one agrees on them.
+  chooseCarriers(ast)
   const headingIds = new Set<string>()
   const referencedHeadingIds = new Set<string>()
 
@@ -1097,15 +1101,17 @@ function sanitizeMdUrl(url: string): string {
  * - DEL (U+007F) and the C1 controls (U+0080..U+009F) sit outside \u00a729 by T5,
  *   and CSI (U+009B) and OSC (U+009D) are single-character forms of the
  *   sequences \u00a725 exists to stop.
- * - the section 8a sentinels, which are this renderer's own: author content
- *   carrying one would reach normalize() and be read as an escape this
- *   renderer emitted.
+ * The section 8a carriers were dropped here too, and that was the defect
+ * carve-js#1281: they are this renderer's own markers, and deleting the range
+ * they occupied was how author content was kept off them. They are picked per
+ * document now, so no authored character can be one and nothing has to be
+ * deleted to keep it that way.
  *
  * The ANSI target keeps the broad strip and MUST: it is the one consumer that
  * acts on the character (\u00a729 T4).
  */
 function stripControls(s: string): string {
-  return s.replace(/[\u000d\u007f-\u009f\ue004-\ue008]/gu, '')
+  return s.replace(/[\u000d\u007f-\u009f]/gu, '')
 }
 
 /**
@@ -1119,13 +1125,12 @@ function stripControls(s: string): string {
  * The probe class itself now spans DEL and the C1 block
  * (markup-carve/carve-js#915), so this call is no longer the only thing standing
  * between a split scheme and the denylist. It stays anyway: it is one layer and
- * the probe class is another, and this one also removes the sentinels the probe
- * has no reason to know about. Narrowing THIS call along with the emit path
- * would still be wrong, so the two remain separate functions rather than one
- * with a flag.
+ * the probe class is another. Narrowing THIS call along with the emit path would
+ * still be wrong, so the two remain separate functions rather than one with a
+ * flag.
  */
 function stripDestinationControls(s: string): string {
-  return s.replace(/\p{Cc}|[\ue004-\ue008]/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
+  return s.replace(/\p{Cc}/gu, (c) => (c === '\t' || c === '\n' ? c : ''))
 }
 
 /** Escape `<>&` so embedded raw HTML cannot become live markup downstream. */
@@ -1141,26 +1146,26 @@ function cleanEscapedText(node: Text): string {
   return node.value
 }
 
-
-
 /**
- * Sentinels standing in for the escapes section 8a decides on the LINE.
+ * Carriers standing in for the escapes section 8a decides on the LINE.
  *
- * One per narrowed character. U+E000 is the NBSP sentinel and render-carve
- * claims U+E001..U+E003; this extends the scheme. Author content never carries
- * one: stripControls() drops the whole range on the way in, and every path to
- * the output runs through stripControls().
+ * One per narrowed character, and they are CHOSEN PER DOCUMENT from code points
+ * it does not contain.
+ *
+ * They used to be the fixed U+E004..U+E008, and author content was kept off them
+ * by DELETING that range on the way in - so an author who wrote one of the five
+ * lost it, on this target and no other. PART 9 section 29 had already settled
+ * that question for the C0 controls: every character that is not one of the four
+ * whitespace characters is content (PART 7), and a target that silently deletes
+ * content is the lossy party rather than the safe one (carve-js#1281).
+ *
+ * Picking them removes the collision instead of deleting around it, and takes
+ * the strip with it: a code point the document does not contain cannot arrive in
+ * author content, so there is nothing on the way in to drop.
  */
-const NARROWED_SENTINEL: Record<string, string> = {
-  _: '\ue004',
-  '#': '\ue005',
-  '[': '\ue006',
-}
-const NARROWED_CHARACTER: Record<string, string> = {
-  '\ue004': '_',
-  '\ue005': '#',
-  '\ue006': '[',
-}
+let NARROWED_SENTINEL: Record<string, string> = {}
+let NARROWED_CHARACTER: Record<string, string> = {}
+
 /**
  * PART 11 section 8b M2a: characters this target's readers never read as
  * markup, at ANY position on the line.
@@ -1184,9 +1189,7 @@ const AUTHORED_INERT = new Set(['{', '}', '^', ',', '%', ':', '/', '@'])
  * about an adjacent delimiter of the same character, M2b asks where on the
  * line the character stands.
  */
-const AUTHORED_SENTINEL: Record<string, string> = {
-  '#': '\ue007',
-}
+let AUTHORED_SENTINEL: Record<string, string> = {}
 
 /**
  * The same hash once M2b HAS decided to keep its escape.
@@ -1207,15 +1210,55 @@ const AUTHORED_SENTINEL: Record<string, string> = {
  * spelling the decision as the two characters `\#` instead would shift every
  * later candidate on the line and change M1b's answers with it.
  */
-const AUTHORED_KEPT = '\ue008'
-const AUTHORED_CHARACTER: Record<string, string> = {
-  '\ue007': '#',
-  '\ue008': '#',
+let AUTHORED_KEPT = ''
+let AUTHORED_CHARACTER: Record<string, string> = {}
+let RE_NARROWED_SENTINEL = /(?!)/g
+let HAS_NARROWED_SENTINEL = /(?!)/
+let RE_UNDECIDED_HASH = /(?!)/g
+let HAS_UNDECIDED_HASH = /(?!)/
+
+/**
+ * The carriers this document uses, one run of five.
+ *
+ * Slots, in order: the three section 8a narrowings - `_`, `#`, `[` - then M2b's
+ * undecided hash and the same hash once M2b has decided to KEEP its escape. The
+ * last two are one character apart on purpose; see AUTHORED_KEPT above.
+ *
+ * The run is picked from code points the DOCUMENT does not contain, so no
+ * authored character can be read as one and none has to be deleted to make that
+ * true. The canonical writer's run is picked the same way and is deliberately
+ * NOT the same run: the two never overlap in time, and one shared run would make
+ * a slot added on either side a renumbering on the other (see sentinel-run.ts).
+ */
+const CARRIER_BASE = 0xe004
+const CARRIER_COUNT = 5
+
+function setCarriers(run: string[]): void {
+  const [underscore, hash, bracket, undecidedHash, keptHash] = run as [
+    string,
+    string,
+    string,
+    string,
+    string,
+  ]
+
+  NARROWED_SENTINEL = { _: underscore, '#': hash, '[': bracket }
+  NARROWED_CHARACTER = { [underscore]: '_', [hash]: '#', [bracket]: '[' }
+  AUTHORED_SENTINEL = { '#': undecidedHash }
+  AUTHORED_KEPT = keptHash
+  AUTHORED_CHARACTER = { [undecidedHash]: '#', [keptHash]: '#' }
+  RE_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`, 'g')
+  HAS_NARROWED_SENTINEL = new RegExp(`[${run[0]}-${run[CARRIER_COUNT - 1]}]`)
+  RE_UNDECIDED_HASH = new RegExp(undecidedHash, 'g')
+  HAS_UNDECIDED_HASH = new RegExp(undecidedHash)
 }
-const RE_NARROWED_SENTINEL = /[\ue004-\ue008]/g
-const HAS_NARROWED_SENTINEL = /[\ue004-\ue008]/
-const RE_UNDECIDED_HASH = /\ue007/g
-const HAS_UNDECIDED_HASH = /\ue007/
+
+/** Pick this document's carriers. Called once, before anything is rendered. */
+function chooseCarriers(ast: Document): void {
+  setCarriers(pickSentinelRun(occupiedPrivateUse(ast), CARRIER_BASE, CARRIER_COUNT))
+}
+
+setCarriers(pickSentinelRun(new Set(), CARRIER_BASE, CARRIER_COUNT))
 
 /** The bare character a sentinel stands for, for both passes that build a line view. */
 function sentinelCharacter(s: string): string {

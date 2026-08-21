@@ -22,6 +22,7 @@ import { resolveHeadingIds } from './heading-ids.js'
 import { ownValue } from './own-property.js'
 import { thematicBreakSpelling } from './thematic-break-marker.js'
 import { SourceUnspellableError } from './source-unspellable-error.js'
+import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 export interface CarveRenderOptions {}
 
@@ -119,7 +120,7 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // as the grammar grows.
   // Choose the verbatim sentinels before anything is rendered, so both escape
   // passes below agree on them.
-  sentinels = pickSentinels(collectStrings(ast))
+  sentinels = pickSentinelRun(occupiedPrivateUse(ast), SENTINEL_BASE, SENTINEL_COUNT)
   redundantIds = findRedundantHeadingIds(ast)
   // The two "written in place" sets are NOT reset here: they are per-PASS, and
   // renderWithEscapes owns them. Resetting them here as well would be the same
@@ -910,13 +911,13 @@ function renderList(node: List, ctx: CarveContext): string {
       // 75-list-nesting-and-looseness-5). The content is unchanged either way,
       // since the reader strips the item's columns back off.
       for (const line of lines) {
-        if (line.startsWith(MARKER_COLUMN)) {
+        if (line.startsWith(markerColumnTag())) {
           // The continuation marker and the block it attaches sit at the ITEM's
           // marker column, not at its content column: §17 L3 puts the marker at
           // "the current container's MARKER COLUMN" and attaches the following
           // block "with no marker prefix or indentation". Indenting either into
           // the item is what made the attached paragraph fold (carve#861).
-          out += `${indent}${line.slice(MARKER_COLUMN.length)}\n`
+          out += `${indent}${line.slice(markerColumnTag().length)}\n`
           continue
         }
         out += line ? `${indent}${continuation}${line}\n` : '\n'
@@ -1043,12 +1044,24 @@ function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   ]).has(left.type)
 }
 
-const MARKER_COLUMN = '\ue005'
+/**
+ * The tag that says a written line belongs at the item's MARKER column.
+ *
+ * The sixth slot of the picked run, not a code point of its own: `renderList`
+ * strips it back off BY POSITION, so a fixed one is eaten off a continuation
+ * line the AUTHOR opened with it, taking the item's content column with it
+ * (carve-js#1280).
+ */
+function markerColumnTag(): string {
+  return sentinels[SENTINEL_COUNT - 1]!
+}
 
 function atMarkerColumn(text: string): string {
+  const tag = markerColumnTag()
+
   return text
     .split('\n')
-    .map((line) => MARKER_COLUMN + line)
+    .map((line) => tag + line)
     .join('\n')
 }
 
@@ -2277,20 +2290,27 @@ function normalize(text: string): string {
 }
 
 /**
- * The three writer-only sentinels, chosen per render from code points the
- * DOCUMENT does not contain.
+ * The writer-only sentinels, chosen per render from code points the DOCUMENT
+ * does not contain.
  *
- * They used to be the fixed U+E001..U+E003. An author who wrote one of those in
- * a code block - where arbitrary bytes are the whole point - had it silently
- * rewritten on the way out: U+E001 became a space, U+E002 a tab, U+E003 nothing
- * at all. Three of those are worse than a deletion, because a space or a tab in
- * a code block is plausible content and the diff reads as whitespace
- * (carve#678).
+ * SIX SLOTS: the four that carry verbatim content through whole-document
+ * normalization, §11 N1a's list boundary, and the marker-column tag.
  *
- * Escaping the authored occurrences cannot fix it: any escape needs a reserved
- * character, and that character has the same collision. Picking characters the
- * document does not use does fix it, and cannot fail in practice - the BMP
- * private-use area alone has 6400 code points.
+ * They used to be fixed. An author who wrote one in a code block - where
+ * arbitrary bytes are the whole point - had it silently rewritten on the way
+ * out: the first became a space, the second a tab, the third nothing at all.
+ * Three of those are worse than a deletion, because a space or a tab in a code
+ * block is plausible content and the diff reads as whitespace (carve#678).
+ *
+ * The LAST slot arrived last and by the other door. The marker-column tag sat
+ * beside the run at a fixed address, and `renderList` strips it back off BY
+ * POSITION, so a continuation line the AUTHOR opened with it lost the character
+ * AND the item's content column - the paragraph walked out of the list item, and
+ * `toHtml(fmt(x)) == toHtml(x)` failed with it (carve-js#1280). Beside the run
+ * was also where the tag could collide with the run ITSELF: its fixed code point
+ * was the one the fifth slot takes by default, so one character stood for the
+ * list boundary and for the marker column at the same time. In the run it can be
+ * neither.
  *
  * U+E000 is NOT here. It is the parser's in-band marker for a non-breaking
  * space, shared with the HTML, plain, ANSI and Markdown renderers, so an
@@ -2298,67 +2318,9 @@ function normalize(text: string): string {
  * writer runs. That is the other half of carve#678 and needs a decision about
  * what the parsed text of an nbsp is, not a change here.
  */
-const DEFAULT_SENTINELS = ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005'] as const
-let sentinels: readonly [string, string, string, string, string] = [
-  '\ue001',
-  '\ue002',
-  '\ue003',
-  '\ue004',
-  '\ue005',
-]
-
-/**
- * Every string in the tree, joined. ITERATIVE on purpose: `JSON.stringify` would
- * be one line, and it recurses - so on an AST deeper than the JS stack it throws
- * a RangeError before the writer can reach its own §25 depth REFUSAL, which is
- * a documented behaviour with tests on it. An explicit stack has no such limit.
- */
-function collectStrings(root: unknown): string {
-  const parts: string[] = []
-  const stack: unknown[] = [root]
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (typeof node === 'string') {
-      parts.push(node)
-      continue
-    }
-    if (node === null || typeof node !== 'object') continue
-    if (Array.isArray(node)) {
-      for (const item of node) stack.push(item)
-      continue
-    }
-    for (const value of Object.values(node)) stack.push(value)
-  }
-
-  return parts.join('\u0000')
-}
-
-function pickSentinels(text: string): readonly [string, string, string, string, string] {
-  // FIVE, not four: the last is §11 N1a's list boundary. It is picked here
-  // rather than fixed for the reason the whole scheme exists - a fixed code
-  // point cannot be told apart from an authored one - and it matters more for
-  // this one than for the others, because it expands to THREE BLANK LINES: an
-  // authored occurrence would be rewritten into a list boundary nobody wrote.
-  //
-  // The common case: none of the defaults occur, so keep them and skip the scan
-  // of the private-use area entirely.
-  if (!DEFAULT_SENTINELS.some((c) => text.includes(c))) {
-    return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005']
-  }
-  for (let base = 0xe006; base <= 0xf8fb; base += 5) {
-    const run = [
-      String.fromCharCode(base),
-      String.fromCharCode(base + 1),
-      String.fromCharCode(base + 2),
-      String.fromCharCode(base + 3),
-      String.fromCharCode(base + 4),
-    ] as const
-    if (!run.some((c) => text.includes(c))) return run
-  }
-
-  // Unreachable for any real document; keep the old behaviour rather than throw.
-  return ['\ue001', '\ue002', '\ue003', '\ue004', '\ue005']
-}
+const SENTINEL_BASE = 0xe001
+const SENTINEL_COUNT = 6
+let sentinels: string[] = pickSentinelRun(new Set(), SENTINEL_BASE, SENTINEL_COUNT)
 
 /**
  * Whole-document normalization (trailing-whitespace strip, blank-line
@@ -2366,7 +2328,8 @@ function pickSentinels(text: string): readonly [string, string, string, string, 
  * blocks, frontmatter, and block comments reproduce their content
  * byte-exact (issue 340). Sentinel-encode the vulnerable bytes before the
  * content joins the document string; normalize() restores them at the end.
- * U+E000 is already the NBSP sentinel; U+E001..U+E003 extend the scheme.
+ * U+E000 is already the parser's NBSP marker; the first four slots of the picked
+ * run extend the scheme.
  */
 function protectVerbatim(content: string): string {
   const [sp, tab, blank, nbsp] = sentinels

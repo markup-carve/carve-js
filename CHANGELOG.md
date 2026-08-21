@@ -99,6 +99,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The writer's marker-column tag and the Markdown target's escape carriers are
+  picked per document, not fixed** (#1280, #1281, markup-carve/carve-rs#1210,
+  markup-carve/carve#678). An authored U+E005 opening a list item's continuation
+  line was eaten and the paragraph written back outside the item; the Markdown
+  target deleted an authored U+E004..U+E008 outright. Both runs are now chosen
+  from code points the document does not contain.
 - **A tab control is `type="button"`, and two marked items select one tab**
   (#1285, markup-carve/carve#1504, Extensions §13.3 and §13.5). An `aria`-mode
   control carried no `type`, so a tab set or code group inside a `<form>`
