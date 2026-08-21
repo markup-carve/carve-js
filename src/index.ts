@@ -417,12 +417,21 @@ export function carveToHtml(
   const fast = tryFastHtml(source, opts)
   if (fast !== undefined) return fast
   const exts: CarveExtension[] = opts.extensions ?? []
-  // `sourceLine` rendering needs block positions, so enable parsing them.
+  // POSITIONS ARE FORCED ON, and a caller's `positions: false` is overridden
+  // rather than honored. Two things here read them:
+  //
+  // - `sourceLine` rendering stamps each block with the line it starts on.
+  // - resolution applies the strict column-0 figure rule from the image's own
+  //   `startColumn`, and promotes when there is no position to consult - right
+  //   for a tree that arrived from JSON or an HTML import, wrong for one this
+  //   call just parsed. Without the force, ` ![a](p.png)` over ` ^ cap` renders
+  //   a `figure` where the default path renders a paragraph (carve-js#1263).
+  //
   // Extensions are forwarded to the parse so their matchers add syntax.
   const parseOpts: ParseOptions = {
     ...opts,
     extensions: exts,
-    ...(opts.sourceLine ? { positions: true } : {}),
+    positions: true,
   }
   // With no transform/profile capable of inserting new ids, resolution can
   // seed the renderer namespace during its existing mandatory AST walk. Public

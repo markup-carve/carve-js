@@ -11,7 +11,9 @@
  */
 
 /**
- * Source position of a node, attached when parsing with `{ positions: true }`.
+ * Source position of a node, attached unless the parse was given
+ * `{ positions: false }` (default true; `carveToHtml`, `carveToAstJson` and
+ * `lintCarve` force it on because they read positions).
  *
  * Line numbers are always in ORIGINAL-document coordinates, including for
  * blocks nested inside containers (block quotes, divs, list items, footnote

@@ -65,6 +65,42 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 
 export interface ParseOptions {
+  /**
+   * Record source positions on the returned tree. Default true.
+   *
+   * PART 12 section 4 lets an implementation gate position tracking behind a
+   * parse option, and `false` is that gate. The document comes back with no
+   * `pos` anywhere, and none of the bookkeeping that travels beside it: the
+   * root `footnoteDefPos` map, and a definition item's `termSpans`,
+   * `definitionSpans` and `definitionLines`. Emptying one of those while
+   * leaving the other four would make the option true of a field rather than
+   * of the tree (carve-js#1263).
+   *
+   * IT IS A SMALLER TREE, NOT A FASTER PARSE. The spans are recorded and then
+   * dropped at the document boundary; see `dropPositions` for why the gate is
+   * there rather than threaded through the scanner.
+   *
+   * WHAT IT DOES NOT GATE. Section 4 permits the tracking gate and forbids a
+   * serialization one, and two more paths in this package read positions to
+   * decide something other than a position, so all three force it back on and
+   * ignore a `false` they are handed:
+   *
+   * - `carveToAstJson` - "JSON it is handed carries positions"; a tree without
+   *   them is one an editor or language server cannot navigate.
+   * - `carveToHtml` - resolution applies the strict column-0 figure rule from
+   *   the image's own `startColumn`, and falls back to promoting when there is
+   *   no position (which is right for an ingested tree, and wrong for a parse).
+   *   Without the force, ` ![a](p.png)` over ` ^ cap` renders a `figure` where
+   *   the default path renders a paragraph.
+   * - `lintCarve` - every warning it emits is an offset into the source.
+   *
+   * The same caveat reaches a hand-composed `parse` + `resolve` + `renderHtml`:
+   * positions are an INPUT to that pipeline, so suppressing them changes what
+   * it renders. Use the convenience entry points, or leave the option alone.
+   *
+   * No parse DECISION depends on it. The tree is the same shape either way -
+   * the spans are attached to it, never consulted while building it.
+   */
   positions?: boolean
   /** Format label applied to a bare `---` frontmatter fence. Default 'yaml'. */
   defaultFrontmatterFormat?: string
@@ -1792,6 +1828,57 @@ function declinePositions(sub: Lexer): void {
   sub.suppressPositions = true
 }
 
+/**
+ * Every field on the tree that holds a source position.
+ *
+ * `pos` is the one PART 12 section 4 names, and the other four are the same
+ * information under other names: the root map from a footnote label to where
+ * its definition was written, and a definition item's per-term spans, per-body
+ * spans and per-marker lines. A caller who asked for no positions and got a
+ * document still carrying four of these has the defect the option is meant to
+ * end, one field further along.
+ */
+const POSITION_FIELDS = [
+  'pos',
+  'footnoteDefPos',
+  'termSpans',
+  'definitionSpans',
+  'definitionLines',
+] as const
+
+/**
+ * Drop every source position from a finished document.
+ *
+ * ONE gate at the boundary, not a flag threaded through the parse. The two
+ * existing gates cannot carry this: `suppressPositions` reaches only the block
+ * layer, and the inline layer's is a field on an `InlineSource`, which is built
+ * in seven places from text that has no lexer in scope. Setting the block one
+ * from the option as well was tried and reverted - the walk covers those nodes
+ * anyway, so the line changed nothing any test could see, which is the shape of
+ * defect this ticket is about.
+ *
+ * The consequence is stated rather than smoothed over: the positions are still
+ * TRACKED, and `positions: false` buys a smaller tree rather than a faster
+ * parse. It is not free either - it replaces `toCodepointPositions`, which
+ * walks the same fields, so the cost is one boundary walk in both directions.
+ */
+function dropPositions(doc: Document): void {
+  const seen = new Set<object>()
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (seen.has(value)) return
+    seen.add(value)
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item)
+      return
+    }
+    const record = value as Record<string, unknown>
+    for (const field of POSITION_FIELDS) delete record[field]
+    for (const key of Object.keys(record)) walk(record[key])
+  }
+  walk(doc)
+}
+
 
 /**
  * Rewrite every `pos` from UTF-16 code units to CODEPOINT positions.
@@ -1997,7 +2084,8 @@ export function parse(source: string, opts: ParseOptions = {}): Document {
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
-    toCodepointPositions(doc, source)
+    if (opts.positions === false) dropPositions(doc)
+    else toCodepointPositions(doc, source)
     return doc
   } finally {
     activeMatchers = prevMatchers
