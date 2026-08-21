@@ -972,25 +972,32 @@ describe('markdownToCarve — Carve-only inline syntax is literal in Markdown', 
 })
 
 describe('markdownToCarve — sentinel placeholder robustness', () => {
-  // Placeholders are NUL-wrapped (`\x00S<n>\x00` / `\x00P<n>\x00`). If such a
-  // shape appears in the INPUT with an out-of-range index, the restore must not
-  // splice the literal string "undefined" into the output - it keeps the
-  // matched text verbatim instead.
+  // Placeholders are NUL-wrapped (`\x00S<n>\x00` / `\x00P<n>\x00`), and an
+  // authored NUL is replaced by U+FFFD on the way in (CommonMark 2.3, and what
+  // `parse` does to Carve source), so an injected shape reaches the restore as
+  // `\ufffdS5\ufffd` and matches nothing. These rows used to assert the NUL form
+  // came back byte for byte, which was the behaviour BEFORE carve-js#1291 - the
+  // guarantee they exist for is the other assertion: an index nobody stored must
+  // never splice the literal string "undefined" into the output, and the run
+  // must not be lost or replaced by a span from elsewhere in the document.
   it('does not emit the literal string "undefined" for an injected stash sentinel', () => {
     const out = markdownToCarve('a \x00S5\x00 b')
     expect(out).not.toContain('undefined')
-    expect(out).toContain('\x00S5\x00')
+    expect(out).toContain('\ufffdS5\ufffd')
+    expect(out).not.toContain('\x00')
   })
 
   it('does not emit "undefined" for an injected protect sentinel', () => {
     const out = markdownToCarve('a \x00P9\x00 b')
     expect(out).not.toContain('undefined')
-    expect(out).toContain('\x00P9\x00')
+    expect(out).toContain('\ufffdP9\ufffd')
+    expect(out).not.toContain('\x00')
   })
 
   it('does not emit "undefined" when both sentinel shapes are injected', () => {
     const out = markdownToCarve('x \x00S5\x00 y \x00P9\x00 z')
     expect(out).not.toContain('undefined')
+    expect(out).toBe('x \ufffdS5\ufffd y \ufffdP9\ufffd z')
   })
 })
 
