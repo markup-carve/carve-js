@@ -190,6 +190,12 @@ describe('semantic elements on import', () => {
     expect(carve('<pre><code class="language-js">x()</code></pre>')).toBe('```js\nx()\n```')
   })
 
+  it('does not turn the renderer delimiter newline into a blank code line', () => {
+    const source = '```js\nx()\n```\n'
+    expect(htmlToCarve(carveToHtml(source)).value).toBe(source)
+    expect(carve('<pre><code>x\n\n</code></pre>')).toBe('```\nx\n\n```')
+  })
+
   /*
    * The tier consequence, shown rather than implied. `kbd` is core, so it
    * round-trips through a core render byte for byte. `samp` is the extension's,

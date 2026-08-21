@@ -533,7 +533,12 @@ class Importer {
       const source = code ?? node
       const className = this.attr(source, 'class') ?? ''
       const lang = className.split(/\s+/).find((c) => c.startsWith('language-'))?.slice(9)
-      return [{ type: 'code_block', content: this.text(source), ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
+      // Rendered code blocks conventionally carry one newline before </code>.
+      // It separates payload from markup; it is not an additional blank source
+      // line. Remove exactly one so a real trailing blank line (two newlines)
+      // remains data and Carve's own HTML round-trips semantically.
+      const content = this.text(source).replace(/\n$/, '')
+      return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
