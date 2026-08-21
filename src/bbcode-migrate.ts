@@ -24,6 +24,7 @@ import {
   escapeVerbatimDelimiter,
   HANDLED_PLAIN,
 } from './carve-escape.js'
+import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 /**
  * Maximum input length. The pipeline runs many full-string passes, so cost is
@@ -43,16 +44,72 @@ export class BbcodeInputTooLargeError extends Error {
 }
 
 /**
+ * The stash key's preferred first code point, and how many it needs.
+ *
+ * Two: one to open the key and one to close it, the same pair carve-php's
+ * `BbcodeToCarve::STASH_KEY_FIRST` prefers, so a post that occupies neither
+ * converts to the same bytes in both engines.
+ */
+const STASH_KEY_BASE = 0xe001
+const STASH_KEY_LENGTH = 2
+
+/**
+ * Thrown when the post leaves no private-use run for the stash key.
+ *
+ * REFUSING, NOT CONVERTING ANYWAY. The importer stashes spans behind a key and
+ * splices them back by index, so a key the post also carries does not lose a
+ * character - it puts a span from ELSEWHERE in the post where the author's own
+ * text was, and nothing about the result looks wrong. A post that occupies the
+ * whole private-use area is not a post anyone wrote, and the honest failure is
+ * the same answer {@link BbcodeInputTooLargeError} already gives for input this
+ * converter will not touch. carve-php refuses here too, from the allocator
+ * itself (`SentinelSpaceExhaustedException`, carve-php#1398).
+ */
+export class BbcodeSentinelSpaceExhaustedError extends Error {
+  constructor() {
+    super(
+      `BBCode input occupies every private-use run of ${STASH_KEY_LENGTH} code points, so no stash key can be picked`,
+    )
+    this.name = 'BbcodeSentinelSpaceExhaustedError'
+  }
+}
+
+/**
  * Protect the spans that must survive Carve escaping, then restore them.
  *
- * The stash key is private-use code points the input cannot carry, rather than
- * a fixed sentinel: carve-php#1087 found that a post containing the sentinel
- * had that text replaced by an unrelated span of the same post.
+ * THE STASH KEY IS PICKED FROM WHAT THE POST DOES NOT CONTAIN. It used to be a
+ * fixed U+E001/U+E002 pair under a docblock claiming the opposite, and the
+ * restore is a regex over `open (\d+) close`: a post carrying those two
+ * characters around a number was read as a stash slot and replaced by whatever
+ * that slot held, while the tag that really owned the slot lost its own restore
+ * (carve-js#1290, carve-php#1087). One span of a post rewrote a different part
+ * of it, silently in both directions.
+ *
+ * THE OCCUPANCY SOURCE IS THE INPUT STRING, not a tree. This converter never
+ * parses - it is ordered rewrites over one string - so there are no node values
+ * to walk, and the string it is handed is the whole post. `occupiedPrivateUse`
+ * takes `unknown` and already treats a bare string as one of the shapes it
+ * walks, so it needed no second entry point: the set it returns is the same
+ * bounded set of code points, read in one pass rather than by joining a copy of
+ * the post.
  */
 function escapePlainBbcodeText(bbcode: string): string {
+  const occupied = occupiedPrivateUse(bbcode)
+  const [open, close] = pickSentinelRun(occupied, STASH_KEY_BASE, STASH_KEY_LENGTH) as [
+    string,
+    string,
+  ]
+  // The allocator's documented last resort is the preferred run rather than a
+  // throw - right for a writer, which would otherwise refuse to render a
+  // document it can still write. An importer has the opposite trade: the run it
+  // falls back to is one the post contains, which is the substitution above. So
+  // the post-condition is checked here rather than in the shared allocator,
+  // whose contract the two writers depend on and this does not change.
+  if (occupied.has(open.charCodeAt(0)) || occupied.has(close.charCodeAt(0))) {
+    throw new BbcodeSentinelSpaceExhaustedError()
+  }
+
   const spans: string[] = []
-  const open = '\u{E001}'
-  const close = '\u{E002}'
   const protect = (match: string): string => {
     spans.push(match)
     return `${open}${spans.length - 1}${close}`
@@ -346,6 +403,8 @@ function cleanup(text: string): string {
  * Convert BBCode markup to Carve markup.
  *
  * @throws {BbcodeInputTooLargeError} when the input exceeds the length cap.
+ * @throws {BbcodeSentinelSpaceExhaustedError} when the input leaves no
+ *   private-use run free for the stash key.
  */
 export function bbcodeToCarve(bbcode: string): string {
   if (bbcode.length > BBCODE_MAX_INPUT_LENGTH) {

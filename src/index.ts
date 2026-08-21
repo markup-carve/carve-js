@@ -142,6 +142,7 @@ export {
 export {
   bbcodeToCarve,
   BbcodeInputTooLargeError,
+  BbcodeSentinelSpaceExhaustedError,
   BBCODE_MAX_INPUT_LENGTH,
 } from './bbcode-migrate.js'
 export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
