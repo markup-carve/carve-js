@@ -77,9 +77,17 @@ describe('a tab continues a list item just as two spaces do', () => {
     // the newline AND the tab, which is what makes the following text start at
     // the tab's single source character rather than at the two columns it
     // reaches.
+    //
+    // THE LIST NO LONGER CARRIES THE TRAILING NEWLINE. It read
+    // `'- item\n\tmore\n'` while its only item read `'- item\n\tmore'`, and the
+    // difference was the line terminator that ended the item - source no child
+    // of the list owns, which PART 12 §4 excludes and markup-carve/carve#1522
+    // ruled the list must stop before. Everything the test was written for is
+    // unchanged: the tab arithmetic, the soft break's two characters, and the
+    // item's own extent.
     expect(slices('- item\n\tmore\n\nx\n')).toEqual([
       ['document', null],
-      ['list', '- item\n\tmore\n'],
+      ['list', '- item\n\tmore'],
       ['list_item', '- item\n\tmore'],
       ['paragraph', 'item\n\tmore'],
       ['text', 'item'],
@@ -137,9 +145,13 @@ describe('a tab continues a list item just as two spaces do', () => {
   })
 
   it('CONTROL: two spaces instead of the tab, unchanged', () => {
+    // The list's trailing newline went here for the reason it went above: it is
+    // the item's line terminator and belongs to no child (carve#1522). The
+    // control's own point - that spaces and a tab produce the same spans - is
+    // what it was.
     expect(slices('- item\n  more\n\nx\n')).toEqual([
       ['document', null],
-      ['list', '- item\n  more\n'],
+      ['list', '- item\n  more'],
       ['list_item', '- item\n  more'],
       ['paragraph', 'item\n  more'],
       ['text', 'item'],
