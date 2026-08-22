@@ -224,8 +224,26 @@ function narrowEscalation(ast: Document, conservative: string): string {
   let best = renderSelectively()
   if (best !== conservative) return conservative
 
+  // THE SEARCH IS BOUNDED, because its cost is proportional to how many units
+  // FAIL. A group holding no failing unit is relaxed in one render, so a
+  // document with a handful of them costs about log(n) renders - but one where
+  // nearly every unit fails drives the halving to its leaves and pays a render
+  // and a parse per unit, which is quadratic in the document.
+  //
+  // Such a document gains almost nothing from narrowing: it IS the conservative
+  // form, arrived at because every block needed it. So the search stops when the
+  // budget runs out and returns the state it has reached, which is verified like
+  // every other - the escalation is wider than §2b's minimum there, never
+  // narrower, and no document's output can be wrong for it.
+  //
+  // MEASURED before it was chosen: over the 1341 pinned corpus documents 50
+  // reach the search at all, the most expensive spends 22 renders on 209 units,
+  // and eight times the depth of the halving gives that document 72.
+  let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
+
   /** Hand `group` its minimal form, keeping it only if the document still holds. */
   const relaxAll = (group: object[]): boolean => {
+    budget -= 1
     for (const unit of group) escalated.delete(unit)
     const candidate = renderSelectively()
     if (treeOf(candidate) === conservativeTree) {
@@ -237,7 +255,7 @@ function narrowEscalation(ast: Document, conservative: string): string {
   }
 
   const relax = (group: object[]): void => {
-    if (group.length === 0 || relaxAll(group) || group.length === 1) return
+    if (group.length === 0 || budget <= 0 || relaxAll(group) || group.length === 1) return
     const half = group.length >> 1
     relax(group.slice(0, half))
     relax(group.slice(half))
