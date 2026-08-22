@@ -134,6 +134,56 @@ describe('an inline math span survives HTML import', () => {
       .toThrow(HtmlImportLimitError)
   })
 
+  it('costs the block form the same budget as the div it replaces, on BOTH limits', () => {
+    /*
+     * WHICH ARM A DIV TAKES MUST NOT CHANGE WHAT THE LIMITS SEE. The block arm
+     * returns without walking its children, so it charges the subtree by hand -
+     * and it has to charge from the depth the skipped traversal would have
+     * started at, `depth + 1`, because the ordinary arm hands its children to
+     * `blocks()` there. Charged from `depth` the subtree was one level short:
+     * `maxNodes` agreed, and `maxDepth` admitted a math div at a ceiling that
+     * rejected its own non-math twin.
+     *
+     * Asserted as an EQUALITY against a structurally identical twin rather than
+     * against a number, so it stays true whatever the numbers become - and on
+     * nested rows, because at the top level the two can agree by accident.
+     */
+    const ceiling = (html: string, key: 'maxNodes' | 'maxDepth'): number => {
+      for (let n = 1; n < 64; n++) {
+        try {
+          htmlToAst(html, { [key]: n })
+
+          return n
+        } catch {
+          continue
+        }
+      }
+      throw new Error('no limit admits it')
+    }
+    const rows: Array<[string, string]> = [
+      ['<div class="math display">\\[x\\]</div>', '<div class="mass display">\\[x\\]</div>'],
+      [
+        '<blockquote><div class="math display">\\[x\\]</div></blockquote>',
+        '<blockquote><div class="mass display">\\[x\\]</div></blockquote>',
+      ],
+      ['<div><div class="math display">\\[x\\]</div></div>', '<div><div class="mass display">\\[x\\]</div></div>'],
+    ]
+    for (const [math, twin] of rows) {
+      expect(ceiling(math, 'maxNodes')).toBe(ceiling(twin, 'maxNodes'))
+      expect(ceiling(math, 'maxDepth')).toBe(ceiling(twin, 'maxDepth'))
+    }
+  })
+
+  it('writes the shared import contract\'s math document, byte for byte', () => {
+    // `tests/html-import/math-block-and-mathml` in the spec repo: the div, a
+    // block `<math>` and an inline `<math>` in one input. The MathML half is
+    // pinned on the BYTES because a stray `$` has no render difference to find.
+    const html = '<div class="math display">\\[E = mc^2\\]</div>'
+      + '<math display="block" alttext="a - b"></math>'
+      + '<p>x <math alttext="c + d"></math> y</p>'
+    expect(htmlToCarve(html).value).toBe('$$`E = mc^2`\n\n$$`a - b`\n\nx $`c + d` y\n')
+  })
+
   it('is not fooled by delimiters with nothing between them', () => {
     expect(kinds(htmlToAst('<p><span class="math inline">\\(\\)</span></p>').value))
       .not.toContain('math')

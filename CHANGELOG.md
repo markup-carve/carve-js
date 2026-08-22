@@ -112,6 +112,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fallback now reaches the smallest unit that fails - the inline run, or the
   block containing it - and every other candidate is written bare.
 
+- **A recognized block-math div costs the same import depth as an ordinary div**
+  (markup-carve/carve-js#1300, PART 9 §18). The arm charges the subtree it
+  skips, but charged it one level short, so `<div class="math display">`
+  imported at a `maxDepth` that rejected a structurally identical non-math div.
+  `maxNodes` was unaffected. The block form's core `$$` spelling
+  (markup-carve/carve#1518, markup-carve/carve#1514) is unchanged - this engine
+  already wrote it.
+
 - **The canonical writer spells two sibling sub-lists inside a list item**
   (markup-carve/carve#1501, §11 N1a and §10i). A tight item wrote its sub-lists
   behind the `+` marker at column 0, where a compatible marker dissolves them
