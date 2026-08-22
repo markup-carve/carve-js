@@ -551,7 +551,7 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
           // to normalize away, and fatal for this one, which the rule says to
           // keep. The squeeze cannot tell them apart from the text; only the
           // writer knows, so the writer says so and `normalize` restores it.
-          parts[parts.length - 1] += `${sentinels[4]}${text}`
+          parts[parts.length - 1] += `\n${boundaryTag()}${text}`
         } else {
           parts.push(text)
         }
@@ -1056,6 +1056,88 @@ function markerColumnTag(): string {
   return sentinels[SENTINEL_COUNT - 1]!
 }
 
+/**
+ * The tag that says §11 N1a's boundary - three blank lines - goes ABOVE the
+ * line it opens.
+ *
+ * IT MARKS A LINE, NOT A JOIN. It used to be spliced BETWEEN two rendered
+ * blocks (`a` + tag + `b`), which reads the same at the document level and is
+ * wrong everywhere else: splicing hides a line break from every host that
+ * indents its body line by line. A list item prefixes each line with its content
+ * column and a blockquote prefixes each line with `> `, and neither could see a
+ * second line inside `- a<tag>- b` - so the boundary came out at column 0, taking
+ * the list it opened out of the item with it (markup-carve/carve#1501).
+ *
+ * Written at the START of the following block's first line instead, the tag
+ * rides through every host's prefix pass as ordinary text, and `normalize`
+ * expands it once the prefix it has to repeat is finally visible: whatever
+ * columns sit to its left ARE the host's, so the three blank lines are spelled
+ * with them - nothing at all inside a list item, `>` inside a blockquote, which
+ * is exactly how each host spells a blank line of its own.
+ */
+function boundaryTag(): string {
+  return sentinels[4]!
+}
+
+/**
+ * Block kinds that leave a PARAGRAPH OPEN on their last line, so a line written
+ * below them at the same column is read as its continuation rather than as a
+ * block of its own.
+ *
+ * The other half of `FOLDS_INTO_AN_OPEN_PARAGRAPH`'s question: not "does this
+ * block fold INTO an open paragraph" but "does this block leave one open BELOW
+ * it". The first three members are the same three, for the same reason - their
+ * canonical source IS a bare inline run on its own line. A definition list joins
+ * them because its last description ends in one too.
+ *
+ * EACH MEMBER IS LOAD-BEARING, not carried along for symmetry: with a sub-list
+ * already open at the item's content column, all four of `- o` / `  - z` /
+ * `  | t |` / the block / `  - s1` lose the second sub-list on `main` and keep it
+ * here. A heading, fence, table, break, div, admonition and a sub-list with a
+ * different marker close at their last line and owe the block under them
+ * nothing.
+ */
+const LEAVES_A_PARAGRAPH_OPEN = new Set(['paragraph', 'image', 'figure', 'definition_list'])
+
+/**
+ * Whether a sub-list written at the item's content column needs a blank line
+ * above it to open at all.
+ *
+ * THE MARKER COLUMN. A block attached by §17 L3's marker sits at column 0, and
+ * a sub-list at the item's content column below it is INDENTED under an open
+ * paragraph - lazy continuation, so the list never opens and its markers come
+ * back as text.
+ *
+ * A BLOCKQUOTE. It takes any non-blank line below it as lazy continuation,
+ * bullet line included, so `- x` / `  > q` / `  - b` came back as a quote whose
+ * paragraph carries `- b` as text. That shape holds no §11 N1a boundary at all:
+ * it failed on its own account before markup-carve/carve#1501, and the same rule
+ * settles it.
+ *
+ * A PARAGRAPH BELOW A SUB-LIST THAT ALREADY OPENED. Once a sub-list has opened
+ * at the item's content column, a bullet written at that column below a
+ * paragraph joins THAT list instead of opening under the paragraph - so the
+ * paragraph keeps the line and the list keeps the marker. Without an earlier
+ * sub-list the same two lines open a list, which is why this is conditional
+ * rather than a blanket blank line after every paragraph: writing one there
+ * would re-spell every nested list in the corpus.
+ *
+ * A BLANK LINE IS SAFE HERE. It loosens an item only before a PARAGRAPH; before
+ * a sub-list the item stays tight, which is why `- outer` / blank / `  - a` and
+ * `- outer` / `  - a` are the same document.
+ */
+function needsABlankLineAbove(
+  previousEmitted: BlockNode | null,
+  previousAtMarkerColumn: boolean,
+  aSubListAlreadyOpened: boolean,
+): boolean {
+  if (previousAtMarkerColumn) return true
+  if (previousEmitted === null) return false
+  if (previousEmitted.type === 'block_quote') return true
+
+  return aSubListAlreadyOpened && LEAVES_A_PARAGRAPH_OPEN.has(previousEmitted.type)
+}
+
 function atMarkerColumn(text: string): string {
   const tag = markerColumnTag()
 
@@ -1123,6 +1205,14 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
     // change an outcome: no mutation of it failed a test, which is the shape
     // this repository keeps finding under a check that cannot fail.
     let previousAtMarkerColumn = false
+    // The last child that actually WROTE something, which is what the block
+    // below it is read against. `item.children[i - 1]` is not that: a definition
+    // hoisted out of the item renders nothing and still sits in `children`.
+    let previousEmitted: BlockNode | null = null
+    // Whether a sub-list has already opened at this item's content column - the
+    // condition under which a later bullet written there joins it instead of
+    // opening below the paragraph above it. See `needsABlankLineAbove`.
+    let aSubListAlreadyOpened = false
     item.children.forEach((b, i) => {
       const previous = item.children[i - 1]
       const next = item.children[i + 1]
@@ -1172,6 +1262,52 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       // columns, and the break was absorbed into the paragraph and folded to an
       // em dash. Mixed indentation inside one attached run is not a form any
       // reader can round-trip, so it is not written.
+      // A LIST CHILD NEVER GOES TO THE MARKER COLUMN. The marker column is
+      // column 0, which is where the list this item belongs to writes ITS
+      // markers - so a sub-list put there is not attached to the item, it is
+      // dissolved into the list around it, and the `+` above it is read as the
+      // sibling item's own text. `- outer` / `+` / `- a` / `+` / `- b` came back
+      // as one flat list of three items with both sub-lists and the boundary
+      // between them gone (markup-carve/carve#1501). §17 L3's marker cannot help
+      // here: it attaches a block that could not open at column 0 on its own,
+      // and a list opens there in preference to being attached.
+      //
+      // So a sub-list is written at the item's CONTENT column, and what it needs
+      // there is the right separator above it. Three shapes, one question each -
+      // what would eat this list if nothing separated it:
+      //
+      //   - THE LIST ABOVE IT WOULD SWALLOW IT. Two sibling sub-lists whose
+      //     markers match are one list when written adjacent, which is the whole
+      //     of §11 N1's merge rule; §11 N1a's boundary is the language's way of
+      //     saying they are two, and §10i fixes its length at three blank lines.
+      //   - THE BLOCK ABOVE IT SITS AT COLUMN 0, or is a BLOCKQUOTE. Either way
+      //     a line at the item's content column is INDENTED under it and reads
+      //     as its lazy continuation, so the list never opens. One blank line
+      //     closes the block above without loosening the item - a blank line
+      //     before a sub-list does not make a list loose, only a blank line
+      //     before a paragraph does.
+      //   - NOTHING ABOVE IT REACHES DOWN. Every other block kind was swept:
+      //     heading, fence, table, break, div, definition list, admonition, and
+      //     a sub-list with a different marker all close at their last line, and
+      //     the list opens on the next one with no separator at all.
+      if (b.type === 'list') {
+        if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
+          parts.push(`${boundaryTag()}${rendered}`)
+        } else if (
+          !separated &&
+          needsABlankLineAbove(previousEmitted, previousAtMarkerColumn, aSubListAlreadyOpened)
+        ) {
+          parts.push('', rendered)
+        } else {
+          parts.push(rendered)
+        }
+        // Back at the content column, so a child below this one is read against
+        // the list rather than against whatever stood at column 0 above it.
+        previousAtMarkerColumn = false
+        aSubListAlreadyOpened = true
+        previousEmitted = b
+        return
+      }
       if (
         previousAtMarkerColumn ||
         (next !== undefined && adjacentBlocksMerge(b, next)) ||
@@ -1182,9 +1318,11 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       ) {
         parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
         previousAtMarkerColumn = true
+        previousEmitted = b
         return
       }
       parts.push(rendered)
+      previousEmitted = b
     })
     return parts.join('\n')
   } finally {
@@ -2284,7 +2422,22 @@ function normalize(text: string): string {
   // The squeeze runs FIRST, so a decorative run still normalizes; the boundary
   // sentinel is not a newline yet and passes through it untouched.
   const squeezed = swept.join('\n').replace(/\n{3,}/g, '\n\n')
-  const cleaned = trimNonNbspKeepingGuard(squeezed.replace(new RegExp(`\\n*${sentinels[4]}\\n*`, 'g'), '\n\n\n\n'))
+  // The boundary tag opens the line it sits on, and everything to its LEFT is
+  // the prefix its host had already put there - two columns of a list item's
+  // content, `> ` from a blockquote, both together when a list sits in a quote.
+  // The three blank lines have to carry that same prefix, minus its trailing
+  // whitespace, because that is how each host spells a blank line: a list item
+  // writes nothing, a blockquote writes `>`. Taking the prefix from the line
+  // rather than passing it down means no host has to know about the boundary.
+  //
+  // ONE TAG PER LINE, always: every site that writes one puts it directly after
+  // a newline, so the lazy prefix cannot run past a line it does not own.
+  const cleaned = trimNonNbspKeepingGuard(
+    squeezed.replace(new RegExp(`^(.*?)${sentinels[4]}`, 'gm'), (_match, prefix: string) => {
+      const blank = dropTrailingWs(prefix)
+      return `${blank}\n${blank}\n${blank}\n${prefix}`
+    }),
+  )
 
   return `${guardLeadingBom(restoreVerbatim(cleaned))}\n`
 }
