@@ -210,6 +210,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   text** (#1208, markup-carve/carve#1400). A column never reaches into a block
   quote, so the line continues the quote's paragraph instead of vanishing from
   it and registering a link-reference definition document-wide.
+- **An escape escalation reaches the block that failed, not the document**
+  (#1307, PART 11 §2b). One character that genuinely needed its escape put every
+  other candidate in the document into the conservative class with it, so a
+  paragraph came back with its parentheses escaped because a different block had
+  failed. `renderCarve` output only; both spellings always rendered the same HTML.
 - **A code block's trailing blank lines survive an HTML import** (#1282). The
   structural newline that rendered HTML places before `</code>` was read as
   payload, so importing this engine's own rendered code block grew a blank line
