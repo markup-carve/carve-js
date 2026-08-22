@@ -145,6 +145,237 @@ a row with no cell list, or stray siblings around the list) it degrades to the
 default `<div class="list-table">` holding the literal nested list, so content
 is never silently dropped.
 
+## tabs
+
+`tabs()` renders a `tabs` container holding `tab` children as a tabbed
+interface. Both spellings of a typed div are claimed: the `:::: tabs` /
+`::: tab` admonition form, and a bare `{.tabs}` / `{.tab}` div carrying the
+class. The outer fence needs to be longer than the inner ones so it can hold
+them. HTML output only.
+
+```ts
+import { carveToHtml, tabs } from '@markup-carve/carve'
+
+const src = [
+  ':::: tabs',
+  '',
+  '::: tab [First]',
+  'Content for the first tab.',
+  ':::',
+  '',
+  '::: tab [Second]',
+  'Content for the second tab.',
+  ':::',
+  '',
+  '::::',
+].join('\n')
+
+carveToHtml(src, { extensions: [tabs()] })
+```
+
+```html
+<div class="tabs" role="group" aria-label="Tabs">
+<input type="radio" name="tabset-1" id="tabset-1-tab-1" class="tabs-radio" checked>
+<label for="tabset-1-tab-1" class="tabs-label">First</label>
+<input type="radio" name="tabset-1" id="tabset-1-tab-2" class="tabs-radio">
+<label for="tabset-1-tab-2" class="tabs-label">Second</label>
+<div class="tabs-panel" role="group" aria-label="First">
+<p>Content for the first tab.</p>
+</div>
+<div class="tabs-panel" role="group" aria-label="Second">
+<p>Content for the second tab.</p>
+</div>
+</div>
+```
+
+Options, with their defaults:
+
+- `mode` (`'css'`) - `'css'` or `'aria'`; see below.
+- `wrapperClass` (`'tabs'`) - class on the container.
+- `tabClass` (`'tabs-panel'`) - class on each panel.
+- `labelClass` (`'tabs-label'`) - class on each label or button.
+- `radioClass` (`'tabs-radio'`) - class on each radio input (`css` mode only).
+- `idPrefix` (`'tabset'`) - prefix for generated ids.
+- `groupLabel` (unset) - accessible name for the set as a whole. Left unset the
+  string comes from the render's `labels` map under `tabsGroup` (default
+  `Tabs`), so one map localizes the whole document; set here to override the map
+  for this instance, or set the map entry to `''` to emit no name at all.
+
+### Where a tab's name comes from
+
+In order: the opener's `[label]`, then a `{label="..."}` attribute (deprecated),
+then the text of the panel's first heading - which is then dropped from the
+panel, since it has become the tab's name - and finally `Tab N`. A quoted opener
+title is content, not a name: it stays inside the panel as the
+`<p class="admonition-title">` line core would emit.
+
+### Which tab opens
+
+Exactly one, and the two branches are one statement rather than two rules
+(Extensions §13.5): the first tab the document marks `{selected}` wins, and a set
+that marks none opens its first tab. **First wins, not last** - later marks are
+ignored. Over-specifying is not an error and gets no diagnostic; §13 has no
+diagnostic channel, and the document is not wrong, only redundant.
+
+`{selected}` goes on a block-attribute line above the opener, not on the opener
+line itself:
+
+```
+{selected}
+::: tab [Second]
+Content for the second tab.
+:::
+```
+
+### `css` and `aria`
+
+`css` is the default and emits **no `<button>` at all**: the control is an
+`<input type="radio">` plus its `<label>`, so the set works with no JavaScript.
+`aria` emits semantic roles and needs a script to drive them; registering it and
+shipping no script leaves every panel but the selected one `hidden`. An unknown
+value throws rather than falling back, so `tabs({ mode: 'aira' })` cannot become
+silently different output.
+
+Under `aria` the control is a `<button type="button">` (Extensions §13.3).
+Without the `type` a `<button>` is a submit button, so a tab set inside a
+`<form>` submitted the form instead of switching panels:
+
+```html
+<div class="tabs" role="tablist" aria-label="Tabs">
+<button type="button" role="tab" id="tabset-1-tab-1" aria-selected="true" aria-controls="tabset-1-panel-1" class="tabs-label">First</button>
+<button type="button" role="tab" id="tabset-1-tab-2" aria-selected="false" aria-controls="tabset-1-panel-2" class="tabs-label" tabindex="-1">Second</button>
+<div role="tabpanel" id="tabset-1-panel-1" aria-labelledby="tabset-1-tab-1" class="tabs-panel">
+<p>Content for the first tab.</p>
+</div>
+<div role="tabpanel" id="tabset-1-panel-2" aria-labelledby="tabset-1-tab-2" class="tabs-panel" hidden>
+<p>Content for the second tab.</p>
+</div>
+</div>
+```
+
+The two modes also name things differently, and that is Extensions §13.2 rather
+than an inconsistency. Under `css` every radio and label is emitted before every
+panel, so nothing binds a panel to the control that reveals it - each panel
+therefore takes `role="group"` and an `aria-label` of its own tab's label. Under
+`aria` the panel is **bound instead of named**: `role="tabpanel"` plus
+`aria-labelledby`, and neither `role="group"` nor an `aria-label`, because a
+second name would give one element two.
+
+The wrapper takes a role and a name in both modes - `group` under `css`, which
+has no tab/panel roles to associate and so claims only a plain grouping, and
+`tablist` under `aria`. A `role`, `aria-label` or `aria-labelledby` the author
+wrote on the block wins, and the engine's attributes are appended, so naming the
+set never moves an attribute the author placed.
+
+### Generated ids
+
+`tabset-1`, `tabset-1-tab-1`, ... are deduplicated against the document id
+namespace: when an explicit `{#id}` or a generated heading id already uses a
+name, the set takes the next free suffix (`tabset-1-2`) instead of emitting a
+duplicate DOM id. An explicit `{#id}` on a *tab* is used as-is - directly as the
+radio's id under `css`, and as `<id>-tab` / `<id>-panel` under `aria`.
+
+### Degradation
+
+A `tabs` block with no `tab` children is not claimed and falls through to the
+core `<div class="tabs">`, so content is never dropped. Under
+`carveToHtml(src, { mode: 'static' })` the set flattens to one
+`<section class="tabs-panel">` per panel headed by an `<h3 class="tabs-label">`,
+with no radios and no buttons - the labels survive as visible headings, so a
+reader of a PDF or an archival page can still tell the panels apart. A static
+render takes neither `mode`.
+
+## codeGroup
+
+`codeGroup()` renders a `code-group` container holding several code blocks as a
+tabbed code interface - the same step shown in several languages. Tab names come
+from the fence's `[Label]` suffix, falling back to the language word and then to
+`Code N`. HTML output only.
+
+```ts
+import { carveToHtml, codeGroup } from '@markup-carve/carve'
+
+const src = [
+  '::: code-group',
+  '``` php [Installation]',
+  'composer require markup-carve/carve',
+  '```',
+  '',
+  '``` bash [NPM]',
+  'npm install @markup-carve/carve',
+  '```',
+  ':::',
+].join('\n')
+
+carveToHtml(src, { extensions: [codeGroup()] })
+```
+
+```html
+<div class="code-group" role="group" aria-label="Code examples">
+<input type="radio" name="codegroup-1" id="codegroup-1-tab-1" class="code-group-radio" checked>
+<label for="codegroup-1-tab-1" class="code-group-label">Installation</label>
+<input type="radio" name="codegroup-1" id="codegroup-1-tab-2" class="code-group-radio">
+<label for="codegroup-1-tab-2" class="code-group-label">NPM</label>
+<div class="code-group-panel" role="group" aria-label="Installation"><pre><code class="language-php">composer require markup-carve/carve
+</code></pre>
+</div>
+<div class="code-group-panel" role="group" aria-label="NPM"><pre><code class="language-bash">npm install @markup-carve/carve
+</code></pre>
+</div>
+</div>
+```
+
+Options, with their defaults:
+
+- `mode` (`'css'`) - `'css'` or `'aria'`, the same two values `tabs` carries and
+  the same refusal of a third, because §13 binds both constructs.
+- `wrapperClass` (`'code-group'`), `panelClass` (`'code-group-panel'`),
+  `labelClass` (`'code-group-label'`), `radioClass` (`'code-group-radio'`).
+- `idPrefix` (`'codegroup'`) - prefix for generated ids and the radio group name.
+- `groupLabel` (unset) - accessible name for the group as a whole; left unset it
+  comes from the render's `labels` map under `codeGroup` (default
+  `Code examples`).
+- `highlighter` (unset) - `(code: string, lang: string | undefined) => string`.
+  Its return value replaces the whole default `<pre><code>` markup, so a
+  highlighter owns the escaping of what it emits.
+
+Everything §13 binds is the same as for `tabs`, deliberately and through the
+same code - the selection step is one shared helper rather than a rule copied
+into two renderers. The `aria`-mode control is a `<button type="button">` so a
+code group inside a `<form>` does not submit it (§13.3); exactly one panel is
+selected, first `{selected}` mark wins, later marks are ignored and undiagnosed,
+and a group that marks none opens its first panel (§13.5). The wrapper takes
+`role="group"` (or `tablist`) and a name, an authored `role` / `aria-label` /
+`aria-labelledby` wins, and a `css` panel is named by its own label while an
+`aria` panel is bound by `aria-labelledby` instead.
+
+As with `tabs`, `{selected}` goes on a block-attribute line above the fence. It
+is stripped before rendering, while every other authored attribute rides onto
+the `<pre>`:
+
+````
+::: code-group
+{#snip .wide selected}
+``` js [JS]
+const a = 1
+```
+:::
+````
+
+Generated ids (`codegroup-1`, `codegroup-1-tab-1`, ...) are deduplicated against
+the document id namespace the same way. Unlike `tabs`, an explicit `{#id}` on a
+panel is not reused as the control's id - it rides onto the `<pre>` and the
+control keeps its generated id.
+
+A `code-group` block with no code blocks falls through to the core
+`<div class="code-group">`. Under `mode: 'static'` each panel becomes a
+`<section class="code-group-panel">` headed by an `<h3 class="code-group-label">`
+holding its label.
+
+Choosing between the two: `codeGroup` for several code blocks whose names come
+from language hints, `tabs` for arbitrary block content whose names come from
+headings or `[label]` openers.
+
 ## mermaid
 
 `mermaid()` renders a fenced code block tagged `mermaid` (a ` ``` mermaid `
