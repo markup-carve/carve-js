@@ -99,6 +99,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An escape escalation reaches the block that failed, not the document**
+  (#1298, markup-carve/carve#1516, PART 11 §2b). The writer took the
+  conservative form for the whole document as soon as its minimal form did not
+  re-parse, so one needed escape dragged every other candidate along; the
+  fallback now reaches the smallest unit that fails - the inline run, or the
+  block containing it - and every other candidate is written bare.
+
 - **The canonical writer spells two sibling sub-lists inside a list item**
   (markup-carve/carve#1501, §11 N1a and §10i). A tight item wrote its sub-lists
   behind the `+` marker at column 0, where a compatible marker dissolves them

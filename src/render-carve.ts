@@ -169,7 +169,120 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // cannot help.
   const minimalTree = treeOf(minimal)
   if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
-  return escapingIsRedundant(minimalTree, conservative) ? minimal : conservative
+  if (escapingIsRedundant(minimalTree, conservative)) return minimal
+  // The minimal form of the WHOLE document does not hold, which used to end the
+  // decision here with the conservative form of the whole document. PART 11 §2b
+  // says how far that fallback actually reaches: the smallest unit whose minimal
+  // form fails, and §2's own test everywhere else.
+  return narrowEscalation(ast, conservative)
+}
+
+/**
+ * The conservative form of the units that need it, and the minimal form of
+ * every other unit (PART 11 §2b).
+ *
+ * WHY THIS IS A SEARCH AND NOT A LOOKUP. The comparison stays document-scoped -
+ * §4's argument holds, a unit re-parsed alone has lost the document's link
+ * reference and footnote definitions - so what a failure reports is THAT the
+ * document changed, never WHERE. The unit is found by trying: start from the
+ * conservative form, which is known to hold, and hand each unit back its
+ * minimal form only while the whole document still re-parses to the same tree.
+ * Every state this walks through is verified, and the one returned is the last
+ * that passed.
+ *
+ * HALVED RATHER THAN SWEPT, because a document is mostly units that need
+ * nothing. A group is offered its minimal form all at once and only split when
+ * that fails, so a document with one failing unit costs about log(n) renders
+ * instead of n, and the `- x` ladder the escaper's scaling guards watch does not
+ * become quadratic when one paragraph in it needs an escape.
+ *
+ * THE FIRST RENDER IS A CONTROL. With every unit escalated this must reproduce
+ * `conservative` byte for byte; if it does not, the selection is deciding
+ * something other than the escape mode - a unit the walk did not reach, for
+ * instance - and the document-scoped form is returned rather than a narrowing
+ * built on a state that is not what it claims.
+ */
+function narrowEscalation(ast: Document, conservative: string): string {
+  const conservativeTree = treeOf(conservative)
+  // Null answers "cannot tell", exactly as it does for the minimal form: with
+  // no tree to hold the narrowing against, there is nothing to narrow toward.
+  if (conservativeTree === null) return conservative
+
+  const units = collectEscapeUnits(ast)
+  if (units.length === 0) return conservative
+  const escalated = new Set<object>(units)
+
+  const renderSelectively = (): string => {
+    escalatedUnits = escalated
+    try {
+      return withFreshWriteBackState(() => renderWithEscapes(ast, 'conservative'))
+    } finally {
+      escalatedUnits = null
+    }
+  }
+
+  let best = renderSelectively()
+  if (best !== conservative) return conservative
+
+  /** Hand `group` its minimal form, keeping it only if the document still holds. */
+  const relaxAll = (group: object[]): boolean => {
+    for (const unit of group) escalated.delete(unit)
+    const candidate = renderSelectively()
+    if (treeOf(candidate) === conservativeTree) {
+      best = candidate
+      return true
+    }
+    for (const unit of group) escalated.add(unit)
+    return false
+  }
+
+  const relax = (group: object[]): void => {
+    if (group.length === 0 || relaxAll(group) || group.length === 1) return
+    const half = group.length >> 1
+    relax(group.slice(0, half))
+    relax(group.slice(half))
+  }
+
+  relax(units)
+  return best
+}
+
+/**
+ * Every node that can carry an escaped character, in document order.
+ *
+ * A GENERIC WALK rather than a list of types, because the unit is "the node
+ * whose render arm wrote this character" and every arm can grow one. A type
+ * this misses is not silently mis-escaped: it is charged to no unit, written
+ * minimally, and the control render in `narrowEscalation` sees the byte
+ * difference and declines to narrow.
+ *
+ * `attrs` is not descended: it holds named slots rather than nodes, and an
+ * author can spell an attribute `type`. `pos` holds offsets.
+ */
+function collectEscapeUnits(ast: Document): object[] {
+  const out: object[] = []
+  const seen = new Set<object>()
+  // ITERATIVE, like `findRedundantHeadingIds` above and for the same reason:
+  // this runs before the renderer's depth guard, and a deep hand-built tree
+  // must reach `RenderDepthError` rather than a stack overflow. Document order
+  // is preserved by pushing children in reverse.
+  const stack: unknown[] = [ast]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (Array.isArray(node)) {
+      for (let i = node.length - 1; i >= 0; i -= 1) stack.push(node[i])
+      continue
+    }
+    if (!node || typeof node !== 'object') continue
+    const record = node as Record<string, unknown>
+    if (typeof record['type'] === 'string' && !seen.has(record)) {
+      seen.add(record)
+      out.push(record)
+    }
+    const entries = Object.entries(record).filter(([key]) => key !== 'attrs' && key !== 'pos')
+    for (let i = entries.length - 1; i >= 0; i -= 1) stack.push(entries[i]![1])
+  }
+  return out
 }
 
 /**
@@ -621,7 +734,25 @@ function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
   return next
 }
 
+/**
+ * Render one block, recording it as the escape unit its own arm writes with.
+ *
+ * PART 11 §2b bounds an escalation to the smallest unit that fails, so the
+ * escape pass has to know which unit each escaped character belongs to. The
+ * unit is the node whose render arm is running: a text node for a run of
+ * prose, the block itself for the strings a block writes directly.
+ */
 function renderBlock(node: BlockNode, ctx: CarveContext): string {
+  const previous = escapeUnit
+  escapeUnit = node as unknown as object
+  try {
+    return renderBlockBody(node, ctx)
+  } finally {
+    escapeUnit = previous
+  }
+}
+
+function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
   const attrs = renderBlockAttrs(node.attrs)
   const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
   switch (node.type) {
@@ -1865,7 +1996,25 @@ function inlineHostsCaption(node: InlineNode): boolean {
   return (node.type === 'image' && node.src !== '') || (node.type === 'math' && node.display)
 }
 
+/** Render one inline node, recording it as its own escape unit (see `renderBlock`). */
 function renderInline(
+  node: InlineNode,
+  ctx: CarveContext,
+  prevChar = '',
+  nextChar = '',
+  captionCanOpen = false,
+  nextOpensBacktickRun = false,
+): string {
+  const previous = escapeUnit
+  escapeUnit = node as unknown as object
+  try {
+    return renderInlineBody(node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun)
+  } finally {
+    escapeUnit = previous
+  }
+}
+
+function renderInlineBody(
   node: InlineNode,
   ctx: CarveContext,
   prevChar = '',
@@ -2591,6 +2740,32 @@ const LINE_INITIAL_COLON = /(^|\\n)(:+)/g
 let escapeMode: 'minimal' | 'conservative' = 'conservative'
 
 /**
+ * The units written in the conservative form, when the writer is deciding unit
+ * by unit rather than document by document.
+ *
+ * Null means the whole pass follows `escapeMode`, which is what the two
+ * exploratory renders in `renderCarve` do. Non-null is PART 11 §2b's pass: a
+ * unit in the set is escaped in full, every other unit is emitted by §2's own
+ * test, and for a character nothing needs that means bare.
+ */
+let escalatedUnits: Set<object> | null = null
+
+/**
+ * The node whose render arm is currently writing, and therefore the unit the
+ * next escaped character belongs to.
+ *
+ * Set by `renderBlock` and `renderInline`, so a run of prose is charged to its
+ * text node and the strings a block writes itself are charged to the block.
+ */
+let escapeUnit: object | null = null
+
+/** Which form the character being written now takes (PART 11 §2b). */
+function escapeModeHere(): 'minimal' | 'conservative' {
+  if (escalatedUnits === null) return escapeMode
+  return escapeUnit !== null && escalatedUnits.has(escapeUnit) ? 'conservative' : 'minimal'
+}
+
+/**
  * Headings whose published id is the one a fresh parse would assign anyway.
  *
  * PART 12 §5 publishes a heading's slugged id, and PART 11 §1 writes the
@@ -2679,7 +2854,8 @@ function guardThematicBreakLines(body: string): string {
 const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 
 function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
-  const escapes = escapeMode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
+  const mode = escapeModeHere()
+  const escapes = mode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
   let out = text
     .replace(UNWRITABLE_CONTROLS, '')
     .replace(escapes, (char, offset: number) => {
@@ -2702,7 +2878,7 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   // carve-php and carve-rs write the characters bare. One structural escape
   // keeps the minimal pass winnable (cross-engine fmt parity, PART 11 §4).
   if (
-    escapeMode === 'minimal' &&
+    mode === 'minimal' &&
     captionCanOpen &&
     out.startsWith('^') &&
     out[1] === ' '
@@ -2719,10 +2895,10 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   // escaping. `foo (bar) 50% a-b` in a document that also holds a `!` before a
   // code span came out `foo \(bar\) 50\% a\-b`, which is the over-escaping PART
   // 11 §4 forbids, while carve-rs wrote the whole line bare (carve-js#1175).
-  if (escapeMode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
+  if (mode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
     out = out.slice(0, -1) + '\\!'
   }
-  if (escapeMode === 'minimal') return out
+  if (mode === 'minimal') return out
   // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
   // single character: `:::` needs only its first colon neutralized to stop
   // being a fence, and escaping each one would be the same over-escaping in a
