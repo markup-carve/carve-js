@@ -799,7 +799,13 @@ class Importer {
         // must not change what `maxNodes` / `maxDepth` see. Only a div whose
         // classes already carry the pair reaches here - `carveMath` tests them
         // before it reads any text - so a plain div pays for nothing.
-        this.budget(node, depth)
+        //
+        // At `depth + 1`, which is where the skipped traversal would have
+        // started: the ordinary div arm below hands its children to `blocks()`
+        // at `depth + 1`. Charged from `depth` the subtree was one level short,
+        // and `maxNodes` agreed while `maxDepth` did not - a math div imported
+        // at a ceiling its own non-math twin was rejected at.
+        this.budget(node, depth + 1)
         return [{ type: 'paragraph', children: [math] }]
       }
     }
