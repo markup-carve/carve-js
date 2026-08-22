@@ -297,13 +297,44 @@ describe('a derived accessible name does not come back from an HTML import', () 
    * baked into source, §12's author-wins rule makes the imported copy WIN and
    * the map stops reaching it - permanently, while every byte of today's
    * output at the default is unchanged.
+   *
+   * THE MAP HAS TO BE THE THING UNDER TEST, which means rendering the imported
+   * source somewhere the map is READ. A round trip of this engine's own render
+   * is not such a place: a rendered set imports as a `tabs` div holding a
+   * `tabs-panel` div, and the extension claims a `tabs` div holding `tab`
+   * children (markup-carve/carve-php#1543), so that re-render writes no
+   * accessible name at all and consults no `labels` map. So the CONTAINER is
+   * pinned to the one the renderer writes - name, role and all, since that is
+   * the pair the import has to drop - and its child is written in the shape
+   * that comes back claimable. Now one render reads both the map and the
+   * imported source, which is the only place the two can be told apart.
+   *
+   * THE FIRST CUT MEASURED NEITHER HALF (markup-carve/carve-js#1297, found by
+   * the port in markup-carve/carve-rs#1224). It re-rendered the bare divs, so
+   * the assertion held identically with the map set to German, set to the
+   * English default, and removed - the discriminator this whole file is built
+   * on was inert in the one test named for it.
    */
-  it('leaves the labels map reaching a document that has been through an import', () => {
-    const original = ':::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n'
-    const imported = htmlToCarve(carveToHtml(original, { extensions: [tabs()] })).value
+  it('leaves a non-default labels map reaching a tab set that came through an import', () => {
+    const container = `<div class="tabs" role="group" aria-label="${LABEL_DEFAULTS.tabsGroup}">`
+    // Pinned against a real render, so the HTML imported below cannot drift
+    // away from the pair this engine actually writes.
+    expect(
+      carveToHtml(':::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n', {
+        extensions: [tabs()],
+      }),
+    ).toContain(container)
 
-    const german = carveToHtml(imported, { labels: { tabsGroup: 'Registerkarten' } })
-    expect(german).not.toContain('aria-label="Tabs"')
+    const source = htmlToCarve(`${container}<div class="tab">Content one.</div></div>`).value
+
+    const german = carveToHtml(source, {
+      extensions: [tabs()],
+      labels: { tabsGroup: 'Registerkarten' },
+    })
+    expect(german).toContain('aria-label="Registerkarten"')
+    // Evidence rather than decoration: a name the import had baked into source
+    // is the one author-wins would pin this render to instead.
+    expect(german).not.toContain(`aria-label="${LABEL_DEFAULTS.tabsGroup}"`)
   })
 
   /*
