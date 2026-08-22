@@ -84,6 +84,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   typography, emphasis and every other inline recognizer byte by byte. The
   shared 49 KiB Tier-1 benchmark improves by about 25% locally.
 
+- **The Prettier plugin and the published pre-commit hooks claim `.crv` only**
+  (#1269). **BREAKING for a `.carve` file**: the spec names one Carve
+  extension and the rest of the ecosystem refuses the other, so
+  `prettier --write` and the hooks no longer format or lint a file nothing else
+  renders. Rename such a file to `.crv`.
+
 ### Deprecated
 
 - **The single-hyphen arrows `<-`, `->` and `<->`** (#1241). They still render, so documents written before the doubled-run rule keep working; prefer `<--`, `-->` and `<-->`.
@@ -200,6 +206,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (markup-carve/carve#1376). A following line below that column no longer uses
   the comment-only continuation path; bare-dot items use the bullet column.
 - **Three parser seams found by the combinatorial corpus** (#1226, markup-carve/carve#1418, markup-carve/carve#1419, markup-carve/carve#1421): an unclosed inline literal is one literal-inline node to the end of its block rather than a literal bang plus a code span; a quoted line comment closes the block quote's lazy paragraph; and a terminal comment-only verse line keeps the newline an open verbatim run carries. The guard that carries that newline no longer leaves an empty text leaf in the AST (#1227).
+- **An unmarked definition-shaped lazy line inside a quoted list stays visible
+  text** (#1208, markup-carve/carve#1400). A column never reaches into a block
+  quote, so the line continues the quote's paragraph instead of vanishing from
+  it and registering a link-reference definition document-wide.
+- **An escape escalation reaches the block that failed, not the document**
+  (#1307, PART 11 §2b). One character that genuinely needed its escape put every
+  other candidate in the document into the conservative class with it, so a
+  paragraph came back with its parentheses escaped because a different block had
+  failed. `renderCarve` output only; both spellings always rendered the same HTML.
+- **A code block's trailing blank lines survive an HTML import** (#1282). The
+  structural newline that rendered HTML places before `</code>` was read as
+  payload, so importing this engine's own rendered code block grew a blank line
+  each round trip; a blank line the author wrote is kept.
 
 ## [0.1.4] - 2026-08-18
 
