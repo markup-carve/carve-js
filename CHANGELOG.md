@@ -99,6 +99,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer spells two sibling sub-lists inside a list item**
+  (markup-carve/carve#1501, §11 N1a and §10i). A tight item wrote its sub-lists
+  behind the `+` marker at column 0, where a compatible marker dissolves them
+  into the list around the item; they are written at the item's content column
+  now, separated by the boundary. The same repair covers a sub-list below a
+  blockquote in a tight item, which was read as the quote's lazy continuation.
+
 - **An HTML import no longer bakes a derived accessible name into source**
   (#1278, markup-carve/carve#1500, markup-carve/carve#1511, PART 9 §16a and
   Extensions §1.5). An attribute whose value equals what the renderer derives
