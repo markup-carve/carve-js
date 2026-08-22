@@ -497,7 +497,3 @@ See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) i
 | M2   | Inline parser: emphasis (all 8 forms), links, images, code, autolinks, attributes, extensions, mentions, tags, smart typography, CriticMarkup | ✅ Done |
 | M3   | HTML renderer; full corpus green | ✅ Done |
 | M4   | npm publish; playground page in the docs site | Playground shipped; npm publish pending |
-
-## License
-
-MIT.
