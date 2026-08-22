@@ -4203,6 +4203,38 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
   return para
 }
 
+/*
+ * A CONTAINER ENDS AT ITS LAST PLACED CHILD (PART 12 §4, markup-carve/carve#1522
+ * and markup-carve/carve#1524).
+ *
+ * These three have no closer to end at, so their extent came from the LINES
+ * THEY CONSUMED - and a container consumes lines whose content ends up
+ * somewhere else. A definition written at an item's content column is collected
+ * and hoisted to the document, so it becomes the list's SIBLING while the list
+ * went on covering it and two nodes claimed the same offsets; an attribute
+ * block that attaches to nothing yields no child at all, and §4 excludes it by
+ * name. Every other container ends at a fence closer, a pipe or a delimiter run
+ * and is left alone.
+ */
+const ENDS_AT_LAST_PLACED_CHILD = new Set(['block_quote', 'list', 'list_item'])
+
+/*
+ * What an EMPTIED container of each kind spans instead: the markup that opened
+ * it, and the whitespace separating that markup from the content it never got.
+ *
+ * "Ends at its last placed child" is silent when there is none, and a container
+ * can be emptied - a definition written as an item's only content is collected
+ * out of it and the item keeps no trace. Zero width was rejected (a shape every
+ * consumer special-cases, and it discards the marker the author typed) and so
+ * was the extent the author typed, which is what the ruling above rejects for a
+ * container that does have children.
+ */
+const EMPTIED_CONTAINER_MARKUP: Record<string, RegExp> = {
+  block_quote: /^[ \t]*>[ \t]*/,
+  list: /^[ \t]*(?:[-+*]|[0-9]+[.)]|[A-Za-z]+[.)]|\.)[ \t]*/,
+  list_item: /^[ \t]*(?:[-+*]|[0-9]+[.)]|[A-Za-z]+[.)]|\.)[ \t]*/,
+}
+
 function attachBlockPos(
   lexer: Lexer,
   node: { pos?: Position },
@@ -4236,6 +4268,28 @@ function attachBlockPos(
       node.pos.endLine = last.endLine
       if (last.endColumn !== undefined) node.pos.endColumn = last.endColumn
       if (last.endOffset !== undefined) node.pos.endOffset = last.endOffset
+    }
+  }
+  const type = (node as { type?: string }).type
+  if (type !== undefined && ENDS_AT_LAST_PLACED_CHILD.has(type)) {
+    // The LAST PLACED child, not the last child. §4 lets a reassembled node omit
+    // its position, and skipping past one keeps a container from reporting an
+    // end shorter than something it really does hold.
+    const kids = [
+      ...((node as { children?: Array<{ pos?: Position }> }).children ?? []),
+      ...((node as { items?: Array<{ pos?: Position }> }).items ?? []),
+    ]
+    const lastOwned = [...kids].reverse().find((child) => child.pos !== undefined)?.pos
+    if (lastOwned) {
+      node.pos.endLine = lastOwned.endLine
+      if (lastOwned.endColumn !== undefined) node.pos.endColumn = lastOwned.endColumn
+      if (lastOwned.endOffset !== undefined) node.pos.endOffset = lastOwned.endOffset
+    } else {
+      const marker =
+        EMPTIED_CONTAINER_MARKUP[type]!.exec(lexer.lines[startLineIndex] ?? '')?.[0]?.length ?? 0
+      node.pos.endLine = node.pos.startLine
+      if (node.pos.startColumn !== undefined) node.pos.endColumn = node.pos.startColumn + marker
+      if (node.pos.startOffset !== undefined) node.pos.endOffset = node.pos.startOffset + marker
     }
   }
 }
@@ -9111,13 +9165,10 @@ function parseList(lexer: Lexer): List {
     const item: ListItem = { type: 'list_item', children }
     let itemEnd = lexer.pos
     while (itemEnd > itemStartLineIndex + 1 && isBlankLine(lexer.lines[itemEnd - 1]!)) itemEnd--
+    // The end-at-the-last-placed-child fixup that used to sit here moved into
+    // `attachBlockPos`, which now applies it to every closerless container
+    // rather than to items alone (markup-carve/carve#1522).
     attachBlockPos(lexer, item, itemStartLineIndex, itemEnd)
-    const lastOwned = [...children].reverse().find((child) => child.pos !== undefined)?.pos
-    if (item.pos && lastOwned) {
-      item.pos.endLine = lastOwned.endLine
-      if (lastOwned.endColumn !== undefined) item.pos.endColumn = lastOwned.endColumn
-      if (lastOwned.endOffset !== undefined) item.pos.endOffset = lastOwned.endOffset
-    }
     if (checked !== undefined) item.checked = checked
     if (itemAttrs) item.attrs = itemAttrs
     items.push(item)

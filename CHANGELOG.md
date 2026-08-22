@@ -20,6 +20,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A container's span ends at its last placed child**
+  (markup-carve/carve#1522, markup-carve/carve#1524, PART 12 §4). A `list`,
+  `list_item` or `block_quote` no longer reaches over a definition hoisted out
+  of it, an unattached attribute block, or the line terminator that ended its
+  last child. A container a collected definition emptied spans the markup that
+  opened it. Published `pos` values move on those documents.
 - **A `css`-mode tabs or code-group panel carries its tab's name**
   (#1265, markup-carve/carve#1489, PART 11 §13.2). Each panel gains
   `role="group"` and an `aria-label` holding its tab's own label,
