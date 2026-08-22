@@ -461,6 +461,9 @@ Full recipe, defaults, the threat model and a checklist:
   parse-stage matchers.
 - [Migration and linting](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md) - `markdownToCarve`,
   Djot collision warnings + `carve fix`, and `lintCarve` / `carve lint`.
+- [Editor API RFC](https://github.com/markup-carve/carve-js/blob/main/docs/editor-api-rfc.md) - draft source maps,
+  incremental snapshots, lossless commands and a framework-neutral Live Preview
+  contract; no API is exported yet.
 
 Try Carve live in the [playground](https://markup-carve.github.io/carve/playground),
 which runs this implementation in the browser.
