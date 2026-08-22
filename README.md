@@ -456,9 +456,9 @@ Full recipe, defaults, the threat model and a checklist:
 ## Documentation
 
 - [Extensions](https://github.com/markup-carve/carve-js/blob/main/docs/extensions.md) - opt-in extensions (`smartQuotes`, `tabNormalize`,
-  `details`, `mermaid`, `wikilinks`, `externalLinks`, `headingPermalinks`,
-  `tableOfContents`, `autolink`) and how to add your own syntax with
-  parse-stage matchers.
+  `details`, `tabs`, `codeGroup`, `mermaid`, `wikilinks`, `externalLinks`,
+  `headingPermalinks`, `tableOfContents`, `autolink`) and how to add your own
+  syntax with parse-stage matchers.
 - [Migration and linting](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md) - `markdownToCarve`,
   Djot collision warnings + `carve fix`, and `lintCarve` / `carve lint`.
 
