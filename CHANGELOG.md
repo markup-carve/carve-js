@@ -40,6 +40,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`fromAstJson` collapses a carriage return to a line feed** (#1352, ruling on
+  that ticket). CR and CRLF in any ingested string value now normalize the way
+  PART 0 normalizes the same characters in source text, alongside the PART 12
+  §21 NUL replacement in the same walk, so a payload built from a CRLF document
+  produces the tree its LF twin produces and the writer is never handed one. It
+  is not a refusal: the #1344 refusals below are about whitespace shapes, and
+  they are unchanged.
+
 - **`renderCarve` refuses a verbatim value no Carve source can carry** (#1344,
   ruling on that ticket). A `code`, `raw_inline`, `literal_inline` or `math`
   node whose value holds whitespace at a line's edge, or needs the verbatim

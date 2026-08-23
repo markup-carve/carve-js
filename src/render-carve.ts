@@ -2605,6 +2605,17 @@ function unclosedVerbatimSpells(content: string): boolean {
  * that whitespace before the inline scan, in a line block as much as in a
  * paragraph, and normalizes every terminator to LF before that, so no document
  * produces one. They arrive by constructing a tree or by ingesting one.
+ *
+ * THIS IS NOT A RULE ABOUT THE CARRIAGE RETURN, and the `[\r\n]` class above
+ * should not be read as one. Every condition here is about a SHAPE - a run at a
+ * line edge, a pad before a terminator - and the terminator is only how the
+ * shape is delimited; CR is in the class because it delimits one, not because
+ * the character is itself unspellable. A CR ALONE IS FINE AND IS NORMALIZED,
+ * not refused: `normalizeIngestedValue` in `ast-json.ts` collapses it to LF at
+ * the ingest boundary, so it is lossless and it never reaches here from that
+ * door (markup-carve/carve-js#1352). Widening any condition here to catch the
+ * character would refuse CRLF-sourced input that is ordinary in provenance -
+ * the opposite of what these three conditions were ruled for.
  */
 function unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
   if (/[ \t][\r\n]/.test(content)) {
