@@ -4,6 +4,9 @@ import { index } from '../src/index-terms.js'
 import { tabs } from '../src/tabs.js'
 import { codeGroup } from '../src/code-group.js'
 import { mermaid, fencedRender } from '../src/fenced-render.js'
+import { headingPermalinks } from '../src/heading-permalinks.js'
+import { tableOfContents } from '../src/table-of-contents.js'
+import { LABEL_DEFAULTS } from '../src/render-html.js'
 
 /*
  * carve#1468 / carve#1469: a Tier-3 extension that writes an element writes its
@@ -181,5 +184,82 @@ describe('ONE labels map localizes every engine-written string (carve#1468)', ()
     })
     expect(out).toContain('aria-label="Explicit"')
     expect(out).not.toContain('aria-label="Registerkarten"')
+  })
+})
+
+/*
+ * THE OTHER HALF OF THE ADMISSION RULE (markup-carve/carve#1510, ruled in
+ * markup-carve/carve#1520).
+ *
+ * The block above checks that a DOCUMENTED key reaches the output. This checks
+ * the opposite direction. Extensions §1.5 used to say every extension-written
+ * string with a fixed English default has a key in the `labels` map, and two
+ * strings satisfied that sentence with no key: the heading-permalink label and
+ * the table-of-contents summary. §1.5 has been narrowed instead of the map
+ * grown - a string the extension already exposes as an OPTION is configured
+ * there, and it does not get both spellings. PART 9 §16a's note recording the
+ * question as open is now that rule.
+ *
+ * ASSERTING THE ABSENCE ALONE CANNOT FAIL FOR THE RIGHT REASON. A key nothing
+ * implements is inert whether the rule is honored or the string was simply
+ * forgotten, so each row asserts three things: the documented default renders,
+ * the map key changes NOTHING, and the extension option DOES reach the output.
+ * Only the third separates "configured elsewhere" from "not configurable at
+ * all", which is the state §1.5 says a string must not be in.
+ */
+describe('a string its extension exposes as an option gets no labels key (carve#1510)', () => {
+  interface OptionOnlyRow {
+    source: string
+    extension: (opts: Record<string, unknown>) => ReturnType<typeof headingPermalinks>
+    option: (value: string) => Record<string, unknown>
+    default: string
+    find: (html: string) => string | undefined
+  }
+
+  const optionOnly: Record<string, OptionOnlyRow> = {
+    headingPermalink: {
+      source: '# One\n\nbody\n',
+      extension: (opts) => headingPermalinks(opts),
+      option: (value) => ({ ariaLabel: value }),
+      default: 'Permalink',
+      find: (html) => /class="permalink" aria-label="([^"]*)"/.exec(html)?.[1],
+    },
+    tocSummary: {
+      source: '::: toc\n:::\n\n# One\n\nbody\n',
+      extension: (opts) => tableOfContents({ collapsible: true, ...opts }),
+      option: (value) => ({ summary: value }),
+      default: 'Table of Contents',
+      find: (html) => /<summary>([^<]*)<\/summary>/.exec(html)?.[1],
+    },
+  }
+
+  for (const [key, row] of Object.entries(optionOnly)) {
+    describe(key, () => {
+      const render = (extensionOptions: Record<string, unknown>, renderOptions: object) =>
+        row.find(
+          carveToHtml(row.source, { extensions: [row.extension(extensionOptions)], ...renderOptions }),
+        )
+
+      it('renders the documented English default', () => {
+        // Without this the two below could both hold on a probe that finds
+        // nothing at all in either render.
+        expect(render({}, {})).toBe(row.default)
+      })
+
+      it('is not read from the labels map', () => {
+        expect(render({}, { labels: { [key]: `Sentinel-${key}` } })).toBe(row.default)
+      })
+
+      it('is read from the extension option', () => {
+        expect(render(row.option(`Option-${key}`), {})).toBe(`Option-${key}`)
+      })
+    })
+  }
+
+  it('names neither string in the labels vocabulary', () => {
+    // The assertion that fails if someone later adds the key the rule refuses.
+    for (const key of Object.keys(optionOnly)) {
+      expect(Object.keys(LABEL_DEFAULTS)).not.toContain(key)
+    }
   })
 })
