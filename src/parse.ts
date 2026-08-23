@@ -5765,10 +5765,23 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // block layer emptied above goes back in as the `comment` node it is, at
     // the boundary that ends it, so the canonical writer emits the author's own
     // line back at the column they wrote it at.
+    //
+    // AND IT KEEPS ITS POSITION IN A STANZA THAT PLACES NOTHING ELSE
+    // (markup-carve/carve-js#1323). A stanza holding a tab publishes no
+    // position for its inlines, and the reason is right: the verse text is
+    // RECONSTRUCTED with expanded tabs, whose display width is not a source
+    // length, so PART 12 §4 forbids inventing a mapping for anything measured
+    // from it. A comment is not measured from that text. It is a whole source
+    // LINE the block layer emptied, its span was taken from the line table
+    // above before any of the rewriting happened, and it is the same table the
+    // `hard_break` below is re-posed from - a break this engine publishes on
+    // exactly these stanzas, at a span whose end is the comment line's first
+    // column. Stripping the comment therefore withheld a position the engine
+    // had, on the one node in the stanza that never needed the reassembled
+    // text, while carve-rs and carve-php published it.
     const pendingComments = new Map<number, Comment>()
     lines.forEach((line, index) => {
       if (!line.comment) return
-      if (!anchorable) stripPositions([line.comment])
       pendingComments.set(index, line.comment)
     })
     // BOTH THE REINSERTION AND THE CONVERSION DESCEND (carve-js#1174,
