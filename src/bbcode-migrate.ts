@@ -403,28 +403,249 @@ function convertQuotes(text: string): string {
   return contents[0]!
 }
 
-function convertLists(text: string): string {
-  let out = text.replace(/\[list=1\]([\s\S]*?)\[\/list\]/gi, (_whole, body: string) => {
-    let counter = 1
-    const items = body.replace(
-      /\[\*\]([\s\S]*?)(?=\[\*\]|$)/gi,
-      (_item, content: string) => `${counter++}. ${content.trim()}\n`,
-    )
-    return `\n\n${items}\n`
+/**
+ * The container prefix already written on the line that reaches `index`, or
+ * `null` when what stands before it there is not container structure.
+ *
+ * THE COLUMN A PASS WRITES INTO IS NOT ALWAYS COLUMN 0. `convertQuotes` runs
+ * before `convertLists`, so by the time the list pass writes a line it may be
+ * writing INSIDE a quote whose `> ` is already on the page. A blank line at
+ * column 0 there ENDS the quote and one source quote comes out as two
+ * (carve-js#1383); a marker at column 0 leaves it the same way.
+ *
+ * THE BOUND IS THAT THE PREFIX IS STRUCTURE AND NOTHING ELSE. Only blockquote
+ * markers and indentation are replicated. A `[list]` that follows prose on its
+ * line is not opening a container - re-indenting under it would rewrite an
+ * ordinary post - and `null` is the answer that keeps today's output for every
+ * such line.
+ */
+function containerPrefixAt(text: string, index: number): string | null {
+  const prefix = text.slice(text.lastIndexOf('\n', index - 1) + 1, index)
+
+  return prefix !== '' && /^[ \t>]*$/.test(prefix) ? prefix : null
+}
+
+/**
+ * Write `body` at the column `prefix` opens, from line `from` onward.
+ *
+ * A line that would be empty takes the prefix with its trailing spaces removed,
+ * which is how a quote's own blank line is spelled: `> ` with the space left on
+ * is trailing whitespace the Carve writer never emits.
+ */
+function prefixLines(prefix: string, body: string, from: number): string {
+  const blank = prefix.replace(/[ \t]+$/, '')
+
+  return body
+    .split('\n')
+    .map((line, index) => (index < from ? line : line === '' ? blank : `${prefix}${line}`))
+    .join('\n')
+}
+
+/**
+ * Trim an item body to the text it holds, keeping the interior layout.
+ *
+ * The same trim the regex version spelled `content.trim()`, plus a per-line
+ * right trim so a continuation line indented below cannot carry the source's
+ * trailing spaces into the middle of a list.
+ */
+function trimItemBody(body: string): string {
+  return body
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+$/, ''))
+    .join('\n')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '')
+    .trimStart()
+}
+
+/** One open `[list]`, with the items it has collected so far. */
+interface ListFrame {
+  /** `[list=1]` rather than `[list]`. */
+  ordered: boolean
+  /** The bullet this list writes, alternating with its siblings. */
+  marker: string
+  /** The ordered delimiter this list writes, alternating with its siblings. */
+  delimiter: string
+  /** Text between `[list]` and its first `[*]`. */
+  lead: string
+  /** Item bodies, at the column their content will occupy. */
+  items: string[]
+  /** The body of the item being collected, or `null` before the first `[*]`. */
+  current: string | null
+  /** The separation axis for lists opening inside the CURRENT item. */
+  siblingIndex: number
+}
+
+/**
+ * `[list=a]` and friends are not a spelling this converter claims.
+ *
+ * Only the two forms it has ever converted open a frame; anything else falls
+ * through to `cleanup`, which strips an opener carrying a value exactly as it
+ * did before. Widening the set here would be a second change wearing this
+ * one's clothes.
+ */
+function isListSpelling(value: string | undefined): boolean {
+  return value === undefined || value.trim() === '1'
+}
+
+/** How much of the container prefix stands at `at`, so the scan can step over it. */
+function consumedPrefix(text: string, at: number, prefix: string): number {
+  if (text.startsWith(prefix, at)) return prefix.length
+  const blank = prefix.replace(/[ \t]+$/, '')
+
+  return blank !== '' && text.startsWith(blank, at) ? blank.length : 0
+}
+
+/** Write one closed list as Carve, every line at the column it occupies. */
+function renderList(frame: ListFrame): string {
+  let counter = 1
+  const items = frame.items.map((content) => {
+    const marker = frame.ordered ? `${counter++}${frame.delimiter} ` : `${frame.marker} `
+    const indent = ' '.repeat(marker.length)
+
+    // THE ITEM'S CONTENT COLUMN, NOT COLUMN 0. A continuation paragraph written
+    // flat is a TOP-LEVEL paragraph, and the next marker line then folds into it
+    // as lazy continuation - a two-item source list came back as one item plus a
+    // paragraph that had swallowed the second marker (carve-js#1387).
+    return trimItemBody(content)
+      .split('\n')
+      .map((line, index) => (index === 0 ? `${marker}${line}` : line === '' ? '' : `${indent}${line}`))
+      .join('\n')
   })
 
-  // The bullet marker alternates per list so two adjacent lists stay distinct:
-  // same-marker lists separated only by a blank line merge into one in Carve.
-  let bulletIndex = 0
-  out = out.replace(/\[list\]([\s\S]*?)\[\/list\]/gi, (_whole, body: string) => {
-    const marker = bulletIndex % 2 === 0 ? '-' : '*'
-    bulletIndex++
-    const items = body.replace(
-      /\[\*\]([\s\S]*?)(?=\[\*\]|$)/gi,
-      (_item, content: string) => `${marker} ${content.trim()}\n`,
-    )
-    return `\n\n${items}\n`
-  })
+  return items.length === 0 ? '' : `${items.join('\n')}\n`
+}
+
+/**
+ * Convert the `[list]` family with a stack rather than a pair of non-greedy
+ * regexes.
+ *
+ * `/\[list\]([\s\S]*?)\[\/list\]/` pairs an outer opener with the INNER
+ * closer, so a nested source left a literal `[list]` inside item one, promoted
+ * the inner item to an outer sibling, and dropped the rest of the outer list
+ * outside every match, where `cleanup` does not strip a valueless opener or a
+ * `[*]` (carve-js#1387). A stack pairs each closer with the opener it belongs
+ * to, which is the same reason `convertQuotes` already runs on one.
+ *
+ * BOTH OF PART 9 SECTION 11 N1'S MARKER AXES ARE SPENT NOW. The bullet path
+ * already alternated `-` and `*` so two adjacent lists stay two lists; the
+ * ordered path always wrote `1. ` and two adjacent `[list=1]` blocks merged
+ * into one `<ol>`, taking the second list's restart with them (carve-js#1385).
+ * The ordered delimiter is the axis N1 gives that path, so it alternates `.`
+ * and `)` on the same counter. The counter is per SIBLING GROUP rather than per
+ * document: a global one would hand two adjacent siblings the same marker
+ * whenever a nested list had consumed an index between them.
+ *
+ * N1a's other separator - three or more blank lines - could not be used here
+ * even if it were written, because `cleanup` collapses any such run to the
+ * ordinary loose separator on the way out.
+ */
+function convertLists(text: string): string {
+  const openTag = /\[list(?:=([^\]]*))?\]/iy
+  const itemTag = /\[\*\]/iy
+  const closeTag = /\[\/list\]/iy
+
+  const frames: ListFrame[] = []
+  let out = ''
+  let rootSibling = 0
+  // The prefix the OUTERMOST open list stands in. Every line inside that list
+  // carries it too, so the scan steps over it on the way in and `prefixLines`
+  // writes it back on the way out.
+  let prefix: string | null = null
+  let i = 0
+
+  const attach = (frame: ListFrame, addition: string): void => {
+    if (frame.current === null) frame.lead += addition
+    else frame.current += addition
+  }
+
+  const append = (addition: string): void => {
+    if (frames.length === 0) out += addition
+    else attach(frames[frames.length - 1]!, addition)
+  }
+
+  const closeFrame = (): void => {
+    const frame = frames.pop()!
+    if (frame.current !== null) frame.items.push(frame.current)
+
+    const lead = trimItemBody(frame.lead)
+    const list = renderList(frame)
+    const block = `${lead === '' ? '' : `${lead}\n`}${list}`.replace(/\n+$/, '')
+
+    if (frames.length > 0) {
+      // A nested list joins its item's content directly, with no blank line, so
+      // the item stays tight rather than growing a paragraph around its text.
+      const parent = frames[frames.length - 1]!
+      const existing = parent.current === null ? parent.lead : parent.current
+      attach(parent, `${existing === '' || existing.endsWith('\n') ? '' : '\n'}${block}\n`)
+
+      return
+    }
+
+    if (prefix === null) {
+      out += `\n\n${block}\n\n`
+    } else {
+      out = out.replace(/\n+$/, '\n')
+      out += prefixLines(prefix, `\n${block}`, 0)
+    }
+    prefix = null
+  }
+
+  while (i < text.length) {
+    openTag.lastIndex = i
+    const open = openTag.exec(text)
+    if (open && isListSpelling(open[1])) {
+      const axis =
+        frames.length === 0 ? rootSibling++ : frames[frames.length - 1]!.siblingIndex++
+      if (frames.length === 0) {
+        prefix = containerPrefixAt(out, out.length)
+        if (prefix !== null) out = out.slice(0, out.length - prefix.length)
+      }
+      frames.push({
+        ordered: open[1] !== undefined,
+        marker: axis % 2 === 0 ? '-' : '*',
+        delimiter: axis % 2 === 0 ? '.' : ')',
+        lead: '',
+        items: [],
+        current: null,
+        siblingIndex: 0,
+      })
+      i += open[0].length
+      continue
+    }
+
+    if (frames.length > 0) {
+      itemTag.lastIndex = i
+      const item = itemTag.exec(text)
+      if (item) {
+        const frame = frames[frames.length - 1]!
+        if (frame.current !== null) frame.items.push(frame.current)
+        frame.current = ''
+        frame.siblingIndex = 0
+        i += item[0].length
+        continue
+      }
+
+      closeTag.lastIndex = i
+      if (closeTag.exec(text) !== null) {
+        i += '[/list]'.length
+        closeFrame()
+        continue
+      }
+    }
+
+    // A `[/list]` with no open list, and every other character, is text - the
+    // stray closer reaches `cleanup` and is stripped there, as before.
+    const character = text[i]!
+    append(character)
+    i++
+    if (character === '\n' && frames.length > 0 && prefix !== null) {
+      i += consumedPrefix(text, i, prefix)
+    }
+  }
+
+  // An unclosed `[list]` runs to end of input, innermost first.
+  while (frames.length > 0) closeFrame()
 
   return out
 }
