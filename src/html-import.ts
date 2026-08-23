@@ -2569,6 +2569,29 @@ class Importer {
      * without moving `<del>` would have made that asymmetry worse: the
      * insertion of an edit surviving as an edit and the deletion beside it not.
      */
+    /*
+     * AN EMPTY ONE HAS NOTHING TO MARK, and inventing a brace pair for it
+     * put text in the document the HTML never held (markup-carve/carve#1608).
+     * `<ins></ins>` was written as an empty brace pair, which is not a
+     * construct at all: it renders as the four literal characters. `<del>`
+     * was worse than literal - its empty pair is the braced en dash, so the
+     * import rendered a GLYPH for an element that held nothing.
+     *
+     * So the element is dropped, which keeps the text right because there was
+     * none, and the drop is REPORTED - it is an element that left the
+     * document, which is what `element-dropped` is for. Dropping in silence
+     * is the other engine's half of this shape and is filed there.
+     */
+    if ((tag === 'del' || tag === 'ins') && children.length === 0) {
+      this.add(
+        'element-dropped',
+        `Dropped an empty <${tag}>: Carve spells the pair around its content, and an empty brace pair is not a construct`,
+        'warning',
+        path,
+        node,
+      )
+      return []
+    }
     if (tag === 'del') return [{ type: 'delete', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'ins') return [{ type: 'insert', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
@@ -3095,17 +3118,33 @@ class Importer {
 
     const defs: Record<string, BlockNode[]> = {}
     const containers = new Set<P5Node>()
+
+    /*
+     * EVERY REFERENCE SITE IS REWRITTEN BEFORE ANY BODY IS CONVERTED
+     * (markup-carve/carve-js#1380).
+     *
+     * These were one loop, so a note's body was converted while the reference
+     * sites of every LATER note were still raw anchors. A note body that
+     * references another note is exactly that case: note 1's body was
+     * converted at index 0, and the anchor in it pointing at note 2 was not
+     * replaced until index 1 - too late, so it imported as an ordinary link
+     * and came out hand-spelled:
+     *
+     *     [^1]: see [{^2^}](#fn2){#fnref2 role=doc-noteref}
+     *
+     * The damage did not stop at the spelling. Nothing referenced `[^2]` any
+     * more, so its definition never rendered and the word it held left the
+     * document. The pairing was never in doubt - both notes are recognized
+     * candidates - only the ORDER in which the two halves ran.
+     */
     definitions.forEach((definition, index) => {
       const label = String(index + 1)
-      const block = definition.block
-      if (index === 0) this.removeFootnoteSeparator(block)
+      if (index === 0) this.removeFootnoteSeparator(definition.block)
 
       const identities = definition.refs
         .map((reference) => this.footnoteAnchorIdentity(reference))
         .filter((identity) => identity !== '')
-      this.stripFootnoteBacklinks(block, identities, definition.fragments)
-
-      defs[label] = this.blocks(block.childNodes ?? [], `footnote[${label}]`, 1)
+      this.stripFootnoteBacklinks(definition.block, identities, definition.fragments)
 
       for (const reference of definition.refs) {
         const site = this.footnoteReferenceSite(reference)
@@ -3118,7 +3157,13 @@ class Importer {
         if (site.parentNode !== undefined) replacement.parentNode = site.parentNode
         this.replaceP5Node(site, replacement)
       }
+    })
 
+    // Detached only after the conversion above has read every body, for the
+    // same reason: a body detached early is a body another note cannot reach.
+    definitions.forEach((definition, index) => {
+      const block = definition.block
+      defs[String(index + 1)] = this.blocks(block.childNodes ?? [], `footnote[${String(index + 1)}]`, 1)
       if (block.parentNode) containers.add(block.parentNode)
       this.detachP5Node(block)
     })

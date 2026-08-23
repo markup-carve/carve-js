@@ -100,6 +100,9 @@ interface CarveContext {
   /** Depth of line-block nesting, so the inline writer drops the explicit
    *  backslash: inside a `::: |` fence every newline already IS a hard break. */
   lineBlockDepth: number
+  /** Depth of INLINE-NOTE nesting. A note's content recognizes no note, so
+   *  a bracket run opening with a caret needs no escape inside one. */
+  inlineNoteDepth: number
   /** Number of colon-fence containers enclosing the block currently rendering. */
   colonFenceDepth: number
   /** Whether the previous sibling block can host a caption. */
@@ -637,6 +640,7 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
       inlineDepth: 0,
       listDepth: 0,
       lineBlockDepth: 0,
+      inlineNoteDepth: 0,
       colonFenceDepth: 0,
       afterCaptionHost: false,
       paragraphStartsAfterCaptionHost: false,
@@ -2373,7 +2377,7 @@ function renderInlineBody(
     case 'image':
       return renderImage(node)
     case 'span':
-      return `[${renderInlines(node.children, ctx)}]${renderAttrs(node.attrs) || '{}'}`
+      return `[${escapeNoteReferenceLabel(renderInlines(node.children, ctx), ctx)}]${renderAttrs(node.attrs) || '{}'}`
     case 'math':
       return withAttrs(renderMath(node.display, node.content))
     case 'raw_inline':
@@ -2406,7 +2410,7 @@ function renderInlineBody(
     case 'footnote_ref':
     case 'inline_footnote':
       return withAttrs(node.inline
-        ? `^[${renderInlines(node.inline, ctx)}]`
+        ? `^[${renderInlines(node.inline, { ...ctx, inlineNoteDepth: ctx.inlineNoteDepth + 1 })}]`
         : `[^${writeFlatBracketRun(node.id ?? '')}]`)
     case 'soft_break':
       return '\n'
@@ -2449,6 +2453,34 @@ function renderInlineBody(
   }
 }
 
+/**
+ * A LABEL SLOT opens with `[`, and `[^x]` is a note reference (PART 11 §2).
+ *
+ * A span and an inline link both write their content between brackets, so
+ * content that begins with a caret re-parses as a reference to a note instead
+ * of as the thing that was written. `<abbr title="y">^1</abbr>` came back as
+ * `[^1]{abbr=y}`: the span is gone, the attribute block is literal text, and
+ * the paragraph renders `[^1]`. An anchor loses its destination the same way -
+ * `[^1](u)` renders the characters `[^1](u)`.
+ *
+ * ONLY THE LABELED HALF COLLIDES, which is the other half of §2 and the half
+ * that is wrong silently: the reference rule needs at least one character
+ * after the caret and cannot cross `]` or a line break, so `[^]` is not a
+ * reference and must NOT be escaped. A caret anywhere but the first position
+ * is ordinary punctuation too.
+ *
+ * An IMAGE label is not a slot this applies to: `![^1](u)` is an image whose
+ * alternative text is `^1`, because the `!` takes the `[` first.
+ */
+function escapeNoteReferenceLabel(label: string, ctx: CarveContext): string {
+  // A NOTE'S CONTENT RECOGNIZES NO NOTE, so inside one the bracket run is
+  // already read as what it is and the escape would be idle - which
+  // PART 11 §2 forbids just as squarely as the missing one, and which the
+  // corpus ratchet catches on `309-a-note-s-content-recognizes-no-note-4`.
+  if (ctx.inlineNoteDepth > 0) return label
+  return /^\^[^\]\r\n]/.test(label) ? `\\${label}` : label
+}
+
 function renderLink(node: Link, ctx: CarveContext): string {
   // An unresolved reference link (parse() left `ref` set with an empty href -
   // no matching `[label]: url` def) round-trips via its verbatim source. resolve
@@ -2476,7 +2508,7 @@ function renderLink(node: Link, ctx: CarveContext): string {
   if (node.ref !== undefined && node.rawRef !== undefined) {
     return node.rawRef
   }
-  const text = renderInlines(node.children, ctx)
+  const text = escapeNoteReferenceLabel(renderInlines(node.children, ctx), ctx)
   const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
   return `[${text}](${escapeDestination(node.href)}${title})${renderAttrs(node.attrs)}`
 }
