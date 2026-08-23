@@ -150,9 +150,30 @@ or a list item as much as at the top level - is untouched.
 > applies smart typography to prose. That is true of any `---` a migrated
 > document carries, not only one inside a pipe row.
 
-To go the other way - flagging a Djot document that would silently mis-render
-under Carve - use `djotMigrationWarnings`, and to rewrite those collisions in
-place use `applyMigrationFixes` (or the `carve fix` CLI below):
+## Migrating from Djot
+
+`djotToCarve(source)` converts a complete Djot document. Unlike
+`applyMigrationFixes`, it also escapes source text that is inert in Djot but
+would become Carve markup, including tags, mentions, bare `/` and `=`, and the
+`%%` comment opener. Code spans, fenced code and link destinations remain
+opaque.
+
+```ts
+import { djotToCarve } from '@markup-carve/carve'
+
+djotToCarve('_em_ and ~sub~; literal #tag and /path/')
+// => '/em/ and {,sub,}; literal \\#tag and \\/path/'
+```
+
+The CLI spelling reads a file or stdin and writes Carve to stdout:
+
+```sh
+carve migrate --from djot document.djot > document.crv
+```
+
+To only flag delimiter collisions without importing the document, use
+`djotMigrationWarnings`; to rewrite only those collisions, use
+`applyMigrationFixes` (or the `carve fix` CLI below):
 
 ```ts
 import { applyMigrationFixes } from '@markup-carve/carve'

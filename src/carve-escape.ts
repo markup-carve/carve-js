@@ -175,7 +175,9 @@ export function escapeAttributeBlockOpener(text: string): string {
  * closer ahead does not fall back to text in Carve, it opens a verbatim span
  * that runs to the END of the block (see `resources/grammar.ebnf`, UNCLOSED RUN).
  *
- * `djotToCarve` still does not call it - it walks the AST and escapes no text.
+ * `djotToCarve` does not call it because a backtick is Djot's own verbatim
+ * delimiter; its masking pass protects matched spans and leaves unmatched
+ * source text unchanged, as Djot does.
  */
 export function escapeVerbatimDelimiter(text: string): string {
   return escapeUnlessAlreadyEscaped(/`/g, text)
@@ -209,15 +211,9 @@ export const HANDLED_PLAIN: HandledDelimiters = {}
 export const HANDLED_MARKDOWN: HandledDelimiters = { braced: '*_', bare: '*_~' }
 
 /**
- * Djot. NO CALLER IN THIS PACKAGE: `djotToCarve` walks the Djot AST and never
- * escapes a line of text, so nothing here passes this set today.
- *
- * It is still named, and still measured against the corpus, because the handled
- * set is a parameter: the profile is a statement this implementation can be
- * held to whether or not a converter reaches it yet, and it is what a
- * text-level Djot path would pass on the day one appears. carve-rs keeps the
- * same three for the same reason, with the callers the other way round - Djot
- * is its only text-level converter.
+ * Djot. `djotToCarve` passes this set while escaping source text outside code
+ * and destinations. Constructs owned by Djot remain available to its delimiter
+ * conversion pass; Carve-only constructs are frozen as literal text.
  */
 export const HANDLED_DJOT: HandledDelimiters = { braced: '=+-*_^~', bare: '~*_' }
 

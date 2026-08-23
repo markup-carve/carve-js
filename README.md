@@ -76,9 +76,9 @@ rather than a placeholder for a mapping still to come:
   them: each already has its own syntax (`=text=` and a code span), so importing
   them as span attributes as well would give one input two spellings.
 
-`migrate` reaches the other importers too - `--from markdown` (or `md`) and
-`--from bbcode` - which need no report because they parse their source whole
-and drop nothing. See
+`migrate` reaches the other importers too - `--from markdown` (or `md`),
+`--from djot`, and `--from bbcode` - which need no report because they parse
+their source whole and drop nothing. See
 [Migration and linting](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md).
 
 ## Install and develop
@@ -460,6 +460,7 @@ Full recipe, defaults, the threat model and a checklist:
   `headingPermalinks`, `tableOfContents`, `autolink`) and how to add your own
   syntax with parse-stage matchers.
 - [Migration and linting](https://github.com/markup-carve/carve-js/blob/main/docs/migration.md) - `markdownToCarve`,
+  `djotToCarve`,
   Djot collision warnings + `carve fix`, and `lintCarve` / `carve lint`.
 
 Try Carve live in the [playground](https://markup-carve.github.io/carve/playground),
@@ -477,6 +478,7 @@ carve-js/
 │   ├── render-plain.ts     AST → plain-text renderer
 │   ├── render-ansi.ts      AST → ANSI-styled renderer
 │   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
+│   ├── djot-import.ts      Djot → Carve source transform
 │   ├── markdown-migrate.ts Markdown → Carve source transform
 │   ├── cli.ts              `carve` binary (render, fmt, fix, lint)
 │   └── index.ts            Public API

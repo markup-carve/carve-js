@@ -100,6 +100,13 @@ describe('carve migrate — the other importers', () => {
     expect(t.out).toContain('*bold* and /em/')
   })
 
+  it('converts Djot with --from djot', async () => {
+    const t = makeIO({ stdin: '_em_ and ~sub~\n' })
+    const code = await run(['migrate', '--from', 'djot'], t.io)
+    expect(code).toBe(0)
+    expect(t.out).toBe('/em/ and {,sub,}\n')
+  })
+
   it('reads the input file rather than stdin when one is named', async () => {
     const t = makeIO({ files: { 'in.md': '# Title\n' } })
     const code = await run(['migrate', '--from', 'markdown', 'in.md'], t.io)
@@ -107,10 +114,9 @@ describe('carve migrate — the other importers', () => {
     expect(t.out).toContain('# Title')
   })
 
-  // Djot has no importer here yet, only the `fix` linter, so it must fail as
-  // an unknown format rather than look supported.
-  it.each(['djot', 'rst'])('rejects the unsupported source format %s', async (from) => {
+  it('rejects an unsupported source format', async () => {
     const t = makeIO({ stdin: 'x' })
+    const from = 'rst'
     const code = await run(['migrate', '--from', from], t.io)
     expect(code).toBe(2)
     expect(t.err).toContain(`unknown source format ${from}`)
@@ -120,7 +126,7 @@ describe('carve migrate — the other importers', () => {
     const t = makeIO({ stdin: 'x' })
     const code = await run(['migrate'], t.io)
     expect(code).toBe(2)
-    expect(t.err).toContain('html, markdown or bbcode')
+    expect(t.err).toContain('html, markdown, djot or bbcode')
   })
 
   /**

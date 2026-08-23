@@ -9,6 +9,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`djotToCarve` and `carve migrate --from djot`** (#1367). The importer rewrites Djot delimiter meanings and escapes text that would otherwise become Carve tags, mentions, formatting or comments, while leaving code and destinations opaque.
 - **`createEditorSession` and `EditorSession`, exported** (#1306, #1317). A source-authoritative editor session whose `snapshot()` and `update(changes)` return the AST with document-space UTF-16 node ranges and marker token ranges.
 - **Table column metadata** (#1206, markup-carve/carve#1391). Positional alignment, vertical alignment and widths reach the AST as `table.columns` and `table_cell.valign`, render as `<colgroup>`, carry through ListTable, and are covered by new lint rules.
 - **Semantic table row partitions** (#1223). Pipe tables take `{header-rows=N footer-rows=N}` for explicit head/body/foot ranges; a ListTable cell takes `{align= valign=}` over the positional column default. The consumed attributes do not reach the HTML.
