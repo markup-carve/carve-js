@@ -70,7 +70,12 @@
  *    Carve. An EMPTY fence pair carries no metadata and stays two rules.
  */
 
-import { escapePlainCarveInlineSyntax, HANDLED_MARKDOWN } from './carve-escape.js'
+import {
+  escapeAttributeBlockOpener,
+  escapePlainCarveInlineSyntax,
+  escapeVerbatimDelimiter,
+  HANDLED_MARKDOWN,
+} from './carve-escape.js'
 
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
 
@@ -931,7 +936,16 @@ function escapeAttributeListsThatAttach(input: string): string {
     .replace(/^\{([^}\n]*)\}(?=[ \t]*$)/gm, escapeUnlessDelimiterPair)
 }
 
-function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM): string {
+/**
+ * @param holdsFenceBody The caller handed a run whose first line opens a code
+ *   fence, so its backticks are that fence rather than literal prose text. See
+ *   `restorePrefixedInlineRun`, the only caller that passes it.
+ */
+function convertInline(
+  input: string,
+  dialect: MarkdownDialect = COMMONMARK_GFM,
+  holdsFenceBody = false,
+): string {
   // Protect inline code spans so their delimiters are never rewritten.
   // Placeholders are wrapped in NUL, so ordinary text like "P0" is never
   // mistaken for one. NUL cannot occur in the text this sees because
@@ -1056,6 +1070,35 @@ function convertInline(input: string, dialect: MarkdownDialect = COMMONMARK_GFM)
   // so `~b~` is struck, and Carve spells strikethrough the same way. Escaping
   // it here froze it as literal text, and the doubled form's rule below could
   // then never see it.
+  // A backtick and an attribute-block brace are ordinary text in CommonMark and
+  // GFM, and both are markup in Carve. They are escaped by the two shared
+  // helpers the BBCode converter already calls, in the same composition order it
+  // uses - the helpers FIRST, then the delimiter escaper - because that order is
+  // what also escapes the `#`: the tag rule below declines a `#` that an
+  // UNESCAPED `{` precedes, on the premise that the braced-pair rule handled it.
+  // Escaping the brace first is what takes that premise away, so the reverse
+  // order left `\{` in front of a LIVE tag span (the same trap
+  // `escapeAttributeListsThatAttach` documents).
+  //
+  // A backtick reaching here is, by construction, one CommonMark reads as
+  // literal text. `protectCodeSpans` above turned every MATCHED run into a
+  // placeholder and emitted only the unterminated ones as text, so a genuine
+  // code span is out of reach and cannot be frozen. That construction is what
+  // makes the premise these helpers carried - that a backtick in Markdown
+  // already means a code span the converter carries over - true of a matched
+  // backtick and false of an unmatched one. An unmatched one is not literal text
+  // in Carve: it opens a verbatim span that runs to the END of the block, so a
+  // single stray backtick in migrated prose swallowed the rest of the line.
+  if (!holdsFenceBody) line = escapeVerbatimDelimiter(line)
+  // `{#id}` is ordinary text in CommonMark, where in Djot it is a deliberate
+  // attribute block - which is why `djotToCarve` is right to leave it and this
+  // path is not, and why the escape belongs at the CALL SITE rather than in the
+  // shared escaper. Gated on the same flag as `escapeAttributeListsThatAttach`
+  // below: with `attributes` on, `{#id}` is the Pandoc/kramdown syntax the
+  // caller opted into and freezing it would lose the id. That rule escapes a
+  // brace that ATTACHES to the construct before it, and one alone on a line;
+  // mid-prose, attaching to nothing, was the position neither reached.
+  if (!dialect.attributes) line = escapeAttributeBlockOpener(line)
   line = escapePlainCarveInlineSyntax(line, HANDLED_MARKDOWN)
   line = escapeCarveConstructsSpelledLikeText(line, dialect, protectedSpans)
 
@@ -1434,7 +1477,33 @@ function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
 ): string[] {
-  const converted = convertInline(run.map((part) => part.text).join('\n'), dialect).split('\n')
+  // A run whose FIRST line opens a code fence is block markup a collector could
+  // not peel: the list collector declines a fence on a continuation line but the
+  // marker line carries its own, so `- ` plus three backticks arrives here as
+  // one run. `convertInline` is documented for one paragraph-ish run and this is
+  // a code block, which is why the verbatim escape has to be told: a backtick in
+  // ordinary Markdown prose is literal text and gets escaped, while THIS run's
+  // backticks are the fence and its body, and escaping them turned the item's
+  // code block into escaped prose.
+  //
+  // Only the verbatim escape is suppressed, not the rest of the conversion. The
+  // other rewrites have always run over such a run, and widening the fix to stop
+  // them is a separate question about where a container's fence is peeled.
+  //
+  // DELIBERATELY the same predicate the collector above and the main loop's own
+  // fence branch use, rather than a stricter one. CommonMark says a BACKTICK
+  // fence's info string may hold no backtick, so ```` ```a`b ```` is a paragraph
+  // to cmark and a fence to this converter - but that reading is the converter's
+  // everywhere, not just here, and a stricter test in this one spot would have
+  // the two paths disagree about the same line. Asking them to agree with cmark
+  // is a question about the info string, and it is asked of the whole file or
+  // not at all.
+  const opensFence = /^[ \t]{0,3}(`{3,}|~{3,})/.test(run[0]?.text ?? '')
+  const converted = convertInline(
+    run.map((part) => part.text).join('\n'),
+    dialect,
+    opensFence,
+  ).split('\n')
   const held = run.map((part) => peelQuoteMarkers(part.text))
   // Only a run whose lines this function can place in a container gets the
   // escape at all. What `prefix` holds is up to the collector, and a run can
