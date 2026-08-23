@@ -220,8 +220,13 @@ describe('the recorded extent is in the same unit as every other span', () => {
       return found[0]!.pos
     }
 
+    // The extent stops at the body, not at the blank line after it
+    // (markup-carve/carve-js#1347). What this test claims is the UNIT the
+    // offsets are counted in, and the trailing newline was never part of that
+    // claim - the emoji ahead of the definition is what makes a wrong unit
+    // show up here.
     expect(codepoints(astral, spanOf(astral).startOffset, spanOf(astral).endOffset)).toBe(
-      '[^f]: body\n',
+      '[^f]: body',
     )
     // The astral document and the plain one differ by one CODEPOINT before the
     // definition, so their spans must be equal - the emoji is one codepoint and
