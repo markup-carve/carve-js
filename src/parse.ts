@@ -1374,6 +1374,31 @@ class Lexer {
    * parent lexer, where the flag was never set.
    */
   inFigureGroup = false
+  /**
+   * True for the sub-lexer over a LIST ITEM's own body, and for that body only.
+   *
+   * PART 9 §24 C3: "AT content_column: dedented to the body's column 0, a block
+   * opener nests and a list marker opens a sublist", and it "holds whether or
+   * not a blank line precedes the child". §10 I2 defers to it by name - "TIGHT
+   * NESTED LISTS UNAFFECTED: an indented marker inside an open list ITEM opens a
+   * sublist with no blank line - that is §24 C3 (content column), not this
+   * relation". So an item body is the one context where a marker DOES interrupt
+   * an open paragraph, and it is a deliberate divergence from djot rather than a
+   * gap in §10.
+   *
+   * It answered for the FIRST marker in an item only, and by accident: the
+   * collector hands everything from the first marker line onward to a separate
+   * `parseBlocks`, so that marker met no open paragraph while every later one
+   * met §10 I2 with one open and folded. Two documents differing by a sub-list
+   * the table between them had already closed then disagreed about what their
+   * last line was (markup-carve/carve#1517).
+   *
+   * NOT CARRIED BY `nestedSubLexer`, which is the whole point. A quote, a div or
+   * a definition body inside an item gets its own lexer with the flag clear, so
+   * `> q` / `> - a` inside an item still folds exactly as it does at the top
+   * level - §10 I6 is unaffected, and only the item's OWN column 0 changes.
+   */
+  markerOpensSublist = false
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead), the same entry the container-local scans keep: per fence
@@ -6865,7 +6890,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
       isBlankLine(ln) ||
       RE_CAPTION.test(ln) ||
       colonFenceShapeEndsLazyContinuation(ln) ||
-      startsInterruptingBlock(lexer)
+      startsInterruptingBlock(lexer, undefined, false)
     ) {
       break
     }
@@ -9181,7 +9206,15 @@ function parseList(lexer: Lexer): List {
       startLineIndex: number,
       sourceLineMap?: number[],
     ): Lexer => {
-      return nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
+      const sub = nestedSubLexer(lexer, lines, startLineIndex, sourceLineMap)
+      // THIS BODY'S COLUMN 0 IS THE ITEM'S CONTENT COLUMN, so a marker reaching
+      // it opens a sublist rather than folding into an open paragraph (§24 C3,
+      // markup-carve/carve#1517). Set here rather than in `nestedSubLexer`
+      // because it must NOT travel: a quote, a div or a definition body inside
+      // the item gets its own lexer without it, and a marker there folds as §10
+      // I2 says.
+      sub.markerOpensSublist = true
+      return sub
     }
     // AN ATTRIBUTE BLOCK MUST SURVIVE THE SPLIT (markup-carve/carve#1238,
     // carve-js#1100). The two `parseBlocks` calls below are one stream to the
@@ -10002,7 +10035,23 @@ function fenceHasCloser(lexer: Lexer, marker: string): boolean {
  * line open a block AT ITS INDENT" - and that question is the top level's to
  * answer, after the container has closed.
  */
-function startsInterruptingBlock(lexer: Lexer, content?: string): boolean {
+function startsInterruptingBlock(
+  lexer: Lexer,
+  content?: string,
+  // THE §24 C3 SUBLIST ARM IS THE CALLER'S TO WAIVE, and exactly one caller
+  // does. A block quote's lazy-continuation loop asks this about the QUOTE's
+  // open paragraph, and carve-js#1200 ruled that paragraph claims the line
+  // first: `- > q` / `  - s` is one quoted paragraph, not a quote plus a
+  // sub-list, and carve-rs and the executable spec agree. §24 C3 is about a
+  // child of the ITEM, so it does not decide a line the quote is still holding.
+  //
+  // Waiving it does NOT hand the quote every marker. The loop's own
+  // `blockQuoteParagraphOpen` guard runs right after this test, so a quote that
+  // ended on a heading, a table or a blank line still breaks there - and the
+  // marker then reaches the item body, where §24 C3 opens the sublist. That is
+  // the near miss carve-js#1200 names, and it stays intact.
+  sublistArm = true,
+): boolean {
   const ln = content ?? lexer.peek()
   if (ln === undefined) return false
   // Dispatch on the first non-whitespace character, so a line costs one or two
@@ -10029,17 +10078,24 @@ function startsInterruptingBlock(lexer: Lexer, content?: string): boolean {
       if (RE_FENCE.test(ln)) return fenceHasCloser(lexer, RE_FENCE.exec(ln)![2]!)
       return false
     case '-':
-      // thematic break only. A bullet/task does NOT interrupt a paragraph
-      // (symmetric with ordered markers; a list needs a blank line, §10).
-      return RE_HR.test(ln)
+      // A thematic break, or - in a list item's own body - a bullet or task at
+      // the body's column 0, which §24 C3 opens a sublist with. Everywhere else
+      // a bullet/task does NOT interrupt a paragraph (symmetric with ordered
+      // markers; a list needs a blank line, §10 I2).
+      return RE_HR.test(ln) || opensSublistHere(lexer, ln, i, sublistArm)
     case '+':
       // `+` is the list-continuation marker, never an interrupter.
       return false
     case '*':
       // abbreviation definition (invisible, and only at document level - PART
-      // 12 §7) or thematic break. A bullet/task does NOT interrupt
-      // (symmetric, §10).
-      return (lexer.atDocumentLevel && RE_ABBR_DEF.test(ln)) || RE_HR.test(ln)
+      // 12 §7), a thematic break, or a `*` bullet at a list item body's column 0
+      // (§24 C3). Everywhere else a bullet/task does NOT interrupt
+      // (symmetric, §10 I2).
+      return (
+        (lexer.atDocumentLevel && RE_ABBR_DEF.test(ln)) ||
+        RE_HR.test(ln) ||
+        opensSublistHere(lexer, ln, i, sublistArm)
+      )
     case '_':
       return RE_HR.test(ln)
     case ':':
@@ -10088,8 +10144,42 @@ function startsInterruptingBlock(lexer: Lexer, content?: string): boolean {
       // line, matching Djot): allowing it would require the CommonMark `1.`-only
       // heuristic to keep `2.`, `1985.`, `a.`, `i.` as prose, which Carve avoids.
       // A bare image is inline, not a block, so it does not interrupt either.
-      return false
+      //
+      // Inside a list item's own body it does, at that body's column 0, and it
+      // is the SAME sentence the bullet arms above take: §24 C3 opens a sublist
+      // with any marker reaching the content column, "SYMMETRIC" in its own
+      // words, so bullet, task and ordered behave alike here exactly as they do
+      // when they fold everywhere else.
+      return opensSublistHere(lexer, ln, i, sublistArm)
   }
+}
+
+/**
+ * Does `ln` open a SUBLIST where the lexer is reading - a list item's own body,
+ * at that body's column 0?
+ *
+ * PART 9 §24 C3, which §10 I2 defers to by name. The content column IS the item
+ * body's column 0, and a marker reaching it opens a sublist "whether or not a
+ * blank line precedes the child" - which is the one place a marker interrupts an
+ * open paragraph, and a divergence from djot the clause calls intentional.
+ *
+ * COLUMN 0 EXACTLY, which is what `i` carries. A marker one column in has not
+ * reached the content column, and §24 C3 is explicit that BELOW it "a list
+ * marker folds as lazy item text (markers never interrupt, §10 I2)". The item
+ * collector already delivers such a line with its residual indent intact, so
+ * testing the dispatch index is what keeps the two bands apart -
+ * `RE_UNORDERED` and friends are whitespace-tolerant and would answer yes for
+ * both.
+ *
+ * THE ABUTTING-ATTRIBUTE FORM IS A MARKER TOO (`-{.x} item`), recognized here
+ * the way the collector's own nesting path recognizes it, so the two spellings
+ * of one marker do not answer differently.
+ */
+function opensSublistHere(lexer: Lexer, ln: string, i: number, enabled: boolean): boolean {
+  if (!enabled || !lexer.markerOpensSublist || i !== 0) return false
+  return (
+    RE_TASK.test(ln) || RE_UNORDERED.test(ln) || RE_ORDERED.test(ln) || extractItemAttr(ln) !== null
+  )
 }
 
 // Whether the peeked line ENDS an open heading or blockquote (and starts a
