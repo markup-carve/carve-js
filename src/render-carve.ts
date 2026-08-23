@@ -1788,7 +1788,33 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           return
         }
       }
-      const lines = trimNonNbsp(renderHostedBlocks(def, ctx)).split('\n')
+      /*
+       * A DESCRIPTION THAT WRITES NOTHING IS NOT WRITTEN AT ALL
+       * (markup-carve/carve#1608, carve-js#1394).
+       *
+       * The bare `:` line it used to emit is not an empty description - the
+       * parser reads it as more of the TERM above it, so `<dl><dt>term</dt>
+       * <dd></dd></dl>` came back as a `<dt>` reading `term\n:` with no `<dd>`
+       * at all. The description was lost AND the term was damaged. Six other
+       * spellings were probed on the ruling and none works: `: `, `:  `,
+       * `: {}` and a tab after the colon each leak a `:` into the text or fold
+       * into the term, and a colon plus three spaces yields `<dd>&nbsp;</dd>`,
+       * which is not empty.
+       *
+       * Writing the term alone loses exactly the empty description and nothing
+       * else. A declared loss is a CEILING, not a licence: an importer may lose
+       * what it declares and no more, and `structure-unspellable` on the `<dd>`
+       * is what declares it - the HTML importer already reports it, for this
+       * shape and for the two others that write nothing (an empty paragraph, a
+       * list with no items).
+       *
+       * The AST keeps the empty description either way. This is the WRITER, so
+       * it is the exit `structure-unspellable` is about: the structure survives
+       * in the AST and not in written Carve.
+       */
+      const written = trimNonNbsp(renderHostedBlocks(def, ctx))
+      if (written === '') return
+      const lines = written.split('\n')
       out.push(`:  ${lines.shift() ?? ''}`)
       for (const line of lines) out.push(`   ${line}`)
     })

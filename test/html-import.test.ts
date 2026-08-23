@@ -412,7 +412,12 @@ describe('definition lists on import', () => {
     expect(carveToHtml(carve(html))).toBe('<p>::\n:  A description whose term was deleted.</p>')
   })
 
-  it('reports an empty description, which the term above it swallows', () => {
+  it('drops an empty description and reports it, leaving the term alone', () => {
+    // The bare `:` line the writer used to emit is not an empty description: the
+    // parser reads it as more of the TERM, so this came back as a `<dt>` reading
+    // `Term\n:` with no `<dd>` at all - the description lost AND the term
+    // damaged. Writing the term alone loses exactly the empty description and
+    // nothing else, which is the ceiling the diagnostic declares (carve#1608).
     const html = '<dl><dt>Term</dt><dd></dd></dl>'
     expect(htmlToAst(html).report.diagnostics).toEqual([])
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
@@ -421,19 +426,21 @@ describe('definition lists on import', () => {
       message: expect.stringContaining('<dd> that writes nothing'),
       path: '/dl[1]/dd[2]',
     }))
-    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+    expect(htmlToCarve(html).value).toBe(':: Term\n')
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term</dt>\n</dl>')
   })
 
   it('reports a description whose blocks write nothing, not only an empty one', () => {
     // `<dd><p></p></dd>` is a NON-empty block list holding a block that writes
-    // nothing, so an array-length check reports no loss while the writer still
-    // emits the bare `:` the term above absorbs.
+    // nothing, so an array-length check reports no loss - and the writer drops
+    // it for the same reason it drops the empty array, since what decides is
+    // whether anything reaches the source, not how long the list is.
     const html = '<dl><dt>Term</dt><dd><p></p></dd></dl>'
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
       message: expect.stringContaining('<dd> that writes nothing'),
     }))
-    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term\n:</dt>\n</dl>')
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term</dt>\n</dl>')
   })
 
   it('leaves a description that writes SOMETHING alone', () => {

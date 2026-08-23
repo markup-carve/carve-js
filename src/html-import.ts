@@ -126,6 +126,12 @@ const BLOCK = new Set([
   'address', 'article', 'aside', 'blockquote', 'details', 'div', 'dl', 'fieldset',
   'figure', 'footer', 'form', 'header', 'hgroup', 'main', 'nav', 'ol', 'p', 'pre',
   'section', 'table', 'ul', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
+  // Synthetic, never present in real HTML input: the marker
+  // `markFootnotePlacement` leaves where a non-final endnotes section sat. It
+  // belongs here because it stands where a `<section>` stood, and a name
+  // `blocks()` does not recognize is buffered as INLINE - which put the
+  // placement inside the paragraph after it rather than between the two.
+  'carve-footnote-placement',
 ])
 /**
  * Is this node a BLOCK being flattened into an inline slot?
@@ -1147,6 +1153,11 @@ class Importer {
       const content = this.text(source).replace(/\n$/, '')
       return [{ type: 'code_block', content, ...(lang ? { lang } : {}), ...(attrs ? { attrs } : {}) }]
     }
+    // The synthetic element `markFootnotePlacement` leaves where an endnotes
+    // section sat that was NOT last; never present in real HTML input. It reads
+    // back as the `::: footnotes` placement directive, which is what puts the
+    // rebuilt section back in that slot instead of at document end.
+    if (tag === 'carve-footnote-placement') return [{ type: 'admonition', kind: 'footnotes', children: [] }]
     if (tag === 'hr') return [{ type: 'thematic_break', ...(attrs ? { attrs } : {}) }]
     if (tag === 'table') return [this.table(node, path, depth, attrs)]
     if (tag === 'figure') return this.figure(node, path, depth, attrs)
@@ -1472,7 +1483,7 @@ class Importer {
             this.unspellable.push({
               node: child,
               path: childPath,
-              message: 'A <dd> that writes nothing has no Carve spelling; the bare `:` line is read as more of the term above it',
+              message: 'A <dd> that writes nothing has no Carve spelling; the empty description is dropped, because the only line that could carry it is read as more of the term above it',
             })
           }
           current.definitions.push(definition)
@@ -1631,6 +1642,8 @@ class Importer {
    * SCOPED TO THE ROLE, not to `<section>`. A `<section id="intro">` an author
    * wrote is unwrapped and still reports both rows, because nothing derives it.
    */
+  private footnotePlacementMarked = false
+
   private isDerivedWrapper(node: P5Node, tag: string): boolean {
     return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
   }
@@ -1646,9 +1659,15 @@ class Importer {
    * An empty ARRAY is the obvious case, and it is not the only one: the two
    * further shapes measured against the writer are a paragraph with no visible
    * text (`<dd><p></p></dd>`) and a list with no items (`<dd><ul></ul></dd>`).
-   * Both write a bare `:` line that the term above absorbs. Everything else
-   * writes something the reparse keeps - an empty `<li>` comes back as `:  - +`
-   * and an empty `<blockquote>` as `:  >`, which are descriptions, not losses.
+   * None of the three reaches the source: the writer drops a description that
+   * would write nothing, because the bare `:` line it used to emit is read as
+   * more of the TERM above it - losing the description AND damaging the term
+   * (carve#1608). Everything else writes something the reparse keeps - an empty
+   * `<li>` comes back as `:  - +` and an empty `<blockquote>` as `:  >`, which
+   * are descriptions, not losses.
+   *
+   * A DECLARED LOSS IS A CEILING, NOT A LICENCE: this is what declares the one
+   * the writer takes, and dropping the description is all it covers.
    */
   private writesNothing(blocks: BlockNode[]): boolean {
     return blocks.every(
@@ -3641,17 +3660,80 @@ class Importer {
    * swept up here instead.
    */
   private pruneEmptyFootnoteContainer(node: P5Node | undefined): void {
-    while (node !== undefined && node.tagName !== undefined) {
-      if (node.tagName === 'body' || node.tagName === 'html') return
+    // WHERE the container sat, so the placement below can put a marker back
+    // there. Recorded at every level the walk detaches, so it names the
+    // outermost thing that actually left rather than the note list inside it.
+    let removedFrom: { parent: P5Node; index: number } | undefined
+    outer: while (node !== undefined && node.tagName !== undefined) {
+      if (node.tagName === 'body' || node.tagName === 'html') break
       for (const child of node.childNodes ?? []) {
         if (this.isFootnoteChromeNode(child)) continue
         if (child.tagName === 'hr' || child.tagName === 'br') continue
-        return
+        break outer
       }
       const parent = node.parentNode
+      const index = parent?.childNodes?.indexOf(node) ?? -1
       this.detachP5Node(node)
+      if (parent !== undefined && index !== -1) removedFrom = { parent, index }
       node = parent
     }
+    this.markFootnotePlacement(removedFrom)
+  }
+
+  /**
+   * An endnotes section that is not last: POSITION IS MEANING.
+   *
+   * The notes are consumed into `footnoteDefs`, and the renderer appends the
+   * section it rebuilds at DOCUMENT END. That reproduces the input exactly when
+   * the section was already last, and silently moves it when it was not: the
+   * same characters in the wrong order, with nothing said (carve#1608,
+   * carve-js#1394).
+   *
+   * This is NOT `structure-unspellable`. Carve HAS a spelling for the position -
+   * the `::: footnotes` placement directive - so discarding a position the
+   * language can express is a loss with no justification. A marker goes back
+   * where the section sat, and the AST-returning exit gets the placement node in
+   * the same slot.
+   *
+   * ONLY when something actually follows it, checked outward through the
+   * ancestors rather than among the immediate siblings alone: a section last in
+   * a `<div>` that is itself followed by a paragraph is still not last in the
+   * document. A section that IS last needs no marker, and gets none, so every
+   * document that was already right stays byte-identical.
+   */
+  private markFootnotePlacement(removedFrom: { parent: P5Node; index: number } | undefined): void {
+    if (removedFrom === undefined) return
+    if (this.footnotePlacementMarked) return
+    if (!this.contentFollows(removedFrom.parent, removedFrom.index)) return
+    const siblings = removedFrom.parent.childNodes
+    if (siblings === undefined) return
+    const marker: P5Node = {
+      nodeName: 'carve-footnote-placement',
+      tagName: 'carve-footnote-placement',
+      attrs: [],
+      childNodes: [],
+      parentNode: removedFrom.parent,
+    }
+    siblings.splice(Math.min(removedFrom.index, siblings.length), 0, marker)
+    this.footnotePlacementMarked = true
+  }
+
+  /** Is there content after INDEX in PARENT, or after PARENT in any ancestor? */
+  private contentFollows(parent: P5Node, index: number): boolean {
+    let node: P5Node | undefined = parent
+    let from = index
+    while (node !== undefined) {
+      const siblings = node.childNodes ?? []
+      for (let i = from; i < siblings.length; i++) {
+        if (!this.isFootnoteChromeNode(siblings[i]!)) return true
+      }
+      const up: P5Node | undefined = node.parentNode
+      if (up === undefined) return false
+      from = (up.childNodes?.indexOf(node) ?? -1) + 1
+      if (from === 0) return false
+      node = up
+    }
+    return false
   }
 }
 
