@@ -111,7 +111,22 @@ interface CarveContext {
 /**
  * Render canonical Carve source.
  *
- * @throws {SourceUnspellableError} when no source can reproduce an AST node.
+ * The contract is on the node's own content: a node whose value no Carve source
+ * can carry is refused rather than written as the nearest form that can be
+ * spelled, because the nearest form re-reads as a different tree and the
+ * difference is silent (carve-js#1209, carve-js#1344). It covers an empty raw
+ * inline, and a verbatim value the block layer would take apart - one carrying
+ * whitespace at a line's edge, and one needing the verbatim padding pair while
+ * ending in a line terminator.
+ *
+ * What it does NOT cover is a value that IS spellable and is defeated by where
+ * its node sits: a backtick-run span opening a block or carrying an attribute
+ * block (see `unclosedVerbatimSpells`), and a blank line, which a line block
+ * spells as `%%` and a paragraph cannot spell at all. Those keep the closed
+ * form.
+ *
+ * @throws {SourceUnspellableError} when no source can carry an AST node's own
+ *   content.
  */
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
@@ -2341,12 +2356,12 @@ function renderInlineBody(
           'an empty raw inline has no Carve source spelling',
         )
       }
-      return `${renderCode(node.content)}{=${escapeFormat(node.format)}}`
+      return `${renderCode(node.content, false, 'raw_inline')}{=${escapeFormat(node.format)}}`
     case 'literal_inline':
       // §27: `!` prefix on a verbatim span. A trailing attribute block is the
       // ordinary inline attribute block (same as a code span carries).
       // renderCode widens the backtick fence when the content holds backticks.
-      return `!${renderCode(node.content)}${renderAttrs(node.attrs)}`
+      return `!${renderCode(node.content, false, 'literal_inline')}${renderAttrs(node.attrs)}`
     case 'symbol':
       return withAttrs(`:${escapeSymbolName(node.name)}:`)
     case 'autolink':
@@ -2482,7 +2497,7 @@ function renderBlockComment(content: string): string {
 }
 
 function renderMath(display: boolean, content: string): string {
-  const code = renderCode(content)
+  const code = renderCode(content, false, 'math')
   return `${display ? '$$' : '$'}${code}`
 }
 
@@ -2551,7 +2566,60 @@ function unclosedVerbatimSpells(content: string): boolean {
   return true
 }
 
-function renderCode(content: string, allowUnclosed = false): string {
+/**
+ * Why NO Carve source reproduces this verbatim value, or `undefined` when one
+ * does (carve-js#1344).
+ *
+ * `unclosedVerbatimSpells` above asks the narrower question - whether the BARE
+ * OPENER serves - and two of its answers are not about that form at all: they
+ * are properties of the block layer, which strips a line's trailing run and a
+ * continuation line's indent before the inline scanner ever sees a backtick. A
+ * value carrying either cannot be written in the closed form either, or in any
+ * other, because the loss happens on the way back IN. So the same two
+ * conditions answer the wider question, and they are spelled here rather than
+ * shared with the narrower predicate, which reads its own list for its own
+ * reason.
+ *
+ * The third condition is the padding pair. Content touching a backtick has to
+ * be padded or it merges with the delimiter, and a TRAILING pad after a line
+ * terminator is the last line's leading indent, which the block layer takes -
+ * so the value comes back holding the leading pad and missing the trailing one.
+ * A value ending in a terminator that needs NO pad is spelled fine, which is
+ * why the pad is part of the question and not just the terminator.
+ *
+ * A BLANK LINE IS DELIBERATELY NOT HERE, even though `unclosedVerbatimSpells`
+ * rejects one and a paragraph really cannot carry it. Inside a line block it is
+ * spellable, and spelled: §23 makes a comment-only line the one construct that
+ * leaves an empty verse line, so `renderBlock` writes the emptied line as `%%`
+ * and it re-reads exactly. Corpus 344 is that document. The question this
+ * predicate answers is about the VALUE alone, so a loss that only one position
+ * inflicts belongs with the other positional guards, not here.
+ *
+ * THE TERMINATOR CLASS IS `[\r\n]`, not `\r?\n`. A lone CR is a line
+ * terminator in PART 2's list, so `a \rb` loses its space exactly as `a \nb`
+ * does; reading only the CRLF pair would have let the CR spellings through the
+ * two edge rules while the pad rule below caught them, which is one rule
+ * answered two ways.
+ *
+ * Nothing this rejects is reachable by parsing a document: the parser drops
+ * that whitespace before the inline scan, in a line block as much as in a
+ * paragraph, and normalizes every terminator to LF before that, so no document
+ * produces one. They arrive by constructing a tree or by ingesting one.
+ */
+function unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
+  if (/[ \t][\r\n]/.test(content)) {
+    return 'a line of the value ends in whitespace, which the block layer strips'
+  }
+  if (/[\r\n][ \t]/.test(content)) {
+    return 'a line of the value starts with whitespace, which the block layer strips'
+  }
+  if (needsPad && /[\r\n]$/.test(content)) {
+    return 'a padded value ending in a line terminator loses the pad'
+  }
+  return undefined
+}
+
+function renderCode(content: string, allowUnclosed = false, nodeType = 'code'): string {
   // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
   // much as it is inside a fence - and `normalize()` would otherwise rewrite it
   // to `\ `, which inside backticks is a literal backslash and a space
@@ -2578,6 +2646,12 @@ function renderCode(content: string, allowUnclosed = false): string {
     content.startsWith('`') ||
     content.endsWith('`') ||
     (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
+  // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
+  // writer refuses it instead of emitting the nearest form (carve-js#1344).
+  // Same throw path as the empty `raw_inline`, and the same sentence: the
+  // writer's contract is that what it returns re-reads as what it was given.
+  const unspellable = unspellableVerbatimReason(content, needsPad)
+  if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
   // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
   // the closed form has no spelling and the bare opener is the one that does
   // (carve-js#1338). Only the caller knows whether the opener may run to the

@@ -40,6 +40,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`renderCarve` refuses a verbatim value no Carve source can carry** (#1344,
+  ruling on that ticket). A `code`, `raw_inline`, `literal_inline` or `math`
+  node whose value holds whitespace at a line's edge, or needs the verbatim
+  padding pair while ending in a line terminator, now throws the exported
+  `SourceUnspellableError` instead of being written as the nearest spellable
+  form, which re-read as a different tree. No document parses to such a value,
+  so only constructed or ingested trees are affected.
+
 - **The writer escapes per opener occurrence, not per unit**
   (markup-carve/carve#1533, PART 11 §2). A unit that needs the conservative form
   no longer escapes every candidate in it beside the one that needed it:
