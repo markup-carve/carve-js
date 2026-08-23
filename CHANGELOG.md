@@ -139,6 +139,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A derived admonition title id is recognized when the id namespace
+  collides** (#1336). The importer predicted the renderer's counter as `adm-N`,
+  but the renderer allocates through the document's id registry, which appends
+  a suffix when the author already holds that name - so a document carrying
+  `{#adm-1}` renders `adm-1-2`, the equality match missed, and the import
+  reported an `attribute-dropped` row for a value nothing lost. The prediction
+  now models the allocation. Fixed in carve-rs as markup-carve/carve-rs#1264;
+  carve-php does not have it.
+
 - **An HTML import rebuilds the container the renderer wrote** (#1316,
   markup-carve/carve#1502). A callout was unwrapped to its own body and a tab
   set, a code group and every other named container came back as a generic
