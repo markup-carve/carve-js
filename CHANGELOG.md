@@ -164,6 +164,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   consumed while the description beside it already blended a recorded start
   with a derived end; both are blended now. Two spec-corpus documents publish
   a shorter `definition_term` span.
+- **A heading's span ends at its last placed child, so it drops the trailing
+  whitespace its line drops** (#1348, PART 12 §4 and PART 2's NO TRAILING
+  WHITESPACE clause). A heading has no closer, and the run it used to cover
+  reaches no child of it: PART 2 rules such a run is not content at all. One
+  spec-corpus document publishes a shorter `heading` span.
 
 - **A table `<caption>` is numbered among the table's child nodes**
   (markup-carve/carve#1560, PART 12 §16). The step was a literal `caption[1]`

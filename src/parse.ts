@@ -4241,10 +4241,21 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
  * block that attaches to nothing yields no child at all, and §4 excludes it by
  * name. Every other container ends at a fence closer, a pipe or a delimiter run
  * and is left alone.
+ *
+ * A HEADING IS IN THE SET FOR THE SAME REASON, over inline children rather than
+ * blocks (markup-carve/carve-js#1348). It has no closer either - it ends at its
+ * newline by construction - so its extent came from the line it consumed, and
+ * that line can end in whitespace PART 2's NO TRAILING WHITESPACE clause rules
+ * is "DROPPED. It does not reach the output, and it is not content", naming a
+ * heading among the lines it holds for. The run reaches no inline child,
+ * because the text the children are parsed from has already had it stripped, so
+ * a construct was owning source that is not content. Ending at the last placed
+ * child is §4's own answer and takes a trailing tab with it.
  */
 const ENDS_AT_LAST_PLACED_CHILD = new Set([
   'block_quote',
   'definition_list',
+  'heading',
   'list',
   'list_item',
 ])
