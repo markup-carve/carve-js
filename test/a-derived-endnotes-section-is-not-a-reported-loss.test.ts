@@ -43,7 +43,7 @@ describe('a derived endnotes section is not a reported loss', () => {
 
   it('writes the degraded form carve-php writes, byte for byte', () => {
     // carve-php#1585 settled this source, and the shared fixture pins it. It
-    // gained the `{loose}` key in markup-carve/carve@d2bd801b: a document with
+    // gained the `{loose}` key in markup-carve/carve commit d2bd801b: a document with
     // ONE footnote imports as exactly one list item, a blank line needs two to
     // stand between, so before PART 9 §17 L7 the written source re-read TIGHT
     // and lost the `<p>` the imported tree recorded. The engine is ahead of the

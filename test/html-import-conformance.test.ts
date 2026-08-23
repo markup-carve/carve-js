@@ -31,7 +31,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; carve: string }>([
       // a blank line needs two items to stand between - so before the consumed
       // `loose` boolean this fixture's source parsed TIGHT while the tree
       // recorded beside it said loose. The writer now spells the key, which is
-      // what markup-carve/carve@d2bd801b rewrote the fixture to.
+      // what markup-carve/carve commit d2bd801b rewrote the fixture to.
       reason: 'the one-item loose list now has a spelling: the consumed `loose` boolean',
       carve: '---\n\n{loose}\n1. Note text.\n',
     },

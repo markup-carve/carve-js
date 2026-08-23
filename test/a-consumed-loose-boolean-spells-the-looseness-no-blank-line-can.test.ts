@@ -161,6 +161,17 @@ describe('the writer spells looseness only where a blank line cannot', () => {
     expect(h(fmt(src))).toBe(h(src))
   })
 
+  // THE NEAR MISS a naive reading of the rule also decorates. This one-item list
+  // is loose, and its lead CONTAINER carries a blank line of its own, so the
+  // written source re-reads loose without any key - the mark would be idle. The
+  // looseness is not even observable in the HTML here, since the `<li>` holds no
+  // paragraph of its own.
+  it('does not decorate a one-item list whose lead container already spells it', () => {
+    const src = '- ::: d\n  b\n\n  tail\n  :::\n'
+    expect(fmt(src)).toBe(src)
+    expect(h(fmt(src))).toBe(h(src))
+  })
+
   it('round-trips every shape through the writer', () => {
     const cases = [
       '{loose}\n- Note text.\n',
@@ -172,6 +183,7 @@ describe('the writer spells looseness only where a blank line cannot', () => {
       '{loose=x}\n- x\n',
       '{loose}\n> q\n',
       '- outer\n  {loose}\n  - inner\n',
+      '- ::: d\n  b\n\n  tail\n  :::\n',
     ]
     for (const src of cases) {
       expect(h(fmt(src)), src).toBe(h(src))
