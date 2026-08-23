@@ -836,11 +836,14 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
       if (block.type === 'list') {
         listSeparated = previousList !== null && listsWouldMerge(previousList, block)
         previousList = block
-      } else if (rendered.length > 0) {
+      } else if (spellsSomething(rendered)) {
         previousList = null
         listSeparated = false
       }
-      if (rendered.length > 0) {
+      // A block that spells nothing contributes nothing - not even the blank
+      // line a part of its own would open. As far as the page is concerned it
+      // is the empty paragraph above it (PART 11 §10j).
+      if (spellsSomething(rendered)) {
         const text = rendered
         // A RUN OF BIBLIOGRAPHY LINES STAYS A RUN. Consecutive `[@key]: entry`
         // lines are one paragraph in the source and N nodes in the tree since
@@ -1400,6 +1403,32 @@ function markerColumnTag(): string {
  * with them - nothing at all inside a list item, `>` inside a blockquote, which
  * is exactly how each host spells a blank line of its own.
  */
+/**
+ * Does this block put anything on the page that a re-parse can see?
+ *
+ * PART 11 §10j: an unspellable block does not cancel the adjacency it cannot
+ * spell. When two sibling lists are parted by a block that reaches the page,
+ * that block separates them and PART 9 §11 N1a's boundary is not needed; when
+ * it reaches the page with NOTHING, the lists are still adjacent and the
+ * boundary is the only thing keeping them two.
+ *
+ * ASKED OVER WHAT THE BLOCK SPELLS, NEVER OVER ITS TYPE. A test written
+ * against `paragraph` would pass the shape that found this and miss the
+ * rule - a `figure` wrapping a `table` is interchange-only too (PART 12
+ * §17), and so is anything a later clause makes unspellable.
+ *
+ * A length test was the near miss: an EMPTY paragraph renders to nothing and
+ * was already handled, while a paragraph holding one space rendered to one
+ * space and cancelled the boundary - so the writer disagreed with itself
+ * about two trees it puts the same thing on the page for. A space and a tab
+ * are the `whitespace` terminal, which a re-parse reads as a blank line. A
+ * NO-BREAK space is not in it and is content, so a paragraph holding one
+ * spells a paragraph and does separate the lists.
+ */
+function spellsSomething(rendered: string): boolean {
+  return /[^ \t\n\r]/.test(rendered)
+}
+
 function boundaryTag(): string {
   return sentinels[4]!
 }
