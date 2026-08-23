@@ -1880,20 +1880,32 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
    * defines an abbreviation the input never had - an addition, which is the
    * thing being avoided.
    *
-   * DEFERRED, not emitted at the drop: a dropped entry with nothing after it
-   * needs no separator, which is the one-entry shape carve#1627 already ruled.
-   * The mark is spent only once something else in this list is written.
+   * DEFERRED, AND SPENT ONLY ON A TERM. What the break prevents is a term
+   * ABOVE the drop acquiring a description written BELOW it, and only a `::`
+   * line starts a new entry that could carry one. A second description of the
+   * SAME entry is not that: `<dl><dt>t</dt><dd></dd><dd>d2</dd></dl>` is one
+   * entry whose term already has `d2`, so breaking there would strand `:  d2`
+   * outside the list, where it re-reads as a paragraph - a loss the rule was
+   * meant to prevent, not cause. It clears the mark instead.
+   *
+   * A dropped entry with nothing after it needs no separator either, which is
+   * the one-entry shape carve#1627 already ruled - an unspent mark is simply
+   * dropped at the end.
    */
   let pendingBreak = false
-  const emit = (line: string): void => {
+  const emitTerm = (line: string): void => {
     if (pendingBreak) {
       out.push('', '%%', '')
       pendingBreak = false
     }
     out.push(line)
   }
+  const emitDefinition = (line: string): void => {
+    pendingBreak = false
+    out.push(line)
+  }
   for (const item of items) {
-    for (const term of item.terms) emit(`:: ${renderInlines(term, ctx)}`)
+    for (const term of item.terms) emitTerm(`:: ${renderInlines(term, ctx)}`)
     item.definitions.forEach((def, index) => {
       // An EMPTY description whose line carries a hoisted definition is one the
       // author wrote the definition on: write it back there. Without this the
@@ -1907,7 +1919,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           // node in this set, so marking first renders the line away.
           const written = renderBlock(definition, ctx)
           definitionsWrittenInPlace.add(definition as unknown as object)
-          emit(`:  ${written}`)
+          emitDefinition(`:  ${written}`)
           return
         }
         const label = line === undefined ? undefined : footnoteDefsByLine.get(line)
@@ -1918,7 +1930,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           // A footnote body can be multi-line; its continuation lines carry the
           // body's own two-column indent and sit under the description.
           const [first, ...rest] = written.split('\n')
-          emit(`:  ${first}`)
+          emitDefinition(`:  ${first}`)
           for (const l of rest) out.push(`   ${l}`)
           return
         }
@@ -1958,7 +1970,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
         return
       }
       const lines = written.split('\n')
-      emit(`:  ${lines.shift() ?? ''}`)
+      emitDefinition(`:  ${lines.shift() ?? ''}`)
       for (const line of lines) out.push(`   ${line}`)
     })
   }

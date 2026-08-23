@@ -142,6 +142,32 @@ describe('a dropped empty description breaks the list', () => {
   })
 
   /**
+   * A SECOND DESCRIPTION OF THE SAME ENTRY IS NOT A NEW ENTRY, and breaking
+   * there would cause the loss the rule exists to prevent rather than avoid it:
+   * `:  d2` written outside the list re-reads as a PARAGRAPH, so the
+   * description is gone and a paragraph the input never had is in its place.
+   * The term already has `d2`, so nothing is gained by keeping them together
+   * and there is nothing to declare.
+   */
+  it('does not break before another description of the same term', () => {
+    const html = '<dl><dt>t</dt><dd></dd><dd>d2</dd></dl>'
+    expect(htmlToCarve(html).value).toBe(':: t\n:  d2\n')
+    expect(carveToHtml(htmlToCarve(html).value)).toBe('<dl>\n  <dt>t</dt>\n  <dd>d2</dd>\n</dl>')
+    expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
+  })
+
+  /**
+   * And the mark is CLEARED there rather than carried: a term that follows such
+   * an entry is a new entry whose description is its own, so the earlier drop
+   * has nothing left to protect against.
+   */
+  it('clears the mark once the same entry writes a description after all', () => {
+    const html = '<dl><dt>t1</dt><dd></dd><dd>d1</dd><dt>t2</dt><dd>d2</dd></dl>'
+    expect(htmlToCarve(html).value).toBe(':: t1\n:  d1\n:: t2\n:  d2\n')
+    expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
+  })
+
+  /**
    * EVERY dropped entry breaks, not just the first. Spending one separator for a
    * run of them would leave `:: t2` / `:: t3` / `:  d3` in the second list, and
    * `t2` would acquire `d3` - the same addition one list further along. One

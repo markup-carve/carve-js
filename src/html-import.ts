@@ -1480,8 +1480,10 @@ class Importer {
     // and which the ceiling forbids outright. The writer splits instead; what
     // that costs is the grouping, and this is the row that declares it.
     //
-    // Only a drop with something AFTER it splits anything: the last-entry shape
-    // writes the term alone and stays one list, which is what carve#1627 ruled.
+    // Only a drop with a TERM after it splits anything. The last-entry shape
+    // writes the term alone and stays one list, which is what carve#1627 ruled;
+    // and a second description of the SAME entry is not a new entry at all -
+    // that term already has it, so nothing is gained and nothing is split.
     let dropped = false
     let splitsHere = false
     let current: DefinitionItem | undefined
@@ -1549,8 +1551,8 @@ class Importer {
               path: childPath,
               message: 'A <dd> that writes nothing has no Carve spelling; the empty description is dropped, because the only line that could carry it is read as more of the term above it',
             })
-          } else if (dropped) {
-            splitsHere = true
+          } else {
+            dropped = false
           }
           current.definitions.push(definition)
           return
