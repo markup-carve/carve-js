@@ -1144,7 +1144,12 @@ class Importer {
    * attribute is reported, and skipping the call made these three the only
    * places in the importer where active markup was dropped in silence.
    */
-  private entryAttributes(node: P5Node, path: string, tag: 'dt' | 'dd' | 'div' | 'summary', noun?: string): void {
+  private entryAttributes(
+    node: P5Node,
+    path: string,
+    tag: 'dt' | 'dd' | 'div' | 'summary' | 'figcaption' | 'caption',
+    noun?: string,
+  ): void {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
     const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
@@ -1201,6 +1206,33 @@ class Importer {
     delete kept.classes
     if (rest.length) kept.classes = rest
     return { kind, ...(kept.id || kept.classes || kept.keyValues ? { attrs: kept } : {}) }
+  }
+
+  /**
+   * A CAPTION's inlines, with the caption ELEMENT accounted for.
+   *
+   * A caption line holds inline content and has no attribute slot, so a
+   * `<figcaption>` or a table `<caption>` is consumed for its CHILDREN and the
+   * element itself contributes no node. Reading `childNodes` straight past it -
+   * which all four caption sites did - meant the element's own attributes were
+   * never looked at, so nothing was kept and nothing was said: an
+   * `onclick` on a `<figcaption>` was stripped in silence, and a silent drop is
+   * the one failure mode the report exists to prevent
+   * (markup-carve/carve-js#1332).
+   *
+   * THIS IS THE CATEGORY, not the element. The importer already had the answer
+   * for a `<dt>`, a `<dd>`, a `<dl>`'s group wrapper and a `<summary>` - route
+   * the node through `attrs()` for its diagnostics even though the model has
+   * nowhere to put the result - and `entryAttributes` is that answer. The two
+   * caption slots were simply not wired to it, which is why the comment there
+   * claiming those were "the only places where active markup was dropped in
+   * silence" had stopped being true. Every consumed-for-its-children element
+   * now goes through one helper, so the next slot added inherits the report
+   * rather than having to remember it.
+   */
+  private captionInlines(node: P5Node, path: string, depth: number, tag: 'figcaption' | 'caption'): InlineNode[] {
+    this.entryAttributes(node, path, tag, 'a caption line')
+    return this.inlines(node.childNodes ?? [], path, depth)
   }
 
   private attrNames(attrs: Attrs): string[] {
@@ -1698,7 +1730,7 @@ class Importer {
       this.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path)
     }
     const caption = captionNode
-      ? this.inlines(captionNode.childNodes ?? [], `${path}/caption[1]`, depth + 1)
+      ? this.captionInlines(captionNode, `${path}/caption[1]`, depth + 1, 'caption')
       : undefined
     return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
   }
@@ -1924,6 +1956,24 @@ class Importer {
           'warning',
           captionPath,
         )
+        /*
+         * THE SIXTH CAPTION SITE, and the only one where the element goes
+         * WHOLE. `table-degraded` above says the caption was dropped, and says
+         * nothing about what rode on it - so an `onclick` here was stripped
+         * with no `attribute-dropped` row, which is the same silence this
+         * change removes everywhere else. The call is what reports it: an
+         * event handler is diagnosed inside `attrs()`, and anything it kept is
+         * named here, because the element it would have ridden on is gone.
+         */
+        const own = this.attrs(captionNode, captionPath)
+        if (own) {
+          this.add(
+            'attribute-dropped',
+            `Dropped ${this.attrNames(own).join(', ')} with the <figcaption>: the element itself is not kept`,
+            'warning',
+            captionPath,
+          )
+        }
         return [target, ...targets.slice(1)]
       }
       /*
@@ -1942,11 +1992,11 @@ class Importer {
           message: 'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
         })
       }
-      return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], captionPath, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
+      return [{ type: 'figure', target: target as never, caption: captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : [], ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)
     this.reportUnwrappedAttributes(attrs, 'figure', path)
-    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.inlines(captionNode.childNodes ?? [], captionPath, depth + 1) }] : [])]
+    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') }] : [])]
   }
 
   private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): InlineNode[] {
@@ -2485,7 +2535,7 @@ class Importer {
     }
     const group: FigureGroup = { type: 'figure_group', children }
     if (captionNode) {
-      group.caption = this.inlines(captionNode.childNodes ?? [], `${path}/figcaption[${captionAt + 1}]`, depth + 1)
+      group.caption = this.captionInlines(captionNode, `${path}/figcaption[${captionAt + 1}]`, depth + 1, 'figcaption')
     }
     const groupAttrs = this.stripClass(attrs, 'carve-figure-group')
     if (groupAttrs) group.attrs = groupAttrs

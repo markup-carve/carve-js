@@ -145,6 +145,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the `htmlToAst` tree both change; a class no fence opener can spell still
   keeps the generic node.
 
+- **A consumed caption reports the attributes it drops** (#1332). A
+  `<figcaption>` and a table `<caption>` are read for their children, and the
+  element's own attributes were dropped without a diagnostic - an `onclick` on a
+  caption was stripped in silence where carve-php and carve-rs both reported it.
+  Every caption site now routes through the helper the importer already used for
+  a `<dt>`, `<dd>` and `<summary>`, including the `<figcaption>` a figure-wrapped
+  table drops whole. The conversion is unchanged; the report gains the rows.
+
 - **A diagnostic on a bare inline run is numbered among the body children**
   (markup-carve/carve#1554, PART 12 §16). The importer wraps such a run in a
   paragraph, correctly prints no step for the wrapper, and then numbered the run
