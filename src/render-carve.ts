@@ -169,12 +169,17 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // cannot help.
   const minimalTree = treeOf(minimal)
   if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
-  if (escapingIsRedundant(minimalTree, conservative)) return minimal
+  // ONE parse of the conservative form as well, for the same reason as the
+  // minimal one above: the redundancy check and the narrowing below both need
+  // it, and parsing it in each made every narrowed document pay a second full
+  // parse of its own output for an answer it already had.
+  const conservativeTree = treeOf(conservative)
+  if (escapingIsRedundant(minimalTree, conservativeTree)) return minimal
   // The minimal form of the WHOLE document does not hold, which used to end the
   // decision here with the conservative form of the whole document. PART 11 §2b
   // says how far that fallback actually reaches: the smallest unit whose minimal
   // form fails, and §2's own test everywhere else.
-  return narrowEscalation(ast, conservative)
+  return narrowEscalation(ast, conservative, conservativeTree)
 }
 
 /**
@@ -202,15 +207,14 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
  * instance - and the document-scoped form is returned rather than a narrowing
  * built on a state that is not what it claims.
  */
-function narrowEscalation(ast: Document, conservative: string): string {
-  const conservativeTree = treeOf(conservative)
+function narrowEscalation(ast: Document, conservative: string, conservativeTree: string | null): string {
   // Null answers "cannot tell", exactly as it does for the minimal form: with
   // no tree to hold the narrowing against, there is nothing to narrow toward.
   if (conservativeTree === null) return conservative
 
-  const units = collectEscapeUnits(ast)
-  if (units.length === 0) return conservative
-  const escalated = new Set<object>(units)
+  const all = collectEscapeUnits(ast)
+  if (all.length === 0) return conservative
+  const escalated = new Set<object>(all)
 
   const renderSelectively = (): string => {
     escalatedUnits = escalated
@@ -221,8 +225,41 @@ function narrowEscalation(ast: Document, conservative: string): string {
     }
   }
 
-  let best = renderSelectively()
+  // THE CONTROL RENDER LOGS WHICH UNITS THE WRITER ACTUALLY ASKS ABOUT, so the
+  // search below can skip the ones it cannot move. `collectEscapeUnits` is a
+  // generic walk over every node that COULD carry an escaped character; the
+  // units that DO are whatever the writer's own escape arms charge a character
+  // to, and only those read `escalatedUnits`. A unit the writer never asks about
+  // renders the same bytes in or out of the set, so offering it its minimal form
+  // is a render and a parse spent to learn nothing.
+  //
+  // The gap is not small on nested documents. On the deepest corpus document -
+  // 203 nested colon fences, whose overflow past the nesting cap is the text the
+  // writer must keep from re-opening a div - the walk yields 209 units and the
+  // writer asks about FOUR of them. The other 205 were halved over at a render
+  // and a parse each, and that document's own output is 21x its source (a fence
+  // widens by one colon per level, PART 9 §12), so each of those cost about
+  // what parsing 42 KB costs.
+  //
+  // Logging it rather than predicting it is the same choice `collectEscapeUnits`
+  // makes and for the same reason: the set is whatever the arms visit, so an arm
+  // that grows a new escape cannot fall out of the search. And a unit wrongly
+  // left out cannot produce wrong output - every state the search returns is
+  // re-parsed against `conservativeTree` below, exactly as before.
+  let best: string
+  const asked = new Set<object>()
+  askedUnits = asked
+  try {
+    best = renderSelectively()
+  } finally {
+    askedUnits = null
+  }
   if (best !== conservative) return conservative
+  const units = all.filter((unit) => asked.has(unit))
+  // No guard for an EMPTY `units`: `relax` returns on an empty group, and a
+  // check here would be one no corpus document can reach - the control render
+  // asks about a unit for every byte the two forms differ in, and they differ
+  // or this is not running.
 
   // THE SEARCH IS BOUNDED, because its cost is proportional to how many units
   // FAIL. A group holding no failing unit is relaxed in one render, so a
@@ -236,9 +273,9 @@ function narrowEscalation(ast: Document, conservative: string): string {
   // every other - the escalation is wider than §2b's minimum there, never
   // narrower, and no document's output can be wrong for it.
   //
-  // MEASURED before it was chosen: over the 1341 pinned corpus documents 50
-  // reach the search at all, the most expensive spends 22 renders on 209 units,
-  // and eight times the depth of the halving gives that document 72.
+  // MEASURED over the 1358 pinned corpus documents: 51 reach the search at all,
+  // and once the control render has narrowed the candidates to the units the
+  // writer asks about, the widest holds five and none holds more.
   let budget = 8 * Math.ceil(Math.log2(units.length + 1)) + 8
 
   /** Hand `group` its minimal form, keeping it only if the document still holds. */
@@ -498,11 +535,10 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
  * reference link comes back with an empty href and reports a difference that
  * escaping never caused.
  */
-function escapingIsRedundant(minimalTree: string | null, conservative: string): boolean {
-  // `minimalTree` is the caller's single parse of the minimal form; null means it
-  // did not parse, which answers the question conservatively.
+function escapingIsRedundant(minimalTree: string | null, conservativeTree: string | null): boolean {
+  // Both trees are the caller's single parse of each form; null means it did not
+  // parse, which answers the question conservatively.
   if (minimalTree === null) return false
-  const conservativeTree = treeOf(conservative)
   return conservativeTree !== null && minimalTree === conservativeTree
 }
 
@@ -2787,6 +2823,15 @@ let escapeMode: 'minimal' | 'conservative' = 'conservative'
 let escalatedUnits: Set<object> | null = null
 
 /**
+ * Where the writer records the unit a character it is escaping belongs to.
+ *
+ * Non-null only for `narrowEscalation`'s control render, which uses it to learn
+ * which units the escape arms actually ask about - see the comment there. Null
+ * everywhere else, so no other render pays for the bookkeeping.
+ */
+let askedUnits: Set<object> | null = null
+
+/**
  * The node whose render arm is currently writing, and therefore the unit the
  * next escaped character belongs to.
  *
@@ -2797,6 +2842,7 @@ let escapeUnit: object | null = null
 
 /** Which form the character being written now takes (PART 11 §2b). */
 function escapeModeHere(): 'minimal' | 'conservative' {
+  if (askedUnits !== null && escapeUnit !== null) askedUnits.add(escapeUnit)
   if (escalatedUnits === null) return escapeMode
   return escapeUnit !== null && escalatedUnits.has(escapeUnit) ? 'conservative' : 'minimal'
 }
