@@ -5637,6 +5637,7 @@ function parseLineBlock(lexer: Lexer): LineBlock {
             lineAnchors: lines.map((line) => ({
               offset: lexer.lineOffset(line.lineIndex),
               column: lexer.lineStartColumn(line.lineIndex),
+              line: lexer.lineNumber(line.lineIndex),
             })),
           })
         : inlineSource({ anchored: false }),
@@ -5666,6 +5667,43 @@ function parseLineBlock(lexer: Lexer): LineBlock {
         return false
       }
       removeGuard(parsed)
+      // AND THE GUARD IS NOT SOURCE, so no span may end past where it sits. It
+      // is one synthesized codepoint standing in for the boundary an emptied
+      // comment line still ends at, and the scanner measures it like any other
+      // character: a verbatim run that swallowed it reported an end one
+      // codepoint INTO the `%%` the block layer removed, so the construct owned
+      // half a comment marker - and half of one either way.
+      //
+      // PART 12 §4 ends a span "immediately after the last source codepoint the
+      // construct owns". The last one this run owns is the line terminator the
+      // guard stands for, and §4's break sentence names that position as column
+      // 1 of the FOLLOWING line - which is exactly where the guard sits, at the
+      // emptied line's own start (markup-carve/carve-js#1305).
+      if (lexer.hasDocumentOffsets) {
+        const guardLine = lines[lines.length - 1]!
+        const guardOffset = lexer.lineOffset(guardLine.lineIndex)
+        const guardColumn = lexer.lineStartColumn(guardLine.lineIndex)
+        const guardLineNumber = lexer.lineNumber(guardLine.lineIndex)
+        // AT EVERY DEPTH: the run that swallows the boundary may be nested
+        // inside emphasis that opened on an earlier body line, and then the
+        // container ends there too.
+        const clampToGuard = (nodes: InlineNode[]): void => {
+          for (const node of nodes) {
+            const pos = node.pos
+            if (pos && pos.endOffset !== undefined && pos.endOffset > guardOffset) {
+              pos.endOffset = guardOffset
+              pos.endColumn = guardColumn
+              pos.endLine = guardLineNumber
+            }
+            const record = node as unknown as Record<string, unknown>
+            for (const key of ['children', 'inline', 'content'] as const) {
+              const value = record[key]
+              if (Array.isArray(value)) clampToGuard(value as InlineNode[])
+            }
+          }
+        }
+        clampToGuard(parsed)
+      }
     }
     // Read the boundary each break belongs to BEFORE any stripping takes the
     // position that says so.
@@ -6330,10 +6368,12 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
               {
                 offset: lexer.lineOffset(termLineIndex) + termStart,
                 column: lexer.lineStartColumn(termLineIndex) + termStart,
+                line: lexer.lineNumber(termLineIndex),
               },
               ...Array.from({ length: continuationLines }, (_unused, i) => ({
                 offset: lexer.lineOffset(termLineIndex + 1 + i),
                 column: lexer.lineStartColumn(termLineIndex + 1 + i),
+                line: lexer.lineNumber(termLineIndex + 1 + i),
               })),
             ]
           : undefined
@@ -10051,7 +10091,7 @@ function startsInterruptingBlock(lexer: Lexer, content?: string): boolean {
 function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
   const capIndex = lexer.pos - 1
   const capLine = lexer.lines[capIndex]
-  const anchors: Array<{ offset: number; column: number }> = []
+  const anchors: Array<{ offset: number; column: number; line: number }> = []
   const anchorable =
     lexer.hasDocumentOffsets && capLine !== undefined && capLine.endsWith(firstLine)
   if (anchorable) {
@@ -10059,6 +10099,7 @@ function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
     anchors.push({
       offset: lexer.lineOffset(capIndex) + within,
       column: lexer.lineStartColumn(capIndex) + within,
+      line: lexer.lineNumber(capIndex),
     })
   }
   const text = readCaptionText(lexer, firstLine, anchorable ? anchors : undefined)
@@ -10085,7 +10126,7 @@ function parseCaptionInline(lexer: Lexer, firstLine: string): InlineNode[] {
 function readCaptionText(
   lexer: Lexer,
   firstLine: string,
-  anchors?: Array<{ offset: number; column: number }>,
+  anchors?: Array<{ offset: number; column: number; line: number }>,
 ): string {
   let text = firstLine
   while (!lexer.eof()) {
@@ -10097,6 +10138,7 @@ function readCaptionText(
     anchors?.push({
       offset: lexer.lineOffset(lexer.pos),
       column: lexer.lineStartColumn(lexer.pos),
+      line: lexer.lineNumber(lexer.pos),
     })
     lexer.consume()
   }
@@ -10192,6 +10234,7 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
           return {
             offset: lexer.lineOffset(startLineIndex + i) + lead,
             column: lexer.lineStartColumn(startLineIndex + i) + lead,
+            line: lexer.lineNumber(startLineIndex + i),
           }
         })
       : undefined
@@ -10966,8 +11009,16 @@ interface InlineSource {
    * Absent for text that was reconstructed rather than stripped - a line block's
    * expanded whitespace, a table's reassembled cells - where no exact mapping
    * exists and inventing one is what PART 12 section 4 forbids.
+   *
+   * EACH ANCHOR CARRIES ITS SOURCE LINE NUMBER, not only its offset and column.
+   * Counting newlines in the stripped text names the right line only while the
+   * text has one newline per source line, and a container that REMOVES a line -
+   * a `+` continuation marker, whose own line the block layer consumes - breaks
+   * that. The offsets stayed right and the line number ran one short per removed
+   * line, so a node reported a line whose start its own offset was nowhere near
+   * (markup-carve/carve-js#1305).
    */
-  lineAnchors?: Array<{ offset: number; column: number }>
+  lineAnchors?: Array<{ offset: number; column: number; line: number }>
   /**
    * How many lines into `lineAnchors` this text starts.
    *
@@ -12290,6 +12341,9 @@ function pointAt(
   }
   const indices = newlineIndices(text)
   const newlinesBefore = newlinesUpTo(text, offset)
+  // A FALLBACK ONLY. `startLine + newlinesBefore` assumes the stripped text has
+  // one newline per source line, which an anchored text need not: see
+  // `lineAnchors`. Where anchors exist the anchor's own line wins below.
   const line = source.startLine + newlinesBefore
   // Offset of this line's start within the LOCAL text.
   const lineStart = newlinesBefore === 0 ? 0 : indices[newlinesBefore - 1]! + 1
@@ -12311,7 +12365,11 @@ function pointAt(
     if (newlinesBefore === 0) {
       return { line, column: source.startColumn + offset, offset: source.baseOffset + offset }
     }
-    return { line, column: anchor.column + withinLine, offset: anchor.offset + withinLine }
+    return {
+      line: anchor.line,
+      column: anchor.column + withinLine,
+      offset: anchor.offset + withinLine,
+    }
   }
 
   // Column resets to 1 right after the most recent newline; with none, it

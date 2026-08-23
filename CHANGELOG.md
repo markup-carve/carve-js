@@ -111,6 +111,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An offset past a line the block layer removed names the line it is on**
+  (#1305, markup-carve/carve#1534, PART 12 §4). A `+` continuation marker's own
+  line is consumed before the inline run, so the line number ran one short for
+  everything after it while the offsets stayed right; and a line block whose
+  last body line is an emptied comment ended an open verbatim run one codepoint
+  into the `%%` the block layer removed. Published `pos` values move on those
+  two shapes.
+
 - **An escape escalation reaches the block that failed, not the document**
   (#1298, markup-carve/carve#1516, PART 11 §2b). The writer took the
   conservative form for the whole document as soon as its minimal form did not
