@@ -5226,14 +5226,51 @@ function parseFootnoteDef(lexer: Lexer): null {
       let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
       while (lastIndex > defLineIndex && isBlankLine(lexer.lines[lastIndex] ?? '')) lastIndex--
       const lastLine = lexer.lines[lastIndex] ?? ''
-      lexer.footnoteDefPos.set(label, {
+      const pos: Position = {
         startLine: lexer.lineNumber(defLineIndex),
         endLine: lexer.lineNumber(lastIndex),
         startColumn: lexer.lineStartColumn(defLineIndex),
         endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
         startOffset: lexer.lineOffset(defLineIndex),
         endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
-      })
+      }
+      // AND IT ENDS AT ITS LAST PLACED CHILD, which the line arithmetic above
+      // cannot see (PART 12 §4, markup-carve/carve-js#1364).
+      //
+      // A definition written on a continuation line is COLLECTED and hoisted to
+      // the document by §7, so it becomes the note's SIBLING - but the note went
+      // on covering the line it was written on, and offsets 11..20 of a
+      // four-line document were claimed by two document-level nodes at once.
+      // The blank walk-back above cannot reach it: the line is not blank, it
+      // simply produced no child of this note.
+      //
+      // NOT A NEW RULE, AND NOT A RULING QUESTION. `attachBlockPos` already
+      // applies exactly this to a `block_quote`, so `> note` / `> [r]: /u`
+      // publishes a quote spanning `> note` and a definition entirely outside
+      // it - the same arrangement, answered. This construct records its extent
+      // here instead of going through that function, which is the whole reason
+      // it was left out: the marker `[^label]:` is part of no child, so the
+      // START cannot come from the body, and the END was taken from the same
+      // line arithmetic rather than from the children.
+      //
+      // markup-carve/carve#1571's exemption is untouched and still needed. It
+      // covers a definition claiming source inside the container it was
+      // authored in, which is what a note whose body CONTINUES past the
+      // definition still does - the interior overlap is exempt, and only the
+      // trailing reach is the defect.
+      //
+      // EMPTIED, THERE IS NO CHILD TO END AT, and the extent above stands. That
+      // is carve#1522's arrangement rather than this one, and moving it here
+      // would answer a question this does not ask.
+      const lastOwned = [...(lexer.footnoteDefs.get(label) ?? [])]
+        .reverse()
+        .find((child) => child.pos !== undefined)?.pos
+      if (lastOwned !== undefined) {
+        pos.endLine = lastOwned.endLine
+        if (lastOwned.endColumn !== undefined) pos.endColumn = lastOwned.endColumn
+        if (lastOwned.endOffset !== undefined) pos.endOffset = lastOwned.endOffset
+      }
+      lexer.footnoteDefPos.set(label, pos)
     }
   }
   return null
