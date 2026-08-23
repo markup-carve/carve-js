@@ -186,13 +186,23 @@ describe('footnote pairing boundaries', () => {
     expect(importAsWord(html)).toBe('Body[^1] t.\n\n[^1]: The note.\n')
   })
 
-  it('notes written before the body still pair', () => {
+  it('notes written before the body still pair, and stay before it', () => {
+    // POSITION IS MEANING. The notes are consumed into definitions and the
+    // renderer rebuilds the section, which without a marker lands at DOCUMENT
+    // END - the same characters in the wrong order, silently. Carve HAS a
+    // spelling for the position, so the placement directive goes back where the
+    // section sat and the re-render puts the notes first again (carve#1608).
     const html =
       '<html><body>' +
       '<section class="footnotes"><ol><li id="fn1"><p>The note.' +
       '<a href="#fnref1" class="footnote-back">&#8617;</a></p></li></ol></section>' +
       '<p>Body<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a> tail.</p>' +
       '</body></html>'
-    expect(importAsWord(html)).toBe('Body[^1] tail.\n\n[^1]: The note.\n')
+    const imported = importAsWord(html)
+
+    expect(imported).toBe('::: footnotes\n\n:::\n\nBody[^1] tail.\n\n[^1]: The note.\n')
+    expect(carveToHtml(imported).indexOf('The note.')).toBeLessThan(
+      carveToHtml(imported).indexOf('Body'),
+    )
   })
 })
