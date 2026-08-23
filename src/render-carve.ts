@@ -2678,7 +2678,25 @@ function restoreVerbatim(text: string): string {
       // lines, so a list item turned it into a line of nothing but spaces. The
       // host's indent goes with the sentinel: the line was blank in the source
       // and stays blank, and the reader strips those columns back off anyway.
-      .replace(new RegExp(`^[ \\t]+${sentinels[2]}$`, 'gm'), '')
+      //
+      // A BLOCKQUOTE PREFIX GOES THE SAME WAY, minus its `>`. Everything to the
+      // left of the marker is the prefix its host already wrote - two columns
+      // from a list item, `> ` from a quote, both together when a list sits in a
+      // quote - and the blank the marker stands for is spelled the way that host
+      // spells a blank line: an item writes nothing, a quote writes `>`. The
+      // marker itself may not go with it, because an EMPTY line would close the
+      // quote and take the open fence with it, so what goes is the prefix's
+      // TRAILING whitespace. Matching whitespace alone left the space behind, so
+      // a blank line inside a fenced block inside a quote came out as `> ` - a
+      // line with a trailing run, which every tool that strips trailing
+      // whitespace rewrites behind the formatter (PART 11 §7), and which no
+      // other path here emits: the §11 N1a boundary below already drops the same
+      // run for the same reason, and an authored blank quote line is written
+      // `>`. carve-rs writes `>` here; this was the divergence in
+      // markup-carve/carve#1544.
+      .replace(new RegExp(`^([ \\t>]*)${sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
+        dropTrailingWs(prefix),
+      )
       .replace(new RegExp(sentinels[0], 'g'), ' ')
       .replace(new RegExp(sentinels[1], 'g'), '\t')
       .replace(new RegExp(sentinels[2], 'g'), '')
