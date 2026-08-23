@@ -22,11 +22,16 @@
  * same count is taken on the SOURCE and subtracted, so an escape the author
  * wrote and the writer merely carried through is not charged to the writer.
  *
- * THE READING, at spec `d164b12`: 72 invented escapes across 28 of 1341
- * documents - the same 28 slugs with the same 28 counts carve-php measured in
- * markup-carve/carve-php#1549. Two engines with independently written writers
- * landing on the same 72 is the finding: the debt is not this engine's escape
- * table, it is the shape both writers chose, and the two causes are the same.
+ * THE READING, and how it moved. Seeded at 72 invented escapes across 28 of
+ * 1341 documents - the same slugs with the same counts carve-php measured in
+ * markup-carve/carve-php#1549, which is what made it a shape both writers chose
+ * rather than this engine's escape table. PART 11 §2b narrowed the fallback
+ * from the document to the failing unit and left 57 across 24
+ * (markup-carve/carve#1516), which the pin then carried to 59 across 25 when
+ * §2b's own corpus document arrived (markup-carve/carve#1549). §2's
+ * per-OPENER-OCCURRENCE test retires the 47 that were one unit written
+ * conservatively in full, and leaves 12 across 5 (markup-carve/carve#1533).
+ * carve-php measures the same 5 with the same counts.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -51,13 +56,13 @@ if (!existsSync(corpusDir)) {
  * none of them is a cause nobody has looked at yet, which is a finding rather
  * than a resident.
  *
- * `escalation: ` was the fourth, and it is gone: PART 11 §2b narrowed the
- * fallback from the document to the failing unit, and every document that
- * carried an escape only because a DIFFERENT block needed one now writes it
- * bare. What the narrowing did NOT retire is split between the two causes that
- * replaced it, because the two are fixed by different work.
+ * TWO HAVE BEEN RETIRED BY WORK. `escalation: ` went when PART 11 §2b narrowed
+ * the fallback from the document to the failing unit, and `unit scope: ` went
+ * when §2's test was taken per opener occurrence inside that unit
+ * (markup-carve/carve#1533). What is left is the two causes that are not scope
+ * questions at all.
  */
-const IDLE_ESCAPE_CAUSES = ['unit scope: ', 'opener run: ', 'minimal class: ']
+const IDLE_ESCAPE_CAUSES = ['opener run: ', 'minimal class: ']
 
 /**
  * THE DEBT, NOT A BLESSING: documents where the writer emits an escape the
@@ -73,65 +78,42 @@ const IDLE_ESCAPE_CAUSES = ['unit scope: ', 'opener run: ', 'minimal class: ']
  * because an entry nobody can explain is the next thing to investigate. An
  * empty reason, a zero count, or a slug the corpus does not have all fail below.
  *
- * UNIT SCOPE, the 20-document cause: PART 11 §4's two-render strategy has one
- * knob per unit - minimal or conservative - so a unit that fails is written
- * conservatively IN FULL, and every other candidate character in the same run
- * is escaped with the one that needed it. §2b bounds how far that reaches (the
- * run, or the block holding it, never the document) and this is what is left
- * inside the bound. Retiring it needs §2's own per-OPENER-OCCURRENCE test -
- * `\\{.note}` rather than `\\{\\.note\\}` - which is a different mechanism, not a
- * narrower scope.
+ * `unit scope` WAS THE 20-DOCUMENT CAUSE AND IS GONE (markup-carve/carve#1533).
+ * PART 11 §4's strategy had one knob per unit, so a unit that failed was
+ * written conservatively IN FULL and every candidate in it was escaped beside
+ * the one that needed it. §2 takes the decision per OPENER OCCURRENCE, and the
+ * writer now runs the same halving search one level finer: 20 documents and 47
+ * escapes retired, `\\{.note}` where the unit-scoped form wrote `\\{\\.note\\}`.
  *
- * OPENER RUN, three documents since the pin moved past carve#1516: §2's THE
- * UNIT IS THE OPENER requires the WHOLE
+ * OPENER RUN, three documents: §2's THE UNIT IS THE OPENER requires the WHOLE
  * opener run escaped - `\\#\\# H` and not `\\## H`, `\\*\\*\\*` and not `\\***` - and
  * PART 11 §2b names the first of those as its own worked example. The sweep
  * below removes ONE backslash at a time, so it reads the second `\\#` as idle:
  * with the first still there no heading forms either way. These entries are
  * therefore a floor this measurement cannot go below while §2 says what it
- * says, and they are here to be seen rather than to be fixed.
+ * says, and they are here to be seen rather than to be fixed. The occurrence
+ * search is why they are a floor rather than an accident: it offers a RUN back
+ * whole, so the half-escaped run §2 forbids is not a state it can reach.
  *
- * THE READING MOVED WITH THE PIN, NOT WITH THE WRITER (markup-carve/carve#1516).
- * The corpus document that ruling ADDED - `396-an-idle-escape-does-not-spread-
- * from-the-block-that-needed-one`, which is `  ## H` plus a second paragraph -
- * is a THIRD opener-run document, so this engine lands at 25 documents / 59
- * escapes where PART 11 §2b's prose still says 2 opener-run documents and 24 /
- * 57 overall. Nothing regressed: the writer emits the spec's own `.fmt` golden
- * for 396 byte for byte, and the sweep reads the second `\\#` of a correctly
- * escaped opener run as idle exactly as it does for `103-heading-marker-column-
- * zero-2`. The §2b count was taken on a pin that predated its own corpus case.
+ * `396-an-idle-escape-does-not-spread-from-the-block-that-needed-one` is the
+ * third of them and arrived with the PIN rather than with the writer
+ * (markup-carve/carve#1549): it is §2b's own corpus document, `  ## H` plus a
+ * second paragraph, and the writer emits the spec's `.fmt` golden for it byte
+ * for byte. §2b's prose still counts two opener-run documents because its
+ * reading was taken on a pin that predated the case it shipped.
  *
  * MINIMAL CLASS, the other two: both passes agree, so nothing escalated, and
  * the escape is still idle - once because a literal backslash is written
  * doubled where the bare one re-parses the same, once because the writer's own
- * cell padding retired an authored escape it then kept.
+ * cell padding retired an authored escape it then kept. Both are §2 defects in
+ * the escape logic and are fixed on their own merits.
  */
 const IDLE_ESCAPE_RATCHET = new Map<string, [number, string]>([
   ['103-heading-marker-column-zero-2', [2, 'opener run: the heading opener `##` is escaped in full, and removing either backslash alone still leaves a paragraph']],
-  ['129-emphasis-opener-slash-adjacency-3', [2, 'unit scope: the failing run is written conservatively in full, which escapes `_` x2 where the opener alone would do']],
   ['132-thematic-break-requires-contiguous-markers-3', [3, 'opener run: the break opener `***` is escaped in full, and removing any one backslash alone still leaves a paragraph']],
-  ['146-table-as-a-block-opener-in-a-list-item-2', [3, 'unit scope: the failing run is written conservatively in full, which escapes `=`, `|` x2 beyond the opener']],
-  ['151-indented-ordered-marker-content-column-includes-the-marker-indent', [1, 'unit scope: the failing run is written conservatively in full, which escapes the closing `|` beyond the opener']],
-  ['157-indented-attribute-line-stays-literal', [3, 'unit scope: the failing run is written conservatively in full, which escapes `{`, `.`, `}` where any one of them alone stops the attribute line']],
-  ['157-indented-attribute-line-stays-literal-2', [3, 'unit scope: the failing run is written conservatively in full, which escapes `{`, `.`, `}` where any one of them alone stops the attribute line']],
-  ['158-indented-image-and-caption-stay-literal-2', [3, 'unit scope: the failing run is written conservatively in full, which escapes `{`, `.`, `}` where any one of them alone stops the attribute line']],
-  ['159-indented-reference-and-footnote-definitions-stay-literal', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['159-indented-reference-and-footnote-definitions-stay-literal-2', [1, 'unit scope: the failing run is written conservatively in full, which escapes a `.` beyond the opener']],
-  ['160-indented-colon-fence-blocks-stay-literal-2', [2, 'unit scope: the failing run is written conservatively in full, which escapes `:`, `|` beyond the opener']],
-  ['195-a-definition-inside-a-container-is-collected-at-that-container-s-content-column-3', [3, 'unit scope: the failing run is written conservatively in full, which escapes `[`, `]`, `/` where any one of them alone stops the definition']],
-  ['218-a-footnote-body-s-own-column-is-two-and-a-third-column-is-its-text', [4, 'unit scope: the failing run is written conservatively in full, which escapes `|` x3, `-` beyond the openers']],
-  ['219-a-definition-below-a-footnote-body-s-column-is-the-document-s-own-text', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['220-a-definition-past-a-footnote-body-s-column-is-the-body-s-own-text', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['287-a-column-zero-definition-ends-an-open-list-item-3', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['322-an-attribute-block-reaches-the-nested-list-it-precedes-9', [3, 'unit scope: the failing run is written conservatively in full, which escapes `{`, `.`, `}` where any one of them alone stops the attribute line']],
-  ['350-a-definition-at-a-container-s-content-column-3', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['369-a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['369-a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one-2', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
-  ['369-a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one-3', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
   ['390-a-table-cell-s-marker-run-ends-at-a-space-5', [1, 'minimal class: an authored `\\=` is kept after the writer\'s own cell padding retired it - padded, the `=` no longer starts the cell']],
   ['396-an-idle-escape-does-not-spread-from-the-block-that-needed-one', [2, 'opener run: the heading opener `##` is escaped in full, and removing either backslash alone still leaves a paragraph']],
   ['72-escape-coverage-2', [4, 'minimal class: a literal backslash is written doubled, and a lone backslash before a non-escapable character re-parses the same bare']],
-  ['87-compact-list-blocks-10', [3, 'unit scope: the failing run is written conservatively in full, which escapes `{`, `.`, `}` where any one of them alone stops the attribute line']],
 ])
 
 /**
@@ -317,8 +299,8 @@ describe('the idle-escape ratchet', () => {
     // line that moves when the debt does.
     let total = 0
     for (const [, [count]] of IDLE_ESCAPE_RATCHET) total += count
-    expect(total).toBeLessThanOrEqual(59)
-    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(25)
+    expect(total).toBeLessThanOrEqual(12)
+    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(5)
   })
 })
 

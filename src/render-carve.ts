@@ -299,7 +299,121 @@ function narrowEscalation(ast: Document, conservative: string, conservativeTree:
   }
 
   relax(units)
-  return best
+
+  // PART 11 §2 TAKES THE DECISION PER OPENER OCCURRENCE, and a unit is still
+  // ONE KNOB: a unit that fails is written conservatively IN FULL, so every
+  // candidate character beside the one that needed it is escaped for nothing -
+  // `\\{\\.note\\}` where §2 wants `\\{.note}`. §2b bounds how far the fallback
+  // reaches; this is what is left inside the bound (markup-carve/carve#1533).
+  return narrowOccurrences(units, best, conservativeTree, renderSelectively)
+}
+
+/**
+ * The candidate escapes an escalated unit can still hand back, one occurrence
+ * at a time (PART 11 §2).
+ *
+ * SAME SEARCH, ONE LEVEL FINER. The comparison is still document-scoped, so a
+ * failure still reports THAT the document changed and never WHERE; the
+ * occurrence is found by trying, and every state returned is one that re-parsed
+ * to the tree the conservative form parses to.
+ *
+ * THE OCCURRENCES ARE LOGGED, NOT PREDICTED. A candidate site is whatever the
+ * writer's own escape arms visit, so they are collected by rendering once with
+ * the log switched on rather than by a second enumeration here that could drift
+ * from the one that emits. A key is `unit:ordinal` within the unit, which is
+ * stable across the search because relaxing one occurrence changes the bytes
+ * and not the sites: the arms walk the node's own text, which no relaxation
+ * touches.
+ *
+ * THE FIRST RENDER IS A CONTROL, as it is one level up. With nothing relaxed
+ * this must reproduce the state the unit search settled on byte for byte; if
+ * logging changed what was written, the unit-scoped answer is returned rather
+ * than a narrowing built on a pass that is not the pass being measured.
+ *
+ * BOUNDED THE SAME WAY AND FOR THE SAME REASON. A group holding no failing
+ * occurrence is relaxed in one render, so a document with a handful of them
+ * costs about log(n) renders - but a document where every occurrence is load
+ * bearing drives the halving to its leaves and pays a render and a parse per
+ * occurrence, which is a render of the whole document per escaped character.
+ * A file of indented `## H` paragraphs is exactly that, and it is ordinary
+ * input rather than an adversarial one. The budget is the unit search's,
+ * measured over the occurrence count, and the OUTPUT is unchanged where it
+ * binds: those occurrences are the opener runs §2 requires escaped in full.
+ */
+function narrowOccurrences(
+  units: object[],
+  unitScoped: string,
+  conservativeTree: string,
+  renderSelectively: () => string,
+): string {
+  const numbers = new Map<object, number>()
+  units.forEach((unit, index) => numbers.set(unit, index))
+  const occurrences: string[] = []
+  const relaxed = new Set<string>()
+  let best = unitScoped
+
+  unitNumbers = numbers
+  relaxedOccurrences = relaxed
+  occurrenceLog = occurrences
+  try {
+    const control = renderSelectively()
+    occurrenceLog = null
+    if (control !== unitScoped || occurrences.length === 0) return unitScoped
+
+    let budget = 8 * Math.ceil(Math.log2(occurrences.length + 1)) + 8
+
+    /** Hand `group` its bare form, keeping it only if the document still holds. */
+    const relaxAll = (group: string[]): boolean => {
+      budget -= 1
+      for (const key of group) relaxed.add(key)
+      const candidate = renderSelectively()
+      if (treeOf(candidate) === conservativeTree) {
+        best = candidate
+        return true
+      }
+      for (const key of group) relaxed.delete(key)
+      return false
+    }
+
+    const relax = (group: string[]): void => {
+      if (group.length === 0 || budget <= 0 || relaxAll(group) || group.length === 1) return
+      const half = group.length >> 1
+      relax(group.slice(0, half))
+      relax(group.slice(half))
+    }
+
+    // OFFERED FROM THE END OF THE DOCUMENT BACKWARDS, which is what makes the
+    // escape that survives the OPENER's. §2 asks whether omitting the escapes
+    // on an occurrence would let the construct FORM, and a construct forms at
+    // its opener - so with the opener still escaped every later candidate in
+    // the same line is free, while relaxing the opener first leaves the escape
+    // on a closer that was never load bearing (`{.note \\}` where §2 wants
+    // `\\{.note}`). Both spellings re-parse to the same tree, so only the order
+    // separates them.
+    const order = occurrences.slice().reverse()
+    relax(order)
+    // AND THEN ONE SWEEP OF WHAT IS LEFT, because the halving is not a
+    // FIXPOINT. Relaxing occurrences is not monotone: an occurrence rejected
+    // while a neighbour was still escaped can be free once that neighbour is
+    // relaxed, and the halving never revisits a group it has descended past.
+    // Corpus 160 is the case - the closing `:::` line cannot go bare while the
+    // OPENING one is escaped, because then it is the only fence marker on the
+    // page, and it can once the opener is bare. The sweep offers every
+    // still-escalated occurrence once more, on top of everything the halving
+    // accepted, and spends the same budget - so where the budget is already
+    // gone it costs nothing, which is the pathological document.
+    for (const key of order) {
+      if (budget <= 0) break
+      if (relaxed.has(key)) continue
+      relaxAll([key])
+    }
+    return best
+  } finally {
+    unitNumbers = null
+    relaxedOccurrences = null
+    occurrenceLog = null
+    escapeCallIndexes = null
+  }
 }
 
 /**
@@ -495,6 +609,13 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
   // reference back into literal text (markup-carve/carve#805).
   definitionsWrittenInPlace = new WeakSet()
   footnotesWrittenInPlace = new Set()
+  // The LOG and the call indexes are per PASS: `renderWithEscapes` can render
+  // twice for the frontmatter fallback, and keeping either would count the
+  // second pass's runs on from the end of the first.
+  if (unitNumbers !== null) {
+    escapeCallIndexes = new Map()
+    if (occurrenceLog !== null) occurrenceLog.length = 0
+  }
   try {
     const ctx: CarveContext = {
       blockDepth: 0,
@@ -2793,18 +2914,7 @@ function cleanEscapedText(node: Text): string {
 // differ by a FIGURE node rather than by a flag, and that difference this
 // comparison already sees.
 const UNCONDITIONAL_ESCAPES = /[\\`"']/g
-const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=;"']/g
-// A colon is a candidate only where it can OPEN something: at the start of a
-// line, which is where `:: term`, `:  def` and a `:::` fence live. Mid-line it
-// is ordinary punctuation and escaping it is exactly the over-escaping PART 11
-// section 4 forbids - `\\^ Figure 1: moon` came out `\\^ Figure 1\\: moon`, where the
-// caret on that line is ALREADY escaped, so the line is a paragraph and nothing
-// downstream reads the colon (carve-js#614).
-//
-// Kept in the CONSERVATIVE form only, like every other candidate: the
-// round-trip check decides whether it is needed. Dropping it outright breaks
-// seven corpus round-trips whose text runs hold a line-initial `::`/`:::`.
-const LINE_INITIAL_COLON = /(^|\\n)(:+)/g
+const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 
 // Which set the writer is escaping right now. renderCarve renders the document
 // minimally, checks that it re-parses to the same AST, and re-renders
@@ -2845,6 +2955,91 @@ function escapeModeHere(): 'minimal' | 'conservative' {
   if (askedUnits !== null && escapeUnit !== null) askedUnits.add(escapeUnit)
   if (escalatedUnits === null) return escapeMode
   return escapeUnit !== null && escalatedUnits.has(escapeUnit) ? 'conservative' : 'minimal'
+}
+
+/**
+ * The characters the occurrence search never offers back.
+ *
+ * §5's UNCONDITIONAL set is written in the minimal form too, so relaxing one is
+ * not a narrower escaping of the same tree but a different document. The CARET
+ * joins them for a different reason: the arm below already applies §2's own
+ * test to it, position by position, so there is nothing left for a search to
+ * decide - and carve-php guards `!` and `$` the same way, so leaving every
+ * guarded character out is what keeps the two engines offering the SAME sites
+ * in the same order.
+ */
+const NOT_OFFERED_PER_OCCURRENCE = '\\`"\'^'
+
+/**
+ * Which units the occurrence search numbers, so a key survives a re-render.
+ *
+ * Non-null only during that search. Everywhere else the whole unit follows
+ * `escapeModeHere`, which is §2b's per-unit knob.
+ */
+let unitNumbers: Map<object, number> | null = null
+
+/** The occurrences handed back their bare form by the search (PART 11 §2). */
+let relaxedOccurrences: Set<string> | null = null
+
+/** Where a pass records the occurrences it visited, in emission order. */
+let occurrenceLog: string[] | null = null
+
+/** The decision the last candidate site took, so a RUN can inherit it. */
+let lastOccurrenceRelaxed = false
+
+/**
+ * How many escaped runs each unit has written in this pass.
+ *
+ * THE OFFSET ALONE IS NOT A KEY. A unit is the node whose arm wrote the
+ * character, and a BLOCK's arm can write several runs - a table row's cells, a
+ * fence title beside its info string - each with its own offsets starting at
+ * zero. Two of them collide at offset 0 and the search would then relax both
+ * sites or neither, which is the per-unit knob this whole change removes, one
+ * level down.
+ *
+ * The count is stable across the search for the same reason the offsets are:
+ * relaxing an occurrence changes which characters are emitted and never which
+ * arms run, so a unit writes the same runs in the same order on every render.
+ */
+let escapeCallIndexes: Map<object, number> | null = null
+
+/** The index of the run now being escaped, within its unit. */
+function nextEscapeCallIndex(): number {
+  if (escapeCallIndexes === null || escapeUnit === null) return 0
+  const index = escapeCallIndexes.get(escapeUnit) ?? 0
+  escapeCallIndexes.set(escapeUnit, index + 1)
+  return index
+}
+
+/**
+ * Whether the search has handed the candidate at `offset` back its bare form.
+ *
+ * THE KEY IS THE POSITION, NOT AN ORDINAL, and that is what makes it survive a
+ * re-render: relaxing an occurrence changes the emitted BYTES and never the
+ * node's own text, so a site keeps the offset it had. An ordinal would have to
+ * be counted at every site whether it was offered or not, and two engines whose
+ * escape classes differ by one character would then number every later site
+ * differently.
+ *
+ * THE OCCURRENCE IS THE RUN, WHICH IS §2's OWN UNIT. "THE UNIT IS THE OPENER,
+ * NOT THE CHARACTER" - where a construct opens on a run of characters the whole
+ * run is escaped, so `\\#\\# H` and never `\\## H`. A search that offered the
+ * two hashes separately relaxes the second one, because with the first still
+ * escaped no heading forms either way, and emits precisely the half-escaped run
+ * §2 calls "a shape that happens to work rather than one that says what it
+ * means". So a candidate repeating the character before it inherits that
+ * character's decision instead of taking one, and the run is escaped or bare as
+ * a whole.
+ */
+function occurrenceIsRelaxed(call: number, offset: number, continuesRun: boolean): boolean {
+  if (unitNumbers === null || escapeUnit === null) return false
+  if (continuesRun) return lastOccurrenceRelaxed
+  const unit = unitNumbers.get(escapeUnit)
+  if (unit === undefined) return false
+  const key = `${unit}:${call}:${offset}`
+  occurrenceLog?.push(key)
+  lastOccurrenceRelaxed = relaxedOccurrences !== null && relaxedOccurrences.has(key)
+  return lastOccurrenceRelaxed
 }
 
 /**
@@ -2938,9 +3133,27 @@ const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
 function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
   const mode = escapeModeHere()
   const escapes = mode === 'minimal' ? UNCONDITIONAL_ESCAPES : CANDIDATE_ESCAPES
+  const call = mode === 'conservative' ? nextEscapeCallIndex() : 0
   let out = text
     .replace(UNWRITABLE_CONTROLS, '')
-    .replace(escapes, (char, offset: number) => {
+    .replace(escapes, (char, offset: number, subject: string) => {
+      // PART 11 §2's decision is taken per OPENER OCCURRENCE. In a unit the
+      // search has escalated, each candidate site is offered back on its own,
+      // so the one occurrence that needed the escape no longer drags the rest
+      // of the unit with it. The unconditional set is not a candidate and is
+      // never offered.
+      if (
+        mode === 'conservative' &&
+        !NOT_OFFERED_PER_OCCURRENCE.includes(char) &&
+        occurrenceIsRelaxed(call, offset, offset > 0 && subject[offset - 1] === char)
+      ) {
+        return char
+      }
+      // A COLON only opens something at the start of a line - `::` opens a
+      // definition term, `:::` a fence - and PART 11 §2 escapes a character
+      // only where omitting it would change the re-parse. Mid-line it is
+      // ordinary punctuation.
+      if (char === ':' && !opensLine(subject, offset)) return ':'
       if (char !== '^') return `\\${char}`
       const next = text[offset + 1] ?? ''
       // A TAB after the marker is not a caption opener: PART 10 §231 leaves
@@ -2980,12 +3193,32 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   if (mode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
     out = out.slice(0, -1) + '\\!'
   }
-  if (mode === 'minimal') return out
-  // Escape a colon RUN that begins a line (see LINE_INITIAL_COLON). Run, not
-  // single character: `:::` needs only its first colon neutralized to stop
-  // being a fence, and escaping each one would be the same over-escaping in a
-  // different place.
-  return out.replace(LINE_INITIAL_COLON, (_m, lead: string, colons: string) => `${lead}\\${colons}`)
+  return out
+}
+
+/**
+ * Is this offset at the start of a line within the node's text?
+ *
+ * A construct opens at a line start; mid-line the same character is
+ * punctuation. The node's own first character counts, because a text node that
+ * begins a paragraph begins a line.
+ *
+ * Ported from carve-php's `opensLine`, and it replaced a second pass over the
+ * RENDERED run. The two agree on what they escape - only the FIRST colon of a
+ * line-initial run, since every later one has a colon before it - and they
+ * disagree on WHEN: a second pass decides after every other character in the
+ * node, so the colon's occurrence was offered to PART 11 §2's search out of
+ * document order, and the two engines settled corpus 160 on different
+ * occurrences of the same paragraph. Deciding it in place is what makes the
+ * order the same one in both (markup-carve/carve#1533).
+ */
+function opensLine(text: string, offset: number): boolean {
+  for (let i = offset - 1; i >= 0; i -= 1) {
+    const char = text[i]
+    if (char === '\n') return true
+    if (char !== ' ' && char !== '\t') return false
+  }
+  return true
 }
 
 function escapePlainLine(text: string): string {
