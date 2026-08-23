@@ -20,6 +20,7 @@ import {
   SCHEME_PROBE_STRIP_RE,
   isDangerousAttrName,
 } from './render-html.js'
+import type { LabelKey } from './render-html.js'
 import { hasOwnKey, setOwn } from './own-property.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -75,6 +76,21 @@ export interface HtmlImportOptions {
   maxDepth?: number
   maxNodes?: number
   maxDiagnostics?: number
+  /**
+   * The `labels` map the HTML was RENDERED with (PART 9 §16a).
+   *
+   * The derived-name drop matches the English defaults, which catches a
+   * document rendered in English and nothing else: one rendered with
+   * `{tabsGroup: 'Registerkarten'}` carries a value no default equals, so its
+   * generated name is kept and baked into the imported source - and a
+   * translated document is exactly the one the map exists to serve
+   * (markup-carve/carve#1500 step 2).
+   *
+   * The host that rendered the HTML knows the map it used; passing the same one
+   * here closes that. Layered OVER the defaults, so naming one key leaves every
+   * other construct matched as before. Omitting it changes nothing.
+   */
+  labels?: Partial<Record<LabelKey, string>>
 }
 
 export interface HtmlImportResult<T> {
@@ -312,6 +328,8 @@ class Importer {
   private readonly maxNodes: number
   private readonly maxDiagnostics: number
 
+  private readonly labels: Record<LabelKey, string>
+
   constructor(options: HtmlImportOptions) {
     this.mode = options.mode ?? 'safe'
     this.adapter = options.adapter ?? 'generic'
@@ -319,6 +337,7 @@ class Importer {
     this.maxDepth = options.maxDepth ?? 128
     this.maxNodes = options.maxNodes ?? 1_000_000
     this.maxDiagnostics = options.maxDiagnostics ?? 1_000
+    this.labels = { ...LABEL_DEFAULTS, ...options.labels }
   }
 
   import(html: string): Document {
@@ -522,10 +541,10 @@ class Importer {
     // fence an author may genuinely have written the same words. Only the
     // documented English default is dropped; anything else is kept.
     if (tag === 'div' && has('tabs')) {
-      return { role: ['group', 'tablist'], 'aria-label': [LABEL_DEFAULTS.tabsGroup] }
+      return { role: ['group', 'tablist'], 'aria-label': [this.labels.tabsGroup] }
     }
     if (tag === 'div' && has('code-group')) {
-      return { role: ['group'], 'aria-label': [LABEL_DEFAULTS.codeGroup] }
+      return { role: ['group'], 'aria-label': [this.labels.codeGroup] }
     }
 
     // A `css`-MODE PANEL is named by its own tab's `[label]` - a string the
@@ -599,7 +618,7 @@ class Importer {
       .join('')
       .trim()
     if (term === '') return undefined
-    const label = LABEL_DEFAULTS.indexBackref
+    const label = this.labels.indexBackref
     return [`${label} ${term}`, `${label} ${term} ${ordinal}`]
   }
 

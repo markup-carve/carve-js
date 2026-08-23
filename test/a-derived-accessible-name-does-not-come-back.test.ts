@@ -347,3 +347,61 @@ describe('a derived accessible name does not come back from an HTML import', () 
     expect(htmlToCarve(html).report.diagnostics).toEqual([])
   })
 })
+
+/*
+ * markup-carve/carve#1500 step 2. The default match catches a document rendered
+ * in ENGLISH and nothing else - one rendered with a `labels` map carries a value
+ * no default equals, so its generated name was kept and baked into the imported
+ * source. A translated document is exactly the one §16a's map exists to serve.
+ *
+ * The host that rendered the HTML knows the map it used, so passing the same one
+ * closes it. Omitting it changes nothing, which is asserted rather than assumed.
+ */
+describe('an import takes the labels map the HTML was rendered with', () => {
+  const de = { tabsGroup: 'Registerkarten', codeGroup: 'Codebeispiele' }
+  const tabsSrc = ':::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n'
+
+  it('drops a translated name when the map is supplied', () => {
+    const html = carveToHtml(tabsSrc, { labels: de, extensions: [tabs()] })
+    expect(html).toContain('aria-label="Registerkarten"')
+
+    const back = htmlToCarve(html, { labels: de }).value
+    expect(back).not.toContain('aria-label')
+  })
+
+  it('still keeps it without the map, which is the residue this closes', () => {
+    const html = carveToHtml(tabsSrc, { labels: de, extensions: [tabs()] })
+
+    expect(htmlToCarve(html).value).toContain('aria-label=Registerkarten')
+  })
+
+  it('still drops the English default when no map is supplied', () => {
+    const html = carveToHtml(tabsSrc, { extensions: [tabs()] })
+
+    expect(htmlToCarve(html).value).not.toContain('aria-label')
+  })
+
+  /*
+   * The host's map is LAYERED over the defaults, so naming one key leaves every
+   * other construct matched as before. A map that blinded the importer to the
+   * defaults would trade one residue for a larger one.
+   */
+  it('a partial map still matches the defaults for every other key', () => {
+    const html = carveToHtml(
+      '::: code-group\n\n``` php [PHP]\n1;\n```\n\n:::\n',
+      { labels: { tabsGroup: 'Registerkarten' }, extensions: [codeGroup()] },
+    )
+
+    expect(htmlToCarve(html, { labels: { tabsGroup: 'Registerkarten' } }).value).not.toContain('aria-label')
+  })
+
+  /*
+   * An authored name still survives either way - its value differs from the
+   * derived one whether or not a map is supplied (carve-js#1156).
+   */
+  it('keeps an authored name with the map supplied', () => {
+    const back = htmlToCarve('<div class="tabs" aria-label="My tab set"><p>x</p></div>', { labels: de }).value
+
+    expect(back).toContain('aria-label="My tab set"')
+  })
+})
