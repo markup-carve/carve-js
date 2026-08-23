@@ -139,6 +139,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A verbatim span touching a fence run no longer gains a trailing space**
+  (#1338). A code fence whose payload held a WIDER run left an unclosed
+  verbatim opener, and the writer spelled it closed with a padding pair whose
+  LEADING pad landed in the last column of a line, where PART 2's
+  no-trailing-whitespace rule took it. The value came back carrying the
+  trailing pad, so `toHtml(fmt(x)) != toHtml(x)` - a PART 11 section 1 failure
+  that idempotence and both plausible renders hid. The writer emits the bare
+  opener, which is the spelling such a value has.
+
 - **A derived admonition title id is recognized when the id namespace
   collides** (#1336). The importer predicted the renderer's counter as `adm-N`,
   but the renderer allocates through the document's id registry, which appends

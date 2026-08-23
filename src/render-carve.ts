@@ -2070,6 +2070,10 @@ function renderInlines(
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
         opensBacktickRun(nodes[idx + 1]),
+        // MAY A VERBATIM SPAN HERE RUN TO THE END OF THIS TEXT? Only if it is
+        // the last node AND something is already written - a backtick run that
+        // opens a block's first line is a code FENCE, not a span at all.
+        idx === nodes.length - 1 && out !== '',
       )
       // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
       // live here and not in `renderInline`: the answer is a property of the
@@ -2179,11 +2183,20 @@ function renderInline(
   nextChar = '',
   captionCanOpen = false,
   nextOpensBacktickRun = false,
+  mayRunToEndOfText = false,
 ): string {
   const previous = escapeUnit
   escapeUnit = node as unknown as object
   try {
-    return renderInlineBody(node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun)
+    return renderInlineBody(
+      node,
+      ctx,
+      prevChar,
+      nextChar,
+      captionCanOpen,
+      nextOpensBacktickRun,
+      mayRunToEndOfText,
+    )
   } finally {
     escapeUnit = previous
   }
@@ -2204,6 +2217,15 @@ function renderInlineBody(
    * needs to know (carve-js#1175).
    */
   nextOpensBacktickRun = false,
+  /**
+   * Whether a verbatim span written here may run to the END of this inline
+   * text - nothing follows it, so an unclosed opener spells its content.
+   *
+   * The inline LOOP is the only place that knows: it needs both that this is
+   * the last node and that the text has already begun, since a backtick run
+   * opening the first line of a block is a code FENCE and not a span at all.
+   */
+  mayRunToEndOfText = false,
 ): string {
   // A stored tree may still carry a type this engine no longer emits; map it
   // before dispatch so the switch below only ever sees current types.
@@ -2245,7 +2267,11 @@ function renderInlineBody(
     case 'highlight':
       return withAttrs(renderEmphasis('=', renderInlines(node.children, ctx), prevChar, nextChar))
     case 'code':
-      return withAttrs(renderCode(node.value))
+      // The unclosed spelling is offered only when NOTHING is written after the
+      // span. An attribute block is written after it, so a code span carrying
+      // one keeps the closed form (and `raw_inline` and `literal_inline`, which
+      // both append to `renderCode`, never ask for it).
+      return withAttrs(renderCode(node.value, mayRunToEndOfText && renderAttrs(node.attrs) === ''))
     case 'link':
       return renderLink(node, ctx)
     case 'image':
@@ -2433,7 +2459,45 @@ function renderEmphasis(
 }
 
 
-function renderCode(content: string): string {
+/**
+ * Whether an UNCLOSED opener can spell this verbatim content.
+ *
+ * A closed span needs the padding pair when its content touches a backtick, and
+ * the LEADING pad has nowhere to live when the content opens with a line
+ * terminator: it lands in the last column of the opener's line, and PART 2's no
+ * trailing whitespace rule takes it - on the way out, and again on the way back
+ * in, because the block layer strips a line's trailing run before the inline
+ * scanner ever sees the backticks. What comes back is the content plus the
+ * TRAILING pad, so `toHtml(fmt(x)) != toHtml(x)`. Widening the fence does not
+ * help: an opener of any length D sits against a content-final run of N and
+ * reads back as one run of N+D, which is never D, so it never closes at all.
+ *
+ * The parser's own answer is that "an opener with no equal-length closer is
+ * opaque to the end of the string", so the opener ALONE spells it - and
+ * `safeFence` already picks a run one longer than the longest inside, so no run
+ * in the content can close it early. What the writer has to guarantee is the
+ * rest: that nothing needs to be written after the span, and that every line
+ * of the content survives whole-document normalization and the block layer.
+ */
+function unclosedVerbatimSpells(content: string): boolean {
+  // A TRAILING terminator is lost: it would be the block's own final newline.
+  if (/[\r\n]$/.test(content)) return false
+  // LINE-TRAILING WHITESPACE is stripped from every line, inside the span or
+  // not, so content carrying any cannot be spelled this way (nor any other -
+  // see the note in the test file).
+  if (/[ \t](?:\r?\n)/.test(content) || /[ \t]$/.test(content)) return false
+  // A BLANK LINE ends the paragraph, and the span with it.
+  if (/\n[ \t]*(?:\r?\n)/.test(content)) return false
+  // LINE-LEADING WHITESPACE is a continuation line's indent, which the block
+  // layer strips before the inline scanner runs - so content carrying any is
+  // not spelled by this form either. (A line block PRESERVES it, so the form
+  // would in fact serve there; rejecting it in both places keeps one predicate
+  // and only ever falls back to what the writer emits today.)
+  if (/\n[ \t]/.test(content)) return false
+  return true
+}
+
+function renderCode(content: string, allowUnclosed = false): string {
   // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
   // much as it is inside a fence - and `normalize()` would otherwise rewrite it
   // to `\ `, which inside backticks is a literal backslash and a space
@@ -2460,6 +2524,13 @@ function renderCode(content: string): string {
     content.startsWith('`') ||
     content.endsWith('`') ||
     (content.startsWith(' ') && content.endsWith(' ') && !isCarveBlank(content))
+  // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
+  // the closed form has no spelling and the bare opener is the one that does
+  // (carve-js#1338). Only the caller knows whether the opener may run to the
+  // end of the text, so it says so.
+  if (needsPad && /^[\r\n]/.test(content) && allowUnclosed && unclosedVerbatimSpells(content)) {
+    return `${fence}${content}`
+  }
   return needsPad ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`
 }
 
