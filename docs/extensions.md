@@ -728,6 +728,245 @@ sentence punctuation mark stays outside the link. Restrict with
 `autolink({ allowedSchemes: ['https'] })` (dropping `mailto` also disables bare
 email linking).
 
+## citations
+
+`citations()` resolves `[@key]` references against `[@key]: entry` definitions
+and appends a numbered reference list. Tier-2:
+
+```ts
+import { carveToHtml, citations } from '@markup-carve/carve'
+
+carveToHtml('Text [@knuth1984].\n\n[@knuth1984]: Knuth, D. (1984). The TeXbook.\n', {
+  extensions: [citations()],
+})
+// <p>Text [<a data-cite-key="knuth1984" href="#ref-knuth1984">1</a>].</p>
+// <ol class="references">
+//   <li id="ref-knuth1984">Knuth, D. (1984). The TeXbook.</li>
+// </ol>
+```
+
+Numbering follows first appearance, and a key with no definition renders
+verbatim rather than silently vanishing. Locators (`[@key, p. 5]`), group
+syntax and the CSL-JSON option are covered by the spec's own extensions
+document; this section is the call form.
+
+## codeCallouts
+
+`codeCallouts()` turns `<n>` markers at the end of lines inside a fenced code
+block into numbered bubbles, and binds an immediately following paragraph of
+`<n> text` lines to them. Tier-2, off by default:
+
+````ts
+import { carveToHtml, codeCallouts } from '@markup-carve/carve'
+
+carveToHtml('``` js\nconst a = 1 <1>\n```\n\n<1> The declaration.\n', {
+  extensions: [codeCallouts()],
+})
+// <pre><code class="language-js">const a = 1 <b class="callout" data-callout="1">1</b>
+// </code></pre>
+// <ol class="callouts">
+//   <li value="1">The declaration.</li>
+// </ol>
+````
+
+The list keeps the marker's own number through `value`, so a code block that
+starts at `<3>` still reads correctly. A marker with no matching list line, and
+a list line with no matching marker, are both left as ordinary text.
+
+## colorSwatch
+
+`colorSwatch()` renders `:color[value]` as a small chip beside the value.
+Tier-3, the standard `color` extension from the spec's Extension Registry:
+
+```ts
+import { carveToHtml, colorSwatch } from '@markup-carve/carve'
+
+carveToHtml('Brand :color[#3b82f6] here.', { extensions: [colorSwatch()] })
+// <p>Brand <span class="swatch"><span class="swatch-chip" style="background-color:#3b82f6"></span> #3b82f6</span> here.</p>
+```
+
+Configurable `position` (`before`, `after`, `none`), `shape` (`square`,
+`round`, `ring`) and `cssClass`. Only a value the extension can recognize as a
+safe CSS color - hex, `rgb()`/`hsl()`, or a real CSS named color - gets a chip;
+anything else falls through to the generic `<span class="ext-color">` form, so
+a hostile value cannot reach the `style` attribute.
+
+## defaultAttributes
+
+`defaultAttributes()` applies attributes to every node of a given type, so a
+document need not repeat them. Ported from carve-php's
+DefaultAttributesExtension:
+
+```ts
+import { carveToHtml, defaultAttributes } from '@markup-carve/carve'
+
+carveToHtml('| a |\n|---|\n| b |\n', {
+  extensions: [defaultAttributes({ defaults: { table: { class: 'table table-striped' } } })],
+})
+// <table class="table table-striped"> …
+```
+
+Keys are carve-php's snake_case node types (`paragraph`, `heading`,
+`code_block`, `block_quote`, `list`, `table`, `div`, `thematic_break`, `link`,
+`image`, …); `div` covers both a bare div and an admonition. A `class` value
+merges with the classes the author wrote, and every other key is set only where
+the node does not already carry it - so an authored attribute always wins.
+Sub-structural types (`list_item`, `table_row`, `table_cell`) are deliberately
+not supported, matching carve-php's actual behavior rather than its docblock.
+
+## glossary
+
+`glossary()` declares terms in a `::: glossary` definition list and links each
+`:term[word]` use to its definition. Tier-3, off by default:
+
+```ts
+import { carveToHtml, glossary } from '@markup-carve/carve'
+
+carveToHtml(':::: glossary\n:: Widget\n:  A small thing.\n::::\n\nA :term[Widget] here.\n', {
+  extensions: [glossary()],
+})
+// <dl class="glossary">
+//   <dt id="gloss-widget">Widget</dt>
+//   <dd>A small thing.</dd>
+// </dl>
+// <p>A <a href="#gloss-widget" class="term">Widget</a> here.</p>
+```
+
+Note the definition-list spelling: `:: term` then `:  definition`. It reuses
+the core definition-list and `:name[…]` inline forms, so there is no new syntax
+to learn. A `:term[…]` naming no declared term stays a plain
+`<span class="term">` rather than becoming a dead link.
+
+## headingLevelShift
+
+`headingLevelShift()` shifts every heading down a fixed number of levels, for
+embedding a document inside a page that already owns its `<h1>`:
+
+```ts
+import { carveToHtml, headingLevelShift } from '@markup-carve/carve'
+
+carveToHtml('# Title\n\n## Sub\n', { extensions: [headingLevelShift()] })
+// <section id="Title">
+//   <h2>Title</h2>
+//   <section id="Sub">
+//     <h3>Sub</h3>
+//   </section>
+// </section>
+```
+
+`by` defaults to 1 and is clamped to 0-5, so a shift can never produce a
+level below `<h1>` or past `<h6>`. Section ids are unaffected: they come from
+the heading text, not its level.
+
+## headingNumbers
+
+`headingNumbers()` auto-numbers sections and rewrites auto-filled `</#id>`
+cross-references to carry the number. Tier-3, render-stage, no new syntax:
+
+```ts
+import { carveToHtml, headingNumbers } from '@markup-carve/carve'
+
+carveToHtml('# One\n\n## Two\n', { extensions: [headingNumbers()] })
+// <section id="One">
+//   <h1><span class="section-number">1</span> One</h1>
+//   <section id="Two">
+//     <h2><span class="section-number">1.1</span> Two</h2>
+//   </section>
+// </section>
+```
+
+A heading carrying `{.unnumbered}` is skipped and does not advance the counter.
+Configurable start level, separator and CSS class.
+
+## headingReference
+
+`headingReference()` resolves `[[Heading Text]]` to a link to that heading,
+with the text auto-filled:
+
+```ts
+import { carveToHtml, headingReference } from '@markup-carve/carve'
+
+carveToHtml('See [[Getting Started]].\n\n# Getting Started\n', {
+  extensions: [headingReference()],
+})
+// <p>See <a href="#Getting-Started" class="heading-ref">Getting Started</a>.</p>
+// <section id="Getting-Started">
+//   <h1>Getting Started</h1>
+// </section>
+```
+
+References resolve by heading PLAIN TEXT, not by an author-guessed id, so a
+document does not depend on slug rules; `[[Heading|click here]]` sets the link
+text. A reference to a missing heading, or to text that appears on more than
+one heading, falls back to its literal `[[…]]` source rather than guessing.
+
+This shares the `[[…]]` syntax with [`wikilinks`](#wikilinks) - register one or
+the other on a given render, not both.
+
+## imgFence
+
+`imgFence()` renders an ` ```img ` fence holding an SVG document as an image.
+Tier-3:
+
+````ts
+import { carveToHtml, imgFence } from '@markup-carve/carve'
+
+carveToHtml('``` img\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>\n```\n', {
+  extensions: [imgFence()],
+})
+// <img src="data:image/svg+xml,%3Csvg%20xmlns%3D…" alt="">
+````
+
+The SVG is **sanitized**, then emitted as a `data:` URI inside an `<img>`,
+which is a browser sandbox: script, external references and event handlers in
+the payload cannot execute there. `inline` mode - a live `<svg>` in the page
+DOM for fences carrying `{inline}` - is **off by default** and opt-in for a
+reason: it removes that sandbox and leaves only this extension's hand-rolled
+sanitizer, which is suitable for trusted author content and is not a hardened
+XSS boundary. `allowStyle`, `allowLinks`, `allowAnimation` and
+`allowExternalImages` pass through to the sanitizer.
+
+## index
+
+`index()` collects invisible `:index[term]` markers into a sorted
+`::: index` block with a back-link per occurrence. Tier-3, off by default:
+
+```ts
+import { carveToHtml, index } from '@markup-carve/carve'
+
+carveToHtml('A :index[widget] here.\n\n::: index\n:::\n', { extensions: [index()] })
+// <p>A <span id="idx-widget-1" class="index-term"></span> here.</p>
+// <ul class="index">
+//   <li>widget <a href="#idx-widget-1" class="index-backref" aria-label="Back to widget">↩</a></li>
+// </ul>
+```
+
+The marker renders nothing visible - it is an anchor, not content. A
+back-link's accessible name comes from the render's `labels` map under
+`indexBackref` (default `Back to`), so one map localizes the whole document;
+the extension's own `backrefLabel` option overrides the map where a single
+instance needs to differ.
+
+## semanticSpan
+
+`semanticSpan()` adds the four semantic span names core does not reserve -
+`samp`, `var`, `cite`, `dfn` - under the same attribute spelling core uses for
+its own:
+
+```ts
+import { carveToHtml, semanticSpan } from '@markup-carve/carve'
+
+carveToHtml('[x]{samp} and [Dune]{cite}', { extensions: [semanticSpan()] })
+// <p><samp>x</samp> and <cite>Dune</cite></p>
+```
+
+Core reserves `abbr`, `time` and `kbd` because the first two carry data the
+author would otherwise lose and the third is the one name every comparable
+system ships. These four carry no data and collide with no core clause, so a
+core processor leaves them as ordinary attributes (`<span samp="">x</span>`)
+and this extension is what turns them into elements. `[CSS]{dfn="Cascading
+Style Sheets"}` maps the value to `title`.
+
 ## Transform hooks: afterParse and beforeRender
 
 Every extension's `afterParse(doc)` runs before any extension's

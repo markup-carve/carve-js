@@ -105,25 +105,14 @@ const COVERED_IN_ANOTHER_SECTION = [
 ]
 
 /**
- * Shipped with no doc home at all, tracked by markup-carve/carve-js#1313.
+ * Shipped with no doc home at all. EMPTY, and markup-carve/carve-js#1313 - the
+ * ticket that carried the eleven - is closed by emptying it.
  *
- * This list may only SHRINK. Deleting an entry is how that ticket gets closed;
- * adding one means a new extension shipped undocumented, which is the thing
- * this test is here to make someone say out loud.
+ * It stays here rather than being deleted with its last entry, because the
+ * assertion below is what makes a NEW undocumented extension fail: an addition
+ * here is someone saying out loud that one shipped without a doc home.
  */
-const UNDOCUMENTED_KNOWN = [
-  'citations',
-  'codeCallouts',
-  'colorSwatch',
-  'defaultAttributes',
-  'glossary',
-  'headingLevelShift',
-  'headingNumbers',
-  'headingReference',
-  'imgFence',
-  'index',
-  'semanticSpan',
-]
+const UNDOCUMENTED_KNOWN: string[] = []
 
 describe('every shipped extension has a docs section', () => {
   const docs = readFileSync(docsPath, 'utf8')
