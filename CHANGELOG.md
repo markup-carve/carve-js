@@ -25,6 +25,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `htmlToCarve(html, { labels })` closes that; the map layers over the defaults,
   and omitting it changes nothing.
 
+- **`createEditorSession` and `EditorSession`, exported** (#1306, #1317). A
+  source-authoritative editor session whose `snapshot()` and `update(changes)`
+  return the AST with document-space UTF-16 node ranges and marker token ranges.
+
 - **Table column metadata** (#1206, markup-carve/carve#1391). Positional alignment, vertical alignment and widths reach the AST as `table.columns` and `table_cell.valign`, render as `<colgroup>`, carry through ListTable, and are covered by new lint rules.
 - **Semantic table row partitions** (#1223). Pipe tables take `{header-rows=N footer-rows=N}` for explicit head/body/foot ranges; a ListTable cell takes `{align= valign=}` over the positional column default. The consumed attributes do not leak into the HTML.
 - **Local ListTable headers** (#1220, markup-carve/carve#1248). `header-row` on a row's first cell starts a header-led body group; `header` on any cell emits a single `<th>`.
