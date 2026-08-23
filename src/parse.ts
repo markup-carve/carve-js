@@ -62,6 +62,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import type { CarveExtension, MatcherContext, InlineMatch } from './extension.js'
 import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
+import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 
 export interface ParseOptions {
@@ -4216,7 +4217,12 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
  * name. Every other container ends at a fence closer, a pipe or a delimiter run
  * and is left alone.
  */
-const ENDS_AT_LAST_PLACED_CHILD = new Set(['block_quote', 'list', 'list_item'])
+const ENDS_AT_LAST_PLACED_CHILD = new Set([
+  'block_quote',
+  'definition_list',
+  'list',
+  'list_item',
+])
 
 /*
  * What an EMPTIED container of each kind spans instead: the markup that opened
@@ -4275,16 +4281,28 @@ function attachBlockPos(
     // The LAST PLACED child, not the last child. §4 lets a reassembled node omit
     // its position, and skipping past one keeps a container from reporting an
     // end shorter than something it really does hold.
-    const kids = [
-      ...((node as { children?: Array<{ pos?: Position }> }).children ?? []),
-      ...((node as { items?: Array<{ pos?: Position }> }).items ?? []),
-    ]
+    //
+    // A DEFINITION LIST'S CHILDREN ARE NOT IN `items` (markup-carve/carve#1530).
+    // This engine models an entry as a bare `{terms, definitions, ...}` record
+    // with no `type` and no `pos`, so the scan below finds nothing in one and
+    // the list took the extent of the lines it consumed - which reached an
+    // attribute line no child covers. The children §4 means are the wire nodes
+    // `entriesToWire` publishes, so the bound is read from THEM rather than
+    // spelled a second time here: a description that kept children ends at the
+    // last of them, and one the root emptied ends where the parser recorded.
+    const kids =
+      type === 'definition_list'
+        ? entriesToWire((node as { items?: DefinitionItem[] }).items ?? [])
+        : [
+            ...((node as { children?: Array<{ pos?: Position }> }).children ?? []),
+            ...((node as { items?: Array<{ pos?: Position }> }).items ?? []),
+          ]
     const lastOwned = [...kids].reverse().find((child) => child.pos !== undefined)?.pos
     if (lastOwned) {
       node.pos.endLine = lastOwned.endLine
       if (lastOwned.endColumn !== undefined) node.pos.endColumn = lastOwned.endColumn
       if (lastOwned.endOffset !== undefined) node.pos.endOffset = lastOwned.endOffset
-    } else {
+    } else if (EMPTIED_CONTAINER_MARKUP[type]) {
       const marker =
         EMPTIED_CONTAINER_MARKUP[type]!.exec(lexer.lines[startLineIndex] ?? '')?.[0]?.length ?? 0
       node.pos.endLine = node.pos.startLine
