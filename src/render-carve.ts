@@ -13,7 +13,7 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { opensFrontmatter, parse, rawBracketRunCloses } from './parse.js'
+import { cellPayloadIsSpanMarker, opensFrontmatter, parse, rawBracketRunCloses, symbolOpensAt } from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -1942,7 +1942,34 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // nobody wrote (markup-carve/carve-js#903). This used to be a guard that
   // fired only on those three characters and only where the prefix was a bare
   // `=`; padding every cell covers it without enumerating anything.
-  return padCell(prefix, renderInlines(cell.children, ctx))
+  //
+  // A PAYLOAD THAT IS ITSELF A SPAN MARKER is the one thing the padding cannot
+  // keep as content, because the span cell's own production is written with the
+  // padding inside it (PART 11 section 6f). It LOSES THE CELL rather than a
+  // byte of spelling, which is why it is a section 1 failure and not an
+  // under-escaped character: a lone caret in a two-cell row came back as
+  // `| ^ |`, the cell ABOVE grew a rowspan nobody wrote, and the caret's own
+  // cell was deleted outright.
+  //
+  // The markers written for a REAL span are pushed onto the row by the branch
+  // above and are markers on purpose, so they never reach this. An ATTRIBUTED
+  // cell is not asked either, for the reason the parser does not ask it - an
+  // attribute block ahead of the payload already makes the cell content.
+  return padCell(prefix, escapeSpanMarkerPayload(renderInlines(cell.children, ctx), cell.attrs))
+}
+
+/**
+ * Escape a cell payload that would otherwise re-read as a span marker.
+ *
+ * A cell emitted with the glued header marker or an alignment run does not NEED
+ * the escape - `|= ^ |` is already a header cell holding a caret - and it gets
+ * one anyway, because which prefix a cell takes is settled after the payload is
+ * rendered. That spends one idle backslash on a rare cell and renders
+ * identically; the other direction deletes the cell.
+ */
+function escapeSpanMarkerPayload(payload: string, attrs: Attrs | undefined): string {
+  if (attrs !== undefined || !cellPayloadIsSpanMarker(payload)) return payload
+  return '\\' + payload
 }
 
 function renderFigure(node: Figure, ctx: CarveContext): string {
@@ -3395,10 +3422,10 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
       ) {
         return char
       }
-      // A COLON only opens something at the start of a line - `::` opens a
-      // definition term, `:::` a fence - and PART 11 §2 escapes a character
-      // only where omitting it would change the re-parse. Mid-line it is
-      // ordinary punctuation.
+      // A COLON at the start of a line opens a structure - `::` a definition
+      // term, `:::` a fence - and PART 11 §2 escapes a character only where
+      // omitting it would change the re-parse. Mid-line the colon is left to
+      // the symbol pass below, which is the one channel it still opens there.
       if (char === ':' && !opensLine(subject, offset)) return ':'
       if (char !== '^') return `\\${char}`
       const next = text[offset + 1] ?? ''
@@ -3439,7 +3466,48 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
   if (mode === 'minimal' && bangOpensLiteral && out.endsWith('!')) {
     out = out.slice(0, -1) + '\\!'
   }
+  // A SYMBOL-OPENING COLON is escaped in EVERY mode, for the reason the caption
+  // caret and the trailing `!` above are: it is not an optional escape. Under a
+  // configured symbol map `a :rocket: b` re-parses to a `symbol` node the text
+  // never held, so PART 11 section 2 requires the backslash - and the map is
+  // not the writer's to know, which is why the node is what decides and not the
+  // rendering. Leaving it to the minimal pass's redundancy check instead
+  // escalated the WHOLE document to conservative escaping, the over-escaping
+  // section 4 forbids, because `:` is not in the unconditional class.
+  //
+  // MID-LINE ONLY IS THE WRONG FRAME, so this pass does not ask where the colon
+  // sits: `symbolOpensAt` is the parser's own predicate, and it answers for a
+  // line-opening colon too. A `:name:` at column 0 was already escaped by the
+  // branch above, and the odd-backslash guard here is what keeps this pass from
+  // escaping it a second time.
+  //
+  // Only the OPENING colon is escaped, because only the opening colon opens
+  // anything: the closing one is preceded by a name character, so the
+  // predicate declines it and `a \:rocket: b` is the whole escape. A colon that
+  // closes no shortcode opens no symbol either, which is what leaves the
+  // corpus's `a : b : c` bare.
+  if (out.includes(':')) {
+    let scanned = ''
+    for (let i = 0; i < out.length; i += 1) {
+      if (out[i] === ':' && !precededByOddBackslashRun(out, i) && symbolOpensAt(out, i)) scanned += '\\'
+      scanned += out[i]
+    }
+    out = scanned
+  }
   return out
+}
+
+/**
+ * Is the character at this offset already escaped?
+ *
+ * A question about the PARITY of the backslash run in front of it, which a
+ * fixed-width lookbehind cannot ask: `\\:` is a literal backslash followed by a
+ * live colon, while `\:` is an escaped one.
+ */
+function precededByOddBackslashRun(text: string, offset: number): boolean {
+  let run = 0
+  for (let i = offset - 1; i >= 0 && text[i] === '\\'; i -= 1) run += 1
+  return run % 2 === 1
 }
 
 /**

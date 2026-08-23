@@ -332,6 +332,29 @@ export function escapePlainCarveInlineSyntax(
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])@(?=[A-Za-z0-9_-])/g, out)
   }
 
+  // A SYMBOL SHORTCODE is the third member of that family and the one that was
+  // missing. `a :rocket: b` came back bare and re-parses as a `symbol` node, so
+  // under a configured symbol map the prose stopped being the prose the source
+  // held. PART 11 section 2 already asks for the escape - omitting it changes
+  // the re-parsed AST - and `:` is already in section 5's candidate set, which
+  // is why the tag and mention sigils beside it are hardened and this one was
+  // not. Ported from carve-php#1610, which fixed the same gap there.
+  //
+  // ONLY THE OPENING COLON is escaped, because only the opening colon opens
+  // anything: the closing one is preceded by a name character, so the lookbehind
+  // declines it and `a \:rocket: b` is the whole escape.
+  //
+  // Mirrors `RE_SYMBOL` and its preceding-character guard in parse.ts rather
+  // than approximating it: a symbol opens on a `:` NOT preceded by `_` or an
+  // alphanumeric and followed by a name that closes on another `:`, where the
+  // first name character is a letter, a digit, `+` or `-` and the rest adds `_`.
+  // Requiring the CLOSER too is what leaves `a : b : c` alone - a colon that
+  // closes no shortcode opens no symbol - and the lookbehind is what leaves a
+  // URL alone, since `http://x` has a letter before its colon.
+  if (!bareHandled.includes(':')) {
+    out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_]):(?=[A-Za-z0-9+-][\w+-]*:)/g, out)
+  }
+
   return out
 }
 
