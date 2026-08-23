@@ -602,6 +602,19 @@ const IMPLEMENTED = new Set([
   'a-terminal-comment-line-still-leaves-an-empty-verse-line',
   'an-unclosed-inline-literal-reaches-the-end-of-its-block',
   'pipe-tables-can-state-head-and-foot-row-counts',
+  // markup-carve/carve#1526 and #1542. A container's span - and a definition
+  // list's - ends at its last PLACED child, not at the line the scan reached.
+  'a-container-s-span-ends-at-its-last-placed-child',
+  'a-definition-list-ends-at-its-last-placed-child-too',
+  // markup-carve/carve#1516. An escape escalation reaches the block that
+  // needed one, never the whole document.
+  'a-leading-escaped-caret-keeps-its-escape',
+  'an-idle-escape-does-not-spread-from-the-block-that-needed-one',
+  // markup-carve/carve#1513. A hard list boundary is written as exactly three
+  // blank lines.
+  'a-longer-run-at-a-list-boundary-is-written-as-exactly-three-blank-lines',
+  // markup-carve/carve#1525. A null byte is replaced before the document is read.
+  'a-null-byte-is-replaced-before-the-document-is-read',
 ])
 
 /**

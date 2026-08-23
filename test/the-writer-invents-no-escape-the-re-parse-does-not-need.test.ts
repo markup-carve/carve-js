@@ -82,13 +82,24 @@ const IDLE_ESCAPE_CAUSES = ['unit scope: ', 'opener run: ', 'minimal class: ']
  * `\\{.note}` rather than `\\{\\.note\\}` - which is a different mechanism, not a
  * narrower scope.
  *
- * OPENER RUN, two documents: §2's THE UNIT IS THE OPENER requires the WHOLE
+ * OPENER RUN, three documents since the pin moved past carve#1516: §2's THE
+ * UNIT IS THE OPENER requires the WHOLE
  * opener run escaped - `\\#\\# H` and not `\\## H`, `\\*\\*\\*` and not `\\***` - and
  * PART 11 §2b names the first of those as its own worked example. The sweep
  * below removes ONE backslash at a time, so it reads the second `\\#` as idle:
- * with the first still there no heading forms either way. These two entries are
+ * with the first still there no heading forms either way. These entries are
  * therefore a floor this measurement cannot go below while §2 says what it
  * says, and they are here to be seen rather than to be fixed.
+ *
+ * THE READING MOVED WITH THE PIN, NOT WITH THE WRITER (markup-carve/carve#1516).
+ * The corpus document that ruling ADDED - `396-an-idle-escape-does-not-spread-
+ * from-the-block-that-needed-one`, which is `  ## H` plus a second paragraph -
+ * is a THIRD opener-run document, so this engine lands at 25 documents / 59
+ * escapes where PART 11 §2b's prose still says 2 opener-run documents and 24 /
+ * 57 overall. Nothing regressed: the writer emits the spec's own `.fmt` golden
+ * for 396 byte for byte, and the sweep reads the second `\\#` of a correctly
+ * escaped opener run as idle exactly as it does for `103-heading-marker-column-
+ * zero-2`. The §2b count was taken on a pin that predated its own corpus case.
  *
  * MINIMAL CLASS, the other two: both passes agree, so nothing escalated, and
  * the escape is still idle - once because a literal backslash is written
@@ -118,6 +129,7 @@ const IDLE_ESCAPE_RATCHET = new Map<string, [number, string]>([
   ['369-a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one-2', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
   ['369-a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one-3', [2, 'unit scope: the failing run is written conservatively in full, which escapes `]`, `/` beyond the opener']],
   ['390-a-table-cell-s-marker-run-ends-at-a-space-5', [1, 'minimal class: an authored `\\=` is kept after the writer\'s own cell padding retired it - padded, the `=` no longer starts the cell']],
+  ['396-an-idle-escape-does-not-spread-from-the-block-that-needed-one', [2, 'opener run: the heading opener `##` is escaped in full, and removing either backslash alone still leaves a paragraph']],
   ['72-escape-coverage-2', [4, 'minimal class: a literal backslash is written doubled, and a lone backslash before a non-escapable character re-parses the same bare']],
   ['87-compact-list-blocks-10', [3, 'unit scope: the failing run is written conservatively in full, which escapes `{`, `.`, `}` where any one of them alone stops the attribute line']],
 ])
@@ -305,8 +317,8 @@ describe('the idle-escape ratchet', () => {
     // line that moves when the debt does.
     let total = 0
     for (const [, [count]] of IDLE_ESCAPE_RATCHET) total += count
-    expect(total).toBeLessThanOrEqual(57)
-    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(24)
+    expect(total).toBeLessThanOrEqual(59)
+    expect(IDLE_ESCAPE_RATCHET.size).toBeLessThanOrEqual(25)
   })
 })
 
