@@ -169,6 +169,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   WHITESPACE clause). A heading has no closer, and the run it used to cover
   reaches no child of it: PART 2 rules such a run is not content at all. One
   spec-corpus document publishes a shorter `heading` span.
+- **A footnote definition's span ends at its body, not at the blank line that
+  ends it** (#1347, PART 12 §4). The parser consumes the blank line before it
+  can know the note is over, so the recorded extent reached the start of the
+  line after the body - one codepoint past the note's own last block, over the
+  terminator §4 excludes by name. 27 spec-corpus documents publish a shorter
+  `footnote` span; 26 of them stop reaching past their last child.
 
 - **A table `<caption>` is numbered among the table's child nodes**
   (markup-carve/carve#1560, PART 12 §16). The step was a literal `caption[1]`

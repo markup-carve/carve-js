@@ -5210,7 +5210,21 @@ function parseFootnoteDef(lexer: Lexer): null {
     // Only when this lexer can express a document offset - inside an unmapped
     // container the numbers mean something else, and §4 forbids inventing one.
     if (lexer.hasDocumentOffsets) {
-      const lastIndex = Math.max(defLineIndex, lexer.pos - 1)
+      // THE BLANK RUN THAT ENDS THE DEFINITION IS NOT PART OF IT. PART 12 §4
+      // excludes "a following newline, blank line, or unattached attribute
+      // block" from a span by name, and the loop above consumes a blank line
+      // BEFORE it can know whether the line after it continues the body - so
+      // when it does not, `lexer.pos - 1` sits on a line the definition never
+      // took. The span then ran one codepoint past the note's last block, over
+      // the terminator of its own last line (markup-carve/carve-js#1347): the
+      // same defect a list's span carried over the blank run that ended it
+      // (markup-carve/carve-js#1304), one container over.
+      //
+      // Walk back to the last line the body actually holds. The definition
+      // line is always one of them, so this never runs past the start, and a
+      // blank line INSIDE the body is followed by the content that kept it.
+      let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
+      while (lastIndex > defLineIndex && isBlankLine(lexer.lines[lastIndex] ?? '')) lastIndex--
       const lastLine = lexer.lines[lastIndex] ?? ''
       lexer.footnoteDefPos.set(label, {
         startLine: lexer.lineNumber(defLineIndex),
