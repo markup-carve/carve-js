@@ -2,7 +2,12 @@ import type { Admonition, Attrs, Heading, InlineNode, RawBlock, Text } from './a
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { deriveDisplayNodes } from './heading-ids.js'
 import type { BlockExtensionRenderContext, CarveExtension } from './extension.js'
-import { renderInlinesInLinkContext, type RenderOptions } from './render-html.js'
+import {
+  escapeAttrValue,
+  LABEL_DEFAULTS,
+  renderInlinesInLinkContext,
+  type RenderOptions,
+} from './render-html.js'
 import { stripBidiControls } from './bidi-controls.js'
 
 /** Options for the {@link tableOfContents} extension. */
@@ -18,7 +23,8 @@ export interface TableOfContentsOptions {
   /** Insert the generated TOC at the top or bottom of the document. Default `'top'`. */
   position?: 'top' | 'bottom'
   /** Wrap the TOC in a `<details>`/`<summary>` disclosure so it can be collapsed.
-   *  Off by default; when off the output is the unchanged `<nav class="toc">`. */
+   *  Off by default; when off the output is the named `<nav class="toc">`, whose
+   *  `aria-label` comes from the `tocNav` label rather than from here. */
   collapsible?: boolean
   /** Summary label for the disclosure (only used when `collapsible` is true). Default `'Table of Contents'`. */
   summary?: string
@@ -193,6 +199,18 @@ function buildList(
 }
 
 /**
+ * The nav's accessible name, from the render's `labels` map (PART 9 §16a).
+ *
+ * Read off the OPTIONS rather than a resolved context, because `beforeRender`
+ * runs before any render exists and has no `ctx.labels` to inherit - the same
+ * reason the entry inlines are rendered with the caller's options here
+ * (carve-js#871).
+ */
+function tocNavLabel(opts: Readonly<RenderOptions> | undefined): string {
+  return opts?.labels?.tocNav ?? LABEL_DEFAULTS.tocNav
+}
+
+/**
  * Generate a table of contents from the document's headings, ported from
  * carve-php's TableOfContentsExtension. A `beforeRender` transform that
  * collects headings (with their resolved ids) and injects a `<nav>` of nested
@@ -207,7 +225,7 @@ function buildList(
  * directive's:
  *
  * ```html
- * <nav class="toc">
+ * <nav class="toc" aria-label="Table of contents">
  * <ul>
  * <li><a href="#intro">Intro</a></li>
  * </ul>
@@ -249,10 +267,18 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
       // Collapsible: the heading list sits directly inside a <details>
       // disclosure so it can be toggled, closed by default unless `open`.
       // Byte-identical to carve-php's TableOfContentsExtension.
+      // The injected nav is named from the same `labels` key the `::: toc`
+      // directive reads, so the two extensions' navs stay byte-identical -
+      // which extensions §8b.3 makes the cross-impl contract, and naming one
+      // per-extension is the single change that would break it. The
+      // `<details>` shape has no `<nav>` at all, so it takes no landmark name;
+      // its `<summary>` stays the `summary` option (carve#1510).
+      const navLabel = tocNavLabel(ctx.options)
+      const named = navLabel === '' ? '' : ` aria-label="${escapeAttrValue(navLabel)}"`
       const html = collapsible
         ? `<details class="${escapeHtml(cssClass)}"${open ? ' open' : ''}>\n` +
           `<summary>${escapeHtml(summary)}</summary>\n${list}</details>`
-        : `<nav class="${escapeHtml(cssClass)}">\n${list}</nav>`
+        : `<nav class="${escapeHtml(cssClass)}"${named}>\n${list}</nav>`
       const toc: RawBlock = { type: 'raw_block', format: 'html', content: html }
       if (position === 'top') {
         doc.children.unshift(toc)
@@ -305,20 +331,53 @@ function tocWindow(attrs: Attrs | undefined): { minLevel: number; maxLevel: numb
   return { minLevel: 1, maxLevel: levelOf(kv.depth, 6) }
 }
 
+/**
+ * True when the author wrote `name` on the directive themselves. HTML attribute
+ * names are ASCII-case-insensitive, and this engine echoes an authored
+ * `ARIA-LABEL` back in the author's own spelling, so a case-sensitive test would
+ * write a second name beside theirs (extensions §16a, carve#1468).
+ */
+function authoredAttr(attrs: Attrs | undefined, name: string): boolean {
+  return Object.keys(attrs?.keyValues ?? {}).some((k) => k.toLowerCase() === name)
+}
+
 /** Build the `<nav>`'s attributes: force a leading `toc` class, carry the
- *  author's `{#id .class}`, and drop the directive-only `depth`/`from`/`to`
- *  keys so they never render as HTML attributes. */
-function navAttrs(attrs: Attrs | undefined): Attrs {
+ *  author's `{#id .class}`, name the landmark, and drop the directive-only
+ *  `depth`/`from`/`to` keys so they never render as HTML attributes. */
+function navAttrs(attrs: Attrs | undefined, navLabel: string): Attrs {
   // `toc` leads; drop any author-supplied `toc` so `{.toc}` never doubles it.
   const a: Attrs = { classes: ['toc', ...(attrs?.classes ?? []).filter((c) => c !== 'toc')] }
   if (attrs?.id !== undefined) a.id = attrs.id
+  const kept: Record<string, string> = {}
   const kv = attrs?.keyValues
   if (kv) {
-    const kept: Record<string, string> = {}
     for (const k of Object.keys(kv)) if (!RESERVED_TOC_ATTRS.has(k)) kept[k] = kv[k]!
-    if (Object.keys(kept).length > 0) a.keyValues = kept
   }
+  // APPENDED, after whatever the author wrote, so naming the landmark never
+  // moves an attribute they placed.
+  if (namesTheNav(navLabel, attrs)) kept['aria-label'] = navLabel
+  if (Object.keys(kept).length > 0) a.keyValues = kept
   return a
+}
+
+/**
+ * Whether the engine writes the nav's accessible name.
+ *
+ * `<nav>` is a navigation landmark unconditionally, so an unnamed one is an
+ * entry in a reader's landmark list reading only "navigation" - and a page
+ * holds more than one of them the moment both TOC extensions are registered, a
+ * document writes `::: toc` twice, or a site template contributes its own
+ * (extensions §8b.1, markup-carve/carve#1509). Two exceptions, both §1.5's
+ * existing precedence rather than anything new here: an author who named the
+ * element keeps their name with nothing added beside it, and a host who sets
+ * the `tocNav` key to the empty string gets no name at all.
+ */
+function namesTheNav(navLabel: string, attrs: Attrs | undefined): boolean {
+  return (
+    navLabel !== '' &&
+    !authoredAttr(attrs, 'aria-label') &&
+    !authoredAttr(attrs, 'aria-labelledby')
+  )
 }
 
 /** Depth-first, document-order collection of every heading with a resolved id,
@@ -347,7 +406,7 @@ function renderToc(
   entries: TocEntry[],
   budget: AbbrBudget,
 ): string {
-  const attrs = ctx.renderAttrs(navAttrs(node.attrs))
+  const attrs = ctx.renderAttrs(navAttrs(node.attrs, ctx.labels.tocNav))
   const emptyNav = `<nav${attrs}></nav>`
   // Preserve any authored blocks written inside the placeholder before the nav,
   // never silently drop them (mirrors the index/glossary directives).
@@ -409,14 +468,15 @@ function renderToc(
  * | registered | `::: toc` written | output |
  * | --- | --- | --- |
  * | neither | yes | the empty `<div class="toc">` floor, in place |
- * | `tocPlacement` | yes | `<nav class="toc">` in place |
+ * | `tocPlacement` | yes | the named `<nav class="toc">` in place |
  * | `tableOfContents` | yes | nav at the top, PLUS the empty floor in place |
  * | both | yes | two navs, one at the top and one in place |
  * | `tocPlacement` | no | nothing |
  * | `tableOfContents` | no | nav at the top |
  *
  * A separate empty case is NOT the floor: with this extension registered and no
- * heading inside the level window, the block renders `<nav class="toc"></nav>`.
+ * heading inside the level window, the block renders an EMPTY nav - still a
+ * landmark, so it is still named.
  * Both are empty; only one means the extension is missing.
  */
 export function tocPlacement(): CarveExtension {

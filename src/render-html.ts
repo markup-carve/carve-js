@@ -748,6 +748,7 @@ export type LabelKey =
   | 'tabsGroup'
   | 'codeGroup'
   | 'endnotes'
+  | 'tocNav'
   | 'admonitionNote'
   | 'admonitionTip'
   | 'admonitionWarning'
@@ -773,6 +774,7 @@ export const LABEL_DEFAULTS: Record<LabelKey, string> = {
   tabsGroup: 'Tabs',
   codeGroup: 'Code examples',
   endnotes: 'Footnotes',
+  tocNav: 'Table of contents',
   admonitionNote: 'Note',
   admonitionTip: 'Tip',
   admonitionWarning: 'Warning',

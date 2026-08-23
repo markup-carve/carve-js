@@ -9,7 +9,7 @@ describe('::: toc placement directive', () => {
   it('renders a nested nav where the directive is written', () => {
     const out = h('# Intro\n\n::: toc\n:::\n\n## Setup\n\n### Details\n\n## Usage\n')
     expect(out).toContain(
-      '<nav class="toc">\n<ul>\n<li><a href="#Intro">Intro</a>\n<ul>\n' +
+      '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#Intro">Intro</a>\n<ul>\n' +
         '<li><a href="#Setup">Setup</a>\n<ul>\n<li><a href="#Details">Details</a></li>\n</ul>\n</li>\n' +
         '<li><a href="#Usage">Usage</a></li>\n</ul>\n</li>\n</ul>\n</nav>',
     )
@@ -29,7 +29,7 @@ describe('::: toc placement directive', () => {
   it('{depth=N} limits to levels 1..N', () => {
     const out = h('# A\n\n{depth=2}\n::: toc\n:::\n\n## B\n\n### C\n\n## D\n')
     expect(out).toContain(
-      '<nav class="toc">\n<ul>\n<li><a href="#A">A</a>\n<ul>\n' +
+      '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a>\n<ul>\n' +
         '<li><a href="#B">B</a></li>\n<li><a href="#D">D</a></li>\n</ul>\n</li>\n</ul>\n</nav>',
     )
     expect(out).not.toContain('href="#C"')
@@ -38,7 +38,7 @@ describe('::: toc placement directive', () => {
   it('{from=X to=Y} selects an explicit level window', () => {
     const out = h('# A\n\n{from=2 to=2}\n::: toc\n:::\n\n## B\n\n### C\n\n## D\n')
     expect(out).toContain(
-      '<nav class="toc">\n<ul>\n<li><a href="#B">B</a></li>\n<li><a href="#D">D</a></li>\n</ul>\n</nav>',
+      '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#B">B</a></li>\n<li><a href="#D">D</a></li>\n</ul>\n</nav>',
     )
     expect(out).not.toContain('href="#A"')
     expect(out).not.toContain('href="#C"')
@@ -46,7 +46,7 @@ describe('::: toc placement directive', () => {
 
   it('carries the author {#id .class} onto <nav> but strips depth/from/to', () => {
     const out = h('# A\n\n{#nav .side depth=1}\n::: toc\n:::\n\n## B\n')
-    expect(out).toContain('<nav class="toc side" id="nav">')
+    expect(out).toContain('<nav class="toc side" id="nav" aria-label="Table of contents">')
     expect(out).not.toContain('depth=')
   })
 
@@ -60,13 +60,13 @@ describe('::: toc placement directive', () => {
 
   it('renders an empty nav when there are no headings in range', () => {
     const out = h('::: toc\n:::\n\nplain paragraph\n')
-    expect(out).toContain('<nav class="toc"></nav>')
+    expect(out).toContain('<nav class="toc" aria-label="Table of contents"></nav>')
   })
 
   it('preserves blocks authored inside the placeholder', () => {
     const out = h('# A\n\n::: toc\nSee below.\n:::\n\n## B\n')
     expect(out).toContain('<p>See below.</p>')
-    expect(out).toContain('<nav class="toc">')
+    expect(out).toContain('<nav class="toc" aria-label="Table of contents">')
     expect(out.indexOf('See below.')).toBeLessThan(out.indexOf('<nav'))
   })
 
@@ -110,7 +110,7 @@ describe('::: toc placement directive', () => {
     }).trim()
 
     expect(out).toContain('<div class="toc">')
-    expect(out).toContain('<nav class="toc">')
+    expect(out).toContain('<nav class="toc" aria-label="Table of contents">')
     // The nav is at the top, ahead of the intro paragraph; the floor is after it.
     expect(out.indexOf('<nav')).toBeLessThan(out.indexOf('Intro.'))
     expect(out.indexOf('Intro.')).toBeLessThan(out.indexOf('<div class="toc">'))
@@ -118,11 +118,11 @@ describe('::: toc placement directive', () => {
 
   it('an empty nav is not the floor: the extension IS registered', () => {
     // Two different empties, and only one of them means a missing extension.
-    // Registered with no heading in range gives `<nav class="toc"></nav>`;
+    // Registered with no heading in range gives `<nav class="toc" aria-label="Table of contents"></nav>`;
     // unregistered gives the `<div>`. A reader who conflates them debugs the
     // wrong thing.
     const registered = h('::: toc\n:::\n\nplain paragraph\n')
-    expect(registered).toContain('<nav class="toc"></nav>')
+    expect(registered).toContain('<nav class="toc" aria-label="Table of contents"></nav>')
     expect(registered).not.toContain('<div class="toc">')
   })
 
@@ -144,7 +144,7 @@ describe('::: toc placement — audit fixes', () => {
   })
 
   it('dedupes the toc class when the author writes {.toc}', () => {
-    expect(t('{.toc}\n::: toc\n:::\n\n# A')).toContain('<nav class="toc">')
+    expect(t('{.toc}\n::: toc\n:::\n\n# A')).toContain('<nav class="toc" aria-label="Table of contents">')
     expect(t('{.toc}\n::: toc\n:::\n\n# A')).not.toContain('class="toc toc"')
   })
 

@@ -640,7 +640,7 @@ document's headings, ported from carve-php's TableOfContentsExtension:
 import { carveToHtml, tableOfContents } from '@markup-carve/carve'
 
 carveToHtml('# Intro\n\n## Details', { extensions: [tableOfContents()] })
-// <nav class="toc"><ul><li><a href="#intro">Intro</a><ul><li><a href="#details">Details</a></li></ul></li></ul></nav>
+// <nav class="toc" aria-label="Table of contents"><ul><li><a href="#intro">Intro</a><ul><li><a href="#details">Details</a></li></ul></li></ul></nav>
 // <section id="intro"> … </section>
 ```
 
@@ -662,8 +662,31 @@ carveToHtml('# A', { extensions: [tableOfContents({ position: 'bottom' })] })
 // <section id="A">
 //   <h1>A</h1>
 // </section>
-// <nav class="toc"> … </nav>
+// <nav class="toc" aria-label="Table of contents"> … </nav>
 ```
+
+### The nav says what it is called
+
+`<nav>` is a navigation landmark unconditionally, so an unnamed one is an entry
+in a reader's landmark list reading only "navigation" - and a page holds more
+than one the moment both TOC extensions are registered, a document writes
+`::: toc` twice, or a site template contributes its own. Both extensions
+therefore write an `aria-label` on the nav, from the render's `labels` map under
+`tocNav` (default `Table of contents`), so one map localizes the whole document
+and the two navs stay byte-identical:
+
+```ts
+carveToHtml('# Intro', {
+  extensions: [tableOfContents()],
+  labels: { tocNav: 'Inhaltsverzeichnis' },
+})
+// <nav class="toc" aria-label="Inhaltsverzeichnis"> … </nav>
+```
+
+An `aria-label` (or `aria-labelledby`) the author wrote on a `::: toc` block
+wins and nothing is added beside it - the attribute name is matched
+case-insensitively, and the author's own spelling is what renders. Set the map
+entry to `''` to emit no name at all.
 
 The in-document `::: toc` directive (the `tocPlacement()` extension) is the
 other half of this and behaves the opposite way on purpose: it renders exactly
@@ -673,7 +696,12 @@ agree on that, and it is unaffected by the `position` option.
 Set `collapsible: true` to wrap the TOC in a `<details>`/`<summary>` disclosure
 (closed unless `open: true`), with the label from `summary` (default
 `'Table of Contents'`). When off (the default) the output is the unchanged
-`<nav class="toc">`.
+`<nav class="toc" aria-label="Table of contents">`.
+
+The two strings sit on mutually exclusive shapes and neither is the other
+wearing a second hat: the disclosure has no `<nav>` at all, so `summary` is
+visible text in a widget and stays an option on this extension, while the
+landmark's accessible name comes from the render's `labels` map.
 
 ```ts
 carveToHtml('# One\n\n## Two', { extensions: [tableOfContents({ collapsible: true })] })
