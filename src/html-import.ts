@@ -539,6 +539,18 @@ class Importer {
       return { role: ['img'], 'aria-label': [classes[0]!] }
     }
 
+    // AN ENDNOTES SECTION is named by the `endnotes` key, beside the fixed
+    // `doc-endnotes` role the renderer writes with it. Both are reconstructable
+    // from the element: the role IS the shape test, and the name is the key's
+    // documented default. Which is the whole property - a value the importer
+    // can rebuild from the element it is standing on was written by the
+    // renderer from the same document, so it is not the author's, whatever this
+    // import goes on to do with the element (markup-carve/carve#1500,
+    // markup-carve/carve-php#1588).
+    if (tag === 'section' && this.attr(node, 'role') === 'doc-endnotes') {
+      return { role: ['doc-endnotes'], 'aria-label': [this.labels.endnotes] }
+    }
+
     // A TAB SET / CODE GROUP takes its name from a `labels` key, so unlike the
     // fence an author may genuinely have written the same words. Only the
     // documented English default is dropped; anything else is kept.
@@ -1001,7 +1013,14 @@ class Importer {
         ]
       }
       if (tag !== 'div') {
-        this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+        // The ELEMENT row is the one a derived wrapper does not earn. What it
+        // still CARRIED is reported as it always was: `attrs` here is what
+        // survived `dropDerived`, so an author's `class` on the section, or an
+        // `aria-label` the default does not match, still goes out with a row.
+        // Suppressing both together silenced two real losses.
+        if (!this.isDerivedWrapper(node, tag)) {
+          this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+        }
         this.reportUnwrappedAttributes(attrs, tag, path)
       }
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
@@ -1353,6 +1372,32 @@ class Importer {
    * `<video id="player">` reported that the element was unwrapped and never
    * that the id had gone with it.
    */
+  /**
+   * Is the ELEMENT itself one the renderer derives, rather than one the author
+   * wrote?
+   *
+   * The same property `derivedAttributes()` answers for a value, asked of the
+   * wrapper: an endnotes `<section>` is reconstructable from the document -
+   * `render-html.ts` writes one around the notes whenever the document has any
+   * - and no Carve construct spells a `<section>`, so nothing the AUTHOR wrote
+   * goes when it is unwrapped. `element-unwrapped` names a loss, and there is
+   * none to name (markup-carve/carve-php#1588).
+   *
+   * IT DOES NOT DEPEND ON WHAT THIS IMPORT DOES NEXT. The referenced form is
+   * consumed into footnote definitions and the renderer writes the section back;
+   * the reference-less form degrades to the `<hr>` and `<ol>` it is built from
+   * and the renderer writes no section at all (markup-carve/carve#1558). Either
+   * way the author never wrote the wrapper, so neither way is a loss. Asking
+   * the OUTPUT instead is the question that made the report contradict the
+   * conversion, which is what markup-carve/carve#1502 measured.
+   *
+   * SCOPED TO THE ROLE, not to `<section>`. A `<section id="intro">` an author
+   * wrote is unwrapped and still reports both rows, because nothing derives it.
+   */
+  private isDerivedWrapper(node: P5Node, tag: string): boolean {
+    return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
+  }
+
   private reportUnwrappedAttributes(attrs: Attrs | undefined, tag: string, path: string): void {
     if (attrs === undefined) return
     this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} with the unwrapped <${tag}>: there is no element left to carry them`, 'warning', path)
