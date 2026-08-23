@@ -1701,8 +1701,10 @@ class Importer {
      * the element was skipped and the caption left the document silently -
      * pandoc emits exactly this shape for every captioned table.
      */
-    const captions = (node.childNodes ?? []).filter((n) => n.tagName === 'caption')
-    const captionNode = captions[0]
+    const captions = (node.childNodes ?? [])
+      .map((n, index) => ({ node: n, index }))
+      .filter(({ node: n }) => n.tagName === 'caption')
+    const captionNode = captions[0]?.node
     // The PARSER keeps the first `^ ` line and reads the second as a paragraph,
     // so a table that arrives with two captions loses one either way. Reported
     // rather than dropped in silence, and the same rule as the parser's, so the
@@ -1712,7 +1714,7 @@ class Importer {
         'table-degraded',
         'Dropped a second <caption>: a table has one caption, and the first one wins',
         'warning',
-        this.childPath(path, extra, (node.childNodes ?? []).indexOf(extra)),
+        this.childPath(path, extra.node, extra.index),
       )
     }
     /*
@@ -1874,8 +1876,31 @@ class Importer {
           : 'a body group is the rows it consumes, and this one has none'
       this.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path)
     }
+    /*
+     * THE CAPTION IS NUMBERED WHERE THE AUTHOR PUT IT (PART 12 §16,
+     * markup-carve/carve#1560). A step counts among ALL of the parent's child
+     * nodes, and the clause's three exemptions - an item among the items, a row
+     * among the rows, a cell among the cells of its row - are the whole of it,
+     * because the importer reads those parents through a shape of its own. A
+     * table has at most one caption, so there is nothing to renumber and no
+     * exemption to claim.
+     *
+     * The literal `caption[1]` this replaces never consulted a position at all,
+     * and what it printed was the caption's rank among the captions - the one
+     * basis the clause forbids, and the reading a reader also gets from
+     * resolving the path as XPath. It agreed with the child index only for a
+     * table written with no whitespace: `<table>` on its own line puts a text
+     * node first, so the caption is the SECOND child and `caption[1]` named a
+     * node the reader does not have. The second-caption row below already
+     * counted this way, so one element spoke under two bases.
+     */
     const caption = captionNode
-      ? this.captionInlines(captionNode, `${path}/caption[1]`, depth + 1, 'caption')
+      ? this.captionInlines(
+          captionNode,
+          `${path}/caption[${captions[0]!.index + 1}]`,
+          depth + 1,
+          'caption',
+        )
       : undefined
     return { type: 'table', rows, ...(rowGroups ? { rowGroups } : {}), ...(caption ? { caption } : {}), ...(attrs ? { attrs } : {}) }
   }
