@@ -14,6 +14,7 @@ import type {
   TableRowGroups,
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
+import { DocumentIdRegistry } from './document-ids.js'
 import { isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import {
   DANGEROUS_URL_SCHEMES,
@@ -560,8 +561,9 @@ class Importer {
     // A TITLED ADMONITION's title paragraph carries the renderer's own
     // document-order counter, and the `<aside>`'s `aria-labelledby` points at
     // it. Baked into source the id is authored, so the next render's counter
-    // collides with it. The Nth such paragraph derives exactly `adm-N`, so this
-    // stays an equality match rather than a guess at the shape.
+    // collides with it. The Nth such paragraph derives what the renderer's id
+    // registry hands out for `adm-N`, so this stays an equality match rather
+    // than a guess at the shape.
     if (tag === 'p' && has('admonition-title')) {
       const derivedId = this.admonitionTitleId(node)
       return derivedId === undefined ? undefined : { id: [derivedId] }
@@ -689,14 +691,37 @@ class Importer {
    */
   private admonitionTitleId(node: P5Node): string | undefined {
     if (!this.admonitionTitleIds) {
-      const ids = new Map<P5Node, string>()
+      // ONE WALK, TWO COLLECTIONS. The counted titles in document order - the
+      // order the renderer's counter runs in - and every OTHER id the document
+      // carries, which is the namespace the renderer's registry was seeded with
+      // before that counter allocated anything.
+      const titles: P5Node[] = []
+      const reserved: string[] = []
       const stack: P5Node[] = this.root ? [this.root] : []
       while (stack.length > 0) {
         const current = stack.pop()!
-        if (this.isCountedAdmonitionTitle(current)) ids.set(current, `adm-${ids.size + 1}`)
+        if (this.isCountedAdmonitionTitle(current)) {
+          titles.push(current)
+        } else {
+          const id = this.attr(current, 'id')
+          if (id !== undefined) reserved.push(id)
+        }
         const children = current.childNodes ?? []
         for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!)
       }
+      // THE PREDICTION IS THE RENDERER'S ALLOCATION, NOT ITS COUNTER. The
+      // renderer takes `adm-N` from the document's id registry, which appends a
+      // collision suffix when the name is already taken - so on a document
+      // where the author holds `adm-1`, the id written is `adm-1-2` and a bare
+      // `adm-${N}` matches nothing. Reserving the ids the document already
+      // carries first, then allocating through the same registry, keeps this an
+      // EQUALITY match on the value the renderer would write (carve-js#1336).
+      // Matching the SHAPE `adm-N-M` instead is the guess the rule deliberately
+      // does not make.
+      const registry = new DocumentIdRegistry()
+      for (const id of reserved) registry.reserve(id)
+      const ids = new Map<P5Node, string>()
+      for (const [index, title] of titles.entries()) ids.set(title, registry.uniqueId(`adm-${index + 1}`))
       this.admonitionTitleIds = ids
     }
     return this.admonitionTitleIds.get(node)
@@ -706,9 +731,10 @@ class Importer {
    * Whether this node is a title paragraph the renderer's admonition counter
    * counted: an id, inside an `<aside class="admonition …">`, with the aside's
    * `aria-labelledby` naming it back. A `docIds` collision suffix (`adm-1-2`)
-   * is not reconstructable from here, so such a title matches no derived value
-   * and its id is kept - the safe side of the same accepted limit §16a states
-   * for a non-default label.
+   * IS reconstructed, by seeding the same registry with the ids the document
+   * already carries before allocating (carve-js#1336); before that the title
+   * matched no derived value and its id was reported as a drop that had not
+   * happened.
    */
   /**
    * Whether this is the paragraph a container's TITLE renders as.

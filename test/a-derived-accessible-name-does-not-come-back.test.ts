@@ -261,6 +261,80 @@ describe('a derived accessible name does not come back from an HTML import', () 
     })
 
     /*
+     * THE COUNTER IS NOT THE ALLOCATION (carve-js#1336).
+     *
+     * The renderer takes `adm-N` from the document's id registry, which appends
+     * a collision suffix when the author already holds that name - so it writes
+     * `adm-1-2` where a bare counter predicts `adm-1`. A prediction that reads
+     * the counter alone therefore matches nothing on these documents and
+     * reports a drop that did not happen: the mirror of carve-php#1579, and the
+     * one direction §16a's "not a lossy decision" cannot excuse, because
+     * nothing was lost.
+     *
+     * THE ROUND TRIP IS NOT THE TEST HERE EITHER, for the reason at the top of
+     * this file - every shape below rebuilds byte-identical while carrying the
+     * defect. What separates them is the DIAGNOSTIC.
+     */
+    it('predicts the suffixed id the registry hands out, not the bare counter', () => {
+      const source = '{#adm-1}\nx\n\n::: note "A"\nb\n:::\n'
+      const html = carveToHtml(source)
+      expect(html).toContain('<p class="admonition-title" id="adm-1-2">A</p>')
+
+      const result = htmlToCarve(html)
+      expect(result.value).toBe(source)
+      expect(result.value).not.toContain('#adm-1-2')
+      expect(result.report.diagnostics).toEqual([])
+    })
+
+    it('follows the registry past a second collision', () => {
+      const source = '{#adm-1}\nx\n\n{#adm-1-2}\ny\n\n::: note "A"\nb\n:::\n'
+      const html = carveToHtml(source)
+      expect(html).toContain('<p class="admonition-title" id="adm-1-3">A</p>')
+
+      const result = htmlToCarve(html)
+      expect(result.value).toBe(source)
+      expect(result.report.diagnostics).toEqual([])
+    })
+
+    it('predicts per admonition, so one collision does not shift the others', () => {
+      // The author holds `adm-2`, which the FIRST admonition does not want and
+      // the second does. A model that offset the whole counter on any collision
+      // would move both.
+      const source = '{#adm-2}\nx\n\n::: note "A"\na\n:::\n\n::: tip "B"\nb\n:::\n'
+      const html = carveToHtml(source)
+      expect(html).toContain('<p class="admonition-title" id="adm-1">A</p>')
+      expect(html).toContain('<p class="admonition-title" id="adm-2-2">B</p>')
+
+      const result = htmlToCarve(html)
+      expect(result.value).toBe(source)
+      expect(result.report.diagnostics).toEqual([])
+    })
+
+    it('still matches the value and not the suffixed shape', () => {
+      // An `adm-N-M` id the registry would NOT have handed out here: the
+      // document holds no other `adm-1`, so a titled admonition takes `adm-1`
+      // and this value is the author's. Reading the suffix as proof of a
+      // generated id is the same guess, one shape further out.
+      //
+      // A lifted title has no attribute slot either way, so the id GOES either
+      // way and the source cannot be the discriminator. The DIAGNOSTIC is: a
+      // derived value is dropped silently (the tests above), an authored one is
+      // reported. Shape-matching `adm-N-M` would silence this row.
+      const result = htmlToCarve(
+        '<aside class="admonition note" aria-labelledby="adm-1-2">' +
+          '<p class="admonition-title" id="adm-1-2">A</p><p>b</p></aside>',
+      )
+      expect(result.report.diagnostics).toEqual([
+        {
+          code: 'attribute-dropped',
+          message: 'Dropped id on <p>: an admonition title has no attribute slot',
+          severity: 'warning',
+          path: '/aside[1]/p[1]',
+        },
+      ])
+    })
+
+    /*
      * THE TWO SHAPES THAT CARRY THE CLASS AND NO COUNTER, both ahead of a real
      * title so a counter keyed on the class alone is off by one and keeps the
      * derived id it should drop. Found by review of the first cut, which did
