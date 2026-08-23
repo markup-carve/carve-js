@@ -129,10 +129,20 @@ export function escapeLiteralBackslashes(text: string): string {
  * source language that has no such construct.
  *
  * `{#id}` is an attribute block in Carve and in Djot, so a Djot converter must
- * leave it alone - a pinned id is deliberate there. In HTML and BBCode text the
- * same characters are literal, and left bare the `#` rule below declines to
- * escape them (it defers to the brace rule, which only matches a complete
- * pair), so `a {#id} b` came back with a tag span inside literal braces.
+ * leave it alone - a pinned id is deliberate there. In HTML, BBCode and MARKDOWN
+ * text the same characters are literal, and left bare the `#` rule below
+ * declines to escape them (it defers to the brace rule, which only matches a
+ * complete pair), so `a {#id} b` came back with a tag span inside literal
+ * braces.
+ *
+ * Djot is the one source language here that means an attribute by it. The split
+ * is per LANGUAGE, not per character, which is why the escape lives at the call
+ * site: the Markdown converter calls this and `djotToCarve` does not.
+ *
+ * Call it BEFORE `escapePlainCarveInlineSyntax`, not after. That function's tag
+ * rule declines a `#` behind an unescaped `{`, so the brace has to be escaped
+ * first for the `#` to be escaped at all; the reverse order yields `\{` in front
+ * of a live tag span, which is the defect this helper exists to prevent.
  */
 export function escapeAttributeBlockOpener(text: string): string {
   return escapeUnlessAlreadyEscaped(/\{(?=#)/g, text)
@@ -151,8 +161,21 @@ export function escapeAttributeBlockOpener(text: string): string {
  * emits its own fence, and BBCode's code tags are stashed before any escaping
  * runs, so neither is reached from here.
  *
- * Djot and Markdown do not call it: a backtick there already means a code span,
- * and their converters carry it over as one.
+ * MARKDOWN CALLS IT TOO, on a distinction the earlier premise here missed. That
+ * premise - a backtick in Markdown already means a code span its converter
+ * carries over as one - holds for a MATCHED backtick and fails for an unmatched
+ * one, which CommonMark and GFM read as ordinary text. The two are told apart by
+ * position rather than by character, so no per-character handled set can express
+ * it; what expresses it is the Markdown converter's own code-span protection,
+ * which turns every matched run into a placeholder before it calls this. A
+ * backtick still standing in the text by then is one CommonMark read as literal,
+ * and escaping it cannot reach a real code span.
+ *
+ * Leaving it bare was unbounded, not cosmetic: an opener with no equal-length
+ * closer ahead does not fall back to text in Carve, it opens a verbatim span
+ * that runs to the END of the block (see `resources/grammar.ebnf`, UNCLOSED RUN).
+ *
+ * `djotToCarve` still does not call it - it walks the AST and escapes no text.
  */
 export function escapeVerbatimDelimiter(text: string): string {
   return escapeUnlessAlreadyEscaped(/`/g, text)
