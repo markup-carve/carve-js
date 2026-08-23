@@ -2,6 +2,7 @@ import type {
   Attrs,
   BlockNode,
   DefinitionItem,
+  DefinitionList,
   Document,
   Figure,
   Image,
@@ -1042,7 +1043,7 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(body)
     }
     case 'list':
-      return withAttrs(renderList(node, ctx))
+      return withLooseAttrs(node, attrs, renderList(node, ctx))
     case 'thematic_break':
       return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
     case 'table':
@@ -1100,7 +1101,7 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
     }
     case 'definition_list':
-      return withAttrs(renderDefinitionList(node.items, ctx))
+      return withLooseAttrs(node, attrs, renderDefinitionList(node.items, ctx))
     case 'figure':
       return withAttrs(renderFigure(node, ctx))
     case 'figure_group': {
@@ -1161,6 +1162,73 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
     }
   }
+}
+
+/**
+ * PART 9 §17 L7: the writer spells looseness with `{loose}` ONLY where the
+ * blank-line spelling cannot.
+ *
+ * This is the load-bearing rule for churn. Emitting the key on every loose
+ * container would rewrite a large share of the corpus and of every document
+ * anyone has written, for nothing gained - on a multi-item loose list the blank
+ * lines already say it, so the key would be an idle mark. The precedent is PART
+ * 12 §15, whose writer retains `header-rows` where it is present rather than
+ * deriving it onto every table, and PART 11 §2, which spends a mark only where
+ * omitting it would change the re-parsed document.
+ *
+ * `attrs` is the node's own already-rendered attribute run, which never contains
+ * `loose`: the parser CONSUMED it, so the writer re-derives it from the tree
+ * rather than echoing what the author wrote. That is what makes a redundant
+ * `{loose}` a no-op through a format pass as well as through a render.
+ */
+function withLooseAttrs(node: List | DefinitionList, attrs: string, body: string): string {
+  if (!needsLooseKey(node, body)) return attrs ? `${attrs}\n${body}` : body
+  const withKey = renderAttrs({
+    ...(node.attrs ?? {}),
+    keyValues: { ...(node.attrs?.keyValues ?? {}), loose: '' },
+    // The key leads, which is where an author writes it and where the corpus
+    // shows it. Its position among the other slots is not observable in the
+    // output - it is consumed before any renderer sees it - so leading is a
+    // spelling choice rather than a fact being moved.
+    ...(node.attrs?.order ? { order: ['loose', ...node.attrs.order.filter((slot) => slot !== 'loose')] } : {}),
+  })
+  return `${withKey}\n${body}`
+}
+
+function needsLooseKey(node: List | DefinitionList, body: string): boolean {
+  if (node.type === 'list') {
+    if (node.tight || node.items.length === 0) return false
+    // A BLANK LINE BETWEEN ITEMS ALWAYS LOOSENS (§17 L2), and this writer emits
+    // one between every pair of a loose list's items, so two or more items
+    // already spell it.
+    if (node.items.length > 1) return false
+    // ONE ITEM has no "between items" for a blank line to stand in, so the only
+    // spelling left is one the item's own content produces - and whether it
+    // does is the PARSER's question, not a shape this writer can read off the
+    // tree. §17's looseness rules (L1, L2, L6) decide it together, so a second
+    // copy of them here would answer differently the day any of them moves:
+    // a lead container holding a blank line re-reads LOOSE, while the same
+    // blank line before a fence does not.
+    //
+    // A body with NO blank line in it cannot re-read loose either way, so the
+    // common shape - a one-item list holding one paragraph - is answered
+    // without a parse.
+    if (!/\n[ \t]*\n/.test(body)) return true
+    const reparsed = treeOf(body) === null ? undefined : parse(body).children[0]
+    return reparsed === undefined || reparsed.type !== 'list' || reparsed.tight
+  }
+  if (node.loose !== true) return false
+  // A description already holding a second block takes the wrapper without the
+  // key, so it spells its own looseness; one that renders as a single paragraph
+  // has no blank-line spelling at all - a blank line between two ENTRIES does
+  // not loosen a `<dl>`. The key is needed as soon as ONE description is in that
+  // second state, because a sibling's second block says nothing about it.
+  return node.items.some((item) =>
+    item.definitions.some((blocks) => {
+      const visible = blocks.filter((child) => child.type !== 'comment')
+      return visible.length === 1 && visible[0]!.type === 'paragraph'
+    }),
+  )
 }
 
 function renderTableWithColumns(node: Table, ctx: CarveContext): string {

@@ -42,9 +42,14 @@ describe('a derived endnotes section is not a reported loss', () => {
   })
 
   it('writes the degraded form carve-php writes, byte for byte', () => {
-    // The fix is to the REPORT alone. carve-php#1585 settled this source, and
-    // it is what the shared fixture pins.
-    expect(htmlToCarve(DERIVED).value).toBe('---\n\n1. Note text.\n')
+    // carve-php#1585 settled this source, and the shared fixture pins it. It
+    // gained the `{loose}` key in markup-carve/carve commit d2bd801b: a document with
+    // ONE footnote imports as exactly one list item, a blank line needs two to
+    // stand between, so before PART 9 §17 L7 the written source re-read TIGHT
+    // and lost the `<p>` the imported tree recorded. The engine is ahead of the
+    // pinned fixture until the next bump; `html-import-conformance.test.ts`
+    // carries the matching AHEAD_OF_PIN entry.
+    expect(htmlToCarve(DERIVED).value).toBe('---\n\n{loose}\n1. Note text.\n')
   })
 
   it('keeps the note text on the page', () => {
