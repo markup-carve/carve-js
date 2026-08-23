@@ -1179,7 +1179,7 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
  * `{loose}` a no-op through a format pass as well as through a render.
  */
 function withLooseAttrs(node: List | DefinitionList, attrs: string, body: string): string {
-  if (!needsLooseKey(node)) return attrs ? `${attrs}\n${body}` : body
+  if (!needsLooseKey(node, body)) return attrs ? `${attrs}\n${body}` : body
   const withKey = renderAttrs({
     ...(node.attrs ?? {}),
     keyValues: { ...(node.attrs?.keyValues ?? {}), loose: '' },
@@ -1192,20 +1192,27 @@ function withLooseAttrs(node: List | DefinitionList, attrs: string, body: string
   return `${withKey}\n${body}`
 }
 
-function needsLooseKey(node: List | DefinitionList): boolean {
+function needsLooseKey(node: List | DefinitionList, body: string): boolean {
   if (node.type === 'list') {
     if (node.tight || node.items.length === 0) return false
     // A BLANK LINE BETWEEN ITEMS ALWAYS LOOSENS (§17 L2), and this writer emits
     // one between every pair of a loose list's items, so two or more items
     // already spell it.
     if (node.items.length > 1) return false
-    // Inside ONE item the blank line has to earn it: L2 loosens on a blank line
-    // before a genuine second PARAGRAPH and not before a sub-block, so an item
-    // whose later children are all sub-lists, fences or tables re-reads TIGHT
-    // and the key is the only spelling left.
-    return !node.items.some((item) =>
-      item.children.slice(1).some((child) => child.type === 'paragraph'),
-    )
+    // ONE ITEM has no "between items" for a blank line to stand in, so the only
+    // spelling left is one the item's own content produces - and whether it
+    // does is the PARSER's question, not a shape this writer can read off the
+    // tree. §17's looseness rules (L1, L2, L6) decide it together, so a second
+    // copy of them here would answer differently the day any of them moves:
+    // a lead container holding a blank line re-reads LOOSE, while the same
+    // blank line before a fence does not.
+    //
+    // A body with NO blank line in it cannot re-read loose either way, so the
+    // common shape - a one-item list holding one paragraph - is answered
+    // without a parse.
+    if (!/\n[ \t]*\n/.test(body)) return true
+    const reparsed = treeOf(body) === null ? undefined : parse(body).children[0]
+    return reparsed === undefined || reparsed.type !== 'list' || reparsed.tight
   }
   if (node.loose !== true) return false
   // A description already holding a second block takes the wrapper without the

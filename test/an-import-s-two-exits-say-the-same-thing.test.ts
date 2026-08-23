@@ -153,10 +153,12 @@ function twoExits(html: string): string | null {
  * retire the proof.
  */
 const UNMET = new Map<string, string>([
-  [
-    'derived-endnotes-section',
-    'the tree says a one-item list is loose where its own source says tight, and Carve has no spelling for a loose one-item list (markup-carve/carve#1607)',
-  ],
+  // THE THIRD WENT OUT THE SAME WAY. `derived-endnotes-section` said "the tree
+  // says a one-item list is loose where its own source says tight, and Carve has
+  // no spelling for a loose one-item list" (markup-carve/carve#1607). PART 9 §17
+  // L7 gave it one - the consumed `loose` boolean - so the source now carries
+  // the key, the tree carries no attribute for it because the key is consumed,
+  // and the two exits say the same thing (markup-carve/carve-js#1401).
 ])
 
 const fixtures = readdirSync(fixtureDir, { withFileTypes: true })
