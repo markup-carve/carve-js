@@ -1124,6 +1124,76 @@ function astJsonDepth(
   return { nodes: deepest, walk: deepestWalk }
 }
 
+/**
+ * Replace every U+0000 with U+FFFD in every string value of an ingested
+ * payload, before anything reads one of them (PART 12 section 21).
+ *
+ * THE PARSE BOUNDARY ALREADY DOES THIS. `normalizeSource` in `parse.ts`
+ * replaces an authored NUL before the first line of a document is read, and
+ * PART 9 section 29 carves the character out of the content class on that
+ * basis. The AST is a SECOND DOOR into the same renderers and it had no
+ * equivalent, so an authored NUL and an ingested one stood on different
+ * footings - one replaced, one content - which is the divergence section 29
+ * exists to remove.
+ *
+ * THE SUBJECT IS THE DECODED VALUE, not the bytes of a JSON document. RFC 8259
+ * forbids an unescaped U+0000 inside a string, so a raw byte in JSON text is a
+ * syntax error `JSON.parse` raises before any Carve rule is reached, and stays
+ * one. What reaches here is the `\u0000` escape, or a string a host built in
+ * memory and handed to `fromAstJson` directly - and the in-memory door has no
+ * JSON layer at all, which is why the rule is stated on the value.
+ *
+ * NOT A REFUSAL, unlike section 11's unknown property and section 12's deviant
+ * root. Those are structure a producer got wrong. This is the opposite case:
+ * the replacement is what the parse boundary already does to the identical
+ * string, so performing it is the documented reading rather than a repair, and
+ * refusing would make an ingested document stricter than the same document
+ * written as source.
+ *
+ * WHAT IT MAKES SAFE HERE. `abbreviationPairKey` joins an abbreviation term and
+ * expansion on a NUL, on the premise that the parser strips the character from
+ * both halves. That premise held on the parse path and not on this one, so
+ * `("A" NUL "b", "c")` and `("A", "b" NUL "c")` keyed identically and a document
+ * carrying both definitions with an occurrence of only the first DROPPED the
+ * second definition line - deleting the author's text, which is the direction
+ * PART 11 section 10f names as the one its two-pass design exists to avoid
+ * (carve-js#1294). The sentinel does not have to change once the character
+ * cannot arrive; carve-rs keeps its NUL-wrapped footnote placement marker for
+ * the same reason.
+ *
+ * STRUCTURALLY SHARED, like `definitionListsToWire`: a branch with no NUL in it
+ * comes back as the SAME object, so a payload without the character - every
+ * realistic one - pays a walk and no copy, and the caller's tree is never
+ * mutated either way.
+ */
+function replaceNulValues<T>(node: T): T {
+  if (typeof node === 'string') {
+    return (node.includes('\0') ? node.replace(/\0/g, '\ufffd') : node) as T
+  }
+  if (Array.isArray(node)) {
+    let changed = false
+    const mapped = node.map((child) => {
+      const next = replaceNulValues(child)
+      if (next !== child) changed = true
+      return next
+    })
+    return (changed ? mapped : node) as T
+  }
+  if (typeof node !== 'object' || node === null) return node
+
+  const record = node as Record<string, unknown>
+  let out: Record<string, unknown> | undefined
+  for (const key of Object.keys(record)) {
+    const value = ownValue(record, key)
+    const next = replaceNulValues(value)
+    if (next === value) continue
+    // OWN-PROPERTY WRITE, for the reason `own-property.ts` gives: a payload
+    // naming `__proto__` reaches the prototype setter through plain assignment.
+    setOwn((out ??= { ...record }), key, next)
+  }
+  return (out ?? record) as T
+}
+
 export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): Document {
   // A STRING is the mistake the name invites - `fromAstJson` reads as "from AST
   // JSON", carve-php spells the same entry point `decodeJson`, and carve-rs's
@@ -1161,6 +1231,22 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // the more specific answer and the one those clauses name.
   refuseSchemaViolations(json, '')
 
+  // PART 12 §21, and BEFORE every read of a VALUE below - before a label
+  // becomes a key, before an abbreviation half is joined into a pair key,
+  // before anything reaches a renderer, which are the three readings the clause
+  // names.
+  //
+  // AFTER THE REFUSALS, which is the §9 ordering rather than a weakening of
+  // §21. The refusals read STRUCTURE - a type name, a field name, a value's
+  // kind - and no refusal outcome turns on this character: a type spelled with
+  // a NUL is not a known type, and it is not one with the NUL replaced either,
+  // so a payload is refused identically whichever side of them this runs on.
+  // Going first would cost that ordering for nothing: `refuseUnknownFields`
+  // throws at an unknown field WITHOUT descending into it, so a payload naming
+  // one over a deeply nested object would be walked in full here before the
+  // cheap refusal ever ran.
+  const tree = replaceNulValues(json)
+
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
   const footnoteDefPos: Record<string, Position> = {}
@@ -1172,7 +1258,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // "a reader that supplies a default has turned a truncated document into an
   // empty one" - arriving through a door the clause did not cover. Left as the
   // type narrowing it also is, rather than deleted for a line count.
-  for (const child of Array.isArray(json.children) ? json.children : []) {
+  for (const child of Array.isArray(tree.children) ? tree.children : []) {
     if (child?.type === 'frontmatter' && frontmatter === undefined) {
       const node = child as FrontmatterNode
       if (typeof node.format === 'string' && typeof node.content === 'string') {
@@ -1220,7 +1306,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   if (frontmatter !== undefined) doc.frontmatter = frontmatter
   if (Object.keys(footnoteDefs).length > 0) doc.footnoteDefs = footnoteDefs
   if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
-  if (json.srcByteLength !== undefined) doc.srcByteLength = json.srcByteLength
+  if (tree.srcByteLength !== undefined) doc.srcByteLength = tree.srcByteLength
 
   // RE-DERIVED, not adopted. `number` is a resolution result PART 12 §5
   // serializes, and the payload's value describes the document the payload was

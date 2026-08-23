@@ -111,6 +111,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The AST-JSON ingest replaces U+0000, as the parse boundary already does**
+  (#1311, markup-carve/carve#1528, PART 12 §21). Every string value
+  `fromAstJson` reads has its NULs replaced by U+FFFD before anything else
+  reads them, so an ingested document renders like the same document written as
+  source. This closes a data loss: two abbreviation pairs that differed only
+  around a NUL shared the §10f pair key, and rendering a document holding both
+  deleted the second definition line (#1294). `bbcodeToCarve` performs the same
+  replacement on its input.
+
 - **An offset past a line the block layer removed names the line it is on**
   (#1305, markup-carve/carve#1534, PART 12 §4). A `+` continuation marker's own
   line is consumed before the inline run, so the line number ran one short for
