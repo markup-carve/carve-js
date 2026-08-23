@@ -89,14 +89,23 @@ describe('a derived accessible name does not come back from an HTML import', () 
       const source = htmlToCarve(html).value
       expect(source).not.toContain('aria-label=Tabs')
       expect(source).not.toContain('role=group')
-      expect(source).toContain('{.tabs}')
+      // WAS `{.tabs}` on a generic div, until markup-carve/carve-js#1316 made
+      // the import rebuild the container the renderer wrote. The subject of
+      // this assertion has not moved - the tab set's own class must survive the
+      // name drop, or the renderer has nothing to write the pair back FROM -
+      // only the slot it survives in: the structural class is now the fence
+      // word rather than a class beside a bare `:::`.
+      expect(source).toContain('::: tabs')
     })
 
     it('drops the aria-mode role too, which is the other value it derives', () => {
       // The class stays - it is the author's, and it is what the renderer reads
       // to write the pair back.
       const source = htmlToCarve('<div class="tabs" role="tablist" aria-label="Tabs">x</div>').value
-      expect(source).toBe('{.tabs}\n:::\nx\n:::\n')
+      // WAS `'{.tabs}\n:::\nx\n:::\n'` for the reason recorded above: the class
+      // is now spelled as the container's name, which is where a tab set's
+      // `tabs` came from before it was rendered (carve-js#1316).
+      expect(source).toBe('::: tabs\nx\n:::\n')
     })
 
     it('keeps a group name rendered from a non-default labels map', () => {
@@ -204,15 +213,38 @@ describe('a derived accessible name does not come back from an HTML import', () 
       const source = htmlToCarve(html).value
       expect(source).not.toContain('#adm-1')
       expect(source).not.toContain('#adm-2')
-      expect(source).toContain('{.admonition-title}')
+      // WAS `{.admonition-title}` - the title survived as an ordinary paragraph
+      // carrying the renderer's class, because the `<aside>` around it was
+      // unwrapped and there was no container to be the title OF. Since
+      // markup-carve/carve-js#1316 the aside is rebuilt and the paragraph is
+      // lifted into it, so the title is spelled where a title is spelled. The
+      // subject of this test has not moved: the counter id is still dropped,
+      // which the two assertions above still read.
+      expect(source).toContain('::: note "A"')
+      expect(source).toContain('::: tip "B"')
     })
 
-    it('keeps an id that is not the counter value for its position', () => {
-      const source = htmlToCarve(
+    it('reports an id that is not the counter value for its position', () => {
+      // WAS `keeps an id …`, asserting `#adm-7` reached the source. It reached
+      // it because the title was written back as a paragraph, which had an
+      // attribute slot to hold it. A lifted title has none - the same shape as
+      // a `<summary>` - so the id cannot come with it and is REPORTED instead of
+      // kept. What the near-miss control exists to prove is unchanged and is
+      // now read off the diagnostic: an id the counter did not derive is not
+      // silently swallowed (carve-js#1316, carve-js#1332).
+      const result = htmlToCarve(
         '<aside class="admonition note" aria-labelledby="adm-7">' +
           '<p class="admonition-title" id="adm-7">A</p><p>x</p></aside>',
-      ).value
-      expect(source).toContain('#adm-7')
+      )
+      expect(result.value).toBe('::: note "A"\nx\n:::\n')
+      expect(result.report.diagnostics).toEqual([
+        {
+          code: 'attribute-dropped',
+          message: 'Dropped id on <p>: an admonition title has no attribute slot',
+          severity: 'warning',
+          path: '/aside[1]/p[1]',
+        },
+      ])
     })
 
     it('keeps an id the author chose', () => {

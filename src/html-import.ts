@@ -13,7 +13,8 @@ import type {
   TableRow,
   TableRowGroups,
 } from './ast.js'
-import { isAttrIdentifier, renderCarve } from './render-carve.js'
+import { CANONICAL_ADMONITION_KINDS } from './ast.js'
+import { isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import {
   DANGEROUS_URL_SCHEMES,
   LABEL_DEFAULTS,
@@ -566,6 +567,42 @@ class Importer {
       return derivedId === undefined ? undefined : { id: [derivedId] }
     }
 
+    // A TITLED ADMONITION points `aria-labelledby` at the id on its own title
+    // paragraph, and both halves are the renderer's: the id is the counter's
+    // (dropped by the `<p>` arm above) and the reference is written from it.
+    // Left standing it is a DANGLING reference - the paragraph it names becomes
+    // the container's title and stops being an element with an id - which is
+    // the defect carve-php#1542 records, and one this engine could not reach
+    // until the aside survived the import at all (carve-js#1316).
+    // The value matched is the title's OWN id rather than the counter's,
+    // because what makes the reference derived here is not where the id came
+    // from but that the ELEMENT it names is consumed: the paragraph becomes the
+    // container's title, so any `aria-labelledby` still pointing at it names
+    // nothing. The counter id is dropped by the `<p>` arm above when it is the
+    // counter's; an authored one is reported as dropped where the title is
+    // lifted. Either way the renderer writes a fresh reference on the next
+    // render, so keeping this one could only ever preserve a dangling name.
+    if (tag === 'aside' && has('admonition')) {
+      const derived: Record<string, string[]> = {}
+      // AN UNTITLED CALLOUT IS NAMED BY ITS TYPE WORD, through the `labels` key
+      // for that kind - the shape §16a's own example uses. Unreachable until
+      // carve-js#1316, because the `<aside>` was unwrapped and there was no
+      // element left to read a name off; a `::: note` therefore came back
+      // carrying `{aria-label=Note}` and was permanently unlocalizable, which
+      // is the exact cost the clause exists to prevent.
+      const kind = classes.find((name) => name !== 'admonition' && CANONICAL_ADMONITION_KINDS.has(name))
+      if (kind !== undefined) {
+        const key = `admonition${kind[0]!.toUpperCase()}${kind.slice(1)}` as LabelKey
+        if (key in LABEL_DEFAULTS) derived['aria-label'] = [this.labels[key]]
+      }
+      // A TITLED one points at its title paragraph instead, and the renderer
+      // writes one form or the other rather than both.
+      const title = (node.childNodes ?? []).find((child) => this.isCountedAdmonitionTitle(child))
+      const titleId = title === undefined ? undefined : this.attr(title, 'id')
+      if (titleId !== undefined) derived['aria-labelledby'] = [titleId]
+      if (Object.keys(derived).length > 0) return derived
+    }
+
     // AN INDEX BACK-LINK is named `{indexBackref} {term}`, or with the
     // occurrence ordinal appended for the kth of several. Both halves are on
     // the page - the term is the entry's own text, the ordinal is the link's
@@ -673,9 +710,31 @@ class Importer {
    * and its id is kept - the safe side of the same accepted limit §16a states
    * for a non-default label.
    */
+  /**
+   * Whether this is the paragraph a container's TITLE renders as.
+   *
+   * The class alone, because the class alone is what the renderer always
+   * writes. The generated `id` beside it is conditional - `renderAdmonition`
+   * emits one only for a CANONICAL kind with no authored name - so a
+   * `::: sidebar "A"` (a `<div>`, no id) and a `::: note "A"` carrying an
+   * authored `aria-label` (no id either) both render a bare
+   * `<p class="admonition-title">`. Reading the id as the marker left the title
+   * of both in the body, where it was written back as an ordinary paragraph
+   * carrying the renderer's class.
+   *
+   * `isCountedAdmonitionTitle` is the NARROWER question and stays narrow: it
+   * asks whether the renderer's counter produced this id, which is a question
+   * about dropping a derived value, not about what the paragraph IS.
+   */
+  private isAdmonitionTitle(node: P5Node): boolean {
+    return (
+      node.tagName === 'p' &&
+      (this.attr(node, 'class') ?? '').split(/\s+/).includes('admonition-title')
+    )
+  }
+
   private isCountedAdmonitionTitle(node: P5Node): boolean {
-    if (node.tagName !== 'p') return false
-    if (!(this.attr(node, 'class') ?? '').split(/\s+/).includes('admonition-title')) return false
+    if (!this.isAdmonitionTitle(node)) return false
     const id = this.attr(node, 'id')
     if (id === undefined) return false
     const parent = node.parentNode
@@ -851,6 +910,70 @@ class Importer {
       }
     }
     if (tag === 'div' || ['article', 'aside', 'footer', 'header', 'main', 'nav', 'section'].includes(tag)) {
+      const container = this.containerFrom(tag, attrs)
+      if (container) {
+        /*
+         * THE TITLE PARAGRAPH IS THE CONTAINER'S TITLE, not its first body
+         * block. `::: note "A"` renders the title as a
+         * `<p class="admonition-title">` inside the aside, so leaving it in the
+         * body wrote it back as an ordinary paragraph carrying the renderer's
+         * own class - source that renders a SECOND title element on the next
+         * pass, and a document whose opening line is no longer the callout's
+         * name. Lifted here, and the `aria-labelledby` that pointed at it is
+         * dropped as derived, so nothing is left naming an element that no
+         * longer exists.
+         */
+        const children0 = node.childNodes ?? []
+        const titleAt = children0.findIndex((child) => this.isAdmonitionTitle(child))
+        const titleNode = titleAt < 0 ? undefined : children0[titleAt]
+        // The paths stay the ones the elements arrived under: filtering the
+        // title out renumbers everything after it, the same reason `details`
+        // keeps its summary's siblings numbered where the author put them.
+        const body: P5Node[] = []
+        const bodyPaths: string[] = []
+        children0.forEach((child, index) => {
+          if (child === titleNode) return
+          body.push(child)
+          bodyPaths.push(this.childPath(path, child, index))
+        })
+        let title: InlineNode[] | undefined
+        if (titleNode) {
+          // The element itself, not only its children - an empty title is a DOM
+          // node the caller's `maxNodes` is counting, exactly as `<summary>` is.
+          this.enter(depth + 1)
+          const titlePath = this.childPath(path, titleNode, titleAt)
+          /*
+           * A TITLE HOLDS INLINE CONTENT AND HAS NO ATTRIBUTE SLOT, so whatever
+           * the paragraph carried cannot come with it - the same shape as a
+           * `<summary>`, and reported the same way rather than in silence
+           * (carve-js#1332). The structural `admonition-title` class is the
+           * exception and is consumed rather than reported, because the renderer
+           * writes it back from the title itself, exactly as the container's own
+           * `admonition` class is.
+           */
+          const own = this.attrs(titleNode, titlePath)
+          const leftover = own && { ...own, classes: (own.classes ?? []).filter((c) => c !== 'admonition-title') }
+          if (leftover && !leftover.classes.length) delete (leftover as Attrs).classes
+          if (leftover && (leftover.id || leftover.classes || leftover.keyValues)) {
+            this.add(
+              'attribute-dropped',
+              `Dropped ${this.attrNames(leftover).join(', ')} on <p>: an admonition title has no attribute slot`,
+              'warning',
+              titlePath,
+            )
+          }
+          title = this.inlines(titleNode.childNodes ?? [], titlePath, depth + 2)
+        }
+        return [
+          {
+            type: 'admonition',
+            kind: container.kind,
+            ...(title ? { title } : {}),
+            children: this.blocks(body, path, depth + 1, bodyPaths),
+            ...(container.attrs ? { attrs: container.attrs } : {}),
+          },
+        ]
+      }
       if (tag !== 'div') {
         this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
         this.reportUnwrappedAttributes(attrs, tag, path)
@@ -1026,6 +1149,58 @@ class Importer {
     if (attrs === undefined) return
     const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
     this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
+  }
+
+  /**
+   * The container an `<aside>` or `<div>` was RENDERED FROM, rebuilt.
+   *
+   * This is `renderAdmonition` read backwards, and it is written as that
+   * inverse rather than as a list of names on purpose. The renderer sends an
+   * `admonition` to one of exactly two shapes: a kind in
+   * `CANONICAL_ADMONITION_KINDS` becomes
+   * `<aside class="admonition {kind}">`, and every other kind - a tab set, a
+   * code group, a panel, a Tier-2 container an extension invented - becomes
+   * `<div class="{kind}">`, with the node's own extra classes appended after
+   * the structural one. Inverting the mapping therefore covers the constructs
+   * nobody has thought of yet; naming `tabs` and `code-group` would have
+   * covered two and gone on losing the rest (markup-carve/carve-js#1316).
+   *
+   * WHAT IT COSTS TO UNWRAP INSTEAD is a node, not bytes, which is why an
+   * HTML-to-HTML check never found it: an unwrapped `<aside>` re-renders as
+   * the same `<p>` it went in as, and a `<div class="tabs">` kept as a `div`
+   * node with a `.tabs` class re-renders byte-identically too. Only the AST
+   * moved - `admonition` became `div`, or vanished - and the document stopped
+   * being a callout while looking exactly like one
+   * (markup-carve/carve-js#1295).
+   *
+   * THE STRUCTURAL CLASS IS CONSUMED, not kept beside the fence word, because
+   * the renderer writes it back from the kind. Keeping it would make the next
+   * render emit `class="tabs tabs"`, and `dropDerived` already relies on the
+   * same reading to recognize the naming attributes that ride these elements.
+   */
+  private containerFrom(tag: string, attrs: Attrs | undefined): { kind: string; attrs?: Attrs } | undefined {
+    const classes = attrs?.classes ?? []
+    // An `<aside>` is the canonical half, and it is the CLASS PAIR that marks
+    // one - `admonition` plus a Tier-1 kind. A bare `<aside>` is somebody
+    // else's sidebar and keeps the unwrap it has always had.
+    const kind =
+      tag === 'aside'
+        ? classes.includes('admonition')
+          ? classes.find((name) => name !== 'admonition' && CANONICAL_ADMONITION_KINDS.has(name))
+          : undefined
+        : tag === 'div'
+          ? classes[0]
+          : undefined
+    // The writer's own rule, not a copy of it: a class a fence opener cannot
+    // spell (`2col`, `my.class`) would be written after the colons and read
+    // back as a paragraph, so such an element keeps the generic `div` node
+    // where the class survives as a class.
+    if (kind === undefined || !isContainerKind(kind)) return undefined
+    const rest = classes.filter((name) => (tag === 'aside' ? name !== 'admonition' && name !== kind : name !== kind))
+    const kept: Attrs = { ...attrs }
+    delete kept.classes
+    if (rest.length) kept.classes = rest
+    return { kind, ...(kept.id || kept.classes || kept.keyValues ? { attrs: kept } : {}) }
   }
 
   private attrNames(attrs: Attrs): string[] {
