@@ -21,13 +21,17 @@ import { expectedCorpusSize } from './helpers/corpus-population.js'
  */
 
 /**
- * A fenced block inside a list item has its indentation sentinel-protected so
- * normalization cannot eat real code indentation, which also hides the
- * structural indent on a line whose verbatim content is empty. carve-rs and
- * carve-php have the same site. Listed rather than filtered out of the sweep, so
- * it stays visible.
+ * Sites the sweep still tolerates. Listed rather than filtered out of it, so
+ * they stay visible.
+ *
+ * Empty: its one entry named `73-list-nesting-and-looseness-5.crv:3`, a fenced
+ * block in a list item whose indentation sentinel hid the structural indent on
+ * a line with no verbatim content. Upstream renumbered that document to 75, so
+ * the entry named no file and excused nothing, and the renumbered document
+ * emits no such line - the sweep is green with the set empty. The guard below
+ * is what makes the next one of these fail instead of rot.
  */
-const KNOWN_REMAINING = new Set(['73-list-nesting-and-looseness-5.crv:3'])
+const KNOWN_REMAINING = new Set<string>([])
 
 /**
  * ASCII space and tab only. A trailing no-break space is content the author
@@ -40,6 +44,31 @@ const offendingLines = (slug: string, out: string): string[] =>
     .map((line, i) => ({ line, site: `${slug}:${i + 1}` }))
     .filter(({ line }) => line.length > 0 && line.replace(/[ \t]+/g, '') === '')
     .map(({ site }) => site)
+
+/*
+ * A SITE THAT NAMES NO CORPUS FILE IS NOT AN EXEMPTION.
+ *
+ * The sweep below only consults this set for a site it actually produced, so an
+ * entry naming a file the corpus no longer has is consulted never, excuses
+ * nothing, and still reads as a live carve-out. Corpus files carry the spec's
+ * ordering number, which shifts whenever a section is inserted upstream, so
+ * that is the ordinary way an entry here goes stale. Same guard shape as
+ * AHEAD_OF_PIN in `test/corpus.test.ts`.
+ */
+describe('KNOWN_REMAINING', () => {
+  it('names only corpus files that exist', () => {
+    const dir = resolve(import.meta.dirname, '../spec/tests/corpus')
+    const files = new Set(readdirSync(dir))
+    const orphaned = [...KNOWN_REMAINING]
+      .map((site) => site.slice(0, site.lastIndexOf(':')))
+      .filter((file) => !files.has(file))
+      .sort()
+    expect(
+      orphaned,
+      'renumbered upstream, or already retired - either way the entry excuses nothing',
+    ).toEqual([])
+  })
+})
 
 describe('the writer never emits a whitespace-only line', () => {
   const dir = resolve(import.meta.dirname, '../spec/tests/corpus')
