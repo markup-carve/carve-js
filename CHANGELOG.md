@@ -151,6 +151,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A definition term's span ends at its last placed child, so it drops the
+  trailing whitespace its line drops** (#1349, PART 12 §4 and PART 2's NO
+  TRAILING WHITESPACE clause). The term took the extent of the LINES it
+  consumed while the description beside it already blended a recorded start
+  with a derived end; both are blended now. Two spec-corpus documents publish
+  a shorter `definition_term` span.
+
 - **A table `<caption>` is numbered among the table's child nodes**
   (markup-carve/carve#1560, PART 12 §16). The step was a literal `caption[1]`
   that never consulted a position, which is the rank among the captions - a

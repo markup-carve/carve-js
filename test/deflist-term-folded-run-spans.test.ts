@@ -143,16 +143,23 @@ describe('an unclosed verbatim run folded into a definition term', () => {
     ])
   })
 
-  it("leaves the TERM's own extent covering the dropped run", () => {
-    // The term span is taken from the LINES the term consumed, so it still
-    // reaches the end of line 2 - carve-rs reports `definition_term` [0,8) on
-    // this document. Shrinking the run must not shrink its container.
+  it("ends the TERM where the run ends, for the term's own reason", () => {
+    // THIS ROW USED TO PIN THE OPPOSITE, and it was a scope guard rather than a
+    // ruling: shrinking the run must not shrink its container, so the term went
+    // on covering the dropped space and this asserted `':: `a\nb '`.
+    //
+    // The container then had to shrink for a reason of its own
+    // (markup-carve/carve-js#1349). A term has no closer, so PART 12 §4 ends it
+    // at its last placed child, and PART 2's NO TRAILING WHITESPACE clause -
+    // which names a definition term - rules the run is not content at all. The
+    // guard's point survives: the run's own span is what carve-js#1145 moved,
+    // and it is asserted above; the term's end comes from §4, not from the run.
     const list = toAstJson(parse(TICKET)).children[0] as unknown as {
       items: Array<{ type: string; pos?: { startOffset: number; endOffset: number } }>
     }
     const term = list.items.find((item) => item.type === 'definition_term')
 
-    expect(term?.pos && TICKET.slice(term.pos.startOffset, term.pos.endOffset)).toBe(':: `a\nb ')
+    expect(term?.pos && TICKET.slice(term.pos.startOffset, term.pos.endOffset)).toBe(':: `a\nb')
   })
 
   it('CONTROL: no renderer can see this', () => {
