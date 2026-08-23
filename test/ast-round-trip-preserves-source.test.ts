@@ -79,6 +79,27 @@ const KNOWN_LOSSES = new Set<string>([
   "227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace-2.crv",
 ])
 
+/*
+ * A KNOWN LOSS THAT NAMES NO CORPUS FILE IS NOT A KNOWN LOSS.
+ *
+ * The sweep below only consults this set for a document it actually walked, so
+ * an entry naming a file the corpus no longer has excuses nothing and still
+ * reads as a live, reasoned carve-out. Corpus files carry the spec's ordering
+ * number, which shifts whenever a section is inserted upstream, so an entry
+ * here goes stale without anything in the diff saying so. Same guard shape as
+ * AHEAD_OF_PIN in `test/corpus.test.ts`.
+ */
+describe('KNOWN_LOSSES', () => {
+  it('names only corpus files that exist', () => {
+    const files = new Set(existsSync(corpusDir) ? readdirSync(corpusDir) : [])
+    const orphaned = [...KNOWN_LOSSES].filter((name) => !files.has(name)).sort()
+    expect(
+      orphaned,
+      'renumbered upstream, or already retired - either way the entry excuses nothing',
+    ).toEqual([])
+  })
+})
+
 describe('a document round-tripped through the AST', () => {
   const sources = existsSync(corpusDir)
     ? readdirSync(corpusDir).filter((f) => f.endsWith('.crv'))

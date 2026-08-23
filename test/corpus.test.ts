@@ -96,7 +96,6 @@ const IMPLEMENTED = new Set([
   'a-malformed-language-tag-leaves-the-whole-block-literal',
   'a-language-attribute-and-lang-are-one-key',
   'the-language-sigil-takes-no-padding',
-  'a-semantic-span-keeps-its-wrapper-unless-consumption-empties-it',
   'a-structural-attribute-leads-the-author-s-own',
   'a-caret-line-does-not-end-a-paragraph-it-cannot-caption',
   'heading-index-plain-text-covers-visible-leaves-and-rejects-an-empty-key',
@@ -703,6 +702,38 @@ describe('AHEAD_OF_PIN', () => {
   it('names only corpus cases that exist', () => {
     const orphaned = [...AHEAD_OF_PIN.keys()].filter((slug) => !pairs.includes(slug))
     expect(orphaned, 'renamed upstream, or already retired - either way the entry asserts nothing').toEqual([])
+  })
+})
+
+/*
+ * AN IMPLEMENTED ENTRY THAT NAMES NOTHING IS NOT COVERAGE.
+ *
+ * The mirror of the AHEAD_OF_PIN guard above, and it exists for the same
+ * reason: the coverage guard below only walks the corpus INWARD - it catches a
+ * category the corpus gained and the list never learned - so an entry whose
+ * category the corpus LOST matched nothing, ran nothing, and still read as a
+ * declaration that this engine handles it. That is a worse state than a missing
+ * entry, because a missing entry shows up as `.todo` and an orphaned one shows
+ * up as nothing at all.
+ *
+ * The accepted names are exactly the two spellings the runner honors below -
+ * the base category, and the variant-suffixed name with its ordering number
+ * stripped - so the guard can never reject an entry that is actually doing
+ * work.
+ */
+describe('IMPLEMENTED', () => {
+  it('names only corpus categories that exist', () => {
+    const named = new Set<string>()
+    for (const name of pairs) {
+      if (!existsSync(resolve(corpusDir, `${name}.html`))) continue
+      named.add(baseSlug(name))
+      named.add(name.replace(/^\d+-/, ''))
+    }
+    const orphaned = [...IMPLEMENTED].filter((slug) => !named.has(slug)).sort()
+    expect(
+      orphaned,
+      'renamed upstream, or already retired - either way the entry covers nothing',
+    ).toEqual([])
   })
 })
 
