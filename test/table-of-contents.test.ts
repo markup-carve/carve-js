@@ -19,7 +19,7 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml(src, { extensions: [tableOfContents()] })
     expect(
       html.startsWith(
-        '<nav class="toc">\n<ul>\n' +
+        '<nav class="toc" aria-label="Table of contents">\n<ul>\n' +
           '<li><a href="#Intro">Intro</a>\n<ul>\n<li><a href="#Details">Details</a></li>\n</ul>\n</li>\n' +
           '<li><a href="#End">End</a></li>\n' +
           '</ul>\n</nav>',
@@ -30,7 +30,7 @@ describe('tableOfContents extension', () => {
 
   it('inserts after the last section when position is bottom', () => {
     // THE WHOLE DOCUMENT, not a substring. The assertion here used to be
-    // `'<h1>A</h1>\n<nav class="toc">'`, which matched whether the nav sat
+    // `'<h1>A</h1>\n<nav class="toc" aria-label="Table of contents">'`, which matched whether the nav sat
     // inside the heading's `<section>` or after it - so a test written to pin
     // cross-impl parity could not see the one thing it differed on
     // (markup-carve/carve-js#728). A fragment that spans the `</section>` is
@@ -41,7 +41,7 @@ describe('tableOfContents extension', () => {
       '<section id="A">\n' +
         '  <h1>A</h1>\n' +
         '</section>\n' +
-        '<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>',
+        '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>',
     )
   })
 
@@ -58,7 +58,7 @@ describe('tableOfContents extension', () => {
         '    <h2>B</h2>\n' +
         '  </section>\n' +
         '</section>\n' +
-        '<nav class="toc">\n<ul>\n<li><a href="#A">A</a>\n<ul>\n' +
+        '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a>\n<ul>\n' +
         '<li><a href="#B">B</a></li>\n</ul>\n</li>\n</ul>\n</nav>',
     )
   })
@@ -72,7 +72,7 @@ describe('tableOfContents extension', () => {
       extensions: [tableOfContents({ position: 'bottom' })],
     })
 
-    expect(html.indexOf('<nav class="toc">')).toBeGreaterThan(html.indexOf('role="doc-endnotes"'))
+    expect(html.indexOf('<nav class="toc" aria-label="Table of contents">')).toBeGreaterThan(html.indexOf('role="doc-endnotes"'))
     expect(html.endsWith('</ul>\n</nav>')).toBe(true)
   })
 
@@ -81,7 +81,7 @@ describe('tableOfContents extension', () => {
     // accidental reason it was already at document level. No mutation of the
     // trailer path can move this row.
     expect(carveToHtml('# A', { extensions: [tableOfContents({ position: 'top' })] })).toBe(
-      '<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
+      '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
         '<section id="A">\n' +
         '  <h1>A</h1>\n' +
         '</section>',
@@ -100,21 +100,21 @@ describe('tableOfContents extension', () => {
   it('honors minLevel and maxLevel', () => {
     const src = '# One\n\n## Two\n\n### Three'
     const html = carveToHtml(src, { extensions: [tableOfContents({ minLevel: 2, maxLevel: 2 })] })
-    expect(html).toContain('<nav class="toc">\n<ul>\n<li><a href="#Two">Two</a></li>\n</ul>\n</nav>')
+    expect(html).toContain('<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#Two">Two</a></li>\n</ul>\n</nav>')
     expect(html).not.toContain('href="#One"')
     expect(html).not.toContain('href="#Three"')
   })
 
   it('uses an ordered list when listType is ol', () => {
     const html = carveToHtml('# A', { extensions: [tableOfContents({ listType: 'ol' })] })
-    expect(html).toContain('<nav class="toc">\n<ol>\n<li><a href="#A">A</a></li>\n</ol>\n</nav>')
+    expect(html).toContain('<nav class="toc" aria-label="Table of contents">\n<ol>\n<li><a href="#A">A</a></li>\n</ol>\n</nav>')
   })
 
   it('honors a custom cssClass and escapes heading text', () => {
     const html = carveToHtml('# A & <B>', {
       extensions: [tableOfContents({ cssClass: 'contents' })],
     })
-    expect(html).toContain('<nav class="contents">\n<ul>\n<li><a href="#A-B">A &amp; &lt;B&gt;</a>')
+    expect(html).toContain('<nav class="contents" aria-label="Table of contents">\n<ul>\n<li><a href="#A-B">A &amp; &lt;B&gt;</a>')
   })
 
   it('keeps a partially-restored level as a sibling in the same nested list', () => {
@@ -123,7 +123,7 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml('## A\n\n#### B\n\n### C', { extensions: [tableOfContents()] })
     const toc = html.slice(0, html.indexOf('</nav>') + '</nav>'.length)
     expect(toc).toBe(
-      '<nav class="toc">\n<ul>\n' +
+      '<nav class="toc" aria-label="Table of contents">\n<ul>\n' +
         '<li><a href="#A">A</a>\n<ul>\n' +
         '<li><a href="#B">B</a></li>\n<li><a href="#C">C</a></li>\n' +
         '</ul>\n</li>\n</ul>\n</nav>',
@@ -134,7 +134,7 @@ describe('tableOfContents extension', () => {
     const html = carveToHtml('## A\n\n# B', { extensions: [tableOfContents()] })
     const toc = html.slice(0, html.indexOf('</nav>') + '</nav>'.length)
     expect(toc).toBe(
-      '<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n<li><a href="#B">B</a></li>\n</ul>\n</nav>',
+      '<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a></li>\n<li><a href="#B">B</a></li>\n</ul>\n</nav>',
     )
   })
 
@@ -143,7 +143,7 @@ describe('tableOfContents extension', () => {
       // @ts-expect-error testing a runtime-supplied invalid value
       extensions: [tableOfContents({ listType: 'ul><script>x</script><ul' })],
     })
-    expect(html).toContain('<nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>')
+    expect(html).toContain('<nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>')
     expect(html).not.toContain('<script>')
   })
 
@@ -188,7 +188,7 @@ describe('tableOfContents extension', () => {
 
   it('leaves the plain nav unchanged when not collapsible', () => {
     const html = carveToHtml('# One', { extensions: [tableOfContents()] })
-    expect(html.startsWith('<nav class="toc">')).toBe(true)
+    expect(html.startsWith('<nav class="toc" aria-label="Table of contents">')).toBe(true)
     expect(html).not.toContain('<details')
   })
 })
@@ -216,7 +216,7 @@ describe('a bottom TOC stays at document level under a profile', () => {
       '<section id="A">\n' +
         '  <h1>A</h1>\n' +
         '</section>\n' +
-        '<p>&lt;nav class="toc"&gt;<br>\n' +
+        '<p>&lt;nav class="toc" aria-label="Table of contents"&gt;<br>\n' +
         '&lt;ul&gt;<br>\n' +
         '&lt;li&gt;&lt;a href="#A"&gt;A&lt;/a&gt;&lt;/li&gt;<br>\n' +
         '&lt;/ul&gt;<br>\n' +
@@ -282,7 +282,7 @@ describe('the trailer mark is runtime-only', () => {
     expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(wire))))).toBe(
       '<section id="A">\n' +
         '  <h1>A</h1>\n' +
-        '  <nav class="toc">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
+        '  <nav class="toc" aria-label="Table of contents">\n<ul>\n<li><a href="#A">A</a></li>\n</ul>\n</nav>\n' +
         '</section>',
     )
     expect(renderHtml(fromAstJson(JSON.parse(JSON.stringify(wire))))).not.toBe(

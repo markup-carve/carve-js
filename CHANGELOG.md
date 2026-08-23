@@ -9,6 +9,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The table-of-contents nav carries an accessible name**
+  (markup-carve/carve#1547, ruling markup-carve/carve#1509, #1326). Both TOC
+  extensions write `aria-label` on the `<nav>` from a new `labels` key
+  `tocNav`, default `Table of contents`; an authored `aria-label` still wins,
+  and an empty entry emits no name. The `<details>` disclosure shape has no
+  `<nav>` and is unchanged.
+
 - **An HTML import can take the `labels` map the HTML was rendered with**
   (markup-carve/carve#1500). The derived-name drop matches the English defaults,
   which catches a document rendered in English and nothing else: one rendered
