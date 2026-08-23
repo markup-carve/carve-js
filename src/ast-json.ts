@@ -182,6 +182,24 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  // `start: 1` is the ordered-list default spelled out, and the schema says the
+  // field is written only "when it is not 1". An encoder is the thing that has
+  // to honor that, so a 1 is normalized away here rather than published.
+  //
+  // Same shape as `refId` above: this engine never WRITES one - `parse("1. a")`
+  // emits no `start` - it ECHOED one, because an ingested record is copied
+  // wholesale. So the encoder's output depended on where the tree came from,
+  // and a hand-built payload came back as a tree that does not match the
+  // documented shape (carve#1615, carve-js#1391).
+  //
+  // Lossless: `start: 1` and no `start` describe the same document. Only 1 is
+  // touched - `0` and `2` are meaningful and stay, which is what separates this
+  // from dropping `start` outright.
+  if ((out ?? record)['type'] === 'list' && (out ?? record)['start'] === 1) {
+    const { start: _start, ...rest } = out ?? record
+    out = rest
+  }
+
   // `escapedLeadingCaret` used to be stripped here (carve#793). The parser no
   // longer sets it at all (carve-js#1259), so there is nothing left to strip:
   // the fact it recorded is stated on the wire by the `escaped_text` node
