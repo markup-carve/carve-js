@@ -53,6 +53,7 @@ import { coalesceTextRuns } from './coalesce-text-runs.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 import { tryFastHtml } from './fast-html.js'
+import { createEditorSession as createEditorSessionInternal } from './editor-session.js'
 
 export * from './ast.js'
 export {
@@ -68,6 +69,15 @@ export {
 } from './html-import.js'
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
+export {
+  EditorChangeError,
+  type EditorChange,
+  type EditorMappedNode,
+  type EditorRange,
+  type EditorSession,
+  type EditorSnapshot,
+  type EditorUpdate,
+} from './editor-session.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
   applyAstPatch,
@@ -347,6 +357,11 @@ export function parseWithSourceLayout(source: string, opts: ParseOptions = {}): 
 } {
   const ast = toAstJsonImpl(parse(source, opts))
   return { ast, layout: toSourceLayout(source, ast) }
+}
+
+/** Create a source-authoritative, UTF-16-addressed editor session. */
+export function createEditorSession(source: string, opts: ParseOptions = {}) {
+  return createEditorSessionInternal(source, (next, options) => toAstJsonImpl(parse(next, options)), opts)
 }
 
 /** Render a Carve AST to HTML matching the spec corpus. */
