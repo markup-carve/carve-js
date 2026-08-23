@@ -38,8 +38,11 @@ describe('the consumed `loose` boolean', () => {
   // is loose passes with `loose=""` still on the tag, because the `<p>` and the
   // stray attribute are independent. Both halves are asserted, on both
   // containers, so neither can be bought by breaking the other.
-  it('emits no `loose` attribute on either container', () => {
+  it('emits no `loose` attribute on the list', () => {
     expect(h('{loose}\n- Note text.\n')).not.toContain('loose')
+  })
+
+  it('emits no `loose` attribute on the definition list', () => {
     expect(h('{loose}\n:: Term\n:  Definition.\n')).not.toContain('loose')
   })
 
@@ -52,8 +55,11 @@ describe('the consumed `loose` boolean', () => {
   // PART 4 makes `{loose}` and `{loose=""}` the SAME attribute, so both are this
   // key. `loose=x` names a value the key does not take, so it is not this key at
   // all: it stays an ordinary attribute and renders. There is no error state.
-  it('reads the empty value as the same key, and a valued one as an ordinary attribute', () => {
+  it('reads the empty value as the same key', () => {
     expect(h('{loose=""}\n- x\n')).toBe('<ul>\n  <li><p>x</p></li>\n</ul>')
+  })
+
+  it('leaves a valued `loose` an ordinary attribute', () => {
     expect(h('{loose=x}\n- x\n')).toBe('<ul loose="x">\n  <li>x</li>\n</ul>')
   })
 
@@ -64,8 +70,13 @@ describe('the consumed `loose` boolean', () => {
     expect(h('{loose}\n> q\n')).toBe('<blockquote loose=""><p>q</p></blockquote>')
   })
 
-  it('takes the same key on an ordered list, and at a nested list\'s own indent', () => {
+  it('takes the same key on an ordered list', () => {
     expect(h('{loose}\n1. a\n')).toBe('<ol>\n  <li><p>a</p></li>\n</ol>')
+  })
+
+  // At the nested container's OWN indent, so it loosens the sub-list and not
+  // its parent - the outer item stays tight and keeps its lead text inline.
+  it('loosens the sub-list and not its parent', () => {
     expect(h('- outer\n  {loose}\n  - inner\n')).toBe(
       '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p></li>\n    </ul>\n  </li>\n</ul>',
     )
@@ -74,8 +85,11 @@ describe('the consumed `loose` boolean', () => {
   // REDUNDANT USE IS A LEGAL NO-OP, on both containers. Rejecting it would make
   // the key context-sensitive, and a producer that always emits it is simpler
   // than one that has to decide.
-  it('changes nothing where the blank lines already said it', () => {
+  it('changes nothing on a list the blank lines already loosened', () => {
     expect(h('{loose}\n- a\n\n- b\n')).toBe(h('- a\n\n- b\n'))
+  })
+
+  it('changes nothing on a description that already holds two blocks', () => {
     expect(h('{loose}\n:: T\n:  a\n\n   b\n')).toBe(h(':: T\n:  a\n\n   b\n'))
   })
 
@@ -91,8 +105,11 @@ describe('the consumed `loose` boolean', () => {
   // `markup-carve/carve#1624` is that half), so the looseness survives in SOURCE
   // and not through an AST round trip. What must NOT happen is the runtime flag
   // leaking onto the wire as a property the schema does not name.
-  it('publishes no looseness property for a definition list, and sets `tight` for a list', () => {
+  it('publishes no looseness property for a definition list', () => {
     expect(JSON.stringify(carveToAstJson('{loose}\n:: T\n:  a\n'))).not.toContain('loose')
+  })
+
+  it('sets the existing `tight` field for a list, and leaves it no attributes', () => {
     const list = parse('{loose}\n- a\n').children[0]!
     expect(list).toMatchObject({ type: 'list', tight: false })
     expect(list.attrs).toBeUndefined()
@@ -110,16 +127,24 @@ describe('the consumed `loose` boolean', () => {
  * change the re-parsed document.
  */
 describe('the writer spells looseness only where a blank line cannot', () => {
-  it('spells it on the two shapes with no blank-line spelling', () => {
+  it('spells it on the one-item list', () => {
     expect(fmt('{loose}\n- Note text.\n')).toBe('{loose}\n- Note text.\n')
+  })
+
+  it('spells it on the one-block definition description', () => {
     expect(fmt('{loose}\n:: Term\n:  Definition.\n')).toBe('{loose}\n:: Term\n:  Definition.\n')
   })
 
   // The corpus control: a multi-item loose list whose blank lines already say it.
   // The HTML is byte-identical with and without the key, so only the written
   // source can see this rule.
-  it('does not decorate a list the blank lines already loosened', () => {
+  it('does not derive it onto a list the blank lines already loosened', () => {
     expect(fmt('- alpha\n\n- beta\n')).toBe('- alpha\n\n- beta\n')
+  })
+
+  // A redundant key the AUTHOR wrote is dropped too: the parser consumed it, so
+  // the writer re-derives the spelling from the tree rather than echoing it.
+  it('drops a redundant key the author wrote', () => {
     expect(fmt('{loose}\n- alpha\n\n- beta\n')).toBe('- alpha\n\n- beta\n')
   })
 
