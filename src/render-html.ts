@@ -1288,10 +1288,23 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
           // still falls through to the block arm, where `body === ''` closes it
           // on its own line.
           const visible = d.filter((child) => child.type !== 'comment')
+          // PART 9 §17 L7: a consumed `{loose}` says the descriptions render as
+          // BLOCKS, which is the one shape no blank line can spell - a blank
+          // line between two ENTRIES does not loosen a `<dl>` at all, so
+          // otherwise only a SECOND block inside the description reaches the
+          // wrapper. Redundant use is a no-op: a description already holding two
+          // blocks took the block arm regardless of the key.
+          //
+          // The single-paragraph description still closes on its own line, the
+          // way a single-paragraph list item does: looseness moves the `<p>`,
+          // never the framing.
           if (visible.length === 1 && visible[0]!.type === 'paragraph') {
-            lines.push(
-              `${pad}  <dd${sourceLineAttr(opts, ddLine)}>${renderInlines((visible[0] as Paragraph).children, opts)}</dd>`,
-            )
+            const para = visible[0] as Paragraph
+            const inner = renderInlines(para.children, opts)
+            const body = node.loose
+              ? `<p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p>`
+              : inner
+            lines.push(`${pad}  <dd${sourceLineAttr(opts, ddLine)}>${body}</dd>`)
           } else {
             const body = renderBlocks(d, opts, level + 2)
             // A definition whose whole body renders to nothing (a lone comment)

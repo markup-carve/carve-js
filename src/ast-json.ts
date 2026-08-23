@@ -182,6 +182,20 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
+  // PART 9 §17 L7's `loose` on a DEFINITION LIST is runtime-only. PART 12 §8
+  // gives `definition_list` no looseness field, and the `<dd>` wrapper is
+  // derived from the description's block count, so a serialized tree cannot say
+  // which of the two spellings it came from. Publishing the runtime flag would
+  // put a property on the wire the schema does not name, which §11 refuses on
+  // the way back in - the same reason `refId` above is dropped rather than
+  // echoed. markup-carve/carve#1624 is the half that gives §8 the field; until
+  // then the definition-list looseness survives in SOURCE and not through a
+  // round trip, exactly as the grammar states.
+  if ((out ?? record)['type'] === 'definition_list' && (out ?? record)['loose'] !== undefined) {
+    const { loose: _loose, ...rest } = out ?? record
+    out = rest
+  }
+
   // `start: 1` is the ordered-list default spelled out, and the schema says the
   // field is written only "when it is not 1". An encoder is the thing that has
   // to honor that, so a 1 is normalized away here rather than published.

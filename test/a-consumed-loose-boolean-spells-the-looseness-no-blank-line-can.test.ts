@@ -1,0 +1,156 @@
+import { describe, expect, it } from 'vitest'
+import { carveToCarve, carveToHtml, carveToAstJson, parse } from '../src/index.js'
+
+const h = (s: string) => carveToHtml(s)
+const fmt = (s: string) => carveToCarve(s)
+
+/**
+ * PART 9 §17 L7 (`markup-carve/carve#1612`, `markup-carve/carve#1623`,
+ * `markup-carve/carve-js#1401`).
+ *
+ * A container's preceding BLOCK-ATTRIBUTE LINE may carry the boolean `loose`.
+ * It says the container's children render as BLOCKS rather than as inline runs,
+ * and it is CONSUMED: it never reaches the output as an HTML attribute. The
+ * precedent is PART 12 §15's `header-rows`, which rides the same line, carries a
+ * structural fact as a boolean, and is likewise consumed rather than emitted.
+ *
+ * The key reaches the shapes a blank line cannot spell, because a blank line
+ * needs two things to stand between:
+ *
+ *   - a ONE-ITEM list has no "between items" to put one in;
+ *   - a definition description holding ONE block has none at ANY entry count,
+ *     since a blank line between two ENTRIES does not loosen a `<dl>` at all.
+ */
+describe('the consumed `loose` boolean', () => {
+  it('loosens a one-item list and does not reach the output', () => {
+    expect(h('{loose}\n- Note text.\n')).toBe(
+      '<ul>\n  <li><p>Note text.</p></li>\n</ul>',
+    )
+  })
+
+  it('loosens a one-block definition description', () => {
+    expect(h('{loose}\n:: Term\n:  Definition.\n')).toBe(
+      '<dl>\n  <dt>Term</dt>\n  <dd><p>Definition.</p></dd>\n</dl>',
+    )
+  })
+
+  // CONSUMPTION IS ITS OWN ASSERTION. A fixture that only checks the container
+  // is loose passes with `loose=""` still on the tag, because the `<p>` and the
+  // stray attribute are independent. Both halves are asserted, on both
+  // containers, so neither can be bought by breaking the other.
+  it('emits no `loose` attribute on either container', () => {
+    expect(h('{loose}\n- Note text.\n')).not.toContain('loose')
+    expect(h('{loose}\n:: Term\n:  Definition.\n')).not.toContain('loose')
+  })
+
+  it('consumes only `loose`, keeping the id and the classes beside it', () => {
+    expect(h('{#i loose .note}\n- x\n')).toBe(
+      '<ul id="i" class="note">\n  <li><p>x</p></li>\n</ul>',
+    )
+  })
+
+  // PART 4 makes `{loose}` and `{loose=""}` the SAME attribute, so both are this
+  // key. `loose=x` names a value the key does not take, so it is not this key at
+  // all: it stays an ordinary attribute and renders. There is no error state.
+  it('reads the empty value as the same key, and a valued one as an ordinary attribute', () => {
+    expect(h('{loose=""}\n- x\n')).toBe('<ul>\n  <li><p>x</p></li>\n</ul>')
+    expect(h('{loose=x}\n- x\n')).toBe('<ul loose="x">\n  <li>x</li>\n</ul>')
+  })
+
+  // THE NAME IS RESERVED NOWHERE ELSE. The tight/loose axis exists in exactly two
+  // containers, so on anything else `loose` has no special meaning and renders
+  // like any other boolean.
+  it('stays an ordinary boolean on a container with no such axis', () => {
+    expect(h('{loose}\n> q\n')).toBe('<blockquote loose=""><p>q</p></blockquote>')
+  })
+
+  it('takes the same key on an ordered list, and at a nested list\'s own indent', () => {
+    expect(h('{loose}\n1. a\n')).toBe('<ol>\n  <li><p>a</p></li>\n</ol>')
+    expect(h('- outer\n  {loose}\n  - inner\n')).toBe(
+      '<ul>\n  <li>outer\n    <ul>\n      <li><p>inner</p></li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  // REDUNDANT USE IS A LEGAL NO-OP, on both containers. Rejecting it would make
+  // the key context-sensitive, and a producer that always emits it is simpler
+  // than one that has to decide.
+  it('changes nothing where the blank lines already said it', () => {
+    expect(h('{loose}\n- a\n\n- b\n')).toBe(h('- a\n\n- b\n'))
+    expect(h('{loose}\n:: T\n:  a\n\n   b\n')).toBe(h(':: T\n:  a\n\n   b\n'))
+  })
+
+  // A SIBLING'S SECOND BLOCK SAYS NOTHING ABOUT THIS DESCRIPTION. Only a second
+  // block inside the SAME description wraps it, so the key is not redundant here.
+  it('loosens every description, not only the ones that already had two blocks', () => {
+    expect(h('{loose}\n:: T\n:  a\n:: U\n:  x\n\n   y\n')).toBe(
+      '<dl>\n  <dt>T</dt>\n  <dd><p>a</p></dd>\n  <dt>U</dt>\n  <dd>\n    <p>x</p>\n    <p>y</p>\n  </dd>\n</dl>',
+    )
+  })
+
+  // The definition-list half has no AST field yet (PART 12 §8;
+  // `markup-carve/carve#1624` is that half), so the looseness survives in SOURCE
+  // and not through an AST round trip. What must NOT happen is the runtime flag
+  // leaking onto the wire as a property the schema does not name.
+  it('publishes no looseness property for a definition list, and sets `tight` for a list', () => {
+    expect(JSON.stringify(carveToAstJson('{loose}\n:: T\n:  a\n'))).not.toContain('loose')
+    const list = parse('{loose}\n- a\n').children[0]!
+    expect(list).toMatchObject({ type: 'list', tight: false })
+    expect(list.attrs).toBeUndefined()
+  })
+})
+
+/**
+ * PART 9 §17 L7's WRITER RULE: the key is spelled only where the blank-line
+ * spelling cannot express the looseness.
+ *
+ * This is the load-bearing rule for churn - emitting it on every loose container
+ * would rewrite a large share of every document anyone has written. It follows
+ * PART 12 §15's writer, which retains `header-rows` rather than deriving it onto
+ * every table, and PART 11 §2, which spends a mark only where omitting it would
+ * change the re-parsed document.
+ */
+describe('the writer spells looseness only where a blank line cannot', () => {
+  it('spells it on the two shapes with no blank-line spelling', () => {
+    expect(fmt('{loose}\n- Note text.\n')).toBe('{loose}\n- Note text.\n')
+    expect(fmt('{loose}\n:: Term\n:  Definition.\n')).toBe('{loose}\n:: Term\n:  Definition.\n')
+  })
+
+  // The corpus control: a multi-item loose list whose blank lines already say it.
+  // The HTML is byte-identical with and without the key, so only the written
+  // source can see this rule.
+  it('does not decorate a list the blank lines already loosened', () => {
+    expect(fmt('- alpha\n\n- beta\n')).toBe('- alpha\n\n- beta\n')
+    expect(fmt('{loose}\n- alpha\n\n- beta\n')).toBe('- alpha\n\n- beta\n')
+  })
+
+  it('does not decorate a description that already holds two blocks', () => {
+    expect(fmt('{loose}\n:: T\n:  a\n\n   b\n')).toBe(':: T\n:  a\n\n   b\n')
+  })
+
+  // A blank line loosens an item only before a genuine PARAGRAPH (§17 L2), so a
+  // one-item list whose second child is a sub-block re-reads TIGHT and the key is
+  // the only spelling left.
+  it('spells it where the item\'s own blank line would not loosen on re-read', () => {
+    const src = '{loose}\n- a\n\n  ```\n  code\n  ```\n'
+    expect(fmt(src)).toContain('{loose}')
+    expect(h(fmt(src))).toBe(h(src))
+  })
+
+  it('round-trips every shape through the writer', () => {
+    const cases = [
+      '{loose}\n- Note text.\n',
+      '{loose}\n:: Term\n:  Definition.\n',
+      '- alpha\n\n- beta\n',
+      '{loose}\n- a\n\n- b\n',
+      '{loose}\n:: T\n:  a\n:: U\n:  x\n\n   y\n',
+      '{#i loose .note}\n- x\n',
+      '{loose=x}\n- x\n',
+      '{loose}\n> q\n',
+      '- outer\n  {loose}\n  - inner\n',
+    ]
+    for (const src of cases) {
+      expect(h(fmt(src)), src).toBe(h(src))
+      expect(fmt(fmt(src)), src).toBe(fmt(src))
+    }
+  })
+})

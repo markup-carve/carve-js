@@ -2,6 +2,7 @@ import type {
   Attrs,
   BlockNode,
   DefinitionItem,
+  DefinitionList,
   Document,
   Figure,
   Image,
@@ -1039,7 +1040,7 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(body)
     }
     case 'list':
-      return withAttrs(renderList(node, ctx))
+      return withLooseAttrs(node, attrs, renderList(node, ctx))
     case 'thematic_break':
       return withAttrs(thematicBreakSpelling(node.marker, thematicBreakMarker))
     case 'table':
@@ -1097,7 +1098,7 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
     }
     case 'definition_list':
-      return withAttrs(renderDefinitionList(node.items, ctx))
+      return withLooseAttrs(node, attrs, renderDefinitionList(node.items, ctx))
     case 'figure':
       return withAttrs(renderFigure(node, ctx))
     case 'figure_group': {
@@ -1158,6 +1159,66 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
     }
   }
+}
+
+/**
+ * PART 9 §17 L7: the writer spells looseness with `{loose}` ONLY where the
+ * blank-line spelling cannot.
+ *
+ * This is the load-bearing rule for churn. Emitting the key on every loose
+ * container would rewrite a large share of the corpus and of every document
+ * anyone has written, for nothing gained - on a multi-item loose list the blank
+ * lines already say it, so the key would be an idle mark. The precedent is PART
+ * 12 §15, whose writer retains `header-rows` where it is present rather than
+ * deriving it onto every table, and PART 11 §2, which spends a mark only where
+ * omitting it would change the re-parsed document.
+ *
+ * `attrs` is the node's own already-rendered attribute run, which never contains
+ * `loose`: the parser CONSUMED it, so the writer re-derives it from the tree
+ * rather than echoing what the author wrote. That is what makes a redundant
+ * `{loose}` a no-op through a format pass as well as through a render.
+ */
+function withLooseAttrs(node: List | DefinitionList, attrs: string, body: string): string {
+  if (!needsLooseKey(node)) return attrs ? `${attrs}\n${body}` : body
+  const withKey = renderAttrs({
+    ...(node.attrs ?? {}),
+    keyValues: { ...(node.attrs?.keyValues ?? {}), loose: '' },
+    // The key leads, which is where an author writes it and where the corpus
+    // shows it. Its position among the other slots is not observable in the
+    // output - it is consumed before any renderer sees it - so leading is a
+    // spelling choice rather than a fact being moved.
+    ...(node.attrs?.order ? { order: ['loose', ...node.attrs.order.filter((slot) => slot !== 'loose')] } : {}),
+  })
+  return `${withKey}\n${body}`
+}
+
+function needsLooseKey(node: List | DefinitionList): boolean {
+  if (node.type === 'list') {
+    if (node.tight || node.items.length === 0) return false
+    // A BLANK LINE BETWEEN ITEMS ALWAYS LOOSENS (§17 L2), and this writer emits
+    // one between every pair of a loose list's items, so two or more items
+    // already spell it.
+    if (node.items.length > 1) return false
+    // Inside ONE item the blank line has to earn it: L2 loosens on a blank line
+    // before a genuine second PARAGRAPH and not before a sub-block, so an item
+    // whose later children are all sub-lists, fences or tables re-reads TIGHT
+    // and the key is the only spelling left.
+    return !node.items.some((item) =>
+      item.children.slice(1).some((child) => child.type === 'paragraph'),
+    )
+  }
+  if (node.loose !== true) return false
+  // A description already holding a second block takes the wrapper without the
+  // key, so it spells its own looseness; one that renders as a single paragraph
+  // has no blank-line spelling at all - a blank line between two ENTRIES does
+  // not loosen a `<dl>`. The key is needed as soon as ONE description is in that
+  // second state, because a sibling's second block says nothing about it.
+  return node.items.some((item) =>
+    item.definitions.some((blocks) => {
+      const visible = blocks.filter((child) => child.type !== 'comment')
+      return visible.length === 1 && visible[0]!.type === 'paragraph'
+    }),
+  )
 }
 
 function renderTableWithColumns(node: Table, ctx: CarveContext): string {

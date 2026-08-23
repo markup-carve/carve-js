@@ -64,6 +64,7 @@ import type { AsciiHeadingIdMode } from './heading-ids.js'
 import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
+import { ownValue } from './own-property.js'
 
 export interface ParseOptions {
   /**
@@ -3821,6 +3822,7 @@ function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry)
         node.attrs = mergeAttrs(pending, node.attrs ?? {})
       }
       if (node.type === 'table') deriveTableMetadata(node)
+      consumeLooseKey(node)
       // A code fence's opener "header" becomes the `title` attribute on the
       // <pre>. Resolved here (after the pending merge) so a preceding
       // {title=...} line wins, and so the title lives on the node attrs --
@@ -3854,6 +3856,69 @@ function parseBlocks(lexer: Lexer, baseIndent: number, carry?: PendingAttrCarry)
   // caller split one stream in two, handed on to the next half.
   if (carry) carry.attrs = pending
   return out
+}
+
+/**
+ * PART 9 §17 L7: `{loose}` on the preceding block-attribute line is a
+ * STRUCTURAL key, and it is CONSUMED - it never reaches the output as an HTML
+ * attribute. The precedent is PART 12 §15's `header-rows`, which rides the same
+ * line, carries a structural fact as a boolean, and is likewise consumed.
+ *
+ * It says the container's children render as BLOCKS rather than as inline runs,
+ * which reaches the one shape a blank line cannot spell: a ONE-ITEM loose list,
+ * and a definition description holding ONE block (a blank line between two
+ * ENTRIES does not loosen a `<dl>` at all, so `<dd><p>x</p></dd>` is unspellable
+ * at every entry count).
+ *
+ * THE AXIS EXISTS IN EXACTLY TWO PLACES, so the key applies in exactly two: a
+ * LIST and a DEFINITION LIST. On a block quote, a div or anything else the name
+ * has no meaning at all and renders `loose=""` like any other boolean - the
+ * clause adds a meaning where there is one and reserves the name nowhere else.
+ *
+ * A BOOLEAN AND AN EMPTY VALUE ARE ONE KEY (PART 4), so `{loose}` and
+ * `{loose=""}` both arrive here as `''` and both are consumed. `loose=x` names a
+ * value this key does not take, so it stays an ordinary attribute and renders
+ * `loose="x"`. There is no error state.
+ *
+ * REDUNDANT USE IS A NO-OP: on a list the blank lines already loosened, and on a
+ * description that already holds two blocks, this changes nothing.
+ */
+function consumeLooseKey(node: BlockNode): void {
+  if (node.type !== 'list' && node.type !== 'definition_list') return
+  const attrs = node.attrs
+  if (!attrs?.keyValues || ownValue(attrs.keyValues, 'loose') !== '') return
+
+  const keyValues = { ...attrs.keyValues }
+  delete keyValues['loose']
+  const order = attrs.order?.filter((slot) => slot !== 'loose')
+  // An attribute run that held NOTHING but this key leaves no attributes at all,
+  // rather than an empty record: `{loose}` is not an authored `{}` and a bare
+  // `attrs: {}` would be published on the wire and re-rendered from there.
+  const remaining: Attrs = {
+    ...attrs,
+    ...(Object.keys(keyValues).length ? { keyValues } : {}),
+    ...(order?.length ? { order } : {}),
+  }
+  if (!Object.keys(keyValues).length) delete remaining.keyValues
+  if (!order?.length) delete remaining.order
+  if (remaining.id === undefined && !remaining.classes?.length && !remaining.keyValues) {
+    delete node.attrs
+  } else {
+    node.attrs = remaining
+  }
+
+  if (node.type === 'list') {
+    node.tight = false
+    return
+  }
+  // THE DEFINITION-LIST HALF HAS NO AST FIELD YET. PART 12 §8's
+  // `definition_list` carries no looseness, and the `<dd>` wrapper is derived
+  // from the description's block count, so a serialized tree cannot say which of
+  // the two spellings it came from. markup-carve/carve#1624 is that half; until
+  // it lands the looseness survives in SOURCE and not through an AST round trip,
+  // which is what a runtime-only field says - the same arrangement `refId` and
+  // `resolvedText` use, and `toAstJson` drops it for the same reason.
+  node.loose = true
 }
 
 function deriveTableMetadata(table: Table): void {
