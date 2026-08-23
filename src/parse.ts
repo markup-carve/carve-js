@@ -9548,6 +9548,41 @@ function parseCellMarkers(src: string): {
   return { header: false, content: trimmed }
 }
 
+/**
+ * Would a cell holding exactly this payload be read as a SPAN MARKER?
+ *
+ * Exported so the Carve writer can read the rule off the parser instead of
+ * carrying a second copy of it, the same way `TABLE_ALIGNMENT_MARKERS` is.
+ * Naming `^` and `<` in the writer would be an enumeration that goes stale the
+ * next time a cell-level marker is added, and the alignment sigil's history is
+ * what that costs: each writer answered that class with its own slightly
+ * different set of characters.
+ *
+ * PADDING IS NOT AN ESCAPE WHERE THE PRODUCTION ADMITS PADDING (PART 11
+ * section 6f). Section 6e's one space in front of a cell's content puts it out
+ * of reach of the three slots that are read GLUED to the opening pipe, and that
+ * argument holds only where the construct forbids the padding. The span cell is
+ * written WITH the padding inside it -
+ *
+ *     rowspan_marker = {space}, '^', {space} ;
+ *     colspan_marker = {space}, '<', {space} ;
+ *
+ * so a cell whose whole payload is `^` or `<` re-reads as a span however it is
+ * padded, and section 2 is what applies: omitting the escape changes the
+ * re-parse.
+ *
+ * The predicate is over the PAYLOAD, so it answers the question the writer can
+ * ask before it has decided which prefix the cell takes. Both of the parser's
+ * span decisions above are reached with `i === 0`, on the padding-trimmed
+ * source, so a payload is a marker exactly when its trimmed form is one: a
+ * leading `^` sets `invalidAxis`, and a lone `<` is caught ahead of the run
+ * scan outright.
+ */
+export function cellPayloadIsSpanMarker(payload: string): boolean {
+  const trimmed = trimCellPadding(payload)
+  return trimmed === '^' || trimmed === '<'
+}
+
 interface RawCell {
   header: boolean
   span?: 'rowspan' | 'colspan'
@@ -10534,6 +10569,26 @@ const RE_RAW_INLINE = /^\{=([a-zA-Z][\w-]*)\}/
 // symbol at the opening `:` also gives it precedence over smart typography,
 // so `:+-:` is the symbol `+-`, not a `±` between colons (grammar PART 9 §7).
 const RE_SYMBOL = /^:([a-zA-Z0-9+-][\w+-]*):/
+
+/**
+ * Does a SYMBOL SHORTCODE open at this offset?
+ *
+ * Exported so the Carve writer can read the rule off the parser instead of
+ * carrying a second copy of it. PART 11 section 2 escapes a character only
+ * where omitting it would change the re-parse, so the writer has to ask the
+ * exact question the parse asks - and this repository has repeatedly found one
+ * rule spelled N times where N was larger than anyone claimed.
+ *
+ * A symbol opens on a `:` NOT preceded by `_` or an alphanumeric and followed
+ * by a name that CLOSES on another `:`. Requiring the closer is what leaves
+ * `a : b : c` alone, and the preceding-character guard is what leaves a URL's
+ * `http://x` alone.
+ */
+export function symbolOpensAt(text: string, offset: number): boolean {
+  if (text[offset] !== ':') return false
+  if (offset > 0 && /[A-Za-z0-9_]/.test(text[offset - 1]!)) return false
+  return RE_SYMBOL.test(text.slice(offset))
+}
 // Autolink (grammar.ebnf:775,776,791,792,1139). Two alternatives:
 //   url_autolink   = scheme ':' {url_char}+   -- url_char excludes `<`/`>` plus
 //                    `"` `\` `` ` `` `{` `}` `|` `^`, so a body holding any of
@@ -11965,7 +12020,7 @@ function scanInlineInner(
         continue
       }
       // Symbol shortcode `:name:` (after extension, which needs `[`).
-      const sym = (i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!)) ? RE_SYMBOL.exec(rest) : null
+      const sym = symbolOpensAt(text, i) ? RE_SYMBOL.exec(rest) : null
       if (sym) {
         flush()
         out.push(withPos({ type: 'symbol', name: sym[1]! } as SymbolInline, source, text, i, i + sym[0].length))

@@ -364,6 +364,26 @@ const TEX_ANNOTATION_ENCODINGS = new Set(['application/x-tex', 'text/x-tex', 'la
 const ROUND_TRIP_MARKER_ATTRIBUTES = new Set(['data-djot-src', 'data-carve-src'])
 
 /**
+ * Does this URL attribute name no destination at all?
+ *
+ * EMPTY IS A PROPERTY OF THE STRING, read the way an HTML URL attribute is
+ * read: a value of zero length, or of zero length once leading and trailing
+ * ASCII whitespace is stripped, because that is what a URL parser strips before
+ * resolving one. A value that is merely unusual is not empty and is kept - the
+ * rule is over the DESTINATION, not over the reason it is missing.
+ *
+ * An ABSENT attribute is the same shape and reaches this the same way: an `<a>`
+ * with no `href` names no destination just as an `<a href="">` does.
+ *
+ * The character list is the URL spec's ASCII whitespace rather than the regex
+ * `\s` class, which adds a vertical tab and the Unicode spaces that are not
+ * whitespace here.
+ */
+function destinationIsEmpty(value: string | undefined): boolean {
+  return value === undefined || value.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, '') === ''
+}
+
+/**
  * The dangerous URL scheme an attribute value hides where the RENDERER's value
  * sanitizer cannot see it, or `undefined` when there is none.
  *
@@ -581,7 +601,7 @@ class Importer {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
         this.add('attribute-dropped', `Dropped round-trip marker ${name} on <${node.tagName}>`, 'info', path, node)
-      } else if (this.isConsumedHtmlAttribute(node.tagName ?? '', name)) {
+      } else if (this.isConsumedHtmlAttribute(node, node.tagName ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
       } else if (!isAttrIdentifier(name)) {
@@ -948,6 +968,31 @@ class Importer {
   }
 
   /**
+   * The nodes an element with no destination leaves behind: its content, in a
+   * span where an attribute survives and bare where none does.
+   *
+   * That is the attribute-less unwrap boundary the rest of this importer uses,
+   * and it is the same boundary because it is the same question - what is the
+   * element still needed to hold? Nothing here reads the destination slot.
+   *
+   * A LINK THAT COMES BACK AS PROSE IS A LOSSY DECISION, and this importer
+   * requires those to be observable. It is not the bare `<span>`'s case, where
+   * nothing was lost because nothing was carried: an anchor has a slot for a
+   * destination, and this one is standing empty.
+   */
+  private unwrapDestinationLess(
+    node: P5Node,
+    message: string,
+    children: InlineNode[],
+    attrs: Attrs | undefined,
+    path: string,
+  ): InlineNode[] {
+    this.add('element-unwrapped', message, 'info', path, node)
+    if (!attrs) return children
+    return [{ type: 'span', children, attrs }]
+  }
+
+  /**
    * Whether the importer already READ this attribute somewhere else - as the
    * node's own content, or as an instruction about what node to build.
    *
@@ -956,12 +1001,31 @@ class Importer {
    * the name as well would give one source two spellings, and reporting it
    * would name a loss that does not happen.
    */
-  private isConsumedHtmlAttribute(tag: string, name: string): boolean {
+  private isConsumedHtmlAttribute(node: P5Node, tag: string, name: string): boolean {
     // `title` on a link or an image is the node's own `title` field, written
     // back as the `"…"` after the destination - so it must not ALSO ride along
     // as `{title=…}`, which would put the same text on the tag twice.
-    if (tag === 'a') return name === 'href' || name === 'title'
-    if (tag === 'img') return name === 'src' || name === 'alt' || name === 'title'
+    //
+    // UNLESS THERE IS NO DESTINATION, in which case no link or image node is
+    // built (see the gate in `inlines()`) and there is no `title` field for the
+    // value to be read into. It is an ordinary attribute again, kept on the
+    // span that carries the content - the alternative is a title that vanishes
+    // with no diagnostic, because this predicate promised it was read
+    // somewhere. Keeping it does not reopen the security question the gate
+    // settles: a `{title=…}` on a span is not a destination, and nothing
+    // downstream reads one out of it.
+    if (tag === 'a') {
+      if (name === 'href') return true
+      return name === 'title' && !destinationIsEmpty(this.attr(node, 'href'))
+    }
+    if (tag === 'img') {
+      // `alt` stays consumed either way: with a source it is the image node's
+      // `alt` field, and without one it is the CONTENT that stands in the
+      // element's place, so it is in the emitted document as prose rather than
+      // in an attribute position.
+      if (name === 'src' || name === 'alt') return true
+      return name === 'title' && !destinationIsEmpty(this.attr(node, 'src'))
+    }
     if (tag === 'ol') return name === 'start' || name === 'type'
     if (tag === 'input') return name === 'type' || name === 'checked'
     if (tag === 'td' || tag === 'th') return name === 'colspan' || name === 'rowspan'
@@ -2479,6 +2543,23 @@ class Importer {
     if (tag === 'sup') return [{ type: 'superscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'code') return [{ type: 'code', value: this.text(node), ...(attrs ? { attrs } : {}) }]
     if (tag === 'a') {
+      // A DESTINATION CARVE CANNOT CARRY IS NOT A DESTINATION
+      // (`spec/docs/html-import.md`). Carve spells a link's destination in one
+      // slot and has NO spelling for an empty one - `[t]()` is literal text -
+      // so building the link node emitted four punctuation characters the HTML
+      // never held, into the middle of the prose. No link node is built: the
+      // element's CONTENT stands in its place, carried by a span where an
+      // attribute survives and bare where none does.
+      //
+      // AND THE DESTINATION IS NOT REBUILT, which is the normative half. This
+      // is what Carve's own renderer emits: PART 9 section 25 blanks a
+      // dangerous destination and writes no provenance for it, keeping the
+      // visible text, so any route from a `title`, from the anchor's text or
+      // from a round-trip attribute back to a destination would reconstruct the
+      // exact value a security rule removed. The round trip owes the text.
+      if (destinationIsEmpty(this.attr(node, 'href'))) {
+        return this.unwrapDestinationLess(node, 'Unwrapped <a> with no destination', children, attrs, path)
+      }
       const title = this.attr(node, 'title')
       // `!== undefined`, not truthiness: `<a href="u" title="">` has a title,
       // and the writer spells the empty one `[x](u "")`. Under a truthiness test
@@ -2487,6 +2568,20 @@ class Importer {
       return [{ type: 'link', href: this.attr(node, 'href') ?? '', children, ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
     }
     if (tag === 'img') {
+      // The same rule as the link one branch up, and it is the SAME shape: an
+      // `<img>` whose `src` names no destination the source can carry builds no
+      // image node either. AN IMAGE'S CONTENT IS ITS ALTERNATIVE TEXT - that is
+      // what every target with no image shows for it, and what a browser shows
+      // for one it cannot load - so the alt text is what stands in its place.
+      //
+      // The alt arrives as a raw attribute value rather than through the node
+      // walk, so it becomes a TEXT node and the writer escapes it for the prose
+      // slot it lands in, the same as any other imported text.
+      if (destinationIsEmpty(this.attr(node, 'src'))) {
+        const alt = this.attr(node, 'alt') ?? ''
+        const stands: InlineNode[] = alt === '' ? [] : [{ type: 'text', value: alt }]
+        return this.unwrapDestinationLess(node, 'Unwrapped <img> with no source', stands, attrs, path)
+      }
       const title = this.attr(node, 'title')
       return [{ type: 'image', src: this.attr(node, 'src') ?? '', alt: this.attr(node, 'alt') ?? '', ...(title !== undefined ? { title } : {}), ...(attrs ? { attrs } : {}) }]
     }
