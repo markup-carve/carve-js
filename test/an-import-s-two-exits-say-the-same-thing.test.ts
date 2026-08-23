@@ -140,18 +140,19 @@ function twoExits(html: string): string | null {
 }
 
 /**
- * DECLARED, NEVER TOLERATED. Both entries are the spec's own, found by writing
- * this check upstream rather than by the ruling that shipped it, and neither is
- * a shape this engine can settle on its own - they are open questions in the
- * spec repo. The ledger fails in BOTH directions, so the line goes out with the
- * commit that fixes it rather than outliving it as slack.
+ * DECLARED, NEVER TOLERATED. The entries are the spec's own, found by writing
+ * this check upstream rather than by the ruling that shipped it. The ledger
+ * fails in BOTH directions, so a line goes out with the commit that fixes it
+ * rather than outliving it as slack.
+ *
+ * TWO WENT OUT THAT WAY. The `<figure>` pair was RULED rather than tolerated
+ * (markup-carve/carve#1606): the TREE was the wrong exit, because PART 9 §4b's
+ * hosts are "an image, a quote, a code block, a display-math paragraph" - the
+ * image host is the image, and only the math host is a paragraph. The tree it
+ * used to return is held as a literal below, so retiring the entries does not
+ * retire the proof.
  */
 const UNMET = new Map<string, string>([
-  [
-    'figure-caption',
-    'the tree wraps the figure target in a paragraph, which the source it writes does not spell (markup-carve/carve#1606)',
-  ],
-  ['caption-attributes', 'the same paragraph wrapper as figure-caption (markup-carve/carve#1606)'],
   [
     'derived-endnotes-section',
     'the tree says a one-item list is loose where its own source says tight, and Carve has no spelling for a loose one-item list (markup-carve/carve#1607)',
@@ -289,5 +290,76 @@ describe('the three shapes the import contract now rules', () => {
     // stand in its place. With no alt there is nothing to write.
     expect(htmlToCarve('<img src="" alt="">').value).toBe('\n')
     expect(htmlToCarve('<img alt="a" id="i" src="">').value).toBe('[a]{#i}\n')
+  })
+})
+
+/**
+ * THE SHAPE THE `<figure>` PAIR USED TO BREAK, kept after their ledger entries
+ * went out (markup-carve/carve#1606, markup-carve/carve-js#1381).
+ *
+ * A retired declaration takes its proof with it unless the proof is written
+ * down somewhere else: the two fixtures now pass the sweep above, and nothing
+ * there says WHICH tree they settled on, so a regression to the wrapper would
+ * be caught only by the shared fixture bytes - one input, in another
+ * repository, behind a pin. These assert the rule against the live importer,
+ * in both directions.
+ */
+describe('a caption target is the captioned block, not a paragraph around it', () => {
+  const figure = (html: string) => (htmlToAst(html).value.children[0] as { target?: unknown }).target
+
+  it('gives a bare image target as the image itself', () => {
+    // PART 9 §4b: "an image, a quote, a code block, a display-math paragraph".
+    // The image host is the image, and this is the node `parse` builds from the
+    // source written beside it - which is the invariant this file is about.
+    const html = '<figure><img src="i.png" alt="a"><figcaption>cap</figcaption></figure>'
+    expect(figure(html)).toEqual({ type: 'image', src: 'i.png', alt: 'a' })
+    expect(htmlToCarve(html).value).toBe('![a](i.png)\n^ cap\n')
+  })
+
+  it('unwraps an authored <p> that only wraps the image, and keeps the image attributes', () => {
+    // The paragraph a bare inline arrives in is SYNTHESIZED by `blocks()`,
+    // whether the HTML spelled a `<p>` around it or not, so taking it off drops
+    // nothing. What rode on the IMAGE stays on the image.
+    expect(figure('<figure><p><img src="i.png" alt="a"></p><figcaption>cap</figcaption></figure>')).toEqual({
+      type: 'image',
+      src: 'i.png',
+      alt: 'a',
+    })
+    expect(figure('<figure><img src="i.png" alt="a" class="z"><figcaption>cap</figcaption></figure>')).toEqual({
+      type: 'image',
+      src: 'i.png',
+      alt: 'a',
+      attrs: { classes: ['z'] },
+    })
+  })
+
+  it('keeps the paragraph for every host that IS one', () => {
+    // The other half of PART 11 §2's "only if": over-escaping and over-
+    // unwrapping both pass every gate that only checks the shape it fixed.
+    // Prose is not a caption host at all, and a paragraph holding more than the
+    // image is not the image - both keep the wrapper, and the loss on those is
+    // on the WRITING side, which is a different ticket's subject.
+    const prose = figure('<figure><p>hello</p><figcaption>cap</figcaption></figure>') as { type: string }
+    expect(prose.type).toBe('paragraph')
+    const tail = figure('<figure><p><img src="i.png" alt="a"> tail</p><figcaption>cap</figcaption></figure>') as {
+      type: string
+    }
+    expect(tail.type).toBe('paragraph')
+    const two = figure(
+      '<figure><img src="i.png" alt="a"><img src="j.png" alt="b"><figcaption>cap</figcaption></figure>',
+    ) as { type: string }
+    expect(two.type).toBe('paragraph')
+  })
+
+  it('keeps a <p> that carries its own attributes, because the tree is the exit that still holds them', () => {
+    // The one shape where the WRAPPER is the faithful half: this tree renders
+    // back to the input exactly, and the source moves the class onto a block-
+    // attribute line that re-parses onto the figure. Unwrapping here would
+    // delete `x` from the only exit that still records it.
+    expect(figure('<figure><p class="x"><img src="i.png" alt="a"></p><figcaption>cap</figcaption></figure>')).toEqual({
+      type: 'paragraph',
+      children: [{ type: 'image', src: 'i.png', alt: 'a' }],
+      attrs: { classes: ['x'] },
+    })
   })
 })
