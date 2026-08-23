@@ -132,6 +132,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A diagnostic on a bare inline run is numbered among the body children**
+  (markup-carve/carve#1554, PART 12 §16). The importer wraps such a run in a
+  paragraph, correctly prints no step for the wrapper, and then numbered the run
+  inside it - so `<p>z</p><kbd onclick="x()">K</kbd>` reported `/kbd[1]` where
+  the `<kbd>` is the second body child. A `<figure>` had the same defect twice
+  over: its body was renumbered once the caption was lifted out, and the
+  caption's own step was a literal `figcaption[1]`.
+
 - **A marker at an item's content column opens a sublist, first in the item or
   not** (markup-carve/carve#1517, PART 9 §24 C3). Only the item's first marker
   did; a later one folded into the paragraph above it, so the answer depended on

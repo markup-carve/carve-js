@@ -615,6 +615,13 @@ const IMPLEMENTED = new Set([
   'a-longer-run-at-a-list-boundary-is-written-as-exactly-three-blank-lines',
   // markup-carve/carve#1525. A null byte is replaced before the document is read.
   'a-null-byte-is-replaced-before-the-document-is-read',
+  // Corpus 400 and 401, which the pin bump for markup-carve/carve#1554 brings
+  // with it. No engine work in either: #1328 landed the marker-at-content-column
+  // rule here and #1309 the container's span, and both categories reproduce
+  // byte-for-byte on this build. Named rather than left out, because a category
+  // absent from this set runs as `.todo` and reads as coverage.
+  'a-container-starts-at-its-opening-markup-even-where-its-first-child-is-unplaced',
+  'a-marker-at-an-item-content-column-opens-a-sublist-first-in-the-item-or-not',
 ])
 
 /**
