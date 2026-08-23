@@ -130,6 +130,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `> ` for a blank line inside a fenced block inside a quote, where an authored
   blank quote line has always been written `>`; carve-rs disagreed on three core
   corpus documents.
+- **A tab-bearing line block stanza publishes the position of its comment node**
+  (#1323, markup-carve/carve-rs#1247, PART 12 §4). Such a stanza places none of
+  its inlines, because the verse text is rebuilt with expanded tabs, and the
+  `comment` an emptied `%%` line leaves behind is not measured from that text -
+  it comes from the same line table the `hard_break` beside it was already
+  placed from. The node now carries the span carve-rs and carve-php publish.
 
 - **The AST-JSON ingest replaces U+0000, as the parse boundary already does**
   (#1311, markup-carve/carve#1528, PART 12 §21). Every string value
