@@ -622,6 +622,32 @@ const IMPLEMENTED = new Set([
   // absent from this set runs as `.todo` and reads as coverage.
   'a-container-starts-at-its-opening-markup-even-where-its-first-child-is-unplaced',
   'a-marker-at-an-item-content-column-opens-a-sublist-first-in-the-item-or-not',
+  // Corpus 402 through 406, which the pin bump to carve `d0b6c92` brings with
+  // it. Eight documents across five categories, and NONE of them needed engine
+  // work here: every one reproduces byte-for-byte on this build. They are named
+  // rather than left out because a category absent from this set runs as
+  // `.todo`, and a `.todo` reads as coverage while asserting nothing.
+  //
+  // markup-carve/carve#1564. A container's span ends at the markup that CLOSES
+  // it, so a trailing comment line - which places no child - still leaves the
+  // closing fence as the end.
+  'a-container-ends-at-the-markup-that-closes-it-even-where-its-last-child-is-unplaced',
+  // markup-carve/carve#1570. The writer escapes per opener OCCURRENCE, not per
+  // unit, so an escape earned by one occurrence does not spread to the rest.
+  // This category also ships a `.fmt` fixture, which the canonical-form and
+  // non-HTML render sweeps pick up on their own - neither is allowlisted.
+  'an-idle-escape-does-not-spread-from-the-occurrence-that-needed-one',
+  // markup-carve/carve#1583. A caption marker's separator is a RUN of spaces
+  // and none of the run is content, and a quote holding a captioned block
+  // indents it like any other nested block.
+  'a-caption-s-marker-separator-is-a-run-and-none-of-it-is-content',
+  'a-quote-holding-a-captioned-block-indents-it-like-any-other-nested-block',
+  // markup-carve/carve#1587. The same rule for a heading marker: the separator
+  // is ASCII spaces only, so the first non-space character begins the heading
+  // text and a TAB standing there is content. The parser here already read it
+  // that way; the WRITER half of the rule landed separately as #1359, which is
+  // why the third document renders the tab back.
+  'a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content',
 ])
 
 /**
