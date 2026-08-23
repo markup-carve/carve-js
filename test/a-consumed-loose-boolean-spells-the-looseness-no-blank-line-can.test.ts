@@ -148,8 +148,41 @@ describe('the writer spells looseness only where a blank line cannot', () => {
     expect(fmt('{loose}\n- alpha\n\n- beta\n')).toBe('- alpha\n\n- beta\n')
   })
 
-  it('does not decorate a description that already holds two blocks', () => {
-    expect(fmt('{loose}\n:: T\n:  a\n\n   b\n')).toBe(':: T\n:  a\n\n   b\n')
+  /**
+   * ON A DEFINITION LIST THE ANSWER IS UNCONDITIONAL (§17 L7, ruled in
+   * markup-carve/carve-rs#1305 / markup-carve/carve#1639). The looseness field
+   * is set ONLY where the key was spelled, because a blank line between two
+   * ENTRIES does not loosen a `<dl>` at any count - so a body written without
+   * the key can never read back with the field set, and the re-parse test says
+   * "emit" every time.
+   *
+   * A description already holding two blocks does not change it. The key is
+   * redundant in the RENDER there - both spellings wrap the `<dd>` - and it is
+   * NOT redundant in the tree, and the tree is what PART 11 §1's equality is
+   * taken over. This engine read the redundancy off the render and dropped the
+   * key, so `fmt` deleted a fact the document stated.
+   */
+  it('decorates a definition list unconditionally, two-block description included', () => {
+    expect(fmt('{loose}\n:: T\n:  a\n\n   b\n')).toBe('{loose}\n:: T\n:  a\n\n   b\n')
+    expect(fmt('{loose}\n:: T\n:  a\n:: U\n:  b\n')).toBe('{loose}\n:: T\n:  a\n:: U\n:  b\n')
+  })
+
+  /** And a `<dl>` that never carried the key still never gains one. */
+  it('does not derive the key onto a definition list that did not spell it', () => {
+    expect(fmt(':: T\n:  a\n\n   b\n')).toBe(':: T\n:  a\n\n   b\n')
+    expect(fmt(':: T\n:  a\n')).toBe(':: T\n:  a\n')
+  })
+
+  /**
+   * THE TEST IS A RE-PARSE OVER THE DOCUMENT, not over the render. Written
+   * without the key, this `<dl>` reads back with no looseness at all - which is
+   * exactly what the render cannot see, since both spellings wrap the `<dd>`.
+   */
+  it('keeps the looseness through a format pass where the render cannot see it', () => {
+    const src = '{loose}\n:: T\n:  a\n\n   b\n'
+    expect(h(fmt(src))).toBe(h(src))
+    expect(parse(fmt(src)).children[0]).toMatchObject({ type: 'definition_list', loose: true })
+    expect(parse(':: T\n:  a\n\n   b\n').children[0]).not.toHaveProperty('loose')
   })
 
   // A blank line loosens an item only before a genuine PARAGRAPH (§17 L2), so a

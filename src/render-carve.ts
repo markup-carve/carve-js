@@ -1217,18 +1217,24 @@ function needsLooseKey(node: List | DefinitionList, body: string): boolean {
     const reparsed = treeOf(body) === null ? undefined : parse(body).children[0]
     return reparsed === undefined || reparsed.type !== 'list' || reparsed.tight
   }
-  if (node.loose !== true) return false
-  // A description already holding a second block takes the wrapper without the
-  // key, so it spells its own looseness; one that renders as a single paragraph
-  // has no blank-line spelling at all - a blank line between two ENTRIES does
-  // not loosen a `<dl>`. The key is needed as soon as ONE description is in that
-  // second state, because a sibling's second block says nothing about it.
-  return node.items.some((item) =>
-    item.definitions.some((blocks) => {
-      const visible = blocks.filter((child) => child.type !== 'comment')
-      return visible.length === 1 && visible[0]!.type === 'paragraph'
-    }),
-  )
+  // ON A DEFINITION LIST THE ANSWER IS UNCONDITIONAL (§17 L7,
+  // markup-carve/carve-rs#1305, markup-carve/carve#1639). The looseness field is
+  // set ONLY where the key was spelled - a `<dl>`'s own derivation gets it from
+  // nowhere else, because a blank line between two ENTRIES does not loosen a
+  // `<dl>` at any count - so a body written without the key can never read back
+  // with the field set, and the re-parse test says "emit" every time.
+  //
+  // A DESCRIPTION THAT ALREADY HOLDS TWO BLOCKS DOES NOT CHANGE IT. There the
+  // key is redundant in the RENDER, which is why redundant use is a no-op, and
+  // it is not redundant in the TREE - and the tree is what the equality is taken
+  // over. Reading the redundancy off the render is what this used to do, and it
+  // dropped the key from `{loose}` over a two-block description, so `fmt`
+  // silently deleted a fact the document stated.
+  //
+  // That is the same asymmetry the two fields have: `list.tight` is total and
+  // derived from the source, so the writer above has a real question to answer,
+  // while a definition list's field records only what its own derivation misses.
+  return node.loose === true
 }
 
 function renderTableWithColumns(node: Table, ctx: CarveContext): string {
