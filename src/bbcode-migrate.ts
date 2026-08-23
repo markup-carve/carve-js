@@ -153,6 +153,97 @@ function escapePlainBbcodeText(bbcode: string): string {
 }
 
 /**
+ * Escape the first `count` characters of `line`, which is how the Carve writer
+ * neutralizes a block opener: the marker itself stops being a marker.
+ */
+function escapeOpenerRun(line: string, count: number): string {
+  return `${line.slice(0, count).replace(/(.)/gu, '\\$1')}${line.slice(count)}`
+}
+
+/** How long the run of `marker` at the start of `line` is. */
+function openerRunLength(line: string, marker: string): number {
+  let length = 0
+  while (line[length] === marker) length++
+
+  return length
+}
+
+/**
+ * The line rewritten so it opens no block, or `null` when it opens none.
+ *
+ * EVERY SPELLING HERE IS THE ONE `renderCarve` WRITES for a paragraph whose
+ * text is this line, and the two are checked against each other form by form in
+ * test/a-noparse-run-opens-no-block.test.ts rather than being asserted from a
+ * table written by hand. The writer is the authority for this engine's own
+ * output, so a rule that moves there moves this check with it.
+ *
+ * THE BOUND IS THAT A LOOKALIKE IS NOT A MARKER. `-a`, `1.a`, `>a`, `+ a` and
+ * `[b]x[/b]` open nothing, so none of them is touched - a literal run that
+ * backslashed every leading punctuation character would put escapes in front of
+ * ordinary forum text.
+ */
+function escapedBlockOpener(rest: string): string | null {
+  // A thematic break is three or more of one marker with nothing else on the
+  // line, so it is decided before the bullet arm, which shares two of them.
+  if (/^([-*_])\1{2,}[ \t]*$/.test(rest)) {
+    return escapeOpenerRun(rest, rest.trimEnd().length)
+  }
+  if (/^([`~])\1{2,}/.test(rest)) {
+    return escapeOpenerRun(rest, openerRunLength(rest, rest[0]!))
+  }
+  if (rest.startsWith('%%')) return escapeOpenerRun(rest, 2)
+  if (/^[-*][ \t]/.test(rest)) return escapeOpenerRun(rest, 1)
+
+  // An ordered marker is reached by its DELIMITER, with or without the digits
+  // in front of it, so the escape goes on the delimiter rather than the line.
+  const ordered = /^(\d{1,9}[.)]|\.)[ \t]/.exec(rest)
+  if (ordered) {
+    const digits = ordered[1]!.length - 1
+
+    return `${rest.slice(0, digits)}${escapeOpenerRun(rest.slice(digits), 1)}`
+  }
+
+  if (/^>([ \t]|$)/.test(rest)) return escapeOpenerRun(rest, 1)
+  if (/^#{1,6}[ \t]+\S/.test(rest)) {
+    return escapeOpenerRun(rest, openerRunLength(rest, '#'))
+  }
+  if (/^:{3,}/.test(rest)) return escapeOpenerRun(rest, 1)
+  if (/^\|.*\|/.test(rest)) return escapeOpenerRun(rest, 1)
+  // A link reference, footnote or abbreviation definition. `[b]x[/b]` is not
+  // one of these, and the pinned `[noparse]` output keeps it unescaped.
+  if (/^\*?\[[^\]]*\]:/.test(rest)) return escapeOpenerRun(rest, 1)
+
+  return null
+}
+
+/**
+ * Escape every line-initial block opener in a run whose content is LITERAL.
+ *
+ * `escapePlainCarveInlineSyntax` covers INLINE syntax only, so a line-initial
+ * `- `, `1. ` or `> ` inside a `[noparse]` body was never protected and reached
+ * the document as document structure - and a literal blank run in the same body
+ * then decided how MANY lists it built, since PART 9 section 11 N1a reads three
+ * or more blank lines before a marker as a hard list boundary (carve-js#1386).
+ * `[noparse]` means the enclosed text is literal, so no line of it may open a
+ * block at all.
+ *
+ * NOT APPLIED TO THE `[code]` FAMILY, whose body is written inside a fence and
+ * is literal by construction; escaping there would put backslashes into the
+ * code the author asked to be shown.
+ */
+function escapeLineInitialBlockOpeners(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const indent = /^[ \t]*/.exec(line)![0]
+      const escaped = escapedBlockOpener(line.slice(indent.length))
+
+      return escaped === null ? line : `${indent}${escaped}`
+    })
+    .join('\n')
+}
+
+/**
  * The runs whose content is LITERAL for the whole pipeline, hidden behind a
  * key and put back at the very end.
  *
@@ -209,7 +300,13 @@ function stashLiteralRuns(text: string): { text: string; restore: (out: string) 
     out = out.replace(pattern, (_whole, openTag: string, body: string, closeTag: string) =>
       `${openTag}${key(trim ? body.trim() : body)}${closeTag}`)
   }
-  out = out.replace(/\[noparse\]([\s\S]*?)\[\/noparse\]/gi, (_whole, body: string) => key(body))
+  // The body is escaped as the LITERAL text the tag declares it to be. It has
+  // already been through the plain escaper for inline syntax; this is the block
+  // half of the same job, and it runs here because after this line the body is
+  // a key nothing else can read.
+  out = out.replace(/\[noparse\]([\s\S]*?)\[\/noparse\]/gi, (_whole, body: string) =>
+    key(escapeLineInitialBlockOpeners(body)),
+  )
 
   const slot = new RegExp(`${open}(\\d+)${close}`, 'gu')
 
@@ -221,10 +318,22 @@ function stashLiteralRuns(text: string): { text: string; restore: (out: string) 
     // pass and emits the raw private-use characters for exactly that input.
     // The loop is bounded by the number of spans, since every pass that changes
     // the text consumes at least one.
+    // THE KEY IS ONE LINE STANDING IN FOR MANY. Every pass that owns layout has
+    // run by the time the body comes back, so `convertQuotes` wrote ONE `> ` for
+    // however many lines the run holds and the rest of them arrived at column 0
+    // - leaving both the quote and the fence the importer had just written, and
+    // delivering the literal code text to the document as structure
+    // (carve-js#1384). The body is spliced at the column its key stood in.
     restore: (result: string): string => {
       let restored = result
       for (let i = 0; i <= spans.length; i++) {
-        const next = restored.replace(slot, (_whole, index: string) => spans[Number(index)] ?? '')
+        const next = restored.replace(slot, (_whole: string, index: string, offset: number) => {
+          const body = spans[Number(index)] ?? ''
+          if (!body.includes('\n')) return body
+          const prefix = containerPrefixAt(restored, offset)
+
+          return prefix === null ? body : prefixLines(prefix, body, 1)
+        })
         if (next === restored) break
         restored = next
       }
