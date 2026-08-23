@@ -750,19 +750,41 @@ class Importer {
   private blocks(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): BlockNode[] {
     const out: BlockNode[] = []
     let inlineBuffer: P5Node[] = []
+    /*
+     * THE PARAGRAPH THIS SYNTHESIZES IS NOT A STEP, so it is not an index basis
+     * either (PART 12 §16, markup-carve/carve#1554). A bare inline run gets
+     * wrapped here, the wrapper contributes no path step - and numbering the
+     * run inside the wrapper anyway printed an index against a parent no step
+     * names: `<p>z</p><kbd onclick="x()">K</kbd>` reported `/kbd[1]` where the
+     * `<kbd>` is the second body child. The buffer therefore carries the path
+     * each node ALREADY has among `nodes`, which is the level the step is
+     * printed at. It is not a contiguous offset: a leading whitespace-only text
+     * node is dropped rather than buffered, so the run does not start where the
+     * buffer does.
+     *
+     * The tell that this was a defect rather than a spelling latitude: the same
+     * document reported `/p[3]/math[2]` correctly one diagnostic later, and
+     * `/p[3]` counts the siblings `/math[1]` did not.
+     */
+    let inlinePaths: string[] = []
     const flush = (): void => {
-      const children = this.inlines(inlineBuffer, parentPath, depth + 1)
+      const children = this.inlines(inlineBuffer, parentPath, depth + 1, inlinePaths)
       inlineBuffer = []
+      inlinePaths = []
       if (this.visible(children)) out.push({ type: 'paragraph', children })
     }
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
       if (node.nodeName === '#text' && !(node.value ?? '').trim()) {
-        if (inlineBuffer.length) inlineBuffer.push(node)
+        if (inlineBuffer.length) {
+          inlineBuffer.push(node)
+          inlinePaths.push(path)
+        }
         return
       }
       if (!node.tagName || !BLOCK.has(node.tagName)) {
         inlineBuffer.push(node)
+        inlinePaths.push(path)
         return
       }
       flush()
@@ -1687,9 +1709,29 @@ class Importer {
     if ((this.attr(node, 'class') ?? '').split(/\s+/).includes('carve-figure-group')) {
       return this.figureGroup(node, path, depth, attrs)
     }
-    const captionNode = node.childNodes?.find((n) => n.tagName === 'figcaption')
-    const body = (node.childNodes ?? []).filter((n) => n !== captionNode)
-    const targets = this.blocks(body, path, depth + 1)
+    /*
+     * THE CAPTION IS LIFTED OUT, AND NOTHING ELSE MOVES (carve#1554). Both
+     * lists below are read against the figure's OWN children, because that is
+     * what a step's index counts among (PART 12 §16): filtering the caption out
+     * and renumbering the rest reported `<figure><figcaption>c</figcaption>
+     * <img onclick>` at `/figure[1]/img[1]`, one short of the position the
+     * `<img>` holds in the document a reader is looking at. The caption's step
+     * was a literal `figcaption[1]` for the same reason - it is wherever the
+     * author put it, which is second here and fourth in a pretty-printed
+     * figure.
+     */
+    const children = node.childNodes ?? []
+    const captionAt = children.findIndex((n) => n.tagName === 'figcaption')
+    const captionNode = captionAt < 0 ? undefined : children[captionAt]
+    const captionPath = `${path}/figcaption[${captionAt + 1}]`
+    const bodyPaths: string[] = []
+    const body: P5Node[] = []
+    children.forEach((child, index) => {
+      if (child === captionNode) return
+      body.push(child)
+      bodyPaths.push(this.childPath(path, child, index))
+    })
+    const targets = this.blocks(body, path, depth + 1, bodyPaths)
     const target = targets[0]
     if (target && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)) {
       /*
@@ -1705,7 +1747,7 @@ class Importer {
           'table-degraded',
           'Dropped a <figcaption> from a figure wrapping a table that carries its own <caption>: Carve spells one caption per table',
           'warning',
-          `${path}/figcaption[1]`,
+          captionPath,
         )
         return [target, ...targets.slice(1)]
       }
@@ -1725,14 +1767,14 @@ class Importer {
           message: 'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
         })
       }
-      return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], `${path}/figcaption[1]`, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
+      return [{ type: 'figure', target: target as never, caption: this.inlines(captionNode?.childNodes ?? [], captionPath, depth + 1), ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)
     this.reportUnwrappedAttributes(attrs, 'figure', path)
-    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.inlines(captionNode.childNodes ?? [], path, depth + 1) }] : [])]
+    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.inlines(captionNode.childNodes ?? [], captionPath, depth + 1) }] : [])]
   }
 
-  private inlines(nodes: P5Node[], parentPath: string, depth: number): InlineNode[] {
+  private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): InlineNode[] {
     const out: InlineNode[] = []
     // A BLOCK BOUNDARY IN AN INLINE SLOT SURVIVES ONLY IN THE BYTES (PART 11
     // §1b). A caption holds inline content, so a `<figcaption>` carrying two
@@ -1745,7 +1787,7 @@ class Importer {
     // fires and no gate below this one can see it.
     let previousWasBlock = false
     nodes.forEach((node, index) => {
-      const produced = this.inline(node, this.childPath(parentPath, node, index), depth)
+      const produced = this.inline(node, paths?.[index] ?? this.childPath(parentPath, node, index), depth)
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
       out.push(...produced)
@@ -2239,9 +2281,20 @@ class Importer {
    * stay its own.
    */
   private figureGroup(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
-    const captionNode = node.childNodes?.filter((n) => n.tagName === 'figcaption').pop()
-    const bodyNodes = (node.childNodes ?? []).filter((n) => n !== captionNode)
-    const children = this.blocks(bodyNodes, path, depth + 1)
+    const groupChildren = node.childNodes ?? []
+    let captionAt = -1
+    groupChildren.forEach((child, index) => {
+      if (child.tagName === 'figcaption') captionAt = index
+    })
+    const captionNode = captionAt < 0 ? undefined : groupChildren[captionAt]
+    const bodyNodes: P5Node[] = []
+    const bodyPaths: string[] = []
+    groupChildren.forEach((child, index) => {
+      if (child === captionNode) return
+      bodyNodes.push(child)
+      bodyPaths.push(this.childPath(path, child, index))
+    })
+    const children = this.blocks(bodyNodes, path, depth + 1, bodyPaths)
     for (let i = 0; i < children.length; i++) {
       const child = children[i]!
       if (child.type !== 'figure' || !child.attrs?.classes?.includes('carve-figure-panel')) continue
@@ -2257,7 +2310,7 @@ class Importer {
     }
     const group: FigureGroup = { type: 'figure_group', children }
     if (captionNode) {
-      group.caption = this.inlines(captionNode.childNodes ?? [], `${path}/figcaption[1]`, depth + 1)
+      group.caption = this.inlines(captionNode.childNodes ?? [], `${path}/figcaption[${captionAt + 1}]`, depth + 1)
     }
     const groupAttrs = this.stripClass(attrs, 'carve-figure-group')
     if (groupAttrs) group.attrs = groupAttrs
