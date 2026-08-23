@@ -54,6 +54,15 @@ const STASH_KEY_BASE = 0xe001
 const STASH_KEY_LENGTH = 2
 
 /**
+ * The key for the stash that survives the WHOLE pipeline.
+ *
+ * A separate run from {@link STASH_KEY_BASE}, and the same one carve-php
+ * prefers (`BbcodeToCarve::STASH_KEY_CODE`), so a post that occupies neither
+ * converts to the same bytes in both engines.
+ */
+const STASH_KEY_CODE = 0xe010
+
+/**
  * Thrown when the post leaves no private-use run for the stash key.
  *
  * REFUSING, NOT CONVERTING ANYWAY. The importer stashes spans behind a key and
@@ -141,6 +150,88 @@ function escapePlainBbcodeText(bbcode: string): string {
     new RegExp(`${open}(\\d+)${close}`, 'gu'),
     (_whole, index: string) => spans[Number(index)] ?? '',
   )
+}
+
+/**
+ * The runs whose content is LITERAL for the whole pipeline, hidden behind a
+ * key and put back at the very end.
+ *
+ * {@link escapePlainBbcodeText} protects spans while it escapes and restores
+ * them before it returns, so every pass below used to see the enclosed markup
+ * and rewrite it. Two families need more than that:
+ *
+ * `[code]`, `[c]` and `[icode]` hold text the author wants SHOWN, which is most
+ * of what a forum uses them for. Only the CONTENT is hidden here; the tags stay
+ * visible so `convertCode` still recognizes the run and builds its fence.
+ *
+ * `[noparse]` has no Carve construct to become at all. Its whole effect is
+ * "the enclosed text is literal", so the TAGS are consumed and the content is
+ * left as the escaper already wrote it - escaping it a second time would double
+ * the backslash and render a literal one beside the bold it was meant to
+ * prevent. Keeping the tags emitted them verbatim, and `cleanup` then ate the
+ * closer, leaving an unbalanced `[noparse]` in a document that has no such
+ * construct (carve-js#1368, carve-php#1209).
+ *
+ * RESTORED AFTER `cleanup`, because cleanup strips leftover BBCode tags and
+ * this content legitimately contains some - a `[code]` block showing `[b]` is
+ * the whole point of it.
+ */
+function stashLiteralRuns(text: string): { text: string; restore: (out: string) => string } {
+  const occupied = occupiedPrivateUse(text)
+  const [open, close] = pickSentinelRun(occupied, STASH_KEY_CODE, STASH_KEY_LENGTH) as [
+    string,
+    string,
+  ]
+  if (occupied.has(open.charCodeAt(0)) || occupied.has(close.charCodeAt(0))) {
+    throw new BbcodeSentinelSpaceExhaustedError()
+  }
+
+  const spans: string[] = []
+  const key = (body: string): string => {
+    spans.push(body)
+
+    return `${open}${spans.length - 1}${close}`
+  }
+
+  let out = text
+  // THE FENCE TRIM HAPPENS HERE NOW. `convertCode` writes a block fence around
+  // `body.trim()`, and once the body is a key there is no whitespace left for
+  // that trim to find - the newlines it used to remove sit inside the stash
+  // instead, and the fence comes back holding a blank line above and below the
+  // code. carve-php trims in the same place for the same reason and does NOT do
+  // this, so its `[code=php]` output carries both blank lines; this engine has
+  // pinned the trimmed form since before the stash existed. The inline family
+  // is written verbatim between backticks, so it is stashed as it stands.
+  for (const [pattern, trim] of [
+    [/(\[code(?:=[^\]]*)?\])([\s\S]*?)(\[\/code\])/gi, true],
+    [/(\[(?:c|icode)\])([\s\S]*?)(\[\/(?:c|icode)\])/gi, false],
+  ] as Array<[RegExp, boolean]>) {
+    out = out.replace(pattern, (_whole, openTag: string, body: string, closeTag: string) =>
+      `${openTag}${key(trim ? body.trim() : body)}${closeTag}`)
+  }
+  out = out.replace(/\[noparse\]([\s\S]*?)\[\/noparse\]/gi, (_whole, body: string) => key(body))
+
+  const slot = new RegExp(`${open}(\\d+)${close}`, 'gu')
+
+  return {
+    text: out,
+    // ONE PASS IS NOT ENOUGH WHEN THE RUNS NEST. `[noparse]` is stashed after
+    // the code runs, so its body can hold a key of its own, and a single
+    // replace walks PAST the key it just spliced in - carve-php restores in one
+    // pass and emits the raw private-use characters for exactly that input.
+    // The loop is bounded by the number of spans, since every pass that changes
+    // the text consumes at least one.
+    restore: (result: string): string => {
+      let restored = result
+      for (let i = 0; i <= spans.length; i++) {
+        const next = restored.replace(slot, (_whole, index: string) => spans[Number(index)] ?? '')
+        if (next === restored) break
+        restored = next
+      }
+
+      return restored
+    },
+  }
 }
 
 function convertLinks(text: string): string {
@@ -426,6 +517,8 @@ export function bbcodeToCarve(bbcode: string): string {
 
   let text = bbcode.replace(/\0/g, '\ufffd').replace(/\r\n?/g, '\n')
   text = escapePlainBbcodeText(text)
+  const literal = stashLiteralRuns(text)
+  text = literal.text
   text = convertLinks(text)
   text = convertImages(text)
   text = convertBasicFormatting(text)
@@ -434,5 +527,5 @@ export function bbcodeToCarve(bbcode: string): string {
   text = convertLists(text)
   text = convertOther(text)
 
-  return cleanup(text)
+  return literal.restore(cleanup(text))
 }
