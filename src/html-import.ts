@@ -313,9 +313,43 @@ function launderableScheme(value: string): string | undefined {
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
-  readonly diagnostics: HtmlImportDiagnostic[] = []
+  /**
+   * Every diagnostic, with what it takes to put it in the order the page
+   * promises: `at` is the document position of the LOSING ELEMENT and `seq`
+   * the order this one was constructed in, which only ever breaks a tie.
+   */
+  private readonly entries: Array<{ diagnostic: HtmlImportDiagnostic; at: number; seq: number }> = []
+  /**
+   * Every node of the parsed tree, numbered in DOCUMENT ORDER
+   * (markup-carve/carve#1586).
+   *
+   * A REPORT IS ORDERED BY WHERE THE LOSS IS, NOT BY WHEN IT WAS NOTICED.
+   * docs/html-import.md always said the diagnostic list is ordered and, until
+   * that ticket, never said ordered by what - so each engine's list came out in
+   * whatever order its own walk happened to construct the rows in. This
+   * importer reads a table's cells before its `<caption>`, because the caption
+   * fills a slot on the finished table, so a `<table>` losing something on both
+   * reported the cell first and the caption second for a document that spells
+   * them the other way round.
+   *
+   * Numbering the tree once and sorting at the end fixes the whole class rather
+   * than that one shape: no handler has to be rewritten to visit its parent's
+   * children in source order, and none can reintroduce the defect by choosing a
+   * convenient traversal. The number is the node's own position, which is why a
+   * footnote definition lifted out of the end of the document by the adapter
+   * pass - imported FIRST, long before the body it is referenced from - still
+   * reports at the end, where the author wrote it.
+   */
+  private readonly documentOrder = new Map<P5Node, number>()
+
+  /** The report, in the order docs/html-import.md states. */
+  get diagnostics(): HtmlImportDiagnostic[] {
+    return [...this.entries]
+      .sort((a, b) => a.at - b.at || a.seq - b.seq)
+      .map((entry) => entry.diagnostic)
+  }
   /** Where the import built a structure only a serializer loses (§16). */
-  private readonly unspellable: Array<{ path: string; message: string }> = []
+  private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
   private nodes = 0
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
   private quoteDepth = 0
@@ -345,6 +379,11 @@ class Importer {
   import(html: string): Document {
     const fragment = parseFragment(html, { sourceCodeLocationInfo: true }) as unknown as P5Node
     this.root = fragment
+    // BEFORE the adapter pass, which rewrites footnote-shaped HTML and imports
+    // the definitions it finds: the numbers have to be on the tree as the
+    // AUTHOR wrote it, or a definition's diagnostics would sort by where the
+    // rewrite left it rather than by where it stands in the document.
+    this.numberDocumentOrder(fragment)
     // Rewrite footnote-shaped HTML before the core policy reads the tree.
     // Under the word-processor adapters the full anchor-pair heuristic runs
     // ("Adapters may normalize editor-specific markup before the core
@@ -370,9 +409,52 @@ class Importer {
     if (++this.nodes > this.maxNodes) throw new HtmlImportLimitError('nodes')
   }
 
-  private add(code: HtmlImportDiagnosticCode, message: string, severity: HtmlImportDiagnostic['severity'], path: string): void {
-    if (this.diagnostics.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
-    this.diagnostics.push({ code, message, severity, path })
+  private add(
+    code: HtmlImportDiagnosticCode,
+    message: string,
+    severity: HtmlImportDiagnostic['severity'],
+    path: string,
+    node: P5Node,
+  ): void {
+    if (this.entries.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
+    this.entries.push({ diagnostic: { code, message, severity, path }, at: this.positionOf(node), seq: this.entries.length })
+  }
+
+  /**
+   * Where a losing element sits in the document, as the number the pre-order
+   * walk gave it.
+   *
+   * An element the HTML parser IMPLIED - a `<tbody>` around rows nobody wrote
+   * one for - is not in the source at all and has no position of its own, so it
+   * answers with its nearest ancestor's and ties with it. That is the honest
+   * reading: the loss is at the place in the source where the implied element's
+   * content begins.
+   */
+  private positionOf(node: P5Node | undefined): number {
+    for (let current = node; current !== undefined; current = current.parentNode) {
+      const at = this.documentOrder.get(current)
+      if (at !== undefined) return at
+    }
+    return Number.MAX_SAFE_INTEGER
+  }
+
+  /**
+   * Number every node of the parsed tree in document order.
+   *
+   * Iterative, not recursive: the walk runs before `enter()` has capped
+   * anything, so it meets whatever depth the input actually parsed to, and a
+   * recursive version would answer a deeply nested document with a stack
+   * overflow instead of the depth-limit error the page promises.
+   */
+  private numberDocumentOrder(root: P5Node): void {
+    const stack: P5Node[] = [root]
+    let next = 0
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      this.documentOrder.set(node, next++)
+      const children = node.childNodes ?? []
+      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!)
+    }
   }
 
   /**
@@ -404,9 +486,9 @@ class Importer {
         // own wording - but not their own membership test. The set is the
         // renderer's.
         const kind = name.startsWith('on') ? 'event-handler' : 'injection-sink'
-        this.add('attribute-dropped', `Dropped ${kind} attribute ${name} on <${node.tagName}>`, 'warning', path)
+        this.add('attribute-dropped', `Dropped ${kind} attribute ${name} on <${node.tagName}>`, 'warning', path, node)
       } else if (name === 'style') {
-        this.styles(attr.value, keyValues, path)
+        this.styles(node, attr.value, keyValues, path)
       } else if (name === 'id') {
         attrs.id = attr.value
       } else if (name === 'class') {
@@ -414,18 +496,18 @@ class Importer {
       } else if (ROUND_TRIP_MARKER_ATTRIBUTES.has(name)) {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
-        this.add('attribute-dropped', `Dropped round-trip marker ${name} on <${node.tagName}>`, 'info', path)
+        this.add('attribute-dropped', `Dropped round-trip marker ${name} on <${node.tagName}>`, 'info', path, node)
       } else if (this.isConsumedHtmlAttribute(node.tagName ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
       } else if (!isAttrIdentifier(name)) {
-        this.add('attribute-dropped', `Dropped unsupported attribute ${name} on <${node.tagName}>: not spellable as a Carve attribute name`, 'info', path)
+        this.add('attribute-dropped', `Dropped unsupported attribute ${name} on <${node.tagName}>: not spellable as a Carve attribute name`, 'info', path, node)
       } else if (/[\r\n]/.test(attr.value)) {
         // A quoted attribute value ENDS at the line break, so writing this back
         // produces an attribute block that does not reparse as one: it lands in
         // the document as literal `{name="first` text and the attribute is gone
         // anyway. Refused loudly rather than emitted as corruption.
-        this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value spans a line break, which a Carve attribute value cannot`, 'warning', path)
+        this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value spans a line break, which a Carve attribute value cannot`, 'warning', path, node)
       } else {
         // Everything the language can hold, held. `cite` on a block quote,
         // `open` on a `<details>` (PART 11 §6c's bare boolean, which the
@@ -442,11 +524,11 @@ class Importer {
           // source orders - a plain assignment let `<p style="text-align:left"
           // align="right">` come out right-aligned purely because `align` was
           // written second.
-          this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: a mapped CSS declaration already sets it`, 'info', path)
+          this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: a mapped CSS declaration already sets it`, 'info', path, node)
         } else {
           const laundered = launderableScheme(attr.value)
           if (laundered !== undefined) {
-            this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value carries a ${laundered} URL the renderer does not reach`, 'warning', path)
+            this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value carries a ${laundered} URL the renderer does not reach`, 'warning', path, node)
           } else {
             // `setOwn`, not `keyValues[name] = …`: a `<p __proto__="x">` would
             // run the prototype setter, store nothing, and lose the attribute
@@ -812,7 +894,7 @@ class Importer {
     return false
   }
 
-  private styles(value: string, keyValues: Record<string, string>, path: string): void {
+  private styles(node: P5Node, value: string, keyValues: Record<string, string>, path: string): void {
     for (const declaration of value.split(';')) {
       const split = declaration.indexOf(':')
       if (split < 0) continue
@@ -822,7 +904,7 @@ class Importer {
       if (this.mode !== 'safe' && property === 'text-align' && ['left', 'right', 'center'].includes(val)) {
         keyValues.align = val
       } else {
-        this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path)
+        this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)
       }
     }
   }
@@ -895,7 +977,7 @@ class Importer {
     this.enter(depth)
     const tag = node.tagName!
     if (ACTIVE.has(tag)) {
-      this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path)
+      this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
     const attrs = this.attrs(node, path)
@@ -998,6 +1080,7 @@ class Importer {
               `Dropped ${this.attrNames(leftover).join(', ')} on <p>: an admonition title has no attribute slot`,
               'warning',
               titlePath,
+              titleNode,
             )
           }
           title = this.inlines(titleNode.childNodes ?? [], titlePath, depth + 2)
@@ -1019,9 +1102,9 @@ class Importer {
         // `aria-label` the default does not match, still goes out with a row.
         // Suppressing both together silenced two real losses.
         if (!this.isDerivedWrapper(node, tag)) {
-          this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
+          this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
         }
-        this.reportUnwrappedAttributes(attrs, tag, path)
+        this.reportUnwrappedAttributes(node, attrs, tag, path)
       }
       const children = this.blocks(node.childNodes ?? [], path, depth + 1)
       return tag === 'div' && attrs ? [{ type: 'div', children, attrs }] : children
@@ -1031,11 +1114,11 @@ class Importer {
     // they take the inline arm of this same pair of answers, where the policy
     // that covers them is written down.
     if (this.mode === 'roundtrip') {
-      this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
+      this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
-    this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
-    this.reportUnwrappedAttributes(attrs, tag, path)
+    this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
+    this.reportUnwrappedAttributes(node, attrs, tag, path)
     return this.blocks(node.childNodes ?? [], path, depth + 1)
   }
 
@@ -1097,6 +1180,7 @@ class Importer {
             `A <${strayTag}> inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as blocks ahead of the list`,
             'warning',
             childPath,
+            child,
           )
         }
       } else if (child.nodeName !== '#comment' && (child.value ?? '').trim() !== '') {
@@ -1105,6 +1189,7 @@ class Importer {
           `Text directly inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as a paragraph ahead of the list`,
           'warning',
           childPath,
+          child,
         )
       }
       stray.push(child)
@@ -1211,6 +1296,7 @@ class Importer {
           const term = this.inlines(child.childNodes ?? [], childPath, level + 1)
           if (!this.visible(term)) {
             this.unspellable.push({
+              node: child,
               path: childPath,
               message: 'An empty <dt> has no Carve spelling; the bare `::` line re-reads as a paragraph',
             })
@@ -1226,6 +1312,7 @@ class Importer {
           if (current === undefined) {
             current = openEntry()
             this.unspellable.push({
+              node: child,
               path: childPath,
               message: 'A <dd> with no <dt> before it has no Carve spelling; the definition line re-reads as a paragraph',
             })
@@ -1234,6 +1321,7 @@ class Importer {
           const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
           if (this.writesNothing(definition)) {
             this.unspellable.push({
+              node: child,
               path: childPath,
               message: 'A <dd> that writes nothing has no Carve spelling; the bare `:` line is read as more of the term above it',
             })
@@ -1241,7 +1329,7 @@ class Importer {
           current.definitions.push(definition)
           return
         }
-        this.add('element-unwrapped', `Moved <${child.tagName ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath)
+        this.add('element-unwrapped', `Moved <${child.tagName ?? child.nodeName}> content out of the <dl>: only <dt> and <dd> have a place in a definition list`, 'warning', childPath, child)
         trailing.push(child)
         trailingPaths.push(childPath)
       })
@@ -1272,7 +1360,7 @@ class Importer {
     const attrs = this.attrs(node, path)
     if (attrs === undefined) return
     const slot = noun ?? `a definition ${tag === 'dt' ? 'term' : tag === 'dd' ? 'description' : 'group'}`
-    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path)
+    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: ${slot} has no attribute slot`, 'warning', path, node)
   }
 
   /**
@@ -1398,9 +1486,9 @@ class Importer {
     return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
   }
 
-  private reportUnwrappedAttributes(attrs: Attrs | undefined, tag: string, path: string): void {
+  private reportUnwrappedAttributes(node: P5Node, attrs: Attrs | undefined, tag: string, path: string): void {
     if (attrs === undefined) return
-    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} with the unwrapped <${tag}>: there is no element left to carry them`, 'warning', path)
+    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} with the unwrapped <${tag}>: there is no element left to carry them`, 'warning', path, node)
   }
 
   /**
@@ -1463,7 +1551,7 @@ class Importer {
     if (raw === undefined) return 1
     const value = Number(raw.trim())
     if (/^[+-]?\d+$/.test(raw.trim()) && Number.isSafeInteger(value) && value >= -2_147_483_648 && value <= 2_147_483_647) return value
-    this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path)
+    this.add('attribute-dropped', `Dropped start="${raw}" on <ol>: not an integer HTML defines, so the list starts where it would without it`, 'warning', path, node)
     return 1
   }
 
@@ -1471,7 +1559,7 @@ class Importer {
     const value = ordered ? this.attr(node, 'type') : undefined
     if (value === undefined || value === '1') return {}
     if (value !== 'a' && value !== 'A' && value !== 'i' && value !== 'I') {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path)
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol>: an ordered list counts in 1, a, A, i or I`, 'warning', path, node)
       return {}
     }
     const alphabetic = value === 'a' || value === 'A'
@@ -1483,7 +1571,7 @@ class Importer {
     // arithmetically, so zero comes out as a BACKTICK and -3 as `]`, putting
     // characters in the document that can pair with a later one.
     if (start < 1) {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path)
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> with start="${start}": an alphabet has no letter before the first`, 'warning', path, node)
       return {}
     }
     // Roman notation ends at 3999. Past it the writer has no numeral and
@@ -1496,16 +1584,18 @@ class Importer {
     // which spells any position in its own digits.
     const last = start + Math.max(items, 1) - 1
     if (!alphabetic && last > 3999) {
-      this.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path)
+      this.add('attribute-dropped', `Dropped type="${value}" on <ol> reaching ${last}: roman notation has no numeral above 3999`, 'warning', path, node)
       return {}
     }
     if (alphabetic && start > 26) {
       this.unspellable.push({
+        node: node,
         path,
         message: `An alphabetic list starting at ${start} has no Carve spelling; there is no multi-letter marker, so the written list restarts at the first letter`,
       })
     } else if (items === 1 && (alphabetic ? start === 9 : [5, 10, 50, 100, 500, 1000].includes(start))) {
       this.unspellable.push({
+        node: node,
         path,
         message: `A one-item ${alphabetic ? 'alphabetic' : 'roman'} list starting at ${start} has no Carve spelling; its only marker is a letter the other alphabet claims, and nothing follows it to settle which`,
       })
@@ -1567,6 +1657,8 @@ class Importer {
         'Unwrapped a <summary> into the body: a disclosure title cannot spell a double quote or a line break, and writing one makes the whole block a paragraph',
         'warning',
         summaryPath,
+        // Set together with `title`, which this branch is guarded by.
+        summary!,
       )
       return { type: 'admonition', kind: 'details', children: [{ type: 'paragraph', children: title }, ...children], ...(attrs ? { attrs } : {}) }
     }
@@ -1635,6 +1727,7 @@ class Importer {
    * the row's own cells around them is what keeps those indexes aligned.
    */
   private spanGrid(
+    tr: P5Node[],
     built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
     rowAttrs: Array<Attrs | undefined>,
     path: string,
@@ -1685,7 +1778,7 @@ class Importer {
         }
       }
       if (invented) {
-        this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`)
+        this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r])
       }
       rows.push({ type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) })
       carried = [...carried.map((entry) => ({ ...entry, rows: entry.rows - 1 })).filter((entry) => entry.rows > 0), ...opened]
@@ -1715,6 +1808,7 @@ class Importer {
         'Dropped a second <caption>: a table has one caption, and the first one wins',
         'warning',
         this.childPath(path, extra.node, extra.index),
+        extra.node,
       )
     }
     /*
@@ -1738,6 +1832,7 @@ class Importer {
         "Dropped <colgroup>: Carve has no column model, and a table's columns are only the cells its rows carry",
         'warning',
         this.childPath(path, child, index),
+        child,
       )
     })
     const tr: P5Node[] = []
@@ -1822,6 +1917,7 @@ class Importer {
             'Clipped a rowspan at the header rows: Carve derives the head from the leading header rows, and a span leaving them crosses a boundary browsers clip anyway',
             'warning',
             cellPath,
+            cell,
           )
           rowspan = leadingHeaderRows - r
         }
@@ -1858,8 +1954,8 @@ class Importer {
     // writer spells on the closing pipe and every renderer emits on the `<tr>`
     // - and went in silence before this.
     const rowAttrs = tr.map((row, r) => this.attrs(row, `${path}/tr[${r + 1}]`))
-    const rows = this.spanGrid(built, rowAttrs, path, depth)
-    const rowGroups = this.rowGroups(tr, rows, group, leadingHeaderRows, path, sectionAttrs)
+    const rows = this.spanGrid(tr, built, rowAttrs, path, depth)
+    const rowGroups = this.rowGroups(node, tr, rows, group, leadingHeaderRows, path, sectionAttrs)
     // Whatever `rowGroups` did not place. A `<thead>` and a `<tfoot>` have no
     // slot at all - the field states the head and foot as COUNTS - and a
     // `<tbody>`'s attributes reach nothing when the field itself is not kept.
@@ -1874,7 +1970,7 @@ class Importer {
         : sectionsWithRows.has(section)
           ? 'the row grouping this body belongs to was not kept, and nothing else holds it'
           : 'a body group is the rows it consumes, and this one has none'
-      this.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path)
+      this.add('attribute-dropped', `Dropped ${this.attrNames(own.attrs).join(', ')} on <${tag}>: ${reason}`, 'warning', own.path, section)
     }
     /*
      * THE CAPTION IS NUMBERED WHERE THE AUTHOR PUT IT (PART 12 §16,
@@ -1935,6 +2031,7 @@ class Importer {
    * elsewhere, in `fromAstJson`.
    */
   private rowGroups(
+    node: P5Node,
     tr: P5Node[],
     rows: TableRow[],
     group: Map<P5Node, P5Node>,
@@ -1962,6 +2059,7 @@ class Importer {
         'Dropped the row grouping of a table whose <thead> or <tfoot> is not at the edge of its rows: the head is a prefix of the rows and the foot a suffix',
         'warning',
         path,
+        node,
       )
       return undefined
     }
@@ -2023,6 +2121,7 @@ class Importer {
     // Carve SOURCE has no spelling for the field, so a writer loses it. The
     // AST keeps it and `htmlToCarve` reports it, which is the split §16 draws.
     this.unspellable.push({
+      node: node,
       path,
       message: 'A table with an explicit head/body/foot grouping has no Carve spelling; the written table keeps only the structure a reader derives from its rows',
     })
@@ -2125,6 +2224,7 @@ class Importer {
           'Dropped a <figcaption> from a figure wrapping a table that carries its own <caption>: Carve spells one caption per table',
           'warning',
           captionPath,
+          captionNode,
         )
         /*
          * THE SIXTH CAPTION SITE, and the only one where the element goes
@@ -2142,6 +2242,7 @@ class Importer {
             `Dropped ${this.attrNames(own).join(', ')} with the <figcaption>: the element itself is not kept`,
             'warning',
             captionPath,
+            captionNode,
           )
         }
         return [target, ...targets.slice(1)]
@@ -2158,14 +2259,15 @@ class Importer {
        */
       if (target.type === 'table') {
         this.unspellable.push({
+          node: node,
           path,
           message: 'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
         })
       }
       return [{ type: 'figure', target: target as never, caption: captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : [], ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
-    this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path)
-    this.reportUnwrappedAttributes(attrs, 'figure', path)
+    this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path, node)
+    this.reportUnwrappedAttributes(node, attrs, 'figure', path)
     return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') }] : [])]
   }
 
@@ -2206,7 +2308,7 @@ class Importer {
     const tag = node.tagName
     if (!tag) return []
     if (ACTIVE.has(tag)) {
-      this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path)
+      this.add('element-dropped', `Dropped active <${tag}> element`, 'warning', path, node)
       return []
     }
     // Not in `roundtrip`, which raw-preserves what Carve CANNOT express. The
@@ -2253,10 +2355,10 @@ class Importer {
         // branch existed, and byte for byte the same output. Reported once for
         // the element rather than once per descendant, because the descendants
         // are not preserved separately - they are inside this one raw span.
-        this.add('raw-preserved', 'Preserved unsupported <math> element as raw HTML', 'warning', path)
+        this.add('raw-preserved', 'Preserved unsupported <math> element as raw HTML', 'warning', path, node)
         return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
       }
-      this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path)
+      this.add('element-dropped', 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation', 'warning', path, node)
       return []
     }
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
@@ -2298,7 +2400,7 @@ class Importer {
       // A hard break has no `attrs` slot, so anything `attrs()` kept for this
       // element is lost here and has to say so - the alternative is the silence
       // that carve#1210 exists to kill.
-      if (attrs) this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <br>: a hard break has no attribute slot`, 'warning', path)
+      if (attrs) this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <br>: a hard break has no attribute slot`, 'warning', path, node)
       return [{ type: 'hard_break' }]
     }
     // The synthetic element the adapter footnote pass leaves at each
@@ -2331,11 +2433,11 @@ class Importer {
      * verbatim in the mode whose contract is Carve-produced HTML.
      */
     if (this.mode === 'roundtrip') {
-      this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path)
+      this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
-    this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path)
-    this.reportUnwrappedAttributes(attrs, tag, path)
+    this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
+    this.reportUnwrappedAttributes(node, attrs, tag, path)
     return children
   }
 
@@ -2485,7 +2587,7 @@ class Importer {
     // reading the presence of the element would make that fall-through the one
     // tier-2 read that says nothing.
     if (annotated === undefined) {
-      this.add('encoding-assumed', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path)
+      this.add('encoding-assumed', 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed', 'info', path, node)
     }
     return { type: 'math', display: this.attr(node, 'display') === 'block', content, ...(attrs ? { attrs } : {}) }
   }
@@ -2580,7 +2682,7 @@ class Importer {
       const children = this.inlines(node.childNodes ?? [], path, depth + 1)
       const attrs = this.attrs(node, path)
       const quoted: InlineNode[] = [{ type: 'text', value: open! }, ...children, { type: 'text', value: close! }]
-      this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path)
+      this.add('element-unwrapped', 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping', 'info', path, node)
       return attrs ? [{ type: 'span', children: quoted, attrs }] : quoted
     } finally {
       this.quoteDepth -= 1
@@ -2620,7 +2722,7 @@ class Importer {
     // now it arrives, so the collision has to be named rather than overwritten
     // in silence (markup-carve/carve-js#1156).
     if (hasOwnKey(keyValues, tag) && keyValues[tag] !== value) {
-      this.add('attribute-dropped', `Dropped ${tag} on <${tag}>: the name is this span's own semantic marker`, 'warning', path)
+      this.add('attribute-dropped', `Dropped ${tag} on <${tag}>: the name is this span's own semantic marker`, 'warning', path, node)
     }
     keyValues[tag] = value
     return { type: 'span', children, attrs: { ...attrs, keyValues } }
@@ -2647,8 +2749,8 @@ class Importer {
    * limit is the importer's own: these diagnostics are not a second budget.
    */
   reportSerializationLosses(): void {
-    for (const { path, message } of this.unspellable) {
-      this.add('structure-unspellable', message, 'warning', path)
+    for (const { node, path, message } of this.unspellable) {
+      this.add('structure-unspellable', message, 'warning', path, node)
     }
   }
 
