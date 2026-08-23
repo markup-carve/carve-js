@@ -151,6 +151,14 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The canonical writer keeps a heading's leading tab** (#1356,
+  markup-carve/carve#1581). A heading's marker separator is ASCII spaces only,
+  so the first character that is not a space begins the heading text - the
+  parser already read a tab there as content, and the writer trimmed it off with
+  the separator run. `## <TAB>x` came back `## x`, breaking PART 11 §1 at both
+  strengths. The separator's spaces are still dropped, and so is the trailing
+  run PART 2 discards before a heading is read.
+
 - **An import report is ordered by the losing element's document position**
   (markup-carve/carve#1586). The list came out in the order this importer's walk
   constructed the rows in, so a table losing something on both its `<caption>`

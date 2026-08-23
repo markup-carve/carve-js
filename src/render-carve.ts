@@ -957,8 +957,8 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       // Only an ODD run of backslashes before the newline is a hard break's
       // marker; an even run is literal backslashes that happen to end the line,
       // and dropping one there would eat the escape and swallow the space.
-      const text = trimNonNbsp(
-        trimNonNbsp(renderInlines(node.children, ctx)).replace(
+      const text = trimHeadingText(
+        trimHeadingText(renderInlines(node.children, ctx)).replace(
           /(\\*)\n[ \t]*/g,
           (_m, slashes: string) => (slashes.length % 2 === 1 ? slashes.slice(1) : slashes) + ' ',
         ),
@@ -3063,6 +3063,42 @@ function restoreVerbatim(text: string): string {
 
 function trimNonNbsp(text: string): string {
   return trimEndNonNbsp(trimStartNonNbsp(text))
+}
+
+/**
+ * A heading's text with only the run its marker separator takes back.
+ *
+ * THE SEPARATOR AFTER A HEADING MARKER IS ASCII SPACES AND NOTHING ELSE
+ * (`resources/grammar.ebnf`, `heading`: the `space` terminal, U+0020). So the
+ * first character that is NOT a space begins the heading text, and a TAB
+ * standing there is CONTENT - the parser here already reads it that way, and
+ * the corpus pins it at
+ * `406-a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content-3`.
+ *
+ * The leading end used to go through `trimNonNbsp`, which removes all four of
+ * PART 7's whitespace characters, so the writer ate that tab and `## <TAB>x`
+ * came back `## x` - a different document, which PART 11 §1 forbids twice over
+ * (`parse(fmt(x)) == parse(x)`, and the weaker `to_html(fmt(x)) ==
+ * to_html(x)`). Dropping the SPACES is still right and still minimal (PART 11
+ * §2): a re-parse folds every one of them back into the separator run, so
+ * writing them changes nothing but the length.
+ *
+ * THE TRAILING END KEEPS THE FULL TRIM, because PART 2 discards a line's
+ * trailing whitespace before a heading is read at all - there the run is not
+ * content in the first place, and leaving it would only emit a trailing run for
+ * the next tool to strip (PART 11 §7).
+ *
+ * A NEWLINE NEEDS NO MENTION HERE. A heading is single-line, so the arm's own
+ * collapse rewrites every newline to a space before this trim's second pass
+ * sees it, and a lone CR never survives the inline layer.
+ *
+ * The neighbouring constructs place the same boundary two other ways, and both
+ * are already right: a CAPTION writes `^ ` + its inlines with no trim at all,
+ * and a BULLET's leading tab is structural - it never reaches the item's
+ * content, so there is nothing there to keep (markup-carve/carve#698).
+ */
+function trimHeadingText(text: string): string {
+  return trimEndNonNbsp(text.replace(/^ +/, ''))
 }
 
 /**
