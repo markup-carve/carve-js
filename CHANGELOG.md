@@ -132,6 +132,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An HTML import rebuilds the container the renderer wrote** (#1316,
+  markup-carve/carve#1502). A callout was unwrapped to its own body and a tab
+  set, a code group and every other named container came back as a generic
+  `div` node carrying a class. The import now inverts `renderAdmonition`, so
+  any kind survives rather than a list of the ones thought of so far. A titled
+  callout's `<p class="admonition-title">` is lifted into the container it
+  names, and the `aria-labelledby` pointing at it goes with it rather than
+  dangling. The callout's own derived `aria-label` is now dropped under PART 9
+  §16a - a rule that could not reach it while the element was being unwrapped -
+  so an imported `::: note` still answers to a `labels` map. Imported source and
+  the `htmlToAst` tree both change; a class no fence opener can spell still
+  keeps the generic node.
+
 - **A diagnostic on a bare inline run is numbered among the body children**
   (markup-carve/carve#1554, PART 12 §16). The importer wraps such a run in a
   paragraph, correctly prints no step for the wrapper, and then numbered the run

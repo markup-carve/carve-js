@@ -3397,6 +3397,24 @@ export function isAttrIdentifier(text: string): boolean {
 }
 
 /**
+ * Whether a container KIND can be spelled as a colon-fence type word.
+ *
+ * `renderAdmonition` writes `node.kind` verbatim after the fence, so a kind
+ * this refuses would be emitted as source that does not read back as the
+ * container it came from: `::: 2col` is an ordinary paragraph, because the
+ * opener grammar (PART 9, `admonition_open`) reads the word as
+ * `[a-zA-Z_][\w-]*` and a digit cannot open it.
+ *
+ * Exported for the same reason `isAttrIdentifier` is: `html-import.ts` decides
+ * whether an element's class can become the fence word of a rebuilt container,
+ * and the answer has to be the writer's rather than a second copy that drifts
+ * from it (markup-carve/carve-js#1316).
+ */
+export function isContainerKind(text: string): boolean {
+  return /^[A-Za-z_][\w-]*$/.test(text)
+}
+
+/**
  * Whether a name can be written as a BOOLEAN attribute - a bare word with no
  * value. Narrower than `isAttrIdentifier` by exactly one character: a leading
  * `_` is legal in an id, a class and a key, and refused here, because `{_x_}`
