@@ -402,6 +402,19 @@ function cleanup(text: string): string {
 /**
  * Convert BBCode markup to Carve markup.
  *
+ * A U+0000 IN THE INPUT IS REPLACED BY U+FFFD, before anything reads the text.
+ * An importer is the same boundary as an ingest, and PART 12 section 21 says so
+ * as a SHOULD rather than a MUST because the format being read may have a rule
+ * of its own - BBCode has none, so Carve's applies. The Markdown importer
+ * already does this, following CommonMark 2.3 (carve-js#1291); this one passed
+ * the raw byte straight through into its Carve output, which is a writer
+ * emitting a character the Carve parser replaces on read.
+ *
+ * Not the same act as picking the stash key (carve-js#1290): a picked run is
+ * drawn from characters the input MAY legitimately carry, so it needs a scan
+ * and a refusal when the private-use area is full. NUL is not a character this
+ * converter may emit at all.
+ *
  * @throws {BbcodeInputTooLargeError} when the input exceeds the length cap.
  * @throws {BbcodeSentinelSpaceExhaustedError} when the input leaves no
  *   private-use run free for the stash key.
@@ -411,7 +424,7 @@ export function bbcodeToCarve(bbcode: string): string {
     throw new BbcodeInputTooLargeError(bbcode.length)
   }
 
-  let text = bbcode.replace(/\r\n?/g, '\n')
+  let text = bbcode.replace(/\0/g, '\ufffd').replace(/\r\n?/g, '\n')
   text = escapePlainBbcodeText(text)
   text = convertLinks(text)
   text = convertImages(text)
