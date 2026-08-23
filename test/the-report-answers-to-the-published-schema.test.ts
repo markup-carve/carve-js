@@ -76,11 +76,44 @@ function violations(value: unknown, node: JsonSchema, path = '$'): string[] {
 
 const schemaCodes = schema.properties!.diagnostics!.items!.properties!.code!.enum as string[]
 
+/**
+ * Codes this engine has DELIBERATELY moved PAST the pinned schema on.
+ *
+ * The same shape `corpus.test.ts`'s `AHEAD_OF_PIN` uses, and it fails in both
+ * directions: the code must be absent from the PINNED enum, so the entry goes
+ * out with the bump that catches the pin up rather than rotting, and the set
+ * comparison below still holds once it is discounted.
+ *
+ * A code is only ever added here when the SPEC has already ruled it - never to
+ * let this engine publish a code the format does not name.
+ */
+const AHEAD_OF_PIN: ReadonlyArray<{ code: string; reason: string }> = [
+  {
+    code: 'structure-split',
+    // markup-carve/carve#1636, landed in the spec as `structure-split` in
+    // `resources/html-import-schema.json`. The pinned spec here predates it.
+    reason: 'one source structure written as more than one, ruled in markup-carve/carve#1636',
+  },
+]
+
 describe('the HTML import report answers to the published schema', () => {
   it('publishes exactly the diagnostic codes the schema does', () => {
+    const ahead = new Set(AHEAD_OF_PIN.map((entry) => entry.code))
     // Sorted, because the two lists are sets and their orders are each
     // document's own business.
-    expect([...HTML_IMPORT_DIAGNOSTIC_CODES].sort()).toEqual([...schemaCodes].sort())
+    expect([...HTML_IMPORT_DIAGNOSTIC_CODES].filter((code) => !ahead.has(code)).sort())
+      .toEqual([...schemaCodes].sort())
+  })
+
+  it('is ahead of the pinned schema only where it says it is', () => {
+    for (const { code, reason } of AHEAD_OF_PIN) {
+      // The staleness half: once the pin moves the schema names the code, and
+      // the entry has to be deleted in the same commit.
+      expect(schemaCodes, `${code} is in the pinned schema now: delete its AHEAD_OF_PIN entry (${reason})`)
+        .not.toContain(code)
+      // And the code must actually be published, or the entry excuses nothing.
+      expect([...HTML_IMPORT_DIAGNOSTIC_CODES]).toContain(code)
+    }
   })
 
   it('carries the code the spec added for an encoding the source never declared', () => {
