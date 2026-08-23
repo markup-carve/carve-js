@@ -82,13 +82,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   needs no migration.
 - **A table cell's alignment run is horizontal-first** (#1219). Reverse-order pairs such as `^<`, `v>` and `~>` stay literal cell content instead of being normalized silently.
 - **A vertical table-cell marker requires a horizontal partner.** Lone `^` and `v` prefixes remain visible content; paired two-axis runs are unchanged.
-- **Common Tier-1 documents render through a borrowed HTML layout** (#1247). `carveToHtml` probes a conservative fast path before allocating an AST; on the shared 48 KiB Tier-1 comparison document the render time drops from about 23.6 ms to 4.7 ms locally. Anything the probe does not accept takes the ordinary path unchanged.
+- **Common Tier-1 documents render through a borrowed HTML layout** (#1247). `carveToHtml` probes a conservative fast path first, and an accepted document renders from borrowed source slices without constructing the AST at all. Anything the probe does not accept falls back for the whole document before any output is published, and every accepted corpus document is rendered again through the authoritative pipeline and must come back byte-identical.
 - **Document IDs are carried through conversion instead of rebuilt** (#1239), removing one full AST traversal from the source-to-HTML path. Public `parse` / `resolve` / `renderHtml` composition is unchanged.
-- **Core inline parsing skips punctuation dispatch for ordinary prose runs.**
-  With no extension matcher active, consecutive ASCII letters, digits and
-  horizontal whitespace are appended together instead of probing smart
-  typography, emphasis and every other inline recognizer byte by byte. The
-  shared 49 KiB Tier-1 benchmark improves by about 25% locally.
+- **Core inline parsing skips punctuation dispatch for ordinary prose runs**
+  (#1235). With no extension matcher active, consecutive ASCII letters, digits
+  and horizontal whitespace are appended together instead of probing smart
+  typography, emphasis and every other inline recognizer byte by byte. A
+  profile of the shared 49 KiB Tier-1 benchmark put those recognizers at the
+  top of self time, called once per character on prose that can open none of
+  them; a run now costs one dispatch instead of one per byte.
 
 - **The Prettier plugin and the published pre-commit hooks claim `.crv` only**
   (#1269). **BREAKING for a `.carve` file**: the spec names one Carve
