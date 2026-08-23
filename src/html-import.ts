@@ -175,6 +175,90 @@ function needsSeparator(before: InlineNode[], after: InlineNode[]): boolean {
   return true
 }
 
+/**
+ * WHAT A CARVE LINE DROPS, THE IMPORTER MUST NOT WRITE (`docs/html-import.md`:
+ * "an importer emits the source `carve fmt` emits").
+ *
+ * HTML collapses a run of whitespace and then ignores it entirely at the edges
+ * of a block and around a hard break; Carve's parser does the same, dropping
+ * the indentation of a continuation line and the padding of a table cell. So
+ * the two agree about the DOCUMENT and disagree only about the bytes - which is
+ * exactly the disagreement the fixed-point rule exists to catch, because the
+ * writer, handed the tree that whitespace produced, writes the space back out
+ * and then removes it on the next pass.
+ *
+ * Measured over the 1370-document render corpus, the surviving space was ONE
+ * root cause wearing four faces: a hard break whose next line began with it, a
+ * padded table cell, a caption whose separator became a run, and a lazy
+ * continuation carried one column too far. Every one of them is a text run
+ * holding a space at a boundary where the re-parse does not keep it.
+ */
+function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean {
+  if (node === undefined || node.type !== 'text') return false
+  // NOT the whitespace class: JavaScript counts U+00A0 as whitespace and a
+  // non-breaking space is CONTENT - it is the one character here whose whole
+  // point is that the renderer does not collapse it.
+  return (side === 'start' ? /^[ 	]/ : /[ 	]$/).test(node.value)
+}
+
+/**
+ * A line's leading whitespace, dropped after every hard break.
+ *
+ * Applies at EVERY level rather than only at a block's edges: a break inside a
+ * `<strong>` still ends a line, and the text that follows it may sit in the
+ * same element or in the parent, so the test asks what the previous node ENDS
+ * with rather than what it is.
+ */
+function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
+  const out: InlineNode[] = []
+  for (const node of nodes) {
+    if (node.type === 'text' && endsWithHardBreak(out.at(-1))) {
+      const value = node.value.replace(/^[ 	]+/, '')
+      if (value === '') continue
+      out.push({ ...node, value })
+      continue
+    }
+    out.push(node)
+  }
+
+  return out
+}
+
+function endsWithHardBreak(node: InlineNode | undefined): boolean {
+  if (node === undefined) return false
+  if (node.type === 'hard_break') return true
+  const children = (node as { children?: InlineNode[] }).children
+  if (children === undefined || children.length === 0) return false
+
+  return endsWithHardBreak(children.at(-1))
+}
+
+/**
+ * The whitespace at the edges of a BLOCK's inline content, dropped.
+ *
+ * Only at a block boundary, never around an inline element: `a <em> b </em>c`
+ * renders with the space between the words, so trimming inside the `<em>`
+ * would join them. The caller says which it is - `inlines()` itself cannot
+ * know, since it serves both.
+ */
+function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
+  const out = [...nodes]
+  while (textEdge(out[0], 'start')) {
+    const first = out[0] as { type: 'text'; value: string }
+    const value = first.value.replace(/^[ 	]+/, '')
+    if (value === '') out.shift()
+    else out[0] = { ...first, value }
+  }
+  while (textEdge(out.at(-1), 'end')) {
+    const last = out.at(-1) as { type: 'text'; value: string }
+    const value = last.value.replace(/[ 	]+$/, '')
+    if (value === '') out.pop()
+    else out[out.length - 1] = { ...last, value }
+  }
+
+  return out
+}
+
 const ADAPTERS = new Set<HtmlImportAdapter>([
   'generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs',
 ])
@@ -947,7 +1031,7 @@ class Importer {
      */
     let inlinePaths: string[] = []
     const flush = (): void => {
-      const children = this.inlines(inlineBuffer, parentPath, depth + 1, inlinePaths)
+      const children = this.blockInlines(inlineBuffer, parentPath, depth + 1, inlinePaths)
       inlineBuffer = []
       inlinePaths = []
       if (this.visible(children)) out.push({ type: 'paragraph', children })
@@ -981,8 +1065,8 @@ class Importer {
       return []
     }
     const attrs = this.attrs(node, path)
-    if (/^h[1-6]$/.test(tag)) return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
-    if (tag === 'p') return [{ type: 'paragraph', children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+    if (/^h[1-6]$/.test(tag)) return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+    if (tag === 'p') return [{ type: 'paragraph', children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return this.list(node, path, depth, tag === 'ol', attrs)
     if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
@@ -1083,7 +1167,7 @@ class Importer {
               titleNode,
             )
           }
-          title = this.inlines(titleNode.childNodes ?? [], titlePath, depth + 2)
+          title = this.blockInlines(titleNode.childNodes ?? [], titlePath, depth + 2)
         }
         return [
           {
@@ -1293,7 +1377,7 @@ class Importer {
           // term joins the one being opened.
           if (current === undefined || current.definitions.length > 0) current = openEntry()
           this.entryAttributes(child, childPath, 'dt')
-          const term = this.inlines(child.childNodes ?? [], childPath, level + 1)
+          const term = this.blockInlines(child.childNodes ?? [], childPath, level + 1)
           if (!this.visible(term)) {
             this.unspellable.push({
               node: child,
@@ -1439,7 +1523,7 @@ class Importer {
    */
   private captionInlines(node: P5Node, path: string, depth: number, tag: 'figcaption' | 'caption'): InlineNode[] {
     this.entryAttributes(node, path, tag, 'a caption line')
-    return this.inlines(node.childNodes ?? [], path, depth)
+    return trimBlockEdges(this.inlines(node.childNodes ?? [], path, depth))
   }
 
   private attrNames(attrs: Attrs): string[] {
@@ -1641,7 +1725,7 @@ class Importer {
       // it let a document process more nodes than the limit allows.
       this.enter(depth + 1)
       this.entryAttributes(summary, summaryPath, 'summary', 'a disclosure label')
-      title = this.inlines(summary.childNodes ?? [], summaryPath, depth + 2)
+      title = this.blockInlines(summary.childNodes ?? [], summaryPath, depth + 2)
     }
     const children = this.blocks(body, path, depth + 1, bodyPaths)
     if (title && this.visible(title) && !this.spellableTitle(title)) {
@@ -1944,7 +2028,7 @@ class Importer {
         }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
         return {
-          cell: { type: 'table_cell' as const, header: cell.tagName === 'th', children: this.inlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) },
+          cell: { type: 'table_cell' as const, header: cell.tagName === 'th', children: this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) },
           colspan,
           rowspan,
         }
@@ -2299,7 +2383,17 @@ class Importer {
       if (node.type === 'text' && last?.type === 'text') last.value += node.value
       else merged.push(node)
     }
-    return merged
+
+    return dropSpaceAfterHardBreak(merged)
+  }
+
+  /**
+   * `inlines()` for a slot that IS a block's content - a paragraph, a heading,
+   * a table cell, a caption, a term, a title - where the whitespace at the two
+   * edges is not content and the re-parse will not keep it.
+   */
+  private blockInlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): InlineNode[] {
+    return trimBlockEdges(this.inlines(nodes, parentPath, depth, paths))
   }
 
   private inline(node: P5Node, path: string, depth: number): InlineNode[] {
