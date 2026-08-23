@@ -77,6 +77,41 @@ import {
   HANDLED_MARKDOWN,
 } from './carve-escape.js'
 
+/**
+ * A code-fence opener or closer, read the way CommonMark reads one.
+ *
+ * The `.*` tail is the info string, and CommonMark 4.5 puts one rule on it that
+ * this converter used to ignore: *"If the info string comes after a backtick
+ * code fence, it may not contain any backtick characters."* So ```` ```a`b ````
+ * is a PARAGRAPH to cmark, not a code block, and a tilde fence is unaffected.
+ *
+ * Ignoring it lost bytes. The opener's info was reduced to its first token
+ * over Carve's fence-language charset, which for ```` ```foo`bar ```` is
+ * `foo` - so `` `bar `` was gone from the output with no diagnostic and no way
+ * to read it back (carve-js#1392). The other engines lose nothing here:
+ * carve-php preserves the info string verbatim, and carve-rs reads the line
+ * through pulldown-cmark, which applies this rule and hands back a paragraph.
+ *
+ * The converter's own note on the list-marker path said this reading "is asked
+ * of the whole file or not at all", which is why the predicate is shared by
+ * every place that decides whether a line is a fence rather than tightened in
+ * the one spot the loss was noticed.
+ */
+const RE_MD_FENCE_LINE = /^([ \t]{0,3})(`{3,}|~{3,})(.*)$/
+/**
+ * Whether a matched fence run and its info string open or close a fence at all.
+ *
+ * Split out so a caller that has already matched the line with its own indent
+ * rule can ask the info-string question without re-matching.
+ */
+const fenceRunIsAFence = (run: string, info: string): boolean =>
+  run[0] !== '`' || !info.includes('`')
+/** Whether LINE is a Markdown code-fence opener or closer. */
+const isMarkdownFenceLine = (line: string): boolean => {
+  const m = RE_MD_FENCE_LINE.exec(line)
+  return m !== null && fenceRunIsAFence(m[2]!, m[3]!)
+}
+
 type TagReplacer = string | ((match: string, body: string, offset: number, full: string) => string)
 
 /**
@@ -1313,7 +1348,7 @@ function continuesGfmTableBody(line: string): boolean {
   if (trimmed === '') return false
   if (/^#{1,6}([ \t]|$)/.test(trimmed)) return false
   if (trimmed.startsWith('>')) return false
-  if (/^(`{3,}|~{3,})/.test(trimmed)) return false
+  if (isMarkdownFenceLine(trimmed)) return false
   if (RE_MD_THEMATIC.test(line)) return false
   // An HTML block that can interrupt a paragraph ends the table too, and the
   // same predicate answers both: `marked` 18 closes the table at `<div>` and
@@ -1381,7 +1416,7 @@ function isParagraphRunLine(
   const line = lines[index]!
   const trimmed = line.trim()
   if (trimmed === '') return false
-  if (/^(\s{0,3})(`{3,}|~{3,})(.*)$/.test(line)) return false
+  if (isMarkdownFenceLine(line)) return false
   if (/^#{1,6}\s/.test(trimmed) || trimmed.startsWith('>')) return false
   if (RE_MD_THEMATIC.test(line) || hasFollowingSetextUnderline(lines, index)) return false
   if (startsTableHeader(lines, index) || isStandardTableRow(line)) return false
@@ -1491,14 +1526,12 @@ function restorePrefixedInlineRun(
   // them is a separate question about where a container's fence is peeled.
   //
   // DELIBERATELY the same predicate the collector above and the main loop's own
-  // fence branch use, rather than a stricter one. CommonMark says a BACKTICK
-  // fence's info string may hold no backtick, so ```` ```a`b ```` is a paragraph
-  // to cmark and a fence to this converter - but that reading is the converter's
-  // everywhere, not just here, and a stricter test in this one spot would have
-  // the two paths disagree about the same line. Asking them to agree with cmark
-  // is a question about the info string, and it is asked of the whole file or
-  // not at all.
-  const opensFence = /^[ \t]{0,3}(`{3,}|~{3,})/.test(run[0]?.text ?? '')
+  // fence branch use, rather than a stricter one - and that predicate has since
+  // been ASKED of the whole file, which is the only way this note said it could
+  // be asked: `isMarkdownFenceLine` applies CommonMark's rule that a BACKTICK
+  // fence's info string may hold no backtick, so ```` ```a`b ```` is now a
+  // paragraph here, at top level and everywhere else alike (carve-js#1392).
+  const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
     dialect,
@@ -1775,7 +1808,7 @@ function collectListInlineRun(
     if (indent < contentCol) break
 
     // Leave fenced code blocks inside list items to the main fence handler.
-    if (/^[ \t]{0,3}(`{3,}|~{3,})/.test(line.slice(contentCol))) break
+    if (isMarkdownFenceLine(line.slice(contentCol))) break
     // Same for an HTML block opening at the item's content column.
     if (interruptingHtmlBlock(line.slice(contentCol))) break
 
@@ -2138,7 +2171,7 @@ export function markdownToCarve(
       const startsBlock =
         /^#{1,6}([ \t]|$)/.test(trimmed) ||
         trimmed.startsWith('>') ||
-        /^(`{3,}|~{3,})/.test(trimmed) ||
+        isMarkdownFenceLine(trimmed) ||
         htmlBlockAt(lines, i) !== null ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)
       if (marker && /\S/.test(line.slice(marker[0].length))) {
@@ -2168,13 +2201,33 @@ export function markdownToCarve(
     // string is normalized to its first such token — keeping `c++`/`text/html`
     // intact and reducing an extended info (```js title="x") to ```js (still a
     // code block). The charset matches RE_FENCE in parse.ts, including `/`.
-    const open = !inCode ? line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/) : null
-    if (open) {
+    const open = !inCode ? RE_MD_FENCE_LINE.exec(line) : null
+    if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      const info = open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? ''
+      // A BACKTICK IN THE FIRST INFO WORD carries no language at all.
+      //
+      // The reduction is an UNANCHORED search for the first run over the
+      // charset, which is right for the shapes it was written for: a separate
+      // word (```js title="x") and a Pandoc brace (```{.python .numberLines})
+      // both reduce to a language the source really named. A backtick inside
+      // the word is neither. Truncating there does not reduce a word, it
+      // TRUNCATES one: a tilde fence's ```` foo`bar ```` came out as `foo`, a
+      // different and entirely plausible language the source never named, with
+      // the rest of the word simply gone (carve-js#1392). Dropping the word
+      // says "this language does not fit"; keeping half of it says something
+      // untrue, which is the worse of the two.
+      //
+      // A BACKTICK fence never reaches here with a backtick in its info -
+      // `fenceRunIsAFence` above reads that line as CommonMark does, as a
+      // paragraph - so this is the tilde fence, where the info string may hold
+      // one and the language it names is simply unspellable in a Carve fence.
+      const firstInfoWord = open[3]!.trim().split(/[ \t]/, 1)[0] ?? ''
+      const info = firstInfoWord.includes('`')
+        ? ''
+        : (open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? '')
       // Re-base the fence to its container's content column: strip only the
       // indentation ABOVE that column. At document level the column is 0, so a
       // 1-3 space Markdown fence dedents fully; inside a list item the fence's
