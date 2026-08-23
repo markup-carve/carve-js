@@ -151,6 +151,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An import report is ordered by the losing element's document position**
+  (markup-carve/carve#1586). The list came out in the order this importer's walk
+  constructed the rows in, so a table losing something on both its `<caption>`
+  and a cell reported the cell first, and a footnote definition the adapter pass
+  imports before the body reported before it. carve-php already answered in
+  document order.
+
 - **A definition term's span ends at its last placed child, so it drops the
   trailing whitespace its line drops** (#1349, PART 12 §4 and PART 2's NO
   TRAILING WHITESPACE clause). The term took the extent of the LINES it
