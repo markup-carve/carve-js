@@ -1125,8 +1125,49 @@ function astJsonDepth(
 }
 
 /**
+ * One string value of an ingested payload, normalized the way the parse
+ * boundary normalizes the same characters in source text.
+ *
+ * TWO CHARACTERS, ONE PASS, and both for the same reason: the AST is a SECOND
+ * DOOR into the same renderers, and a character the source door rewrites before
+ * the first line is read must not arrive through this one still spelled the way
+ * the source door refuses to keep it.
+ *
+ * U+0000 becomes U+FFFD. See the clause discussion on the walk below.
+ *
+ * A CARRIAGE RETURN BECOMES A LINE FEED, and a CRLF pair becomes one
+ * (markup-carve/carve-js#1352, ruled on the ticket). PART 0 splits input on
+ * `'\n'`, `'\r\n'` or a lone `'\r'` and `newline = '\n' | '\r\n' | '\r'` - all
+ * three engines have agreed since markup-carve/carve#872 - so NO SOURCE TEXT
+ * CAN PRODUCE A VALUE HOLDING A LITERAL CR. It arrives only by constructing a
+ * tree or by ingesting one, and through this door it arrives routinely, because
+ * a payload built from a CRLF document carries the pair in every multi-line
+ * value it has.
+ *
+ * COLLAPSING IS LOSSLESS, which is what makes normalizing right here where
+ * refusing was right for the shapes in markup-carve/carve-js#1344. A carriage
+ * return already means exactly "line terminator" everywhere else in the
+ * language, so nothing about the value survives the collapse except its
+ * spelling; #1344's subject is whitespace SHAPES - a run at a line edge, a pad
+ * before a terminator - for which no normalization preserves intent, so there
+ * the only honest answer was to refuse. Refusing a CR would also turn away
+ * CRLF-sourced input that is completely ordinary in provenance, a cost #1344
+ * never had to pay.
+ *
+ * THE WRITER IS THEREFORE NEVER HANDED ONE from this door, which is why the
+ * normalization lives here and not there: a constructed tree and an ingested
+ * one reach `renderCarve` in the same shape, rather than the writer holding a
+ * rule that only one of its two callers can trip.
+ */
+function normalizeIngestedValue(text: string): string {
+  const denulled = text.includes('\0') ? text.replace(/\0/g, '\ufffd') : text
+  return denulled.includes('\r') ? denulled.replace(/\r\n?/g, '\n') : denulled
+}
+
+/**
  * Replace every U+0000 with U+FFFD in every string value of an ingested
- * payload, before anything reads one of them (PART 12 section 21).
+ * payload, before anything reads one of them (PART 12 section 21), and collapse
+ * every carriage return to a line feed alongside it.
  *
  * THE PARSE BOUNDARY ALREADY DOES THIS. `normalizeSource` in `parse.ts`
  * replaces an authored NUL before the first line of a document is read, and
@@ -1161,19 +1202,24 @@ function astJsonDepth(
  * cannot arrive; carve-rs keeps its NUL-wrapped footnote placement marker for
  * the same reason.
  *
- * STRUCTURALLY SHARED, like `definitionListsToWire`: a branch with no NUL in it
- * comes back as the SAME object, so a payload without the character - every
- * realistic one - pays a walk and no copy, and the caller's tree is never
+ * STRUCTURALLY SHARED, like `definitionListsToWire`: a branch with neither
+ * character in it comes back as the SAME object, so a payload without them -
+ * every realistic one - pays a walk and no copy, and the caller's tree is never
  * mutated either way.
+ *
+ * ONE WALK FOR BOTH CHARACTERS. They are two rules, and `normalizeIngestedValue`
+ * states each on its own, but a second full traversal of the payload would be
+ * paid by every ingest to answer a question the first traversal already had the
+ * string in hand for.
  */
-function replaceNulValues<T>(node: T): T {
+function normalizeIngestedValues<T>(node: T): T {
   if (typeof node === 'string') {
-    return (node.includes('\0') ? node.replace(/\0/g, '\ufffd') : node) as T
+    return normalizeIngestedValue(node) as T
   }
   if (Array.isArray(node)) {
     let changed = false
     const mapped = node.map((child) => {
-      const next = replaceNulValues(child)
+      const next = normalizeIngestedValues(child)
       if (next !== child) changed = true
       return next
     })
@@ -1185,7 +1231,7 @@ function replaceNulValues<T>(node: T): T {
   let out: Record<string, unknown> | undefined
   for (const key of Object.keys(record)) {
     const value = ownValue(record, key)
-    const next = replaceNulValues(value)
+    const next = normalizeIngestedValues(value)
     if (next === value) continue
     // OWN-PROPERTY WRITE, for the reason `own-property.ts` gives: a payload
     // naming `__proto__` reaches the prototype setter through plain assignment.
@@ -1245,7 +1291,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // throws at an unknown field WITHOUT descending into it, so a payload naming
   // one over a deeply nested object would be walked in full here before the
   // cheap refusal ever ran.
-  const tree = replaceNulValues(json)
+  const tree = normalizeIngestedValues(json)
 
   const children: BlockNode[] = []
   const footnoteDefs: Record<string, BlockNode[]> = {}
