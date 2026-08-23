@@ -143,6 +143,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A non-`li` child of a list keeps its content and is reported** (#1340). The
+  HTML importer filtered a `<ul>` or `<ol>` down to its `<li>` children and
+  walked only those, so `<ul><div id="stray">z</div><li>a</li></ul>` imported as
+  one item with the text `z` gone and an EMPTY report. Every non-item child now
+  goes through the ordinary block walk and is emitted ahead of the list, keeping
+  its own element and attributes, with an `element-unwrapped` warning naming
+  where it sat. A `<script>` in the same position is still dropped and now says
+  so. Matches markup-carve/carve-rs#1266.
+
 - **A block below a sub-list in a tight item stays in the outer item**
   (markup-carve/pandoc-carve#135). PART 9 §17 L3's `+` marker was written for a
   paragraph below a PARAGRAPH, and three other siblings leave a paragraph open

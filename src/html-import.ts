@@ -890,7 +890,7 @@ class Importer {
     if (/^h[1-6]$/.test(tag)) return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'p') return [{ type: 'paragraph', children: this.inlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
-    if (tag === 'ul' || tag === 'ol') return [this.list(node, path, depth, tag === 'ol', attrs)]
+    if (tag === 'ul' || tag === 'ol') return this.list(node, path, depth, tag === 'ol', attrs)
     if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
     if (tag === 'pre') {
       const code = node.childNodes?.find((n) => n.tagName === 'code')
@@ -1020,8 +1020,81 @@ class Importer {
     return this.blocks(node.childNodes ?? [], path, depth + 1)
   }
 
-  private list(node: P5Node, path: string, depth: number, ordered: boolean, attrs?: Attrs): List {
-    const listItems = (node.childNodes ?? []).filter((n) => n.tagName === 'li')
+  /**
+   * A NON-`li` CHILD IS NOT DISCARDED, and not discarded in silence either
+   * (carve-js#1340). Filtering the children down to `<li>` and walking only
+   * those took the WHOLE of anything else the list carried:
+   * `<ul><div id="stray">z</div><li>a</li></ul>` came back as one item and an
+   * EMPTY report, so the text `z` left the document with nothing anywhere
+   * saying it had.
+   *
+   * HTML5 does not allow the shape. A sliced-up editor export produces it
+   * anyway, and that is the input an importer exists for.
+   *
+   * The content is emitted as blocks AHEAD OF THE LIST: it keeps every word
+   * and stays valid Carve, where a list holding a non-item has no Carve
+   * spelling at all. The stray child goes through the ORDINARY block walk
+   * rather than being unwrapped by hand, so it keeps its own element and its
+   * attributes too - a `<div id="stray">` comes back as a Carve div still
+   * carrying the id. Unwrapping it, the way a `<dd>` with no `<dt>` has to,
+   * would drop the id for no reason: a `<dd>` has no standalone spelling and a
+   * div has one, so the loss the `<dd>` is forced into is not forced here.
+   *
+   * `element-unwrapped` is the code: a structural note about the INPUT that
+   * loses no meaning, which is what the vocabulary says that code is for. No
+   * engine spells "moved", and inventing a code for it is a three-engine
+   * decision rather than this defect's.
+   *
+   * Delegating to `blocks()` also settles the kinds that are not elements at
+   * all: a margin between pretty-printed items is blank text and produces
+   * nothing, a comment produces nothing, bare text directly inside the list is
+   * wrapped in the paragraph it needs, and an ACTIVE element (`script`,
+   * `style`, `template`, `noscript`) keeps the `element-dropped` every other
+   * site gives it. That drop was a SECOND silence the filtered walk carried:
+   * the element never reached the arm that reports it, so a `<script>` in a
+   * list was dropped with no diagnostic at all. It gets no position note
+   * beside the drop - saying it was kept ahead of the list would tell the
+   * reader a script survived somewhere.
+   *
+   * The paths are the child's OWN indices among the LIST's children, so the
+   * report points where the node sits and not where it sits in the filtered
+   * array (PART 12 §16).
+   */
+  private list(node: P5Node, path: string, depth: number, ordered: boolean, attrs?: Attrs): BlockNode[] {
+    const listItems: P5Node[] = []
+    const stray: P5Node[] = []
+    const strayPaths: string[] = []
+    ;(node.childNodes ?? []).forEach((child, index) => {
+      if (child.tagName === 'li') {
+        listItems.push(child)
+        return
+      }
+      const childPath = this.childPath(path, child, index)
+      const strayTag = child.tagName
+      if (strayTag !== undefined) {
+        if (!ACTIVE.has(strayTag)) {
+          this.add(
+            'element-unwrapped',
+            `A <${strayTag}> inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as blocks ahead of the list`,
+            'warning',
+            childPath,
+          )
+        }
+      } else if (child.nodeName !== '#comment' && (child.value ?? '').trim() !== '') {
+        this.add(
+          'element-unwrapped',
+          `Text directly inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as a paragraph ahead of the list`,
+          'warning',
+          childPath,
+        )
+      }
+      stray.push(child)
+      strayPaths.push(childPath)
+    })
+    // The strays are walked BEFORE the items, so their diagnostics and their
+    // share of the node budget land in document order rather than behind every
+    // item the list happens to hold.
+    const before = stray.length ? this.blocks(stray, path, depth + 1, strayPaths) : []
     const items = listItems.map((li, i) => {
       const liPath = `${path}/li[${i + 1}]`
       const input = li.childNodes?.find((n) => n.tagName === 'input' && this.attr(n, 'type') === 'checkbox')
@@ -1052,7 +1125,8 @@ class Importer {
     // either.
     const tight = !listItems.some((li) => (li.childNodes ?? []).some((child) => child.tagName === 'p'))
     const start = this.listStart(node, path, ordered)
-    return { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
+    const list: List = { type: 'list', ordered, tight, items, ...(start !== undefined && start !== 1 ? { start } : {}), ...this.olType(node, path, ordered, items.length, start ?? 1), ...(attrs ? { attrs } : {}) }
+    return [...before, list]
   }
 
   /**
