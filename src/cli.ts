@@ -50,6 +50,7 @@ import {
   htmlToCarve,
   markdownToCarve,
   bbcodeToCarve,
+  djotToCarve,
   type HtmlImportAdapter,
   type HtmlImportMode,
 } from './index.js'
@@ -85,7 +86,7 @@ Usage:
   carve portability [files...]     Report where a document reads differently
                                    in Djot (needs @djot/djot)
   carve migrate --from FORMAT [options] [file]
-                                   Convert html, markdown (md) or bbcode to
+                                   Convert html, markdown (md), djot or bbcode to
                                    Carve. --mode, --adapter, --report and
                                    --check-loss are html's alone: it is the
                                    only importer that drops anything
@@ -210,10 +211,10 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
   if (values.help) { io.write(HELP); return 0 }
   const from = values.from
   if (from === undefined) {
-    io.writeErr('carve migrate: --from html, markdown or bbcode is required\n')
+    io.writeErr('carve migrate: --from html, markdown, djot or bbcode is required\n')
     return 2
   }
-  if (!['html', 'markdown', 'md', 'bbcode'].includes(from)) {
+  if (!['html', 'markdown', 'md', 'djot', 'bbcode'].includes(from)) {
     io.writeErr(`carve migrate: unknown source format ${from}\n`)
     return 2
   }
@@ -234,7 +235,7 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
   try { source = positionals[0] ? io.readFile(positionals[0]) : await io.readStdin() }
   catch { io.writeErr(`carve migrate: cannot read ${positionals[0]}\n`); return 2 }
   if (from !== 'html') {
-    io.write(from === 'bbcode' ? bbcodeToCarve(source) : markdownToCarve(source))
+    io.write(from === 'bbcode' ? bbcodeToCarve(source) : from === 'djot' ? djotToCarve(source) : markdownToCarve(source))
     return 0
   }
   const result = htmlToCarve(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })

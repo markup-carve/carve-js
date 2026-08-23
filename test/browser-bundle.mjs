@@ -125,6 +125,7 @@ const PROBES = {
   renderAnsi: (api) => api.renderAnsi(api.resolve(api.parse(PROBE))),
   lintCarve: (api) => api.lintCarve(PROBE),
   markdownToCarve: (api) => api.markdownToCarve('# md\n\n**b** and _i_\n'),
+  djotToCarve: (api) => api.djotToCarve('_i_ and ~n~\n'),
   bbcodeToCarve: (api) => api.bbcodeToCarve('[b]b[/b] and [i]i[/i]'),
   htmlToCarve: (api) => api.htmlToCarve('<h1>h</h1><p><em>i</em></p>'),
   parse: (api) => api.parse(PROBE),

@@ -309,7 +309,7 @@ const blanks = (s: string) => s.replace(/[^\n]/g, ' ')
  * collisions inside code are not real mis-renders, so the scanner simply
  * never sees them.
  */
-function maskCode(src: string): string {
+export function maskDjotCodeAndDestinations(src: string): string {
   // Stage 1: fenced blocks, line by line.
   const lines = src.split('\n')
   let fence: { ch: string; len: number } | null = null
@@ -469,7 +469,7 @@ function scanHits(source: string): ScanHit[] {
   // `masked`, so the captured content for a suggestion is sliced from
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
-  const masked = maskCode(norm)
+  const masked = maskDjotCodeAndDestinations(norm)
 
   // index -> {line, column} (both 1-based), via newline prefix sums.
   const nlAt: number[] = []
