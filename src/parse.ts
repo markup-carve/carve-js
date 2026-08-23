@@ -9048,10 +9048,58 @@ function parseList(lexer: Lexer): List {
     // blank inside that code loosened the item - the divergence from what the
     // block parser does with the same lines. Raised by codex review.
     const closers = buildCloserIndex(fenceLines)
-    // Fences currently open, innermost last. A code/raw or comment fence makes
-    // its body OPAQUE, so while one is innermost only its own closer is read.
-    const open: Array<{ kind: 'code' | 'comment' | 'colon'; close: RegExp | null; len: number }> = []
-    let openIdx = -1
+    // THE ITEM'S LEAD CONTAINER HIDES NOTHING (markup-carve/carve#1602). A
+    // `:::` container that IS the item's first block is the item's own body:
+    // the blank line between two of its blocks is the only blank line the item
+    // has, and §17 L1 reads it. That is already what happens when the closer is
+    // MISSING - an unterminated opener latches nothing below, so the blank is
+    // seen and the list is loose - and writing the closer is a spelling change,
+    // so it must not move the tightness. Marking the range made
+    //
+    //     - ::: d
+    //       b
+    //
+    //       tail
+    //
+    // loose and the same document with `  :::` written TIGHT, which is
+    // `parse(fmt(x)) != parse(x)` - PART 11 §1 - on the one corpus document
+    // where the writer supplies a missing closer, corpus
+    // `362-an-unterminated-container-does-not-extend-the-item-past-a-blank-line-3`.
+    // The maintainer ruled the two converge on the reading the SOURCE already
+    // gets, which is loose.
+    //
+    // A container the item ATTACHES below a lead block keeps its interior: a
+    // blank between two of ITS blocks is the container's, not the item's, and
+    // corpus `279-a-boundary-line-inside-an-open-fence-does-not-end-the-
+    // container-10` pins that reading. So the lead test is what separates them,
+    // not the presence of a closer.
+    //
+    // STILL ONE MARKED RANGE PER OUTERMOST OPAQUE FENCE, so the pass stays
+    // linear. `openOpaque` counts the opaque fences currently open, and only
+    // the transition through zero writes a range: nesting a hundred containers
+    // inside an item marks the outermost span once rather than once per level,
+    // which is the same bound the openIdx it replaces had.
+    const firstContentIdx = fenceLines.findIndex((l) => l.trim() !== '')
+    const open: Array<{
+      kind: 'code' | 'comment' | 'colon'
+      close: RegExp | null
+      len: number
+      opaque: boolean
+    }> = []
+    let openOpaque = 0
+    let opaqueIdx = -1
+    const enter = (entry: { opaque: boolean }, k: number): void => {
+      if (!entry.opaque) return
+      if (openOpaque === 0) opaqueIdx = k
+      openOpaque++
+    }
+    const leave = (entry: { opaque: boolean }, k: number): void => {
+      if (!entry.opaque) return
+      openOpaque--
+      if (openOpaque > 0) return
+      for (let i = opaqueIdx; i <= k; i++) inFence[i] = true
+      opaqueIdx = -1
+    }
     for (let k = 0; k < fenceLines.length; k++) {
       const line = fenceLines[k]!
       const inner = open[open.length - 1]
@@ -9060,10 +9108,7 @@ function parseList(lexer: Lexer): List {
           inner.kind === 'code' ? inner.close!.test(line) : commentFenceRun(line) === inner.len
         if (!closed) continue
         open.pop()
-        if (open.length === 0) {
-          for (let i = openIdx; i <= k; i++) inFence[i] = true
-          openIdx = -1
-        }
+        leave(inner, k)
         continue
       }
       if (inner !== undefined) {
@@ -9074,12 +9119,11 @@ function parseList(lexer: Lexer): List {
           const len = close[1]!.length
           if (len === inner.len) {
             open.pop()
-            if (open.length === 0) {
-              for (let i = openIdx; i <= k; i++) inFence[i] = true
-              openIdx = -1
-            }
+            leave(inner, k)
           } else {
-            open.push({ kind: 'colon', close: null, len })
+            const nested = { kind: 'colon' as const, close: null, len, opaque: true }
+            open.push(nested)
+            enter(nested, k)
           }
           continue
         }
@@ -9104,8 +9148,12 @@ function parseList(lexer: Lexer): List {
         }
       }
       if (opened === null) continue
-      if (open.length === 0) openIdx = k
-      open.push(opened)
+      const entry = {
+        ...opened,
+        opaque: !(opened.kind === 'colon' && k === firstContentIdx),
+      }
+      open.push(entry)
+      enter(entry, k)
     }
     // A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
     // all (markup-carve/carve#1363, PART 1 S4). A blank between two lines of the

@@ -53,6 +53,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Writing a container's missing closer no longer changes the list's tightness** (#1370, ruling markup-carve/carve#1602, PART 11 §1). A `:::` container that IS a list item's first block is the item's own body, so the blank line between two of its blocks loosens the item whether or not the closer is written - the closed spelling read tight where the identical unclosed source read loose. A container the item attaches below a lead block keeps its interior, unchanged. One spec-corpus document changes tree, none changes HTML.
 - **The canonical writer keeps a heading's leading tab** (#1356, markup-carve/carve#1581, PART 11 §1). A heading's marker separator is ASCII spaces only, so a tab there is content the parser already read - the writer trimmed it off with the separator run, and `## <TAB>x` came back `## x`. The separator's spaces are still dropped, as is the trailing run PART 2 discards.
 - **An import report is ordered by the losing element's document position** (markup-carve/carve#1586). The list came out in the order the importer's walk built the rows, so a table losing something on both its `<caption>` and a cell reported the cell first. carve-php already answered in document order.
 - **A definition term's span ends at its last placed child** (#1349, PART 12 §4 and PART 2's NO TRAILING WHITESPACE clause), so it drops the trailing whitespace its line drops. Two spec-corpus documents publish a shorter `definition_term` span.

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import { carveToAstJson, carveToCarve, carveToHtml, parse } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -19,6 +19,84 @@ const cases = readdirSync(corpusDir)
   .filter((f) => f.endsWith('.crv'))
   .map((f) => basename(f, '.crv'))
   .sort()
+
+/**
+ * The comparable form of a published tree, for PART 11 §1's `parse(fmt(x)) ==
+ * parse(x)`.
+ *
+ * §1 is equality of DOCUMENTS, not of JSON, so four differences that are not
+ * differences of document are taken out first:
+ *
+ *  - `pos` and `srcByteLength`, which say where a node was written. The writer
+ *    is allowed to move a node - that is most of what it does - and a §1 that
+ *    read a moved node as a changed one could never hold for any writer.
+ *  - `escaped_text` vs `text`. §1 has to forgive escaping or it contradicts
+ *    §2, which requires the writer to ADD an escape wherever omitting it would
+ *    change the re-parse. PART 11 §2's own "only if" half is what audits the
+ *    escapes, and carve-php measures it separately for that reason.
+ *  - ADJACENT TEXT RUNS, merged. One run or two is a slot-boundary artifact of
+ *    where the escape fell, not a different document, and the renderers already
+ *    coalesce them.
+ *  - OBJECT KEY ORDER. JSON objects are unordered; the parser fills `attrs`
+ *    slot by slot, so `{.c}{#i}` and its merged `{.c #i}` arrive with `id` and
+ *    `classes` inserted in different orders while holding the same values. The
+ *    author-visible order is carried by `attrs.order`, which compares
+ *    verbatim.
+ *
+ * NOT INTO `attrs`. It holds named slots rather than nodes, and a `keyValues`
+ * entry can be spelled `type`, `pos` or `srcByteLength` - descending would
+ * rename or delete an ATTRIBUTE, and the order of `keyValues` and `classes` is
+ * what the renderer emits. Its own four slot names are a fixed schema, so
+ * sorting THOSE is safe; the values below them compare exactly as they came.
+ * carve-php's `CarveFmtCorpusTest::canonical()` states the same exclusion.
+ */
+function canonicalTree(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const out: unknown[] = []
+    for (const raw of value) {
+      const child = canonicalTree(raw)
+      const last = out.length > 0 ? out[out.length - 1] : null
+      if (isTextRun(child) && isTextRun(last)) {
+        last.value += child.value
+        continue
+      }
+      out.push(child)
+    }
+    return out
+  }
+  if (value === null || typeof value !== 'object') return value
+
+  const src: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+  delete src.srcByteLength
+  delete src.pos
+  if (src.type === 'escaped_text') src.type = 'text'
+
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(src).sort()) {
+    out[key] = key === 'attrs' ? sortedAttrSlots(src[key]) : canonicalTree(src[key])
+  }
+  return out
+}
+
+function isTextRun(node: unknown): node is { type: 'text'; value: string } {
+  if (node === null || typeof node !== 'object' || Array.isArray(node)) return false
+  const keys = Object.keys(node)
+  return (
+    keys.length === 2 &&
+    keys.includes('type') &&
+    keys.includes('value') &&
+    (node as { type: unknown }).type === 'text'
+  )
+}
+
+function sortedAttrSlots(attrs: unknown): unknown {
+  if (attrs === null || typeof attrs !== 'object' || Array.isArray(attrs)) return attrs
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(attrs).sort()) out[key] = (attrs as Record<string, unknown>)[key]
+  return out
+}
+
+const tree = (source: string): string => JSON.stringify(canonicalTree(carveToAstJson(source)))
 
 describe('renderCarve corpus', () => {
   for (const name of cases) {
@@ -37,6 +115,22 @@ describe('renderCarve corpus', () => {
       const formatted = carveToCarve(source)
       expect(() => parse(formatted)).not.toThrow()
       expect(() => parse(carveToCarve(formatted))).not.toThrow()
+    })
+
+    // PART 11 §1's OWN invariant, and the one the three above cannot see. §1a
+    // says it in as many words: `to_html(fmt(x)) == to_html(x)` is "strictly
+    // weaker", and "a writer satisfying only the HTML form still fails this
+    // section". Two spellings that render alike are still two spellings - a
+    // list whose tightness moves is invisible to the HTML whenever the item's
+    // blocks sit inside a container, because a tight list's paragraph
+    // suppression never reaches inside one.
+    //
+    // NO ALLOWLIST, deliberately. carve-php has asserted this over the same
+    // 1370 documents with none (`CarveFmtCorpusTest::
+    // testTheFormattedDocumentParsesToTheSameTree`), and an entry here would
+    // silence the comparison whether or not the engine passed it.
+    it(`${name}: parses to the same tree`, () => {
+      expect(tree(carveToCarve(source))).toBe(tree(source))
     })
   }
 })
