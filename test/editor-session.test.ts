@@ -46,4 +46,24 @@ describe('editor session', () => {
       expect(update.ast).toEqual(fresh(update.source))
     }
   })
+
+  it('maps authored syntax tokens instead of making adapters rediscover them', () => {
+    const source = '{#hero .wide}\n### Head\n\n- item\n\n[label](https://example.com)\n\n|= A |\n| x |\n\n```js\ncode\n```\n'
+    const nodes = createEditorSession(source).snapshot().nodes
+    const heading = nodes.find((node) => node.type === 'heading')!
+    expect(heading.tokens).toEqual([
+      { role: 'attribute', start: 0, end: 13 },
+      { role: 'block-marker', start: 14, end: 18 },
+    ])
+    expect(nodes.find((node) => node.type === 'list_item')!.tokens).toEqual([
+      { role: 'block-marker', start: 24, end: 26 },
+    ])
+    expect(nodes.find((node) => node.type === 'link')!.tokens.map((token) => [token.role, source.slice(token.start, token.end)])).toEqual([
+      ['open-marker', '['], ['close-marker', ']('], ['destination', 'https://example.com'], ['close-marker', ')'],
+    ])
+    expect(nodes.filter((node) => node.type === 'table_row').flatMap((node) => node.tokens)).toHaveLength(4)
+    expect(nodes.find((node) => node.type === 'code_block')!.tokens.map((token) => [token.role, source.slice(token.start, token.end)])).toEqual([
+      ['fence-open', '```js\n'], ['fence-close', '\n```'],
+    ])
+  })
 })

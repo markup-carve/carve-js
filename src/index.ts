@@ -76,6 +76,7 @@ export {
   type EditorRange,
   type EditorSession,
   type EditorSnapshot,
+  type EditorToken,
   type EditorUpdate,
 } from './editor-session.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
