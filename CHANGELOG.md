@@ -139,6 +139,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A block below a sub-list in a tight item stays in the outer item**
+  (markup-carve/pandoc-carve#135). PART 9 §17 L3's `+` marker was written for a
+  paragraph below a PARAGRAPH, and three other siblings leave a paragraph open
+  below them: a sub-list, whose marker column IS the hosting item's content
+  column, a blockquote, which takes any non-blank line below it, and a
+  definition list. `- - x` / `  Z` came back as an inner item holding `x Z`, so
+  the outer item's second block was gone and the reader saw one level less of
+  content. The marker now asks the container what it ends in, so an emptied last
+  item and a quote closing on a heading still cost nothing. Written source
+  changes for these shapes only.
+
 - **A verbatim span touching a fence run no longer gains a trailing space**
   (#1338). A code fence whose payload held a WIDER run left an unclosed
   verbatim opener, and the writer spelled it closed with a padding pair whose

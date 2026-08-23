@@ -1406,6 +1406,59 @@ function boundaryTag(): string {
 const LEAVES_A_PARAGRAPH_OPEN = new Set(['paragraph', 'image', 'figure', 'definition_list'])
 
 /**
+ * Does an open paragraph inside `previous` reach DOWN to the next line written
+ * at the same column?
+ *
+ * `LEAVES_A_PARAGRAPH_OPEN` answers this for a block that ends in a bare inline
+ * run of its OWN. Two kinds end in one that is not theirs, and both were missed
+ * because the fold test below asked only whether the sibling above was itself a
+ * `paragraph`:
+ *
+ *   - A SUB-LIST hands the question to its LAST item: a line at the sub-list's
+ *     marker column - which IS the hosting item's content column - is read
+ *     against whatever that item left open. `- - x` / `  Z` came back as an
+ *     inner item holding `x Z`.
+ *   - A BLOCKQUOTE hands it to its last child the same way. `- > q` / `  Z`
+ *     came back as one quote holding `q Z`, and the item's second block was
+ *     gone.
+ *
+ * NEITHER ANSWERS `true` ON ITS OWN ACCOUNT, which is why this recurses instead
+ * of naming the two container kinds. An emptied last item, an empty quote, and a
+ * quote or item ending in a heading, table, fence or break all leave nothing
+ * open, and the writer already spelled those correctly - `- > ## H` / `  Z` and
+ * `- - +` / `  Z` are both left exactly as they are. A marker written there
+ * would cost the document a construct it did not have.
+ *
+ * The remedy where it DOES reach down is the one §17 L3 already provides for a
+ * paragraph after a paragraph: write the block at the item's MARKER column
+ * behind a `+`, where no open paragraph above it can reach. Measured:
+ * `- - x` / `+` / `Z` keeps the sub-list and the outer item's paragraph apart,
+ * and the item stays tight.
+ */
+function anOpenParagraphReachesDown(previous: BlockNode): boolean {
+  const tail = theLastBlockInside(previous)
+  if (tail !== undefined) return anOpenParagraphReachesDown(tail)
+
+  return LEAVES_A_PARAGRAPH_OPEN.has(previous.type)
+}
+
+/**
+ * The block a line written BELOW `node` is read against, for the two kinds that
+ * host one. `undefined` for every other kind, and for an EMPTY host - which is
+ * the answer that keeps an emptied last item from costing a marker.
+ */
+function theLastBlockInside(node: BlockNode): BlockNode | undefined {
+  if (node.type === 'block_quote') return node.children[node.children.length - 1]
+  if (node.type === 'list') {
+    const last = node.items[node.items.length - 1]
+
+    return last === undefined ? undefined : last.children[last.children.length - 1]
+  }
+
+  return undefined
+}
+
+/**
  * Whether a sub-list written at the item's content column needs a blank line
  * above it to open at all.
  *
@@ -1618,7 +1671,8 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
         previousAtMarkerColumn ||
         (next !== undefined && adjacentBlocksMerge(b, next)) ||
         (!separated &&
-          previous?.type === 'paragraph' &&
+          previousEmitted !== null &&
+          anOpenParagraphReachesDown(previousEmitted) &&
           FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
           !opensWithAnAttributeLine(rendered))
       ) {
