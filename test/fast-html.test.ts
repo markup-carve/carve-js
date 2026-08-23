@@ -58,7 +58,12 @@ describe('borrowed HTML layout', () => {
       accepted++
       expect(fast, file).toBe(authoritative(source))
     }
-    expect(accepted).toBe(51)
+    // The population this sweep compares, so a fast path that quietly stopped
+    // accepting anything cannot pass by comparing nothing. It moves only when
+    // the pinned corpus does: the bump to carve `d0b6c92` added
+    // `406-a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content`,
+    // whose shadow render already matches the authoritative pipeline above.
+    expect(accepted).toBe(52)
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {
