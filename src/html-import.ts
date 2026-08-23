@@ -1137,7 +1137,43 @@ class Importer {
     }
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
-    if (tag === 'p') return [{ type: 'paragraph', children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+    if (tag === 'p') {
+      /*
+       * PART 11 §7 DECIDES WHAT AN IMPORT KEEPS, and it draws the line at
+       * the two-character `whitespace` terminal. A block whose every
+       * character is layout builds NO node - a lone space or tab line is a
+       * blank line, so a paragraph there is a node no Carve source spells -
+       * while a block holding a character §7 calls content keeps both the
+       * character and its paragraph. A NO-BREAK space is content, and so are
+       * U+202F and U+3000: a lone one of those reads back as a paragraph.
+       *
+       * The drop is REPORTED, because an element left the document.
+       *
+       * READ OFF THE BUILT CHILDREN, not off the element's text. A second
+       * walk of the subtree to weigh its characters is a recursion the
+       * depth counter does not cover, and it overflowed the stack on the
+       * nesting the counter exists to survive. `inlines()` is already
+       * guarded, and the trim already removes exactly the characters §7
+       * calls layout - so what it leaves answers the question by itself.
+       *
+       * A block that held NOTHING is untouched, and the distinction is the
+       * point: §7 weighs the characters a block holds, and an empty one
+       * holds none for the clause to call layout.
+       */
+      const raw = this.inlines(node.childNodes ?? [], path, depth + 1)
+      const children = trimBlockEdges(raw)
+      if (children.length === 0 && raw.length > 0) {
+        this.add(
+          'element-dropped',
+          `Dropped whitespace-only <${tag}> holding no content character`,
+          'warning',
+          path,
+          node,
+        )
+        return []
+      }
+      return [{ type: 'paragraph', children, ...(attrs ? { attrs } : {}) }]
+    }
     if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return this.list(node, path, depth, tag === 'ol', attrs)
     if (tag === 'dl') return this.definitionList(node, path, depth, attrs)
@@ -2516,7 +2552,15 @@ class Importer {
 
   private inline(node: P5Node, path: string, depth: number): InlineNode[] {
     this.enter(depth)
-    if (node.nodeName === '#text') return [{ type: 'text', value: (node.value ?? '').replace(/\s+/g, ' ') }]
+    // HTML's collapsible whitespace is the ASCII set, and `\s` is not it:
+    // JavaScript counts U+00A0, U+202F and U+3000 among its whitespace, so
+    // collapsing by `\s` rewrote a NO-BREAK SPACE into an ordinary one and
+    // the block trim then dropped it. PART 11 §7 draws the line the other
+    // way round - a no-break space is CONTENT - so the collapse names the
+    // characters HTML actually collapses and leaves every other one alone.
+    if (node.nodeName === '#text') {
+      return [{ type: 'text', value: (node.value ?? '').replace(/[ \t\n\r\f]+/g, ' ') }]
+    }
     const tag = node.tagName
     if (!tag) return []
     if (ACTIVE.has(tag)) {
