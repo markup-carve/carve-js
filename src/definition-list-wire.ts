@@ -74,7 +74,29 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
   for (const item of items) {
     for (const [index, term] of (item.terms ?? []).entries()) {
       const node: DefinitionTermNode = { type: 'definition_term', children: term }
-      const pos = item.termSpans?.[index] ?? span(term)
+      // A TERM IS BLENDED THE SAME WAY THE DESCRIPTION BELOW IS, and for the
+      // same two halves (markup-carve/carve-js#1349). The recorded span owns
+      // the `::` marker, which is part of no child, so the START has to come
+      // from it. The END cannot: the parser recorded the LINES the term took,
+      // and a content line may end in a whitespace run PART 2's NO TRAILING
+      // WHITESPACE clause rules is "DROPPED. It does not reach the output, and
+      // it is not content" - naming a definition term among the lines it holds
+      // for. The run is stripped out of the text the inlines are parsed from,
+      // so it reaches no child, and the term was left owning source that is not
+      // content: PART 12 §4's closerless-container rule, which ends a term at
+      // its last placed child exactly as it ends the description.
+      //
+      // `span` yields nothing at all rather than something short when a child
+      // is unplaced, so a term with an unplaced inline keeps the recorded
+      // extent instead of a bound that only looks complete.
+      const recorded = item.termSpans?.[index]
+      const derived = span(term)
+      const pos = recorded ? { ...recorded } : derived
+      if (pos && recorded && derived) {
+        pos.endLine = derived.endLine
+        if (derived.endColumn !== undefined) pos.endColumn = derived.endColumn
+        if (derived.endOffset !== undefined) pos.endOffset = derived.endOffset
+      }
       if (pos !== undefined) node.pos = pos
       out.push(node)
     }
