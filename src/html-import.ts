@@ -57,6 +57,7 @@ export const HTML_IMPORT_DIAGNOSTIC_CODES = [
   'style-unmapped',
   'table-degraded',
   'structure-unspellable',
+  'structure-split',
   'raw-preserved',
   'encoding-assumed',
   'diagnostics-truncated',
@@ -461,6 +462,17 @@ class Importer {
   }
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
+  /**
+   * Where a WRITER has to spell one source structure as more than one (§16,
+   * markup-carve/carve#1636).
+   *
+   * Kept apart from `unspellable` because the two say different things and the
+   * page keeps them apart: `structure-unspellable` is for a shape the syntax
+   * cannot spell at all, and here every part is spellable, present and exact -
+   * what the source cannot say is that they were ONE list. Reported by the
+   * source-writing exit only, like every other serialization loss.
+   */
+  private readonly split: Array<{ node: P5Node; path: string; message: string }> = []
   private nodes = 0
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
   private quoteDepth = 0
@@ -1461,6 +1473,19 @@ class Importer {
     const items: DefinitionItem[] = []
     const trailing: P5Node[] = []
     const trailingPaths: string[] = []
+    // A DROPPED ENTRY BREAKS THE LIST, and the break is a real loss
+    // (markup-carve/carve#1636). Consecutive `::` lines SHARE the description
+    // below them, so writing both terms into one list would hand the surviving
+    // term the NEXT entry's description - an ADDITION, which no row can declare
+    // and which the ceiling forbids outright. The writer splits instead; what
+    // that costs is the grouping, and this is the row that declares it.
+    //
+    // Only a drop with a TERM after it splits anything. The last-entry shape
+    // writes the term alone and stays one list, which is what carve#1627 ruled;
+    // and a second description of the SAME entry is not a new entry at all -
+    // that term already has it, so nothing is gained and nothing is split.
+    let dropped = false
+    let splitsHere = false
     let current: DefinitionItem | undefined
     const openEntry = (): DefinitionItem => {
       const entry: DefinitionItem = { terms: [], definitions: [] }
@@ -1489,6 +1514,7 @@ class Importer {
           // term joins the one being opened.
           if (current === undefined || current.definitions.length > 0) current = openEntry()
           this.entryAttributes(child, childPath, 'dt')
+          if (dropped) splitsHere = true
           const term = this.blockInlines(child.childNodes ?? [], childPath, level + 1)
           if (!this.visible(term)) {
             this.unspellable.push({
@@ -1515,12 +1541,18 @@ class Importer {
           }
           this.entryAttributes(child, childPath, 'dd')
           const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
+          // THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description
+          // is empty": a `<dd>` holding an invisible paragraph or an empty list
+          // writes nothing either, and the writer drops all three alike.
           if (this.writesNothing(definition)) {
+            dropped = true
             this.unspellable.push({
               node: child,
               path: childPath,
               message: 'A <dd> that writes nothing has no Carve spelling; the empty description is dropped, because the only line that could carry it is read as more of the term above it',
             })
+          } else {
+            dropped = false
           }
           current.definitions.push(definition)
           return
@@ -1531,6 +1563,13 @@ class Importer {
       })
     }
     visit(node.childNodes ?? [], path, depth + 1)
+    if (splitsHere) {
+      this.split.push({
+        node,
+        path,
+        message: 'A <dd> that writes nothing ends the list it is in; the entries after it are written as a second <dl>, because one list would give the term above it the next entry\'s description',
+      })
+    }
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
     return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }
@@ -3061,6 +3100,9 @@ class Importer {
   reportSerializationLosses(): void {
     for (const { node, path, message } of this.unspellable) {
       this.add('structure-unspellable', message, 'warning', path, node)
+    }
+    for (const { node, path, message } of this.split) {
+      this.add('structure-split', message, 'warning', path, node)
     }
   }
 
