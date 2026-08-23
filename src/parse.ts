@@ -9179,9 +9179,25 @@ function parseList(lexer: Lexer): List {
           if (exactCloserPossible(closers.comment, run, k))
             opened = { kind: 'comment', close: null, len: run }
         } else {
+          // AN UNTERMINATED CONTAINER RUNS TO THE END OF THE ITEM, so its
+          // interior is its own whether or not the closer is written
+          // (markup-carve/carve-js#1376). The closer gate stays for the two
+          // VERBATIM kinds, where an opener with none is inline verbatim inside
+          // a paragraph and opens no block at all; a `:::` with none still
+          // opens a container - corpus family 362 pins that - so gating it here
+          // made the blank line inside it visible to the scan and the item
+          // read LOOSE where the identical document with `:::` written read
+          // TIGHT. That is PART 11 §1 in both its forms, the HTML one included:
+          // the lead paragraph rendered `<p>x</p>` on one side and `x` on the
+          // other.
+          //
+          // The maintainer ruled TIGHT, converging on the reading the engine
+          // already gives the closed spelling - #1602's principle, from the
+          // other side - which is also carve-php's answer in both attached
+          // configurations and keeps corpus
+          // `279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-10`.
           const colon = colonBlockOpenerRun(line)
-          if (colon !== null && exactCloserPossible(closers.colon, colon, k))
-            opened = { kind: 'colon', close: null, len: colon }
+          if (colon !== null) opened = { kind: 'colon', close: null, len: colon }
         }
       }
       if (opened === null) continue
@@ -9191,6 +9207,14 @@ function parseList(lexer: Lexer): List {
       }
       open.push(entry)
       enter(entry, k)
+    }
+    // WHAT IS STILL OPEN AT THE END REACHED THE END, and its range is marked
+    // from where it opened to the item's last line. Only the loop's transition
+    // through zero wrote a range, so an unterminated container left the stack
+    // non-empty and marked nothing - which is the same blindness the closer gate
+    // above used to produce, one step later.
+    if (openOpaque > 0 && opaqueIdx >= 0) {
+      for (let i = opaqueIdx; i < fenceLines.length; i++) inFence[i] = true
     }
     // A FOOTNOTE DEFINITION'S BLOCK RUNS TO THE END OF ITS BODY, blank lines and
     // all (markup-carve/carve#1363, PART 1 S4). A blank between two lines of the
