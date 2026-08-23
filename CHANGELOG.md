@@ -81,7 +81,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and the canonical writer already pads every cell, so a formatted document
   needs no migration.
 - **A table cell's alignment run is horizontal-first** (#1219). Reverse-order pairs such as `^<`, `v>` and `~>` stay literal cell content instead of being normalized silently.
-- **A vertical table-cell marker requires a horizontal partner.** Lone `^` and `v` prefixes remain visible content; paired two-axis runs are unchanged.
 - **Common Tier-1 documents render through a borrowed HTML layout** (#1247). `carveToHtml` probes a conservative fast path first, and an accepted document renders from borrowed source slices without constructing the AST at all. Anything the probe does not accept falls back for the whole document before any output is published, and every accepted corpus document is rendered again through the authoritative pipeline and must come back byte-identical.
 - **Document IDs are carried through conversion instead of rebuilt** (#1239), removing one full AST traversal from the source-to-HTML path. Public `parse` / `resolve` / `renderHtml` composition is unchanged.
 - **Core inline parsing skips punctuation dispatch for ordinary prose runs**
@@ -127,14 +126,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   re-parse, so one needed escape dragged every other candidate along; the
   fallback now reaches the smallest unit that fails - the inline run, or the
   block containing it - and every other candidate is written bare.
-
-- **A recognized block-math div costs the same import depth as an ordinary div**
-  (markup-carve/carve-js#1300, PART 9 §18). The arm charges the subtree it
-  skips, but charged it one level short, so `<div class="math display">`
-  imported at a `maxDepth` that rejected a structurally identical non-math div.
-  `maxNodes` was unaffected. The block form's core `$$` spelling
-  (markup-carve/carve#1518, markup-carve/carve#1514) is unchanged - this engine
-  already wrote it.
 
 - **The canonical writer spells two sibling sub-lists inside a list item**
   (markup-carve/carve#1501, §11 N1a and §10i). A tight item wrote its sub-lists
@@ -221,7 +212,6 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (markup-carve/carve#1443, PART 9 §8). `git log --oneline` and
   `--force-with-lease` keep their hyphens; every other position converts as
   before, including `pages 1--10` and a trailing `text --`.
-- **The braced en dash keeps the spelling its author typed** (#1243). It is the same `smart_punctuation` node the bare run produces, so `carve fmt` writes `{--}` back instead of the resolved glyph.
 - **A continuation marker attaches only a flush-left block** (#1244, markup-carve/carve#1436, §17 L3). A line at any other column falls through to the ordinary column rules, as if the marker line had been a comment.
 - **A lazy marker line's definition defines nothing** (#1229 via #1230, markup-carve/carve#1428, markup-carve/carve#1429). A link-reference definition behind a list marker on a line folded into an open paragraph rendered as text and still registered in the link table; the same line inside a block quote both vanished from the paragraph and went active document-wide.
 - **The lazy guard no longer depends on whether an extension is registered** (#1231 via #1234, markup-carve/carve#1435, markup-carve/carve#1437). Registering any block matcher used to bring the defect back, so six executable-spec documents answered differently with and without an extension.
@@ -229,7 +219,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Definitions collected at a list item's content column close its paragraph**
   (markup-carve/carve#1376). A following line below that column no longer uses
   the comment-only continuation path; bare-dot items use the bullet column.
-- **Three parser seams found by the combinatorial corpus** (#1226, markup-carve/carve#1418, markup-carve/carve#1419, markup-carve/carve#1421): an unclosed inline literal is one literal-inline node to the end of its block rather than a literal bang plus a code span; a quoted line comment closes the block quote's lazy paragraph; and a terminal comment-only verse line keeps the newline an open verbatim run carries. The guard that carries that newline no longer leaves an empty text leaf in the AST (#1227).
+- **Three parser seams found by the combinatorial corpus** (#1226, markup-carve/carve#1418, markup-carve/carve#1419, markup-carve/carve#1421): an unclosed inline literal is one literal-inline node to the end of its block rather than a literal bang plus a code span; a quoted line comment closes the block quote's lazy paragraph; and a terminal comment-only verse line keeps the newline an open verbatim run carries.
 - **An unmarked definition-shaped lazy line inside a quoted list stays visible
   text** (#1208, markup-carve/carve#1400). A column never reaches into a block
   quote, so the line continues the quote's paragraph instead of vanishing from
