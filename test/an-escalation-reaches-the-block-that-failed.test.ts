@@ -9,6 +9,13 @@
  * containing it - and every other unit is emitted by §2's own test, which for a
  * character nothing needs means bare.
  *
+ * AND INSIDE THE UNIT THAT FAILS, §2's test is taken PER OPENER OCCURRENCE
+ * (markup-carve/carve#1533). §2b bounds how far the fallback reaches; it left
+ * the unit itself as one knob, so a unit that failed was written conservatively
+ * IN FULL and every candidate in it was escaped beside the one that needed it.
+ * The cases below pin both halves: which unit escalates, and which occurrences
+ * inside it carry a backslash.
+ *
  * WHY THE ASSERTIONS ARE ON BYTES. §1 forgives escaping on purpose: both
  * spellings render the same HTML and re-parse to the same tree, so a round-trip
  * check cannot see the difference and neither can the corpus HTML. That is
@@ -55,7 +62,13 @@ describe('an escalation reaches the block that failed, not the document', () => 
     // and it escalates. The run after the code span is in the SAME paragraph
     // and needs nothing, so a fallback that stopped at the block would escape
     // its parentheses too.
-    expect(written('/a/_b_ `x` plain (d)\n')).toBe('{/a/}\\_b\\_ `x` plain (d)\n')
+    //
+    // WITHIN the run the escape is the OPENER's alone (§2, per opener
+    // occurrence): emphasis needs both delimiters, so the opening `_` escaped
+    // is already the whole suppression and the closing one opens nothing on its
+    // own. The unit-scoped form wrote `\\_b\\_` and the second backslash was
+    // idle (markup-carve/carve#1533).
+    expect(written('/a/_b_ `x` plain (d)\n')).toBe('{/a/}\\_b_ `x` plain (d)\n')
   })
 
   it('widens to the block when escaping the run is not enough', () => {
@@ -63,8 +76,12 @@ describe('an escalation reaches the block that failed, not the document', () => 
     // of the LINE the run begins rather than of the run: both lines of this one
     // paragraph carry one, so both are written conservatively while the
     // paragraph beside them keeps its bare candidates.
+    //
+    // A ROW OPENS ON ITS LEADING PIPE, so that is the occurrence escaped and
+    // the closing pipe stays bare - the block is what escalates, and §2 still
+    // decides each occurrence inside it.
     expect(written(' | a |\n | b |\n\nsee (c) 50% now\n')).toBe(
-      '\\| a \\|\n\\| b \\|\n\nsee (c) 50% now\n',
+      '\\| a |\n\\| b |\n\nsee (c) 50% now\n',
     )
   })
 

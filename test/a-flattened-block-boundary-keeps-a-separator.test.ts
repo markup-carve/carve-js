@@ -117,11 +117,16 @@ describe('a flattened block boundary keeps a separator', () => {
    * A character that was TEXT and turns into a live delimiter once its neighbour
    * arrives beside it is a DIFFERENT question, already answered by the writer's
    * escaping rule. The clause says so, and this pins that the separator does not
-   * take that job on: the asterisks are escaped because the writer reads its own
+   * take that job on: the asterisk is escaped because the writer reads its own
    * output, not because a separator was inserted between them.
+   *
+   * ONE ASTERISK, not both. Strong needs an opener AND a closer, so suppressing
+   * the opener is the whole of it and the second asterisk opens nothing on its
+   * own - PART 11 §2 per opener occurrence (markup-carve/carve#1533). The
+   * unit-scoped form escaped both, and the second backslash was idle.
    */
   it('leaves a delimiter that becomes live to the writer to escape', () => {
-    expect(htmlToCarve(caption('<p>a *b</p><p>c* d</p>')).value).toBe('![x](/i)\n^ a \\*b c\\* d\n')
+    expect(htmlToCarve(caption('<p>a *b</p><p>c* d</p>')).value).toBe('![x](/i)\n^ a \\*b c* d\n')
     expect(rendered(caption('<p>a *b</p><p>c* d</p>'))).toBe(figure('a *b c* d'))
   })
 
