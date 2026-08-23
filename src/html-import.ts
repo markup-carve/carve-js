@@ -8,6 +8,7 @@ import type {
   InlineNode,
   List,
   Math,
+  Paragraph,
   TableBodyGroup,
   TableCell,
   TableRow,
@@ -2326,6 +2327,40 @@ class Importer {
     return Math.min(...groupRows.map((row, offset) => leading(row, firstIndex + offset)))
   }
 
+  /**
+   * The captionable host a `<figure>` body offers, with a SYNTHESIZED paragraph
+   * wrapper taken off an image (PART 9 §4b; markup-carve/carve#1606).
+   *
+   * §4b enumerates what a caption makes of its host - "an image, a quote, a
+   * code block, a display-math paragraph" - and PART 12 §17 and
+   * `docs/ast-json.md` repeat the enumeration verbatim. The image host is the
+   * IMAGE; only the math host is a paragraph, which §4b spells out for that one
+   * case. So the asymmetry is named rather than an omission, and a paragraph
+   * around an image target is not an equivalent spelling of the same tree: it
+   * renders `<figure><p><img></p>`, which is not the input, and it disagrees
+   * with the source this importer writes beside it - `![a](i.png)` under a `^ `
+   * line parses to `figure{target: image}`.
+   *
+   * The wrapper is OURS, not the author's. HTML has no block/inline slot
+   * distinction, so `blocks()` puts a stray inline into a paragraph to have
+   * somewhere to put it; taking that paragraph back off drops nothing the
+   * document held.
+   *
+   * AN ATTRIBUTE-CARRYING `<p>` IS THE AUTHOR'S AND STAYS. Its tree renders
+   * back to the input exactly - `<figure><p class="x"><img></p></figure>` - so
+   * on that shape the wrapper is the faithful half and the loss is on the
+   * writing side, where the class rides a block-attribute line that re-parses
+   * onto the figure. Unwrapping it here would delete an attribute from the one
+   * exit that still records it.
+   */
+  private captionHost(target: BlockNode | undefined): BlockNode | undefined {
+    if (!target || target.type !== 'paragraph') return target
+    const children = (target as Paragraph).children
+    if ((target as Paragraph).attrs || children.length !== 1) return target
+    const only = children[0]
+    return only.type === 'image' ? (only as unknown as BlockNode) : target
+  }
+
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
     // Our own composite-figure shape (PART 9 §4c): the group class marks the
     // wrapper, the panels div holds the children. Own-output round trip only;
@@ -2356,7 +2391,7 @@ class Importer {
       bodyPaths.push(this.childPath(path, child, index))
     })
     const targets = this.blocks(body, path, depth + 1, bodyPaths)
-    const target = targets[0]
+    const target = this.captionHost(targets[0])
     if (target && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)) {
       /*
        * A table brings its own caption slot, so a figure-wrapped table can
