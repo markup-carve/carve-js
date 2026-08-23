@@ -143,6 +143,16 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A derived endnotes section is not a reported loss**
+  (markup-carve/carve-php#1588, ruling markup-carve/carve#1500). The HTML
+  importer reported `element-unwrapped` plus `attribute-dropped` for a
+  `<section role="doc-endnotes">` that nothing references, where carve-php
+  reported nothing and both engines already wrote the same source. The section,
+  its `doc-endnotes` role and its `endnotes`-key name are all reconstructable
+  from the element, so none of them is the author's and none of them is a loss.
+  An authored `class` on such a section, and an `aria-label` the default does
+  not match, are still reported; a `<section>` nothing derives is unchanged.
+
 - **A non-`li` child of a list keeps its content and is reported** (#1340). The
   HTML importer filtered a `<ul>` or `<ol>` down to its `<li>` children and
   walked only those, so `<ul><div id="stray">z</div><li>a</li></ul>` imported as
