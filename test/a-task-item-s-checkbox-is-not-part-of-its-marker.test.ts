@@ -40,10 +40,10 @@ describe("a task item's checkbox is not part of its marker", () => {
     holds('- [ ] {#h}\n  > q\n')
   })
 
-  it('counts item attributes into the column, and the checkbox out of it', () => {
-    // `-{#k} ` is the marker, six wide, so the content column is 6 - not the
-    // ten `-{#k} [x] ` occupies.
-    holds('-{#k} [x] {#h}\n      # h\n')
+  it('counts neither item attributes nor the checkbox into the column', () => {
+    // Attributes are item metadata and `[x]` is content, so only the bare
+    // bullet and separator establish column 2 (markup-carve/carve#1701).
+    holds('-{#k} [x] {#h}\n  # h\n')
   })
 
   it('leaves a plain item and an ordered item alone', () => {
