@@ -221,14 +221,24 @@ describe('renderCarve corpus', () => {
     // The exemption reads the sidecar rather than naming a slug, so it cannot
     // drift onto a document it was not measured against.
     //
-    // AND carve-rs's §1c PREDICATE IS THE CANONICAL MECHANISM, not this one
-    // (markup-carve/carve#1679). It states the rule directly - a predicate over
-    // what the shape SPELLS, a paragraph holding one `image` or one `comment`,
-    // citing the clause - where reading the sidecar makes conformance depend on
-    // a spec ARTIFACT existing. A sidecar is EVIDENCE that a shape has the
-    // property; it is not the definition of it. The ruling keeps this version
-    // for the release and asks the engine to converge on the predicate, so:
-    // do not copy the sidecar shape into a fourth place.
+    // WHAT IS CANONICAL IS THE BOUND, NOT WHERE THE EXEMPTION IS SOURCED FROM.
+    // markup-carve/carve#1679 first ruled carve-rs's §1c PREDICATE canonical,
+    // on the objection that reading a sidecar makes conformance depend on a
+    // spec ARTIFACT existing and would accept any tree change a future pinned
+    // form carried. That ruling was then AMENDED, and the amendment supersedes
+    // it: the objection reaches an exemption keyed on "the sidecar re-parses
+    // differently" and NOTHING ELSE, and it does not reach one that applies the
+    // clause's own limit. Only the dissolution of a bare single-child wrapper is
+    // forgiven; a dropped node, a reordering, a changed attribute or a changed
+    // node type all still fail. That bound is asserted below and its width is
+    // pinned by `the PART 11 §1c wrapper bound reaches bare wrappers and no
+    // others`.
+    //
+    // So both sourcings conform: carve-rs states the predicate and is
+    // clause-bounded by construction, this engine derives the set from the
+    // corpus and applies the bound explicitly. DO NOT "converge" this on
+    // carve-rs's spelling - the amendment ruled against that rewrite by name.
+    // What must hold in a fourth engine is the BOUND.
     //
     // A SECOND `not.toBe` AGAINST THE SOURCE TREE WOULD BE DEAD, and it is
     // deliberately not written back. It was here, and markup-carve/carve-js#1452
@@ -295,6 +305,87 @@ describe('renderCarve corpus', () => {
       'no pinned canonical form re-parses differently from its source: the PART 11 §1c ' +
         'exemption above is dead and should be deleted',
     ).not.toEqual([])
+  })
+
+  /*
+   * THE §1c WRAPPER BOUND IS NARROW, pinned shape by shape.
+   *
+   * The sweep above cannot show this, and that is the whole reason this test
+   * exists. `withoutBareWrappers()` is applied to BOTH SIDES of the comparison,
+   * so WIDENING it can only ever hide a difference, never create one: whatever
+   * extra shape it swallows, it swallows identically in the source tree and in
+   * the pinned canonical form, and the two still agree.
+   *
+   * MEASURED, not assumed. `isBareWrapper()` was mutated to drop its key-count
+   * bound - so a node carrying attributes, a label or an href would dissolve
+   * and lose them - and the whole file stayed GREEN at 5664 tests. That
+   * mutation is not a no-op: walking the pinned corpus with both predicates,
+   * they disagree on 1117 nodes across the 1404 documents, among them a
+   * `heading` with `attrs`, a `link` with an `href`, a `footnote` with a
+   * `label`, a `table_cell` with `header` and an `admonition` with `kind`. So
+   * the sweep says nothing whatsoever about how wide this bound is, and the
+   * near misses have to be asserted directly.
+   *
+   * Each shape below is one PART 11 §1c does not reach. The clause permits
+   * losing a WRAPPER - a node with one child and nothing of its own - because
+   * the content, its attributes and its neighbours all survive as themselves. A
+   * node with a second key of its own has something to lose, so its loss is a
+   * disagreement, not a ceiling.
+   *
+   * carve-php pins the same width the same way (markup-carve/carve-php#1709),
+   * and carve-rs pins its predicate's (markup-carve/carve-rs#1353).
+   */
+  it('the PART 11 §1c wrapper bound reaches bare wrappers and no others', () => {
+    const image = { type: 'image', src: 'a.jpg', alt: 'Apollo' }
+    const dissolves = (candidate: unknown): boolean => {
+      const out = withoutBareWrappers({ type: 'document', children: [candidate] }) as { children: unknown[] }
+      return JSON.stringify(out.children[0]) === JSON.stringify(image)
+    }
+
+    // THE SHAPE THE CLAUSE REACHES: one child, and nothing of its own.
+    expect(
+      dissolves({ type: 'paragraph', children: [image] }),
+      'a bare single-child wrapper is the one loss PART 11 §1c permits',
+    ).toBe(true)
+
+    // ATTRIBUTES ARE CONTENT. Dissolving this wrapper would take them with it,
+    // which is the opposite of "its attributes survive as themselves".
+    expect(
+      dissolves({ type: 'paragraph', attrs: { classes: ['k'] }, children: [image] }),
+      'a wrapper carrying attributes is not bare: dissolving it would drop them',
+    ).toBe(false)
+
+    // A LABEL, AN HREF, A LEVEL, A KIND, A HEADER FLAG - every one of these is
+    // a key the node owns, and every one is a real corpus shape the widened
+    // predicate swallowed.
+    const owning: Record<string, unknown> = {
+      footnote: { type: 'footnote', label: '1', children: [image] },
+      link: { type: 'link', href: 'u', children: [image] },
+      heading: { type: 'heading', level: 1, children: [image] },
+      admonition: { type: 'admonition', kind: 'note', children: [image] },
+      table_cell: { type: 'table_cell', header: true, children: [image] },
+    }
+    for (const [kind, node] of Object.entries(owning)) {
+      expect(
+        dissolves(node),
+        `a ${kind} owns a key beyond its child, so it is not a wrapper §1c may dissolve`,
+      ).toBe(false)
+    }
+
+    // A SECOND NODE BESIDE IT. The clause is about a block whose WHOLE content
+    // is a single node.
+    expect(
+      dissolves({ type: 'paragraph', children: [image, { type: 'text', value: 'x' }] }),
+      'a wrapper holding a neighbour beside its child is not a lone-content block',
+    ).toBe(false)
+
+    // NO CHILDREN AT ALL, which has no child to dissolve into.
+    expect(dissolves({ type: 'paragraph', children: [] }), 'an empty block dissolves into nothing').toBe(false)
+
+    // THE ROOT IS NEVER DISSOLVED - it has no parent to dissolve into, and
+    // `withoutBareWrappers()` only ever rewrites a node's children.
+    const root = { type: 'document', children: [image] }
+    expect(withoutBareWrappers(root), 'the root keeps its wrapper').toEqual(root)
   })
 })
 
