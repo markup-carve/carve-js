@@ -50,6 +50,7 @@ import { htmlToCarve, htmlToAst, parse } from '../src/index.js'
 const src = (html: string) => htmlToCarve(html)
 const rows = (html: string) =>
   src(html).report.diagnostics.filter((d) => d.code === 'structure-unspellable')
+const carveOf = (html: string) => src(html).value
 const blocks = (doc: { children?: Array<{ type: string }> }) => (doc.children ?? []).map((b) => b.type)
 
 describe("an authored paragraph around a lone image is a declared loss", () => {
@@ -98,6 +99,28 @@ describe("an authored paragraph around a lone image is a declared loss", () => {
           'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image instead',
       }),
     ])
+  })
+
+  // A MESSAGE THAT OVERCLAIMS LEAVES A LOSS UNDECLARED, which is the same
+  // defect one level down. The paragraph's attributes are written as a block
+  // ABOVE the image and the image's own `{…}` after it, so a name BOTH set is
+  // decided by the image - `{#p}` above `![a](a){#i}` reads back with `id="i"`
+  // alone, and `id="p"` is gone. Classes are not in that set: the class slot
+  // merges, so `{.p}` and `{.i}` both reach the element.
+  it('names an attribute the image overwrites', () => {
+    expect(rows('<p id="p"><img id="i" src="a" alt="a"></p>')).toEqual([
+      expect.objectContaining({
+        message:
+          "A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image - except id, which the image's own value overwrites",
+      }),
+    ])
+    expect(carveOf('<p id="p"><img id="i" src="a" alt="a"></p>')).toBe('{#p}\n![a](a){#i}\n')
+  })
+
+  it('does not name a class, which merges rather than overwriting', () => {
+    expect(rows('<p class="p"><img class="i" src="a" alt="a"></p>')[0]!.message).toBe(
+      'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image instead',
+    )
   })
 
   it('reports it at every level the tree keeps it', () => {

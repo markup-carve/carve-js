@@ -24,7 +24,7 @@ import {
   isDangerousAttrName,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
-import { hasOwnKey, setOwn } from './own-property.js'
+import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -490,6 +490,8 @@ class Importer {
     path: string
     block: BlockNode
     attributed: boolean
+    /** Names the image's own attribute block wins outright, so they are lost. */
+    overwritten: string[]
   }> = []
   private nodes = 0
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
@@ -1339,7 +1341,13 @@ class Importer {
        * device does not exist for `list_item > paragraph > image` at all.
        */
       if (children.length === 1 && children[0]!.type === 'image') {
-        this.loneImageParagraphs.push({ node, path, block: paragraph, attributed: attrs !== undefined })
+        this.loneImageParagraphs.push({
+          node,
+          path,
+          block: paragraph,
+          attributed: attrs !== undefined,
+          overwritten: overwrittenAttrNames(attrs, (children[0] as { attrs?: Attrs }).attrs),
+        })
       }
       return [paragraph]
     }
@@ -3378,17 +3386,24 @@ class Importer {
     // not there. Reachability from the finished document is the whole test,
     // because taking the wrapper off is exactly what drops the node.
     const kept = reachableObjects(document)
-    for (const { node, path, block, attributed } of this.loneImageParagraphs) {
+    for (const { node, path, block, attributed, overwritten } of this.loneImageParagraphs) {
       if (!kept.has(block as unknown as object)) continue
-      this.add(
-        'structure-unspellable',
-        attributed
-          ? 'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, so the <p> is lost and the attributes it carried are written on the image instead'
-          : 'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block, which renders without the <p> around it',
-        'warning',
-        path,
-        node,
-      )
+      const head =
+        'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block'
+      // THREE OUTCOMES, AND THE MESSAGE SAYS WHICH ONE HAPPENED. The plain one
+      // loses the `<p>` and nothing else. An attributed one re-attaches what
+      // the paragraph carried to the image, which is a different element to
+      // carry it. And where the image sets the SAME name, the image's own
+      // value wins and the paragraph's is gone - `<p id="p"><img id="i">`
+      // writes `{#p}` above `![a](a){#i}` and reads back with `id="i"` alone,
+      // so a message claiming the attributes were written on the image would
+      // leave that loss undeclared, which is the defect this row exists for.
+      const message = !attributed
+        ? `${head}, which renders without the <p> around it`
+        : overwritten.length === 0
+          ? `${head}, so the <p> is lost and the attributes it carried are written on the image instead`
+          : `${head}, so the <p> is lost and the attributes it carried are written on the image - except ${overwritten.join(', ')}, which the image's own value overwrites`
+      this.add('structure-unspellable', message, 'warning', path, node)
     }
     for (const { node, path, message } of this.split) {
       this.add('structure-split', message, 'warning', path, node)
@@ -4110,6 +4125,29 @@ class Importer {
     }
     return false
   }
+}
+
+/**
+ * The paragraph attribute names an image's OWN attribute block overwrites.
+ *
+ * The writer emits the paragraph's attributes as a block above the image and
+ * the image's inline `{…}` after it, and the two are then read onto one node:
+ * a name the image also sets is the one that survives. CLASSES ARE NOT IN THIS
+ * SET - the class slot merges rather than replacing, so both groups reach the
+ * rendered element and nothing is lost.
+ *
+ * A `title` on the image is not here either, and for a different reason: it
+ * goes into the destination's title slot rather than the attribute block, so it
+ * never collides with a `title=` the paragraph carried.
+ */
+function overwrittenAttrNames(paragraph: Attrs | undefined, image: Attrs | undefined): string[] {
+  if (paragraph === undefined || image === undefined) return []
+  const lost: string[] = []
+  if (paragraph.id !== undefined && image.id !== undefined) lost.push('id')
+  for (const key of Object.keys(paragraph.keyValues ?? {})) {
+    if (ownValue(image.keyValues, key) !== undefined) lost.push(key)
+  }
+  return lost.sort()
 }
 
 /**
