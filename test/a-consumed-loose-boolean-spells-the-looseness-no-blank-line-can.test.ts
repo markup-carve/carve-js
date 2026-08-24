@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, carveToAstJson, parse } from '../src/index.js'
+import {
+  carveToCarve,
+  carveToHtml,
+  carveToAstJson,
+  fromAstJson,
+  parse,
+  renderCarve,
+  renderHtml,
+} from '../src/index.js'
 
 const h = (s: string) => carveToHtml(s)
 const fmt = (s: string) => carveToCarve(s)
@@ -101,18 +109,90 @@ describe('the consumed `loose` boolean', () => {
     )
   })
 
-  // The definition-list half has no AST field yet (PART 12 §8;
-  // `markup-carve/carve#1624` is that half), so the looseness survives in SOURCE
-  // and not through an AST round trip. What must NOT happen is the runtime flag
-  // leaking onto the wire as a property the schema does not name.
-  it('publishes no looseness property for a definition list', () => {
-    expect(JSON.stringify(carveToAstJson('{loose}\n:: T\n:  a\n'))).not.toContain('loose')
+  // PART 12 §8 NAMES THE FIELD (`markup-carve/carve#1624`, spec `cfb8d7bf`), so
+  // the definition-list half of L7 rides the wire like the list half's `tight`.
+  // It is `const: true`: PRESENT means the looseness was SPELLED, ABSENT means
+  // each description derives its own wrapper from its block count. There is no
+  // `false` to write, because an absent boolean read as false would say loose -
+  // the opposite of the default.
+  it('publishes the spelled looseness for a definition list', () => {
+    expect(carveToAstJson('{loose}\n:: T\n:  a\n').children[0]).toMatchObject({
+      type: 'definition_list',
+      loose: true,
+    })
+  })
+
+  // THE NEAR MISS, and it is what stops the fix from being "always publish".
+  // Only the SPELLED fact is underivable; a list that derived its own looseness
+  // publishes nothing, so an over-correction that emitted the flag on every
+  // definition list fails here rather than passing quietly.
+  it('publishes no looseness for a definition list that did not spell it', () => {
+    const derived = carveToAstJson(':: T\n:  a\n\n:: U\n:  b\n').children[0]!
+    expect(derived).toMatchObject({ type: 'definition_list' })
+    expect(Object.keys(derived)).not.toContain('loose')
+  })
+
+  it('leaves the list half publishing `tight`, not `loose`', () => {
+    expect(Object.keys(carveToAstJson('{loose}\n- a\n').children[0]!)).not.toContain('loose')
   })
 
   it('sets the existing `tight` field for a list, and leaves it no attributes', () => {
     const list = parse('{loose}\n- a\n').children[0]!
     expect(list).toMatchObject({ type: 'list', tight: false })
     expect(list.attrs).toBeUndefined()
+  })
+})
+
+/**
+ * PART 12 §8's field is the only thing that carries L7's definition-list
+ * looseness across a serialization boundary.
+ *
+ * A blank line between two ENTRIES does not loosen a `<dl>` at all, so
+ * `<dd><p>x</p></dd>` has no blank-line spelling at any entry count. Drop the
+ * field on the way out and the fact is simply gone: the tree re-renders
+ * `<dd>a</dd>` and the writer re-emits a `:: T` / `:  a` that no longer says
+ * what the author said (`markup-carve/carve-js#1409`).
+ */
+describe('the definition-list looseness survives an AST JSON round trip', () => {
+  const src = '{loose}\n:: T\n:  a\n'
+  const roundTrip = () => fromAstJson(carveToAstJson(src))
+
+  it('renders the same HTML after a round trip as it does directly', () => {
+    expect(renderHtml(roundTrip())).toBe(carveToHtml(src))
+  })
+
+  // The value the render is ABOUT, spelled out. Without it the assertion above
+  // could be bought by breaking the direct render to match the round trip.
+  it('keeps the block wrapper the looseness asks for', () => {
+    expect(renderHtml(roundTrip())).toContain('<dd><p>a</p></dd>')
+  })
+
+  it('writes the key back after a round trip', () => {
+    expect(renderCarve(roundTrip())).toBe(src)
+  })
+
+  // §11 refuses a property the schema does not name, so publishing the field
+  // without naming it in `WIRE_FIELDS` would turn a silent loss into a throw.
+  it('accepts an ingested payload carrying the field', () => {
+    expect(() =>
+      fromAstJson({
+        type: 'document',
+        srcByteLength: 0,
+        children: [
+          {
+            type: 'definition_list',
+            loose: true,
+            items: [
+              { type: 'definition_term', children: [{ type: 'text', value: 'T' }] },
+              {
+                type: 'definition_description',
+                children: [{ type: 'paragraph', children: [{ type: 'text', value: 'a' }] }],
+              },
+            ],
+          },
+        ],
+      } as never),
+    ).not.toThrow()
   })
 })
 

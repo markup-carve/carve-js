@@ -438,15 +438,21 @@ export interface DefinitionList extends BaseNode {
    * description wraps it - so `<dd><p>x</p></dd>` has no blank-line spelling at
    * any entry count.
    *
-   * RUNTIME ONLY, AND NOT SERIALIZED. PART 12 §8's `definition_list` has no such
-   * field, and the `<dd>` wrapper is derived from the description's block count,
-   * so a serialized tree cannot say which of the two spellings it came from.
-   * markup-carve/carve#1624 is the half that gives §8 the field; until it lands
-   * the looseness survives in SOURCE and not through an AST round trip, which is
-   * exactly what the grammar states rather than leaves to be discovered. The
-   * same arrangement `footnote_ref.refId` and `heading_ref.resolvedText` use:
-   * `toAstJson` drops it, and an ingested payload carrying it is refused by §11
-   * because the schema does not name it.
+   * PUBLISHED, and `const: true` rather than a boolean. PART 12 §8 names the
+   * field (markup-carve/carve#1624, spec `cfb8d7bf`), so the flag rides the wire
+   * and survives an AST round trip in both directions.
+   *
+   * PRESENT means the looseness was SPELLED; ABSENT means each description
+   * derives its own wrapper from its block count, which is what every other
+   * definition list does. There is no `false` to write, and that asymmetry is
+   * the point: only the spelled fact is underivable, because a `<dl>` has no
+   * blank-line spelling for a one-block description at any entry count, so a
+   * tree carrying no flag could not otherwise say which spelling it came from.
+   *
+   * NOT the arrangement `footnote_ref.refId` and `heading_ref.resolvedText` use.
+   * Those are resolution RESULTS a consumer recomputes from the document, so
+   * echoing them would republish the previous document's answer. This is
+   * authored input, and nothing downstream can recompute it.
    */
   loose?: true
 }
