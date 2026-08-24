@@ -1891,9 +1891,15 @@ function renderImage(img: Image, opts: RenderOptions): string {
   if (isUnresolvedReference(img)) return escapeHtml(referenceSourceText(img.rawRef))
   const titleAttr = img.title !== undefined ? ` title="${escapeAttr(img.title)}"` : ''
   const src = escapeAttr(sanitizeUrl(img.src, opts))
+  let attrs = stripKeyValue(img.attrs, 'src')
+  // The destination title is a structural slot, just like src. When it is
+  // present it wins over a title= key from an attribute block; emitting both
+  // leaves an HTML parser to choose which value survives. Keep title= when the
+  // destination has no title, because then it is the only authored value.
+  if (img.title !== undefined) attrs = stripKeyValue(attrs, 'title')
   // The sanitized structural src wins; never re-emit an author-supplied
   // `src` from an attribute block, which would bypass sanitization.
-  return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${renderAttrs(stripKeyValue(img.attrs, 'src'))}>`
+  return `<img src="${src}" alt="${escapeAttr(img.alt)}"${titleAttr}${renderAttrs(attrs)}>`
 }
 
 // ============================================================================
@@ -2044,7 +2050,9 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
       // The sanitized structural href wins; never re-emit an author-supplied
       // `href` from an attribute block, which would bypass sanitization.
       const label = withinLink(() => renderInlines(node.children, opts))
-      return `<a href="${href}"${titleAttr}${renderAttrs(stripKeyValue(node.attrs, 'href'))}>${label}</a>`
+      let attrs = stripKeyValue(node.attrs, 'href')
+      if (node.title !== undefined) attrs = stripKeyValue(attrs, 'title')
+      return `<a href="${href}"${titleAttr}${renderAttrs(attrs)}>${label}</a>`
     }
     case 'image':
       return renderImage(node, opts)
