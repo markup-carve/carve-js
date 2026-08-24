@@ -141,12 +141,8 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
   switch (node.type) {
     case 'heading':
       return renderHeading(node.level, renderInlines(node.children, ctx))
-    case 'paragraph': {
-      let content = renderInlines(node.children, ctx)
-      const prefix = blockQuotePrefix(ctx)
-      if (prefix) content = prefixLines(content, prefix)
-      return `${content}\n\n`
-    }
+    case 'paragraph':
+      return `${renderInlines(node.children, ctx)}\n\n`
     case 'code_block':
       return renderCodeBlock(
         stripControls(node.content),
@@ -155,11 +151,16 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
         node.label ? stripControls(node.label) : undefined,
       )
     case 'block_quote':
+      // The bar reports CONTAINMENT, not node kind (markup-carve/carve#1689):
+      // everything the quote contains carries it, so the ANSI reader is never
+      // told a block was unquoted where the HTML says it was. Prefixing here,
+      // once, rather than at each child's own case is what makes that true for
+      // every block kind - including the ones no case ever opted in for.
       ctx.blockQuoteDepth++
       {
         const out = renderBlocks(node.children, ctx)
         ctx.blockQuoteDepth--
-        return out
+        return prefixLines(out, blockQuoteBar())
       }
     case 'list':
       return renderList(node, ctx)
@@ -171,19 +172,15 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       const body = renderBlocks(node.children, ctx)
       const title =
         node.title !== undefined ? renderInlines(unwrapStrong(node.title), ctx) : ''
-      // Carry the blockquote `│` prefix onto a bold line, matching how the
-      // paragraph renderer prefixes body content in a quote. `styled` is
-      // already a styled string (title) or raw label text.
-      const prefix = blockQuotePrefix(ctx)
-      const boldLine = (styled: string): string =>
-        prefix ? prefixLines(styled, prefix) : styled
+      // No blockquote prefixing here: the `block_quote` case carries the bar
+      // for everything it contains (markup-carve/carve#1689).
       // Caption floor: surface an unconsumed grouping [label] as a bold line
       // (title first when both are present).
       const labelLine = node.label
-        ? `${boldLine(style(stripControls(node.label), BOLD))}\n\n`
+        ? `${style(stripControls(node.label), BOLD)}\n\n`
         : ''
       if (title !== '') {
-        return `${boldLine(style(title, BOLD))}\n\n${labelLine}${body}`
+        return `${style(title, BOLD)}\n\n${labelLine}${body}`
       }
       return `${labelLine}${body}`
     }
@@ -191,11 +188,9 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return renderBlocks(node.children, ctx)
     case 'div': {
       if (!node.label) return renderBlocks(node.children, ctx)
-      // Caption floor: a bold label line, prefixed with the blockquote `│` when
-      // inside a quote (matching the admonition label/title and the div body).
-      const prefix = blockQuotePrefix(ctx)
-      const styled = style(stripControls(node.label), BOLD)
-      const labelLine = prefix ? prefixLines(styled, prefix) : styled
+      // Caption floor: a bold label line. The blockquote bar, when there is
+      // one, is added by the `block_quote` case (markup-carve/carve#1689).
+      const labelLine = style(stripControls(node.label), BOLD)
       return `${labelLine}\n\n${renderBlocks(node.children, ctx)}`
     }
     case 'definition_list':
@@ -283,12 +278,25 @@ function renderCodeBlock(content: string, lang?: string, header?: string, label?
   return `${out}\n`
 }
 
-function blockQuotePrefix(ctx: AnsiContext): string {
-  return ctx.blockQuoteDepth > 0 ? `${style('│', FG_CYAN + DIM)} `.repeat(ctx.blockQuoteDepth) : ''
+function blockQuoteBar(): string {
+  return `${style('│', FG_CYAN + DIM)} `
 }
 
+/**
+ * Prefix every NON-EMPTY line. A quote's rendered body carries the block
+ * separator (`\n\n`) between its children and after the last one, and those
+ * blank lines stay bare - a bar on a blank line would draw a gutter through
+ * the space BETWEEN blocks and past the end of the quote. Skipping them here
+ * reproduces exactly what the per-node call sites got by prefixing content
+ * before appending the separator, and it composes for nesting: an inner quote
+ * has already prefixed its own lines, so the outer pass adds a second bar to
+ * the same lines and leaves the same blanks alone.
+ */
 function prefixLines(content: string, prefix: string): string {
-  return content.split('\n').map((line) => `${prefix}${line}`).join('\n')
+  return content
+    .split('\n')
+    .map((line) => (line === '' ? line : `${prefix}${line}`))
+    .join('\n')
 }
 
 function renderList(node: List, ctx: AnsiContext): string {
