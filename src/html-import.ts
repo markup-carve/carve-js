@@ -155,6 +155,27 @@ function isFlattenedBlock(node: P5Node): boolean {
 const FLATTENED_BLOCK_EXTRA = new Set(['li', 'dt', 'dd', 'td', 'th', 'tr', 'caption', 'figcaption'])
 
 /**
+ * The figure targets `roundtrip` REBUILDS from Carve rather than preserving the
+ * element (markup-carve/carve#1704).
+ *
+ * THE MEMBERSHIP TEST IS A PROPERTY AND THE SET IS ITS ANSWER, not a list of
+ * blessed names: a target belongs here when the Carve the importer writes for it
+ * parses back to the element it read. `docs/html-import.md` states it that way
+ * so a caption target added later inherits the rule instead of needing another
+ * sweep of every tag to discover it - a name list is exactly the shape that
+ * drifted into that ticket.
+ *
+ * An image, a quote and a code block are here because their caption line re-parses
+ * to the same figure. `table` is the one deliberate carve-out and its exception is
+ * written where it is taken, in `figure()` below.
+ *
+ * Everything else - a paragraph, a list, a heading, a container - has no Carve
+ * spelling that reproduces the figure, so `roundtrip` keeps the element and says
+ * so. `semantic` is unaffected: being lossy is what distinguishes the two modes.
+ */
+const FIGURE_ROUNDTRIP_REBUILDS = new Set(['image', 'block_quote', 'code_block', 'table'])
+
+/**
  * Is a separator needed between what is already in the slot and what follows?
  *
  * The clause makes one required at a block boundary and SUFFICIENT iff
@@ -658,6 +679,28 @@ class Importer {
   ): void {
     if (this.entries.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
     this.entries.push({ diagnostic: { code, message, severity, path }, at: this.positionOf(node), seq: this.entries.length })
+  }
+
+  /**
+   * The report as it stands, so an arm that ends up PRESERVING an element whole
+   * can discard what the walk into it recorded (markup-carve/carve#1704).
+   *
+   * Every loss channel is append-only and every entry is a claim about
+   * something the document did not keep. When `figure()` decides to hand the
+   * element back verbatim, the walk's claims are all false - the attribute it
+   * called dropped rides on bytes the output still carries - so the mark is
+   * taken before the walk and the arm rewinds to it. Nothing outside these four
+   * lists survives a walk, which is why rewinding them is the whole of it.
+   */
+  private mark(): [number, number, number, number] {
+    return [this.entries.length, this.unspellable.length, this.split.length, this.loneImageParagraphs.length]
+  }
+
+  private restore([entries, unspellable, split, loneImages]: [number, number, number, number]): void {
+    this.entries.length = entries
+    this.unspellable.length = unspellable
+    this.split.length = split
+    this.loneImageParagraphs.length = loneImages
   }
 
   /**
@@ -2899,9 +2942,11 @@ class Importer {
       body.push(child)
       bodyPaths.push(this.childPath(path, child, index))
     })
+    const before = this.mark()
     const targets = this.blocks(body, path, depth + 1, bodyPaths)
     const target = this.captionHost(targets[0])
-    if (target && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)) {
+    const captionable = target !== undefined && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)
+    if (captionable && target.type === 'table' && (target as { caption?: unknown }).caption && captionNode) {
       /*
        * A table brings its own caption slot, so a figure-wrapped table can
        * arrive carrying TWO captions - its own `<caption>` and the figure's
@@ -2910,36 +2955,86 @@ class Importer {
        * cannot survive. Keeping both wrote two `^ ` lines, and the second
        * re-read as a literal paragraph.
        */
-      if (target.type === 'table' && (target as { caption?: unknown }).caption && captionNode) {
+      this.add(
+        'table-degraded',
+        'Dropped a <figcaption> from a figure wrapping a table that carries its own <caption>: Carve spells one caption per table',
+        'warning',
+        captionPath,
+        captionNode,
+      )
+      /*
+       * THE SIXTH CAPTION SITE, and the only one where the element goes WHOLE.
+       * `table-degraded` above says the caption was dropped, and says nothing
+       * about what rode on it - so an `onclick` here was stripped with no
+       * `attribute-dropped` row, which is the same silence this change removes
+       * everywhere else. The call is what reports it: an event handler is
+       * diagnosed inside `attrs()`, and anything it kept is named here, because
+       * the element it would have ridden on is gone.
+       */
+      const own = this.attrs(captionNode, captionPath)
+      if (own) {
         this.add(
-          'table-degraded',
-          'Dropped a <figcaption> from a figure wrapping a table that carries its own <caption>: Carve spells one caption per table',
+          'attribute-dropped',
+          `Dropped ${this.attrNames(own).join(', ')} with the <figcaption>: the element itself is not kept`,
           'warning',
           captionPath,
           captionNode,
         )
-        /*
-         * THE SIXTH CAPTION SITE, and the only one where the element goes
-         * WHOLE. `table-degraded` above says the caption was dropped, and says
-         * nothing about what rode on it - so an `onclick` here was stripped
-         * with no `attribute-dropped` row, which is the same silence this
-         * change removes everywhere else. The call is what reports it: an
-         * event handler is diagnosed inside `attrs()`, and anything it kept is
-         * named here, because the element it would have ridden on is gone.
-         */
-        const own = this.attrs(captionNode, captionPath)
-        if (own) {
-          this.add(
-            'attribute-dropped',
-            `Dropped ${this.attrNames(own).join(', ')} with the <figcaption>: the element itself is not kept`,
-            'warning',
-            captionPath,
-            captionNode,
-          )
-        }
-        return [target, ...targets.slice(1)]
       }
-      const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
+      return [target, ...targets.slice(1)]
+    }
+    const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
+    /*
+     * `roundtrip` REBUILDS A FIGURE ONLY WHEN A CARVE SPELLING REPRODUCES THE
+     * ELEMENT, and preserves the element when none does (markup-carve/carve#1704).
+     *
+     * The rebuild is lossless for an image, a quote and a code block: the `^ `
+     * line re-parses to the figure it was written from. For every other target
+     * it is not, and until this ruling the mode wrote it anyway. A figure around
+     * a bare PARAGRAPH was the worst of them and the one nobody had named: it
+     * came back as an `id`-bearing paragraph carrying the body text and a literal
+     * `^ Cap` line under it, so the figure was gone and the caption was no longer
+     * merely lost but turned into prose the document never said - with ZERO
+     * diagnostics. A figure around a LIST detached the caption into a paragraph
+     * of its own; that one at least warned.
+     *
+     * A MODE WHOSE JOB IS FIDELITY MAY NOT SPEND IT ON A SIMPLER RULE.
+     * `docs/divergence-from-djot.md` PART 18 already rules against the shape:
+     * "Silently discarding authored bytes is the failure mode hardest to notice,
+     * because the output is well-formed and merely missing something." Here it
+     * was worse than missing.
+     *
+     * THE ROWS FROM THE BODY ARE ROLLED BACK, because the element is kept whole
+     * and nothing inside it was lost. A diagnostic that named an attribute the
+     * preserved bytes still carry would be a false report, and the one row this
+     * arm owes is the `raw-preserved` it adds.
+     *
+     * THE FIGURE'S OWN ATTRIBUTE ROWS ARE LEFT ALONE, and deliberately. `block()`
+     * reads them before this handler is entered, so an `onclick` on the `<figure>`
+     * still reports `attribute-dropped` while the raw bytes keep it. That is
+     * false in the same way, and it is EVERY raw-preserve arm's behavior in this
+     * mode, not this one's: a preserved `<form onclick>` reports it too. Removing
+     * it here alone would make one preserved element disagree with the others
+     * about what the report means, and it would delete the only row saying an
+     * event handler survived into the output. It is one defect with several
+     * spellings and belongs in one change over all of them.
+     *
+     * A CAPTION-LESS FIGURE NEVER REACHES HERE. A figure is the CAPTIONED
+     * wrapper (PART 9 §4b), so a `<figure>` with no `<figcaption>`, or one whose
+     * caption spells nothing, is not a figure to preserve or rebuild; it unwraps
+     * with the declared `element-unwrapped` row below, in every mode, and that
+     * boundary is unchanged by this ruling.
+     */
+    if (
+      this.mode === 'roundtrip' &&
+      this.captionSpellsSomething(caption) &&
+      !(target !== undefined && FIGURE_ROUNDTRIP_REBUILDS.has(target.type))
+    ) {
+      this.restore(before)
+      this.add('raw-preserved', 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target', 'warning', path, node)
+      return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
+    }
+    if (captionable) {
       /*
        * A FIGURE WITH NO CAPTION IS NOT A FIGURE (PART 9 §4b: the node is the
        * GENERIC CAPTIONED WRAPPER, and Carve builds one only from a `^ ` line on
@@ -2990,7 +3085,7 @@ class Importer {
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
-    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') }] : [])]
+    return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: caption }] : [])]
   }
 
   private inlines(nodes: P5Node[], parentPath: string, depth: number, paths?: string[]): InlineNode[] {
