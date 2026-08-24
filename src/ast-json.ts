@@ -593,6 +593,13 @@ export class AstJsonPartitionError extends Error {
 }
 
 /**
+ * The one value a `const:` kind admits, decoded from the kind that carries it.
+ */
+function constOf(kind: string): unknown {
+  return JSON.parse(kind.slice(6))
+}
+
+/**
  * Whether `value` matches the shape the schema gives it.
  *
  * The kinds are the subset of JSON Schema `resources/ast-schema.json` actually
@@ -601,6 +608,14 @@ export class AstJsonPartitionError extends Error {
  * expressed a second time.
  */
 function matchesKind(value: unknown, kind: string): boolean {
+  if (kind.startsWith('const:')) {
+    // ONE legal value, compared by identity against the schema's own. The
+    // schema writes `const` where the field's presence IS the fact and there is
+    // no other value to write - `definition_list.loose` is `const: true`
+    // precisely so that absent means derived - so `loose: false` says the
+    // opposite of what the field means and is not a lesser spelling of absent.
+    return value === constOf(kind)
+  }
   if (kind.startsWith('enum:')) {
     return typeof value === 'string' && kind.slice(5).split('\u0000').includes(value)
   }
@@ -675,10 +690,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
       if (!(field in record)) continue
       if (record[field] === undefined) continue
       if (!matchesKind(record[field], kind)) {
-        throw new AstJsonSchemaError(
-          `"${field}" is ${describe(record[field])} where the schema gives ${kind}`,
-          path,
-        )
+        throw new AstJsonSchemaError(expectation(field, record[field], kind), path)
       }
     }
     // The typeless RECORDS that hang off a node. Every node kind can carry
@@ -813,13 +825,28 @@ function refuseRecordShape(value: unknown, name: string, path: string): void {
   for (const [field, kind] of Object.entries(kinds)) {
     if (!(field in item) || item[field] === undefined) continue
     if (!matchesKind(item[field], kind)) {
-      throw new AstJsonSchemaError(
-        `"${field}" is ${describe(item[field])} where the schema gives ${kind}`,
-        path,
-      )
+      throw new AstJsonSchemaError(expectation(field, item[field], kind), path)
     }
   }
   refuseNestedRecordShapes(name, item, path)
+}
+
+/**
+ * What the schema asked for and what arrived, for a §12(d) error.
+ *
+ * A `const` names the ONE value it admits rather than a shape, so it says
+ * "requires true" where every other kind says "gives boolean" - `describe`
+ * alone would report `loose: false` as "is a boolean where the schema gives
+ * const:true", which reads as a type complaint about a value that has the right
+ * type and the wrong content.
+ */
+function expectation(field: string, value: unknown, kind: string): string {
+  if (kind.startsWith('const:')) {
+    const wanted = constOf(kind)
+    return `"${field}" is ${describe(value)} where the schema requires ${JSON.stringify(wanted)}`
+  }
+
+  return `"${field}" is ${describe(value)} where the schema gives ${kind}`
 }
 
 /** A short, non-leaking description of a value, for an error message. */

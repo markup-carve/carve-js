@@ -296,6 +296,23 @@ export function wireFieldsSource(schema) {
    */
   const valueKind = (property) => {
     if (property === null || typeof property !== "object") return undefined;
+    // A `const` pins ONE legal value, so it is checked before `type` and `enum`:
+    // it is strictly stronger than either, and it is the whole constraint the
+    // schema writes for these properties - they carry a `const` and a
+    // `description` and nothing else. Read as no kind at all, every one of them
+    // decoded unchecked and was published again (markup-carve/carve-js#1418).
+    //
+    // The kind carries the value as JSON so the decoder can compare against it
+    // without a second table: `const:true` and `const:"integral"` are the two
+    // spellings the schema uses, and JSON keeps them apart from each other and
+    // from a string that merely reads like one.
+    //
+    // `type` never reaches here - `collect` skips it, because §12(c) rules on a
+    // node's type with its own error and two producers of one rule is the
+    // hazard the generator already calls out.
+    if (property.const !== undefined) {
+      return `const:${JSON.stringify(property.const)}`;
+    }
     if (Array.isArray(property.enum)) {
       return `enum:${property.enum.map(String).join("\u0000")}`;
     }
