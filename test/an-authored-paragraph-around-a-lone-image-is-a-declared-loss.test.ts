@@ -147,10 +147,15 @@ describe('what it does not report', () => {
     expect(blocks(htmlToAst(html).value)).toEqual(['figure'])
   })
 
-  // Same shape, different unwrapper: a table cell holds inlines, so the
-  // paragraph is gone from the tree before the writer ever sees it.
-  it('a paragraph a table cell already unwrapped', () => {
-    expect(rows('<table><tr><td><p><img src="g.jpg" alt="G"></p></td></tr></table>')).toEqual([])
+  // NOT A SURVIVOR BOUND, and it does not pretend to be one: a table cell
+  // holds INLINES, so no paragraph is ever built for the survivor filter to
+  // drop. Disabling the filter leaves this green - the figure case above is
+  // what proves the filter. What this pins is the reason it is silent, which
+  // is that both exits already agree here.
+  it('a paragraph a table cell holds as inlines', () => {
+    const html = '<table><tr><td><p><img src="g.jpg" alt="G"></p></td></tr></table>'
+    expect(rows(html)).toEqual([])
+    expect(JSON.stringify(htmlToAst(html).value)).not.toContain('"paragraph"')
   })
 
   // THE NEAR MISS. An indented image IS a paragraph holding one image, so a
