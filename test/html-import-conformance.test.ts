@@ -32,54 +32,12 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unk
   // AN ENTRY CAN NAME EITHER EXIT. `carve` pins the source exit, `ast` the tree
   // exit, and a window can be open on one while the other has already closed -
   // which is exactly the shape below.
-  [
-    'auto-text-link',
-    {
-      // THE SPEC DECLARES THIS SAME WINDOW FROM ITS OWN SIDE:
-      // spec/tests/html-import-contract.check.mjs carries a `PIN_LAG` entry for
-      // `auto-text-link` reading "the source exit omits an authored heading ID
-      // that differs from its generated slug; fixed upstream by
-      // markup-carve/carve-js#1416, but the spec pin cannot advance until the
-      // unrelated round-trip regressions in that newer engine are resolved".
-      // The fixture is therefore a recording of the build the spec pins
-      // (github:markup-carve/carve-js#71add23f), which predates #1416.
-      //
-      // The SOURCE half of that window has already closed - `expected.crv` was
-      // written to the post-#1416 ruling and this engine reproduces it byte for
-      // byte - so no `carve` field is needed. The TREE half is still open, and
-      // the fixture's two files disagree with each other about it: parsing the
-      // fixture's OWN `expected.crv` through this engine yields
-      // `attrs.order: ['#id']`, because `{#Target}` is a spelled `#id` slot and
-      // PART 12 records the source-appearance order of the slots. No Carve
-      // source spelling `{#Target}` parses to an `attrs` without `order`, so
-      // `expected.ast.json` cannot be reached from `expected.crv` and is the
-      // pre-#1416 recording rather than a ruling this engine is behind.
-      // Re-recording it upstream deletes this entry; see the issue filed on
-      // markup-carve/carve from the bump that added it.
-      reason:
-        'an authored heading id is a spelled `#id` slot, so PART 12 records it in ' +
-        '`attrs.order` - the pinned fixture predates markup-carve/carve-js#1416',
-      ast: {
-        type: 'document',
-        children: [
-          {
-            type: 'heading',
-            level: 1,
-            children: [{ type: 'text', value: 'Target' }],
-            attrs: { id: 'Target', order: ['#id'] },
-          },
-          {
-            type: 'paragraph',
-            children: [
-              { type: 'text', value: 'See ' },
-              { type: 'link', href: '#Target', children: [{ type: 'text', value: 'Target' }] },
-              { type: 'text', value: '.' },
-            ],
-          },
-        ],
-      },
-    },
-  ],
+  //
+  // `auto-text-link` sat here while the tree half of that same window was open:
+  // the importer spelled an `#id` slot on BOTH exits, so the published tree
+  // carried `attrs.order` and the fixture - correctly - did not. The slot is a
+  // writer-only channel now (markup-carve/carve-js#1445), the two agree, and the
+  // entry went out with the fix rather than with a pin bump.
 ])
 
 /**

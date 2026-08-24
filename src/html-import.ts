@@ -510,7 +510,26 @@ class Importer {
 
   private readonly labels: Record<LabelKey, string>
 
-  constructor(options: HtmlImportOptions) {
+  /**
+   * Whether this import is the one that WRITES SOURCE (`htmlToCarve`), which is
+   * the only exit allowed to record a source-layout field.
+   *
+   * PART 12 fixes `attrs.order` as a record of how a SOURCE spelled a block,
+   * and an import read HTML: there was no source to read a spelling off, so the
+   * PUBLISHED tree records none (markup-carve/carve#1647). The writer still
+   * needs to be told that an imported heading id is AUTHORED - without that
+   * signal `renderCarve` reads an id equal to its own generated slug as
+   * generated and omits it, which is the loss markup-carve/carve-js#1416 fixed
+   * by spelling the slot on both exits.
+   *
+   * So the slot becomes a WRITER-ONLY channel: the tree `htmlToCarve` renders
+   * is an intermediate nobody publishes, and the tree `htmlToAst` returns
+   * carries no source-layout field at all.
+   */
+  private readonly writing: boolean
+
+  constructor(options: HtmlImportOptions, writing = false) {
+    this.writing = writing
     this.mode = options.mode ?? 'safe'
     this.adapter = options.adapter ?? 'generic'
     if (!ADAPTERS.has(this.adapter)) throw new TypeError(`Unknown HTML import adapter: ${this.adapter}`)
@@ -1288,10 +1307,15 @@ class Importer {
     }
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
-      if (attrs?.id !== undefined) {
+      if (attrs?.id !== undefined && this.writing) {
         // A heading id from HTML is authored input, even when it equals the
         // slug a fresh Carve parse would generate. Attribute order is
         // exhaustive when present, so retain every populated slot.
+        //
+        // ON THE WRITING EXIT ONLY. `order` is a source-layout field and an
+        // import read no source, so the published tree records none of them
+        // (markup-carve/carve#1647); see `writing` above for why the writer
+        // still needs the slot.
         attrs.order = ['#id']
         if (attrs.classes?.length) attrs.order.push('.class')
         attrs.order.push(...Object.keys(attrs.keyValues ?? {}))
@@ -4244,7 +4268,7 @@ export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlIm
 }
 
 export function htmlToCarve(html: string, options: HtmlImportOptions = {}): HtmlImportResult<string> {
-  const importer = new Importer(options)
+  const importer = new Importer(options, true)
   const value = importer.import(html)
   // The loss belongs to serialization, not to the import: a consumer that keeps
   // the AST `htmlToAst` returns keeps the figure wrapper and loses nothing. So
