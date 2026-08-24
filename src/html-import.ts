@@ -1117,7 +1117,8 @@ class Importer {
       const children = this.blockInlines(inlineBuffer, parentPath, depth + 1, inlinePaths)
       inlineBuffer = []
       inlinePaths = []
-      if (this.visible(children)) out.push({ type: 'paragraph', children })
+      if (!this.visible(children)) return
+      out.push(this.bareBlockImage(children) ?? { type: 'paragraph', children })
     }
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
@@ -3084,6 +3085,52 @@ class Importer {
 
   private visible(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || node.value.trim() !== '')
+  }
+
+  /**
+   * The IMAGE a synthesized wrapper was built to hold, when that is all it holds
+   * (PART 9 §4b; markup-carve/carve-js#1411).
+   *
+   * `captionHost` already takes this wrapper off a `<figure>` body, and says why:
+   * HTML has no block/inline slot distinction, so `blocks()` puts a stray inline
+   * into a paragraph to have somewhere to put it, and the wrapper is OURS rather
+   * than the author's. None of that depended on a `<figure>` being present -
+   * `captionHost` is simply the only place that was reached from. Everywhere
+   * else, a bare `<img>` built `paragraph{image}` while the SOURCE exit wrote
+   * `![G](g.jpg)`, which re-parses to a bare `image` block, so this importer's
+   * two exits disagreed about a document it built itself.
+   *
+   * THE ASYMMETRY IS WHY THE WRAPPER GOES RATHER THAN THE DISAGREEMENT BEING
+   * DECLARED. A declared LOSS is a ceiling an import may sit inside; an ADDITION
+   * is the document coming back saying something it never said. Only the second
+   * changes what the document means, so it does not get a diagnostic row - it
+   * gets fixed.
+   *
+   * ONLY A RUN THAT HOLDS NOTHING ELSE - one image, and nothing beside it. A run
+   * carrying text, or a second image, is a paragraph the document really has: it
+   * is what `![a](i.png) folding content` parses to as well.
+   *
+   * NO WHITESPACE TOLERANCE HERE, AND THAT WAS MEASURED RATHER THAN ASSUMED. The
+   * `\n` between an `<img>` and the block after it IS buffered into the wrapper
+   * by `blocks()`, which reads as needing a whitespace-skipping predicate so the
+   * image is not left beside a whitespace-only sibling - and the spec's own
+   * declared-lag note for `detached-caption-caret` records a tree carrying
+   * exactly such a node. In THIS engine `blockInlines` has already trimmed it by
+   * the time the run arrives: a sweep of 1,920 shapes - eight block levels,
+   * six whitespace paddings on each side, five following blocks - produced ZERO
+   * runs holding an image beside whitespace-only text, on unmodified `main`. A
+   * tolerance clause would therefore be a branch no input reaches, which is the
+   * check-that-cannot-fail shape (markup-carve/carve#755), so the predicate is
+   * the strict one the engine can actually exercise.
+   *
+   * This does not reach a `<p>` the AUTHOR wrote. That arrives through `block()`
+   * and never through this buffer, which is the boundary rather than an
+   * oversight: taking off a wrapper the document held would be a loss, and a
+   * loss is a different call from removing an addition.
+   */
+  private bareBlockImage(children: InlineNode[]): BlockNode | undefined {
+    if (children.length !== 1 || children[0]!.type !== 'image') return undefined
+    return children[0] as unknown as BlockNode
   }
 
   /**
