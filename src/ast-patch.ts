@@ -8,6 +8,13 @@ export type AstPatchOperation =
   | { op: 'add' | 'replace'; path: string; value: unknown }
   | { op: 'remove'; path: string }
 
+export interface ReversibleAstPatch {
+  forward: AstPatchOperation[]
+  inverse: AstPatchOperation[]
+  beforeFingerprint: string
+  afterFingerprint: string
+}
+
 export class AstPatchError extends Error {
   constructor(message: string) {
     super(message)
@@ -109,6 +116,38 @@ export function createAstPatch(before: AstJsonDocument, after: AstJsonDocument):
   const out: AstPatchOperation[] = []
   build(before, after, '', out)
   return out
+}
+
+function fingerprint(ast: AstJsonDocument): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(clean(ast)))
+  let hash = 0x811c9dc5
+  for (const byte of bytes) {
+    hash ^= byte
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return `fnv1a32:${hash.toString(16).padStart(8, '0')}`
+}
+
+export function createReversibleAstPatch(
+  before: AstJsonDocument,
+  after: AstJsonDocument,
+): ReversibleAstPatch {
+  return {
+    forward: createAstPatch(before, after),
+    inverse: createAstPatch(after, before),
+    beforeFingerprint: fingerprint(before),
+    afterFingerprint: fingerprint(after),
+  }
+}
+
+export function applyReversibleAstPatch(
+  ast: AstJsonDocument,
+  patch: ReversibleAstPatch,
+  inverse = false,
+): AstJsonDocument {
+  const expected = inverse ? patch.afterFingerprint : patch.beforeFingerprint
+  if (fingerprint(ast) !== expected) throw new AstPatchError('patch precondition does not match the document')
+  return applyAstPatch(ast, inverse ? patch.inverse : patch.forward)
 }
 
 function parentAt(root: unknown, parts: string[]): { parent: unknown; key: string; nodePosition: boolean } {
