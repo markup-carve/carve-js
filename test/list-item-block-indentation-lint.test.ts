@@ -82,6 +82,8 @@ describe('list item block indentation diagnostics', () => {
     ])
     expect(findings('- item\n\n   \\# literal\n')).toEqual([])
     expect(findings('- item\n\n   %% comment\n')).toEqual([])
+    expect(findings('- item\n\n   :::note\n')).toEqual([])
+    expect(findings('- item\n\n   {.unclosed\n')).toEqual([])
   })
 
   it.each([

@@ -699,7 +699,8 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
-const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|:{2,}|\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_ATTRIBUTE = /^(?:\{[^{}\n]+\})+[ \t]*$/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
@@ -831,7 +832,9 @@ function collectListItemIndentWarnings(
       continue
     }
     if (authored.column === 0 ||
-        (!LINT_BLOCK_OPENER.test(authored.rest) && !isTableRow(authored.rest))) continue
+        (!LINT_BLOCK_OPENER.test(authored.rest) &&
+         !LINT_BLOCK_ATTRIBUTE.test(authored.rest) &&
+         !isTableRow(authored.rest))) continue
     let item: LintItemColumn | undefined = containing
     let rule: string | undefined
     if (item && authored.column > item.contentColumn) {
