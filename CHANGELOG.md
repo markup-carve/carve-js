@@ -132,6 +132,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Titled media emits one `title` attribute** (#1424, #1430). A destination title occupies the HTML slot, so a `title=` key from an attribute block no longer duplicates it on an image or a link.
 - **An authored heading id survives an HTML import** (#1416). `htmlToAst` and `htmlToCarve` used to disagree about an id that matched the slug a fresh parse would generate.
 - **An authored paragraph around a lone image is a declared loss** (#1419, #1422). `<p><img></p>` is written as the standalone image shape, and the report now names the wrapper and any attribute the image overwrites.
+- **An indented lone image is published as a paragraph holding an inline image, not a block image** (#1437, ruling markup-carve/carve#1660). `parse()` already applied the column rule and `resolve()` promoted the image back, so the published tree and the rendered HTML both move: the image gains its paragraph wrapper.
 
 ## [0.1.4] - 2026-08-18
 
