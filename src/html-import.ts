@@ -1325,6 +1325,21 @@ class Importer {
     return node.attrs?.find((a) => a.name.toLowerCase() === name)?.value
   }
 
+  /**
+   * `type` on an `<input>` is an ENUMERATED attribute, and HTML matches an
+   * enumerated keyword ASCII case-insensitively: `<input type="CHECKBOX">` is
+   * a checkbox to every browser, and so is `Checkbox`.
+   *
+   * ASCII, not `toLowerCase()`, and the difference is not academic here.
+   * `toLowerCase()` is Unicode-aware, so `CHEC\u212ABOX` - the KELVIN SIGN in
+   * place of the K - folds to the exact string `checkbox` and would be read as
+   * a task marker no browser reads that way. Restricting the fold to `A-Z`
+   * matches only what HTML says matches.
+   */
+  private isEnumeratedKeyword(value: string | undefined, keyword: string): boolean {
+    return value !== undefined && value.replace(/[A-Z]/g, (c) => c.toLowerCase()) === keyword
+  }
+
   private childPath(parent: string, node: P5Node, index: number): string {
     const name = node.tagName ?? (node.nodeName === '#text' ? 'text()' : node.nodeName)
     return `${parent}/${name}[${index + 1}]`
@@ -1807,7 +1822,9 @@ class Importer {
     const before = stray.length ? this.blocks(stray, path, depth + 1, strayPaths) : []
     const items = listItems.map((li, i) => {
       const liPath = `${path}/li[${i + 1}]`
-      const input = li.childNodes?.find((n) => n.tagName === 'input' && this.attr(n, 'type') === 'checkbox')
+      const input = li.childNodes?.find(
+        (n) => n.tagName === 'input' && this.isEnumeratedKeyword(this.attr(n, 'type'), 'checkbox'),
+      )
       const liAttrs = this.attrs(li, liPath)
       return {
         type: 'list_item' as const,
