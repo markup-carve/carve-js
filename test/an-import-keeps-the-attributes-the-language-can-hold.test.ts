@@ -47,7 +47,11 @@ describe('an import keeps the attributes the language can hold', () => {
       ['<p tabindex="0">a</p>', '{tabindex=0}\na\n'],
       ['<p contenteditable="true">a</p>', '{contenteditable=true}\na\n'],
       ['<p title="t">a</p>', '{title=t}\na\n'],
-      ['<p><img src="a.png" alt="a" srcset="a2.png 2x"></p>', '![a](a.png){srcset="a2.png 2x"}\n'],
+      // BARE, not `<p>`-wrapped. Since carve-js#1411 a lone image is a block
+      // at every level, and since carve-js#1419 an authored `<p>` around one
+      // carries a `structure-unspellable` row of its own - which is a true
+      // statement about the paragraph and has nothing to say about `srcset`.
+      ['<img src="a.png" alt="a" srcset="a2.png 2x">', '![a](a.png){srcset="a2.png 2x"}\n'],
       // `lang` reaches the same HTML attribute through PART 11's `:tag`
       // shorthand, which is the writer's spelling for it, not a loss.
       ['<p lang="fr">a</p>', '{:fr}\na\n'],
@@ -219,7 +223,9 @@ describe('an import keeps the attributes the language can hold', () => {
      * entry hides the rest - so `srcset` was the shape where "keep the rest"
      * would have become a vulnerability rather than a fidelity win.
      */
-    const result = htmlToCarve('<p><img src="a.png" alt="a" srcset="safe.png 1x, javascript:alert(1) 2x"></p>')
+    // Bare for the same reason as above: the `<p>` would add a row about the
+    // paragraph to a list that is asserting what happens to the ATTRIBUTE.
+    const result = htmlToCarve('<img src="a.png" alt="a" srcset="safe.png 1x, javascript:alert(1) 2x">')
     expect(result.value).toBe('![a](a.png)\n')
     expect(result.report.diagnostics).toEqual([
       expect.objectContaining({
