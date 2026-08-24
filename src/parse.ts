@@ -8656,19 +8656,18 @@ function parseList(lexer: Lexer): List {
     const itemAttrs = la ? la.attrs : undefined
 
     // item (continuation paragraphs or nested lists). Visual content column:
-    // baseIndent (tab-aware columns) plus the marker width in characters. The
-    // marker (`- `, `1. `) and any abutting `{...}` attr block contain no tabs,
-    // so their column width equals their character count; the leading
+    // baseIndent (tab-aware columns) plus the BARE marker width. An abutting
+    // `{...}` block is item metadata and contributes zero, so changing a class
+    // or Unicode value cannot restructure the body (carve#1701, carve#1698). The leading
     // whitespace may be a tab, so it is measured in columns (baseIndent) rather
-    // than characters. The marker/attr width is taken from the ORIGINAL line so
-    // an abutting `{...}` block widens it correctly. For a TASK item the
+    // than characters. For a TASK item the
     // checkbox is content, not marker, so the content column is the bullet
-    // width (`- `/`* ` = 2) plus any abutting attr width -- not the full
+    // width (`- `/`* ` = 2) -- not the full
     // `- [x] ` width (matching the spec's task attribute/continuation
     // convention `- [x] x` / `  {.c}`).
     const contentCol = isTask
-      ? baseIndent + 2 + (la ? line.length - mline.length : 0)
-      : baseIndent + (line.length - leadingWhitespace(line) - content.length)
+      ? baseIndent + 2
+      : baseIndent + (mline.length - leadingWhitespace(mline) - content.length)
     lexer.consume()
 
     // First-block item (Carve): `- +` opens an item whose body is the

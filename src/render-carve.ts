@@ -1358,6 +1358,7 @@ function renderList(node: List, ctx: CarveContext): string {
       } else {
         prefix = `${bullet} `
       }
+      const continuationWidth = node.ordered ? prefix.length : 2
       const itemAttrs = renderAttrs(item.attrs)
       if (itemAttrs) {
         prefix = node.ordered
@@ -1368,10 +1369,9 @@ function renderList(node: List, ctx: CarveContext): string {
       const lines = content ? content.split('\n') : ['']
       const first = lines.shift() ?? ''
       out += `${indent}${prefix}${first || '+'}\n`
-      // A TASK ITEM'S `[x] ` IS CONTENT, NOT MARKER, so it does not move the
-      // item's content column and the continuation must not be indented past
-      // it. `- [x] ` is six characters wide and its content column is 2, the
-      // width of `- ` alone; `-{#k} [x] ` is ten and its content column is 6.
+      // A TASK ITEM'S `[x] ` IS CONTENT and an attribute block is METADATA, so
+      // neither moves the bare marker's content column. `- [x] ` and
+      // `-{#k} [x] ` both have column 2 (carve#1701).
       //
       // Writing the continuation at the marker's full width put every block
       // after the first four columns too far in, where an INDENTED block opener
@@ -1382,11 +1382,7 @@ function renderList(node: List, ctx: CarveContext): string {
       // quote and a heading after a first paragraph were all lost the same way;
       // an ordinary paragraph was not, which is why it stayed unseen.
       //
-      // The prefix ENDS with the task marker in every branch that writes one,
-      // so subtracting its width is the item's content column in all four
-      // shapes - with and without item attributes, ordered and not.
-      const taskMarker = !node.ordered && item.checked !== undefined ? `[${item.checked ? 'x' : ' '}] ` : ''
-      const continuation = ' '.repeat(prefix.length - taskMarker.length)
+      const continuation = ' '.repeat(continuationWidth)
       // An EMPTY continuation line stays empty. Indenting it produces a line of
       // nothing but spaces, which the writer must never emit - the blank line
       // inside a fenced block in a list item was the one place it did (corpus
