@@ -1214,7 +1214,22 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // formatter path, where the unresolved Image survives). UNRESOLVED means
       // no destination: PART 12 §3a keeps `ref` on a resolved reference too
       // (carve#596).
-      !isUnresolvedReference(b.children[0] as Image)
+      !isUnresolvedReference(b.children[0] as Image) &&
+      // Strict column-0 rule, the same one the figure arm below applies and for
+      // the same reason (carve#1660): a top-level block opener must start at
+      // column 0, so an image indented above its container's content column is
+      // not a block image. `parseParagraph` strips a paragraph's leading
+      // indentation, so the AST text cannot tell an indented image from a flush
+      // one -- the image's own source column can. A flush image, at top level OR
+      // at the dedented content column of any container, has startColumn === 1.
+      //
+      // THIS ARM RUNS FROM resolve(), so without the check the ruling held on
+      // the parse tree and was lost on the PUBLISHED one: the syntactic
+      // block-image pass declines an indented image at parse time, and this
+      // promoted it again afterwards on "is it a real image" alone. carve-js was
+      // the only engine still promoting it (carve-js#1437).
+      ((b.children[0] as Image).pos === undefined ||
+        (b.children[0] as Image).pos!.startColumn === 1)
     ) {
       const img = b.children[0] as Image
       // A leading block-attribute line (`{#id}`) landed on the paragraph; carry
