@@ -70,6 +70,7 @@ export {
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
 export { lintAccessibility, type AccessibilityDiagnostic } from './accessibility.js'
+export { tryRenderHtmlStreaming, type StreamOutcome } from './stream.js'
 export {
   EditorChangeError,
   type EditorChange,
