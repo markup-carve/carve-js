@@ -129,8 +129,70 @@ interface CarveContext {
  * spells as `%%` and a paragraph cannot spell at all. Those keep the closed
  * form.
  *
+ * THE CONTRACT, AND WHAT IT DOES NOT COVER. What this writer returns re-reads as
+ * what it was given - EXCEPT for the shapes named below, which it writes as the
+ * nearest source Carve has and which therefore re-read as something else.
+ *
+ * The list is the point. A contract stated as an absolute while carrying an
+ * exception nothing declares is worse than a narrower one that is true as
+ * written, because every reader of the first is entitled to rely on it
+ * (markup-carve/carve#1658). So the invariant holds AS WRITTEN, and these sit
+ * outside it rather than being places where it quietly fails. Each is a CLASS
+ * with a normative home, not an example: a later shape that falls into one is
+ * already covered, and a shape that falls into none is a defect to file.
+ *
+ * - A BLOCK WHOSE OWN CONTENT SPELLS IT AWAY (PART 11 §1c). Where a block's
+ *   whole content is a single node whose spelling, at that block's column, is
+ *   read back as a block opener of the node's kind, the writer emits that
+ *   spelling and the WRAPPER is lost. There is no smaller departure available:
+ *   every spelling of the content is the content's own. Two shapes reach it
+ *   here - a `paragraph` holding one `image`, written `![a](u)` and re-read as
+ *   the standalone image, and a `paragraph` holding one `comment`, written
+ *   `%% c` and re-read as the block comment.
+ *
+ *   THE INDENTED FORM IS NOT A SPELLING, and on this engine that has to be said
+ *   rather than assumed: carve-php and carve-rs read an indented image as a
+ *   block image at every indent, while HERE ` ![a](u)` really does parse as a
+ *   paragraph. The ruling rejected it anyway. Inside a list item or a definition
+ *   description the marker's content column absorbs the padding at every width,
+ *   so `list_item > paragraph > image` has no spelling at all - a writer that
+ *   preserved the shape at top level and lost it one level down would be two
+ *   rules with nothing declaring the difference - and it emits meaning-bearing
+ *   leading whitespace, which editors and pipelines strip.
+ *
+ * - A BLOCK THAT SPELLS NOTHING AT ALL (PART 11 §10j). It is simply not in the
+ *   source, so the re-read document is a block shorter. An empty `paragraph` and
+ *   a whitespace-only one both reach it: no source spells either, because a
+ *   blank line is a separator rather than a block. §10j bounds the loss TO the
+ *   block - the boundary it stood between survives - and does not pretend the
+ *   block itself does.
+ *
+ * - A FLATTEN INTO AN INLINE-ONLY SLOT (PART 11 §1b). A caption line, a fence
+ *   title, a table cell, an image's alt text and a definition term take no
+ *   blocks, so block content handed to one is flattened and the emitted document
+ *   holds fewer blocks than the tree. What survives is the BOUNDARY: a separator
+ *   between two former siblings that each contribute a token.
+ *
+ * THE PARSER REACHES ALMOST NONE OF THIS. An empty paragraph, a whitespace-only
+ * paragraph and a lone-comment paragraph are all unbuildable from source, so
+ * they arrive only from a hand-built or ingested tree - which is exactly why
+ * they are NAMED. A carve-out a caller discovers is the defect this list exists
+ * to remove.
+ *
+ * NOT SILENT WHERE THERE IS SOMEWHERE TO SAY IT. This function has no diagnostic
+ * channel and can only throw, and refusing would break an editor's round trip on
+ * a tree the HTML renderer accepts. A CALLER that writes source and has a
+ * channel declares the loss instead: `htmlToCarve` reports a
+ * `structure-unspellable` row (docs/html-import.md, carve-js#1422).
+ *
+ * Where it CAN see that emitting source would change the tree, and no carve-out
+ * above covers the shape, it refuses rather than emitting the nearest form. That
+ * is a statement about the shapes it detects, not a second absolute: the list
+ * above is what a caller may rely on.
+ *
  * @throws {SourceUnspellableError} when no source can carry an AST node's own
- *   content.
+ *   content. Never for the structural carve-outs above, which are written and
+ *   lost rather than refused.
  */
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
@@ -2932,7 +2994,14 @@ function renderCode(content: string, allowUnclosed = false, nodeType = 'code'): 
   // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
   // writer refuses it instead of emitting the nearest form (carve-js#1344).
   // Same throw path as the empty `raw_inline`, and the same sentence: the
-  // writer's contract is that what it returns re-reads as what it was given.
+  // writer's contract is that what it returns re-reads as what it was given,
+  // EXCEPT on the structural carve-outs `renderCarve`'s own docblock names
+  // (PART 11 §1b, §1c and §10j). None of them reaches here: every one is about
+  // the SHAPE a node sits in or the blocks it holds, and this test is on a
+  // node's own VALUE. That is why refusing is right here and wrong there -
+  // refusing an unspellable value loses nothing that had a spelling to begin
+  // with, while refusing a structural carve-out would fail an editor's round
+  // trip on a tree the renderer accepts.
   const unspellable = unspellableVerbatimReason(content, needsPad)
   if (unspellable !== undefined) throw new SourceUnspellableError(nodeType, unspellable)
   // THE LEADING PAD CANNOT LIVE IN THE LAST COLUMN OF A LINE. When it would,
