@@ -43,41 +43,33 @@ const corpusDir = resolve(__dirname, '../spec/tests/corpus')
  * tree back differs from writing the parsed tree back - which is what an editor
  * does when it round-trips through the published AST.
  *
- * WAS 41, NOW 2. The 39 generated-heading-id documents are gone: publishing the
- * id is right (PART 12 §5), and 7f86472 stopped the WRITER emitting it, because
- * an authored id carries its `#id` slot in `attrs.order` and a generated one
- * does not. carve-php#901 established that mechanism.
+ * WAS 41, THEN 2, NOW 0.
  *
- * What remains is one cause, and it is an open spec question rather than a bug
- * anyone has declined to fix:
+ * The 39 generated-heading-id documents went first: publishing the id is right
+ * (PART 12 §5), and 7f86472 stopped the WRITER emitting it, because an authored
+ * id carries its `#id` slot in `attrs.order` and a generated one does not.
+ * carve-php#901 established that mechanism.
  *
- *    2  A NESTED LINK or an AUTOLINK inside a link label is flattened into text
- *       on the wire, so `[[x](y)](z)` comes back as `[x](z)` - the inner
- *       destination is not in the tree at all - and `[pre <http://h> post](/u)`
- *       comes back with a bare URL where an autolink was. All three engines
- *       flatten identically; markup-carve/carve#817 asks what §3a requires.
+ * The last four went WITHOUT ANYONE NOTICING, and that is the reason the guard
+ * below exists. Two named nested-link flattening (markup-carve/carve#817) and
+ * two named a definition-list `definitionLines` side table that does not cross
+ * the wire (carve-js#748, carve-js#754). Re-measured on the pinned corpus,
+ * every one of the four round-tripped byte-identically - the set could have
+ * been emptied at whatever commit fixed them, and instead it sat here reading
+ * as a live, reasoned carve-out (markup-carve/carve-js#1447).
  *
- * The value is the boundary: a document joining this list means a change started
- * losing source that did not before, and a THIRD cause appearing is the thing
- * most worth knowing.
+ * Nothing could have said so. The sweep consulted this set in ONE direction: a
+ * document that STOPS losing was silently excused, because `has(name)` only
+ * ever suppressed a failure and never demanded one. Deleting the four rows
+ * makes the ledger honest today; `still loses what it says it loses` below is
+ * what stops the same finding recurring the next time a document is renumbered
+ * or a writer fix lands quietly.
+ *
+ * The value is the boundary: a document joining this list means a change
+ * started losing source that did not before, and a document LEAVING it without
+ * its entry going too is the failure this file could not previously report.
  */
-const KNOWN_LOSSES = new Set<string>([
-  "03-links-11.crv",
-  "03-links-12.crv",
-  // The write-back that keeps a definition on its own description line
-  // (carve-js#748) reads `definitionLines` off the definition-list item, and
-  // that field does not cross the wire: PART 12 §8 publishes the entry as
-  // `definition_term` / `definition_description` nodes, so a DECODED item has
-  // the description but not the line it was written on. Formatting from source
-  // is byte-exact for these two; formatting a decoded tree is not.
-  //
-  // The list-item case next to it does survive, because it is derived from the
-  // surrounding blocks' own positions rather than from a side table
-  // (carve-js#754). Reconstructing `definitionLines` from the wire's
-  // `definition_description` position would close this the same way.
-  "227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace.crv",
-  "227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace-2.crv",
-])
+const KNOWN_LOSSES = new Set<string>([])
 
 /*
  * A KNOWN LOSS THAT NAMES NO CORPUS FILE IS NOT A KNOWN LOSS.
@@ -109,8 +101,15 @@ describe('a document round-tripped through the AST', () => {
     expect(sources.length).toBe(expectedCorpusSize(resolve(__dirname, '../spec')))
   })
 
-  it('comes back as the same source', () => {
+  /**
+   * ONE PASS, THREE BUCKETS. The pass is shared so the two directions are
+   * measured over the SAME run: a forward half and a staleness half computed
+   * from different sweeps could disagree about what the corpus even is.
+   */
+  const sweep = () => {
     const lost: string[] = []
+    const recovered: string[] = []
+    const refused: string[] = []
     for (const name of sources) {
       const src = readFileSync(resolve(corpusDir, name), 'utf8')
       let written: string
@@ -124,6 +123,13 @@ describe('a document round-tripped through the AST', () => {
         // A document the codec refuses is a different failure, and the codec's
         // own tests cover it; this assertion is about silent CHANGE, not about
         // errors.
+        //
+        // A DECLARED document is the exception, and it is reported on its own
+        // rather than folded into either direction. It is not "still losing" -
+        // nothing was compared - and calling it "recovered" would tell whoever
+        // deletes the entry something false about why. Its entry no longer
+        // describes what happens to it, which is its own finding.
+        if (KNOWN_LOSSES.has(name)) refused.push(name)
         continue
       }
       // Compared against the formatter's own output for the same document, not
@@ -131,8 +137,30 @@ describe('a document round-tripped through the AST', () => {
       // this test is about is whether the AST ROUND TRIP changes anything the
       // formatter would not have changed by itself.
       const direct = renderCarve(parse(src))
-      if (written !== direct && !KNOWN_LOSSES.has(name)) lost.push(name)
+      const loses = written !== direct
+      if (loses && !KNOWN_LOSSES.has(name)) lost.push(name)
+      // THE STALENESS HALF. Without it `has(name)` can only ever suppress a
+      // failure, so an entry outlives the loss it names and no run objects -
+      // which is exactly how the four this file used to carry survived.
+      if (!loses && KNOWN_LOSSES.has(name)) recovered.push(name)
     }
+    return { lost, recovered, refused }
+  }
+
+  it('comes back as the same source', () => {
+    const { lost } = sweep()
     expect(lost, `documents whose source changed through the AST: ${lost.join(', ')}`).toEqual([])
+  })
+
+  it('still loses what it says it loses', () => {
+    const { recovered, refused } = sweep()
+    expect(
+      recovered,
+      `${recovered.join(', ')} round-trip(s) byte-identically now: delete the KNOWN_LOSSES entry in the same commit that proves it`,
+    ).toEqual([])
+    expect(
+      refused,
+      `${refused.join(', ')} is declared a known loss but the codec now refuses it, so the entry describes something that no longer happens`,
+    ).toEqual([])
   })
 })

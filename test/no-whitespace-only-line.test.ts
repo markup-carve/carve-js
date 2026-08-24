@@ -74,16 +74,47 @@ describe('the writer never emits a whitespace-only line', () => {
   const dir = resolve(import.meta.dirname, '../spec/tests/corpus')
   const inputs = readdirSync(dir).filter((f) => f.endsWith('.crv'))
 
-  it('holds across the whole corpus', () => {
-    expect(inputs.length).toBe(expectedCorpusSize(resolve(import.meta.dirname, '../spec')))
-    const failures: string[] = []
+  /**
+   * ONE PASS, BOTH DIRECTIONS. The produced set is what the staleness half
+   * below reads, so the two questions are answered over the same run rather
+   * than over two sweeps that could disagree about what the corpus is.
+   */
+  const sweep = () => {
+    const produced = new Set<string>()
     for (const slug of inputs) {
       const out = carveToCarve(readFileSync(resolve(dir, slug), 'utf8'))
-      for (const site of offendingLines(slug, out)) {
-        if (!KNOWN_REMAINING.has(site)) failures.push(site)
-      }
+      for (const site of offendingLines(slug, out)) produced.add(site)
     }
+    return produced
+  }
+
+  it('holds across the whole corpus', () => {
+    expect(inputs.length).toBe(expectedCorpusSize(resolve(import.meta.dirname, '../spec')))
+    const failures = [...sweep()].filter((site) => !KNOWN_REMAINING.has(site)).sort()
     expect(failures).toEqual([])
+  })
+
+  /*
+   * A SITE THAT IS NO LONGER PRODUCED IS NOT AN EXEMPTION EITHER.
+   *
+   * The orphan guard above catches an entry whose FILE is gone - the ordinary
+   * way one rots here, since corpus files carry the spec's ordering number. It
+   * cannot catch the other way: a file that still exists and stopped emitting
+   * the line. `has(site)` only ever suppresses a failure, so such an entry sits
+   * here reading as a live carve-out and no run objects.
+   *
+   * That is not hypothetical. carve-php carried this list's twin with NEITHER
+   * guard, and its single entry named a document upstream had renumbered - dead
+   * in both directions, reported by nothing (markup-carve/carve-php#1687). The
+   * deletion made that ledger honest once; this is what stops it recurring.
+   */
+  it('is behind only what it is still behind on', () => {
+    const produced = sweep()
+    const stale = [...KNOWN_REMAINING].filter((site) => !produced.has(site)).sort()
+    expect(
+      stale,
+      `${stale.join(', ')} is no longer emitted: delete the KNOWN_REMAINING entry in the same commit that proves it`,
+    ).toEqual([])
   })
 
   it('emits a blank line inside a list item empty', () => {
