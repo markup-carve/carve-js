@@ -24,6 +24,7 @@ import {
   isDangerousAttrName,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
+import { inlineText, slugify } from './heading-ids.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 import { trimNonNbsp } from './trim-non-nbsp.js'
 
@@ -460,6 +461,43 @@ function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
   if (held.classes?.length) push('.class')
   for (const key of Object.keys(keyValues)) push(key)
   return order
+}
+
+/**
+ * Whether `id` sits where `renderHtml` writes a GENERATED one: after every
+ * authored attribute.
+ *
+ * `data-source-line` is the one thing allowed to follow it, because that is a
+ * render annotation rather than an authored attribute and the renderer appends
+ * it last on purpose (`injectSourceLine`).
+ */
+function idInGeneratedPosition(node: P5Node): boolean {
+  const names = (node.attrs ?? []).map((attr) => attr.name.toLowerCase())
+  while (names[names.length - 1] === 'data-source-line') names.pop()
+  return names[names.length - 1] === 'id'
+}
+
+/**
+ * Whether `id` is a value the renderer would derive for a heading whose
+ * plain-text projection is `text`.
+ *
+ * THE DEFAULT SLUG ONLY, which is the same accepted limit `dropDerived` states
+ * for every other derived attribute: an importer cannot know which
+ * `HeadingIdOptions` the render used, and a value no default equals is
+ * indistinguishable from an authored one, so failing SAFE - keep - is the side
+ * to err on.
+ *
+ * The `-N` tail is `resolveHeadingIds`' own dedup shape, which starts at 2
+ * because the first occurrence takes the bare base. `-1` is therefore never a
+ * counter this engine wrote, and neither is a leading-zero run nor anything
+ * holding a non-digit.
+ */
+function isGeneratedHeadingId(id: string, text: string): boolean {
+  const base = slugify(text)
+  if (id === base) return true
+  if (!id.startsWith(`${base}-`)) return false
+  const count = id.slice(base.length + 1)
+  return count !== '' && !count.startsWith('0') && count !== '1' && /^[0-9]+$/.test(count)
 }
 
 class Importer {
@@ -1346,18 +1384,62 @@ class Importer {
     }
     const attrs = this.attrs(node, path)
     if (/^h[1-6]$/.test(tag)) {
-      if (attrs?.id !== undefined && this.writing) {
-        // A heading id from HTML is authored input, even when it equals the
-        // slug a fresh Carve parse would generate. Attribute order is
-        // exhaustive when present, so retain every populated slot.
-        //
-        // ON THE WRITING EXIT ONLY. `order` is a source-layout field and an
-        // import read no source, so the published tree records none of them
-        // (markup-carve/carve#1647); see `writing` above for why the writer
-        // still needs the slot.
-        attrs.order = slotOrderFromElement(node, attrs)
+      const children = this.blockInlines(node.childNodes ?? [], path, depth + 1)
+      let held = attrs
+      if (held?.id !== undefined) {
+        /*
+         * A heading id from HTML is authored input, even when it equals the
+         * slug a fresh Carve parse would generate - EXCEPT where the element
+         * itself says the renderer wrote it. `roundtrip` mode's input is
+         * Carve-produced HTML BY DEFINITION, so there the id can be read back
+         * as the generated one rather than assumed authored, and re-emitting it
+         * CHANGES THE RENDER: `renderHtml` puts a generated id after every
+         * authored attribute and an authored one in the slot it was written in,
+         * so `{.k}` and `{.k #H}` are two different documents. carve-rs ruled
+         * this in carve-rs#1354 / carve-rs#1355; this is the port
+         * (markup-carve/carve-js#1459).
+         *
+         * WHICH ELEMENT CARRIES THE ID, measured on this engine rather than
+         * assumed. A TOP-LEVEL heading is wrapped - `# H` renders
+         * `<section id="H"><h1>H</h1></section>` and the `<h1>` carries no id
+         * at all - so that id belongs to the SECTION, which is an unsupported
+         * element the importer unwraps before any heading arm sees it. A
+         * heading INSIDE a container is not sectioned, so the id sits on the
+         * `<h1>` itself, and so it does at top level under `sections: false`.
+         * This arm is that second placement, and it is the only one where the
+         * id is a heading attribute; reading a wrapper's id as a heading's
+         * would be a different claim about a different element.
+         *
+         * BOTH HALVES, AND NEITHER ALONE IS ENOUGH. Position alone eats the id
+         * an author wrote LAST (`{.k #Other}`); slug equality alone cannot tell
+         * `{.k}` from an id an author wrote FIRST whose value happens to be the
+         * slug (`{#H .k}`), which is the shape that makes this a combination
+         * bug rather than a defect in either half.
+         */
+        if (
+          this.mode === 'roundtrip' &&
+          idInGeneratedPosition(node) &&
+          isGeneratedHeadingId(held.id, inlineText(children))
+        ) {
+          // The renderer derives it again from the same text, so dropping it is
+          // the no-op `dropDerived` documents for every other derived
+          // attribute. Carrying it would spell an authored slot the source
+          // never had - and an id that was the whole of `attrs` leaves the
+          // heading with none rather than an empty attribute block.
+          const { id: _dropped, ...rest } = held
+          held = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
+        } else if (this.writing) {
+          // Authored. Attribute order is exhaustive when present, so retain
+          // every populated slot.
+          //
+          // ON THE WRITING EXIT ONLY. `order` is a source-layout field and an
+          // import read no source, so the published tree records none of them
+          // (markup-carve/carve#1647); see `writing` above for why the writer
+          // still needs the slot.
+          held.order = slotOrderFromElement(node, held)
+        }
       }
-      return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+      return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children, ...(held ? { attrs: held } : {}) }]
     }
     if (tag === 'p') {
       /*
