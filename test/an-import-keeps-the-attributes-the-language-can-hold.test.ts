@@ -201,13 +201,17 @@ describe('an import keeps the attributes the language can hold', () => {
     const raw = htmlToCarve('<form onfocus="steal()"><p>q</p></form>', { mode: 'roundtrip' })
     expect(raw.value).toContain('onfocus')
     expect(raw.report.diagnostics).toEqual([
-      // Pinned as it IS, not as it should read: `attrs()` runs for its
-      // diagnostics before the raw arm is taken, so this row claims a drop that
-      // the `raw-preserved` row on the next line undoes. Pre-existing and
-      // unchanged by carve-js#1156 - written down here because a report that
-      // names a loss which did not happen is the mirror of the one this ticket
-      // was filed about.
-      expect.objectContaining({ code: 'attribute-dropped', message: 'Dropped event-handler attribute onfocus on <form>' }),
+      // This row used to claim a DROP that the `raw-preserved` row on the next
+      // line undid - a report naming a loss which did not happen, the mirror of
+      // the one carve-js#1156 was filed about. markup-carve/carve-js#1468 kept
+      // the row and stopped it lying: the handler is in the output, which in a
+      // mode not safe for untrusted input is a stronger signal than a drop and
+      // takes `error` for it.
+      expect.objectContaining({
+        code: 'attribute-preserved',
+        severity: 'error',
+        message: 'Preserved event-handler attribute onfocus on <form> in the raw HTML this element is kept as',
+      }),
       expect.objectContaining({ code: 'raw-preserved', severity: 'warning' }),
     ])
     // The same input in the modes whose contract is untrusted HTML.

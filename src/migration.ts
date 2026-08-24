@@ -33,6 +33,10 @@ function fidelity(code: HtmlImportDiagnosticCode): MigrationFidelity {
     code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
     code === 'diagnostics-truncated'
   ) return 'degraded'
+  // Everything else is CARRIED, and `attribute-preserved` belongs here rather
+  // than beside `attribute-dropped` above: it is the row saying an attribute
+  // reached the output inside preserved raw bytes, so filing it as a drop would
+  // restate the false claim it exists to remove (markup-carve/carve-js#1468).
   return 'carried'
 }
 
