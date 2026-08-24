@@ -698,7 +698,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // a verbatim region is a silent degradation.
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 
-const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})? +(?:\[[ xX]\] +)?/
+const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
 const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|> |`{3,}|~{3,}|:{2,}|\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
 /**
  * A footnote definition line. Mirrors parse.ts.
@@ -783,7 +783,8 @@ function collectListItemIndentWarnings(
     const marker = LINT_LIST_ITEM.exec(markerLine.slice(markerOffset))
     if (!marker) return
     const baseColumn = visualColumnAt(markerLine, markerOffset) + visualIndent(marker[1]!).column
-    const bareWidth = marker[2] ? 2 : marker[3]!.length + marker[4]!.length + 1
+    const markerWidth = marker[2] ? 1 : marker[3]!.length + marker[4]!.length
+    const bareWidth = markerWidth + marker[6]!.length
     const legacyAttributeColumn = marker[5] ? baseColumn + bareWidth + marker[5]!.length : undefined
     items.push({
       startLine: pos.startLine,
@@ -798,6 +799,7 @@ function collectListItemIndentWarnings(
 
   const reported = new Set<number>()
   const active: LintItemColumn[] = []
+  const ambiguousFences = new Map<LintItemColumn, { kind: 'code' | 'colon'; run: string }>()
   let nextItem = 0
   let lastEnded: LintItemColumn | undefined
   for (let index = 0; index < lines.length; index++) {
@@ -817,7 +819,17 @@ function collectListItemIndentWarnings(
       undefined,
     )
     if (unrendered.has(lineNo)) continue
-    const authored = blockView(lines[index]!, (containing ?? lastEnded)?.quoteDepth ?? 0)
+    const owner = containing ?? lastEnded
+    const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
+    const openFence = owner ? ambiguousFences.get(owner) : undefined
+    if (openFence) {
+      const closes = openFence.kind === 'code'
+        ? new RegExp(`^${openFence.run[0] === '`' ? '`' : '~'}{${openFence.run.length},}[ \\t]*$`).test(authored.rest)
+        : new RegExp(`^:{${openFence.run.length}}[ \\t]*$`).test(authored.rest)
+      if (closes) ambiguousFences.delete(owner!)
+      reported.add(lineNo)
+      continue
+    }
     if (authored.column === 0 ||
         (!LINT_BLOCK_OPENER.test(authored.rest) && !isTableRow(authored.rest))) continue
     let item: LintItemColumn | undefined = containing
@@ -848,6 +860,10 @@ function collectListItemIndentWarnings(
       start,
       end: start + Math.max(1, authored.rest.match(/^\S+/)?.[0].length ?? 1),
     })
+    const codeFence = /^(`{3,}|~{3,})/.exec(authored.rest)
+    const colonFence = /^(:{3,})(?: |$)/.exec(authored.rest)
+    if (codeFence) ambiguousFences.set(item, { kind: 'code', run: codeFence[1]! })
+    else if (colonFence) ambiguousFences.set(item, { kind: 'colon', run: colonFence[1]! })
     reported.add(lineNo)
   }
   return reported

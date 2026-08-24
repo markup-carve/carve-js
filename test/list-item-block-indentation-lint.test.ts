@@ -47,7 +47,7 @@ describe('list item block indentation diagnostics', () => {
 
   it('does not double-report an over-indented fence with the generic fence rule', () => {
     const rules = lintCarve('- item\n\n   ```\n   code\n   ```\n').map((warning) => warning.rule)
-    expect(rules.filter((rule) => rule === 'list-item-block-overindented')).toHaveLength(2)
+    expect(rules.filter((rule) => rule === 'list-item-block-overindented')).toHaveLength(1)
     expect(rules).not.toContain('fence-delimiter-indentation')
   })
 
@@ -73,6 +73,7 @@ describe('list item block indentation diagnostics', () => {
     expect(findings('10. item\n\n   # detached\n')).toMatchObject([
       { rule: 'list-item-body-detached', line: 3 },
     ])
+    expect(findings('-   item\n    # exact after a wide separator\n')).toEqual([])
   })
 
   it('covers definitions but not escaped openers, comments, or prose', () => {
