@@ -52,12 +52,21 @@ function commentParagraph(): Document {
 
 describe("the writer's contract names its carve-outs", () => {
   describe('the two structural carve-outs are written and LOST, never refused', () => {
-    const shapes: Array<[string, () => Document, string]> = [
-      ['a paragraph holding one image', () => parse(' ![a](u)\n'), '![a](u)\n'],
-      ['a paragraph holding one comment', commentParagraph, '%% c\n'],
+    // The fourth column is what the HTML renderer produces for the shape. It is
+    // there to show the renderer ACCEPTS the tree - the reason the ruling
+    // declined to refuse it - and it is per-shape because the two shapes do not
+    // render alike. It used to be a shared `toContain('<p>')`, which held only
+    // because carve-js promoted a lone image away before the renderer saw one:
+    // since carve-js#1437 an INDENTED lone image stays a paragraph in the tree
+    // and the renderer collapses it to a bare `<img>`, the way carve-rs and
+    // carve-php always have. Asserting the wrapper here would pin an artifact of
+    // the old promotion against the other two engines.
+    const shapes: Array<[string, () => Document, string, string]> = [
+      ['a paragraph holding one image', () => parse(' ![a](u)\n'), '![a](u)\n', '<img src="u" alt="a">'],
+      ['a paragraph holding one comment', commentParagraph, '%% c\n', '<p></p>'],
     ]
 
-    for (const [label, tree, spelled] of shapes) {
+    for (const [label, tree, spelled, rendered] of shapes) {
       it(`${label}: the content's own spelling, and the wrapper is gone`, () => {
         const before = tree()
         expect(types(before)).toEqual(['paragraph'])
@@ -65,7 +74,8 @@ describe("the writer's contract names its carve-outs", () => {
         // Refusing here would break an editor's round trip on a tree the HTML
         // renderer accepts, which is the reason the ruling declined it.
         expect(() => renderCarve(before)).not.toThrow()
-        expect(renderHtml(before)).toContain('<p>')
+        expect(() => renderHtml(before)).not.toThrow()
+        expect(renderHtml(before)).toBe(rendered)
 
         const written = renderCarve(before)
         expect(written).toBe(spelled)

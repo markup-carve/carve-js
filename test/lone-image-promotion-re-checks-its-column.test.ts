@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToAstJson, parse } from '../src/index.js'
+import { carveToAstJson, carveToHtml, parse } from '../src/index.js'
 
 /**
  * PROMOTION RE-CHECKS THE COLUMN ON THE PUBLISHED TREE
@@ -91,6 +91,42 @@ describe('a lone image promotes only at its container content column', () => {
   it('leaves an unresolved reference a paragraph, flush or not', () => {
     expect(published('![a][nope]\n')).toEqual(['paragraph'])
     expect(published(' ![a][nope]\n')).toEqual(['paragraph'])
+  })
+
+  /**
+   * THE HTML MUST NOT MOVE, which is the half that makes the tree change safe.
+   *
+   * carve#1660 turns on a distinction the rendered output does not carry: a
+   * paragraph whose whole content is one image renders as a bare `<img>` with no
+   * `<p>` wrapper, at every column, on carve-rs, carve-php and the executable
+   * spec. This engine used to get that for free by promoting the paragraph away
+   * before the renderer saw one, so when the promotion started re-checking the
+   * column the renderer began emitting `<p><img></p>` for exactly the documents
+   * the ruling was about - corpus 411 caught it, and this engine's own suite
+   * could not, because its pinned spec corpus predates that category.
+   *
+   * So the render arm is pinned here beside the tree arm: they are one change,
+   * and a fix that moves only the tree is a regression whatever the AST says.
+   */
+  it('renders a bare img for an indented lone image, tree unchanged', () => {
+    expect(carveToHtml(' ![a](u)\n')).toBe('<img src="u" alt="a">')
+    expect(published(' ![a](u)\n')).toEqual(['paragraph'])
+  })
+
+  it('renders a bare img for an indented lone reference image', () => {
+    expect(carveToHtml(' ![a][r]\n\n[r]: u\n')).toBe('<img src="u" alt="a">')
+  })
+
+  it('still wraps a paragraph that holds more than the image', () => {
+    expect(carveToHtml(' ![a](u) and text\n')).toBe('<p><img src="u" alt="a"> and text</p>')
+  })
+
+  it('keeps an unresolved reference in its paragraph, as literal source', () => {
+    expect(carveToHtml('![a][nope]\n')).toBe('<p>![a][nope]</p>')
+  })
+
+  it('carries a block-attribute line onto the collapsed image', () => {
+    expect(carveToHtml('{#hero}\n ![a](u)\n')).toBe('<img src="u" alt="a" id="hero">')
   })
 
   /**
