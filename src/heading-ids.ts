@@ -17,6 +17,7 @@ import type {
   FigureGroup,
   Image,
   InlineNode,
+  Paragraph,
   Table,
   Text,
 } from './ast.js'
@@ -1195,6 +1196,173 @@ function captionFirstLineHasContent(children: InlineNode[]): boolean {
  * losing the figure). Emitting the promoted figure yields a portable
  * unescaped `^ …` line, matching carve-php.
  */
+/**
+ * A paragraph whose entire content is one REAL image.
+ *
+ * "Real" means direct or resolved-reference: an unresolved reference image
+ * renders as literal source text and keeps its `<p>` wrapper, so it is not a
+ * block image at any column. UNRESOLVED means no destination - PART 12 §3a
+ * keeps `ref` on a resolved reference too (carve#596).
+ *
+ * Shared by the two passes that act on this shape and disagree about the
+ * column: `promoteBlockImages` (parse/resolve time, column-gated) and
+ * `collapseLoneImageParagraphs` (render time, ungated). Keeping the predicate
+ * in one place is what stops the two from drifting into disagreeing about which
+ * paragraphs they are even talking about.
+ */
+function isLoneImageParagraph(b: BlockNode): b is Paragraph {
+  return (
+    b.type === 'paragraph' &&
+    b.children.length === 1 &&
+    b.children[0]!.type === 'image' &&
+    !isUnresolvedReference(b.children[0] as Image)
+  )
+}
+
+/**
+ * Render-time half of markup-carve/carve#1660: a sole-image paragraph is a bare
+ * `<img>` at EVERY column.
+ *
+ * The parse tree keeps an INDENTED lone image as `paragraph > image`, because a
+ * block image is a top-level block opener and §15's strict column-0 rule reaches
+ * it (`promoteBlockImages` above declines to promote one). The HTML cannot say
+ * so: corpus `411-a-lone-indented-image-is-a-paragraph-and-its-html-cannot-say-so`
+ * is one indented image and its `.html` is exactly `<img src="a.jpg"
+ * alt="Apollo">`, which is what carve-rs and carve-php both emit. The document's
+ * own name is the ruling - the tree says paragraph and the HTML does not repeat
+ * it.
+ *
+ * So the column gate is lifted here, once, ahead of every layout decision the
+ * renderer makes. That matters beyond the `<p>` itself: the blockquote, `<li>`
+ * and `<dd>` compact forms all fire on "one visible child and it is a
+ * paragraph", so collapsing inside `renderBlock` would still have wrapped
+ * `>   ![a](u)` as `<blockquote><p><img></p></blockquote>` where the other two
+ * engines give the expanded bare-image form. carve-rs took the same shape for
+ * the same reason (carve-rs#1347).
+ *
+ * The FIGURE half of `promoteBlockImages` stays column-gated on both paths, and
+ * deliberately: an indented image with a `^ ` caption is literal paragraph text
+ * in the HTML too (corpus `158-indented-image-and-caption-stay-literal`), so
+ * lifting the gate there would build a figure the author did not write. This
+ * pass cannot reach that shape anyway - a captioned paragraph holds three
+ * inlines, not one.
+ *
+ * COPY ON WRITE, because `renderHtml` is public API and the caller owns the
+ * `Document` it passed. A document with no lone-image paragraph is returned
+ * unchanged and allocates nothing; only when one exists is the block spine
+ * cloned down to the paragraphs that move.
+ *
+ * ITERATIVE, for the reason `documentHasAbbreviationDef` gives: a renderer
+ * refuses a tree past `MAX_RENDER_DEPTH` with a typed `RenderDepthError`, and
+ * this runs BEFORE that refusal, so a recursive walk would turn a documented
+ * refusal into a stack overflow on exactly the trees the refusal exists for.
+ */
+export function collapseLoneImageParagraphs(doc: Document): Document {
+  if (!hasLoneImageParagraph(doc)) return doc
+  const children = collapsedBlocks(doc.children)
+  const footnoteDefs = doc.footnoteDefs
+  let nextDefs = footnoteDefs
+  if (footnoteDefs) {
+    nextDefs = {}
+    for (const [label, blocks] of Object.entries(footnoteDefs)) {
+      nextDefs[label] = collapsedBlocks(blocks)
+    }
+  }
+  return { ...doc, children, ...(nextDefs ? { footnoteDefs: nextDefs } : {}) }
+}
+
+/** Whether any block in `doc` is a lone-image paragraph. The cheap gate. */
+function hasLoneImageParagraph(doc: Document): boolean {
+  const worklist: BlockNode[][] = [doc.children]
+  for (const blocks of Object.values(doc.footnoteDefs ?? {})) worklist.push(blocks)
+  while (worklist.length > 0) {
+    for (const b of worklist.pop()!) {
+      if (isLoneImageParagraph(b)) return true
+      pushChildBlockLists(b, worklist)
+    }
+  }
+  return false
+}
+
+/** `blocks` with every lone-image paragraph, at any depth, replaced by its image. */
+function collapsedBlocks(blocks: BlockNode[]): BlockNode[] {
+  const root = blocks.slice()
+  const worklist: BlockNode[][] = [root]
+  while (worklist.length > 0) {
+    const level = worklist.pop()!
+    for (let i = 0; i < level.length; i++) {
+      const b = level[i]!
+      if (isLoneImageParagraph(b)) {
+        const img = b.children[0] as Image
+        // A leading block-attribute line (`{#id}`) landed on the paragraph;
+        // carry it onto the image (the image's own inline attrs win on
+        // conflict, §15), so `{#id}` then an indented image renders the id the
+        // same way the flush spelling does - which is what carve-rs and
+        // carve-php emit. Written onto a COPY: the caller's image node is not
+        // ours to change.
+        level[i] = (
+          b.attrs ? { ...img, attrs: mergeAttrs(b.attrs, img.attrs ?? {}) } : img
+        ) as unknown as BlockNode
+        continue
+      }
+      const cloned = withClonedChildBlockLists(b)
+      if (cloned !== b) {
+        level[i] = cloned
+        pushChildBlockLists(cloned, worklist)
+      }
+    }
+  }
+  return root
+}
+
+/**
+ * The container recursion, as one function so the scan and the rewrite cannot
+ * disagree about it. Mirrors the `switch` at the foot of `promoteBlockImages`:
+ * the same six container shapes, because these are the two halves of one rule.
+ */
+function pushChildBlockLists(b: BlockNode, out: BlockNode[][]): void {
+  switch (b.type) {
+    case 'block_quote':
+    case 'admonition':
+    case 'div':
+    case 'figure_group':
+      out.push(b.children)
+      break
+    case 'list':
+      for (const item of b.items) out.push(item.children)
+      break
+    case 'definition_list':
+      for (const it of b.items) for (const d of it.definitions) out.push(d)
+      break
+    default:
+      break
+  }
+}
+
+/**
+ * A shallow copy of `b` whose child block lists are fresh arrays, or `b` itself
+ * when it holds none. The copies are what makes the rewrite above safe to do in
+ * place without touching the caller's tree.
+ */
+function withClonedChildBlockLists(b: BlockNode): BlockNode {
+  switch (b.type) {
+    case 'block_quote':
+    case 'admonition':
+    case 'div':
+    case 'figure_group':
+      return { ...b, children: b.children.slice() }
+    case 'list':
+      return { ...b, items: b.items.map((item) => ({ ...item, children: item.children.slice() })) }
+    case 'definition_list':
+      return {
+        ...b,
+        items: b.items.map((it) => ({ ...it, definitions: it.definitions.map((d) => d.slice()) })),
+      }
+    default:
+      return b
+  }
+}
+
 export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): void {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]!
@@ -1205,16 +1373,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
     // formatter keeps it a paragraph so those attrs survive.
     if (
       !figuresOnly &&
-      b.type === 'paragraph' &&
-      b.children.length === 1 &&
-      b.children[0]!.type === 'image' &&
-      // Only a REAL image (direct or resolved reference) promotes; an
-      // unresolved reference image renders as literal text (in HTML mode it is
-      // already a Text node here, so this only matters for the parse-only
-      // formatter path, where the unresolved Image survives). UNRESOLVED means
-      // no destination: PART 12 §3a keeps `ref` on a resolved reference too
-      // (carve#596).
-      !isUnresolvedReference(b.children[0] as Image) &&
+      isLoneImageParagraph(b) &&
       // Strict column-0 rule, the same one the figure arm below applies and for
       // the same reason (carve#1660): a top-level block opener must start at
       // column 0, so an image indented above its container's content column is

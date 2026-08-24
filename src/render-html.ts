@@ -41,8 +41,7 @@ import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
-import { inlineText } from './heading-ids.js'
-import { mergeAttrs } from './parse.js'
+import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -517,6 +516,15 @@ export function renderHtml(
   opts: RenderOptions = {},
   seededDocumentIds?: DocumentIdRegistry,
 ): string {
+  // A sole-image paragraph renders as a bare block image at EVERY column, and
+  // the parse tree deliberately does not say so (markup-carve/carve#1660). This
+  // is the one place the two are reconciled, and it has to be AHEAD of every
+  // layout decision below rather than inside the paragraph arm: the blockquote,
+  // <li> and <dd> compact forms each render their one paragraph child through
+  // `renderInlines` directly, never through `renderBlockNode`, so a collapse
+  // that lives in that arm cannot reach them (carve-js#1440). Copy on write -
+  // `ast` belongs to the caller.
+  ast = collapseLoneImageParagraphs(ast)
   // PART 9 §10: an extension may add semantic span names. Core renders them,
   // so the order below is the union in the canonical order rather than
   // whatever sequence the extensions were registered in.
@@ -1221,33 +1229,6 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       return `${pad}<h${node.level}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
-      // A PARAGRAPH WHOSE WHOLE CONTENT IS ONE IMAGE RENDERS AS A BARE `<img>`,
-      // with no `<p>` wrapper, AT EVERY COLUMN - what carve-rs, carve-php and the
-      // executable spec all render.
-      //
-      // This engine used to get that for free: `promoteBlockImages` turned every
-      // such paragraph into a block `image` before the renderer saw one. Since
-      // carve-js#1437 that promotion re-checks the column, so an INDENTED lone
-      // image correctly stays a paragraph in the tree - and without this arm it
-      // would start rendering `<p><img></p>`, moving HTML that carve#1660
-      // explicitly does not move. The tree distinction is real and the rendered
-      // output is not, which is the whole reason that ruling needed the AST shape
-      // comparison to see it at all.
-      //
-      // It is the RENDER path only. `toAstJson` still publishes the paragraph,
-      // so the two exits keep saying different things about the wrapper on
-      // purpose. An unresolved reference is excluded for the same reason it is
-      // excluded from the promotion: it has no destination and renders as the
-      // literal source the author typed, which needs its paragraph.
-      const only = node.children.length === 1 ? node.children[0] : undefined
-      if (only?.type === 'image' && !isUnresolvedReference(only)) {
-        // The paragraph's own attrs carry onto the image exactly as they do when
-        // the promotion runs (its own inline attrs win on conflict, §15), so a
-        // block-attribute line above the image is not lost to the collapse.
-        const image = node.attrs ? { ...only, attrs: mergeAttrs(node.attrs, only.attrs ?? {}) } : only
-        const rendered = `${pad}${renderImage(image, opts)}`
-        return opts.sourceLine ? withSourceLine(rendered, node.pos?.startLine) : rendered
-      }
       const inner = renderInlines(node.children, opts)
       return `${pad}<p${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</p>`
     }
