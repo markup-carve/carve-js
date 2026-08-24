@@ -22,12 +22,64 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve: string }>([
-  // EMPTY, and the staleness half above is why. `derived-endnotes-section` sat
-  // here while PART 9 §17 L7's consumed `loose` boolean was ruled and
-  // implemented (markup-carve/carve#1623, markup-carve/carve-js#1401) but not
-  // yet pinned; carve commit d2bd801b rewrote the fixture to exactly what this
-  // engine already wrote, so the entry goes out with the bump that reached it.
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown }>([
+  // `derived-endnotes-section` sat here while PART 9 §17 L7's consumed `loose`
+  // boolean was ruled and implemented (markup-carve/carve#1623,
+  // markup-carve/carve-js#1401) but not yet pinned; carve commit d2bd801b
+  // rewrote the fixture to exactly what this engine already wrote, so that
+  // entry went out with the bump that reached it.
+  //
+  // AN ENTRY CAN NAME EITHER EXIT. `carve` pins the source exit, `ast` the tree
+  // exit, and a window can be open on one while the other has already closed -
+  // which is exactly the shape below.
+  [
+    'auto-text-link',
+    {
+      // THE SPEC DECLARES THIS SAME WINDOW FROM ITS OWN SIDE:
+      // spec/tests/html-import-contract.check.mjs carries a `PIN_LAG` entry for
+      // `auto-text-link` reading "the source exit omits an authored heading ID
+      // that differs from its generated slug; fixed upstream by
+      // markup-carve/carve-js#1416, but the spec pin cannot advance until the
+      // unrelated round-trip regressions in that newer engine are resolved".
+      // The fixture is therefore a recording of the build the spec pins
+      // (github:markup-carve/carve-js#71add23f), which predates #1416.
+      //
+      // The SOURCE half of that window has already closed - `expected.crv` was
+      // written to the post-#1416 ruling and this engine reproduces it byte for
+      // byte - so no `carve` field is needed. The TREE half is still open, and
+      // the fixture's two files disagree with each other about it: parsing the
+      // fixture's OWN `expected.crv` through this engine yields
+      // `attrs.order: ['#id']`, because `{#Target}` is a spelled `#id` slot and
+      // PART 12 records the source-appearance order of the slots. No Carve
+      // source spelling `{#Target}` parses to an `attrs` without `order`, so
+      // `expected.ast.json` cannot be reached from `expected.crv` and is the
+      // pre-#1416 recording rather than a ruling this engine is behind.
+      // Re-recording it upstream deletes this entry; see the issue filed on
+      // markup-carve/carve from the bump that added it.
+      reason:
+        'an authored heading id is a spelled `#id` slot, so PART 12 records it in ' +
+        '`attrs.order` - the pinned fixture predates markup-carve/carve-js#1416',
+      ast: {
+        type: 'document',
+        children: [
+          {
+            type: 'heading',
+            level: 1,
+            children: [{ type: 'text', value: 'Target' }],
+            attrs: { id: 'Target', order: ['#id'] },
+          },
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: 'See ' },
+              { type: 'link', href: '#Target', children: [{ type: 'text', value: 'Target' }] },
+              { type: 'text', value: '.' },
+            ],
+          },
+        ],
+      },
+    },
+  ],
 ])
 
 /**
@@ -60,7 +112,7 @@ describe('shared HTML import contract', () => {
       const carve = htmlToCarve(html)
 
       const ahead = AHEAD_OF_PIN.get(fixture)
-      if (ahead) {
+      if (ahead?.carve !== undefined) {
         expect(carve.value, ahead.reason).toBe(ahead.carve)
         // The staleness half: when the pin moves past the clause the fixture is
         // rewritten to exactly this value, and the entry must be deleted.
@@ -81,7 +133,25 @@ describe('shared HTML import contract', () => {
       // fixture against it pins one implementation's internals as the portable
       // minimum, which is the defect the spec's own checker fixed in the commit
       // that re-recorded `traversal-shaped-index` in the published shape.
-      expect(withoutLocations(toAstJson(ast.value))).toEqual(expectedAst)
+      // BOTH SIDES ARE STRIPPED, which is what the spec's own reading over these
+      // same fixtures does (`assert.deepStrictEqual(withoutLocations(actual),
+      // withoutLocations(expected))`). Stripping only the engine's side was
+      // latent for as long as the comment above was true of every fixture - and
+      // markup-carve/carve#1655 added eight that record `srcByteLength: 0`, at
+      // which point a one-sided strip fails every one of them for a field the
+      // comparison exists to ignore.
+      const actualAst = withoutLocations(toAstJson(ast.value))
+      if (ahead?.ast !== undefined) {
+        expect(actualAst, ahead.reason).toEqual(ahead.ast)
+        // The staleness half, as above: the entry must FAIL, and be deleted,
+        // once the fixture is re-recorded to what this engine already writes.
+        expect(
+          withoutLocations(expectedAst),
+          `${fixture} now matches: delete its AHEAD_OF_PIN entry`,
+        ).not.toEqual(ahead.ast)
+      } else {
+        expect(actualAst).toEqual(withoutLocations(expectedAst))
+      }
       // THE REPORT IS THE SOURCE EXIT'S. A fixture's `expected.report.json`
       // records what the WRITER gave up, and the spec's own reading over these
       // fixtures compares it against `htmlToCarve`. The tree exit gives up
