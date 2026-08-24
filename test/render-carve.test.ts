@@ -129,9 +129,38 @@ describe('renderCarve corpus', () => {
     // 1370 documents with none (`CarveFmtCorpusTest::
     // testTheFormattedDocumentParsesToTheSameTree`), and an entry here would
     // silence the comparison whether or not the engine passed it.
-    it(`${name}: parses to the same tree`, () => {
-      expect(tree(carveToCarve(source))).toBe(tree(source))
-    })
+    //
+    // THE ONE EXEMPTION IS THE SPEC'S OWN, AND IT IS DERIVED, NOT LISTED. Where
+    // the corpus ships a `<slug>.fmt` sidecar, the canonical form is the SPEC's
+    // choice, and for corpus 411 that choice re-parses to a different tree: the
+    // source is a lone image indented by one space, which PART 12 reads as a
+    // paragraph, and the canonical form (markup-carve/carve#1673) dedents it to
+    // column 0, where the same image is a promoted block image. The invariant
+    // and the sidecar cannot both hold, and the sidecar is the spec speaking.
+    // carve-rs and carve-php fail this same stricter assertion on the same two
+    // documents; only the weaker `to_html(fmt(x)) == to_html(x)` half of PART 11
+    // §1 is normative, and the `semantic` case above still asserts it here.
+    //
+    // The exemption reads the sidecar rather than naming a slug, so it cannot
+    // drift, and it FAILS IN BOTH DIRECTIONS: the formatted tree must equal the
+    // sidecar's tree exactly, and it must genuinely DIFFER from the source's -
+    // so a document that starts round-tripping cleanly fails here and moves
+    // back to the invariant rather than sitting in a silent carve-out.
+    const sidecar = resolve(corpusDir, `${name}.fmt`)
+    const canonical = existsSync(sidecar) ? readFileSync(sidecar, 'utf8') : undefined
+    if (canonical !== undefined && tree(canonical) !== tree(source)) {
+      it(`${name}: matches the spec's canonical form, which re-parses differently`, () => {
+        expect(tree(carveToCarve(source))).toBe(tree(canonical))
+        expect(
+          tree(carveToCarve(source)),
+          `${name} now round-trips: drop the sidecar exemption`,
+        ).not.toBe(tree(source))
+      })
+    } else {
+      it(`${name}: parses to the same tree`, () => {
+        expect(tree(carveToCarve(source))).toBe(tree(source))
+      })
+    }
   }
 })
 

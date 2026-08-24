@@ -658,6 +658,17 @@ const IMPLEMENTED = new Set([
   'the-writer-spells-looseness-only-where-a-blank-line-cannot',
   'a-blank-line-loosens-an-item-only-when-a-paragraph-follows-it',
   'a-footnote-continuation-survives-a-blank-run',
+
+  // A LONE IMAGE RENDERS AS A BARE `<img>` AT EVERY COLUMN. That took two
+  // commits: #1438 gated the sole-image promotion on the image's own column, so
+  // the published tree keeps the paragraph, and #1443 runs the pass again from
+  // the renderer with the gate lifted, so the HTML does not move with it. The
+  // corpus states both halves - 411 indents the image by one space
+  // (markup-carve/carve#1662) and is titled for the second one, 412 spells it at
+  // column 0 as a direct, a full reference and a collapsed reference, with the
+  // unresolved reference as the counter-case (markup-carve/carve#1666).
+  'a-lone-indented-image-is-a-paragraph-and-its-html-cannot-say-so',
+  'a-lone-reference-image-at-column-0-in-every-spelling',
 ])
 
 /**
