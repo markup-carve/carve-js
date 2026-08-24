@@ -56,6 +56,18 @@ export const HTML_IMPORT_DIAGNOSTIC_CODES = [
   'element-dropped',
   'element-unwrapped',
   'attribute-dropped',
+  /**
+   * An attribute the policy refused to represent as a Carve attribute, and
+   * that reached the output ANYWAY, inside the bytes of an element `roundtrip`
+   * keeps whole (markup-carve/carve-js#1468).
+   *
+   * NOT `attribute-dropped` carrying a different message. The two are opposite
+   * facts about the same attribute, and a consumer that filters on the code
+   * rather than reading the prose would be told a drop happened that did not -
+   * which is the row somebody acts on, because `roundtrip` is the mode that is
+   * not safe for untrusted input.
+   */
+  'attribute-preserved',
   'style-unmapped',
   'table-degraded',
   'structure-unspellable',
@@ -529,7 +541,24 @@ class Importer {
    * promises: `at` is the document position of the LOSING ELEMENT and `seq`
    * the order this one was constructed in, which only ever breaks a tie.
    */
-  private readonly entries: Array<{ diagnostic: HtmlImportDiagnostic; at: number; seq: number }> = []
+  private readonly entries: Array<{
+    diagnostic: HtmlImportDiagnostic
+    at: number
+    seq: number
+    /**
+     * The element this row is ABOUT, and the row it becomes if that element
+     * ends up preserved whole as raw HTML (markup-carve/carve-js#1468).
+     *
+     * Only `attrs()` fills these in, and only for an attribute it refused: a
+     * refusal is a claim about what the OUTPUT lost, and the walk cannot know
+     * yet whether the output keeps the element verbatim. Recording both
+     * readings at the point that knows the attribute, and swapping at the point
+     * that knows the outcome, is what keeps the two from drifting - the
+     * alternative is a second copy of the wording next to every preserve arm.
+     */
+    owner?: P5Node
+    preserved?: Pick<HtmlImportDiagnostic, 'code' | 'message' | 'severity'>
+  }> = []
   /**
    * Every node of the parsed tree, numbered in DOCUMENT ORDER
    * (markup-carve/carve#1586).
@@ -682,6 +711,66 @@ class Importer {
   }
 
   /**
+   * An attribute this importer will not write as a Carve attribute, reported
+   * in BOTH of the readings the walk cannot yet choose between
+   * (markup-carve/carve-js#1468).
+   *
+   * The row goes out as `attribute-dropped`, which is what it is for every
+   * element the import rewrites. `preserveOwnAttributes` turns it into
+   * `attribute-preserved` where the element turned out to be kept whole, and
+   * the two messages are built here, side by side, from the same subject and
+   * the same reason - so the pair cannot say two different things about one
+   * attribute.
+   *
+   * `live` is the half that decides severity, and it is the SAFETY test rather
+   * than the old severity: an event handler, an injection sink or a value
+   * carrying a denied scheme is in the output and executable, in a mode
+   * `docs/html-import.md` calls unsafe for untrusted input. A dropped handler
+   * already spends `warning`, so a preserved one spending `warning` too would
+   * tell a filter nothing about which of the two it is looking at. `error` is
+   * not a failed import here; it is the only level left that separates them.
+   */
+  private refuseAttribute(
+    node: P5Node,
+    path: string,
+    subject: string,
+    reason: string,
+    severity: HtmlImportDiagnostic['severity'],
+    live: boolean,
+  ): void {
+    const tag = `<${node.tagName}>`
+    this.add('attribute-dropped', `Dropped ${subject} on ${tag}${reason}`, severity, path, node)
+    const entry = this.entries[this.entries.length - 1]!
+    entry.owner = node
+    entry.preserved = {
+      code: 'attribute-preserved',
+      message: `Preserved ${subject} on ${tag} in the raw HTML this element is kept as${reason}`,
+      severity: live ? 'error' : 'info',
+    }
+  }
+
+  /**
+   * The element's OWN refused-attribute rows, restated as what the preserved
+   * bytes make them (markup-carve/carve-js#1468).
+   *
+   * Every raw-preserve arm calls this, and calls it on the element it is about
+   * to hand back verbatim. Matching on the node rather than on the path is what
+   * keeps it to the element's own rows: a descendant's row names a deeper path
+   * but a different node, and rewriting one would claim something this arm did
+   * not decide.
+   *
+   * Rewriting IN PLACE rather than dropping and re-adding keeps each row's
+   * `seq`, so the attribute rows still stand ahead of the `raw-preserved` row
+   * for the same element, which is the order they have always come out in.
+   */
+  private preserveOwnAttributes(node: P5Node): void {
+    for (const entry of this.entries) {
+      if (entry.owner !== node || !entry.preserved) continue
+      entry.diagnostic = { ...entry.diagnostic, ...entry.preserved }
+    }
+  }
+
+  /**
    * The report as it stands, so an arm that ends up PRESERVING an element whole
    * can discard what the walk into it recorded (markup-carve/carve#1704).
    *
@@ -769,7 +858,7 @@ class Importer {
         // own wording - but not their own membership test. The set is the
         // renderer's.
         const kind = name.startsWith('on') ? 'event-handler' : 'injection-sink'
-        this.add('attribute-dropped', `Dropped ${kind} attribute ${name} on <${node.tagName}>`, 'warning', path, node)
+        this.refuseAttribute(node, path, `${kind} attribute ${name}`, '', 'warning', true)
       } else if (name === 'style') {
         this.styles(node, attr.value, keyValues, path)
       } else if (name === 'id') {
@@ -779,18 +868,18 @@ class Importer {
       } else if (ROUND_TRIP_MARKER_ATTRIBUTES.has(name)) {
         // A serializer's own marker rather than the author's content, so it is
         // not re-emitted as an attribute of the imported document.
-        this.add('attribute-dropped', `Dropped round-trip marker ${name} on <${node.tagName}>`, 'info', path, node)
+        this.refuseAttribute(node, path, `round-trip marker ${name}`, '', 'info', false)
       } else if (this.isConsumedHtmlAttribute(node, node.tagName ?? '', name)) {
         // Read as content or as an instruction somewhere else in this importer,
         // so keeping it here as well would give the same source two spellings.
       } else if (!isAttrIdentifier(name)) {
-        this.add('attribute-dropped', `Dropped unsupported attribute ${name} on <${node.tagName}>: not spellable as a Carve attribute name`, 'info', path, node)
+        this.refuseAttribute(node, path, `unsupported attribute ${name}`, ': not spellable as a Carve attribute name', 'info', false)
       } else if (/[\r\n]/.test(attr.value)) {
         // A quoted attribute value ENDS at the line break, so writing this back
         // produces an attribute block that does not reparse as one: it lands in
         // the document as literal `{name="first` text and the attribute is gone
         // anyway. Refused loudly rather than emitted as corruption.
-        this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value spans a line break, which a Carve attribute value cannot`, 'warning', path, node)
+        this.refuseAttribute(node, path, name, ': its value spans a line break, which a Carve attribute value cannot', 'warning', false)
       } else {
         // Everything the language can hold, held. `cite` on a block quote,
         // `open` on a `<details>` (PART 11 §6c's bare boolean, which the
@@ -807,11 +896,11 @@ class Importer {
           // source orders - a plain assignment let `<p style="text-align:left"
           // align="right">` come out right-aligned purely because `align` was
           // written second.
-          this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: a mapped CSS declaration already sets it`, 'info', path, node)
+          this.refuseAttribute(node, path, name, ': a mapped CSS declaration already sets it', 'info', false)
         } else {
           const laundered = launderableScheme(attr.value)
           if (laundered !== undefined) {
-            this.add('attribute-dropped', `Dropped ${name} on <${node.tagName}>: its value carries a ${laundered} URL the renderer does not reach`, 'warning', path, node)
+            this.refuseAttribute(node, path, name, `: its value carries a ${laundered} URL the renderer does not reach`, 'warning', true)
           } else {
             // `setOwn`, not `keyValues[name] = …`: a `<p __proto__="x">` would
             // run the prototype setter, store nothing, and lose the attribute
@@ -1778,6 +1867,7 @@ class Importer {
     // they take the inline arm of this same pair of answers, where the policy
     // that covers them is written down.
     if (this.mode === 'roundtrip') {
+      this.preserveOwnAttributes(node)
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
@@ -3009,15 +3099,16 @@ class Importer {
      * preserved bytes still carry would be a false report, and the one row this
      * arm owes is the `raw-preserved` it adds.
      *
-     * THE FIGURE'S OWN ATTRIBUTE ROWS ARE LEFT ALONE, and deliberately. `block()`
-     * reads them before this handler is entered, so an `onclick` on the `<figure>`
-     * still reports `attribute-dropped` while the raw bytes keep it. That is
-     * false in the same way, and it is EVERY raw-preserve arm's behavior in this
-     * mode, not this one's: a preserved `<form onclick>` reports it too. Removing
-     * it here alone would make one preserved element disagree with the others
-     * about what the report means, and it would delete the only row saying an
-     * event handler survived into the output. It is one defect with several
-     * spellings and belongs in one change over all of them.
+     * THE FIGURE'S OWN ATTRIBUTE ROWS ARE RESTATED rather than rolled back
+     * (markup-carve/carve-js#1468). `block()` reads them before this handler is
+     * entered, so an `onclick` on the `<figure>` used to report
+     * `attribute-dropped` while the raw bytes kept it - false in the same way,
+     * and it was EVERY raw-preserve arm's behavior in this mode rather than
+     * this one's. Deleting them would have been the same defect pointed the
+     * other way: the row saying an event handler SURVIVED into the output is
+     * the one a consumer might act on, and losing it is silent. So
+     * `preserveOwnAttributes` turns each of them into `attribute-preserved`,
+     * in every arm at once.
      *
      * A CAPTION-LESS FIGURE NEVER REACHES HERE. A figure is the CAPTIONED
      * wrapper (PART 9 §4b), so a `<figure>` with no `<figcaption>`, or one whose
@@ -3031,6 +3122,7 @@ class Importer {
       !(target !== undefined && FIGURE_ROUNDTRIP_REBUILDS.has(target.type))
     ) {
       this.restore(before)
+      this.preserveOwnAttributes(node)
       this.add('raw-preserved', 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target', 'warning', path, node)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
@@ -3190,6 +3282,7 @@ class Importer {
         // branch existed, and byte for byte the same output. Reported once for
         // the element rather than once per descendant, because the descendants
         // are not preserved separately - they are inside this one raw span.
+        this.preserveOwnAttributes(node)
         this.add('raw-preserved', 'Preserved unsupported <math> element as raw HTML', 'warning', path, node)
         return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
       }
@@ -3322,6 +3415,7 @@ class Importer {
      * verbatim in the mode whose contract is Carve-produced HTML.
      */
     if (this.mode === 'roundtrip') {
+      this.preserveOwnAttributes(node)
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
