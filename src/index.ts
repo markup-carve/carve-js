@@ -82,9 +82,12 @@ export {
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
 export {
   applyAstPatch,
+  applyReversibleAstPatch,
   createAstPatch,
+  createReversibleAstPatch,
   AstPatchError,
   type AstPatchOperation,
+  type ReversibleAstPatch,
 } from './ast-patch.js'
 export {
   mergeAst,
