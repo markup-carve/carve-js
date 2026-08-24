@@ -159,6 +159,16 @@ export {
 export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
 export { djotToCarve } from './djot-import.js'
 export {
+  migrateDjot,
+  migrateHtml,
+  migrateMarkdown,
+  type MigrationConfidence,
+  type MigrationDiagnostic,
+  type MigrationFidelity,
+  type MigrationResult,
+  type SourceFormat,
+} from './migration.js'
+export {
   lintCarve,
   formatLintWarnings,
   type LintWarning,
