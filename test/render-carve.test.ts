@@ -114,19 +114,36 @@ function isBareWrapper(node: unknown): node is { type: string; children: unknown
   return Array.isArray(children) && children.length === 1 && typeof children[0] === 'object' && children[0] !== null
 }
 
-/** The tree with every bare single-child wrapper dissolved into its child. */
+/**
+ * The tree with every bare single-child wrapper dissolved into its child.
+ *
+ * EVERY array-valued slot is walked, not just `children`. A block does not
+ * always reach its children through that key: a list holds `items`, a table
+ * holds `rows` and `cells`, and `caption`, `inline`, `content`, `title`,
+ * `columns` and `bodies` each carry nodes somewhere in the corpus. Walking
+ * `children` alone made this blind to a wrapper loss anywhere inside a list or
+ * a table - so a canonical form that dissolved a paragraph in a list item
+ * compared unequal here and was rejected as "more than a wrapper loss" when it
+ * was exactly a wrapper loss (corpus 411-5).
+ *
+ * Keyed on the SHAPE of the value rather than on a list of key names, so a new
+ * child-bearing slot is covered the day it appears instead of the day someone
+ * remembers to add it here. Non-node arrays are unaffected: `isBareWrapper`
+ * rejects anything that is not an object with exactly `type` and `children`.
+ */
 function withoutBareWrappers(node: unknown): unknown {
   if (node === null || typeof node !== 'object') return node
   if (Array.isArray(node)) return node.map(withoutBareWrappers)
   const src = node as Record<string, unknown>
-  if (!Array.isArray(src.children)) return src
-  return {
-    ...src,
-    children: src.children.map((child) => {
+  const out: Record<string, unknown> = { ...src }
+  for (const [key, value] of Object.entries(src)) {
+    if (!Array.isArray(value)) continue
+    out[key] = value.map((child) => {
       const walked = withoutBareWrappers(child)
       return isBareWrapper(walked) ? walked.children[0] : walked
-    }),
+    })
   }
+  return out
 }
 
 /**
