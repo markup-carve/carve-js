@@ -3911,13 +3911,16 @@ function consumeLooseKey(node: BlockNode): void {
     node.tight = false
     return
   }
-  // THE DEFINITION-LIST HALF HAS NO AST FIELD YET. PART 12 §8's
-  // `definition_list` carries no looseness, and the `<dd>` wrapper is derived
-  // from the description's block count, so a serialized tree cannot say which of
-  // the two spellings it came from. markup-carve/carve#1624 is that half; until
-  // it lands the looseness survives in SOURCE and not through an AST round trip,
-  // which is what a runtime-only field says - the same arrangement `refId` and
-  // `resolvedText` use, and `toAstJson` drops it for the same reason.
+  // THE DEFINITION-LIST HALF SETS ITS OWN FIELD, and PART 12 §8 publishes it
+  // (markup-carve/carve#1624, spec `cfb8d7bf`). The list half above reuses
+  // `tight`, which is required and already false-able; a `<dl>` has no such
+  // field to reuse, because a blank line between two ENTRIES does not loosen it
+  // at any entry count - so the SPELLED fact is the only thing that can say a
+  // one-block description wraps, and it is set here and serialized as-is.
+  //
+  // Written only where the key was spelled: this function runs off the consumed
+  // attribute, so a definition list that derived its own looseness never
+  // reaches it and publishes nothing (markup-carve/carve-js#1409).
   node.loose = true
 }
 

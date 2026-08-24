@@ -182,19 +182,24 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
-  // PART 9 §17 L7's `loose` on a DEFINITION LIST is runtime-only. PART 12 §8
-  // gives `definition_list` no looseness field, and the `<dd>` wrapper is
-  // derived from the description's block count, so a serialized tree cannot say
-  // which of the two spellings it came from. Publishing the runtime flag would
-  // put a property on the wire the schema does not name, which §11 refuses on
-  // the way back in - the same reason `refId` above is dropped rather than
-  // echoed. markup-carve/carve#1624 is the half that gives §8 the field; until
-  // then the definition-list looseness survives in SOURCE and not through a
-  // round trip, exactly as the grammar states.
-  if ((out ?? record)['type'] === 'definition_list' && (out ?? record)['loose'] !== undefined) {
-    const { loose: _loose, ...rest } = out ?? record
-    out = rest
-  }
+  // PART 9 §17 L7's `loose` on a DEFINITION LIST used to be dropped here, on
+  // the reading that PART 12 §8 named no looseness field so publishing one
+  // would put a property on the wire the schema does not name - which §11
+  // refuses on the way back in. §8 NAMES IT NOW (markup-carve/carve#1624, spec
+  // `cfb8d7bf`), so the drop is gone and the flag rides the wire.
+  //
+  // The distinction that made the drop wrong is the one §8's `const: true`
+  // encodes: the `<dd>` wrapper is derived from the description's block count
+  // in every OTHER definition list, but a blank line between two ENTRIES does
+  // not loosen a `<dl>` at all, so a SPELLED looseness is underivable at any
+  // entry count. Dropping it did not withhold a derivable fact, it deleted the
+  // only record of which of two spellings the document came from
+  // (markup-carve/carve-js#1409).
+  //
+  // Nothing replaces it: the record is copied wholesale, so `loose` now
+  // survives in both directions on its own. That is what separates this from
+  // `refId` and `resolvedText` above - those are RESOLUTION results a consumer
+  // recomputes, and this is authored input nothing can recompute.
 
   // `start: 1` is the ordered-list default spelled out, and the schema says the
   // field is written only "when it is not 1". An encoder is the thing that has
