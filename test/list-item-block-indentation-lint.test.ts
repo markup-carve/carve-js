@@ -50,4 +50,43 @@ describe('list item block indentation diagnostics', () => {
     expect(rules.filter((rule) => rule === 'list-item-block-overindented')).toHaveLength(2)
     expect(rules).not.toContain('fence-delimiter-indentation')
   })
+
+  it('uses the innermost item opened on the marker line', () => {
+    expect(findings('- - item\n\n    # exact\n')).toEqual([])
+    expect(findings('- - item\n\n     # over\n')).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3 },
+    ])
+  })
+
+  it('measures authored indentation after quote prefixes', () => {
+    expect(findings('> - item\n>\n>   # exact\n')).toEqual([])
+    expect(findings('> - item\n>\n>    # over\n')).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3, column: 6 },
+    ])
+  })
+
+  it('uses bare-marker columns for task and ordered items, including tabs', () => {
+    expect(findings('- [x] item\n\n  # exact\n')).toEqual([])
+    expect(findings('- [x] item\n\n\t# over\n')).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3, column: 2 },
+    ])
+    expect(findings('10. item\n\n   # detached\n')).toMatchObject([
+      { rule: 'list-item-body-detached', line: 3 },
+    ])
+  })
+
+  it('covers definitions but not escaped openers, comments, or prose', () => {
+    expect(findings('- item\n\n   [r]: /url\n')).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3 },
+    ])
+    expect(findings('- item\n\n   \\# literal\n')).toEqual([])
+    expect(findings('- item\n\n   %% comment\n')).toEqual([])
+  })
+
+  it('keeps a long flat migration scan linear enough for the lint path', () => {
+    const source = Array.from({ length: 3000 }, (_, index) =>
+      `-{.x${index}} item\n   # heading\n`,
+    ).join('')
+    expect(findings(source)).toHaveLength(3000)
+  })
 })

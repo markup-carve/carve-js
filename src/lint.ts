@@ -699,7 +699,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})? +(?:\[[ xX]\] +)?/
-const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|> |`{3,}|~{3,}|:{2,}|\|.*\||\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|> |`{3,}|~{3,}|:{2,}|\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
@@ -718,6 +718,7 @@ interface LintItemColumn {
   baseColumn: number
   contentColumn: number
   legacyAttributeColumn?: number
+  quoteDepth: number
 }
 
 /**
@@ -749,15 +750,39 @@ function collectListItemIndentWarnings(
     }
     return { column, chars, rest: line.slice(chars) }
   }
+  const visualColumnAt = (line: string, end: number): number => {
+    let column = 0
+    for (let i = 0; i < end; i++) {
+      column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
+    }
+    return column
+  }
+  const blockView = (line: string, quoteDepth: number): { column: number; chars: number; rest: string } => {
+    let prefixChars = 0
+    let view = line
+    // Quotes are source containers, not indentation. Peel only quote prefixes;
+    // list prefixes are deliberately retained because the AST item range below
+    // decides which list owns the candidate.
+    for (let depth = 0; depth < quoteDepth; depth++) {
+      const quote = /^[ \t]*>(?: |$)/.exec(view)
+      if (!quote) break
+      prefixChars += quote[0].length
+      view = view.slice(quote[0].length)
+    }
+    const indent = visualIndent(view)
+    const chars = prefixChars + indent.chars
+    return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
+  }
   const items: LintItemColumn[] = []
   walkDocument(doc, (node) => {
     if (node.type !== 'list_item') return
     const pos = (node as Positioned).pos
     if (!pos) return
     const markerLine = lines[pos.startLine - 1] ?? ''
-    const marker = LINT_LIST_ITEM.exec(markerLine)
+    const markerOffset = Math.max(0, (pos.startColumn ?? 1) - 1)
+    const marker = LINT_LIST_ITEM.exec(markerLine.slice(markerOffset))
     if (!marker) return
-    const baseColumn = visualIndent(marker[1]!).column
+    const baseColumn = visualColumnAt(markerLine, markerOffset) + visualIndent(marker[1]!).column
     const bareWidth = marker[2] ? 2 : marker[3]!.length + marker[4]!.length + 1
     const legacyAttributeColumn = marker[5] ? baseColumn + bareWidth + marker[5]!.length : undefined
     items.push({
@@ -765,6 +790,7 @@ function collectListItemIndentWarnings(
       endLine: pos.endLine ?? pos.startLine,
       baseColumn,
       contentColumn: baseColumn + bareWidth,
+      quoteDepth: (markerLine.slice(0, markerOffset).match(/>/g) ?? []).length,
       ...(legacyAttributeColumn === undefined ? {} : { legacyAttributeColumn }),
     })
   })
@@ -784,16 +810,16 @@ function collectListItemIndentWarnings(
       const ended = active.splice(j, 1)[0]!
       if (!lastEnded || ended.endLine >= lastEnded.endLine) lastEnded = ended
     }
-    if (unrendered.has(lineNo)) continue
-    const authored = visualIndent(lines[index]!)
-    if (authored.column === 0 || !LINT_BLOCK_OPENER.test(authored.rest)) continue
-
     const containing = active.reduce<LintItemColumn | undefined>(
       (deepest, candidate) => !deepest || candidate.contentColumn > deepest.contentColumn
         ? candidate
         : deepest,
       undefined,
     )
+    if (unrendered.has(lineNo)) continue
+    const authored = blockView(lines[index]!, (containing ?? lastEnded)?.quoteDepth ?? 0)
+    if (authored.column === 0 ||
+        (!LINT_BLOCK_OPENER.test(authored.rest) && !isTableRow(authored.rest))) continue
     let item: LintItemColumn | undefined = containing
     let rule: string | undefined
     if (item && authored.column > item.contentColumn) {
@@ -1129,6 +1155,7 @@ function collectSilentFailures(
     const m = LEAKED_BLOCK_MARKER.exec(first.value)
     if (!m) continue
     const loc = locate(first as Positioned, toUtf16)
+    if (listIndentLines.has(loc.line)) continue
     // 4a. The common authoring mistakes on a fence opener get a targeted
     //     hint instead of the generic marker warning: an unquoted trailing
     //     title (the VitePress/Docusaurus habit), typographic quotes (a CMS
