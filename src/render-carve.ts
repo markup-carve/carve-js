@@ -1112,7 +1112,7 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       // written back by the caption_number arm like every numbered caption.
       const fence = colonFenceFor(ctx)
       const body = renderColonFenceBody(node.children, ctx)
-      const caption = node.caption !== undefined ? `\n^ ${renderInlines(node.caption, ctx)}` : ''
+      const caption = node.caption !== undefined ? captionLine(node.caption, ctx) : ''
       return withAttrs(`${fence} figure\n${body}\n${fence}${caption}`)
     }
     case 'image':
@@ -2163,6 +2163,32 @@ function escapeSpanMarkerPayload(payload: string, attrs: Attrs | undefined): str
   return '\\' + payload
 }
 
+/**
+ * A caption line for a caption that spells something, and NOTHING otherwise.
+ *
+ * `^` with nothing after it is not a caption line: `caption_line` is the marker,
+ * its separator and inline content (PART 2), so a caption run that reaches the
+ * page as nothing leaves a bare caret behind, which the reparse reads as more of
+ * the block ABOVE it. The figure is lost AND the target is damaged - an image
+ * comes back as a paragraph holding the image and a literal `^`, a code block
+ * gains a `<p>^</p>` after it (markup-carve/carve-js#1423).
+ *
+ * SO THE LINE IS DROPPED RATHER THAN EMITTED EMPTY, which is the call carve#1608
+ * already made one construct over: a description that would write nothing is
+ * dropped, because the bare `:` line it used to emit was read as more of the
+ * TERM above it. Same shape, same answer - the loss is bounded to the caption
+ * instead of taking the target's own parse with it (PART 11 §10j).
+ *
+ * NO CARVE SOURCE REACHES THIS. A parsed caption always has content, so the
+ * empty run arrives from the AST ingest or from an importer, and the trim is
+ * Carve's whitespace rather than the host's: a caption holding a NO-BREAK SPACE
+ * spells something (PART 11 §7) and keeps its line.
+ */
+function captionLine(caption: InlineNode[], ctx: CarveContext): string {
+  const written = renderInlines(caption, ctx)
+  return trimNonNbsp(written) === '' ? '' : `\n^ ${written}`
+}
+
 function renderFigure(node: Figure, ctx: CarveContext): string {
   const target =
     node.target.type === 'image'
@@ -2170,7 +2196,7 @@ function renderFigure(node: Figure, ctx: CarveContext): string {
       : node.target.type === 'table'
         ? renderTable(node.target, ctx)
         : renderBlock(node.target, ctx)
-  return `${target}\n^ ${renderInlines(node.caption, ctx)}`
+  return `${target}${captionLine(node.caption, ctx)}`
 }
 
 /**

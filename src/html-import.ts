@@ -25,6 +25,7 @@ import {
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
 import { hasOwnKey, ownValue, setOwn } from './own-property.js'
+import { trimNonNbsp } from './trim-non-nbsp.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -2767,6 +2768,36 @@ class Importer {
         }
         return [target, ...targets.slice(1)]
       }
+      const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
+      /*
+       * A FIGURE WITH NO CAPTION IS NOT A FIGURE (PART 9 §4b: the node is the
+       * GENERIC CAPTIONED WRAPPER, and Carve builds one only from a `^ ` line on
+       * a captionable host). A `<figure>` carrying no `<figcaption>`, or one
+       * whose caption contributes nothing, therefore has nothing to build a
+       * figure FROM, and building one anyway made the two exits disagree: the
+       * tree said `figure` while the source said the target plus a literal `^`,
+       * because a caret with nothing after it is not a caption line
+       * (markup-carve/carve-js#1423). It reached every target - an image and a
+       * quote came back as a paragraph, a code block and a table gained a stray
+       * `<p>^</p>` after them.
+       *
+       * IT IS AN ADDITION AND NOT A LOSS, so it is fixed rather than declared:
+       * the `^` is the document coming back saying something it never said, and
+       * a `structure-unspellable` row is a ceiling an import may SIT inside, not
+       * a licence to change what the document means (`bareBlockImage`, below, says the
+       * same thing about the wrapper it takes off).
+       *
+       * The unwrap keeps `targets` as the body imported them rather than the
+       * caption HOST: `captionHost` takes a wrapper off an image because a
+       * figure's image target is the image itself, and with no figure there is
+       * no such slot - an authored `<p>` around the image stays a paragraph and
+       * takes its own declared row (markup-carve/carve-js#1422).
+       */
+      if (!this.captionSpellsSomething(caption)) {
+        this.add('element-unwrapped', 'Unwrapped a <figure> with no caption content: a figure is the captioned wrapper, and a caret with nothing after it is not a caption line', 'warning', path, node)
+        this.reportUnwrappedAttributes(node, attrs, 'figure', path)
+        return targets
+      }
       /*
        * PART 12 §16: the wrapper around a TABLE is the one figure this import
        * produces that Carve source cannot spell, so it survives in the AST and
@@ -2784,7 +2815,7 @@ class Importer {
           message: 'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
         })
       }
-      return [{ type: 'figure', target: target as never, caption: captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : [], ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
+      return [{ type: 'figure', target: target as never, caption, ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
@@ -3323,6 +3354,21 @@ class Importer {
   private text(node: P5Node): string {
     if (node.nodeName === '#text') return node.value ?? ''
     return (node.childNodes ?? []).map((child) => this.text(child)).join('')
+  }
+
+  /**
+   * Whether a caption run reaches the page at all.
+   *
+   * NOT `visible`, and the difference is one character. `visible` asks the host
+   * language's `trim()`, which counts U+00A0 as whitespace; PART 11 §7 puts it
+   * on the CONTENT side of Carve's layout/content split, so a caption holding
+   * only a NO-BREAK SPACE spells something and keeps its line. Asking `visible`
+   * here unwrapped `<figcaption>&nbsp;</figcaption>` and deleted a caption the
+   * writer would have written - the two halves of one rule disagreeing about
+   * what "nothing" means.
+   */
+  private captionSpellsSomething(nodes: InlineNode[]): boolean {
+    return nodes.some((node) => node.type !== 'text' || trimNonNbsp(node.value) !== '')
   }
 
   private visible(nodes: InlineNode[]): boolean {
