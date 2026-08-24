@@ -1286,7 +1286,17 @@ class Importer {
       return []
     }
     const attrs = this.attrs(node, path)
-    if (/^h[1-6]$/.test(tag)) return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+    if (/^h[1-6]$/.test(tag)) {
+      if (attrs?.id !== undefined) {
+        // A heading id from HTML is authored input, even when it equals the
+        // slug a fresh Carve parse would generate. Attribute order is
+        // exhaustive when present, so retain every populated slot.
+        attrs.order = ['#id']
+        if (attrs.classes?.length) attrs.order.push('.class')
+        attrs.order.push(...Object.keys(attrs.keyValues ?? {}))
+      }
+      return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
+    }
     if (tag === 'p') {
       /*
        * PART 11 §7 DECIDES WHAT AN IMPORT KEEPS, and it draws the line at
