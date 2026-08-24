@@ -976,6 +976,123 @@ class Importer {
     )
   }
 
+  private isDivLabel(node: P5Node): boolean {
+    return (
+      node.tagName === 'p' && (this.attr(node, 'class') ?? '').split(/\s+/).includes('div-label')
+    )
+  }
+
+  /**
+   * Every DOM node under one this importer consumes without walking it.
+   *
+   * The lift below removes the label paragraph before `blocks()` can reach it,
+   * so its text child is a node nothing else will ever charge - and a labelled
+   * container would then cost one node and one level LESS than the same DOM
+   * without a label, which is a way to process more than `maxNodes` allows by
+   * ADDING markup rather than removing it.
+   */
+  private chargeSubtree(node: P5Node, depth: number): void {
+    for (const child of node.childNodes ?? []) {
+      this.enter(depth + 1)
+      this.chargeSubtree(child, depth + 1)
+    }
+  }
+
+  /**
+   * PART 9 §10's grouping `[label]`, taken back off the `<p class="div-label">`
+   * the renderer degraded it to (markup-carve/carve-js#1413).
+   *
+   * A label has no spelling anywhere but on a container's OPENER, so leaving the
+   * paragraph in the body writes it back as ordinary content carrying the
+   * renderer's own class - `::: [g]` came back as a `{.div-label}` paragraph
+   * holding `g`. That is not a LOSS the import could declare; it is an ADDITION,
+   * the document saying something it never said, and a raw label holding markup
+   * said something NEW on every pass as the escaping compounded.
+   *
+   * The same shape carve-rs uses (markup-carve/carve-rs#1310, #1322), and it
+   * refuses in three places. Each refusal leaves the paragraph exactly where it
+   * was, which is also what makes the refusals the near-miss controls for the
+   * unwrap boundary: a div that lifted nothing kept nothing, so it must still
+   * unwrap.
+   */
+  private containerLabel(
+    body: P5Node[],
+    bodyPaths: string[],
+    depth: number,
+  ): { label: string; body: P5Node[]; bodyPaths: string[] } | undefined {
+    const at = body.findIndex((child) => child.tagName !== undefined)
+    if (at < 0 || !this.isDivLabel(body[at]!)) return undefined
+    /*
+     * TEXT BEFORE IT IS ALSO "FURTHER DOWN". The search finds the first ELEMENT,
+     * which is not the first thing in the container:
+     * `<div>prefix<p class="div-label">g</p></div>` has visible text ahead of
+     * the paragraph, and lifting the label onto the opener MOVES it in front of
+     * `prefix` - the reorder the first-element rule exists to prevent, arriving
+     * by the one route an element search cannot see. The renderer never writes
+     * bare text before the label, so a container shaped like this is foreign
+     * HTML rather than this engine's own output. Whitespace between the tags is
+     * not text an author wrote, so a pretty-printed container still lifts.
+     */
+    for (const before of body.slice(0, at)) {
+      if (before.nodeName === '#text' && (before.value ?? '').trim() !== '') return undefined
+    }
+    /*
+     * TEXT ONLY. `Div.label` is a raw string and the writer emits it raw, so
+     * lifting a paragraph holding markup would flatten the markup and lose it
+     * without a word.
+     */
+    const kids = body[at]!.childNodes ?? []
+    if (kids.some((kid) => kid.nodeName !== '#text')) return undefined
+    const label = kids.map((kid) => kid.value ?? '').join('')
+    /*
+     * AND NOTHING THE OPENER CANNOT SPELL. `]` closes the label and a newline
+     * ends the opener line, so neither can ride back out - a label carrying one
+     * would be written into source that re-reads as something else.
+     */
+    if (label.includes(']') || label.includes('\n')) return undefined
+    /*
+     * The element itself, and then everything under it - see `chargeSubtree`.
+     *
+     * AT THE DEPTH THE BLOCK WALK WOULD HAVE USED, which is `depth + 2` and not
+     * `depth + 1`: both callers hand their body to `blocks(..., depth + 1)`, and
+     * that enters each child through `block(..., depth + 2)`. Charging a level
+     * shallower let a labelled container pass a `maxDepth` the same DOM without
+     * a label is refused at - `<div id="x"><p class="div-label">g</p></div>`
+     * imported at 3 where its unlabelled twin needed 4. Same defect as the node
+     * charge below it, in the other budget.
+     */
+    this.enter(depth + 2)
+    this.chargeSubtree(body[at]!, depth + 2)
+    /*
+     * A LABEL IS A BARE STRING WITH NO ATTRIBUTE SLOT, so whatever the degraded
+     * paragraph carried cannot come with it - the same shape as an admonition
+     * title, and reported rather than dropped in silence. The structural
+     * `div-label` class is the exception and is consumed, because the renderer
+     * writes it back from the label itself.
+     */
+    const labelPath = bodyPaths[at] ?? ''
+    const own = this.attrs(body[at]!, labelPath)
+    const leftover = own && {
+      ...own,
+      classes: (own.classes ?? []).filter((name) => name !== 'div-label'),
+    }
+    if (leftover && !leftover.classes.length) delete (leftover as Attrs).classes
+    if (leftover && (leftover.id || leftover.classes || leftover.keyValues)) {
+      this.add(
+        'attribute-dropped',
+        `Dropped ${this.attrNames(leftover).join(', ')} on <p>: a container label has no attribute slot`,
+        'warning',
+        labelPath,
+        body[at]!,
+      )
+    }
+    return {
+      label,
+      body: body.filter((_, index) => index !== at),
+      bodyPaths: bodyPaths.filter((_, index) => index !== at),
+    }
+  }
+
   private isCountedAdmonitionTitle(node: P5Node): boolean {
     if (!this.isAdmonitionTitle(node)) return false
     const id = this.attr(node, 'id')
@@ -1269,7 +1386,15 @@ class Importer {
         if (titleNode) {
           // The element itself, not only its children - an empty title is a DOM
           // node the caller's `maxNodes` is counting, exactly as `<summary>` is.
-          this.enter(depth + 1)
+          //
+          // AT THE DEPTH THE BLOCK WALK WOULD HAVE USED. The body goes to
+          // `blocks(..., depth + 1)`, which enters each child through
+          // `block(..., depth + 2)`, so charging the lifted title a level
+          // shallower let a titled container pass a `maxDepth` the same DOM
+          // without a title is refused at. Found while giving the grouping
+          // label the same accounting (markup-carve/carve-js#1413); the node
+          // charge here was already right, only the depth was short.
+          this.enter(depth + 2)
           const titlePath = this.childPath(path, titleNode, titleAt)
           /*
            * A TITLE HOLDS INLINE CONTENT AND HAS NO ATTRIBUTE SLOT, so whatever
@@ -1292,14 +1417,24 @@ class Importer {
               titleNode,
             )
           }
-          title = this.blockInlines(titleNode.childNodes ?? [], titlePath, depth + 2)
+          title = this.blockInlines(titleNode.childNodes ?? [], titlePath, depth + 3)
         }
+        // THE GROUPING LABEL IS THE CONTAINER'S TOO, and it sits after the
+        // title the renderer wrote, so it is lifted off what the title lift
+        // left behind (markup-carve/carve-js#1413).
+        const lifted = this.containerLabel(body, bodyPaths, depth)
         return [
           {
             type: 'admonition',
             kind: container.kind,
             ...(title ? { title } : {}),
-            children: this.blocks(body, path, depth + 1, bodyPaths),
+            ...(lifted ? { label: lifted.label } : {}),
+            children: this.blocks(
+              lifted?.body ?? body,
+              path,
+              depth + 1,
+              lifted?.bodyPaths ?? bodyPaths,
+            ),
             ...(container.attrs ? { attrs: container.attrs } : {}),
           },
         ]
@@ -1315,8 +1450,58 @@ class Importer {
         }
         this.reportUnwrappedAttributes(node, attrs, tag, path)
       }
-      const children = this.blocks(node.childNodes ?? [], path, depth + 1)
-      return tag === 'div' && attrs ? [{ type: 'div', children, attrs }] : children
+      // THE LABEL IS LIFTED FIRST, because it is half of the test below. This
+      // arm never had a lift at all - it lived only on the container-CLASS arm
+      // above, so `::: figure [g]` reached it and a plain `<div>` never did.
+      const own = node.childNodes ?? []
+      const lifted =
+        tag === 'div'
+          ? this.containerLabel(
+              own,
+              own.map((child, index) => this.childPath(path, child, index)),
+              depth,
+            )
+          : undefined
+      const children = lifted
+        ? this.blocks(lifted.body, path, depth + 1, lifted.bodyPaths)
+        : this.blocks(own, path, depth + 1)
+      /*
+       * A DIV CARRYING NOTHING ONLY A CONTAINER CAN HOLD IS NOT A CONTAINER
+       * WORTH SPELLING, so it unwraps to its content and the `:::` fence is not
+       * written (markup-carve/carve#1578). A bare `<div>` carries no meaning of
+       * its own: the fence buys the reader nothing and costs two lines of markup
+       * nobody asked for.
+       *
+       * THE BOUNDARY IS WHAT ONLY A CONTAINER CAN HOLD, rather than the tag -
+       * and today that is an attribute the language can hold OR a grouping
+       * label. carve#1578 wrote the test as `attrs` as a proxy for that
+       * principle, and its own rationale said why: "the moment a div carries any
+       * attribute the language can hold, the fence comes back, because then
+       * there IS something only the container can hold." A label has no spelling
+       * anywhere but on an opener, so it is exactly as much "only a container
+       * can hold it" as an attribute is; the proxy was simply narrower than the
+       * principle it stood in for, and when the two disagree the rationale
+       * governs (markup-carve/carve-rs#1315, markup-carve/carve#1650).
+       *
+       * Keeping the narrow test was not a declarable loss either, which is what
+       * settles it. `::: [g]` came back as a `{.div-label}` PARAGRAPH - the
+       * container gone and the label now body content, so the document said
+       * something it never said. A loss can be declared and an ADDITION cannot.
+       *
+       * The test is still on what the div KEPT, not on its markup: a label the
+       * lift REFUSED was never lifted, so such a div kept nothing and unwraps
+       * exactly as before, and `<div style="color:red">` keeps nothing after the
+       * style map refuses the declaration.
+       */
+      if (tag !== 'div' || (!attrs && !lifted)) return children
+      return [
+        {
+          type: 'div',
+          ...(lifted ? { label: lifted.label } : {}),
+          children,
+          ...(attrs ? { attrs } : {}),
+        },
+      ]
     }
     // The four block tags with no mapping: `address`, `fieldset`, `form` and
     // `hgroup`. The EMBEDS do not reach here - none of them is in `BLOCK`, so
