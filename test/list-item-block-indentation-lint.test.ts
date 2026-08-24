@@ -84,6 +84,25 @@ describe('list item block indentation diagnostics', () => {
     expect(findings('- item\n\n   %% comment\n')).toEqual([])
   })
 
+  it.each([
+    '# heading',
+    '>',
+    '> quote',
+    '```',
+    '~~~',
+    '::: note',
+    ':: term',
+    '| a |',
+    '---',
+    '{.class}',
+    '[ref]: /url',
+    '[^note]: text',
+  ])('covers the C3 block-opener family: %s', (opener) => {
+    expect(findings(`- item\n\n   ${opener}\n`)).toMatchObject([
+      { rule: 'list-item-block-overindented', line: 3 },
+    ])
+  })
+
   it('keeps a long flat migration scan linear enough for the lint path', () => {
     const source = Array.from({ length: 3000 }, (_, index) =>
       `-{.x${index}} item\n   # heading\n`,

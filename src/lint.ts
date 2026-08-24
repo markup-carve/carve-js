@@ -699,7 +699,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
-const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|> |`{3,}|~{3,}|:{2,}|\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|:{2,}|\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
