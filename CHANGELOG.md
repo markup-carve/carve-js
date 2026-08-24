@@ -20,6 +20,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The table-of-contents nav carries an accessible name**, from a new `labels` key `tocNav` (markup-carve/carve#1547, ruling markup-carve/carve#1509, #1326).
 - **`htmlToCarve` takes the `labels` map the HTML was rendered with** (markup-carve/carve#1500). It layers over the defaults; omitting it changes nothing.
 - **`SourceUnspellableError`, exported**: the canonical writer refuses an empty `raw_inline` instead of emitting one (#1209).
+- **`migrateHtml`, `migrateMarkdown` and `migrateDjot`, exported** (#1429). One versioned `MigrationResult` for every source format, whose HTML diagnostics carry a `fidelity` and a `confidence` beside the import code.
+- **`createReversibleAstPatch` and `applyReversibleAstPatch`, exported** (#1426). A patch carries its own inverse and a fingerprint of both trees, so a replay against stale content is refused rather than applied.
+- **`lintAccessibility`, exported** (#1428). Two rules to start, `a11y/image-alt` and `a11y/heading-jump`, each reporting the offsets of the node it found.
+- **`tryRenderHtmlStreaming`, exported** (#1427). The sink is written only once the borrowed HTML path has accepted the whole source; anything it rejects returns `needs-ast` and emits nothing.
 
 ### Changed
 
@@ -44,6 +48,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Document IDs are carried through conversion instead of rebuilt** (#1239). Public `parse` / `resolve` / `renderHtml` composition is unchanged.
 - **Core inline parsing skips punctuation dispatch for ordinary prose runs** (#1235).
 - **The Prettier plugin and the published pre-commit hooks claim `.crv` only** (#1269). **BREAKING for a `.carve` file**: rename it to `.crv`.
+- **BREAKING: a `const`-valued wire field is checked when `fromAstJson` decodes it** (#1418, #1425, PART 12 §12). `strong.boldItalic`, `list.bareMarker`, `citation_group.mode` and `definition_list.loose` decoded unchecked and rode back out on the wire; a payload spelling any of them with another value is now refused with the typed field error.
 
 ### Deprecated
 
@@ -122,6 +127,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Three parser seams found by the combinatorial corpus** (#1226, markup-carve/carve#1418, markup-carve/carve#1419, markup-carve/carve#1421): an unclosed inline literal runs to the end of its block, a quoted line comment closes the quote's lazy paragraph, and a terminal comment-only verse line keeps its newline.
 - **An unmarked definition-shaped lazy line inside a quoted list stays visible text** (#1208, markup-carve/carve#1400).
 - **A code block's trailing blank lines survive an HTML import** (#1282).
+- **A grouping label keeps a div's fence, and comes back on its opener** (#1413, #1417, markup-carve/carve#1578, PART 9 §10). `::: [g]` used to import as a `{.div-label}` paragraph with the container gone, and a labelled container also cost less against the node and depth budgets than its unlabelled twin.
+- **A caption line with nothing after it is not a caption** (#1423, #1431, PART 9 §4b). A `<figure>` whose caption contributes nothing unwraps and is reported, and the writer omits a caption line that would spell nothing, instead of leaving a bare caret the reparse read as more of the block above.
+- **Titled media emits one `title` attribute** (#1424, #1430). A destination title occupies the HTML slot, so a `title=` key from an attribute block no longer duplicates it on an image or a link.
+- **An authored heading id survives an HTML import** (#1416). `htmlToAst` and `htmlToCarve` used to disagree about an id that matched the slug a fresh parse would generate.
+- **An authored paragraph around a lone image is a declared loss** (#1419, #1422). `<p><img></p>` is written as the standalone image shape, and the report now names the wrapper and any attribute the image overwrites.
 
 ## [0.1.4] - 2026-08-18
 
