@@ -88,12 +88,10 @@ const schemaCodes = schema.properties!.diagnostics!.items!.properties!.code!.enu
  * let this engine publish a code the format does not name.
  */
 const AHEAD_OF_PIN: ReadonlyArray<{ code: string; reason: string }> = [
-  {
-    code: 'structure-split',
-    // markup-carve/carve#1636, landed in the spec as `structure-split` in
-    // `resources/html-import-schema.json`. The pinned spec here predates it.
-    reason: 'one source structure written as more than one, ruled in markup-carve/carve#1636',
-  },
+  // EMPTY, and the staleness half below is why. `structure-split` sat here
+  // until the pin reached markup-carve/carve#1636, which names the code in
+  // `resources/html-import-schema.json`; the entry went out with the bump that
+  // made it true rather than outliving it as slack.
 ]
 
 describe('the HTML import report answers to the published schema', () => {
