@@ -1260,15 +1260,21 @@ function isLoneImageParagraph(b: BlockNode): b is Paragraph {
 export function collapseLoneImageParagraphs(doc: Document): Document {
   if (!hasLoneImageParagraph(doc)) return doc
   const children = collapsedBlocks(doc.children)
-  const footnoteDefs = doc.footnoteDefs
-  let nextDefs = footnoteDefs
-  if (footnoteDefs) {
-    nextDefs = {}
-    for (const [label, blocks] of Object.entries(footnoteDefs)) {
-      nextDefs[label] = collapsedBlocks(blocks)
-    }
-  }
-  return { ...doc, children, ...(nextDefs ? { footnoteDefs: nextDefs } : {}) }
+  const defs = doc.footnoteDefs
+  // `Object.fromEntries`, not `nextDefs[label] = …` into an object literal. A
+  // footnote label is author-controlled and `[^__proto__]: body` is a real,
+  // resolvable definition here - `Object.getOwnPropertyNames(doc.footnoteDefs)`
+  // reports `__proto__`. Plain assignment onto `{}` finds `Object.prototype`'s
+  // accessor instead of creating an own property, so that definition would be
+  // silently DROPPED from the copy, and only in documents that also hold a
+  // lone-image paragraph: the reference then falls back to literal source and
+  // the whole footnote section disappears. `fromEntries` defines rather than
+  // assigns. Same hazard `ownValue` (src/own-property.ts) exists for on the
+  // read side; found by `codex review`.
+  const footnoteDefs = defs
+    ? Object.fromEntries(Object.entries(defs).map(([label, blocks]) => [label, collapsedBlocks(blocks)]))
+    : undefined
+  return { ...doc, children, ...(footnoteDefs ? { footnoteDefs } : {}) }
 }
 
 /** Whether any block in `doc` is a lone-image paragraph. The cheap gate. */

@@ -176,6 +176,25 @@ describe('rendering does not rewrite the caller tree', () => {
     expect(doc).toEqual(before)
   })
 
+  /**
+   * A FOOTNOTE LABEL IS AUTHOR-CONTROLLED, and `[^__proto__]: body` is a real,
+   * resolvable definition - `Object.getOwnPropertyNames(doc.footnoteDefs)`
+   * reports `__proto__` for it. Copying that map with `next[label] = …` onto an
+   * object literal finds `Object.prototype`'s accessor instead of creating an
+   * own property, so the definition vanishes from the copy.
+   *
+   * The failure is invisible except in combination: it needs a lone-image
+   * paragraph in the SAME document, because the pass returns the document
+   * untouched otherwise. Then the reference resolves against nothing, falls back
+   * to literal source, and the entire footnote section is gone from the output.
+   * Found by `codex review`, and reproduced before it was believed.
+   */
+  it('keeps a footnote definition whose label is a prototype key', () => {
+    const html = carveToHtml('[^__proto__]: body text\n\ncall[^__proto__]\n\n ![a](u)\n')
+    expect(html).toContain('<p>body text<a href="#fnref1"')
+    expect(html).not.toContain('[^__proto__]')
+  })
+
   // A `paragraph > image` also arrives from `--from-json` and from a tree built
   // through the API, where no column was ever recorded. Those collapse too: the
   // answer is a property of the shape, not of how it got here.
