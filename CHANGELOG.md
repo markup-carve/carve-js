@@ -111,6 +111,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **An all-blank raw payload renders, and survives `fmt` unchanged** (#1212, #1214, markup-carve/carve#1401).
 - **A hyphen run that opens a word after whitespace is a flag, not a dash**, so `git log --oneline` keeps its hyphens (markup-carve/carve#1443, PART 9 §8).
 - **A continuation marker attaches only a flush-left block** (#1244, markup-carve/carve#1436, §17 L3).
+- **A definition list's spelled looseness rides the wire** (#1409, #1412), so an
+  importer and a renderer agree on whether the list is loose.
+- **A lone image is a block, not a synthesized paragraph** (#1411, #1414), matching
+  what an HTML import writes elsewhere for a captioned block.
 - **A lazy marker line's definition defines nothing** (#1229 via #1230, markup-carve/carve#1428, markup-carve/carve#1429).
 - **The lazy guard no longer depends on whether an extension is registered** (#1231 via #1234, markup-carve/carve#1435, markup-carve/carve#1437).
 - **A definition hosted by an emptied marker item is written back into it** (#1233, markup-carve/carve#620, PART 11 §1).
