@@ -98,6 +98,66 @@ function sortedAttrSlots(attrs: unknown): unknown {
 
 const tree = (source: string): string => JSON.stringify(canonicalTree(carveToAstJson(source)))
 
+/**
+ * True where a node is a bare WRAPPER: one child and nothing of its own.
+ *
+ * `type` and `children` and no third key, so the node carries no attributes, no
+ * label and no value that dissolving it would take with it. That is exactly the
+ * bound PART 11 §1c states for the loss it permits - "the content, its
+ * attributes and its neighbours all survive as themselves".
+ */
+function isBareWrapper(node: unknown): node is { type: string; children: unknown[] } {
+  if (node === null || typeof node !== 'object' || Array.isArray(node)) return false
+  const keys = Object.keys(node).sort()
+  if (keys.length !== 2 || keys[0] !== 'children' || keys[1] !== 'type') return false
+  const children = (node as { children: unknown }).children
+  return Array.isArray(children) && children.length === 1 && typeof children[0] === 'object' && children[0] !== null
+}
+
+/** The tree with every bare single-child wrapper dissolved into its child. */
+function withoutBareWrappers(node: unknown): unknown {
+  if (node === null || typeof node !== 'object') return node
+  if (Array.isArray(node)) return node.map(withoutBareWrappers)
+  const src = node as Record<string, unknown>
+  if (!Array.isArray(src.children)) return src
+  return {
+    ...src,
+    children: src.children.map((child) => {
+      const walked = withoutBareWrappers(child)
+      return isBareWrapper(walked) ? walked.children[0] : walked
+    }),
+  }
+}
+
+/**
+ * A document's tree with the wrappers PART 11 §1c may dissolve taken out.
+ *
+ * Two documents that agree here differ by NOTHING BUT wrapper loss. That is
+ * what qualifies a pinned canonical form as a §1c ceiling rather than a
+ * disagreement: dropped content, a reordering, a changed attribute or a changed
+ * node type all survive this normalization and still compare unequal.
+ *
+ * Not applied to the root, which has no parent to dissolve it into.
+ */
+const shapeWithoutWrappers = (source: string): string =>
+  JSON.stringify(withoutBareWrappers(canonicalTree(carveToAstJson(source))))
+
+/** The spec's pinned canonical form for a document, where the corpus ships one. */
+const canonicalForm = (name: string): string | undefined => {
+  const sidecar = resolve(corpusDir, `${name}.fmt`)
+  return existsSync(sidecar) ? readFileSync(sidecar, 'utf8') : undefined
+}
+
+/** A corpus document's source. */
+const corpusSource = (name: string): string => readFileSync(resolve(corpusDir, `${name}.crv`), 'utf8')
+
+/** Every document whose pinned canonical form re-parses differently from its source. */
+const sidecarCeilings = (): string[] =>
+  cases.filter((name) => {
+    const canonical = canonicalForm(name)
+    return canonical !== undefined && tree(canonical) !== tree(corpusSource(name))
+  })
+
 describe('renderCarve corpus', () => {
   for (const name of cases) {
     const source = readFileSync(resolve(corpusDir, `${name}.crv`), 'utf8')
@@ -142,19 +202,50 @@ describe('renderCarve corpus', () => {
     // §1 is normative, and the `semantic` case above still asserts it here.
     //
     // The exemption reads the sidecar rather than naming a slug, so it cannot
-    // drift, and it FAILS IN BOTH DIRECTIONS: the formatted tree must equal the
-    // sidecar's tree exactly, and it must genuinely DIFFER from the source's -
-    // so a document that starts round-tripping cleanly fails here and moves
-    // back to the invariant rather than sitting in a silent carve-out.
-    const sidecar = resolve(corpusDir, `${name}.fmt`)
-    const canonical = existsSync(sidecar) ? readFileSync(sidecar, 'utf8') : undefined
+    // drift onto a document it was not measured against.
+    //
+    // AND carve-rs's §1c PREDICATE IS THE CANONICAL MECHANISM, not this one
+    // (markup-carve/carve#1679). It states the rule directly - a predicate over
+    // what the shape SPELLS, a paragraph holding one `image` or one `comment`,
+    // citing the clause - where reading the sidecar makes conformance depend on
+    // a spec ARTIFACT existing. A sidecar is EVIDENCE that a shape has the
+    // property; it is not the definition of it. The ruling keeps this version
+    // for the release and asks the engine to converge on the predicate, so:
+    // do not copy the sidecar shape into a fourth place.
+    //
+    // A SECOND `not.toBe` AGAINST THE SOURCE TREE WOULD BE DEAD, and it is
+    // deliberately not written back. It was here, and markup-carve/carve-js#1452
+    // established it could not fail: reaching it requires the assertion above to
+    // have passed, so `tree(carveToCarve(source)) === tree(canonical)`, and the
+    // branch is only entered when `tree(canonical) !== tree(source)` - so the
+    // inequality holds by construction and no input can report anything.
+    // markup-carve/carve#755 catalogs eleven checks that could not detect what
+    // they claimed. What that assertion reached for is real and is asked once,
+    // over the corpus, where it CAN fail - see `the PART 11 §1c ceiling is
+    // reached` below. The per-document staleness half needs no assertion at all:
+    // a document that starts round-tripping cleanly stops matching this branch's
+    // own condition and falls through to the plain invariant.
+    const canonical = canonicalForm(name)
     if (canonical !== undefined && tree(canonical) !== tree(source)) {
       it(`${name}: matches the spec's canonical form, which re-parses differently`, () => {
-        expect(tree(carveToCarve(source))).toBe(tree(canonical))
+        // THE DIFFERENCE MUST BE A WRAPPER LOSS AND NOTHING ELSE. Without this
+        // the exemption keys on "the sidecar re-parses differently" and would
+        // accept ANY tree change a future pinned form carried - a dropped node,
+        // a reordering, a changed attribute - as canonical. §1c licenses losing
+        // a WRAPPER, so that is what is checked, as a property of the shapes
+        // rather than as a list of slugs that goes stale on the next
+        // renumbering.
         expect(
-          tree(carveToCarve(source)),
-          `${name} now round-trips: drop the sidecar exemption`,
-        ).not.toBe(tree(source))
+          shapeWithoutWrappers(canonical),
+          `the pinned canonical form for ${name} differs from its source by more than a ` +
+            `PART 11 §1c wrapper loss, so it is not a ceiling this exemption covers`,
+        ).toBe(shapeWithoutWrappers(source))
+        // Every writer regression the invariant would have caught is caught
+        // here instead, including the one worth naming: a writer that started
+        // preserving the wrapper would emit the SOURCE's tree, which is not the
+        // sidecar's, so this goes red and the exemption is re-argued rather
+        // than quietly covering it.
+        expect(tree(carveToCarve(source))).toBe(tree(canonical))
       })
     } else {
       it(`${name}: parses to the same tree`, () => {
@@ -162,6 +253,32 @@ describe('renderCarve corpus', () => {
       })
     }
   }
+
+  /*
+   * THE PART 11 §1c EXEMPTION IS REACHED, so it cannot rot unnoticed.
+   *
+   * The per-document branch above is taken SILENTLY: if the corpus or this
+   * engine changed so that no document's pinned canonical form re-parsed
+   * differently from its source, every document would fall through to the plain
+   * invariant, the whole branch would stop being generated, and nothing would
+   * say so. The carve-out would then sit in this file describing a ceiling that
+   * no longer exists - which is how a guard stops guarding.
+   *
+   * Asked once, over the corpus, because it is a question about the corpus. It
+   * fails in the direction the deleted per-document `not.toBe` could not: the
+   * day a lone indented image round-trips cleanly, this goes red and the branch
+   * and this test are deleted together.
+   *
+   * The message names the documents rather than only counting them, so a corpus
+   * renumbering reads as the rename it is.
+   */
+  it('the PART 11 §1c ceiling is reached', () => {
+    expect(
+      sidecarCeilings(),
+      'no pinned canonical form re-parses differently from its source: the PART 11 §1c ' +
+        'exemption above is dead and should be deleted',
+    ).not.toEqual([])
+  })
 })
 
 describe('renderCarve targeted canonicalization', () => {
@@ -234,6 +351,14 @@ describe('renderCarve targeted canonicalization', () => {
     const src = '{.line-block}\n:::\na\nb\n:::\n'
     const formatted = carveToCarve(src)
     expect(carveToHtml(formatted)).toBe(carveToHtml(src))
+    // SWEPT AND LIVE (markup-carve/carve-js#1452). This is the file's other
+    // negative expectation standing behind a positive one, so it was checked
+    // for the same defect and is not an instance of it: the two spellings
+    // render differently today (`<p>a\nb</p>` against `<p>a<br>\nb</p>`), so a
+    // rewrite to the sugar fails the line above and this one never reports -
+    // but the day the renderer stopped putting a `<br>` there, the line above
+    // would pass and only this would catch the rewrite. It has a failing input,
+    // where the one #1452 deleted had none.
     expect(formatted).not.toContain('::: |')
   })
 
