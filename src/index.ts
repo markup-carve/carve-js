@@ -69,6 +69,7 @@ export {
 } from './html-import.js'
 export type { ParseOptions } from './parse.js'
 export { toSourceLayout, type SourceLayout, type SourceLayoutNode } from './source-layout.js'
+export { lintAccessibility, type AccessibilityDiagnostic } from './accessibility.js'
 export {
   EditorChangeError,
   type EditorChange,
