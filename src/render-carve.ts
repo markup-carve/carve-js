@@ -1368,7 +1368,25 @@ function renderList(node: List, ctx: CarveContext): string {
       const lines = content ? content.split('\n') : ['']
       const first = lines.shift() ?? ''
       out += `${indent}${prefix}${first || '+'}\n`
-      const continuation = ' '.repeat(prefix.length)
+      // A TASK ITEM'S `[x] ` IS CONTENT, NOT MARKER, so it does not move the
+      // item's content column and the continuation must not be indented past
+      // it. `- [x] ` is six characters wide and its content column is 2, the
+      // width of `- ` alone; `-{#k} [x] ` is ten and its content column is 6.
+      //
+      // Writing the continuation at the marker's full width put every block
+      // after the first four columns too far in, where an INDENTED block opener
+      // opens nothing: `# h` came back as the text of the marker line's
+      // paragraph, so a document imported from
+      // `<li><input type="checkbox" checked> <h1 id="h">h</h1></li>` rendered
+      // its visible text as `# h` rather than `h` (carve-js#1450). A fence, a
+      // quote and a heading after a first paragraph were all lost the same way;
+      // an ordinary paragraph was not, which is why it stayed unseen.
+      //
+      // The prefix ENDS with the task marker in every branch that writes one,
+      // so subtracting its width is the item's content column in all four
+      // shapes - with and without item attributes, ordered and not.
+      const taskMarker = !node.ordered && item.checked !== undefined ? `[${item.checked ? 'x' : ' '}] ` : ''
+      const continuation = ' '.repeat(prefix.length - taskMarker.length)
       // An EMPTY continuation line stays empty. Indenting it produces a line of
       // nothing but spaces, which the writer must never emit - the blank line
       // inside a fenced block in a list item was the one place it did (corpus
