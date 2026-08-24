@@ -49,6 +49,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Core inline parsing skips punctuation dispatch for ordinary prose runs** (#1235).
 - **The Prettier plugin and the published pre-commit hooks claim `.crv` only** (#1269). **BREAKING for a `.carve` file**: rename it to `.crv`.
 - **BREAKING: a `const`-valued wire field is checked when `fromAstJson` decodes it** (#1418, #1425, PART 12 §12). `strong.boldItalic`, `list.bareMarker`, `citation_group.mode` and `definition_list.loose` decoded unchecked and rode back out on the wire; a payload spelling any of them with another value is now refused with the typed field error.
+- **The ANSI blockquote bar reports containment, not node kind** (#1457, ruling markup-carve/carve#1689). A quoted heading, code block, table, thematic break and lone image keep the bar, and a quoted list's bar sits outside its marker. All three engines agreed on the old behavior, so this moves agreed behavior rather than closing a divergence.
 
 ### Deprecated
 
@@ -132,7 +133,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Titled media emits one `title` attribute** (#1424, #1430). A destination title occupies the HTML slot, so a `title=` key from an attribute block no longer duplicates it on an image or a link.
 - **An authored heading id survives an HTML import** (#1416). `htmlToAst` and `htmlToCarve` used to disagree about an id that matched the slug a fresh parse would generate.
 - **An authored paragraph around a lone image is a declared loss** (#1419, #1422). `<p><img></p>` is written as the standalone image shape, and the report now names the wrapper and any attribute the image overwrites.
-- **An indented lone image is published as a paragraph holding an inline image, not a block image** (#1437, ruling markup-carve/carve#1660). `parse()` already applied the column rule and `resolve()` promoted the image back. The published tree is what the ruling moves; what this engine renders for that shape is open in #1440.
+- **An indented lone image is published as a paragraph holding an inline image, not a block image** (#1437, ruling markup-carve/carve#1660). `parse()` already applied the column rule and `resolve()` promoted the image back. The published tree is what the ruling moves; the rendered HTML is the same bytes it was at 0.1.4 (#1443, #1446).
+- **An attached container's missing closer is a spelling change too** (#1376 via #1379, ruling markup-carve/carve#1602, PART 11 §1). An unterminated `:::` below a list item's lead block reads tight, as the closed spelling already did, so the item's lead paragraph loses its `<p>`. #1370 covers the lead-container configuration, which converged the other way.
+- **A task item's checkbox is content, so it does not move the item's content column** (#1450 via #1455, PART 11 §1). The writer indented every block after an item's first to the full width of the marker line, four columns past the content column, so a heading, a fence or a quote there came back as paragraph text.
 
 ## [0.1.4] - 2026-08-18
 
