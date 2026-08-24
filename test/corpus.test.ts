@@ -647,6 +647,17 @@ const IMPLEMENTED = new Set([
   // that way; the WRITER half of the rule landed separately as #1359, which is
   // why the third document renders the tab back.
   'a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content',
+  // The four categories the freeze at carve `2d790588` adds, all from the
+  // looseness family PART 9 §17 L7 opened. Each is bookkeeping rather than new
+  // behavior: this build renders all thirteen of their documents byte-identically
+  // to the corpus already, verified against the engine before this list was
+  // touched, because the engine work landed here first
+  // (markup-carve/carve-js#1401, #1406, #1407, #1412). They run as real tests
+  // from here on rather than as `.todo`.
+  'one-consumed-boolean-spells-the-looseness-no-blank-line-can',
+  'the-writer-spells-looseness-only-where-a-blank-line-cannot',
+  'a-blank-line-loosens-an-item-only-when-a-paragraph-follows-it',
+  'a-footnote-continuation-survives-a-blank-run',
 ])
 
 /**

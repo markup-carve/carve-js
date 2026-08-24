@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { htmlToCarve, htmlToAst, parse } from '../src/index.js'
+import { htmlToCarve, htmlToAst, parse, toAstJson } from '../src/index.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const fixtureDir = resolve(__dirname, '../spec/tests/html-import')
@@ -128,7 +128,20 @@ function disagreement(parsed: unknown, recorded: unknown, path = ''): string | n
     : `${path}: source says ${JSON.stringify(parsed)}, tree says ${JSON.stringify(recorded)}`
 }
 
-const wire = (value: unknown): unknown => normalize(JSON.parse(JSON.stringify(value)))
+/**
+ * BOTH EXITS ARE PUBLISHED FIRST (markup-carve/carve#1616). The invariant is a
+ * statement about the PART 12 shape, which is the only shape the two exits are
+ * required to share: an internal tree spells a definition-list entry as
+ * `{terms, definitions}` rather than as the nodes §8 publishes, and it hangs
+ * footnote definitions off the ROOT rather than carrying them as `footnote`
+ * children, which §7 forbids outright. Comparing the internal trees instead
+ * reads a root-only source-position record (`footnoteDefPos`) that a parse
+ * fills and an import cannot, and calls it a disagreement about the import -
+ * which it is not. The spec's own reading over these same fixtures publishes
+ * its left side for exactly this reason.
+ */
+const wire = (value: unknown): unknown =>
+  normalize(JSON.parse(JSON.stringify(toAstJson(value as Parameters<typeof toAstJson>[0]))))
 
 function twoExits(html: string): string | null {
   const source = htmlToCarve(html)
