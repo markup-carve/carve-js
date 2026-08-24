@@ -783,7 +783,18 @@ class Importer {
     if (Object.keys(keyValues).length) attrs.keyValues = keyValues
     this.dropDerived(node, classes, attrs)
     if (attrs.keyValues && Object.keys(attrs.keyValues).length === 0) delete attrs.keyValues
-    return attrs.id || attrs.classes || attrs.keyValues ? attrs : undefined
+    // PRESENT, not TRUTHY. An explicit `id=""` suppresses the auto slug rather
+    // than standing for an absent one - `resolveHeadingIds` says so, and
+    // `renderHtml` writes `<h1 id="">` back for it - so a truthiness test threw
+    // the whole `Attrs` away whenever the empty id was the ONLY thing kept, and
+    // the re-render then gave the heading the anchor its source suppressed
+    // (markup-carve/carve-js#1463). It survived one attribute later, which is
+    // what showed the drop was accidental rather than a policy.
+    //
+    // `id` is the only field this can be wrong about: `classes` and `keyValues`
+    // are assigned above only when non-empty, so for them truthy and present are
+    // the same question.
+    return attrs.id !== undefined || attrs.classes || attrs.keyValues ? attrs : undefined
   }
 
   /**
