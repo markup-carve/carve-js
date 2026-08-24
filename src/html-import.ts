@@ -24,7 +24,7 @@ import {
   isDangerousAttrName,
 } from './render-html.js'
 import type { LabelKey } from './render-html.js'
-import { hasOwnKey, setOwn } from './own-property.js'
+import { hasOwnKey, ownValue, setOwn } from './own-property.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
 export type HtmlImportAdapter =
@@ -473,6 +473,26 @@ class Importer {
    * source-writing exit only, like every other serialization loss.
    */
   private readonly split: Array<{ node: P5Node; path: string; message: string }> = []
+  /**
+   * Where the author wrote a `<p>` holding nothing but an image (§16,
+   * markup-carve/carve-js#1419).
+   *
+   * A CANDIDATE, not yet a loss: `block()` is the only place the shape can be
+   * seen with a source path to report it against, and it runs BEFORE the
+   * unwrappers do. `captionHost` takes the paragraph back off a `<figure>`
+   * body, and a table cell keeps inlines rather than blocks, so in both the
+   * paragraph never reaches the tree and there is nothing to lose. The row is
+   * emitted only for a candidate whose node the finished document still holds,
+   * which is why the `block` itself is recorded and not just its coordinates.
+   */
+  private readonly loneImageParagraphs: Array<{
+    node: P5Node
+    path: string
+    block: BlockNode
+    attributed: boolean
+    /** Names the image's own attribute block wins outright, so they are lost. */
+    overwritten: string[]
+  }> = []
   private nodes = 0
   /** How many `<q>` elements enclose the one being read, for the mark pair. */
   private quoteDepth = 0
@@ -1302,7 +1322,34 @@ class Importer {
         )
         return []
       }
-      return [{ type: 'paragraph', children, ...(attrs ? { attrs } : {}) }]
+      const paragraph: BlockNode = { type: 'paragraph', children, ...(attrs ? { attrs } : {}) }
+      /*
+       * CARVE SOURCE CANNOT SPELL THIS PARAGRAPH, so a writer loses it and
+       * §16 says the writing exit reports that (carve-js#1419).
+       *
+       * `spec/resources/examples/edge-cases.md` is what rules the shape: "a
+       * paragraph whose whole content is one image is still the standalone
+       * image shape, not a wrapped one". So `![G](g.jpg)` re-reads as a BLOCK
+       * image and the `<p>` is gone - the mirror of carve-js#1411, where the
+       * paragraph was OURS and the tree was the wrong exit. This one is the
+       * author's, the tree is right, and the loss belongs to the writer.
+       *
+       * NOT A CHANGE OF OUTPUT, because there is no other output to write.
+       * ` ![G](g.jpg)` does parse as a paragraph holding one image, but the
+       * canonical writer normalizes the indent away, and inside a list item or
+       * a definition description the marker absorbs it at every width - so the
+       * device does not exist for `list_item > paragraph > image` at all.
+       */
+      if (children.length === 1 && children[0]!.type === 'image') {
+        this.loneImageParagraphs.push({
+          node,
+          path,
+          block: paragraph,
+          attributed: attrs !== undefined,
+          overwritten: overwrittenAttrNames(attrs, (children[0] as { attrs?: Attrs }).attrs),
+        })
+      }
+      return [paragraph]
     }
     if (tag === 'blockquote') return [{ type: 'block_quote', children: this.blocks(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     if (tag === 'ul' || tag === 'ol') return this.list(node, path, depth, tag === 'ol', attrs)
@@ -3329,8 +3376,33 @@ class Importer {
    * The rendering changes in both cases, so the severity is `warning`, and the
    * limit is the importer's own: these diagnostics are not a second budget.
    */
-  reportSerializationLosses(): void {
+  reportSerializationLosses(document: Document): void {
     for (const { node, path, message } of this.unspellable) {
+      this.add('structure-unspellable', message, 'warning', path, node)
+    }
+    // SURVIVORS ONLY. A candidate whose paragraph an unwrapper took back off is
+    // not a loss: the figure target and the table cell both keep the image
+    // itself on BOTH exits, and a row there would declare a difference that is
+    // not there. Reachability from the finished document is the whole test,
+    // because taking the wrapper off is exactly what drops the node.
+    const kept = reachableObjects(document)
+    for (const { node, path, block, attributed, overwritten } of this.loneImageParagraphs) {
+      if (!kept.has(block as unknown as object)) continue
+      const head =
+        'A paragraph holding nothing but an image has no Carve spelling; the image is written as a block'
+      // THREE OUTCOMES, AND THE MESSAGE SAYS WHICH ONE HAPPENED. The plain one
+      // loses the `<p>` and nothing else. An attributed one re-attaches what
+      // the paragraph carried to the image, which is a different element to
+      // carry it. And where the image sets the SAME name, the image's own
+      // value wins and the paragraph's is gone - `<p id="p"><img id="i">`
+      // writes `{#p}` above `![a](a){#i}` and reads back with `id="i"` alone,
+      // so a message claiming the attributes were written on the image would
+      // leave that loss undeclared, which is the defect this row exists for.
+      const message = !attributed
+        ? `${head}, which renders without the <p> around it`
+        : overwritten.length === 0
+          ? `${head}, so the <p> is lost and the attributes it carried are written on the image instead`
+          : `${head}, so the <p> is lost and the attributes it carried are written on the image - except ${overwritten.join(', ')}, which the image's own value overwrites`
       this.add('structure-unspellable', message, 'warning', path, node)
     }
     for (const { node, path, message } of this.split) {
@@ -4055,6 +4127,60 @@ class Importer {
   }
 }
 
+/**
+ * The paragraph attribute names an image's OWN attribute block overwrites.
+ *
+ * The writer emits the paragraph's attributes as a block above the image and
+ * the image's inline `{…}` after it, and the two are then read onto one node:
+ * a name the image also sets is the one that survives. CLASSES ARE NOT IN THIS
+ * SET - the class slot merges rather than replacing, so both groups reach the
+ * rendered element and nothing is lost.
+ *
+ * A `title` on the image is not here either, and for a different reason: it
+ * goes into the destination's title slot rather than the attribute block, so it
+ * never collides with a `title=` the paragraph carried.
+ */
+function overwrittenAttrNames(paragraph: Attrs | undefined, image: Attrs | undefined): string[] {
+  if (paragraph === undefined || image === undefined) return []
+  const lost: string[] = []
+  if (paragraph.id !== undefined && image.id !== undefined) lost.push('id')
+  for (const key of Object.keys(paragraph.keyValues ?? {})) {
+    if (ownValue(image.keyValues, key) !== undefined) lost.push(key)
+  }
+  return lost.sort()
+}
+
+/**
+ * Every object the finished document still reaches, by IDENTITY.
+ *
+ * Structural rather than type-aware on purpose: a walker that enumerates the
+ * container kinds is a list that goes stale the next time one is added, and it
+ * would go stale SILENTLY - a missed container reads as "the paragraph was
+ * unwrapped" and drops a row that was owed. Own enumerable keys visit every
+ * node, since AST nodes are plain object literals.
+ *
+ * Iterative, and it records what it has seen: the depth here is the document's
+ * own, which the importer already bounds, and the seen set makes a shared or
+ * repeated subtree cost nothing extra.
+ */
+function reachableObjects(root: unknown): Set<object> {
+  const seen = new Set<object>()
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const item = stack.pop()
+    if (item === null || typeof item !== 'object') continue
+    if (seen.has(item)) continue
+    seen.add(item)
+    if (Array.isArray(item)) {
+      for (const child of item) stack.push(child)
+      continue
+    }
+    const record = item as Record<string, unknown>
+    for (const key of Object.keys(record)) stack.push(record[key])
+  }
+  return seen
+}
+
 export function htmlToAst(html: string, options: HtmlImportOptions = {}): HtmlImportResult<Document> {
   const importer = new Importer(options)
   const value = importer.import(html)
@@ -4067,6 +4193,6 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
   // The loss belongs to serialization, not to the import: a consumer that keeps
   // the AST `htmlToAst` returns keeps the figure wrapper and loses nothing. So
   // the importer records where it built one and only this function reports it.
-  importer.reportSerializationLosses()
+  importer.reportSerializationLosses(value)
   return { value: renderCarve(value), report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
 }
