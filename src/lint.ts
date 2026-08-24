@@ -661,7 +661,8 @@ export function lintCarve(
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
-  collectSilentFailures(source, doc, unrendered, out, toUtf16)
+  const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out)
+  collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never
@@ -696,6 +697,9 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // fence is column-exact, so an indented delimiter the parser did not fold into
 // a verbatim region is a silent degradation.
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
+
+const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})? +(?:\[[ xX]\] +)?/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|> |`{3,}|~{3,}|:{2,}|\|.*\||\{[.#]|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
@@ -707,6 +711,121 @@ const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
  * the content.
  */
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
+
+interface LintItemColumn {
+  startLine: number
+  endLine: number
+  baseColumn: number
+  contentColumn: number
+  legacyAttributeColumn?: number
+}
+
+/**
+ * Report block-shaped lines on either side of a list item's exact content
+ * column. The AST supplies item ownership/ranges; source is read only for the
+ * marker width and the authored indentation. That keeps this diagnostic in
+ * lockstep with the parser instead of implementing a second list parser.
+ */
+function collectListItemIndentWarnings(
+  source: string,
+  doc: Document,
+  unrendered: ReadonlySet<number>,
+  out: LintWarning[],
+): Set<number> {
+  const lines = source.split(/\r\n?|\n/)
+  const starts: number[] = []
+  for (let offset = 0, i = 0; i < lines.length; i++) {
+    starts[i] = offset
+    offset += lines[i]!.length + (source.slice(offset + lines[i]!.length, offset + lines[i]!.length + 2) === '\r\n' ? 2 : 1)
+  }
+  const visualIndent = (line: string): { column: number; chars: number; rest: string } => {
+    let column = 0
+    let chars = 0
+    while (chars < line.length) {
+      if (line[chars] === ' ') column++
+      else if (line[chars] === '\t') column = Math.floor(column / 4 + 1) * 4
+      else break
+      chars++
+    }
+    return { column, chars, rest: line.slice(chars) }
+  }
+  const items: LintItemColumn[] = []
+  walkDocument(doc, (node) => {
+    if (node.type !== 'list_item') return
+    const pos = (node as Positioned).pos
+    if (!pos) return
+    const markerLine = lines[pos.startLine - 1] ?? ''
+    const marker = LINT_LIST_ITEM.exec(markerLine)
+    if (!marker) return
+    const baseColumn = visualIndent(marker[1]!).column
+    const bareWidth = marker[2] ? 2 : marker[3]!.length + marker[4]!.length + 1
+    const legacyAttributeColumn = marker[5] ? baseColumn + bareWidth + marker[5]!.length : undefined
+    items.push({
+      startLine: pos.startLine,
+      endLine: pos.endLine ?? pos.startLine,
+      baseColumn,
+      contentColumn: baseColumn + bareWidth,
+      ...(legacyAttributeColumn === undefined ? {} : { legacyAttributeColumn }),
+    })
+  })
+  items.sort((a, b) => a.startLine - b.startLine || b.contentColumn - a.contentColumn)
+
+  const reported = new Set<number>()
+  const active: LintItemColumn[] = []
+  let nextItem = 0
+  let lastEnded: LintItemColumn | undefined
+  for (let index = 0; index < lines.length; index++) {
+    const lineNo = index + 1
+    while (nextItem < items.length && items[nextItem]!.startLine < lineNo) {
+      active.push(items[nextItem++]!)
+    }
+    for (let j = active.length - 1; j >= 0; j--) {
+      if (active[j]!.endLine >= lineNo) continue
+      const ended = active.splice(j, 1)[0]!
+      if (!lastEnded || ended.endLine >= lastEnded.endLine) lastEnded = ended
+    }
+    if (unrendered.has(lineNo)) continue
+    const authored = visualIndent(lines[index]!)
+    if (authored.column === 0 || !LINT_BLOCK_OPENER.test(authored.rest)) continue
+
+    const containing = active.reduce<LintItemColumn | undefined>(
+      (deepest, candidate) => !deepest || candidate.contentColumn > deepest.contentColumn
+        ? candidate
+        : deepest,
+      undefined,
+    )
+    let item: LintItemColumn | undefined = containing
+    let rule: string | undefined
+    if (item && authored.column > item.contentColumn) {
+      rule = 'list-item-block-overindented'
+    } else if (!item) {
+      const candidate = lastEnded
+      if (candidate && candidate.baseColumn < authored.column &&
+          authored.column < candidate.contentColumn &&
+          lines.slice(candidate.endLine, index).every((between) => between.trim() === '')) {
+        item = candidate
+      }
+      if (item) rule = 'list-item-body-detached'
+    }
+    if (!item || !rule) continue
+
+    const first = authored.chars
+    const start = (starts[index] ?? 0) + first
+    const legacy = item.legacyAttributeColumn === authored.column
+    out.push({
+      line: lineNo,
+      column: first + 1,
+      rule,
+      message: rule === 'list-item-body-detached'
+        ? `This block-shaped line is below the preceding list item's content column ${item.contentColumn}; it parsed outside the item. Indent it to column ${item.contentColumn} to make it part of the item, or escape the opener to preserve literal text.`
+        : `${legacy ? 'This line uses the attributed item’s former full-prefix column. ' : ''}This block-shaped line is past the list item's exact content column ${item.contentColumn}; it parsed as literal item text. Dedent it to column ${item.contentColumn} to make it structural, or escape the opener to preserve literal text explicitly.`,
+      start,
+      end: start + Math.max(1, authored.rest.match(/^\S+/)?.[0].length ?? 1),
+    })
+    reported.add(lineNo)
+  }
+  return reported
+}
 
 /**
  * PART 9 §10's nine reserved names, in the order the renderer nests them.
@@ -915,6 +1034,7 @@ function collectSilentFailures(
   verbatimLines: Set<number>,
   out: LintWarning[],
   toUtf16: (offset: number) => number,
+  listIndentLines: ReadonlySet<number>,
 ): void {
   const lines = source.split('\n')
   const lineStart: number[] = []
@@ -1092,6 +1212,7 @@ function collectSilentFailures(
   //    visibly), unlike the silent opener case this rule targets.
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
+    if (listIndentLines.has(i + 1)) continue
     const m = INDENTED_FENCE.exec(lines[i]!)
     if (!m) continue
     // a legacy `raw FORMAT` fence is already reported by rule 2; do not
