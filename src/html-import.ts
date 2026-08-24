@@ -423,6 +423,45 @@ function launderableScheme(value: string): string | undefined {
   return undefined
 }
 
+/**
+ * The writer's slot order for `held`, READ OFF THE ELEMENT'S OWN ATTRIBUTE
+ * ORDER.
+ *
+ * A fixed id-then-class-then-keys order renders `<h1 class="k" id="x">` back as
+ * `{#x .k}` and then as `<h1 id="x" class="k">` - attributes the input did not
+ * have in that order. carve-rs ruled this in carve-rs#1354 and reads the
+ * element; markup-carve/carve-js#1416 added the slot here without that half, so
+ * the two engines wrote different source for the same HTML
+ * (markup-carve/carve-js#1456).
+ *
+ * A NON-EMPTY ORDER IS EXHAUSTIVE, so anything the element did not spell under
+ * its own name - an attribute renamed or folded on the way in, a `style`
+ * expanded into key-values - still has to appear, or the writer drops it
+ * silently. Those go after the slots the element did name, keeping their own
+ * order among themselves.
+ */
+function slotOrderFromElement(node: P5Node, held: Attrs): string[] {
+  const order: string[] = []
+  const push = (slot: string) => {
+    if (!order.includes(slot)) order.push(slot)
+  }
+  const keyValues = held.keyValues ?? {}
+  for (const attr of node.attrs ?? []) {
+    const name = attr.name.toLowerCase()
+    if (name === 'id') {
+      if (held.id !== undefined) push('#id')
+    } else if (name === 'class') {
+      if (held.classes?.length) push('.class')
+    } else if (name in keyValues) {
+      push(name)
+    }
+  }
+  if (held.id !== undefined) push('#id')
+  if (held.classes?.length) push('.class')
+  for (const key of Object.keys(keyValues)) push(key)
+  return order
+}
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -1316,9 +1355,7 @@ class Importer {
         // import read no source, so the published tree records none of them
         // (markup-carve/carve#1647); see `writing` above for why the writer
         // still needs the slot.
-        attrs.order = ['#id']
-        if (attrs.classes?.length) attrs.order.push('.class')
-        attrs.order.push(...Object.keys(attrs.keyValues ?? {}))
+        attrs.order = slotOrderFromElement(node, attrs)
       }
       return [{ type: 'heading', level: Number(tag[1]) as 1 | 2 | 3 | 4 | 5 | 6, children: this.blockInlines(node.childNodes ?? [], path, depth + 1), ...(attrs ? { attrs } : {}) }]
     }
