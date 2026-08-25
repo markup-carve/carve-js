@@ -190,6 +190,32 @@ const FLATTENED_BLOCK_EXTRA = new Set(['li', 'dt', 'dd', 'td', 'th', 'tr', 'capt
 const FIGURE_ROUNDTRIP_REBUILDS = new Set(['image', 'block_quote', 'code_block', 'table'])
 
 /**
+ * ONE MESSAGE FOR AN UNWRAPPED FIGURE, at the severity every other unwrapped
+ * element already reports (ruling markup-carve/carve#1716).
+ *
+ * `element-unwrapped` means one thing wherever it appears: the content
+ * survived, the element around it did not. That is the same event for a
+ * `<figure>` as for a `<section>`, an `<article>` or an `<address>`, every one
+ * of which is `info` here - so rating the figure `warning` said a figure's
+ * disappearance costs more than a section's, which nothing in
+ * `docs/html-import.md` supports and no clause distinguishes.
+ *
+ * AND THE TEXT MAY NOT VARY WITH THIS ENGINE'S CAPABILITY SET. The two call
+ * sites below used to say different things, split by whether the target was
+ * one THIS engine can write a caption line for - so the same document read
+ * differently from different engines, and the text would move again whenever
+ * the target set did. That is an implementation detail in the wire format. The
+ * constant exists so the split cannot quietly regrow: there is one string, and
+ * a new arm has to reuse it.
+ *
+ * IT IS A WORDING AND SEVERITY CHANGE, NOT A NARROWING. Both call sites keep
+ * firing on exactly the inputs they fired on before; see
+ * `test/an-unwrapped-figure-reports-like-every-other-unwrapped-element.test.ts`,
+ * which pins the whole firing surface rather than the two shapes that moved.
+ */
+const FIGURE_UNWRAPPED = 'Unwrapped unsupported <figure> element'
+
+/**
  * Is a separator needed between what is already in the slot and what follows?
  *
  * The clause makes one required at a block boundary and SUFFICIENT iff
@@ -3297,7 +3323,7 @@ class Importer {
        * takes its own declared row (markup-carve/carve-js#1422).
        */
       if (!this.captionSpellsSomething(caption)) {
-        this.add('element-unwrapped', 'Unwrapped a <figure> with no caption content: a figure is the captioned wrapper, and a caret with nothing after it is not a caption line', 'warning', path, node)
+        this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
         this.reportUnwrappedAttributes(node, attrs, 'figure', path)
         return targets
       }
@@ -3320,7 +3346,7 @@ class Importer {
       }
       return [{ type: 'figure', target: target as never, caption, ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
-    this.add('element-unwrapped', 'Unwrapped figure without a representable target', 'warning', path, node)
+    this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
     return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: caption }] : [])]
   }
