@@ -535,6 +535,75 @@ function isGeneratedHeadingId(id: string, text: string): boolean {
   return count !== '' && !count.startsWith('0') && count !== '1' && /^[0-9]+$/.test(count)
 }
 
+/**
+ * Put a `<section id>` back on the heading the renderer hoisted it off
+ * (markup-carve/carve-js#1475), and return what the wrapper still carries.
+ *
+ * THE INVERSE OF ONE KNOWN TRANSFORMATION, not a general rescue. With
+ * `sections` on, `renderHtml` writes the heading's id on the WRAPPER and leaves
+ * the heading without one. So once the mode unwraps the wrapper - which is
+ * right, a `<section>` is not a shape Carve cannot express - the single
+ * attribute the wrapper carried is the single thing the import needs, and
+ * `{#install .featured}` over `## Setup` came back as `{.featured}`, which
+ * re-renders as `<section id="Setup">`. The author's id was gone and a
+ * different one had taken its place, so every anchor pointing at `#install`
+ * broke on a round trip through this engine's own output.
+ *
+ * `roundtrip` ONLY, on the same ground carve-js#1459 stands on: that mode's
+ * input is Carve-produced HTML by definition, so a `<section id>` there IS the
+ * hoist. In arbitrary HTML it is a landmark's own id, which names the REGION
+ * rather than the heading, and moving it onto the heading would invent a fact.
+ * Elsewhere the id keeps being reported as dropped.
+ *
+ * `<section>` ONLY, for the same reason: `renderHtml` hoists onto that tag
+ * alone, and the other six sectioning names that unwrap here never carry a
+ * heading's id. And the ID ONLY: `<section id="x">` is the whole of what the
+ * renderer writes there, so a class or a data attribute on a wrapper is
+ * somebody else's markup, and putting it on the heading would render an
+ * attribute the input never had on an element that never had it. Those keep
+ * the `attribute-dropped` row they have always had.
+ *
+ * A DERIVED ID IS STILL DROPPED, and silently, exactly as `dropDerived`
+ * documents for every other derived value: the renderer computes the same slug
+ * again from the same heading, so nothing is lost. This is what keeps
+ * carve-js#1459's ruling intact through the wrapper - `{.k}` over `# H` renders
+ * `<section id="H">` and must not come back as `{#H .k}`, which is a different
+ * document. The POSITION half that ruling reads off the element does not exist
+ * here: a hoisted id is the wrapper's only attribute, so slug equality is the
+ * whole test.
+ *
+ * And where the inline projection MOVED the slug - a crossref that comes back
+ * as an explicit link, an index marker that comes back as its text - the
+ * wrapper's id no longer equals the slug of what survived, so it is kept and
+ * written. That is the right answer rather than a lucky one: the section id is
+ * a fact of the RENDERED document, not something to recompute from what the
+ * import left behind.
+ */
+function restoreHoistedSectionId(
+  tag: string,
+  attrs: Attrs | undefined,
+  blocks: BlockNode[],
+): Attrs | undefined {
+  if (tag !== 'section' || attrs?.id === undefined) return attrs
+  // The heading the wrapper was built around is its FIRST block. Anything else
+  // and the `<section>` is not this renderer's, so its id is not a hoist and
+  // stays reported.
+  const heading = blocks[0]
+  if (heading?.type !== 'heading') return attrs
+  // A heading that already carries an id was never hoisted off - two ids in the
+  // rendered document mean two different facts, and overwriting the heading's
+  // own with the wrapper's would lose one of them.
+  if (heading.attrs?.id !== undefined) return attrs
+  const { id, ...rest } = attrs
+  // An id that was the whole of the wrapper's attributes leaves NOTHING behind,
+  // and nothing is what `reportUnwrappedAttributes` reads as "no row" - an
+  // empty object would write a row naming no attribute at all.
+  const kept = Object.keys(rest).length > 0 ? (rest as Attrs) : undefined
+  if (isGeneratedHeadingId(id, inlineText(heading.children))) return kept
+  heading.attrs = { ...(heading.attrs ?? {}), id }
+  return kept
+}
+
 class Importer {
   readonly mode: HtmlImportMode
   readonly adapter: HtmlImportAdapter
@@ -1836,16 +1905,13 @@ class Importer {
           },
         ]
       }
-      if (tag !== 'div') {
-        // The ELEMENT row is the one a derived wrapper does not earn. What it
-        // still CARRIED is reported as it always was: `attrs` here is what
-        // survived `dropDerived`, so an author's `class` on the section, or an
-        // `aria-label` the default does not match, still goes out with a row.
-        // Suppressing both together silenced two real losses.
-        if (!this.isDerivedWrapper(node, tag)) {
-          this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
-        }
-        this.reportUnwrappedAttributes(node, attrs, tag, path)
+      // The ELEMENT row is the one a derived wrapper does not earn. What it
+      // still CARRIED is reported below, as it always was: `attrs` there is
+      // what survived `dropDerived`, so an author's `class` on the section, or
+      // an `aria-label` the default does not match, still goes out with a row.
+      // Suppressing both together silenced two real losses.
+      if (tag !== 'div' && !this.isDerivedWrapper(node, tag)) {
+        this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
       }
       // THE LABEL IS LIFTED FIRST, because it is half of the test below. This
       // arm never had a lift at all - it lived only on the container-CLASS arm
@@ -1862,6 +1928,25 @@ class Importer {
       const children = lifted
         ? this.blocks(lifted.body, path, depth + 1, lifted.bodyPaths)
         : this.blocks(own, path, depth + 1)
+      // THE BODY IS BUILT BEFORE THE ATTRIBUTE ROWS so the wrapper's id has a
+      // heading to land on. Whether that id is the renderer's or the author's
+      // is a question about the HEADING's own text, and only the imported node
+      // carries the inline projection that answers it.
+      //
+      // This does not reorder the report. Rows sort by the position of the
+      // LOSING ELEMENT, and a wrapper stands before everything it wraps, so
+      // moving one call across another only changes the order rows were
+      // CONSTRUCTED in - which the sort keeps only as a tie-break between rows
+      // at the same position, and the wrapper's own two rows keep their
+      // relative order because `element-unwrapped` is still added first.
+      if (tag !== 'div') {
+        this.reportUnwrappedAttributes(
+          node,
+          this.mode === 'roundtrip' ? restoreHoistedSectionId(tag, attrs, children) : attrs,
+          tag,
+          path,
+        )
+      }
       /*
        * A DIV CARRYING NOTHING ONLY A CONTAINER CAN HOLD IS NOT A CONTAINER
        * WORTH SPELLING, so it unwraps to its content and the `:::` fence is not
