@@ -332,6 +332,25 @@ function endsWithHardBreak(node: InlineNode | undefined): boolean {
  * would join them. The caller says which it is - `inlines()` itself cannot
  * know, since it serves both.
  */
+/**
+ * Is this text node LAYOUT rather than content (PART 11 §7,
+ * markup-carve/carve#1628)?
+ *
+ * The line is Carve's `whitespace` terminal and nothing wider: SPACE, TAB, LF
+ * and CR. EVERY OTHER CHARACTER IS CONTENT, U+00A0 included, and so are
+ * U+202F, U+2002 and U+3000.
+ *
+ * NOT `String.prototype.trim`, which is where this went wrong
+ * (markup-carve/carve-js#1493). JS trims every Unicode space, so a text node
+ * holding one NO-BREAK SPACE tested as layout, was never buffered, and the
+ * character left the document with no row - while `<p>&#160;</p>`, which reads
+ * its content through a trim that knows the difference, kept it. One class,
+ * two answers, in one file.
+ */
+function isLayoutOnlyText(node: P5Node): boolean {
+  return node.nodeName === '#text' && trimNonNbsp(node.value ?? '') === ''
+}
+
 function trimBlockEdges(nodes: InlineNode[]): InlineNode[] {
   const out = [...nodes]
   while (textEdge(out[0], 'start')) {
@@ -1737,7 +1756,7 @@ class Importer {
         buffered.length > 0 &&
         buffered.some((node) => node.nodeName === '#comment') &&
         buffered.every(
-          (node) => node.nodeName === '#comment' || (node.nodeName === '#text' && (node.value ?? '').trim() === ''),
+          (node) => node.nodeName === '#comment' || isLayoutOnlyText(node),
         )
       if (commentsOnly) {
         buffered.forEach((node, index) => {
@@ -1753,7 +1772,7 @@ class Importer {
     }
     nodes.forEach((node, index) => {
       const path = paths?.[index] ?? this.childPath(parentPath, node, index)
-      if (node.nodeName === '#text' && !(node.value ?? '').trim()) {
+      if (isLayoutOnlyText(node)) {
         if (inlineBuffer.length) {
           inlineBuffer.push(node)
           inlinePaths.push(path)
@@ -2612,6 +2631,13 @@ class Importer {
    * survives an unwrap, so neither can be what an unwrap preserved. This is
    * carve-php's `hasImportContentToUnwrap()` predicate, deliberately, because
    * the point of the ruling is that the two engines answer alike.
+   *
+   * AND WHITESPACE IS PART 11 §7's WHITESPACE, which is what the row now has to
+   * follow: the unwrap keeps a NO-BREAK SPACE, so a `<progress>` holding one is
+   * unwrapped rather than dropped, and `String.prototype.trim` said the
+   * opposite (markup-carve/carve-js#1493). carve-php reports
+   * `element-unwrapped` for that input, which is the answer this predicate
+   * exists to match.
    */
   private hasContentToUnwrap(node: P5Node): boolean {
     for (const child of node.childNodes ?? []) {
@@ -2620,7 +2646,7 @@ class Importer {
         if (!ACTIVE.has(childTag)) return true
         continue
       }
-      if ((child.value ?? child.data ?? '').trim() !== '') return true
+      if (trimNonNbsp(child.value ?? child.data ?? '') !== '') return true
     }
     return false
   }
@@ -4372,8 +4398,18 @@ class Importer {
     return [{ type: 'comment', block: false, delimited: true, content }]
   }
 
+  /**
+   * Does this run hold anything PART 11 §7 calls content?
+   *
+   * `trimNonNbsp` rather than `String.prototype.trim`, for the reason
+   * `isLayoutOnlyText` gives: the second one eats every Unicode space, so a run
+   * holding one NO-BREAK SPACE answered no and the paragraph around it was
+   * never built (markup-carve/carve-js#1493). `captionSpellsSomething` is the
+   * same predicate for a caption slot and was corrected first; this is the
+   * other half of one rule.
+   */
   private visible(nodes: InlineNode[]): boolean {
-    return nodes.some((node) => node.type !== 'text' || node.value.trim() !== '')
+    return nodes.some((node) => node.type !== 'text' || trimNonNbsp(node.value) !== '')
   }
 
   /**
