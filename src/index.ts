@@ -193,6 +193,7 @@ export {
   type LintPlatform,
   KNOWN_LINT_PLATFORMS,
 } from './lint.js'
+export { inspectColonFences, type ColonFenceSite, type ColonFenceMismatch } from './colon-fences.js'
 export { tabNormalize } from './tab-normalize.js'
 export { details } from './details.js'
 export { semanticSpan } from './semantic-span.js'

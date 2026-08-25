@@ -53,6 +53,7 @@ import { hasOwnKey } from './own-property.js'
 import { isBidiControl } from './bidi-controls.js'
 import { renderedAttrValue, escapeAttrValue } from './render-html.js'
 import type { Attrs, BlockNode, Document, Heading, Table } from './ast.js'
+import { inspectColonFences } from './colon-fences.js'
 
 export interface LintWarning {
   /** 1-based line number. */
@@ -75,6 +76,8 @@ export interface LintWarning {
   start: number
   /** 0-based end offset in the source, exclusive, in UTF-16 code units. */
   end: number
+  /** Structured rule details for editor and JSON consumers. */
+  data?: Readonly<Record<string, unknown>>
 }
 
 interface Positioned {
@@ -338,6 +341,24 @@ export function lintCarve(
   const foldId = (s: string): string =>
     Array.from(s, (c) => c.toLowerCase()).join('')
   const out: LintWarning[] = []
+
+  for (const mismatch of inspectColonFences(source).mismatches) {
+    out.push({
+      line: mismatch.line,
+      column: mismatch.column,
+      rule: 'colon-fence-length-mismatch',
+      message: `Bare ${mismatch.authoredWidth}-colon fence does not close the innermost ${mismatch.expectedWidth}-colon ${mismatch.opener.kind} opened at ${mismatch.opener.line}:${mismatch.opener.column}; it currently opens a ${mismatch.outcome}.`,
+      start: mismatch.start,
+      end: mismatch.end,
+      data: {
+        authoredWidth: mismatch.authoredWidth,
+        expectedWidth: mismatch.expectedWidth,
+        openerLine: mismatch.opener.line,
+        openerColumn: mismatch.opener.column,
+        outcome: mismatch.outcome,
+      },
+    })
+  }
 
   // Canonical Carve deliberately preserves these source characters for a
   // lossless round trip. Presentation targets strip them, so make that quiet
