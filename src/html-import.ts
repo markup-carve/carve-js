@@ -2451,9 +2451,40 @@ class Importer {
     return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
   }
 
+  /**
+   * The attributes an UNWRAPPED element took with it: ONE ROW PER ATTRIBUTE, at
+   * `info` (ruling markup-carve/carve-php#1731).
+   *
+   * IT USED TO BE ONE ROW AT `warning`, NAMING THEM ALL. Both halves of that
+   * were this engine alone: carve-php and carve-rs each emit a row per
+   * attribute and each rates it `info`, so the same document read differently
+   * depending on which engine read it, and a consumer counting rows to size a
+   * loss got a different number from each.
+   *
+   * `info` IS WHAT THIS ENGINE ALREADY SAYS ABOUT AN ORDINARY ATTRIBUTE.
+   * `refuseAttribute` spends `warning` on the SAFETY half - an event handler, a
+   * value carrying a denied scheme - and on a value whose shape no Carve
+   * attribute can hold; it spends `info` on an ordinary one it cannot spell, on
+   * a round-trip marker and on a declaration something else already sets. An
+   * `id` or a `class` losing its carrier is the ordinary case, so `warning`
+   * here rated the same attribute higher for the reason it went than for what
+   * it was.
+   *
+   * ONE ROW PER ATTRIBUTE, because a row is what names a loss and there is one
+   * loss per attribute. The joined form also collapsed at the wrong place: a
+   * reader had to split a message to learn how much went, and a filter had no
+   * way to act on the `id` without acting on the `class` beside it.
+   *
+   * A CLASS ATTRIBUTE IS ONE ATTRIBUTE, however many names it holds, which is
+   * what `attrNames` already answers and what carve-php reports. carve-rs
+   * splits `class="a b"` into a row per name; that disagreement is older than
+   * this ruling and is not settled here.
+   */
   private reportUnwrappedAttributes(node: P5Node, attrs: Attrs | undefined, tag: string, path: string): void {
     if (attrs === undefined) return
-    this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} with the unwrapped <${tag}>: there is no element left to carry them`, 'warning', path, node)
+    for (const name of this.attrNames(attrs)) {
+      this.add('attribute-dropped', `Dropped ${name} with the unwrapped <${tag}>: there is no element left to carry it`, 'info', path, node)
+    }
   }
 
   /**

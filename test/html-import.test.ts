@@ -1064,7 +1064,7 @@ describe('the import decisions that are policy', () => {
         // would have carried it, which is what the unwrap report names.
         expect(result.report.diagnostics).toEqual([
           expect.objectContaining({ code: 'element-unwrapped', message: `Unwrapped unsupported <${tag}> element` }),
-          expect.objectContaining({ code: 'attribute-dropped', message: `Dropped src with the unwrapped <${tag}>: there is no element left to carry them` }),
+          expect.objectContaining({ code: 'attribute-dropped', message: `Dropped src with the unwrapped <${tag}>: there is no element left to carry it` }),
         ])
       }
     }
@@ -1081,12 +1081,27 @@ describe('the import decisions that are policy', () => {
      * Not only embeds: the same arms unwrap `<section>`, `<form>` and any
      * unmapped inline element.
      */
+    // ONE ROW PER ATTRIBUTE, at `info`, which is what carve-php and carve-rs
+    // both emit and what ruling markup-carve/carve-php#1731 named as the
+    // target. The joined `warning` row collapsed three losses into one and
+    // rated an ordinary `id` above what this engine says about an ordinary
+    // attribute anywhere else.
     expect(htmlToCarve('<video id="player" class="wide" data-x="1">fallback</video>').report.diagnostics).toEqual([
       expect.objectContaining({ code: 'element-unwrapped' }),
       expect.objectContaining({
         code: 'attribute-dropped',
-        severity: 'warning',
-        message: 'Dropped id, class, data-x with the unwrapped <video>: there is no element left to carry them',
+        severity: 'info',
+        message: 'Dropped id with the unwrapped <video>: there is no element left to carry it',
+      }),
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'info',
+        message: 'Dropped class with the unwrapped <video>: there is no element left to carry it',
+      }),
+      expect.objectContaining({
+        code: 'attribute-dropped',
+        severity: 'info',
+        message: 'Dropped data-x with the unwrapped <video>: there is no element left to carry it',
       }),
     ])
     for (const html of [
