@@ -5277,13 +5277,23 @@ function parseFootnoteDef(lexer: Lexer): null {
       // happens to carry. Anything beyond two is residual indent the body's
       // blocks read themselves, so an opener one column in is lazy text rather
       // than a block, the same way it is inside a list item (carve-js#677).
+      //
+      // KEEP THE RESIDUAL COLUMNS of a tab that straddles the two-column
+      // boundary (carve-js#1515). §24 C1 gives a tab a column value, and the
+      // whole column model is visual, so a bare tab and the four spaces it
+      // expands to are the same document. Consuming the tab whole handed the
+      // body's blocks a line at column 0 while its four-space spelling arrived
+      // at column 2, and the two extra columns are exactly what §24 C3 turns
+      // into the body's authored base - so only the spaces got the base. The
+      // definition body's own strip has kept its residual since carve#1729;
+      // this is that strip's other half.
       for (let k = 0; k < pendingBlanks; k++) {
         bodyLines.push('')
         bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
       }
       pendingBlanks = 0
       pendingBlankLineNumbers = []
-      bodyLines.push(sliceColumns(ln, FOOTNOTE_BODY_COLUMN))
+      bodyLines.push(sliceColumns(ln, FOOTNOTE_BODY_COLUMN, true))
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       lexer.consume()
     } else {
