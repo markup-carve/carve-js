@@ -149,7 +149,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
         // Merge the cssClass ahead of author classes; renderAttrs hardens the
         // copied author attributes (names + values).
         const attrs: Attrs = { ...code.attrs, classes: [cssClass, ...(code.attrs?.classes ?? [])] }
-        const open = `<${tag}${ctx.renderAttrs(named(attrs))}>`
+        const open = `<${tag}${ctx.renderAttrs(named(attrs), tag)}>`
         const body =
           mode === 'json'
             ? `<script type="application/json">${guardScriptClose(code.content)}</script>`
@@ -188,7 +188,7 @@ export function fencedRender(opts: FencedRenderOptions): CarveExtension {
           // the class/attrs survive and the wrapper is identical across engines
           // (carve#302). A `<div>` - not the interactive `<pre>`/`<div>` tag -
           // because the output is a rendered image, not source text.
-          const element = `<div${ctx.renderAttrs(named(attrs))}>${build(code.content)}</div>`
+          const element = `<div${ctx.renderAttrs(named(attrs), 'div')}>${build(code.content)}</div>`
           if (opts.wrapInFigure) {
             return `${pad}<figure class="${ctx.escapeAttr(figureClass)}">\n${pad}${element}\n${pad}</figure>`
           }

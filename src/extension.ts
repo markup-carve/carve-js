@@ -35,7 +35,7 @@ export interface ExtensionRenderContext {
   renderInlines(nodes: InlineNode[]): string
   escapeHtml(s: string): string
   escapeAttr(s: string): string
-  renderAttrs(attrs: Attrs | undefined): string
+  renderAttrs(attrs: Attrs | undefined, tag?: string): string
   /**
    * Reserve a DOM id in the shared document id namespace (extensions
    * contract §2.6): returns `baseId` when free, else the next free numeric

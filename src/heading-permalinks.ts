@@ -81,7 +81,7 @@ export function headingPermalinks(opts: HeadingPermalinksOptions = {}): CarveExt
           : anchor
         const body = prepend ? `${marker} ${inner}` : `${inner} ${marker}`
         const attrs = ctx.sections ? stripId(h.attrs) : h.attrs
-        return `${ctx.indent(ctx.level)}<h${h.level}${ctx.renderAttrs(attrs)}>${body}</h${h.level}>`
+        return `${ctx.indent(ctx.level)}<h${h.level}${ctx.renderAttrs(attrs, `h${h.level}`)}>${body}</h${h.level}>`
       },
     },
   }
