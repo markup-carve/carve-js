@@ -2,28 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /**
- * Reading side of the footnote body column: the body's own column is TWO, fixed
- * by §16 (`space, space, {whitespace}`), NOT whatever the first continuation
- * line happens to carry.
- *
- * This engine took it from the first continuation line, so a body written at
- * three saw its blocks at relative column zero and an indented table opened a
- * table. The executable spec, carve-rs and carve-php all dedent by two, leaving
- * one residual column, at which an opener is lazy text instead - a 3-to-1
- * divergence, and this engine was the one (carve-js#677).
- *
- * Why it survived: the leniency is invisible to a round trip. Once the writer
- * moved to two (carve-js#676) every `carveToCarve` output was a form this
- * parser reads the same way as everyone else, so nothing here could fail. The
- * discriminating input is a body a HUMAN wrote at three - which no generated
- * fixture produces.
- *
- * The `at three` half of each pair is therefore the load-bearing assertion. Both
- * halves are kept together so a fix that simply hard-strips all leading
- * whitespace - passing the three-space half by flattening it - fails the two.
+ * The body starts at §16's minimum column of two. A structural opener at that
+ * column or farther in establishes its authored local block base (carve#1729),
+ * matching the container rule introduced for list items by carve#1705.
  */
 
-/** Each shape at the body's own column, and the same shape one column in. */
+/** Each shape at the minimum column, and the same shape one column in. */
 const SHAPES: Array<{ name: string; opens: string; folds: string; probe: RegExp }> = [
   {
     name: 'table',
@@ -51,22 +35,14 @@ describe('a footnote body is read at its own column', () => {
     }
   })
 
-  it('does not open one at three', () => {
-    for (const { name, folds, probe } of SHAPES) {
-      const html = carveToHtml(document(folds))
-      expect(html, name).not.toMatch(probe)
-      // Present as text, not dropped: the residual column makes it a paragraph.
-      expect(html, name).toContain('<p>')
-    }
+  it('opens one at an authored base past the minimum', () => {
+    for (const { name, folds, probe } of SHAPES)
+      expect(carveToHtml(document(folds)), name).toMatch(probe)
   })
 
-  it('reads the column from §16, not from the first continuation line', () => {
-    // The whole body sits at four, so the first line cannot be what sets the
-    // column - under the old reading every row landed at relative zero and this
-    // was a table. Two residual columns, so it is a paragraph.
+  it('accepts an authored base several columns past the minimum', () => {
     const html = carveToHtml(document('    | a |\n    | - |\n    | b |\n'))
-    expect(html).not.toMatch(/<table>/)
-    expect(html).toContain('| a |')
+    expect(html).toMatch(/<table>/)
   })
 
   it('keeps a narrower line after a wider one attached', () => {
@@ -86,11 +62,10 @@ describe('a footnote body is read at its own column', () => {
   })
 
   it('agrees with a list item at the same relative column', () => {
-    // §16's body and §24's item body are the same rule read twice, so an opener
-    // one column above the content column has to behave the same in both.
+    // §16's body and §24's item body apply the same authored-base rule.
     const inNote = carveToHtml(document('   > q\n'))
     const inItem = carveToHtml('- a\n\n   > q\n')
-    expect(inNote).not.toMatch(/<blockquote>/)
+    expect(inNote).toMatch(/<blockquote>/)
     expect(inItem).toMatch(/<blockquote>/)
   })
 })

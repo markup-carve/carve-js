@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /**
- * A definition inside a footnote body is collected at the body's own column and
- * NOWHERE ELSE.
+ * A definition inside a footnote body is collected at its minimum column or an
+ * authored block base farther in (carve#1729).
  *
  * The definition prepass exempted footnote bodies outright, on the grounds that a
  * flat pass cannot model the body's content column. It can: the column is two,
@@ -51,13 +51,11 @@ describe('a definition in a footnote body', () => {
     expect(resolves(html)).toBe(false)
   })
 
-  it('is text past the body column, and inert', () => {
-    // Three and four: inside the body, but above its content column, so the
-    // body's blocks read residual indent and the line is paragraph text there.
+  it('defines at an authored base past the minimum', () => {
     for (const indent of [3, 4]) {
       const html = carveToHtml(document(indent))
-      expect(renders(html), `indent ${indent}`).toBe(true)
-      expect(resolves(html), `indent ${indent}`).toBe(false)
+      expect(renders(html), `indent ${indent}`).toBe(false)
+      expect(resolves(html), `indent ${indent}`).toBe(true)
     }
   })
 
