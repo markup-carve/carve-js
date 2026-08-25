@@ -200,7 +200,10 @@ describe('roundtrip restores the id the renderer hoisted onto a section', () => 
     // keep the row they have always had, and the heading is not given them.
     const html = '<section id="install" class="wrap" data-x="1"><h2>Setup</h2></section>'
     expect(written(html).roundtrip).toBe('{#install}\n## Setup\n')
-    expect(codes(html)).toEqual(['element-unwrapped', 'attribute-dropped'])
+    // One row per attribute that stayed behind - the class and the data pair -
+    // and none for the id, which the heading took (markup-carve/carve-php#1731
+    // moved the row from one joined line to one per attribute).
+    expect(codes(html)).toEqual(['element-unwrapped', 'attribute-dropped', 'attribute-dropped'])
   })
 
   it('leaves a wrapper whose first block is not a heading alone', () => {

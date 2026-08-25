@@ -49,8 +49,10 @@ describe('a figure unwraps when its target cannot carry a caption', () => {
   it.each(MODES)('unwraps a paragraph figure in %s and declares what it cost', (mode) => {
     const { carve, codes, severities } = importOf(PARAGRAPH, mode)
     expect(carve).toBe('x\n\nCap\n')
-    expect(codes).toEqual(['element-unwrapped', 'attribute-dropped'])
-    expect(severities[0]).toBe('info')
+    // ONE ROW PER ATTRIBUTE the wrapper carried, at `info`, which is what the
+    // ruling named and what carve-php and carve-rs both emit from this input.
+    expect(codes).toEqual(['element-unwrapped', 'attribute-dropped', 'attribute-dropped'])
+    expect(severities).toEqual(['info', 'info', 'info'])
   })
 
   /*
@@ -78,9 +80,10 @@ describe('a figure unwraps when its target cannot carry a caption', () => {
    * say nothing at all on the one that corrupted the text.
    */
   it.each(MODES)('leaves the list figure on the unwrap it already took in %s', (mode) => {
-    const { carve, codes } = importOf(LIST, mode)
+    const { carve, codes, severities } = importOf(LIST, mode)
     expect(carve).toBe('- x\n\nCap\n')
-    expect(codes).toEqual(['element-unwrapped', 'attribute-dropped'])
+    expect(codes).toEqual(['element-unwrapped', 'attribute-dropped', 'attribute-dropped'])
+    expect(severities).toEqual(['info', 'info', 'info'])
   })
 
   /*

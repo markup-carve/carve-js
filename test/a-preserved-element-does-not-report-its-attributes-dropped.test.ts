@@ -124,12 +124,18 @@ describe('a preserved element does not report its attributes dropped', () => {
     // handler, so the row that says so has to survive untouched.
     const result = htmlToCarve('<form onclick="x()" id="q"><p>a</p></form>', { mode: 'semantic' })
     expect(result.value).not.toContain('onclick')
+    // THE TWO SEVERITIES SIDE BY SIDE, which is what the split is for: the
+    // handler is the SAFETY case and keeps `warning`, and the `id` that lost
+    // its carrier is the ordinary case at `info` (ruling
+    // markup-carve/carve-php#1731). Rating both the same told a filter nothing
+    // about which of the two it was looking at.
     expect(result.report.diagnostics.map((entry) => [entry.code, entry.severity])).toEqual([
       ['attribute-dropped', 'warning'],
       ['element-unwrapped', 'info'],
-      ['attribute-dropped', 'warning'],
+      ['attribute-dropped', 'info'],
     ])
     expect(result.report.diagnostics[0]!.message).toBe('Dropped event-handler attribute onclick on <form>')
+    expect(result.report.diagnostics[2]!.message).toBe('Dropped id with the unwrapped <form>: there is no element left to carry it')
   })
 
   it('rewrites the rows of the preserved element and of nothing else', () => {
