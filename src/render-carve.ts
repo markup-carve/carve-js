@@ -1758,7 +1758,7 @@ function renderListItem(item: ListItem, ctx: CarveContext, tight: boolean): stri
   const outerFenceDepth = ctx.colonFenceDepth
   ctx.colonFenceDepth = 0
   try {
-    return renderListItemBody(item, ctx, tight)
+    return atAnAuthoredBodyColumn(ctx, () => renderListItemBody(item, ctx, tight))
   } finally {
     ctx.colonFenceDepth = outerFenceDepth
   }
@@ -2028,10 +2028,42 @@ function atARaisedBase(rendered: string, atAnAuthoredBodyColumn: boolean): strin
 
   // A BLANK LINE STAYS BLANK. Indenting it produces a line of nothing but
   // spaces, which this writer never emits.
-  return rendered
+  const raised = rendered
     .split('\n')
     .map((line) => (line === '' ? line : ` ${line}`))
     .join('\n')
+
+  // AT A RAISED BASE A BLANK LINE ENDS THE DESCRIPTION. The raise exists
+  // because the payload has to stay inside the `dd`; a blank written above that
+  // payload hands it back to the host as a sibling, which is the same loss the
+  // raise was applied to avoid. So a blank whose next line is payload - INDENTED
+  // past the `::` line, hence not a sibling entry - is dropped. A blank between
+  // two entries has a next line at the entry column and is left alone.
+  const lines = raised.split('\n')
+  const kept: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line.trim() === '') {
+      let j = i + 1
+      while (j < lines.length && lines[j]!.trim() === '') j++
+      const next = lines[j]
+      if (next !== undefined && leadingSpaces(next) > ENTRY_RAISE_COLUMN) {
+        i = j - 1
+        continue
+      }
+    }
+    kept.push(line)
+  }
+
+  return kept.join('\n')
+}
+
+/** The column a raised `::` line sits at - one past the body's minimum. */
+const ENTRY_RAISE_COLUMN = 1
+
+/** Leading spaces of a line, for comparing a payload against its entry column. */
+function leadingSpaces(line: string): number {
+  return line.length - line.replace(/^ +/, '').length
 }
 
 function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
