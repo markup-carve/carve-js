@@ -45,6 +45,15 @@ describe('smart punctuation nodes', () => {
     expect(carveToPlainText(src).trim()).toBe('a…b → c ©')
   })
 
+  it.each(['--', '---', '...', '-->', '<==', '+-', '(c)'])(
+    'keeps an attribute block literal after %j',
+    (run) => {
+      const source = `a${run}{x}`
+      expect(carveToHtml(source).trim()).toContain('{x}</p>')
+      expect(carveToCarve(source).trim()).toBe(source)
+    },
+  )
+
   it('carries the source run and the kind on the node', () => {
     const doc = parse('a...b')
     const kids = (doc.children[0] as { children: Array<Record<string, unknown>> }).children
