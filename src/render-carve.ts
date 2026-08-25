@@ -14,7 +14,14 @@ import type {
   TableCell,
   Text,
 } from './ast.js'
-import { cellPayloadIsSpanMarker, opensFrontmatter, parse, rawBracketRunCloses, symbolOpensAt } from './parse.js'
+import {
+  aBodyRebaseWouldMoveALine,
+  cellPayloadIsSpanMarker,
+  opensFrontmatter,
+  parse,
+  rawBracketRunCloses,
+  symbolOpensAt,
+} from './parse.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -110,6 +117,18 @@ interface CarveContext {
   afterCaptionHost: boolean
   /** Caption state scoped to the paragraph currently being rendered. */
   paragraphStartsAfterCaptionHost: boolean
+  /**
+   * Whether the block about to be written sits DIRECTLY in a body that gives a
+   * definition entry its own authored base: a footnote body or a definition
+   * description (PART 9 §24 C3, markup-carve/carve#1763). A definition list is
+   * the one block whose payload needs one - see `atARaisedBase`.
+   *
+   * A LIST ITEM is not one of them: both spellings say the same thing there, so
+   * the raise would buy nothing. Neither is a blockquote or a colon fence,
+   * which carry a marker or a fence rather than a column. Measured on all seven
+   * hosts before choosing the two (carve-js#1509).
+   */
+  atAnAuthoredBodyColumn: boolean
 }
 
 /**
@@ -707,6 +726,7 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
       colonFenceDepth: 0,
       afterCaptionHost: false,
       paragraphStartsAfterCaptionHost: false,
+      atAnAuthoredBodyColumn: false,
     }
     const parts: string[] = []
     if (ast.frontmatter) parts.push(renderFrontmatter(ast.frontmatter))
@@ -1005,14 +1025,26 @@ function withoutKey(attrs: Attrs | undefined, key: string): Attrs | undefined {
 function renderBlock(node: BlockNode, ctx: CarveContext): string {
   const previous = escapeUnit
   escapeUnit = node as unknown as object
+  // THE FLAG DESCRIBES THIS NODE, NOT ITS SUBTREE. A host sets it once and
+  // `renderBlocks` walks several children with it still set, so it is read here
+  // and cleared for whatever this node renders inside itself - a definition
+  // list inside a blockquote inside a footnote body is at the QUOTE's column,
+  // not the body's - and restored so the next sibling still sees it.
+  const atAnAuthoredBodyColumn = ctx.atAnAuthoredBodyColumn
+  ctx.atAnAuthoredBodyColumn = false
   try {
-    return renderBlockBody(node, ctx)
+    return renderBlockBody(node, ctx, atAnAuthoredBodyColumn)
   } finally {
     escapeUnit = previous
+    ctx.atAnAuthoredBodyColumn = atAnAuthoredBodyColumn
   }
 }
 
-function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
+function renderBlockBody(
+  node: BlockNode,
+  ctx: CarveContext,
+  atAnAuthoredBodyColumn = false,
+): string {
   const attrs = renderBlockAttrs(node.attrs)
   const withAttrs = (body: string) => (attrs ? `${attrs}\n${body}` : body)
   switch (node.type) {
@@ -1173,7 +1205,14 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       return withAttrs(`${fence}${label}\n${body}\n${fence}`)
     }
     case 'definition_list':
-      return withLooseAttrs(node, attrs, renderDefinitionList(node.items, ctx))
+      // THE ATTRIBUTE LINE MOVES WITH THE LIST. It is part of how this block is
+      // spelled, so raising the body alone would leave `{loose}` at the body
+      // minimum with the `::` line a column past it - a shape no author writes
+      // and one the rebase then has to reconcile a line at a time.
+      return atARaisedBase(
+        withLooseAttrs(node, attrs, renderDefinitionList(node.items, ctx)),
+        atAnAuthoredBodyColumn,
+      )
     case 'figure':
       return withAttrs(renderFigure(node, ctx))
     case 'figure_group': {
@@ -1955,6 +1994,46 @@ function romanMarker(n: number): string {
   return out || 'I'
 }
 
+/**
+ * One extra column, when a definition list's payload needs a base of its own.
+ *
+ * A DESCRIPTION'S PAYLOAD LIVES ABOVE ITS OPENER'S COLUMN. `:: term` sits at the
+ * list's own column and everything under `:  ` sits three columns in, so a
+ * quote, a fence, a heading or a table inside a description is INDENTED
+ * relative to the `::` line. At a body's minimum column that indentation is an
+ * authored block base of its own (PART 9 §24 C3), and the body's rebase claims
+ * the block - the description keeps only its first paragraph and the block
+ * re-reads as the body's next sibling.
+ *
+ * Written one column in, the `::` line is the over-indented opener instead, its
+ * own column becomes the entry's base, and the rebase hands the whole run back
+ * with its relative columns intact. That is the spelling carve#1763 pins for a
+ * definition list inside a footnote body, and it is the only spelling of the
+ * document that exists: at the body minimum the description CANNOT hold the
+ * block at any payload column, measured across eight (carve-js#1509).
+ *
+ * SO IT IS NOT A PREFERENCE BETWEEN TWO CANONICAL FORMS. Where the un-raised
+ * spelling still says what the document says - a single-line description, a
+ * soft-wrapped one, a second paragraph, a sub-list - nothing is raised and the
+ * canonical bytes are unchanged; PART 11 §2 pins those and they stay pinned.
+ *
+ * A LIST ITEM ASKS FOR NOTHING HERE, because its two spellings are one
+ * document: carve#1752 asks a payload to keep its offset from its opener, and
+ * in a list item both spellings have the same offset. The reader was giving a
+ * base there anyway (carve-js#1514) and no longer does.
+ */
+function atARaisedBase(rendered: string, atAnAuthoredBodyColumn: boolean): string {
+  if (!atAnAuthoredBodyColumn) return rendered
+  if (!aBodyRebaseWouldMoveALine(rendered)) return rendered
+
+  // A BLANK LINE STAYS BLANK. Indenting it produces a line of nothing but
+  // spaces, which this writer never emits.
+  return rendered
+    .split('\n')
+    .map((line) => (line === '' ? line : ` ${line}`))
+    .join('\n')
+}
+
 function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
   const out: string[] = []
   /*
@@ -2062,7 +2141,9 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
        * it is the exit `structure-unspellable` is about: the structure survives
        * in the AST and not in written Carve.
        */
-      const written = trimNonNbsp(renderHostedBlocks(def, ctx))
+      const written = trimNonNbsp(
+        atAnAuthoredBodyColumn(ctx, () => renderHostedBlocks(def, ctx)),
+      )
       // THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
       // empty". All three paths that reach this writer - an HTML import, an
       // ingested AST, and `fmt` over parsed source - arrive with a different
@@ -2103,6 +2184,21 @@ function renderColonFenceBody(children: BlockNode[], ctx: CarveContext): string 
     return renderBlocks(children, ctx)
   } finally {
     ctx.colonFenceDepth--
+  }
+}
+
+/**
+ * Render a body that gives a definition entry its own authored base - a
+ * footnote body or a definition description - so a definition list among its
+ * DIRECT children can take that base one column in. See `atARaisedBase`.
+ */
+function atAnAuthoredBodyColumn<T>(ctx: CarveContext, render: () => T): T {
+  const outer = ctx.atAnAuthoredBodyColumn
+  ctx.atAnAuthoredBodyColumn = true
+  try {
+    return render()
+  } finally {
+    ctx.atAnAuthoredBodyColumn = outer
   }
 }
 
@@ -2365,7 +2461,7 @@ function renderFigure(node: Figure, ctx: CarveContext): string {
 const EMPTY_FOOTNOTE_BODY = '{empty}'
 
 function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
-  const rawBody = renderBlocks(blocks, ctx)
+  const rawBody = atAnAuthoredBodyColumn(ctx, () => renderBlocks(blocks, ctx))
   const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
   // AN EMPTY BODY IS NOT SPELLABLE, so it is written as something the reader
   // consumes back to nothing.
@@ -2393,11 +2489,15 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
   }
   const lines = body.split('\n')
   const defLines = [`[^${writeFlatBracketRun(label)}]: ${lines.shift() ?? ''}`]
-  // TWO spaces, the body's own column (PART 9 §16). Three is legal
-  // continuation, but it leaves the body's blocks at a relative column above
-  // zero - and a reader that takes the body's column as two then sees an
-  // indented block opener, which does not open. This engine reads three back
-  // fine; the executable spec, carve-rs and carve-php do not.
+  // TWO spaces, the body's own column (PART 9 §16). Three is not a longer
+  // spelling of the same thing: since carve#1752 a recognized opener there
+  // takes its own authored base, so the third column CHANGES what the body
+  // says. The executable spec reads it that way and carve#1763 pins it; the
+  // released carve-rs and carve-php still eject the payload, and the spec
+  // declares that lag rather than this writer working around it.
+  //
+  // So the body's blocks are written at two, and the ONE block whose payload
+  // needs the third column asks for it by itself - see `atARaisedBase`.
   for (const line of lines) defLines.push(`  ${line}`)
   return defLines.join('\n')
 }

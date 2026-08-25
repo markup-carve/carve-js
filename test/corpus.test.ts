@@ -60,6 +60,7 @@ const IMPLEMENTED = new Set([
   'a-collected-definition-closes-the-item-paragraph',
   'an-all-blank-raw-payload-still-emits-its-line',
   'a-quote-is-reached-by-its-marker-and-a-column-never-reaches-into-one',
+  'a-definition-list-inside-a-footnote-body-carries-its-authored-base',
   // The category the freeze at carve `0f6b990` adds. It needed no engine work:
   // this build renders all four of its documents, and all 62 quote/list prefixes
   // to depth five for both definition kinds, exactly as the executable spec does
