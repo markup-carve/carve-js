@@ -2289,9 +2289,15 @@ function captionLine(caption: InlineNode[], ctx: CarveContext): string {
  *
  * The two lines STACK and the parse merges them - the last `id` wins, classes
  * union - so writing the target's line under the figure's is what hands the
- * table back its own identity. What the merge displaces is the FIGURE's id,
- * and `html-import.ts` declares it with an `attribute-dropped` row rather than
+ * table back its own identity: `{#f}` over `{#g}` over the rows re-reads as
+ * `<table id="g">`. What the merge displaces is the FIGURE's id, and
+ * `html-import.ts` declares it with an `attribute-dropped` row rather than
  * letting either side go in silence.
+ *
+ * THE OTHER ARMS ALREADY WROTE BOTH LINES, and there the merged pair lands on
+ * the FIGURE the caption line rebuilds rather than on the quote or the fence
+ * inside it. The value that survives is still the target's, which is what the
+ * ruling asks; only the table arm was dropping a line outright.
  *
  * AN IMAGE NEVER MEETS THE COLLISION. Its attributes are written INLINE, after
  * the destination, so `{#f}` above `![A](a.png){#g}` puts one on the figure and

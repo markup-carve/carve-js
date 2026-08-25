@@ -25,6 +25,13 @@
  * that slot rule under a name, and `class` is a set the two lines UNION - so a
  * class is never displaced and never owed a row.
  *
+ * WHERE THE MERGED SET LANDS DIFFERS BY ARM, and the ruling is about the VALUE
+ * that wins rather than the element it ends up on. A table re-reads as
+ * `<table id="g"><caption>`, so the pair sits on the table itself; a quote or a
+ * fence re-reads as a figure around them, so it sits on that figure. Both are
+ * pinned below, because a message claiming the target ELEMENT keeps its id
+ * would be false on two of the three arms.
+ *
  * THE IMAGE ARM IS THE CONTROL. An image writes its attributes inline, after
  * the destination, so the figure's line and the image's braces never meet.
  * Nothing about that arm changes, and the case that says so fails if a later
@@ -36,7 +43,7 @@ import { carveToHtml, htmlToCarve } from '../src/index.js'
 
 const MODES: HtmlImportMode[] = ['safe', 'semantic', 'roundtrip']
 
-const DISPLACED_ID = "info :: attribute-dropped :: Dropped id on <figure>: its target's own attribute line sets id, and the merged pair keeps the target's"
+const DISPLACED_ID = "info :: attribute-dropped :: Dropped id on <figure>: its target sets id as well, and the two attribute lines merge into one that keeps the target's value"
 const UNSPELLABLE =
   'warning :: structure-unspellable :: A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it'
 
@@ -87,6 +94,19 @@ describe('a figure and its target both carrying attributes', () => {
     })
   })
 
+  /*
+   * WHERE THE MERGED SET LANDS, pinned so the row's wording stays honest. A
+   * quote target re-reads as a figure holding the merged pair, not as a quote
+   * holding it - the surviving VALUE is the target's either way, which is what
+   * the row says and all it says.
+   */
+  it.each(MODES)('lands the merged pair on the rebuilt figure for a quote target (%s)', (mode) => {
+    const html = carveToHtml(imported('<figure id="f" class="c"><blockquote id="g" class="d"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode).carve)
+    expect(html).toContain('<figure id="g" class="c d">')
+    expect(html).toContain('<blockquote>')
+    expect(html).not.toContain('id="f"')
+  })
+
   it.each(MODES)('declares the displaced id on a code-block target (%s)', (mode) => {
     expect(imported('<figure id="f" class="c"><pre id="g" class="d"><code>a</code></pre><figcaption>Cap</figcaption></figure>', mode)).toEqual({
       carve: '{#f .c}\n{#g .d}\n```\na\n```\n^ Cap\n',
@@ -103,7 +123,7 @@ describe('a figure and its target both carrying attributes', () => {
     const { carve, rows } = imported('<figure data-k="1"><blockquote data-k="2"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)
     expect(carve).toBe('{data-k=1}\n{data-k=2}\n> a\n^ Cap\n')
     expect(rows).toEqual([
-      "info :: attribute-dropped :: Dropped data-k on <figure>: its target's own attribute line sets data-k, and the merged pair keeps the target's",
+      "info :: attribute-dropped :: Dropped data-k on <figure>: its target sets data-k as well, and the two attribute lines merge into one that keeps the target's value",
     ])
     expect(carveToHtml(carve)).toContain('data-k="2"')
   })

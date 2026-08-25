@@ -715,8 +715,8 @@ class Importer {
    * lines - the figure's, then the target's - and the parse MERGES them. The
    * merge is not symmetric: `id` is a single slot the last line wins, a
    * key-value pair is the same, and `class` is a set the two lines union. So
-   * the target keeps its own identity, which is the ruling, and whatever the
-   * figure set under a name the target also sets is gone from the source.
+   * the TARGET'S VALUE wins the collision, which is the ruling, and whatever
+   * the figure set under a name the target also sets is gone from the source.
    *
    * A LOSS THE AST DOES NOT TAKE, which is why it buffers here instead of
    * reporting at the point it is found. `htmlToAst` keeps `figure.attrs` and
@@ -3246,8 +3246,14 @@ class Importer {
    * target's, then the target, then the `^ ` caption line. Two adjacent
    * attribute lines are ONE attribute set to the parse, so the pair that comes
    * back is a merge rather than either line - and the ruling is that the merge
-   * has to leave the TARGET holding its own, because the target is the element
-   * that survives the rebuild and the wrapper is the one that does not.
+   * has to keep the TARGET'S value, because the target is the element that
+   * survives the rebuild and the wrapper is the one that does not.
+   *
+   * WHERE THE MERGED SET LANDS DIFFERS BY ARM and is not what this row is
+   * about. A table re-reads as `<table id="g"><caption>`, so the pair sits on
+   * the table itself; a quote or a fence re-reads as a figure around them, so
+   * it sits on that figure. The surviving value is the target's either way,
+   * and the figure's is the one gone.
    *
    * THE MERGE DECIDES WHICH NAMES ARE LOST, and it treats them differently:
    *
@@ -4172,13 +4178,13 @@ class Importer {
     }
     // ONE ROW PER DISPLACED NAME, at `info`, which is what this code means
     // everywhere else: an attribute the output does not carry. The figure's
-    // target now keeps its own identity (`renderFigure`), and this is the other
-    // half of that ruling - the side that loses is DECLARED rather than
-    // resolved in silence (markup-carve/carve#1721).
+    // target now gets its own attribute line written (`renderFigure`), and this
+    // is the other half of that ruling - the side that loses is DECLARED rather
+    // than resolved in silence (markup-carve/carve#1721).
     for (const { node, path, name } of this.displacedFigureAttrs) {
       this.add(
         'attribute-dropped',
-        `Dropped ${name} on <figure>: its target's own attribute line sets ${name}, and the merged pair keeps the target's`,
+        `Dropped ${name} on <figure>: its target sets ${name} as well, and the two attribute lines merge into one that keeps the target's value`,
         'info',
         path,
         node,
