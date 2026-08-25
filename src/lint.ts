@@ -699,7 +699,7 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
 
 const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
-const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
 const LINT_BLOCK_ATTRIBUTE = /^(?:\{[^{}\n]+\})+[ \t]*$/
 /**
  * A footnote definition line. Mirrors parse.ts.
@@ -906,6 +906,13 @@ function collectListItemIndentWarnings(
         ? 'table'
         : (/^::(?: |$)/.test(authored.rest) || /^:  /.test(authored.rest))
           ? 'definition-list'
+          : (FOOTNOTE_DEF.test(authored.rest) || (
+              previousGroup?.kind === 'footnote-definition' &&
+              previousGroup.item === item &&
+              previousGroup.column === authored.column &&
+              previousGroup.line === lineNo - 1
+            ))
+            ? 'footnote-definition'
           : undefined
     if (
       groupKind !== undefined &&
