@@ -3688,12 +3688,10 @@ function collectLinkDefs(lexer: Lexer) {
     const rawIndent = leadingWhitespace(unquoted)
     if (isContinuationMarker(raw)) plusColumn = leadingWhitespace(unquoted)
     else if (isBlankLine(raw)) plusColumn = null
-    // Inside a footnote body the column is KNOWN - it is two, §16's own
-    // (carve#717) - so the body no longer needs the blanket exemption it used to
-    // carry below. With the exemption a definition anywhere in a note body was
-    // collected, including at columns where the body renders the line as text:
-    // the reader saw `[r]: /u` as prose while a reference to it silently
-    // resolved (the `VA` rows of carve#669 and carve#701, at indents 1 and 3).
+    // Inside a footnote body the minimum is column two. After carve#1729 a
+    // recognized opener at or past it establishes an authored local base, so
+    // an over-indented link definition registers just like the exact-column
+    // spelling. A line below two still leaves the body and stays literal.
     const openColumn = inFootnoteBody ? FOOTNOTE_BODY_COLUMN : contentCol
     // THE COLUMN IS THE COMPOSED ONE, and it is compared against the columns the
     // line REACHED plus the ones it opened itself. `rawIndent` measures a line
@@ -3737,7 +3735,9 @@ function collectLinkDefs(lexer: Lexer) {
       ? rawIndent === plusColumn
       : anyReached
         ? reached(composed.column)
-        : composed.column === openColumn
+        : inFootnoteBody
+          ? composed.column >= FOOTNOTE_BODY_COLUMN
+          : composed.column === openColumn
     // NO EXEMPTION FOR A LINE THAT CARRIES ITS OWN PREFIX. The guard used to
     // apply only where `kept === unquoted`, which asked "does this line carry a
     // marker of its own?" - because `rawIndent` measured the wrong thing on the
@@ -5291,6 +5291,10 @@ function parseFootnoteDef(lexer: Lexer): null {
     }
   }
   if (!lexer.footnoteDefs.has(label)) {
+    // A recognized opener at or beyond the note's minimum column establishes
+    // its authored column as a local base (carve#1729). The collector has
+    // already removed the fixed two-column body margin.
+    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
     // The definition runs from its `[^label]:` marker to the last line it
@@ -6491,6 +6495,9 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       }
       break
     }
+    // The same authored-base rule list items use, now in the definition body's
+    // coordinate system after its fixed three-column margin was removed.
+    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
     return parseBlocks(sub, 0)
   }
@@ -9113,7 +9120,7 @@ function parseList(lexer: Lexer): List {
       RE_TASK.test(content) ||
       extractItemAttr(content) !== null
     if (hasOverindentedBlockCandidate)
-      rebaseOverindentedItemBlocks(
+      rebaseOverindentedBlocks(
         nested,
         authoredBaseEligible,
         leadIsMarker ? markerContentColumn(content) : -1,
@@ -10701,10 +10708,11 @@ function leadingWhitespace(line: string): number {
  * and its exact-column twin parsing identically from here on.  Nothing
  * downstream needs to know a rebase happened.
  */
-function rebaseOverindentedItemBlocks(
+function rebaseOverindentedBlocks(
   lines: string[],
   eligible?: ReadonlySet<number>,
   leadNestedColumn = -1,
+  includeSublists = false,
 ): void {
   const firstVisible = lines.find((line) => !isBlankLine(line))
   const firstMarkerColumn = firstVisible === undefined ? -1 : markerContentColumn(firstVisible)
@@ -10753,12 +10761,12 @@ function rebaseOverindentedItemBlocks(
     // Sublists already use the containment rule in the item collector. Their
     // residual indentation expresses another nesting level, not an authored
     // base to erase here.
-    if (
+    if (!includeSublists && (
       RE_ORDERED.test(opener) ||
       RE_UNORDERED.test(opener) ||
       RE_TASK.test(opener) ||
       extractItemAttr(opener) !== null
-    )
+    ))
       continue
 
     let end = i

@@ -3,23 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 /**
- * A CONTINUATION INDENTED PAST THE BODY'S COLUMN IS LAZY TEXT
- * (markup-carve/carve#918).
- *
- * `definition_indent` REACHES the body's column and does not measure how far
- * past it a line went, because there is nothing past that column for
- * indentation to mean. So a line indented further continues the body's OPEN
- * PARAGRAPH, and a paragraph continuation carries inline content.
- *
- * Why not "extra indentation nests", from the signoff: that reading makes
- * indentation depth mean two different things one line apart - lazy
- * continuation already governs the line above and folds it into the same
- * paragraph, so a stray four-space indent would silently become a block quote.
- *
- * The corpus names the block QUOTE. It is not one opener: this engine stripped
- * the WHOLE indentation run, so a line at column 4 arrived flush at column 0,
- * byte-identical to one written at column 3 - and EVERY nesting opener gave the
- * same answer at both columns. Eight of them move.
+ * A recognized block opener indented past the definition body's minimum column
+ * establishes an authored local block base (markup-carve/carve#1729).
  */
 
 // The body's column is 3, the one `:  ` establishes.
@@ -35,12 +20,12 @@ const OPENERS: Array<[string, string, string]> = [
   ['a definition term', ':: q', '<dt>q</dt>'],
 ]
 
-describe('past the body column, a block opener is text', () => {
+describe('past the body column, an opener establishes an authored base', () => {
   for (const [name, opener, marker] of OPENERS) {
-    it(`does not nest ${name}`, () => {
+    it(`nests ${name}`, () => {
       const src = `:: t\n:  body\n${opener.split('\n').map((l) => PAST + l).join('\n')}\n`
 
-      expect(carveToHtml(src)).not.toContain(marker)
+      expect(carveToHtml(src)).toContain(marker)
     })
 
     it(`CONTROL: nests ${name} AT the body column`, () => {
@@ -52,9 +37,9 @@ describe('past the body column, a block opener is text', () => {
     })
   }
 
-  it('renders the corpus shape as one paragraph carrying the marker as text', () => {
+  it('renders the corpus shape as a structural quote', () => {
     expect(carveToHtml(':: t\n:  body\n    > q\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>body\n&gt; q</dd>\n</dl>',
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body</p>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>',
     )
   })
 

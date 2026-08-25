@@ -37,13 +37,15 @@ describe("BELOW the body's column the body ends", () => {
     expect(carveToHtml(input)).toBe(expected)
   })
 
-  it('CONTROL PAST the column the line is lazy text', () => {
+  it('CONTROL PAST the column a block opener establishes an authored base', () => {
     let input = ':: t\n:  body\n' + ' '.repeat(4) + '> q\n'
-    let expected = '<dl>\n  <dt>t</dt>\n  <dd>body\n&gt; q</dd>\n</dl>'
+    let expected =
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body</p>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>'
     expect(carveToHtml(input)).toBe(expected)
 
     input = ':: t\n:  body\n' + ' '.repeat(5) + '> q\n'
-    expected = '<dl>\n  <dt>t</dt>\n  <dd>body\n&gt; q</dd>\n</dl>'
+    expected =
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>body</p>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>'
     expect(carveToHtml(input)).toBe(expected)
   })
 
