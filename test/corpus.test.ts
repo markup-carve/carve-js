@@ -690,9 +690,18 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  // Empty: the pin moved past its one entry (the canonical doubled arrow), and
-  // the file's own rule is that such an entry is DELETED in the commit that
-  // moves the pin rather than left to rot.
+  ['24-generic-divs-4', {
+    reason: 'carve#1725 permits an ASCII digit to start an explicit class',
+    html: '<div class="123">\n  <p>not a div</p>\n</div>',
+  }],
+  ['71-attribute-edge-cases-15', {
+    reason: 'carve#1725 permits ASCII digits to start explicit IDs and classes',
+    html: '<p><span class="123">x</span> and [y]{12=v}</p>',
+  }],
+  ['71-attribute-edge-cases-17', {
+    reason: 'carve#1725 permits an ASCII digit to start an explicit class',
+    html: '<p><span class="ok 1">x</span></p>',
+  }],
 ])
 
 
