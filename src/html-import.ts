@@ -697,6 +697,15 @@ class Importer {
    * pass - imported FIRST, long before the body it is referenced from - still
    * reports at the end, where the author wrote it.
    */
+  /**
+   * The cell alignment a `style` attribute mapped, keyed by the cell it was
+   * read off. `attrs()` fills it and `table()` moves it onto the cell node,
+   * because a cell alignment is a FIELD of the cell rather than an attribute -
+   * `|>` and `|?^` are the marker run, not `{align=…}` and `{valign=…}`
+   * (markup-carve/carve#1745).
+   */
+  private readonly cellAlignment = new Map<P5Node, { align?: string; valign?: string }>()
+
   private readonly documentOrder = new Map<P5Node, number>()
 
   /** The report, in the order docs/html-import.md states. */
@@ -1579,15 +1588,68 @@ class Importer {
     return false
   }
 
+  /**
+   * The Carve slot a CSS declaration maps to, or `undefined` where nothing in
+   * the language spells it.
+   *
+   * THE TEST IS THIS RENDERER. `text-align: right` maps because a Carve cell
+   * alignment is written back as `style="text-align: right;"` - the very
+   * declaration the import was handed - and `vertical-align: top` maps for the
+   * same reason through the cell's `valign`. Refusing either declared a loss
+   * the engine did not have to take, and `docs/html-import.md` makes a declared
+   * loss a ceiling rather than a licence (markup-carve/carve#1741,
+   * markup-carve/carve#1746).
+   *
+   * WHAT STAYS UNMAPPED, and why the list is short:
+   *
+   * - `text-align: justify` / `start` / `end` and `vertical-align: baseline` /
+   *   `sub` / a length are outside Carve's enums (`left`, `right`, `center`;
+   *   `top`, `middle`, `bottom`), so there is no value to write.
+   * - `width` and `height` reach no per-cell slot. A `table.columns` entry
+   *   carries a width, but nothing writes one from a cell and the column model
+   *   is its own question (markup-carve/carve#1092).
+   * - `color`, `background`, `border`, `padding`, `margin`, `font-*`,
+   *   `white-space` and the rest of CSS have no Carve construct at all. Their
+   *   loss is a real ceiling and stays reported.
+   *
+   * `safe` maps NOTHING. It is the conservative mode: a declaration it declines
+   * is dropped and reported.
+   */
+  private mappedStyleDeclaration(property: string, value: string): { key: 'align' | 'valign'; value: string } | undefined {
+    if (this.mode === 'safe') return undefined
+    if (property === 'text-align' && ['left', 'right', 'center'].includes(value)) return { key: 'align', value }
+    if (property === 'vertical-align' && ['top', 'middle', 'bottom'].includes(value)) return { key: 'valign', value }
+    return undefined
+  }
+
   private styles(node: P5Node, value: string, keyValues: Record<string, string>, path: string): void {
+    const cell = node.tagName === 'td' || node.tagName === 'th'
     for (const declaration of value.split(';')) {
       const split = declaration.indexOf(':')
       if (split < 0) continue
       const property = declaration.slice(0, split).trim().toLowerCase()
       const val = declaration.slice(split + 1).trim().toLowerCase()
       if (!property) continue
-      if (this.mode !== 'safe' && property === 'text-align' && ['left', 'right', 'center'].includes(val)) {
-        keyValues.align = val
+      const mapped = this.mappedStyleDeclaration(property, val)
+      // A CELL TAKES THE MARKER RUN, NOT AN ATTRIBUTE. `|>` is written back as
+      // `style="text-align: right;"` and `{align=right}` as `align="right"`, so
+      // only the marker returns the declaration the import was handed - and
+      // only the marker keeps `carve -> html -> carve -> html` stable, which the
+      // attribute spelling did not (markup-carve/carve#1745).
+      if (mapped && cell) {
+        const slot = this.cellAlignment.get(node) ?? {}
+        slot[mapped.key] = mapped.value
+        this.cellAlignment.set(node, slot)
+      } else if (mapped?.key === 'align') {
+        // OFF A CELL there is no marker, and `align` is a legacy presentational
+        // attribute HTML defines for exactly these elements, so the key-value
+        // is the faithful spelling rather than a second-best one.
+        keyValues.align = mapped.value
+      } else if (mapped) {
+        // `valign` is defined for table cells and nothing else, so writing it
+        // onto a paragraph would emit an attribute no reader honours - a
+        // spelling that looks like a mapping and is not one.
+        this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)
       } else {
         this.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, node)
       }
@@ -2898,6 +2960,65 @@ class Importer {
     return rows
   }
 
+  /**
+   * Drop a body cell's alignment where the HEAD already says it.
+   *
+   * A header cell's marker run is the COLUMN's default: the renderer reads it
+   * off the leading header rows and every cell below inherits what it does not
+   * state. So a body cell repeating the column's value spells a thing the
+   * document already says, and the shortest source that renders the same table
+   * is the one without it - which is also the source a round trip has to come
+   * back to, or `| h |\n|:---|\n| a |` grows a marker on every body row each
+   * time it passes through HTML.
+   *
+   * ONLY WHERE THE VALUE AGREES. A body cell that differs from its column keeps
+   * its own marker, because that is the only thing that overrides the default.
+   *
+   * The column walk is the renderer's: a colspan seeds every column it covers,
+   * a rowspan holds its columns in the rows below, and among several header
+   * rows the last one to state an axis wins.
+   */
+  private dropInheritedCellAlignment(
+    built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
+    leadingHeaderRows: number,
+  ): void {
+    if (leadingHeaderRows === 0) return
+    const columns: Array<{ align?: string; valign?: string }> = []
+    const held = new Map<number, number>()
+    const walk = (row: Array<{ cell: TableCell; colspan: number; rowspan: number }>, visit: (entry: { cell: TableCell; colspan: number; rowspan: number }, column: number) => void): void => {
+      let column = 0
+      for (const entry of row) {
+        while ((held.get(column) ?? 0) > 0) column++
+        visit(entry, column)
+        for (let k = column; k < column + entry.colspan; k++) {
+          if (entry.rowspan > 1) held.set(k, entry.rowspan - 1)
+        }
+        column += entry.colspan
+      }
+    }
+    const endOfRow = (): void => {
+      for (const [column, rows] of held) {
+        if (rows <= 1) held.delete(column)
+        else held.set(column, rows - 1)
+      }
+    }
+    for (let r = 0; r < built.length; r++) {
+      walk(built[r]!, (entry, column) => {
+        if (r < leadingHeaderRows) {
+          for (let k = column; k < column + entry.colspan; k++) {
+            columns[k] ??= {}
+            if (entry.cell.align) columns[k]!.align = entry.cell.align
+            if (entry.cell.valign) columns[k]!.valign = entry.cell.valign
+          }
+          return
+        }
+        if (entry.cell.align && columns[column]?.align === entry.cell.align) delete entry.cell.align
+        if (entry.cell.valign && columns[column]?.valign === entry.cell.valign) delete entry.cell.valign
+      })
+      endOfRow()
+    }
+  }
+
   private table(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode {
     /*
      * `<caption>` is a DIRECT child of the table and holds the table's own
@@ -3054,14 +3175,35 @@ class Importer {
             if (Object.keys(cellAttrs!.keyValues!).length === 0) delete cellAttrs!.keyValues
           }
         }
+        // THE MARKER RUN IS THE CELL'S OWN FIELD, so a mapped `text-align` /
+        // `vertical-align` is moved out of the attribute block and onto the
+        // cell. A presentational `align` / `valign` beside it is dropped: CSS
+        // beats the presentational attribute in HTML, and keeping both would
+        // emit the same axis twice, in two spellings, from one source.
+        const alignment = this.cellAlignment.get(cell)
+        for (const key of ['align', 'valign'] as const) {
+          if (alignment?.[key] === undefined) continue
+          if (cellAttrs?.keyValues?.[key] === undefined) continue
+          this.refuseAttribute(cell, cellPath, key, ': a mapped CSS declaration already sets it', 'info', false)
+          delete cellAttrs.keyValues[key]
+          if (Object.keys(cellAttrs.keyValues).length === 0) delete cellAttrs.keyValues
+        }
         const kept = cellAttrs && (cellAttrs.id || cellAttrs.classes || cellAttrs.keyValues) ? cellAttrs : undefined
         return {
-          cell: { type: 'table_cell' as const, header: cell.tagName === 'th', children: this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1), ...(kept ? { attrs: kept } : {}) },
+          cell: {
+            type: 'table_cell' as const,
+            header: cell.tagName === 'th',
+            children: this.blockInlines(cell.childNodes ?? [], cellPath, depth + 1),
+            ...(alignment?.align ? { align: alignment.align as 'left' | 'right' | 'center' } : {}),
+            ...(alignment?.valign ? { valign: alignment.valign as 'top' | 'middle' | 'bottom' } : {}),
+            ...(kept ? { attrs: kept } : {}),
+          },
           colspan,
           rowspan,
         }
       }),
     )
+    this.dropInheritedCellAlignment(built, leadingHeaderRows)
     // A `<tr>`'s own attributes have a slot - `table_row.attrs`, which the
     // writer spells on the closing pipe and every renderer emits on the `<tr>`
     // - and went in silence before this.
