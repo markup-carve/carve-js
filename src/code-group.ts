@@ -172,7 +172,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     const groupId = ctx.uniqueId(`${idPrefix}-${groupCounter}`)
     const pad = ctx.indent(ctx.level)
 
-    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx))}>\n`
+    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx), 'div')}>\n`
     items.forEach((item, index) => {
       const inputId = ctx.uniqueId(`${groupId}-tab-${index + 1}`)
       const checked = item.selected ? ' checked' : ''
@@ -223,7 +223,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
       tab: ctx.uniqueId(`${groupId}-tab-${index + 1}`),
       panel: ctx.uniqueId(`${groupId}-panel-${index + 1}`),
     }))
-    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx, 'tablist'))}>\n`
+    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx, 'tablist'), 'div')}>\n`
     items.forEach((item, index) => {
       const { tab: tabId, panel: panelId } = pairIds[index]!
       const selected = item.selected ? 'true' : 'false'
@@ -273,7 +273,7 @@ export function codeGroup(opts: CodeGroupOptions = {}): CarveExtension {
     // A static render takes NEITHER mode (§13.1): the set flattens to one
     // `<section>` per panel headed by its label, the heading IS the name, and
     // no interaction survives to bind. So the wrapper is the plain `group`.
-    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx))}>\n`
+    let html = `${pad}<div${ctx.renderAttrs(wrapperAttrs(node, ctx), 'div')}>\n`
     for (const item of items) {
       html += `${innerPad}<section class="${ctx.escapeAttr(panelClass)}">\n`
       html += `${innerPad}<h3 class="${ctx.escapeAttr(labelClass)}">${ctx.escapeHtml(item.label)}</h3>\n`

@@ -666,7 +666,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       const inner = renderInlines(node.children, opts)
       const slAttr = sourceLineAttr(opts, node.pos?.startLine, headingAttrs)
       out.push(
-        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs)}${slAttr}>${inner}</h${node.level}>`,
+        `${indent(headingLevel)}<h${node.level}${renderAttrs(headingAttrs, `h${node.level}`)}${slAttr}>${inner}</h${node.level}>`,
       )
       continue
     }
@@ -876,8 +876,81 @@ function indent(level: number): string {
   return '  '.repeat(level)
 }
 
-function renderAttrs(attrs?: Attrs): string {
-  if (!attrs) return ''
+/**
+ * The elements on which HTML's legacy `align` attribute means TEXT ALIGNMENT,
+ * so `{align=…}` on them renders the CSS declaration instead of the deprecated
+ * attribute (PART 10, markup-carve/carve#1755).
+ *
+ * `table` IS DELIBERATELY ABSENT AND MUST NOT BE ADDED. On a table `align` is
+ * PLACEMENT - the table floats left or right, or centres as a block - which is
+ * a different property that does not map to `text-align` at all. Rewriting it
+ * would silently turn a floated table into one whose CELL TEXT is right-
+ * aligned, in every existing document that spells it, which is a worse defect
+ * than the deprecated attribute. `{align=…}` on a table keeps rendering
+ * `align=` until somebody rules what a floated table should spell.
+ *
+ * The same reasoning keeps `img`, `hr`, `iframe`, `object`, `embed`, `input`
+ * and `caption` out: HTML maps their `align` to a float, a margin, a
+ * `vertical-align` or a caption side, never to `text-align`.
+ */
+const TEXT_ALIGN_ELEMENTS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+
+/** The `align` values HTML gives a `text-align` meaning on those elements. */
+const TEXT_ALIGN_VALUES = new Set(['left', 'right', 'center'])
+
+/** Append a declaration to an author `style` value, keeping one `style` attr. */
+function appendDeclaration(style: string, declaration: string): string {
+  const trimmed = style.trim()
+  if (trimmed === '') return declaration
+  return trimmed.endsWith(';') ? `${trimmed} ${declaration}` : `${trimmed}; ${declaration}`
+}
+
+/**
+ * Rewrite a text-alignment `align` key-value into a `text-align` declaration.
+ *
+ * `align` is one of the KNOWN keys the attribute mechanism acts on, alongside
+ * `loose` (consumed, emits nothing), `#id` and `.class`. Every other key stays
+ * a raw pass-through: `{banana=yellow}` still renders `banana="yellow"`, and
+ * `{valign=…}` is untouched here (markup-carve/carve#1756 ruled it
+ * working-as-designed).
+ *
+ * The declaration takes the `align` slot so source order is preserved. When the
+ * author also wrote `style`, it is appended to that value instead - two `style`
+ * attributes would be invalid HTML and the second one ignored.
+ */
+function withTextAlignDeclaration(attrs: Attrs, tag?: string): Attrs {
+  if (tag === undefined || !TEXT_ALIGN_ELEMENTS.has(tag)) return attrs
+  const keyValues = attrs.keyValues
+  if (!keyValues) return attrs
+  // HTML attribute names are case-insensitive, so `{ALIGN=right}` is the same
+  // key and must take the same path.
+  const alignKey = Object.keys(keyValues).find((k) => k.toLowerCase() === 'align')
+  if (alignKey === undefined) return attrs
+  const value = (keyValues[alignKey] ?? '').trim().toLowerCase()
+  if (!TEXT_ALIGN_VALUES.has(value)) return attrs
+  const declaration = `text-align: ${value};`
+  const styleKey = Object.keys(keyValues).find((k) => k.toLowerCase() === 'style')
+  const next: Record<string, string> = {}
+  for (const [k, v] of Object.entries(keyValues)) {
+    if (k === alignKey) {
+      if (styleKey === undefined) next['style'] = declaration
+      continue
+    }
+    next[k] = k === styleKey ? appendDeclaration(v, declaration) : v
+  }
+  const result: Attrs = { ...attrs, keyValues: next }
+  if (attrs.order) {
+    result.order =
+      styleKey === undefined
+        ? attrs.order.map((slot) => (slot === alignKey ? 'style' : slot))
+        : attrs.order.filter((slot) => slot !== alignKey)
+  }
+  return result
+}
+
+function renderAttrs(raw?: Attrs, tag?: string): string {
+  if (!raw) return ''
+  const attrs = withTextAlignDeclaration(raw, tag)
   const parts: string[] = []
   const classAttr = () =>
     attrs.classes && attrs.classes.length
@@ -1008,7 +1081,7 @@ function renderSemanticSpan(node: Span, opts: RenderOptions): string {
  */
 function renderAttrs2(
   attrs: Attrs | undefined,
-  opts: { baseClass?: string; trailingClass?: string; dropId?: boolean } = {},
+  opts: { baseClass?: string; trailingClass?: string; dropId?: boolean; tag?: string } = {},
 ): string {
   if (!attrs && !opts.baseClass && !opts.trailingClass) return ''
   // Build a synthetic Attrs and delegate to renderAttrs so author
@@ -1032,7 +1105,7 @@ function renderAttrs2(
     delete a.id
     if (a.order) a.order = a.order.filter((s) => s !== '#id')
   }
-  return renderAttrs(a)
+  return renderAttrs(a, opts.tag)
 }
 
 function renderLeadingBaseClassAttrs(attrs: Attrs | undefined, baseClass: string): string {
@@ -1227,11 +1300,11 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
   switch (node.type) {
     case 'heading': {
       const inner = renderInlines(node.children, opts)
-      return `${pad}<h${node.level}${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
+      return `${pad}<h${node.level}${renderAttrs(node.attrs, `h${node.level}`)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</h${node.level}>`
     }
     case 'paragraph': {
       const inner = renderInlines(node.children, opts)
-      return `${pad}<p${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</p>`
+      return `${pad}<p${renderAttrs(node.attrs, 'p')}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>${inner}</p>`
     }
     case 'thematic_break':
       return `${pad}<hr${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
@@ -1256,7 +1329,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'admonition':
       return renderAdmonition(node, opts, level)
     case 'div': {
-      const open = `${pad}<div${renderAttrs(node.attrs)}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      const open = `${pad}<div${renderAttrs(node.attrs, 'div')}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
       // Core caption floor (graceful degradation): a grouping `[label]` that
       // no extension consumed must not be silently dropped. Surface it as a
       // `<p class="div-label">` at the start of the div content. (A group
@@ -1274,7 +1347,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // class is part of the OUTPUT contract, not of the AST: the node type is
       // what records that every newline inside is a hard break, so a plain div
       // an author gave that class stays an ordinary div.
-      const open = `${pad}<div${renderAttrs2(node.attrs, { trailingClass: 'line-block' })}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
+      const open = `${pad}<div${renderAttrs2(node.attrs, { trailingClass: 'line-block', tag: 'div' })}${sourceLineAttr(opts, node.pos?.startLine, node.attrs)}>`
       const body = renderBlocks(node.children, opts, level + 1)
       if (body === '') return `${open}\n${pad}</div>`
       return `${open}\n${body}\n${pad}</div>`
@@ -1312,7 +1385,7 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
             const para = visible[0] as Paragraph
             const inner = renderInlines(para.children, opts)
             const body = node.loose
-              ? `<p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p>`
+              ? `<p${renderAttrs(para.attrs, 'p')}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p>`
               : inner
             lines.push(`${pad}  <dd${sourceLineAttr(opts, ddLine)}>${body}</dd>`)
           } else {
@@ -1401,7 +1474,7 @@ function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number):
   if (visible.length === 1 && visible[0]!.type === 'paragraph') {
     const para = visible[0] as Paragraph
     const inner = renderInlines(para.children, opts)
-    return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs)}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
+    return `${pad}<blockquote${attrs}><p${renderAttrs(para.attrs, 'p')}${sourceLineAttr(opts, para.pos?.startLine, para.attrs)}>${inner}</p></blockquote>`
   }
   const inner = node.children
     .map((child, i) => rendered[i] ?? renderBlock(child, opts, level + 1))
@@ -1455,7 +1528,7 @@ function renderListItem(
     // carrying its own attributes (e.g. a leading block-attribute line, §15)
     // must keep the <p> so the attributes survive.
     if (tight && isLead && !p.attrs) return inner
-    return `<p${renderAttrs(p.attrs)}${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}>${inner}</p>`
+    return `<p${renderAttrs(p.attrs, 'p')}${sourceLineAttr(opts, p.pos?.startLine, p.attrs)}>${inner}</p>`
   }
 
   // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING. A comment (§4.13) and a
@@ -1802,8 +1875,8 @@ function renderAdmonition(node: Admonition, opts: RenderOptions, level: number):
   // The class is structurally first (`admonition {type}`); the id/key
   // attrs after it keep their source order (order minus the class slot).
   if (node.attrs?.order) restAttrs.order = node.attrs.order.filter((s) => s !== '.class')
-  const rest = renderAttrs(restAttrs)
   const tag = canonical ? 'aside' : 'div'
+  const rest = renderAttrs(restAttrs, tag)
   return `${pad}<${tag}${sourceLineAttr(opts, node.pos?.startLine, restAttrs)} class="${classValue}"${rest}${accessibleName}>\n${titleLine}${labelLine}${body}\n${pad}</${tag}>`
 }
 

@@ -59,7 +59,7 @@ export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
         // the author attributes, mirroring core display `$$` math (renderAttrs2
         // with baseClass). ctx.renderAttrs applies the always-on attribute
         // hardening, so a {onclick=…} fence cannot inject a handler.
-        return `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(mathAttrs(code))}>\\[${escapeMath(code.content)}\\]</div>`
+        return `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(mathAttrs(code), 'div')}>\\[${escapeMath(code.content)}\\]</div>`
       },
     },
     // Static render: math needs a client script (KaTeX / MathJax) to draw. If a
@@ -70,7 +70,7 @@ export function mathBlock(opts: MathBlockOptions = {}): CarveExtension {
       'code_block': (node, ctx) => {
         const code = node as CodeBlock
         if (code.lang !== language) return undefined
-        const open = `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(mathAttrs(code))}>`
+        const open = `${ctx.indent(ctx.level)}<div${ctx.renderAttrs(mathAttrs(code), 'div')}>`
         const build = ctx.renderers.math
         const body = build ? build(code.content, true) : `\\[${escapeMath(code.content)}\\]`
         return `${open}${body}</div>`
