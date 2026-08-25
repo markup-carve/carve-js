@@ -155,6 +155,20 @@ describe('a figure caption and a table caption both survive the import', () => {
     }
   })
 
+  it('leaves the slot free when the table caption writes nothing', () => {
+    // A `<caption>` holding only an empty `<span>` is structurally non-empty
+    // and contributes no caption line, so the figure's caption takes the slot
+    // as it does for a `<caption></caption>`. carve-php writes this byte for
+    // byte, in all three modes.
+    const html =
+      '<figure id="f"><table><caption><span></span></caption><tr><td>a</td></tr></table>' +
+      '<figcaption>FigCap</figcaption></figure>'
+    for (const mode of ['safe', 'semantic'] as const) {
+      expect(htmlToCarve(html, { mode }).value).toBe('{#f}\n| a |\n^ FigCap\n')
+      expect(carveToHtml(htmlToCarve(html, { mode }).value)).toContain('<caption>FigCap</caption>')
+    }
+  })
+
   /*
    * THE TABLE IS THE ONLY TARGET IN THE COLLISION. A quote, a code block and an
    * image have no caption of their own, so the figure's `^ ` line is
