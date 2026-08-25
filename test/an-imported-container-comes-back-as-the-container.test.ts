@@ -128,15 +128,15 @@ describe('an imported container comes back as the container', () => {
 
   /*
    * THE GUARD, and it is the writer's own rule rather than a copy of it. A
-   * fence opener reads its type word as `[a-zA-Z_][\w-]*`, so a class outside
+   * fence opener reads its type word as `[a-zA-Z0-9_][\w-]*`, so a class outside
    * that shape cannot be the fence word: written there it would read back as a
    * paragraph, and the element would lose both its class and its structure.
    * Such a div keeps the generic node, where the class survives as a class.
    */
   it('keeps a class a fence opener cannot spell as a class', () => {
-    const result = htmlToCarve('<div class="2col"><p>x</p></div>')
-    expect(result.value).toBe('{.2col}\n:::\nx\n:::\n')
-    expect(kinds(htmlToAst('<div class="2col"><p>x</p></div>').value)).toContain('div')
+    const result = htmlToCarve('<div class="-2col"><p>x</p></div>')
+    expect(result.value).toBe('{.-2col}\n:::\nx\n:::\n')
+    expect(kinds(htmlToAst('<div class="-2col"><p>x</p></div>').value)).toContain('div')
   })
 
   it('leaves an aside that is not a callout unwrapped', () => {
