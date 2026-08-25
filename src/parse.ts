@@ -3703,11 +3703,17 @@ function collectLinkDefs(lexer: Lexer) {
       .slice(0, composed.depth)
       .filter((entry) => !entry.quote)
       .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+    // WITH A LIST COLUMN IN PLAY the test is "at or past the deepest one", not
+    // "exactly at an open one": §24 C3 erases an authored base before the item
+    // parses the line, so an over-indented definition is the item's definition
+    // and registers document-wide (carve#1705). With NO list column open the
+    // exact test stands unchanged - a quote's content column is reached, not
+    // rebased.
     const reached = (col: number): boolean =>
-      (deepestTrackedListColumn === null || col >= deepestTrackedListColumn) &&
-      (composed.peeled.some((one) => one.content === col) ||
-        openCols.some((e, i) => i < composed.depth && e.quote && e.col === col) ||
-        deepestTrackedListColumn !== null)
+      deepestTrackedListColumn !== null
+        ? col >= deepestTrackedListColumn
+        : composed.peeled.some((one) => one.content === col) ||
+          openCols.some((e, i) => i < composed.depth && e.col === col)
     const anyReached = composed.peeled.length > 0 || composed.depth > 0
     // An unmarked line may lazily continue a quote's open paragraph, but it
     // does not reach a container inside that quote. Falling back to the outer
@@ -9385,7 +9391,14 @@ function parseList(lexer: Lexer): List {
       }
       // `j` can no longer be an invisible line (skipped above), so this is the
       // plain "is the next visible thing a paragraph" test it always was.
-      if (!lineOpensItemBlock(nested[j]!)) {
+      //
+      // STILL `lineOpensBlock`, not §24 C3's wider family. The rebase above has
+      // already rewritten an over-indented opener into its exact-column
+      // spelling, so asking the ordinary question here is what makes the two
+      // spellings agree. Asking `lineOpensItemBlock` instead widened the
+      // EXACT-column case too, and a lone block image - a paragraph under §17
+      // L2 - stopped loosening its item (corpus 411, 162).
+      if (!lineOpensBlock(nested[j]!)) {
         loose = true
         break
       }
@@ -10657,6 +10670,11 @@ function leadingWhitespace(line: string): number {
  *
  * This is one forward pass.  A line is stripped at most once and container
  * scans advance the outer cursor, keeping flat and deeply nested input linear.
+ *
+ * Every line this pass moves ends up spelled exactly as the same block would be
+ * spelled AT the content column, which is what keeps an over-indented opener
+ * and its exact-column twin parsing identically from here on.  Nothing
+ * downstream needs to know a rebase happened.
  */
 function rebaseOverindentedItemBlocks(
   lines: string[],
@@ -10675,38 +10693,35 @@ function rebaseOverindentedItemBlocks(
     })
     if (!hasParentOwnedCandidate) return
   }
-  if (
-    firstVisible !== undefined &&
-    indentColumns(firstVisible, 1) === 0 &&
-    RE_BLOCKQUOTE.test(firstVisible) &&
-    !lines.some(isBlankLine)
-  )
-    return
   // A sub-list may open on the item's marker line, which is not part of
   // `lines`. Seed its ownership column so a following line at that child's
   // content column is left for the child's collector (for example
   // `- > - - x` / `  >     # h`).
-  const nestedColumns: number[] = leadNestedColumn >= 0 ? [leadNestedColumn] : []
+  //
+  // ONE column, not a stack. A line at or past the open child's content column
+  // is handed to that child whatever it is, so a deeper marker inside the child
+  // could only ever be popped again before it decided anything - the deeper
+  // entries were unreachable. Keeping one column is also what makes the scan
+  // linear: `cap` below bounds every measurement by the child's column instead
+  // of by the line's own indentation, so a ladder does not re-read the same
+  // leading run once per level (carve#752's counted bound).
+  let ownedColumn = leadNestedColumn
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     if (isBlankLine(line)) continue
     if (eligible && !eligible.has(i)) continue
-    const base = indentColumns(line, Number.MAX_SAFE_INTEGER)
-    while (nestedColumns.length && base < nestedColumns[nestedColumns.length - 1]!) {
-      nestedColumns.pop()
-    }
-    const markerColumn = markerContentColumn(line)
-    if (markerColumn >= 0) {
-      while (nestedColumns.length && base < nestedColumns[nestedColumns.length - 1]!) {
-        nestedColumns.pop()
-      }
-      nestedColumns.push(markerColumn)
-      continue
-    }
+    const cap = ownedColumn >= 0 ? ownedColumn + 1 : Infinity
+    const base = indentColumns(line, cap)
     // A deeper item owns this line. Its own collector will see the line after
     // the intervening marker/content columns have been removed and will apply
     // the authored-base rule in that coordinate system.
-    if (nestedColumns.length && base >= nestedColumns[nestedColumns.length - 1]!) continue
+    if (ownedColumn >= 0 && base >= ownedColumn) continue
+    ownedColumn = -1
+    const markerColumn = markerContentColumn(line)
+    if (markerColumn >= 0) {
+      ownedColumn = markerColumn
+      continue
+    }
     if (base === 0) continue
     const opener = sliceColumns(line, base, true)
     if (!lineOpensItemBlock(opener)) continue
@@ -10796,6 +10811,21 @@ function rebaseOverindentedItemBlocks(
   }
 }
 
+/**
+ * The opener families an OVER-COLUMN line may spell (PART 9 §24 C3,
+ * carve#1705).
+ *
+ * Wider than `lineOpensBlock` by the two shapes that still deserve to be moved
+ * back to the item's base even though they are not block OPENERS there: a block
+ * attribute line and a bare block image.  Both are PARAGRAPHS at the canonical
+ * content column (PART 9 §17 L2) and stay paragraphs after the move - the point
+ * of rebasing them is that `{.c}` reaches the heading below it, and that the
+ * image is inside the item rather than an indented run beside it.
+ *
+ * ONLY the rebase asks this. Anything that classifies a line the collector
+ * already placed at the content column asks `lineOpensBlock`, so an
+ * over-indented spelling and its exact-column twin answer alike.
+ */
 function lineOpensItemBlock(line: string): boolean {
   return lineOpensBlock(line) || isBlockAttributeLine(line) || isBlockImageLine(line)
 }

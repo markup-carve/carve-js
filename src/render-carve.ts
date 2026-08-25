@@ -1785,8 +1785,19 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
           separated = true
         }
       }
-      const rendered = renderBlock(b, ctx)
+      let rendered = renderBlock(b, ctx)
       if (rendered.length === 0) return
+      // `guardThematicBreakLines` protects a paragraph continuation that is
+      // semantically an em dash by giving it one leading space.  Inside a list
+      // the ordinary continuation prefix would add the item content column to
+      // that guard.  Since #1705, that combined indentation is an authored
+      // block base and the guarded text would reparse as a real thematic break.
+      // Keep guarded continuation lines at the item's marker column; the one
+      // authored space remains below the content column and therefore remains
+      // lazy paragraph text.
+      if (b.type === 'paragraph' && rendered.includes('\n ')) {
+        rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${markerColumnTag()} `)
+      }
       // §17 L3: a PARAGRAPH after a paragraph needs the continuation marker
       // written back. Indented under the item it is a LAZY CONTINUATION of the
       // paragraph above (§10 I2), so the item comes back holding ONE block

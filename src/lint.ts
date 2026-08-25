@@ -814,6 +814,7 @@ function collectListItemIndentWarnings(
   const reported = new Set<number>()
   const active: LintItemColumn[] = []
   const ambiguousFences = new Map<LintItemColumn, { kind: 'code' | 'colon'; run: string }>()
+  let previousGroup: { item: LintItemColumn; kind: string; column: number; line: number } | undefined
   let nextItem = 0
   let lastEnded: LintItemColumn | undefined
   for (let index = 0; index < lines.length; index++) {
@@ -848,6 +849,17 @@ function collectListItemIndentWarnings(
       reported.add(lineNo)
       continue
     }
+    // Payload inside an already parsed verbatim/comment/container region is
+    // data, even when it happens to begin with `#`, `>` or another block
+    // marker. Suggesting a dedent or escape there would corrupt that payload.
+    // Keep genuine fence delimiters eligible so an authored over-column opener
+    // still receives the migration diagnostic.
+    if (_unrendered.has(lineNo) && !/^(?:`{3,}|~{3,}|:{3,})(?: |$)/.test(authored.rest)) {
+      reported.add(lineNo)
+      continue
+    }
+    const authoredCodeFence = /^(`{3,}|~{3,})/.exec(authored.rest)
+    const authoredColonFence = /^(:{3,})(?: |$)/.exec(authored.rest)
     if (authored.column === 0 ||
         (!LINT_BLOCK_OPENER.test(authored.rest) &&
          !LINT_BLOCK_ATTRIBUTE.test(authored.rest) &&
@@ -860,7 +872,9 @@ function collectListItemIndentWarnings(
       !item &&
       lastEnded &&
       authored.column > lastEnded.contentColumn &&
-      lines.slice(lastEnded.endLine, index).every((between) => between.trim() === '')
+      lines.slice(lastEnded.endLine, index).every((between) =>
+        blockView(between, lastEnded!.quoteDepth).rest.trim() === '',
+      )
     ) {
       // Definitions render no AST child, so an item's reported span can end
       // before their source line even though the source collector still owns
@@ -871,12 +885,39 @@ function collectListItemIndentWarnings(
       const candidate = lastEnded
       if (candidate && candidate.baseColumn < authored.column &&
           authored.column < candidate.contentColumn &&
-          lines.slice(candidate.endLine, index).every((between) => between.trim() === '')) {
+          lines.slice(candidate.endLine, index).every((between) =>
+            blockView(between, candidate.quoteDepth).rest.trim() === '',
+          )) {
         item = candidate
       }
       if (item) rule = 'list-item-body-detached'
     }
-    if (!item || !rule) continue
+    if (!item || !rule) {
+      if (owner && authored.column >= owner.contentColumn) {
+        if (authoredCodeFence) ambiguousFences.set(owner, { kind: 'code', run: authoredCodeFence[1]! })
+        else if (authoredColonFence) ambiguousFences.set(owner, { kind: 'colon', run: authoredColonFence[1]! })
+      }
+      continue
+    }
+
+    const groupKind = /^>(?: |$)/.test(authored.rest)
+      ? 'quote'
+      : isTableRow(authored.rest)
+        ? 'table'
+        : (/^::(?: |$)/.test(authored.rest) || /^:  /.test(authored.rest))
+          ? 'definition-list'
+          : undefined
+    if (
+      groupKind !== undefined &&
+      previousGroup?.item === item &&
+      previousGroup.kind === groupKind &&
+      previousGroup.column === authored.column &&
+      previousGroup.line === lineNo - 1
+    ) {
+      reported.add(lineNo)
+      previousGroup.line = lineNo
+      continue
+    }
 
     const first = authored.chars
     const start = (starts[index] ?? 0) + first
@@ -891,11 +932,12 @@ function collectListItemIndentWarnings(
       start,
       end: start + Math.max(1, authored.rest.match(/^\S+/)?.[0].length ?? 1),
     })
-    const codeFence = /^(`{3,}|~{3,})/.exec(authored.rest)
-    const colonFence = /^(:{3,})(?: |$)/.exec(authored.rest)
-    if (codeFence) ambiguousFences.set(item, { kind: 'code', run: codeFence[1]! })
-    else if (colonFence) ambiguousFences.set(item, { kind: 'colon', run: colonFence[1]! })
+    if (authoredCodeFence) ambiguousFences.set(item, { kind: 'code', run: authoredCodeFence[1]! })
+    else if (authoredColonFence) ambiguousFences.set(item, { kind: 'colon', run: authoredColonFence[1]! })
     reported.add(lineNo)
+    previousGroup = groupKind === undefined
+      ? undefined
+      : { item, kind: groupKind, column: authored.column, line: lineNo }
   }
   return reported
 }

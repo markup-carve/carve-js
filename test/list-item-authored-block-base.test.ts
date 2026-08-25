@@ -57,4 +57,28 @@ describe('list-item authored block bases (carve#1705)', () => {
     const text = heading.children[0]
     expect(source.slice(text.pos.startOffset, text.pos.endOffset)).toBe('heading')
   })
+
+  it('does not widen exact-column image looseness', () => {
+    const exact = html('- x\n\n  ![i](u)\n')
+    const over = html('- x\n\n   ![i](u)\n')
+    expect(over).toBe(exact)
+    expect(exact).toContain('<li><p>x</p>')
+  })
+
+  it('rebases a block after an item-level quote with and without a blank', () => {
+    for (const separator of ['\n', '\n\n']) {
+      const exact = html(`- > q${separator}  # h\n`)
+      const over = html(`- > q${separator}   # h\n`)
+      expect(over).toBe(exact)
+      expect(over).toContain('<h1 id="h">h</h1>')
+    }
+  })
+
+  it('keeps a below-column thematic marker stable through formatting', () => {
+    const source = '- a\n ---\n'
+    const formatted = carveToCarve(source)
+    expect(html(formatted)).toBe(html(source))
+    expect(carveToCarve(formatted)).toBe(formatted)
+    expect(formatted).not.toContain('   ---')
+  })
 })

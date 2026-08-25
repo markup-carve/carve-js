@@ -111,4 +111,21 @@ describe('list item block indentation diagnostics', () => {
     ).join('')
     expect(findings(source)).toHaveLength(3000)
   })
+
+  it('does not diagnose block-shaped verbatim payload', () => {
+    expect(findings('- x\n\n  ```\n     # code\n     > data\n  ```\n')).toEqual([])
+    expect(findings('- x\n\n  ::: note\n     # body\n  :::\n')).toEqual([])
+  })
+
+  it('reports one finding for a multi-line authored block group', () => {
+    expect(findings('- x\n\n   > one\n   > two\n   > three\n')).toHaveLength(1)
+    expect(findings('- x\n\n   | a |\n   | b |\n')).toHaveLength(1)
+    expect(findings('- x\n\n   :: term\n   :  definition\n')).toHaveLength(1)
+  })
+
+  it('finds a detached block through a quote blank prefix', () => {
+    expect(findings('> - item\n>\n>  # detached\n')).toMatchObject([
+      { rule: 'list-item-body-detached', line: 3 },
+    ])
+  })
 })
