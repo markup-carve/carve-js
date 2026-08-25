@@ -3068,6 +3068,19 @@ class Importer {
    * The column walk is the renderer's: a colspan seeds every column it covers,
    * a rowspan holds its columns in the rows below, and among several header
    * rows the last one to state an axis wins.
+   *
+   * THE HOLD BEGINS IN THE NEXT ROW, WHICH IS `spanGrid`'S BOOKKEEPING. A
+   * rowspan opens its columns while the row it starts in is still being
+   * walked, so a walk that ages every hold at the end of that same row retires
+   * each one a row early: the LAST row a span reaches sees its columns free,
+   * every cell after them in that row is read one column to the left, and a
+   * body cell whose alignment matches the WRONG column is deleted as inherited.
+   * Nothing reports it - from the import's point of view no cell was refused -
+   * and the re-render then spells the column the cell was misread into, so an
+   * alignment the source carried is silently replaced. `spanGrid` ages the
+   * carried marks BEFORE it adds the ones this row opened, and the array
+   * indexes it produces are the columns the renderer reads back, so this walk
+   * ages holds the same way.
    */
   private dropInheritedCellAlignment(
     built: Array<Array<{ cell: TableCell; colspan: number; rowspan: number }>>,
@@ -3076,13 +3089,14 @@ class Importer {
     if (leadingHeaderRows === 0) return
     const columns: Array<{ align?: string; valign?: string }> = []
     const held = new Map<number, number>()
+    const opened = new Map<number, number>()
     const walk = (row: Array<{ cell: TableCell; colspan: number; rowspan: number }>, visit: (entry: { cell: TableCell; colspan: number; rowspan: number }, column: number) => void): void => {
       let column = 0
       for (const entry of row) {
         while ((held.get(column) ?? 0) > 0) column++
         visit(entry, column)
         for (let k = column; k < column + entry.colspan; k++) {
-          if (entry.rowspan > 1) held.set(k, entry.rowspan - 1)
+          if (entry.rowspan > 1) opened.set(k, Math.max(opened.get(k) ?? 0, entry.rowspan - 1))
         }
         column += entry.colspan
       }
@@ -3092,10 +3106,23 @@ class Importer {
         if (rows <= 1) held.delete(column)
         else held.set(column, rows - 1)
       }
+      for (const [column, rows] of opened) held.set(column, Math.max(held.get(column) ?? 0, rows))
+      opened.clear()
     }
     for (let r = 0; r < built.length; r++) {
       walk(built[r]!, (entry, column) => {
         if (r < leadingHeaderRows) {
+          // A COLSPAN HEADER SEEDS EVERY COLUMN IT COVERS, and that is not a
+          // guess about tables in general - it is what THIS renderer reads
+          // back. Given `|~ H | < | < |< K |` with no marker on any body cell,
+          // `renderHtml` writes `text-align: center` on all three columns the
+          // header spans, because its own column defaults seed the same run.
+          // So a body cell under any of them that repeats `center` spells what
+          // the document already says, and dropping it is lossless HERE.
+          // Another engine whose renderer stops the default at the header's
+          // own column must keep those markers instead - the walk is only ever
+          // sound against the renderer it is paired with, and this half of
+          // markup-carve/carve-js#1503 was measured, not inherited.
           for (let k = column; k < column + entry.colspan; k++) {
             columns[k] ??= {}
             if (entry.cell.align) columns[k]!.align = entry.cell.align
