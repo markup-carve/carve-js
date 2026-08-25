@@ -188,6 +188,7 @@ plain text. Also flags Djot/Markdown constructs that mis-render in Carve
 exits 1 if anything is reported, 0 if clean.
 
   lint options:
+        --json       Emit semantic lint findings as structured JSON
         --from-djot  Also flag valid Carve whose meaning differs from Djot
         --platform NAME  Also flag bare tokens NAME re-linkifies in published
                      output (repeatable; off by default). Known: github
@@ -1151,6 +1152,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
   let fromDjot: boolean
   let portable: boolean
   let platforms: LintPlatform[]
+  let json: boolean
   try {
     const parsed = parseArgs({
       args,
@@ -1158,6 +1160,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
         help: { type: 'boolean', short: 'h' },
         'from-djot': { type: 'boolean' },
         portable: { type: 'boolean' },
+        json: { type: 'boolean' },
         // Repeatable, so a document can be checked against two hosts at once
         // and a second host's table can be added without a new flag.
         platform: { type: 'string', multiple: true },
@@ -1171,6 +1174,7 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
     positionals = parsed.positionals
     fromDjot = parsed.values['from-djot'] ?? false
     portable = parsed.values.portable ?? false
+    json = parsed.values.json ?? false
     // An unknown name is REFUSED here rather than silently ignored: on the API
     // an unknown host is a typed mistake the compiler catches, but a CLI flag
     // has no such reader, and a misspelt `--platform gihub` that reports
@@ -1190,11 +1194,17 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
 
   if (positionals.length === 0) {
     const src = await io.readStdin()
+    if (json) {
+      const warnings = jsonLintWarnings(src, '<stdin>', fromDjot, portable, platforms)
+      io.write(JSON.stringify(warnings, null, 2) + '\n')
+      return warnings.length > 0 ? 1 : 0
+    }
     return reportLint(src, '<stdin>', io, fromDjot, portable, platforms) > 0 ? 1 : 0
   }
 
   let total = 0
   let hadError = false
+  const jsonWarnings: Array<Record<string, unknown>> = []
   for (const file of positionals) {
     let src: string
     try {
@@ -1204,10 +1214,25 @@ async function runLint(args: string[], io: CliIO): Promise<number> {
       hadError = true
       continue
     }
-    total += reportLint(src, file, io, fromDjot, portable, platforms)
+    if (json) {
+      const warnings = jsonLintWarnings(src, file, fromDjot, portable, platforms)
+      total += warnings.length
+      jsonWarnings.push(...warnings)
+    } else {
+      total += reportLint(src, file, io, fromDjot, portable, platforms)
+    }
   }
+  if (json) io.write(JSON.stringify(jsonWarnings, null, 2) + '\n')
   if (hadError) return 2
   return total > 0 ? 1 : 0
+}
+
+function jsonLintWarnings(source: string, file: string, fromDjot: boolean, portable: boolean, platforms: readonly LintPlatform[]): Array<Record<string, unknown>> {
+  const migration = djotMigrationWarnings(source)
+    .filter((warning) => fromDjot || warning.category === 'carve-breakage')
+    .map((warning) => ({ file, ...warning }))
+  const semantic = lintCarve(source, { portable, platforms }).map((warning) => ({ file, ...warning }))
+  return [...migration, ...semantic]
 }
 
 async function readStdin(): Promise<string> {

@@ -317,6 +317,17 @@ describe('carve lint', () => {
     expect(t.out).toContain('a.crv:3:1 duplicate-heading-id')
   })
 
+  it('exposes colon mismatch details through lint JSON', async () => {
+    const t = makeIO({ stdin: ':::: note\nbody\n:::\n' })
+    expect(await run(['lint', '--json'], t.io)).toBe(1)
+    const warning = (JSON.parse(t.out) as Array<Record<string, unknown>>)
+      .find((item) => item.rule === 'colon-fence-length-mismatch')
+    expect(warning).toMatchObject({
+      file: '<stdin>', rule: 'colon-fence-length-mismatch',
+      data: { authoredWidth: 3, expectedWidth: 4, openerLine: 1, openerColumn: 1, outcome: 'nested container' },
+    })
+  })
+
   it('reports a missing file and exits 2', async () => {
     const t = makeIO()
     expect(await run(['lint', 'nope.crv'], t.io)).toBe(2)
