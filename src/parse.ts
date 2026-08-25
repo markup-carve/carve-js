@@ -6201,7 +6201,7 @@ function parseQuoteBlock(lexer: Lexer): BlockQuote {
     fenceWidth: fence,
   })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
-  return { type: 'block_quote', children: parseBlocks(subLexer, 0) }
+  return { type: 'block_quote', fenced: true, children: parseBlocks(subLexer, 0) }
 }
 
 function parseDiv(lexer: Lexer): Div {

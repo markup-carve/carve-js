@@ -158,6 +158,14 @@ export interface Paragraph extends BaseNode {
 export interface BlockQuote extends BaseNode {
   type: 'block_quote'
   children: BlockNode[]
+  /**
+   * True when the quote was authored as a colon-fence container rather than
+   * with line markers. The two spellings are one node; this records which,
+   * so `renderCarve` writes back what it read. Absent on a prefixed quote,
+   * so a document that predates the fence serializes exactly as it did
+   * (markup-carve/carve#1718).
+   */
+  fenced?: true
 }
 
 export interface List extends BaseNode {

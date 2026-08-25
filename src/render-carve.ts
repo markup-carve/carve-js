@@ -1097,6 +1097,16 @@ function renderBlockBody(node: BlockNode, ctx: CarveContext): string {
       return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
     }
     case 'block_quote': {
+      // Written back in the spelling it was read in (markup-carve/carve#1718).
+      // Choosing structurally instead - the fence whenever the quote holds a
+      // non-paragraph block - re-canonicalizes 50 of the corpus documents and
+      // every user document with a multi-block quote, which is why the node
+      // carries the author's choice rather than the writer inferring one.
+      if (node.fenced) {
+        const fence = colonFenceFor(ctx)
+        const body = renderColonFenceBody(node.children, ctx)
+        return withAttrs(`${fence} >\n${body}\n${fence}`)
+      }
       const inner = renderHostedBlocks(node.children, ctx)
       const body = inner
         .split('\n')
