@@ -165,6 +165,44 @@ function walkDocument(doc: Document, visitNode: (node: Record<string, unknown>) 
   if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
 }
 
+/**
+ * Every ADJACENT PAIR of blocks that share a parent, in document order.
+ *
+ * `walkDocument` visits nodes, and a rule about what a block sits BELOW cannot
+ * be written against a node alone. The children array is where that relation
+ * lives, so this walks arrays rather than nodes and hands both members over.
+ */
+function walkSiblingBlocks(
+  doc: Document,
+  visitPair: (previous: Record<string, unknown>, node: Record<string, unknown>) => void,
+): void {
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      let previous: Record<string, unknown> | undefined
+      for (const item of value) {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const node = item as Record<string, unknown>
+          if (previous && typeof node.type === 'string') visitPair(previous, node)
+          previous = node
+        }
+        visit(item)
+      }
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    for (const key of Object.keys(node)) {
+      if (key !== 'pos' && key !== 'attrs') visit(node[key])
+    }
+  }
+  visit(doc.children)
+  // A footnote definition's body is a block list like any other and hangs off
+  // the document rather than under `children`, so `walkDocument` reaches it
+  // explicitly - and a rule that walked only `children` would report the same
+  // construct in the body of the page and stay silent in a footnote.
+  if (doc.footnoteDefs) visit(Object.values(doc.footnoteDefs))
+}
+
 /** Every `crossref` node anywhere under the document, with its raw target. */
 function collectCrossrefs(doc: Document): Array<{ target: string; node: Positioned }> {
   const found: Array<{ target: string; node: Positioned }> = []
@@ -425,6 +463,29 @@ export function lintCarve(
       rule: 'braced-comment-in-a-template-source',
       message:
         'This braced comment is a template tag. Liquid, Nunjucks, or Twig source may have reached Carve as text; the tag is parsed as an invisible comment.',
+    })
+  })
+
+  // A `::: >` opener written at the column of the quote ABOVE it is a block
+  // opener, so it ends that quote and starts a sibling one - the ordinary
+  // container rule, and correct. It is reported because the failure is
+  // invisible for THIS container kind alone: written with any other type token
+  // the mistake produces a visibly different element, while two adjacent
+  // blockquotes read exactly like the nesting the author was reaching for.
+  // Nothing is malformed, so no other rule here fires (markup-carve/carve#1718).
+  walkSiblingBlocks(doc, (previous, node) => {
+    if (node.type !== 'block_quote' || node.fenced !== true) return
+    if (previous.type !== 'block_quote' || previous.fenced === true) return
+    const above = (previous as Positioned).pos
+    const opener = (node as Positioned).pos
+    if (above?.endLine === undefined || opener?.startLine === undefined) return
+    if (opener.startLine !== above.endLine + 1) return
+    out.push({
+      ...locate(node as Positioned, toUtf16),
+      rule: 'quote-fence-ends-the-quote-above',
+      message:
+        'A "::: >" opener at the column of the quote above it ENDS that quote and opens a sibling one; the two render as adjacent blockquotes, not one nested in the other. Write "> ::: >" to nest it, or leave a blank line to make two quotes deliberate.',
+      data: { quoteLine: above.startLine },
     })
   })
 
