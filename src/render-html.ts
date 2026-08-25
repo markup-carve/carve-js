@@ -40,6 +40,7 @@ import { normalizeLegacyInline } from './legacy-nodes.js'
 import { numberFootnotes } from './footnote-numbering.js'
 import { ownValue } from './own-property.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
+import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
 
@@ -56,7 +57,7 @@ let suppressAutomaticAbbreviation = false
 let docIds: DocumentIdRegistry | null = null
 let admonitionCount = 0
 
-export interface RenderOptions {
+export interface RenderOptions extends RenderLossSinkOptions {
   /**
    * The semantic span names this render consumes, inner to outer.
    *
@@ -1349,11 +1350,13 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
       // is visible inside a `<pre>`. Which of the three readings is canonical
       // for a multi-line raw block is open at markup-carve/carve#800; this
       // matches what the corpus pins without deciding it.
-      return node.format === 'html'
-        ? opts.allowRawHtml === false
-          ? `${pad}${escapeHtml(node.content)}`
-          : `${pad}${node.content}`
-        : ''
+      if (node.format !== 'html') {
+        rawFormatDropped(opts, node, 'html')
+        return ''
+      }
+      return opts.allowRawHtml === false
+        ? `${pad}${escapeHtml(node.content)}`
+        : `${pad}${node.content}`
     case 'comment':
       // Comments are not rendered (§4.13).
       return ''
@@ -2089,11 +2092,11 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'raw_inline':
       // Verbatim only when the format matches this output; else dropped.
       // Escape it instead when raw HTML is disabled (untrusted input).
-      return node.format === 'html'
-        ? opts.allowRawHtml === false
-          ? escapeHtml(node.content)
-          : node.content
-        : ''
+      if (node.format !== 'html') {
+        rawFormatDropped(opts, node, 'html')
+        return ''
+      }
+      return opts.allowRawHtml === false ? escapeHtml(node.content) : node.content
     case 'literal_inline': {
       // §27: content is escaped and ALWAYS emitted (never target-routed like
       // raw passthrough), with the `<code>` wrapper dropped. An element is

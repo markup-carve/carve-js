@@ -54,6 +54,11 @@ import { DocumentIdRegistry } from './document-ids.js'
 import { toSourceLayout, type SourceLayout } from './source-layout.js'
 import { tryFastHtml } from './fast-html.js'
 import { createEditorSession as createEditorSessionInternal } from './editor-session.js'
+import {
+  checkedRender,
+  type CheckedRenderOptions,
+  type RenderResult,
+} from './render-loss.js'
 
 export * from './ast.js'
 export {
@@ -128,6 +133,14 @@ export {
   type FootnoteDefNode,
 } from './ast-json.js'
 export { RenderDepthError, MAX_RENDER_DEPTH } from './render-depth.js'
+export {
+  RenderLossError,
+  type CheckedRenderOptions,
+  type RenderLoss,
+  type RenderLossCode,
+  type RenderResult,
+  type RenderTarget,
+} from './render-loss.js'
 export { SourceUnspellableError } from './source-unspellable-error.js'
 export type { RenderOptions } from './render-html.js'
 export type { MarkdownRenderOptions } from './render-markdown.js'
@@ -386,9 +399,29 @@ export function renderHtml(ast: Document, opts: RenderOptions = {}): string {
   return renderHtmlImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
+export function renderHtmlWithReport(
+  ast: Document,
+  opts: RenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderHtml(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
 /** Render a resolved Carve AST to Markdown. */
 export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}): string {
   return renderMarkdownImpl(adoptBlockFootnoteDefs(ast), opts)
+}
+
+export function renderMarkdownWithReport(
+  ast: Document,
+  opts: MarkdownRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderMarkdown(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
 }
 
 /** Render a resolved Carve AST to canonical Carve source. */
@@ -396,14 +429,41 @@ export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): strin
   return renderCarveImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
+export function renderCarveWithReport(
+  ast: Document,
+  opts: CarveRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(() => renderCarve(ast, opts), opts)
+}
+
 /** Render a resolved Carve AST to plain text. */
 export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}): string {
   return renderPlainTextImpl(adoptBlockFootnoteDefs(ast), opts)
 }
 
+export function renderPlainTextWithReport(
+  ast: Document,
+  opts: PlainTextRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderPlainText(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
 /** Render a resolved Carve AST to ANSI terminal text. */
 export function renderAnsi(ast: Document, opts: AnsiRenderOptions = {}): string {
   return renderAnsiImpl(adoptBlockFootnoteDefs(ast), opts)
+}
+
+export function renderAnsiWithReport(
+  ast: Document,
+  opts: AnsiRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderAnsi(ast, { ...opts, onRenderLoss }),
+    opts,
+  )
 }
 
 /**
@@ -484,6 +544,16 @@ export function carveToHtml(
   )
   doc = runProfile(doc, opts)
   return renderHtmlImpl(adoptBlockFootnoteDefs(doc), opts, documentIds)
+}
+
+export function carveToHtmlWithReport(
+  source: string,
+  opts: ParseOptions & RenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToHtml(source, { ...opts, onRenderLoss }),
+    opts,
+  )
 }
 
 /**
@@ -592,6 +662,16 @@ export function carveToMarkdown(
   return renderMarkdown(doc, opts)
 }
 
+export function carveToMarkdownWithReport(
+  source: string,
+  opts: ParseOptions & MarkdownRenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToMarkdown(source, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
 /**
  * Convenience: parse + render canonical Carve source in one call.
  *
@@ -623,6 +703,13 @@ export function carveToCarve(
   return renderCarve(doc, opts)
 }
 
+export function carveToCarveWithReport(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(() => carveToCarve(source, opts), opts)
+}
+
 /** Convenience: parse + resolve + render plain text in one call. */
 export function carveToPlainText(
   source: string,
@@ -642,6 +729,16 @@ export function carveToPlainText(
   return renderPlainText(doc, opts)
 }
 
+export function carveToPlainTextWithReport(
+  source: string,
+  opts: ParseOptions & PlainTextRenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToPlainText(source, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
 /** Convenience: parse + resolve + render ANSI terminal text in one call. */
 export function carveToAnsi(
   source: string,
@@ -659,4 +756,14 @@ export function carveToAnsi(
   )
   doc = runProfile(doc, opts)
   return renderAnsi(doc, opts)
+}
+
+export function carveToAnsiWithReport(
+  source: string,
+  opts: ParseOptions & AnsiRenderOptions & ProfileOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => carveToAnsi(source, { ...opts, onRenderLoss }),
+    opts,
+  )
 }

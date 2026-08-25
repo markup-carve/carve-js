@@ -9,6 +9,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Checked render APIs and CLI loss reporting** (#1728). `*WithReport` returns bounded `raw-format-dropped` diagnostics with positions; `--strict-losses` refuses lossy output, while `--report-losses` writes JSON and `--allow-loss` records an intentional exception.
 - **`djotToCarve` and `carve migrate --from djot`** (#1367). Code and destinations stay opaque.
 - **`{loose}` on a container's preceding attribute line renders a list's or a definition list's children as blocks** (#1401, #1407, markup-carve/carve#1612, markup-carve/carve#1623, PART 9 §17 L7).
 - **`createEditorSession` and `EditorSession`, exported** (#1306, #1317). A source-authoritative session whose `snapshot()` and `update(changes)` return the AST with document-space UTF-16 ranges.
