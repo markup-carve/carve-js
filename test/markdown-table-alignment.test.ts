@@ -47,4 +47,16 @@ describe('the Markdown delimiter row carries the column alignment', () => {
   it('sizes the delimiter from a narrow header rather than a wider body row', () => {
     expect(carveToMarkdown('| h |\n|---|\n| |x |\n')).toBe('| h |\n| --- |\n|  | x |\n')
   })
+
+  it('keeps every authored row when multiple rows are headers', () => {
+    expect(carveToMarkdown('|=> H1 |\n|=< H2 |\n| D |\n')).toBe(
+      '| H1 |\n| :--- |\n| H2 |\n| D |\n',
+    )
+  })
+
+  it('does not promote a body-cell override to column alignment', () => {
+    expect(carveToMarkdown('|> R1 |\n|= H2 |\n| D |\n')).toBe(
+      '| H2 |\n| --- |\n| R1 |\n| D |\n',
+    )
+  })
 })

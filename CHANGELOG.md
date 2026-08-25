@@ -66,6 +66,9 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The Markdown target keeps every row from a multi-header table and derives
+  its single delimiter row from the final effective column alignment.
+
 - Definition entries at an authored block base no longer absorb the sibling
   block after their separating blank; tab-indented forms use visual columns.
 
