@@ -2036,9 +2036,19 @@ function atARaisedBase(rendered: string, atAnAuthoredBodyColumn: boolean): strin
   // AT A RAISED BASE A BLANK LINE ENDS THE DESCRIPTION. The raise exists
   // because the payload has to stay inside the `dd`; a blank written above that
   // payload hands it back to the host as a sibling, which is the same loss the
-  // raise was applied to avoid. So a blank whose next line is payload - INDENTED
-  // past the `::` line, hence not a sibling entry - is dropped. A blank between
-  // two entries has a next line at the entry column and is left alone.
+  // raise was applied to avoid.
+  //
+  // ONLY THE BLANK ABOVE A RECOGNIZED OPENER. A blank above ordinary payload
+  // text is a PARAGRAPH BREAK and carries its own meaning - dropping it merges
+  // two paragraphs of a `<dd>`, which is a loss of exactly the kind this
+  // function exists to prevent, and one that a list with two entries reaches
+  // whenever any single entry asks for the raise. So the question is asked per
+  // candidate line, and it is the SAME question the raise itself is gated on
+  // rather than a second spelling of it: `aBodyRebaseWouldMoveALine` over the
+  // line at its description-relative column, with the raise taken back off.
+  //
+  // A blank between two ENTRIES never reaches the test: its next line sits at
+  // the entry column, not past it.
   const lines = raised.split('\n')
   const kept: string[] = []
   for (let i = 0; i < lines.length; i++) {
@@ -2047,7 +2057,11 @@ function atARaisedBase(rendered: string, atAnAuthoredBodyColumn: boolean): strin
       let j = i + 1
       while (j < lines.length && lines[j]!.trim() === '') j++
       const next = lines[j]
-      if (next !== undefined && leadingSpaces(next) > ENTRY_RAISE_COLUMN) {
+      if (
+        next !== undefined &&
+        leadingSpaces(next) > ENTRY_RAISE_COLUMN &&
+        aBodyRebaseWouldMoveALine(next.slice(ENTRY_RAISE_COLUMN))
+      ) {
         i = j - 1
         continue
       }

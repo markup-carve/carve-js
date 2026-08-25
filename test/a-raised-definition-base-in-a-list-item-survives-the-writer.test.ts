@@ -111,6 +111,21 @@ describe('a raised definition base in a list item survives the writer', () => {
   }
 
   /**
+   * A BLANK ABOVE ORDINARY PAYLOAD TEXT IS A PARAGRAPH BREAK, and dropping it
+   * merges two paragraphs of a `<dd>` - the same class of loss the raise exists
+   * to prevent. It is reachable whenever ANY ONE entry of a multi-entry list
+   * asks for the raise, because the raise is applied to the whole rendered
+   * list: here `b`'s quote is what triggers it and `a`'s paragraph break is
+   * what a blanket drop would take. Raised by codex review.
+   */
+  it('keeps a paragraph break in a sibling description of a raised list', () => {
+    const src = '- intro\n\n   :: a\n   :  first\n\n      second\n   :: b\n   :  d\n      > q\n'
+    expect(carveToCarve(src)).toBe(src)
+    expect(roundTrips(src)).toEqual({ html: true, idempotent: true })
+    expect(norm(carveToHtml(src))).toContain('<dd><p>first</p><p>second</p></dd>')
+  })
+
+  /**
    * A BLANK BETWEEN TWO ENTRIES IS NOT A PAYLOAD BLANK. The blank-dropping arm
    * looks at what follows the blank: payload is indented past the entry column,
    * a sibling entry is not. Dropping the wrong one would merge two terms onto
