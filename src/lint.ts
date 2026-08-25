@@ -719,19 +719,20 @@ interface LintItemColumn {
   baseColumn: number
   contentColumn: number
   legacyAttributeColumn?: number
+  markerLineDeepestColumn?: number
   quoteDepth: number
 }
 
 /**
- * Report block-shaped lines on either side of a list item's exact content
- * column. The AST supplies item ownership/ranges; source is read only for the
+ * Report block-shaped lines below an item's minimum column, and compatibility
+ * spellings authored past its canonical column. The AST supplies item ownership/ranges; source is read only for the
  * marker width and the authored indentation. That keeps this diagnostic in
  * lockstep with the parser instead of implementing a second list parser.
  */
 function collectListItemIndentWarnings(
   source: string,
   doc: Document,
-  unrendered: ReadonlySet<number>,
+  _unrendered: ReadonlySet<number>,
   out: LintWarning[],
 ): Set<number> {
   const lines = source.split(/\r\n?|\n/)
@@ -787,12 +788,24 @@ function collectListItemIndentWarnings(
     const markerWidth = marker[2] ? 1 : marker[3]!.length + marker[4]!.length
     const bareWidth = markerWidth + marker[6]!.length
     const legacyAttributeColumn = marker[5] ? baseColumn + bareWidth + marker[5]!.length : undefined
+    let rest = markerLine.slice(markerOffset)
+    let deepestMarkerColumn = visualColumnAt(markerLine, markerOffset)
+    while (true) {
+      const nested = LINT_LIST_ITEM.exec(rest)
+      if (!nested) break
+      const width = (nested[2] ? 1 : nested[3]!.length + nested[4]!.length) + nested[6]!.length
+      deepestMarkerColumn += visualIndent(nested[1]!).column + width
+      rest = rest.slice(nested[0].length)
+    }
     items.push({
       startLine: pos.startLine,
       endLine: pos.endLine ?? pos.startLine,
       baseColumn,
       contentColumn: baseColumn + bareWidth,
       quoteDepth: (markerLine.slice(0, markerOffset).match(/>/g) ?? []).length,
+      ...(deepestMarkerColumn > baseColumn + bareWidth
+        ? { markerLineDeepestColumn: deepestMarkerColumn }
+        : {}),
       ...(legacyAttributeColumn === undefined ? {} : { legacyAttributeColumn }),
     })
   })
@@ -819,9 +832,13 @@ function collectListItemIndentWarnings(
         : deepest,
       undefined,
     )
-    if (unrendered.has(lineNo)) continue
+    // Structural over-indent is intentionally rendered under carve#1705, but
+    // remains a compatibility finding: old readers treated it as literal.
+    // The set still suppresses generic diagnostics after this collector has
+    // classified the source line.
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
+    if (owner?.markerLineDeepestColumn === authored.column) continue
     const openFence = owner ? ambiguousFences.get(owner) : undefined
     if (openFence) {
       const closes = openFence.kind === 'code'
@@ -838,6 +855,17 @@ function collectListItemIndentWarnings(
     let item: LintItemColumn | undefined = containing
     let rule: string | undefined
     if (item && authored.column > item.contentColumn) {
+      rule = 'list-item-block-overindented'
+    } else if (
+      !item &&
+      lastEnded &&
+      authored.column > lastEnded.contentColumn &&
+      lines.slice(lastEnded.endLine, index).every((between) => between.trim() === '')
+    ) {
+      // Definitions render no AST child, so an item's reported span can end
+      // before their source line even though the source collector still owns
+      // it. Preserve that ownership across only the intervening blank run.
+      item = lastEnded
       rule = 'list-item-block-overindented'
     } else if (!item) {
       const candidate = lastEnded
@@ -859,7 +887,7 @@ function collectListItemIndentWarnings(
       rule,
       message: rule === 'list-item-body-detached'
         ? `This block-shaped line is below the preceding list item's content column ${item.contentColumn}; it parsed outside the item. Indent it to column ${item.contentColumn} to make it part of the item, or escape the opener to preserve literal text.`
-        : `${legacy ? 'This line uses the attributed item’s former full-prefix column. ' : ''}This block-shaped line is past the list item's exact content column ${item.contentColumn}; it parsed as literal item text. Dedent it to column ${item.contentColumn} to make it structural, or escape the opener to preserve literal text explicitly.`,
+        : `${legacy ? 'This line uses the attributed item’s former full-prefix column. ' : ''}This block opener is past the list item's canonical content column ${item.contentColumn}; it now parses structurally and the formatter will canonicalize it. Dedent it to column ${item.contentColumn} for an explicit structural spelling, or escape the opener to preserve the literal meaning used by older readers.`,
       start,
       end: start + Math.max(1, authored.rest.match(/^\S+/)?.[0].length ?? 1),
     })
