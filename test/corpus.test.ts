@@ -34,6 +34,8 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-floating-attribute-does-not-widen-a-list-item-s-content-column',
+  'an-unclosed-bare-colon-fence-opens-a-div',
   'an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not',
   'a-boolean-attribute-does-not-start-with-an-underscore',
   'a-braced-hyphen-pair-is-an-en-dash',
