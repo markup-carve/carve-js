@@ -9429,7 +9429,28 @@ function parseList(lexer: Lexer): List {
       // the invisible line instead of looking past it kept `%% n` / `text`
       // tight, which is the opposite error - the item does hold a second
       // paragraph, it just has a comment in front of it (carve#621).
-      while (j < nested.length && (nested[j] === '' || isInvisibleLine(nested[j]!))) j++
+      while (j < nested.length) {
+        if (nested[j] === '') {
+          j++
+          continue
+        }
+        const comment = commentFenceRun(nested[j]!)
+        if (comment !== undefined) {
+          let close = j + 1
+          while (close < nested.length && commentFenceRun(nested[close]!) !== comment) close++
+          // A closed comment fence is one invisible block. Its verbatim
+          // payload is not a paragraph behind an invisible opener.
+          if (close < nested.length) {
+            j = close + 1
+            continue
+          }
+        }
+        if (isInvisibleLine(nested[j]!)) {
+          j++
+          continue
+        }
+        break
+      }
       if (j >= nested.length) continue
       // A blank followed by content the item's SUB-LIST consumes does not
       // loosen THIS item: that content belongs to the sub-list, whose looseness

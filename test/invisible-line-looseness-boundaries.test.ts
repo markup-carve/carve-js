@@ -12,6 +12,12 @@ import { carveToHtml } from '../src/index.js'
  * Every expectation was measured against carve-php, which agrees on both.
  */
 describe('the invisible-line exemption stops at', () => {
+  it('treats a fenced comment and its payload as one invisible block', () => {
+    expect(carveToHtml('- intro\n\n   %%%\n   hidden\n   %%%\n')).toBe(
+      '<ul>\n  <li>intro</li>\n</ul>',
+    )
+  })
+
   describe('a `+` separator, which is not a blank the author wrote', () => {
     it('does not loosen with a comment behind it', () => {
       // The second-paragraph scan has always exempted a `+`-injected separator;
