@@ -91,6 +91,6 @@ describe('a footnote body is read at its own column', () => {
     const inNote = carveToHtml(document('   > q\n'))
     const inItem = carveToHtml('- a\n\n   > q\n')
     expect(inNote).not.toMatch(/<blockquote>/)
-    expect(inItem).not.toMatch(/<blockquote>/)
+    expect(inItem).toMatch(/<blockquote>/)
   })
 })

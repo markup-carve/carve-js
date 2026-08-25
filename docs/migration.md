@@ -234,7 +234,9 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `heading-trailing-attribute` | a trailing `{#id}` / `{.class}` on a heading line; under heading-strict this is literal text, so the attributes never attach (put them on a `{…}` line *above* the heading) |
 | `raw-block-syntax` | a legacy `` ```raw FORMAT `` fence; the Carve raw block is `` ```=FORMAT ``, and the wrong form fails to open and desyncs the rest of the document's fences |
 | `block-marker-as-text` | a line that opens like a block (`:::`, `{#`, `{.`) but parsed as a paragraph because the block never opened |
-| `fence-delimiter-indentation` | an indented fenced-code delimiter (`` ``` `` / `~~~`); a Carve fence is column-exact and must sit at its container's content column (column 0 at the top level), so an indented run does not open a code block - it renders as inline code with the body as plain text |
+| `fence-delimiter-indentation` | a fenced-code delimiter (`` ``` `` / `~~~`) indented where no list-item authored base applies; at top level and below a container's minimum column the run does not open a code block and instead degrades to inline code/plain text |
+| `list-item-block-overindented` | a recognized block group authored past a list item's canonical content column; current readers parse it structurally and `carve fmt` dedents it, while older readers may have treated the marker literally (dedent for explicit structural intent, or escape the opener for literal intent) |
+| `list-item-body-detached` | a block-shaped line that does not reach the preceding list item's minimum content column and therefore parses outside the item; indent it to the reported column to attach it, or escape the opener to keep literal text |
 | `blockquote-marker-without-space` | a `>` blockquote marker with no space after it. Carve requires the separator space, so the marker does not open a quote |
 
 The `carve lint` CLI reports both the collision warnings and these lint

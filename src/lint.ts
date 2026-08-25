@@ -661,7 +661,8 @@ export function lintCarve(
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc)) unrendered.add(ln)
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
-  collectSilentFailures(source, doc, unrendered, out, toUtf16)
+  const listIndentLines = collectListItemIndentWarnings(source, doc, unrendered, out)
+  collectSilentFailures(source, doc, unrendered, out, toUtf16, listIndentLines)
   collectFootnoteDefinitionWarnings(source, doc, verbatimLines, referencedFootnotes, out)
   if (opts.platforms?.length) {
     // Fenced code blocks and raw blocks are reliably safe; comments are never
@@ -696,6 +697,10 @@ const LEAKED_BLOCK_MARKER = /^(\s*)(:{3,}|\{[.#])/
 // fence is column-exact, so an indented delimiter the parser did not fold into
 // a verbatim region is a silent degradation.
 const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
+
+const LINT_LIST_ITEM = /^([ \t]*)(?:([-+*])|(\d+|[A-Za-z]+)([.)]))(\{[^\n{}]*\})?( +)(?:\[[ xX]\] +)?/
+const LINT_BLOCK_OPENER = /^(?:#{1,6} +\S|>(?: |$)|`{3,}|~{3,}|::(?: |$)|:{3,}(?: |$)|!\[[^\]]*\]\([^)\s]+(?: "[^"]*"| '[^']*')?\)(?:\{[^{}\n]+\})?[ \t]*$|\[\^[^\]]+\]: +\S|\[[^\]]+\]: +\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$)/
+const LINT_BLOCK_ATTRIBUTE = /^(?:\{[^{}\n]+\})+[ \t]*$/
 /**
  * A footnote definition line. Mirrors parse.ts.
  *
@@ -707,6 +712,242 @@ const INDENTED_FENCE = /^([ \t]+)(`{3,}|~{3,})/
  * the content.
  */
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(.+)$/
+
+interface LintItemColumn {
+  startLine: number
+  endLine: number
+  baseColumn: number
+  contentColumn: number
+  legacyAttributeColumn?: number
+  markerLineDeepestColumn?: number
+  quoteDepth: number
+}
+
+/**
+ * Report block-shaped lines below an item's minimum column, and compatibility
+ * spellings authored past its canonical column. The AST supplies item ownership/ranges; source is read only for the
+ * marker width and the authored indentation. That keeps this diagnostic in
+ * lockstep with the parser instead of implementing a second list parser.
+ */
+function collectListItemIndentWarnings(
+  source: string,
+  doc: Document,
+  _unrendered: ReadonlySet<number>,
+  out: LintWarning[],
+): Set<number> {
+  const lines = source.split(/\r\n?|\n/)
+  const starts: number[] = []
+  for (let offset = 0, i = 0; i < lines.length; i++) {
+    starts[i] = offset
+    offset += lines[i]!.length + (source.slice(offset + lines[i]!.length, offset + lines[i]!.length + 2) === '\r\n' ? 2 : 1)
+  }
+  const visualIndent = (line: string): { column: number; chars: number; rest: string } => {
+    let column = 0
+    let chars = 0
+    while (chars < line.length) {
+      if (line[chars] === ' ') column++
+      else if (line[chars] === '\t') column = Math.floor(column / 4 + 1) * 4
+      else break
+      chars++
+    }
+    return { column, chars, rest: line.slice(chars) }
+  }
+  const visualColumnAt = (line: string, end: number): number => {
+    let column = 0
+    for (let i = 0; i < end; i++) {
+      column = line[i] === '\t' ? Math.floor(column / 4 + 1) * 4 : column + 1
+    }
+    return column
+  }
+  const blockView = (line: string, quoteDepth: number): { column: number; chars: number; rest: string } => {
+    let prefixChars = 0
+    let view = line
+    // Quotes are source containers, not indentation. Peel only quote prefixes;
+    // list prefixes are deliberately retained because the AST item range below
+    // decides which list owns the candidate.
+    for (let depth = 0; depth < quoteDepth; depth++) {
+      const quote = /^[ \t]*>(?: |$)/.exec(view)
+      if (!quote) break
+      prefixChars += quote[0].length
+      view = view.slice(quote[0].length)
+    }
+    const indent = visualIndent(view)
+    const chars = prefixChars + indent.chars
+    return { column: visualColumnAt(line, chars), chars, rest: indent.rest }
+  }
+  const items: LintItemColumn[] = []
+  walkDocument(doc, (node) => {
+    if (node.type !== 'list_item') return
+    const pos = (node as Positioned).pos
+    if (!pos) return
+    const markerLine = lines[pos.startLine - 1] ?? ''
+    const markerOffset = Math.max(0, (pos.startColumn ?? 1) - 1)
+    const marker = LINT_LIST_ITEM.exec(markerLine.slice(markerOffset))
+    if (!marker) return
+    const baseColumn = visualColumnAt(markerLine, markerOffset) + visualIndent(marker[1]!).column
+    const markerWidth = marker[2] ? 1 : marker[3]!.length + marker[4]!.length
+    const bareWidth = markerWidth + marker[6]!.length
+    const legacyAttributeColumn = marker[5] ? baseColumn + bareWidth + marker[5]!.length : undefined
+    let rest = markerLine.slice(markerOffset)
+    let deepestMarkerColumn = visualColumnAt(markerLine, markerOffset)
+    while (true) {
+      const nested = LINT_LIST_ITEM.exec(rest)
+      if (!nested) break
+      const width = (nested[2] ? 1 : nested[3]!.length + nested[4]!.length) + nested[6]!.length
+      deepestMarkerColumn += visualIndent(nested[1]!).column + width
+      rest = rest.slice(nested[0].length)
+    }
+    items.push({
+      startLine: pos.startLine,
+      endLine: pos.endLine ?? pos.startLine,
+      baseColumn,
+      contentColumn: baseColumn + bareWidth,
+      quoteDepth: (markerLine.slice(0, markerOffset).match(/>/g) ?? []).length,
+      ...(deepestMarkerColumn > baseColumn + bareWidth
+        ? { markerLineDeepestColumn: deepestMarkerColumn }
+        : {}),
+      ...(legacyAttributeColumn === undefined ? {} : { legacyAttributeColumn }),
+    })
+  })
+  items.sort((a, b) => a.startLine - b.startLine || b.contentColumn - a.contentColumn)
+
+  const reported = new Set<number>()
+  const active: LintItemColumn[] = []
+  const ambiguousFences = new Map<LintItemColumn, { kind: 'code' | 'colon'; run: string }>()
+  let previousGroup: { item: LintItemColumn; kind: string; column: number; line: number } | undefined
+  let nextItem = 0
+  let lastEnded: LintItemColumn | undefined
+  for (let index = 0; index < lines.length; index++) {
+    const lineNo = index + 1
+    while (nextItem < items.length && items[nextItem]!.startLine < lineNo) {
+      active.push(items[nextItem++]!)
+    }
+    for (let j = active.length - 1; j >= 0; j--) {
+      if (active[j]!.endLine >= lineNo) continue
+      const ended = active.splice(j, 1)[0]!
+      if (!lastEnded || ended.endLine >= lastEnded.endLine) lastEnded = ended
+    }
+    const containing = active.reduce<LintItemColumn | undefined>(
+      (deepest, candidate) => !deepest || candidate.contentColumn > deepest.contentColumn
+        ? candidate
+        : deepest,
+      undefined,
+    )
+    // Structural over-indent is intentionally rendered under carve#1705, but
+    // remains a compatibility finding: old readers treated it as literal.
+    // The set still suppresses generic diagnostics after this collector has
+    // classified the source line.
+    const owner = containing ?? lastEnded
+    const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
+    if (owner?.markerLineDeepestColumn === authored.column) continue
+    const openFence = owner ? ambiguousFences.get(owner) : undefined
+    if (openFence) {
+      const closes = openFence.kind === 'code'
+        ? new RegExp(`^${openFence.run[0] === '`' ? '`' : '~'}{${openFence.run.length},}[ \\t]*$`).test(authored.rest)
+        : new RegExp(`^:{${openFence.run.length}}[ \\t]*$`).test(authored.rest)
+      if (closes) ambiguousFences.delete(owner!)
+      reported.add(lineNo)
+      continue
+    }
+    // Payload inside an already parsed verbatim/comment/container region is
+    // data, even when it happens to begin with `#`, `>` or another block
+    // marker. Suggesting a dedent or escape there would corrupt that payload.
+    // Keep genuine fence delimiters eligible so an authored over-column opener
+    // still receives the migration diagnostic.
+    if (_unrendered.has(lineNo) && !/^(?:`{3,}|~{3,}|:{3,})(?: |$)/.test(authored.rest)) {
+      reported.add(lineNo)
+      continue
+    }
+    const authoredCodeFence = /^(`{3,}|~{3,})/.exec(authored.rest)
+    const authoredColonFence = /^(:{3,})(?: |$)/.exec(authored.rest)
+    if (authored.column === 0 ||
+        (!LINT_BLOCK_OPENER.test(authored.rest) &&
+         !LINT_BLOCK_ATTRIBUTE.test(authored.rest) &&
+         !isTableRow(authored.rest))) continue
+    let item: LintItemColumn | undefined = containing
+    let rule: string | undefined
+    if (item && authored.column > item.contentColumn) {
+      rule = 'list-item-block-overindented'
+    } else if (
+      !item &&
+      lastEnded &&
+      authored.column > lastEnded.contentColumn &&
+      lines.slice(lastEnded.endLine, index).every((between) =>
+        blockView(between, lastEnded!.quoteDepth).rest.trim() === '',
+      )
+    ) {
+      // Definitions render no AST child, so an item's reported span can end
+      // before their source line even though the source collector still owns
+      // it. Preserve that ownership across only the intervening blank run.
+      item = lastEnded
+      rule = 'list-item-block-overindented'
+    } else if (!item) {
+      const candidate = lastEnded
+      if (candidate && candidate.baseColumn < authored.column &&
+          authored.column < candidate.contentColumn &&
+          lines.slice(candidate.endLine, index).every((between) =>
+            blockView(between, candidate.quoteDepth).rest.trim() === '',
+          )) {
+        item = candidate
+      }
+      if (item) rule = 'list-item-body-detached'
+    }
+    if (!item || !rule) {
+      if (owner && authored.column >= owner.contentColumn) {
+        if (authoredCodeFence) ambiguousFences.set(owner, { kind: 'code', run: authoredCodeFence[1]! })
+        else if (authoredColonFence) ambiguousFences.set(owner, { kind: 'colon', run: authoredColonFence[1]! })
+      }
+      continue
+    }
+
+    const groupKind = /^>(?: |$)/.test(authored.rest)
+      ? 'quote'
+      : isTableRow(authored.rest)
+        ? 'table'
+        : (/^::(?: |$)/.test(authored.rest) || /^:  /.test(authored.rest))
+          ? 'definition-list'
+          : (FOOTNOTE_DEF.test(authored.rest) || (
+              previousGroup?.kind === 'footnote-definition' &&
+              previousGroup.item === item &&
+              previousGroup.column === authored.column &&
+              previousGroup.line === lineNo - 1
+            ))
+            ? 'footnote-definition'
+          : undefined
+    if (
+      groupKind !== undefined &&
+      previousGroup?.item === item &&
+      previousGroup.kind === groupKind &&
+      previousGroup.column === authored.column &&
+      previousGroup.line === lineNo - 1
+    ) {
+      reported.add(lineNo)
+      previousGroup.line = lineNo
+      continue
+    }
+
+    const first = authored.chars
+    const start = (starts[index] ?? 0) + first
+    const legacy = item.legacyAttributeColumn === authored.column
+    out.push({
+      line: lineNo,
+      column: first + 1,
+      rule,
+      message: rule === 'list-item-body-detached'
+        ? `This block-shaped line is below the preceding list item's content column ${item.contentColumn}; it parsed outside the item. Indent it to column ${item.contentColumn} to make it part of the item, or escape the opener to preserve literal text.`
+        : `${legacy ? 'This line uses the attributed item’s former full-prefix column. ' : ''}This block opener is past the list item's canonical content column ${item.contentColumn}; it now parses structurally and the formatter will canonicalize it. Dedent it to column ${item.contentColumn} for an explicit structural spelling, or escape the opener to preserve the literal meaning used by older readers.`,
+      start,
+      end: start + Math.max(1, authored.rest.match(/^\S+/)?.[0].length ?? 1),
+    })
+    if (authoredCodeFence) ambiguousFences.set(item, { kind: 'code', run: authoredCodeFence[1]! })
+    else if (authoredColonFence) ambiguousFences.set(item, { kind: 'colon', run: authoredColonFence[1]! })
+    reported.add(lineNo)
+    previousGroup = groupKind === undefined
+      ? undefined
+      : { item, kind: groupKind, column: authored.column, line: lineNo }
+  }
+  return reported
+}
 
 /**
  * PART 9 §10's nine reserved names, in the order the renderer nests them.
@@ -915,6 +1156,7 @@ function collectSilentFailures(
   verbatimLines: Set<number>,
   out: LintWarning[],
   toUtf16: (offset: number) => number,
+  listIndentLines: ReadonlySet<number>,
 ): void {
   const lines = source.split('\n')
   const lineStart: number[] = []
@@ -1009,6 +1251,7 @@ function collectSilentFailures(
     const m = LEAKED_BLOCK_MARKER.exec(first.value)
     if (!m) continue
     const loc = locate(first as Positioned, toUtf16)
+    if (listIndentLines.has(loc.line)) continue
     // 4a. The common authoring mistakes on a fence opener get a targeted
     //     hint instead of the generic marker warning: an unquoted trailing
     //     title (the VitePress/Docusaurus habit), typographic quotes (a CMS
@@ -1092,6 +1335,7 @@ function collectSilentFailures(
   //    visibly), unlike the silent opener case this rule targets.
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
+    if (listIndentLines.has(i + 1)) continue
     const m = INDENTED_FENCE.exec(lines[i]!)
     if (!m) continue
     // a legacy `raw FORMAT` fence is already reported by rule 2; do not

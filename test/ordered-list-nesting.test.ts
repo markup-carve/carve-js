@@ -188,7 +188,7 @@ describe('mixed tab+space aligned sub-items are siblings (visual columns)', () =
     // whole-tab and the opener arrived flush at column 0. That made the same
     // column mean two things depending on how it was written (carve-js#767).
     expect(h('1. a\n\t> quote')).toBe(h('1. a\n    > quote'))
-    expect(h('1. a\n\t> quote')).not.toContain('<blockquote>')
+    expect(h('1. a\n\t> quote')).toContain('<blockquote>')
   })
 
   it('still nests a block opener AT the content column', () => {

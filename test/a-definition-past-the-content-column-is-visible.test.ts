@@ -21,8 +21,8 @@ describe('a definition past the content column is visible', () => {
   it.each([
     ['a reference definition', '1. item\n\n    [r]: /u\n'],
     ['a footnote definition', '1. item\n\n    [^f]: n\n'],
-  ])('%s loosens the item', (_name, source) => {
-    expect(listTight(source)).toBe(false)
+  ])('%s is structural and keeps the item tight', (_name, source) => {
+    expect(listTight(source)).toBe(true)
   })
 
   /**

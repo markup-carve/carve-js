@@ -120,7 +120,7 @@ describe('the writer never emits a whitespace-only line', () => {
   it('emits a blank line inside a list item empty', () => {
     const src = '1. one\n\n    > q\n'
     const out = carveToCarve(src)
-    expect(out).toContain('\n\n')
+    expect(out).toBe('1. one\n   > q\n')
     expect(offendingLines('inline', out)).toEqual([])
     expect(carveToHtml(out)).toBe(carveToHtml(src))
     expect(carveToCarve(out)).toBe(out)

@@ -27,6 +27,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Recognized block groups authored past a list item's canonical content column now parse at their authored local base and format back to the canonical column** (#1470, markup-carve/carve#1705). Exact-column and below-column parsing are unchanged. This is a source-compatibility change: `list-item-block-overindented` identifies spellings whose older literal reading changed, while `list-item-body-detached` identifies block-shaped lines that remain below the minimum column.
 - **`fromAstJson` collapses a carriage return to a line feed**, the way PART 0 normalizes source text (#1352).
 - **`renderCarve` refuses a verbatim value no Carve source can carry**, throwing the exported `SourceUnspellableError` (#1344). Only constructed or ingested trees are affected.
 - **The writer escapes per opener occurrence, not per unit** (markup-carve/carve#1533, PART 11 §2).

@@ -19,11 +19,11 @@ import { carveToHtml } from '../src/index.js'
 describe('a tab indent is the column it reaches', () => {
   const ul = (html: string): number => html.split('<ul>').length - 1
 
-  it('makes a block opener past the content column text, like its space spelling', () => {
+  it('makes a block opener past the content column structural, like its space spelling', () => {
     const withTab = carveToHtml('1. a\n\t> quote\n')
     const withSpaces = carveToHtml('1. a\n    > quote\n')
 
-    expect(withTab).not.toContain('<blockquote>')
+    expect(withTab).toContain('<blockquote>')
     expect(withTab).toBe(withSpaces)
   })
 
@@ -33,13 +33,13 @@ describe('a tab indent is the column it reaches', () => {
     expect(carveToHtml('1. a\n   > quote\n')).toContain('<blockquote>')
   })
 
-  it('keeps a heading past the content column text too', () => {
+  it('keeps a heading past the content column structural too', () => {
     // A second opener kind, because a fix that special-cases `>` leaves the
     // rest reading the tab as column 0.
     const withTab = carveToHtml('1. a\n\t# h\n')
 
     expect(withTab).toBe(carveToHtml('1. a\n    # h\n'))
-    expect(withTab).not.toContain('<h1')
+    expect(withTab).toContain('<h1')
   })
 
   it('keeps sibling markers at one column in one list', () => {

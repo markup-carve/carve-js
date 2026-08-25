@@ -3492,7 +3492,7 @@ function collectLinkDefs(lexer: Lexer) {
     const quoteAtWrongColumn =
       quoteIndent > 0 &&
       raw.slice(quoteIndent).startsWith('>') &&
-      !listCols.includes(quoteIndent)
+      (listCols.length === 0 || quoteIndent < Math.max(...listCols))
     if (quoteAtWrongColumn) continue
     const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
     const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
@@ -3503,7 +3503,12 @@ function collectLinkDefs(lexer: Lexer) {
     // reference below the note resolved against a code sample (carve-js#667).
     // The opener's own indent is the column to re-base on; the closer check below
     // already re-bases to whatever `fence.contentCol` says.
-    const openerCol = inFootnoteBody && contentCol === 0 ? keptIndent : contentCol
+    const openerCol =
+      inFootnoteBody && contentCol === 0
+        ? keptIndent
+        : contentCol > 0 && keptIndent >= contentCol
+          ? keptIndent
+          : contentCol
     // A DESCRIPTION HAS A CONTENT COLUMN TOO, and it is neither a list column
     // nor a footnote body's. `:  ` is stripped out of `kept` before the opener
     // is matched, so a fence opened on a description line recorded column 0 -
@@ -3687,9 +3692,28 @@ function collectLinkDefs(lexer: Lexer) {
     // behind a COLUMN-0 quote run only, so `  >    [r]: /url` scored 2 - the
     // indent before a marker the block parser strips - and the exemption below
     // let it through on top of that.
+    const deepestListColumn = openCols
+      .filter((entry) => !entry.quote)
+      .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+    const deepestTrackedListColumn = listCols.reduce<number | null>(
+      (deepest, column) => deepest === null || column > deepest ? column : deepest,
+      deepestListColumn,
+    )
+    const reachedOuterListColumn = openCols
+      .slice(0, composed.depth)
+      .filter((entry) => !entry.quote)
+      .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
+    // WITH A LIST COLUMN IN PLAY the test is "at or past the deepest one", not
+    // "exactly at an open one": §24 C3 erases an authored base before the item
+    // parses the line, so an over-indented definition is the item's definition
+    // and registers document-wide (carve#1705). With NO list column open the
+    // exact test stands unchanged - a quote's content column is reached, not
+    // rebased.
     const reached = (col: number): boolean =>
-      composed.peeled.some((one) => one.content === col) ||
-      openCols.some((e, i) => i < composed.depth && e.col === col)
+      deepestTrackedListColumn !== null
+        ? col >= deepestTrackedListColumn
+        : composed.peeled.some((one) => one.content === col) ||
+          openCols.some((e, i) => i < composed.depth && e.col === col)
     const anyReached = composed.peeled.length > 0 || composed.depth > 0
     // An unmarked line may lazily continue a quote's open paragraph, but it
     // does not reach a container inside that quote. Falling back to the outer
@@ -3700,7 +3724,7 @@ function collectLinkDefs(lexer: Lexer) {
       composed.depth < openCols.length &&
       openCols[composed.depth]!.quote
     const atAnOpenContentColumn = stoppedAtQuote
-      ? false
+      ? reachedOuterListColumn !== null && composed.column >= reachedOuterListColumn
       : plusColumn !== null
       ? rawIndent === plusColumn
       : anyReached
@@ -8732,6 +8756,11 @@ function parseList(lexer: Lexer): List {
 
     const nested: string[] = []
     const nestedLineNumbers: number[] = []
+    // Lines admitted by reaching this item's content column. A below-column
+    // lazy line can retain a positive residual indent for recursive safety,
+    // but that must never be mistaken for #1705 over-indentation.
+    const authoredBaseEligible = new Set<number>()
+    let hasOverindentedBlockCandidate = false
     // Index in `nested` where an indented ORDERED sub-list begins. Ordered
     // markers do not interrupt a paragraph (§10), so if the sub-list is joined
     // with the lead text it folds into the lead paragraph instead of nesting
@@ -8940,6 +8969,8 @@ function parseList(lexer: Lexer): List {
         // opener flush at column 0 and it nested, which no space spelling of
         // that column does (carve-js#767, carve-php#890 one layer down).
         const dedented = sliceColumns(l, contentCol, true)
+        authoredBaseEligible.add(nested.length)
+        if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         const fenceLineIndex = lexer.pos
@@ -9046,6 +9077,23 @@ function parseList(lexer: Lexer): List {
         break
       }
     }
+
+    // A block opener may be authored past the canonical item-body column.  The
+    // collector above deliberately keeps the whole physical run; rebase each
+    // recognized block group now, before tightness and block parsing inspect
+    // it.  This is #1705's authored `block_base`: only structural indentation
+    // is removed, while indentation beyond the opener's base remains payload.
+    const leadIsMarker =
+      RE_UNORDERED.test(content) ||
+      RE_ORDERED.test(content) ||
+      RE_TASK.test(content) ||
+      extractItemAttr(content) !== null
+    if (hasOverindentedBlockCandidate)
+      rebaseOverindentedItemBlocks(
+        nested,
+        authoredBaseEligible,
+        leadIsMarker ? markerContentColumn(content) : -1,
+      )
 
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it
@@ -9343,6 +9391,13 @@ function parseList(lexer: Lexer): List {
       }
       // `j` can no longer be an invisible line (skipped above), so this is the
       // plain "is the next visible thing a paragraph" test it always was.
+      //
+      // STILL `lineOpensBlock`, not §24 C3's wider family. The rebase above has
+      // already rewritten an over-indented opener into its exact-column
+      // spelling, so asking the ordinary question here is what makes the two
+      // spellings agree. Asking `lineOpensItemBlock` instead widened the
+      // EXACT-column case too, and a lone block image - a paragraph under §17
+      // L2 - stopped loosening its item (corpus 411, 162).
       if (!lineOpensBlock(nested[j]!)) {
         loose = true
         break
@@ -9366,16 +9421,6 @@ function parseList(lexer: Lexer): List {
     // below stays for the indented-ordered sub-list case (an ordered marker
     // that does NOT interrupt the lead paragraph), where the lead really is a
     // paragraph.
-    const leadIsMarker =
-      RE_UNORDERED.test(content) ||
-      RE_ORDERED.test(content) ||
-      RE_TASK.test(content) ||
-      // An abutting-attribute bullet/ordered marker (`-{.x} A`, `1.{.x} A`) is a
-      // list marker too, exactly as the sub-list nesting path above recognizes
-      // it -- keep this detection in step so the attributed marker-line case
-      // merges/absorbs like the plain one.
-      extractItemAttr(content) !== null
-
     // When the lead is a colon-fence opener (`::: word` admonition or a bare
     // `:::` div) whose matching closer line sits among the collected nested
     // lines, the body in between -- including a nested LIST -- belongs to the
@@ -10611,6 +10656,178 @@ function leadingWhitespace(line: string): number {
   let n = 0
   while (n < line.length && (line[n] === ' ' || line[n] === '\t')) n++
   return n
+}
+
+/**
+ * Apply an over-indented list block opener's authored column as a temporary
+ * local block base (PART 9 §24 C3, carve#1705).
+ *
+ * The item collector has already removed `content_column`, so a positive
+ * leading indent here is exactly the authored over-indent.  Single-line block
+ * openers are rebased independently.  Containers and definitions carry the
+ * same base through their body/closer; treating every line independently would
+ * let an accidentally dedented fence close or would corrupt opaque payload.
+ *
+ * This is one forward pass.  A line is stripped at most once and container
+ * scans advance the outer cursor, keeping flat and deeply nested input linear.
+ *
+ * Every line this pass moves ends up spelled exactly as the same block would be
+ * spelled AT the content column, which is what keeps an over-indented opener
+ * and its exact-column twin parsing identically from here on.  Nothing
+ * downstream needs to know a rebase happened.
+ */
+function rebaseOverindentedItemBlocks(
+  lines: string[],
+  eligible?: ReadonlySet<number>,
+  leadNestedColumn = -1,
+): void {
+  const firstVisible = lines.find((line) => !isBlankLine(line))
+  const firstMarkerColumn = firstVisible === undefined ? -1 : markerContentColumn(firstVisible)
+  if (firstMarkerColumn >= 0) {
+    const hasParentOwnedCandidate = lines.some((line, index) => {
+      if (isBlankLine(line) || (eligible && !eligible.has(index))) return false
+      const column = indentColumns(line, firstMarkerColumn)
+      if (column === 0 || column >= firstMarkerColumn) return false
+      const opener = sliceColumns(line, column, true)
+      return markerContentColumn(opener) < 0 && lineOpensItemBlock(opener)
+    })
+    if (!hasParentOwnedCandidate) return
+  }
+  // A sub-list may open on the item's marker line, which is not part of
+  // `lines`. Seed its ownership column so a following line at that child's
+  // content column is left for the child's collector (for example
+  // `- > - - x` / `  >     # h`).
+  //
+  // ONE column, not a stack. A line at or past the open child's content column
+  // is handed to that child whatever it is, so a deeper marker inside the child
+  // could only ever be popped again before it decided anything - the deeper
+  // entries were unreachable. Keeping one column is also what makes the scan
+  // linear: `cap` below bounds every measurement by the child's column instead
+  // of by the line's own indentation, so a ladder does not re-read the same
+  // leading run once per level (carve#752's counted bound).
+  let ownedColumn = leadNestedColumn
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (isBlankLine(line)) continue
+    if (eligible && !eligible.has(i)) continue
+    const cap = ownedColumn >= 0 ? ownedColumn + 1 : Infinity
+    const base = indentColumns(line, cap)
+    // A deeper item owns this line. Its own collector will see the line after
+    // the intervening marker/content columns have been removed and will apply
+    // the authored-base rule in that coordinate system.
+    if (ownedColumn >= 0 && base >= ownedColumn) continue
+    ownedColumn = -1
+    const markerColumn = markerContentColumn(line)
+    if (markerColumn >= 0) {
+      ownedColumn = markerColumn
+      continue
+    }
+    if (base === 0) continue
+    const opener = sliceColumns(line, base, true)
+    if (!lineOpensItemBlock(opener)) continue
+    // Sublists already use the containment rule in the item collector. Their
+    // residual indentation expresses another nesting level, not an authored
+    // base to erase here.
+    if (
+      RE_ORDERED.test(opener) ||
+      RE_UNORDERED.test(opener) ||
+      RE_TASK.test(opener) ||
+      extractItemAttr(opener) !== null
+    )
+      continue
+
+    let end = i
+    const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+    const comment = code ? undefined : commentFenceRun(opener)
+    const colon = code || comment !== undefined ? null : colonBlockOpenerRun(opener)
+
+    if (code) {
+      const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
+      const close = fenceCloseRe(marker)
+      for (let j = i + 1; j < lines.length; j++) {
+        const candidate = lines[j]!
+        if (!isBlankLine(candidate) && indentColumns(candidate, base) < base) break
+        end = j
+        if (!isBlankLine(candidate) && close.test(sliceColumns(candidate, base, true))) break
+      }
+    } else if (comment !== undefined) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const candidate = lines[j]!
+        if (!isBlankLine(candidate) && indentColumns(candidate, base) < base) break
+        end = j
+        if (
+          !isBlankLine(candidate) &&
+          commentFenceRun(sliceColumns(candidate, base, true)) === comment
+        )
+          break
+      }
+    } else if (colon !== null) {
+      const stack = [colon]
+      for (let j = i + 1; j < lines.length; j++) {
+        const candidate = lines[j]!
+        if (!isBlankLine(candidate) && indentColumns(candidate, base) < base) break
+        end = j
+        if (isBlankLine(candidate)) continue
+        const local = sliceColumns(candidate, base, true)
+        const run = RE_ADMONITION_CLOSE.exec(local)
+        if (!run) continue
+        const width = run[1]!.length
+        if (stack[stack.length - 1] === width) {
+          stack.pop()
+          if (stack.length === 0) break
+        } else {
+          stack.push(width)
+        }
+      }
+    } else if (
+      RE_BLOCKQUOTE.test(opener) ||
+      RE_DEFLIST_TERM.test(opener) ||
+      RE_DEFLIST_DEF.test(opener) ||
+      RE_FOOTNOTE_DEF.test(opener) ||
+      RE_LINK_DEF.test(opener)
+    ) {
+      // These families own continuation/body lines.  A blank remains part of
+      // the run only when another line at the authored base follows it.
+      for (let j = i + 1; j < lines.length; j++) {
+        const candidate = lines[j]!
+        if (isBlankLine(candidate)) {
+          let k = j + 1
+          while (k < lines.length && isBlankLine(lines[k]!)) k++
+          if (k >= lines.length || indentColumns(lines[k]!, base) < base) break
+          end = j
+          continue
+        }
+        if (indentColumns(candidate, base) < base) break
+        end = j
+      }
+    }
+
+    for (let j = i; j <= end; j++) {
+      if (!isBlankLine(lines[j]!)) {
+        lines[j] = sliceColumns(lines[j]!, base, true)
+      }
+    }
+    i = end
+  }
+}
+
+/**
+ * The opener families an OVER-COLUMN line may spell (PART 9 §24 C3,
+ * carve#1705).
+ *
+ * Wider than `lineOpensBlock` by the two shapes that still deserve to be moved
+ * back to the item's base even though they are not block OPENERS there: a block
+ * attribute line and a bare block image.  Both are PARAGRAPHS at the canonical
+ * content column (PART 9 §17 L2) and stay paragraphs after the move - the point
+ * of rebasing them is that `{.c}` reaches the heading below it, and that the
+ * image is inside the item rather than an indented run beside it.
+ *
+ * ONLY the rebase asks this. Anything that classifies a line the collector
+ * already placed at the content column asks `lineOpensBlock`, so an
+ * over-indented spelling and its exact-column twin answer alike.
+ */
+function lineOpensItemBlock(line: string): boolean {
+  return lineOpensBlock(line) || isBlockAttributeLine(line) || isBlockImageLine(line)
 }
 
 // Visual column of the leading whitespace, expanding tabs to the next

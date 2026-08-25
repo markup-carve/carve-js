@@ -18,10 +18,10 @@ import { carveToHtml } from '../src/index.js'
  */
 const resolves = (src: string) => carveToHtml(src).includes('<a href="/u">t</a>')
 
-describe('a definition only opens AT its content column', () => {
-  it('past the column: renders as text and defines nothing', () => {
-    expect(carveToHtml('- a\n      [r]: /u\n')).toBe('<ul>\n  <li>a\n[r]: /u</li>\n</ul>')
-    expect(resolves('- a\n      [r]: /u\n\nsee [t][r]\n')).toBe(false)
+describe('a definition opens at or past its list content column', () => {
+  it('past the column: uses the authored base and defines', () => {
+    expect(carveToHtml('- a\n      [r]: /u\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
+    expect(resolves('- a\n      [r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 
   it('below every column: text that defines nothing (carve-js#597)', () => {
