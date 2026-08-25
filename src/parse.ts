@@ -3637,7 +3637,7 @@ function collectLinkDefs(lexer: Lexer) {
         ? RE_ABBR_DEF.exec(raw)
         : null
     if (abbr) {
-      lexer.abbrDefs.set(abbr[1]!, abbr[2]!)
+      lexer.abbrDefs.set(abbr[1]!, dropTrailingWhitespace(abbr[2]!))
       continue
     }
     // A footnote def (`[^label]: body`) is parsed as a block in
@@ -6731,7 +6731,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
 function parseAbbrDef(lexer: Lexer): AbbreviationDef {
   const line = lexer.consume()
   const m = RE_ABBR_DEF.exec(line)!
-  return { type: 'abbreviation_def', abbr: m[1]!, expansion: m[2]! }
+  // PART 2's NO TRAILING WHITESPACE rule applies to every non-verbatim
+  // content line. The expansion is otherwise raw, but an ASCII space or tab
+  // at the physical end of its line is not part of that raw value.
+  return { type: 'abbreviation_def', abbr: m[1]!, expansion: dropTrailingWhitespace(m[2]!) }
 }
 
 type BlockQuoteLazyMode =
@@ -7024,13 +7027,18 @@ function classifyQuotedLine(
   // instead. The block parser has always looked ahead; this is the same
   // lookahead over the quote's own lines.
   //
-  // With no closer the line FALLS THROUGH to the bottom of this function
-  // rather than returning, so it lands on `paragraphOpen = true` - which is
-  // where a `%%` line comment already landed, and a degraded opener IS a
-  // comment line.
+  // With no closer the line is still a line comment. Comment classification
+  // happens before visible ownership, so it closes the paragraph while the
+  // quote frame remains available for a later explicitly quoted line. It must
+  // not manufacture a paragraph that an unmarked following line can lazily
+  // continue.
   const commentRun = commentFenceRun(content)
-  if (commentRun !== undefined && hasCommentCloser(commentRun)) {
-    state.mode = { kind: 'comment_fence', length: commentRun }
+  if (commentRun !== undefined) {
+    if (hasCommentCloser(commentRun)) {
+      state.mode = { kind: 'comment_fence', length: commentRun }
+    } else {
+      closeBlockQuoteParagraph(state)
+    }
     return null
   }
   // Everything else (plain prose, a folded list-marker line, div body text, or

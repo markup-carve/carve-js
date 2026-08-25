@@ -93,6 +93,10 @@ describe('blockquote lazy continuation (CommonMark-style, matches carve-php)', (
     expect(html('> %% hidden\ntail')).toBe('<blockquote>\n\n</blockquote>\n<p>tail</p>')
   })
 
+  it('an unterminated comment fence has the same ownership boundary', () => {
+    expect(html('> %%%\ntail')).toBe('<blockquote>\n\n</blockquote>\n<p>tail</p>')
+  })
+
   it('an invisible block-attribute line still ends the quote', () => {
     expect(html('> quoted\n{.x}')).toBe('<blockquote><p>quoted</p></blockquote>')
   })
