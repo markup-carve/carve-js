@@ -12,6 +12,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # THE PIN RESOLVES BY SHA, SO NOTHING ELSE HERE CAN SEE A DANGLING ONE. Every
+  # other job checks the spec submodule out and runs against whatever tree the
+  # pin names, which works just as well for a commit that is not on spec `main`
+  # as for one that is - right up until the commit is collected and the checkout
+  # itself starts failing (markup-carve/carve#1740). Seconds, so it runs first
+  # and on every PR.
+  spec-pin:
+    name: spec pin is on spec main
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Spec pin ancestry
+        run: ./scripts/check-spec-pin-ancestry.sh spec
+
   test:
     name: typecheck + corpus
     runs-on: ubuntu-latest
