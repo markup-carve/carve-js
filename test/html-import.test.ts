@@ -311,7 +311,7 @@ describe('definition lists on import', () => {
 
   it('reads terms and definitions as a definition list, not as one paragraph', () => {
     const html = '<dl><dt>Carve</dt><dd>A markup language.</dd></dl>'
-    expect(carve(html)).toBe(':: Carve\n:  A markup language.')
+    expect(carve(html)).toBe(':: Carve\n: A markup language.')
     expect(codes(html)).toEqual([])
     expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Carve</dt>\n  <dd>A markup language.</dd>\n</dl>')
   })
@@ -327,12 +327,12 @@ describe('definition lists on import', () => {
         ],
       },
     ])
-    expect(carve(html)).toBe(':: HTML\n:: HyperText Markup Language\n:  The web page format.\n:  Also a Carve import source.\n:: CSS\n:  Styling.')
+    expect(carve(html)).toBe(':: HTML\n:: HyperText Markup Language\n: The web page format.\n: Also a Carve import source.\n:: CSS\n: Styling.')
   })
 
   it('walks through the HTML5 <div> wrapper around a name-value group', () => {
     const html = '<dl><div><dt>Carve</dt><dd>A markup language.</dd></div><div><dt>Djot</dt><dd>Its closest relative.</dd></div></dl>'
-    expect(carve(html)).toBe(':: Carve\n:  A markup language.\n:: Djot\n:  Its closest relative.')
+    expect(carve(html)).toBe(':: Carve\n: A markup language.\n:: Djot\n: Its closest relative.')
     expect(codes(html)).toEqual([])
   })
 
@@ -379,12 +379,12 @@ describe('definition lists on import', () => {
   it('keeps block content in a definition', () => {
     const html = '<dl><dt>Modes</dt><dd><p>Three of them:</p><ul><li>safe</li><li>semantic</li></ul></dd></dl>'
     // Bare-text `<li>`s import TIGHT (the ruled tight-li import).
-    expect(carve(html)).toBe(':: Modes\n:  Three of them:\n\n   - safe\n   - semantic')
+    expect(carve(html)).toBe(':: Modes\n: Three of them:\n\n  - safe\n  - semantic')
     expect(carveToHtml(carve(html))).toContain('<ul>')
   })
 
   it('carries the list attributes onto the node', () => {
-    expect(carve('<dl id="glossary" class="compact"><dt>T</dt><dd>D</dd></dl>')).toBe('{#glossary .compact}\n:: T\n:  D')
+    expect(carve('<dl id="glossary" class="compact"><dt>T</dt><dd>D</dd></dl>')).toBe('{#glossary .compact}\n:: T\n: D')
   })
 
   it('reports a definition with no term only when a writer has to spell it', () => {
@@ -400,7 +400,7 @@ describe('definition lists on import', () => {
       path: '/dl[1]/dd[1]',
     }))
     // The diagnostic states what actually happens to the written source.
-    expect(carveToHtml(carve(html))).toBe('<p>:  A description of nothing.</p>')
+    expect(carveToHtml(carve(html))).toBe('<p>: A description of nothing.</p>')
   })
 
   it('reports an empty term, which the writer spells as a line that is not one', () => {
@@ -414,7 +414,7 @@ describe('definition lists on import', () => {
     }))
     // What the emitted source actually reads as: the whole list becomes a
     // paragraph, so the diagnostic is not decoration.
-    expect(carveToHtml(carve(html))).toBe('<p>::\n:  A description whose term was deleted.</p>')
+    expect(carveToHtml(carve(html))).toBe('<p>::\n: A description whose term was deleted.</p>')
   })
 
   it('drops an empty description and reports it, leaving the term alone', () => {
@@ -487,7 +487,7 @@ describe('definition lists on import', () => {
 
   it('keeps content the model has no slot for, after the list, and says so', () => {
     const html = '<dl><dt>T</dt><dd>D</dd><p>An editor stray.</p></dl>'
-    expect(carve(html)).toBe(':: T\n:  D\n\nAn editor stray.')
+    expect(carve(html)).toBe(':: T\n: D\n\nAn editor stray.')
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'element-unwrapped',
       severity: 'warning',

@@ -141,14 +141,14 @@ describe('two sibling sub-lists in a tight item', () => {
     // The prefix is read off the line the tag opens, so no host has to know the
     // boundary exists - and a host that nests inside another gets both halves.
     // A nested quote writes `> >`, a quote inside a list item writes `  >`, and
-    // a definition description writes nothing at its three-column indent.
+    // a definition description writes nothing at its own content column.
     expect(carveToCarve('> > - a\n> >\n> >\n> >\n> > - b\n')).toBe(
       '> > - a\n> >\n> >\n> >\n> > - b\n',
     )
     roundTrips('> > - a\n> >\n> >\n> >\n> > - b\n')
     roundTrips('- x\n\n  > - a\n  >\n  >\n  >\n  > - b\n')
     roundTrips('- x\n\n  > - o\n  >\n  >   - a\n  >\n  >\n  >\n  >   - b\n')
-    expect(carveToCarve(':: t\n:  - a\n\n\n\n   - b\n')).toBe(':: t\n:  - a\n\n\n\n   - b\n')
+    expect(carveToCarve(':: t\n:  - a\n\n\n\n   - b\n')).toBe(':: t\n: - a\n\n\n\n  - b\n')
     roundTrips(':: t\n:  - a\n\n\n\n   - b\n')
   })
 

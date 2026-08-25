@@ -154,7 +154,7 @@ describe('the consumed `loose` boolean', () => {
  * what the author said (`markup-carve/carve-js#1409`).
  */
 describe('the definition-list looseness survives an AST JSON round trip', () => {
-  const src = '{loose}\n:: T\n:  a\n'
+  const src = '{loose}\n:: T\n: a\n'
   const roundTrip = () => fromAstJson(carveToAstJson(src))
 
   it('renders the same HTML after a round trip as it does directly', () => {
@@ -212,7 +212,7 @@ describe('the writer spells looseness only where a blank line cannot', () => {
   })
 
   it('spells it on the one-block definition description', () => {
-    expect(fmt('{loose}\n:: Term\n:  Definition.\n')).toBe('{loose}\n:: Term\n:  Definition.\n')
+    expect(fmt('{loose}\n:: Term\n: Definition.\n')).toBe('{loose}\n:: Term\n: Definition.\n')
   })
 
   // The corpus control: a multi-item loose list whose blank lines already say it.
@@ -243,14 +243,14 @@ describe('the writer spells looseness only where a blank line cannot', () => {
    * key, so `fmt` deleted a fact the document stated.
    */
   it('decorates a definition list unconditionally, two-block description included', () => {
-    expect(fmt('{loose}\n:: T\n:  a\n\n   b\n')).toBe('{loose}\n:: T\n:  a\n\n   b\n')
-    expect(fmt('{loose}\n:: T\n:  a\n:: U\n:  b\n')).toBe('{loose}\n:: T\n:  a\n:: U\n:  b\n')
+    expect(fmt('{loose}\n:: T\n: a\n\n  b\n')).toBe('{loose}\n:: T\n: a\n\n  b\n')
+    expect(fmt('{loose}\n:: T\n: a\n:: U\n: b\n')).toBe('{loose}\n:: T\n: a\n:: U\n: b\n')
   })
 
   /** And a `<dl>` that never carried the key still never gains one. */
   it('does not derive the key onto a definition list that did not spell it', () => {
-    expect(fmt(':: T\n:  a\n\n   b\n')).toBe(':: T\n:  a\n\n   b\n')
-    expect(fmt(':: T\n:  a\n')).toBe(':: T\n:  a\n')
+    expect(fmt(':: T\n: a\n\n  b\n')).toBe(':: T\n: a\n\n  b\n')
+    expect(fmt(':: T\n: a\n')).toBe(':: T\n: a\n')
   })
 
   /**
@@ -259,7 +259,7 @@ describe('the writer spells looseness only where a blank line cannot', () => {
    * exactly what the render cannot see, since both spellings wrap the `<dd>`.
    */
   it('keeps the looseness through a format pass where the render cannot see it', () => {
-    const src = '{loose}\n:: T\n:  a\n\n   b\n'
+    const src = '{loose}\n:: T\n: a\n\n  b\n'
     expect(h(fmt(src))).toBe(h(src))
     expect(parse(fmt(src)).children[0]).toMatchObject({ type: 'definition_list', loose: true })
     expect(parse(':: T\n:  a\n\n   b\n').children[0]).not.toHaveProperty('loose')

@@ -45,7 +45,7 @@ const ingested = () =>
  */
 describe('a dropped empty description breaks the list', () => {
   it('writes two lists, separated by a comment line', () => {
-    expect(htmlToCarve(NOT_LAST).value).toBe(':: t1\n\n%%\n\n:: t2\n:  d2\n')
+    expect(htmlToCarve(NOT_LAST).value).toBe(':: t1\n\n%%\n\n:: t2\n: d2\n')
   })
 
   it('gives the surviving term no description it never had', () => {
@@ -65,7 +65,7 @@ describe('a dropped empty description breaks the list', () => {
     expect(carveToHtml(':: t1\n\n:: t2\n:  d2\n')).toBe(
       '<dl>\n  <dt>t1</dt>\n  <dt>t2</dt>\n  <dd>d2</dd>\n</dl>',
     )
-    expect(carveToCarve(':: t1\n\n:: t2\n:  d2\n')).toBe(':: t1\n:: t2\n:  d2\n')
+    expect(carveToCarve(':: t1\n\n:: t2\n:  d2\n')).toBe(':: t1\n:: t2\n: d2\n')
   })
 
   it('is a fixed point of the writer', () => {
@@ -105,13 +105,13 @@ describe('a dropped empty description breaks the list', () => {
    * split, and no `structure-split` row is owed.
    */
   it('does not split when the dropped entry is last', () => {
-    expect(htmlToCarve(LAST).value).toBe(':: t1\n:  d1\n:: t2\n')
+    expect(htmlToCarve(LAST).value).toBe(':: t1\n: d1\n:: t2\n')
     expect(htmlToCarve(LAST).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
   })
 
   it('does not split a list with nothing dropped', () => {
     expect(htmlToCarve('<dl><dt>t1</dt><dd>d1</dd><dt>t2</dt><dd>d2</dd></dl>').value).toBe(
-      ':: t1\n:  d1\n:: t2\n:  d2\n',
+      ':: t1\n: d1\n:: t2\n: d2\n',
     )
     expect(htmlToCarve('<dl><dt>t1</dt><dd>d1</dd><dt>t2</dt><dd>d2</dd></dl>').report.diagnostics).toEqual([])
   })
@@ -123,7 +123,7 @@ describe('a dropped empty description breaks the list', () => {
    * one do not agree on what an empty description looks like.
    */
   it('takes the same branch on an ingested tree', () => {
-    expect(renderCarve(ingested())).toBe(':: t1\n\n%%\n\n:: t2\n:  d2\n')
+    expect(renderCarve(ingested())).toBe(':: t1\n\n%%\n\n:: t2\n: d2\n')
   })
 
   /**
@@ -134,10 +134,10 @@ describe('a dropped empty description breaks the list', () => {
    */
   it('takes the same branch on a description whose blocks write nothing', () => {
     expect(htmlToCarve('<dl><dt>t1</dt><dd><p>  </p></dd><dt>t2</dt><dd>d2</dd></dl>').value).toBe(
-      ':: t1\n\n%%\n\n:: t2\n:  d2\n',
+      ':: t1\n\n%%\n\n:: t2\n: d2\n',
     )
     expect(htmlToCarve('<dl><dt>t1</dt><dd><ul></ul></dd><dt>t2</dt><dd>d2</dd></dl>').value).toBe(
-      ':: t1\n\n%%\n\n:: t2\n:  d2\n',
+      ':: t1\n\n%%\n\n:: t2\n: d2\n',
     )
   })
 
@@ -151,7 +151,7 @@ describe('a dropped empty description breaks the list', () => {
    */
   it('does not break before another description of the same term', () => {
     const html = '<dl><dt>t</dt><dd></dd><dd>d2</dd></dl>'
-    expect(htmlToCarve(html).value).toBe(':: t\n:  d2\n')
+    expect(htmlToCarve(html).value).toBe(':: t\n: d2\n')
     expect(carveToHtml(htmlToCarve(html).value)).toBe('<dl>\n  <dt>t</dt>\n  <dd>d2</dd>\n</dl>')
     expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
   })
@@ -163,7 +163,7 @@ describe('a dropped empty description breaks the list', () => {
    */
   it('clears the mark once the same entry writes a description after all', () => {
     const html = '<dl><dt>t1</dt><dd></dd><dd>d1</dd><dt>t2</dt><dd>d2</dd></dl>'
-    expect(htmlToCarve(html).value).toBe(':: t1\n:  d1\n:: t2\n:  d2\n')
+    expect(htmlToCarve(html).value).toBe(':: t1\n: d1\n:: t2\n: d2\n')
     expect(htmlToCarve(html).report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
   })
 
@@ -176,7 +176,7 @@ describe('a dropped empty description breaks the list', () => {
    */
   it('breaks at every dropped entry, not only the first', () => {
     const html = '<dl><dt>t1</dt><dd></dd><dt>t2</dt><dd></dd><dt>t3</dt><dd>d3</dd></dl>'
-    expect(htmlToCarve(html).value).toBe(':: t1\n\n%%\n\n:: t2\n\n%%\n\n:: t3\n:  d3\n')
+    expect(htmlToCarve(html).value).toBe(':: t1\n\n%%\n\n:: t2\n\n%%\n\n:: t3\n: d3\n')
     expect(carveToHtml(htmlToCarve(html).value)).toBe(
       '<dl>\n  <dt>t1</dt>\n</dl>\n<dl>\n  <dt>t2</dt>\n</dl>\n<dl>\n  <dt>t3</dt>\n  <dd>d3</dd>\n</dl>',
     )

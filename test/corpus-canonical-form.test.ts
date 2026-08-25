@@ -27,6 +27,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { carveToCarve } from '../src/index.js'
+import { CANONICAL_AHEAD_OF_PIN } from './canonical-ahead-of-pin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -36,6 +37,21 @@ const pinned = readdirSync(corpusDir)
   .map((name) => name.slice(0, -'.fmt'.length))
   .filter((slug) => existsSync(resolve(corpusDir, `${slug}.crv`)))
   .sort()
+
+/*
+ * AN ENTRY THAT NAMES NOTHING IS NOT A DECLARATION. The two assertions below
+ * only run for a slug that HAS a sidecar, so an entry left behind after an
+ * upstream rename matched no case and read as coverage.
+ */
+describe('canonical AHEAD_OF_PIN', () => {
+  it('names only sidecars that exist', () => {
+    const orphaned = [...CANONICAL_AHEAD_OF_PIN.keys()].filter((slug) => !pinned.includes(slug))
+    expect(
+      orphaned,
+      'renamed upstream, or already retired - either way the entry asserts nothing',
+    ).toEqual([])
+  })
+})
 
 describe('the pinned canonical form', () => {
   it('is read from at least one fixture, so the sweep can fail', () => {
@@ -49,7 +65,15 @@ describe('the pinned canonical form', () => {
     it(`is what fmt produces for ${slug}`, () => {
       const source = readFileSync(resolve(corpusDir, `${slug}.crv`), 'utf8')
       const expected = readFileSync(resolve(corpusDir, `${slug}.fmt`), 'utf8')
-      expect(carveToCarve(source)).toBe(expected)
+      const ahead = CANONICAL_AHEAD_OF_PIN.get(slug)
+      if (ahead === undefined) {
+        expect(carveToCarve(source)).toBe(expected)
+        return
+      }
+      expect(carveToCarve(source), ahead.reason).toBe(ahead.fmt)
+      // The staleness half: when the pin moves past the clause the sidecar is
+      // rewritten to exactly this value, and the entry must be deleted.
+      expect(expected, `${slug} now matches: delete its AHEAD_OF_PIN entry`).not.toBe(ahead.fmt)
     })
   }
 })

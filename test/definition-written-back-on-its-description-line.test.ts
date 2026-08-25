@@ -26,13 +26,13 @@ const roundTrips = (source: string): boolean => carveToHtml(source) === carveToH
 
 describe('a definition written inside a description', () => {
   it('is written back on its own line, byte for byte', () => {
-    const src = ':: term\n:  [r]: /u\n\nsee [t][r]\n'
+    const src = ':: term\n: [r]: /u\n\nsee [t][r]\n'
     expect(carveToCarve(src)).toBe(src)
     expect(roundTrips(src)).toBe(true)
   })
 
   it('is written back for a footnote definition too', () => {
-    const src = ':: term\n:  [^f]: x\n\nsee[^f]\n'
+    const src = ':: term\n: [^f]: x\n\nsee[^f]\n'
     expect(carveToCarve(src)).toBe(src)
     expect(roundTrips(src)).toBe(true)
   })
@@ -51,7 +51,7 @@ describe('a definition written inside a description', () => {
   })
 
   it('leaves an ordinary description alone', () => {
-    expect(carveToCarve(':: term\n:  body\n')).toBe(':: term\n:  body\n')
+    expect(carveToCarve(':: term\n: body\n')).toBe(':: term\n: body\n')
   })
 
   it('leaves a footnote written at document level where it was', () => {
@@ -104,7 +104,7 @@ describe('an emptied description survives both escape passes', () => {
   it('is written back inside a container', () => {
     // The line map is keyed on the DOCUMENT's hoisted definitions, so a
     // description nested in a container has to find its definition there too.
-    const src = '::: note\n:: term\n:  [r]: /u\n:::\n\nsee [t][r]\n'
+    const src = '::: note\n:: term\n: [r]: /u\n:::\n\nsee [t][r]\n'
     expect(carveToCarve(src)).toBe(src)
     expect(roundTrips(src)).toBe(true)
   })

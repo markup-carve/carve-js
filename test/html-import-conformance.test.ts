@@ -38,6 +38,31 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unk
   // carried `attrs.order` and the fixture - correctly - did not. The slot is a
   // writer-only channel now (markup-carve/carve-js#1445), the two agree, and the
   // entry went out with the fix rather than with a pin bump.
+  //
+  // THE TWO BELOW ARE A WIDER WINDOW THAN USUAL, and the reason is worth
+  // recording: markup-carve/carve#1757 made ONE SPACE the canonical definition
+  // separator and rewrote the four corpus `.fmt` sidecars that hold a
+  // definition body, but it did not reach these two html-import fixtures. So
+  // the pinned goldens still spell `:  ` while the spec they belong to states
+  // `: `, and no pin bump alone will close it - the fixtures have to be
+  // re-recorded upstream first. Both entries fail in both directions
+  // meanwhile, which is what keeps the window visible instead of silent.
+  [
+    'empty-definition-description-not-last',
+    {
+      reason:
+        'one space is the canonical definition separator (markup-carve/carve#1757); the pinned fixture still spells the two-space form',
+      carve: ':: t1\n\n%%\n\n:: t2\n: d2\n',
+    },
+  ],
+  [
+    'traversal-shaped-index',
+    {
+      reason:
+        'one space is the canonical definition separator (markup-carve/carve#1757); the pinned fixture still spells the two-space form',
+      carve: '- a\n- b [K]{kbd}\n\n|= h |\n| c | d |\n\n:: t\n: v\n',
+    },
+  ],
 ])
 
 /**

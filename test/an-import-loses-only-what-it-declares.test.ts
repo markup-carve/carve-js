@@ -63,7 +63,7 @@ describe('an empty definition description', () => {
   it('leaves a description that writes something alone', () => {
     // The control. Every assertion above passes for an importer that dropped
     // every description, and this is what such an importer would break.
-    expect(htmlToCarve('<dl><dt>term</dt><dd>d</dd></dl>').value).toBe(':: term\n:  d\n')
+    expect(htmlToCarve('<dl><dt>term</dt><dd>d</dd></dl>').value).toBe(':: term\n: d\n')
     expect(carveToHtml(htmlToCarve('<dl><dt>term</dt><dd>d</dd></dl>').value)).toContain('<dd>d</dd>')
   })
 })

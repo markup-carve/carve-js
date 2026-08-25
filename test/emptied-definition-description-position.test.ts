@@ -140,7 +140,7 @@ describe('the recorded extent does not reach the writer', () => {
     // cross-engine writer diffs to, reproduced here by adding a second such
     // field. The corpus round-trip caught it; this names it.
     expect(renderCarve(parse(':: color\n:  The visual property of objects.\n'))).toBe(
-      ':: color\n:  The visual property of objects.\n',
+      ':: color\n: The visual property of objects.\n',
     )
   })
 
@@ -166,7 +166,7 @@ describe('the recorded extent does not reach the writer', () => {
     }
 
     expect(renderCarve({ type: 'document', children: [list] })).toBe(
-      ':: A\n:  A markup language.\n:: B\n:  Its closest relative.\n',
+      ':: A\n: A markup language.\n:: B\n: Its closest relative.\n',
     )
   })
 
@@ -174,7 +174,7 @@ describe('the recorded extent does not reach the writer', () => {
     // The emptied description is written back with its definition on it
     // (markup-carve/carve#805), so this is the path that reads the new field
     // AND the writer's escape decision in the same document.
-    const source = ':: term\n:  [r]: /u\n\nsee [t][r]\n'
+    const source = ':: term\n: [r]: /u\n\nsee [t][r]\n'
 
     expect(renderCarve(parse(source))).toBe(source)
   })

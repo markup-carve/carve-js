@@ -237,13 +237,46 @@ describe('a fence ends with the container that holds it', () => {
     expect(html(':::note\n')).toBe('<p>:::note</p>')
   })
 
-  it("CONTROL: a description's body column is §16's own, not the separator's width", () => {
-    // A wider `:   ` still puts the body at column three, so measuring the
-    // marker made a canonical body line look dedented and ended the fence on it
-    // (raised by codex review).
-    const source = `:: term\n:   ${B}\n   :::\n   ${B}\n\n*[A]: expansion\n\nA here\n`
+  it("CONTROL: a description's body column is its SEPARATOR'S, at every width", () => {
+    // The reading here is the one markup-carve/carve#1757 reversed. It used to
+    // be §16's fixed three for every spelling - "a wider `:   ` still puts the
+    // body at column three" - and a fixed number was what kept a canonical body
+    // line from looking dedented and ending the fence on it (raised by codex
+    // review). The separator's width IS the column now, so the same failure
+    // arrives through the opposite mistake: a fixed three ends the fence on the
+    // CANONICAL one-space body, whose lines sit at column 2.
+    //
+    // Every width, because a control pinned at one of them cannot tell a
+    // derived column from a differently-hard-coded one. The narrow row fails on
+    // a fixed 3, the wide row on a fixed 2, and only the derived reading
+    // answers all three.
+    for (const width of [1, 2, 3]) {
+      const sep = ' '.repeat(width)
+      const col = ' '.repeat(1 + width)
+      const source = `:: term\n:${sep}${B}\n${col}:::\n${col}${B}\n\n*[A]: expansion\n\nA here\n`
 
-    expect(html(source)).toContain('<abbr title="expansion">A</abbr>')
+      expect(html(source), `separator width ${width}`).toContain('<abbr title="expansion">A</abbr>')
+      // The fence really is inside the description: its `:::` is code, not a
+      // container opener, so the row cannot be bought by the definition simply
+      // landing outside a fence that never opened.
+      expect(html(source), `separator width ${width}`).toContain('<pre><code>:::')
+
+      // THE OTHER DIRECTION, and it is the one the column really decides. A
+      // definition written INSIDE that fence is a literal sample and must not
+      // reach the link table. Read at a fixed 3, the canonical one-space body
+      // sits BELOW the recorded scope, so every one of its lines scores out of
+      // the fence, the fence is over on its first line and the sample's
+      // `[r]: /url` goes live - carve-js#667's failure arriving through the
+      // column rather than through the container.
+      //
+      // The abbreviation row above does not catch it: that definition is
+      // outside the description either way. Measured, not assumed - a fixed 3
+      // leaves the row above passing at all three widths.
+      const sample = `[r][]\n\n:: term\n:${sep}${B}\n${col}[r]: /url\n${col}${B}\n`
+
+      expect(html(sample), `separator width ${width}`).not.toContain('href="/url"')
+      expect(html(sample), `separator width ${width}`).toContain('<pre><code>[r]: /url')
+    }
   })
 
   it('CONTROL: reach is measured in VISUAL COLUMNS, so a tab is worth up to four', () => {

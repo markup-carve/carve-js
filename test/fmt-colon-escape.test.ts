@@ -79,7 +79,7 @@ describe('a line-initial colon still gets its escape', () => {
   // shapes that keep it.
 
   it('keeps an indented definition-list term literal', () => {
-    roundTrips('- one\n  :: term\n  :  def\n')
+    roundTrips('- one\n  :: term\n  : def\n')
   })
 
   it('keeps an indented colon fence literal', () => {

@@ -1998,7 +1998,7 @@ function romanMarker(n: number): string {
  * One extra column, when a definition list's payload needs a base of its own.
  *
  * A DESCRIPTION'S PAYLOAD LIVES ABOVE ITS OPENER'S COLUMN. `:: term` sits at the
- * list's own column and everything under `:  ` sits three columns in, so a
+ * list's own column and everything under `: ` sits two columns in, so a
  * quote, a fence, a heading or a table inside a description is INDENTED
  * relative to the `::` line. At a body's minimum column that indentation is an
  * authored block base of its own (PART 9 §24 C3), and the body's rebase claims
@@ -2080,6 +2080,19 @@ function leadingSpaces(line: string): number {
   return line.length - line.replace(/^ +/, '').length
 }
 
+/**
+ * ONE SPACE IS THE CANONICAL DEFINITION SEPARATOR (PART 9 §16,
+ * markup-carve/carve#1757), so a body's continuations sit at column 2.
+ *
+ * The separator's width IS the body's content column, so the two move together:
+ * a writer that narrows `:  ` to `: ` and leaves the body's continuations at
+ * column 3 has written a document that says something else - the payload no
+ * longer reaches the column its own marker hands out, and it leaves the `dd`.
+ * Bound to one name because the marker and the continuation indent are one
+ * decision written in two places, which is how a column rule drifts (carve#755).
+ */
+const DEFINITION_BODY_INDENT = '  '
+
 function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
   const out: string[] = []
   /*
@@ -2147,7 +2160,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           // node in this set, so marking first renders the line away.
           const written = renderBlock(definition, ctx)
           definitionsWrittenInPlace.add(definition as unknown as object)
-          emitDefinition(`:  ${written}`)
+          emitDefinition(`: ${written}`)
           return
         }
         const label = line === undefined ? undefined : footnoteDefsByLine.get(line)
@@ -2158,8 +2171,8 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           // A footnote body can be multi-line; its continuation lines carry the
           // body's own two-column indent and sit under the description.
           const [first, ...rest] = written.split('\n')
-          emitDefinition(`:  ${first}`)
-          for (const l of rest) out.push(`   ${l}`)
+          emitDefinition(`: ${first}`)
+          for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
           return
         }
       }
@@ -2200,8 +2213,8 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
         return
       }
       const lines = written.split('\n')
-      emitDefinition(`:  ${lines.shift() ?? ''}`)
-      for (const line of lines) out.push(`   ${line}`)
+      emitDefinition(`: ${lines.shift() ?? ''}`)
+      for (const line of lines) out.push(`${DEFINITION_BODY_INDENT}${line}`)
     })
   }
   return out.join('\n')
