@@ -11174,7 +11174,18 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // structural, and neither emits the attached attributes - so `</#h>{i}` dropped
 // the `{i}` entirely. carve-rs and carve-php keep it literal in both cases
 // (carve-js#537).
-const ATTR_INERT_PREV = new Set(['text', 'soft_break', 'hard_break', 'mention', 'tag', 'heading_ref'])
+const ATTR_INERT_PREV = new Set([
+  'text',
+  'soft_break',
+  'hard_break',
+  'mention',
+  'tag',
+  'heading_ref',
+  // Smart typography is a source-to-glyph substitution, not one of PART 9's
+  // inline attribute carriers. Attaching a block here consumes source that no
+  // renderer has an element on which to emit.
+  'smart_punctuation',
+])
 
 // Tail patterns parsed after a `[…]` (or `![…]`) whose close bracket was
 // found by balance (buildBracketMap), so the inner text may hold nested
