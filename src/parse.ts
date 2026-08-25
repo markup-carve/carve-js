@@ -10883,10 +10883,19 @@ function rebaseOverindentedBlocks(
           stack.push(width)
         }
       }
+    } else if (RE_DEFLIST_TERM.test(opener) || RE_DEFLIST_DEF.test(opener)) {
+      // A definition entry ends at the separating blank in the exact-column
+      // spelling. Carrying an over-indented authored base through that blank
+      // changed the following sibling block into description content. Keep the
+      // marker/description run together, but leave the next block to the
+      // enclosing container just as the exact-column form does.
+      for (let j = i + 1; j < lines.length; j++) {
+        const candidate = lines[j]!
+        if (isBlankLine(candidate) || indentColumns(candidate, base) < base) break
+        end = j
+      }
     } else if (
       RE_BLOCKQUOTE.test(opener) ||
-      RE_DEFLIST_TERM.test(opener) ||
-      RE_DEFLIST_DEF.test(opener) ||
       RE_FOOTNOTE_DEF.test(opener) ||
       RE_LINK_DEF.test(opener)
     ) {
