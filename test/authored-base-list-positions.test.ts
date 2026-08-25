@@ -17,12 +17,12 @@ describe('authored-base list source spans', () => {
     })
   })
 
-  it('counts a residual tab as columns but one source character', () => {
+  it('counts a residual tab as one source codepoint', () => {
     const source = 'See[^1].\n\n[^1]: a\n\n\n  \t- b\n'
     const ast = toAstJson(parse(source, { positions: true })) as any
     const list = ast.children[1].children[1]
 
-    expect(list.pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 23 })
-    expect(list.items[0].pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 23 })
+    expect(list.pos).toMatchObject({ startLine: 6, startColumn: 4, startOffset: 23 })
+    expect(list.items[0].pos).toMatchObject({ startLine: 6, startColumn: 4, startOffset: 23 })
   })
 })

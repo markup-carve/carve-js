@@ -4400,7 +4400,6 @@ function attachBlockPos(
     const startLine = lexer.lines[startLineIndex] ?? ''
     const leadChars = leadingWhitespace(startLine)
     if (leadChars > 0) {
-      const leadColumns = indentColumns(startLine, Infinity)
       const markerLine = startLine.slice(leadChars)
       const documentLine = (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1]
       // A tab straddling a container strip is represented by synthetic spaces
@@ -4409,8 +4408,8 @@ function attachBlockPos(
       // not charged a second time.
       node.pos.startColumn =
         documentLine !== undefined && documentLine.endsWith(markerLine)
-          ? indentColumns(documentLine.slice(0, documentLine.length - markerLine.length), Infinity) + 1
-          : (node.pos.startColumn ?? 1) + leadColumns
+          ? Array.from(documentLine.slice(0, documentLine.length - markerLine.length)).length + 1
+          : (node.pos.startColumn ?? 1) + leadChars
       node.pos.startOffset = (node.pos.startOffset ?? 0) + leadChars
     }
   }
