@@ -10779,7 +10779,33 @@ function rebaseOverindentedBlocks(
       ownedColumn = markerColumn
       continue
     }
-    if (base === 0) continue
+    if (base === 0) {
+      // Opaque groups already at the container's minimum column still own
+      // their payload. Without advancing past them, a payload line that looks
+      // like a block opener is reconsidered as an authored base of its own.
+      // `~~~~ / one-space ``` / ~~~~` then loses that content space and the
+      // writer is not a fixed point.
+      const code = RE_FENCE.exec(line) ?? RE_RAW_FENCE.exec(line)
+      const comment = code ? undefined : commentFenceRun(line)
+      if (code || comment !== undefined) {
+        let end = i
+        if (code) {
+          const marker = RE_FENCE.test(line) ? code[2]! : code[1]!
+          const close = fenceCloseRe(marker)
+          for (let j = i + 1; j < lines.length; j++) {
+            end = j
+            if (close.test(lines[j]!)) break
+          }
+        } else {
+          for (let j = i + 1; j < lines.length; j++) {
+            end = j
+            if (commentFenceRun(lines[j]!) === comment) break
+          }
+        }
+        i = end
+      }
+      continue
+    }
     const opener = sliceColumns(line, base, true)
     if (!lineOpensItemBlock(opener)) continue
     // Sublists already use the containment rule in the item collector. Their
@@ -10857,6 +10883,19 @@ function rebaseOverindentedBlocks(
         if (indentColumns(candidate, base) < base) break
         end = j
       }
+    }
+
+    // A caption is a structural continuation of the captionable block above
+    // it and shares that block's authored base. Leaving the caption behind at
+    // the residual indentation turns it into escaped prose.
+    const caption = lines[end + 1]
+    if (
+      caption !== undefined &&
+      !isBlankLine(caption) &&
+      indentColumns(caption, base) >= base &&
+      RE_CAPTION.test(sliceColumns(caption, base, true))
+    ) {
+      end++
     }
 
     for (let j = i; j <= end; j++) {
