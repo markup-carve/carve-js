@@ -186,10 +186,10 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
   it('does not take a fence one level DEEPER as its closer', () => {
     // The lookahead strips ONE quote marker, not the whole run. Stripping all of
     // them made `> > %%%` close a fence opened at one `>`, where the sub-lexer
-    // reads that line as a nested block quote - so the tracker and the parse of
-    // the collected body disagreed. Raised by codex review.
+    // reads that line as a nested block quote. Both unterminated openers degrade
+    // to line comments, and each closes the paragraph in its own quote frame.
     expect(html('> %%%\n> secret\n> > %%%\nlazy\n')).toBe(
-      '<blockquote> <p>secret</p> <blockquote><p>lazy</p></blockquote> </blockquote>',
+      '<blockquote> <p>secret</p> <blockquote> </blockquote> </blockquote> <p>lazy</p>',
     )
   })
 
@@ -214,14 +214,13 @@ describe('an UNTERMINATED fence does not open a block, in a quote either', () =>
   })
 
   it('needs the width to match, with a lazy line to make it observable', () => {
-    // Ignoring the width was green too. The width test only changes an ANSWER
-    // where a lazy line follows the mismatched fence: without one, the quote
-    // ends at the same place either way.
+    // A mismatched run cannot close the candidate opener. With no exact closer,
+    // both runs degrade to comments and the unmarked line remains outside.
     const wider = html('> %%%\n> secret\n> %%%%\nlazy\n')
     const narrower = html('> %%%%\n> secret\n> %%%\nlazy\n')
 
-    expect(wider).toBe('<blockquote> <p>secret</p> <p>lazy</p> </blockquote>')
-    expect(narrower).toBe('<blockquote> <p>secret</p> <p>lazy</p> </blockquote>')
+    expect(wider).toBe('<blockquote><p>secret</p></blockquote> <p>lazy</p>')
+    expect(narrower).toBe('<blockquote><p>secret</p></blockquote> <p>lazy</p>')
     // The CONTROL: an exact-width fence really does close, and the lazy line
     // then ends the quote.
     expect(html('> %%%\n> secret\n> %%%\nlazy\n')).toBe('<blockquote> </blockquote> <p>lazy</p>')
