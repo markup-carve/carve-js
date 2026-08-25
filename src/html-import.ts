@@ -131,6 +131,8 @@ interface P5Node {
   nodeName: string
   tagName?: string
   value?: string
+  /** A comment node's text. parse5 spells a comment's payload `data`, not `value`. */
+  data?: string
   attrs?: Array<{ name: string; value: string }>
   childNodes?: P5Node[]
   parentNode?: P5Node
@@ -1473,7 +1475,9 @@ class Importer {
   }
 
   private childPath(parent: string, node: P5Node, index: number): string {
-    const name = node.tagName ?? (node.nodeName === '#text' ? 'text()' : node.nodeName)
+    const name =
+      node.tagName ??
+      (node.nodeName === '#text' ? 'text()' : node.nodeName === '#comment' ? 'comment()' : node.nodeName)
     return `${parent}/${name}[${index + 1}]`
   }
 
@@ -1506,9 +1510,43 @@ class Importer {
      */
     let inlinePaths: string[] = []
     const flush = (): void => {
-      const children = this.blockInlines(inlineBuffer, parentPath, depth + 1, inlinePaths)
+      const buffered = inlineBuffer
+      const bufferedPaths = inlinePaths
       inlineBuffer = []
       inlinePaths = []
+      /*
+       * A RUN THAT HOLDS NOTHING BUT COMMENTS IS A BLOCK COMMENT RUN, not a
+       * paragraph carrying inline ones (markup-carve/carve#1709).
+       *
+       * The POSITION decides the spelling and the comment is not relocated, and
+       * this is where the two positions are told apart. `blocks()` buffers
+       * every non-block node into an inline run, so `<p>a</p><!--n--><p>b</p>`
+       * arrives here as a run holding one comment and nothing else - which is a
+       * comment sitting AMONG BLOCKS, however the buffer got it here. A run
+       * that also carries text is a real inline run and its comment is inline:
+       * `<div>text <!--n--> more</div>` is one paragraph, and splitting it at
+       * the comment would move the words either side of it into two.
+       *
+       * Whitespace-only text is not "something else". It is the layout between
+       * the blocks, which is exactly what a comment between two of them sits
+       * in, and treating it as content would make the answer depend on whether
+       * the author indented their HTML.
+       */
+      const commentsOnly =
+        buffered.length > 0 &&
+        buffered.some((node) => node.nodeName === '#comment') &&
+        buffered.every(
+          (node) => node.nodeName === '#comment' || (node.nodeName === '#text' && (node.value ?? '').trim() === ''),
+        )
+      if (commentsOnly) {
+        buffered.forEach((node, index) => {
+          if (node.nodeName !== '#comment') return
+          out.push({ type: 'comment', block: true, content: node.data ?? '' })
+          void bufferedPaths[index]
+        })
+        return
+      }
+      const children = this.blockInlines(buffered, parentPath, depth + 1, bufferedPaths)
       if (!this.visible(children)) return
       out.push(this.bareBlockImage(children) ?? { type: 'paragraph', children })
     }
@@ -1937,7 +1975,29 @@ class Importer {
             child,
           )
         }
-      } else if (child.nodeName !== '#comment' && (child.value ?? '').trim() !== '') {
+      } else if (child.nodeName === '#comment') {
+        /*
+         * A COMMENT BETWEEN TWO ITEMS MOVES, and now that it is KEPT the move
+         * has to be said (markup-carve/carve#1709). It used to be dropped, so
+         * there was nothing to declare and the row was suppressed here.
+         *
+         * `info`, where the text row beside it is `warning`, and the split is
+         * principled rather than a dial: moved TEXT changes the rendered
+         * document, and a comment renders nothing in either language, so the
+         * move costs a reader of the OUTPUT nothing and a reader of the SOURCE
+         * one position. It is emitted ahead of the list rather than refused
+         * because that is what every other stray child of a list does here; a
+         * comment being the one exception would make the list's own rule say
+         * two things.
+         */
+        this.add(
+          'element-unwrapped',
+          `An HTML comment directly inside <${ordered ? 'ol' : 'ul'}> kept its text but not its place among the items: it is emitted as a comment ahead of the list`,
+          'info',
+          childPath,
+          child,
+        )
+      } else if ((child.value ?? '').trim() !== '') {
         this.add(
           'element-unwrapped',
           `Text directly inside <${ordered ? 'ol' : 'ul'}> kept its content but not its place among the items: it is emitted as a paragraph ahead of the list`,
@@ -3232,6 +3292,18 @@ class Importer {
     if (node.nodeName === '#text') {
       return [{ type: 'text', value: (node.value ?? '').replace(/[ \t\n\r\f]+/g, ' ') }]
     }
+    /*
+     * AN HTML COMMENT IS A CARVE COMMENT, and this is the INLINE position of it
+     * (markup-carve/carve#1709). The block position is `blocks()`'s `flush`.
+     *
+     * The usual reason this importer drops something is that Carve cannot
+     * express the shape. That reason never applied here: Carve has comments, so
+     * dropping one was a choice to lose bytes the format can hold, in a mode
+     * whose whole job is fidelity, made by nobody. A comment renders nothing in
+     * either language, so keeping it is invisible in the output and lossless in
+     * the source.
+     */
+    if (node.nodeName === '#comment') return this.comment(node, path)
     const tag = node.tagName
     if (!tag) return []
     if (ACTIVE.has(tag)) {
@@ -3729,6 +3801,46 @@ class Importer {
    */
   private captionSpellsSomething(nodes: InlineNode[]): boolean {
     return nodes.some((node) => node.type !== 'text' || trimNonNbsp(node.value) !== '')
+  }
+
+  /**
+   * An HTML comment in an INLINE position, as the delimited Carve comment
+   * (markup-carve/carve#1709).
+   *
+   * TWO PAYLOADS HAVE NO INLINE SPELLING, and both close the comment EARLY
+   * rather than being escapable:
+   *
+   * - text holding `%}`, which is the closer. `{% has %} in %}` re-reads as a
+   *   comment saying `has` followed by the prose ` in %}`.
+   * - text holding a BLANK line, which ends the paragraph the run is in, so
+   *   both halves come back as prose and the comment is gone.
+   *
+   * Those are DROPPED, with one row saying so. Not truncated and not escaped
+   * into the form: a comment that came back shorter, or carrying characters the
+   * author did not write, is a silent content change, and the row is the point.
+   *
+   * NOT RELOCATED to the block form either. Moving it would put text somewhere
+   * the author did not write it, and `roundtrip` reading its own output would
+   * then find the document had moved.
+   *
+   * A newline is NOT one of the two: `{% a\nb %}` re-reads intact, because a
+   * single newline is a soft wrap inside the run rather than its end.
+   */
+  private comment(node: P5Node, path: string): InlineNode[] {
+    const content = node.data ?? ''
+    const closesEarly = content.includes('%}')
+    const endsTheRun = /\n[ \t]*\n/.test(content)
+    if (closesEarly || endsTheRun) {
+      this.add(
+        'element-dropped',
+        `Dropped an HTML comment: its text ${closesEarly ? 'holds the comment closer' : 'holds a blank line'}, which ends a Carve inline comment early, and the comment is not moved out of the run to make it spellable`,
+        'warning',
+        path,
+        node,
+      )
+      return []
+    }
+    return [{ type: 'comment', block: false, delimited: true, content }]
   }
 
   private visible(nodes: InlineNode[]): boolean {
