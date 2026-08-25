@@ -999,6 +999,12 @@ function resolveHeadingIdsImpl(
       case 'div':
         b.children.forEach((c) => walkBlock(c, fn))
         break
+      case 'line_block':
+        // A line block holds ordinary paragraphs and ordinary inline syntax.
+        // Its cross-references therefore resolve through the same walk as a
+        // div's, rather than remaining literal only because of their host.
+        b.children.forEach((c) => walkBlock(c, fn))
+        break
       case 'definition_list':
         for (const it of b.items) {
           for (const t of it.terms) fn(t)
