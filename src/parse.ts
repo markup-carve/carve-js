@@ -4389,6 +4389,30 @@ function attachBlockPos(
     startOffset: lexer.lineOffset(startLineIndex),
     endOffset: lexer.lineOffset(endLineIndex) + endLine.length,
   }
+  // A list parser may receive an authored marker past its local body base.
+  // Its lexer is anchored at that body's minimum column, while the marker is
+  // still preceded by the residual indentation that selected the authored
+  // base. A container span begins at its opening markup (PART 12 §4), not at
+  // that indentation. Inline children already account for the residual run;
+  // apply the same source adjustment to the list and item containers.
+  const type = (node as { type?: string }).type
+  if (type === 'list' || type === 'list_item') {
+    const startLine = lexer.lines[startLineIndex] ?? ''
+    const leadChars = leadingWhitespace(startLine)
+    if (leadChars > 0) {
+      const markerLine = startLine.slice(leadChars)
+      const documentLine = (lexer.rootLines ?? lexer.lines)[node.pos.startLine - 1]
+      // A tab straddling a container strip is represented by synthetic spaces
+      // in the local line. When the remaining marker text is an exact suffix,
+      // measure its column in the untouched document line so those spaces are
+      // not charged a second time.
+      node.pos.startColumn =
+        documentLine !== undefined && documentLine.endsWith(markerLine)
+          ? Array.from(documentLine.slice(0, documentLine.length - markerLine.length)).length + 1
+          : (node.pos.startColumn ?? 1) + leadChars
+      node.pos.startOffset = (node.pos.startOffset ?? 0) + leadChars
+    }
+  }
   // A paragraph has no opening marker: its extent begins at its first owned
   // inline, not at indentation or a surrounding container's content column.
   if ((node as { type?: string }).type === 'paragraph') {
@@ -4407,7 +4431,6 @@ function attachBlockPos(
       if (last.endOffset !== undefined) node.pos.endOffset = last.endOffset
     }
   }
-  const type = (node as { type?: string }).type
   if (type !== undefined && ENDS_AT_LAST_PLACED_CHILD.has(type)) {
     // The LAST PLACED child, not the last child. §4 lets a reassembled node omit
     // its position, and skipping past one keeps a container from reporting an
@@ -4434,8 +4457,9 @@ function attachBlockPos(
       if (lastOwned.endColumn !== undefined) node.pos.endColumn = lastOwned.endColumn
       if (lastOwned.endOffset !== undefined) node.pos.endOffset = lastOwned.endOffset
     } else if (EMPTIED_CONTAINER_MARKUP[type]) {
-      const marker =
-        EMPTIED_CONTAINER_MARKUP[type]!.exec(lexer.lines[startLineIndex] ?? '')?.[0]?.length ?? 0
+      const startLine = lexer.lines[startLineIndex] ?? ''
+      const lead = leadingWhitespace(startLine)
+      const marker = EMPTIED_CONTAINER_MARKUP[type]!.exec(startLine.slice(lead))?.[0]?.length ?? 0
       node.pos.endLine = node.pos.startLine
       if (node.pos.startColumn !== undefined) node.pos.endColumn = node.pos.startColumn + marker
       if (node.pos.startOffset !== undefined) node.pos.endOffset = node.pos.startOffset + marker
