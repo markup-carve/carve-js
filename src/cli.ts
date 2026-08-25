@@ -26,10 +26,12 @@ import {
   KNOWN_LINT_PLATFORMS,
   formatLintWarnings,
   carveToHtml,
-  carveToMarkdown,
+  carveToHtmlWithReport,
+  carveToMarkdownWithReport,
   carveToCarve,
-  carveToPlainText,
-  carveToAnsi,
+  carveToCarveWithReport,
+  carveToPlainTextWithReport,
+  carveToAnsiWithReport,
   carveToAstJson,
   diffAst,
   formatChanges,
@@ -37,11 +39,12 @@ import {
   fromAstJson,
   toAstJson,
   applyProfile,
-  renderHtml,
-  renderMarkdown,
+  renderHtmlWithReport,
+  renderMarkdownWithReport,
   renderCarve,
-  renderPlainText,
-  renderAnsi,
+  renderCarveWithReport,
+  renderPlainTextWithReport,
+  renderAnsiWithReport,
   Profile,
   ProfileViolationError,
   type AstJsonDocument,
@@ -53,6 +56,7 @@ import {
   djotToCarve,
   type HtmlImportAdapter,
   type HtmlImportMode,
+  type RenderResult,
 } from './index.js'
 import { stampCarve, readStamp, needsReview, type StampForm } from './stamp.js'
 import { checkPortability, type DjotEngine, type PortabilityReport } from './portability.js'
@@ -117,6 +121,14 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                                 keep it as source text (--ansi, --carve).
     --profile NAME              restrict features (full|article|comment|minimal)
     --profile-base-host HOST    base host for the profile's link policy
+    --strict-losses             write no rendered output and exit 1 when raw
+                                content would be dropped for this target
+    --report-losses FILE        write the structured render-loss report as JSON
+                                (use - for stderr)
+    --allow-loss CODE           allow a loss code intentionally (repeatable;
+                                currently: raw-format-dropped)
+    --max-render-losses N       retain at most N loss rows (default 100); the
+                                report still carries the complete total
 
 fmt - format Carve source canonically.
 
@@ -477,6 +489,7 @@ function renderFromJson(
   src: string,
   target: 'html' | 'markdown' | 'plain' | 'ansi' | 'carve' | 'json',
   opts: ProfileOptions & { allowRawHtml?: false },
+  lossOptions: RenderCliLossOptions,
   io: CliIO,
 ): number {
   // A profile's maxLength bounds UNTRUSTED INPUT, and on this path the untrusted
@@ -540,28 +553,31 @@ function renderFromJson(
     doc = applyProfile(doc, opts.profile, opts.profileBaseHost ?? null).doc
   }
 
-  let out: string
+  let result: RenderResult
   try {
     switch (target) {
       case 'json':
-        out = JSON.stringify(toAstJson(doc), null, 2)
+        result = { value: JSON.stringify(toAstJson(doc), null, 2), losses: [], totalLosses: 0, truncated: false }
         break
       case 'html':
         // The only render option the CLI exposes; the rest of `opts` is parse
         // and profile configuration, which was already applied above.
-        out = renderHtml(doc, opts.allowRawHtml === false ? { allowRawHtml: false } : {})
+        result = renderHtmlWithReport(doc, {
+          ...(opts.allowRawHtml === false ? { allowRawHtml: false } : {}),
+          maxRenderLosses: lossOptions.maxRenderLosses,
+        })
         break
       case 'markdown':
-        out = renderMarkdown(doc)
+        result = renderMarkdownWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
         break
       case 'plain':
-        out = renderPlainText(doc)
+        result = renderPlainTextWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
         break
       case 'ansi':
-        out = renderAnsi(doc)
+        result = renderAnsiWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
         break
       case 'carve':
-        out = renderCarve(doc)
+        result = renderCarveWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
         break
     }
   } catch (e) {
@@ -571,6 +587,42 @@ function renderFromJson(
     }
     throw e
   }
+  return finishRender(result, '<encoded-ast>', lossOptions, io)
+}
+
+interface RenderCliLossOptions {
+  strictLosses: boolean
+  reportLosses?: string
+  allowRawFormatDropped: boolean
+  maxRenderLosses: number
+}
+
+function finishRender(result: RenderResult, file: string, opts: RenderCliLossOptions, io: CliIO): number {
+  const allowed = opts.allowRawFormatDropped
+  const effectiveLosses = allowed ? [] : result.losses
+  const effectiveTotal = allowed ? 0 : result.totalLosses
+  if (effectiveTotal > 0) {
+    for (const loss of effectiveLosses) {
+      const at = loss.pos ? `:${loss.pos.startLine}:${loss.pos.startColumn ?? 1}` : ''
+      io.writeErr(`${file}${at} ${loss.code} - ${loss.message}\n`)
+    }
+    if (result.truncated) {
+      io.writeErr(`${file}: ${effectiveTotal - effectiveLosses.length} additional render losses omitted from the bounded report\n`)
+    }
+    io.writeErr(`${file}: ${effectiveTotal} render ${effectiveTotal === 1 ? 'loss' : 'losses'}\n`)
+  }
+  if (opts.reportLosses) {
+    const report = JSON.stringify({
+      file,
+      losses: effectiveLosses,
+      totalLosses: effectiveTotal,
+      truncated: allowed ? false : result.truncated,
+    }, null, 2) + '\n'
+    if (opts.reportLosses === '-') io.writeErr(report)
+    else io.writeFile(opts.reportLosses, report)
+  }
+  if (opts.strictLosses && effectiveTotal > 0) return 1
+  let out = result.value
   if (!out.endsWith('\n')) out += '\n'
   io.write(out)
   return 0
@@ -594,6 +646,10 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     safe?: boolean
     profile?: string
     'profile-base-host'?: string
+    'strict-losses'?: boolean
+    'report-losses'?: string
+    'allow-loss'?: string[]
+    'max-render-losses'?: string
     help?: boolean
   }
   let positionals: string[]
@@ -617,6 +673,10 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         safe: { type: 'boolean' },
         profile: { type: 'string' },
         'profile-base-host': { type: 'string' },
+        'strict-losses': { type: 'boolean' },
+        'report-losses': { type: 'string' },
+        'allow-loss': { type: 'string', multiple: true },
+        'max-render-losses': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -692,6 +752,25 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   if (values['profile-base-host'] !== undefined) {
     opts.profileBaseHost = values['profile-base-host']
   }
+  const allowedLosses = values['allow-loss'] ?? []
+  const unknownLoss = allowedLosses.find((code) => code !== 'raw-format-dropped')
+  if (unknownLoss !== undefined) {
+    io.writeErr(`carve render: unknown loss code '${unknownLoss}' (expected raw-format-dropped)\n`)
+    return 2
+  }
+  const maxRenderLosses = values['max-render-losses'] === undefined
+    ? 100
+    : Number(values['max-render-losses'])
+  if (!Number.isSafeInteger(maxRenderLosses) || maxRenderLosses < 0) {
+    io.writeErr('carve render: --max-render-losses must be a non-negative safe integer\n')
+    return 2
+  }
+  const lossOptions: RenderCliLossOptions = {
+    strictLosses: values['strict-losses'] ?? false,
+    allowRawFormatDropped: allowedLosses.includes('raw-format-dropped'),
+    maxRenderLosses,
+    ...(values['report-losses'] !== undefined ? { reportLosses: values['report-losses'] } : {}),
+  }
 
   let src: string
   if (positionals.length === 0) {
@@ -730,28 +809,28 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   // --from-json reads an encoded AST instead of Carve source. The render path
   // below takes source, so this branch runs the renderers directly over the
   // decoded tree - and applies the profile itself, since nothing parsed here.
-  if (values['from-json']) return renderFromJson(src, target, opts, io)
+  if (values['from-json']) return renderFromJson(src, target, opts, lossOptions, io)
 
-  let out: string
+  let result: RenderResult
   try {
     switch (target) {
       case 'json':
-        out = JSON.stringify(carveToAstJson(src, opts), null, 2)
+        result = { value: JSON.stringify(carveToAstJson(src, opts), null, 2), losses: [], totalLosses: 0, truncated: false }
         break
       case 'html':
-        out = carveToHtml(src, opts)
+        result = carveToHtmlWithReport(src, { ...opts, maxRenderLosses })
         break
       case 'markdown':
-        out = carveToMarkdown(src, opts)
+        result = carveToMarkdownWithReport(src, { ...opts, maxRenderLosses })
         break
       case 'plain':
-        out = carveToPlainText(src, opts)
+        result = carveToPlainTextWithReport(src, { ...opts, maxRenderLosses })
         break
       case 'ansi':
-        out = carveToAnsi(src, opts)
+        result = carveToAnsiWithReport(src, { ...opts, maxRenderLosses })
         break
       case 'carve':
-        out = carveToCarve(src, opts)
+        result = carveToCarveWithReport(src, { ...opts, maxRenderLosses })
         break
     }
   } catch (e) {
@@ -770,9 +849,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     }
     throw e
   }
-  if (!out.endsWith('\n')) out += '\n'
-  io.write(out)
-  return 0
+  return finishRender(result, positionals[0] ?? '<stdin>', lossOptions, io)
 }
 
 /**

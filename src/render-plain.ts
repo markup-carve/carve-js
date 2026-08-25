@@ -8,6 +8,7 @@ import type { SmartTypographyMode } from './render-markdown.js'
 import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
+import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -16,7 +17,7 @@ let suppressAutomaticAbbreviation = false
 /** No definition has been found expanded yet - the first pass, or no definition. */
 const NO_EXPANDED_DEFINITIONS: ReadonlySet<string> = new Set()
 
-export interface PlainTextRenderOptions {
+export interface PlainTextRenderOptions extends RenderLossSinkOptions {
   /**
    * `'source'` (or `false`) emits the run the author typed instead of the
    * resolved glyph. Accepted in both spellings because the HTML renderer took
@@ -54,7 +55,8 @@ export function renderPlainText(ast: Document, opts: PlainTextRenderOptions = {}
   // See abbr-expansion-emitted.ts for why predicting that from the tree instead
   // is wrong in the direction that deletes text.
   if (!documentHasAbbreviationDef(ast)) return renderPass(ast, opts, NO_EXPANDED_DEFINITIONS).text
-  const probe = renderPass(ast, opts, NO_EXPANDED_DEFINITIONS)
+  const { onRenderLoss: _onRenderLoss, ...probeOptions } = opts
+  const probe = renderPass(ast, probeOptions, NO_EXPANDED_DEFINITIONS)
   return renderPass(ast, opts, probe.expanded).text
 }
 
@@ -64,6 +66,7 @@ function renderPass(
   expandedDefinitions: ReadonlySet<string>,
 ): { text: string; expanded: Set<string> } {
   const ctx: PlainContext = {
+    options: opts,
     smartSource: smartTypographyIsSource(opts.smartTypography),
     listDepth: 0,
     blockDepth: 0,
@@ -85,6 +88,7 @@ function renderPass(
 }
 
 interface PlainContext {
+  options: PlainTextRenderOptions
   smartSource: boolean
   listDepth: number
   blockDepth: number
@@ -191,6 +195,8 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       if (ctx.expandedDefinitions.has(abbreviationPairKey(node.abbr, node.expansion))) return ''
       return `*[${stripControls(node.abbr)}]: ${stripControls(node.expansion)}\n\n`
     case 'raw_block':
+      rawFormatDropped(ctx.options, node, 'plain')
+      return ''
     case 'comment':
       return ''
     case 'link_reference_definition':
@@ -422,6 +428,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
     case 'math':
       return stripControls(node.content)
     case 'raw_inline':
+      rawFormatDropped(ctx.options, node, 'plain')
       return ''
     case 'literal_inline':
       // §27: always emitted (unlike raw passthrough above), as plain prose.

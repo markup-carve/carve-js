@@ -111,6 +111,7 @@ The package exposes one-call converters per output format, plus the lower-level
 ```ts
 import {
   carveToHtml,
+  carveToHtmlWithReport,
   carveToMarkdown,
   carveToPlainText,
   carveToAnsi,
@@ -122,6 +123,22 @@ import {
 const doc = resolve(parse(source)) // typed Document AST
 const html = renderHtml(doc)       // same as carveToHtml(source)
 ```
+
+Raw nodes are routed to their named target. If omitted content must be
+observable, use the checked sibling of either API:
+
+```ts
+const result = carveToHtmlWithReport('`x`{=latex}')
+// result.value is the unchanged HTML output
+// result.losses[0].code === 'raw-format-dropped'
+
+carveToHtmlWithReport('`x`{=latex}', { strictLosses: true })
+// throws RenderLossError before a value is returned
+```
+
+Reports are bounded to 100 entries by default while `totalLosses` retains the
+complete count. Set `maxRenderLosses` to change the bound. The compatible
+string-returning APIs remain available.
 
 HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
 mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes

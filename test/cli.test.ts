@@ -59,6 +59,56 @@ describe('carve CLI — dispatch', () => {
   })
 })
 
+describe('carve render — loss reporting', () => {
+  const source = '`one`{=latex} and `two`{=typst}\n'
+
+  it('warns about dropped raw formats without contaminating stdout', async () => {
+    const t = makeIO({ stdin: source })
+    expect(await run(['render', '--html'], t.io)).toBe(0)
+    expect(t.out).toBe('<p> and </p>\n')
+    expect(t.err).toContain('raw-format-dropped')
+    expect(t.err).toContain('2 render losses')
+  })
+
+  it('fails before writing output in strict mode', async () => {
+    const t = makeIO({ stdin: source })
+    expect(await run(['render', '--html', '--strict-losses'], t.io)).toBe(1)
+    expect(t.out).toBe('')
+    expect(t.err).toContain('2 render losses')
+  })
+
+  it('writes a bounded machine-readable report', async () => {
+    const t = makeIO({ stdin: source })
+    expect(await run([
+      'render', '--html', '--report-losses', 'losses.json', '--max-render-losses', '1',
+    ], t.io)).toBe(0)
+    expect(JSON.parse(t.files['losses.json']!)).toMatchObject({
+      totalLosses: 2,
+      truncated: true,
+      losses: [{ code: 'raw-format-dropped', format: 'latex', target: 'html' }],
+    })
+  })
+
+  it('can explicitly allow the known loss code', async () => {
+    const t = makeIO({ stdin: source })
+    expect(await run([
+      'render', '--html', '--strict-losses', '--allow-loss', 'raw-format-dropped',
+    ], t.io)).toBe(0)
+    expect(t.out).toBe('<p> and </p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('rejects unknown loss codes and invalid bounds', async () => {
+    const unknown = makeIO({ stdin: source })
+    expect(await run(['render', '--allow-loss', 'unknown'], unknown.io)).toBe(2)
+    expect(unknown.err).toContain('unknown loss code')
+
+    const invalid = makeIO({ stdin: source })
+    expect(await run(['render', '--max-render-losses=-1'], invalid.io)).toBe(2)
+    expect(invalid.err).toContain('non-negative safe integer')
+  })
+})
+
 describe('carve migrate — HTML import', () => {
   it('writes Carve plus a machine-readable loss report', async () => {
     const t = makeIO({ stdin: '<p onclick="x()">Hello</p>' })

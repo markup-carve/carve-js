@@ -20,6 +20,7 @@ import { trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
+import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -36,7 +37,7 @@ let suppressAutomaticAbbreviation = false
  */
 export type SmartTypographyMode = 'glyph' | 'source'
 
-export interface MarkdownRenderOptions {
+export interface MarkdownRenderOptions extends RenderLossSinkOptions {
   /** Defaults to `'glyph'`. */
   smartTypography?: SmartTypographyMode | boolean
 }
@@ -90,6 +91,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
   })
 
   const ctx: MarkdownContext = {
+    options: opts,
     headingIds,
     referencedHeadingIds,
     listDepth: 0,
@@ -106,6 +108,7 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
 }
 
 interface MarkdownContext {
+  options: MarkdownRenderOptions
   headingIds: Set<string>
   referencedHeadingIds: Set<string>
   listDepth: number
@@ -305,7 +308,11 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${renderImage(node)}\n\n`
     case 'raw_block':
       // Escape, not emit: raw HTML in Markdown would be live again downstream.
-      return node.format === 'html' ? `${escapeMdHtml(stripControls(node.content))}\n\n` : ''
+      if (node.format !== 'html') {
+        rawFormatDropped(ctx.options, node, 'markdown')
+        return ''
+      }
+      return `${escapeMdHtml(stripControls(node.content))}\n\n`
     case 'abbreviation_def':
       // PART 11 §10a: a definition NOTHING references still reaches this
       // target. HTML drops it because it has nowhere to put one; Markdown,
@@ -630,7 +637,11 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return node.display ? `$$${math}$$` : `$${math}$`
     }
     case 'raw_inline':
-      return node.format === 'html' ? escapeMdHtml(stripControls(node.content)) : ''
+      if (node.format !== 'html') {
+        rawFormatDropped(ctx.options, node, 'markdown')
+        return ''
+      }
+      return escapeMdHtml(stripControls(node.content))
     case 'literal_inline':
       // §27: emitted by EVERY renderer, never dropped. It is prose, not code,
       // so no code fence -- the content becomes literal text, with Markdown
