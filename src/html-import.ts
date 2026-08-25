@@ -708,6 +708,23 @@ class Importer {
    */
   private readonly split: Array<{ node: P5Node; path: string; message: string }> = []
   /**
+   * Where a figure's own attribute is DISPLACED by its target's (§16, ruling
+   * markup-carve/carve#1721).
+   *
+   * A rebuilt figure whose target is not an image writes two block attribute
+   * lines - the figure's, then the target's - and the parse MERGES them. The
+   * merge is not symmetric: `id` is a single slot the last line wins, a
+   * key-value pair is the same, and `class` is a set the two lines union. So
+   * the target keeps its own identity, which is the ruling, and whatever the
+   * figure set under a name the target also sets is gone from the source.
+   *
+   * A LOSS THE AST DOES NOT TAKE, which is why it buffers here instead of
+   * reporting at the point it is found. `htmlToAst` keeps `figure.attrs` and
+   * `target.attrs` apart and loses nothing; only the writer has to put them on
+   * two lines that meet.
+   */
+  private readonly displacedFigureAttrs: Array<{ node: P5Node; path: string; name: string }> = []
+  /**
    * Where the author wrote a `<p>` holding nothing but an image (§16,
    * markup-carve/carve-js#1419).
    *
@@ -884,18 +901,25 @@ class Importer {
    * something the document did not keep. When `figure()` decides to hand the
    * element back verbatim, the walk's claims are all false - the attribute it
    * called dropped rides on bytes the output still carries - so the mark is
-   * taken before the walk and the arm rewinds to it. Nothing outside these four
+   * taken before the walk and the arm rewinds to it. Nothing outside these five
    * lists survives a walk, which is why rewinding them is the whole of it.
    */
-  private mark(): [number, number, number, number] {
-    return [this.entries.length, this.unspellable.length, this.split.length, this.loneImageParagraphs.length]
+  private mark(): [number, number, number, number, number] {
+    return [
+      this.entries.length,
+      this.unspellable.length,
+      this.split.length,
+      this.loneImageParagraphs.length,
+      this.displacedFigureAttrs.length,
+    ]
   }
 
-  private restore([entries, unspellable, split, loneImages]: [number, number, number, number]): void {
+  private restore([entries, unspellable, split, loneImages, displaced]: [number, number, number, number, number]): void {
     this.entries.length = entries
     this.unspellable.length = unspellable
     this.split.length = split
     this.loneImageParagraphs.length = loneImages
+    this.displacedFigureAttrs.length = displaced
   }
 
   /**
@@ -3214,6 +3238,41 @@ class Importer {
     return only.type === 'image' ? (only as unknown as BlockNode) : target
   }
 
+  /**
+   * The figure attributes its TARGET's own attribute line displaces (§16,
+   * ruling markup-carve/carve#1721).
+   *
+   * A rebuilt figure is written as the figure's block attribute line, then the
+   * target's, then the target, then the `^ ` caption line. Two adjacent
+   * attribute lines are ONE attribute set to the parse, so the pair that comes
+   * back is a merge rather than either line - and the ruling is that the merge
+   * has to leave the TARGET holding its own, because the target is the element
+   * that survives the rebuild and the wrapper is the one that does not.
+   *
+   * THE MERGE DECIDES WHICH NAMES ARE LOST, and it treats them differently:
+   *
+   * - `id` is a single slot, so the later line's value replaces the earlier
+   *   one and the figure's id is gone.
+   * - a key-value pair is the same slot rule under a name.
+   * - `class` is a SET: the two lines union, so nothing is displaced and no
+   *   row is owed. Reporting one here would name a class the output still
+   *   carries, which is the mirror of the silence this ruling removes.
+   *
+   * AN IMAGE TARGET IS NOT IN THE COLLISION AT ALL. Its attributes are written
+   * inline after the destination rather than on a line of their own, so the
+   * figure's line and the image's braces never meet and both survive intact.
+   */
+  private recordDisplacedFigureAttrs(node: P5Node, path: string, own: Attrs | undefined, target: BlockNode): void {
+    if (!own || target.type === 'image') return
+    const theirs = (target as { attrs?: Attrs }).attrs
+    if (!theirs) return
+    const displaced = [
+      ...(own.id !== undefined && theirs.id !== undefined ? ['id'] : []),
+      ...Object.keys(own.keyValues ?? {}).filter((key) => theirs.keyValues?.[key] !== undefined),
+    ]
+    for (const name of displaced) this.displacedFigureAttrs.push({ node, path, name })
+  }
+
   private figure(node: P5Node, path: string, depth: number, attrs?: Attrs): BlockNode[] {
     // Our own composite-figure shape (PART 9 §4c): the group class marks the
     // wrapper, the panels div holds the children. Own-output round trip only;
@@ -3388,6 +3447,7 @@ class Importer {
           message: 'A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it',
         })
       }
+      this.recordDisplacedFigureAttrs(node, path, attrs, target)
       return [{ type: 'figure', target: target as never, caption, ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
     /*
@@ -4109,6 +4169,20 @@ class Importer {
     }
     for (const { node, path, message } of this.split) {
       this.add('structure-split', message, 'warning', path, node)
+    }
+    // ONE ROW PER DISPLACED NAME, at `info`, which is what this code means
+    // everywhere else: an attribute the output does not carry. The figure's
+    // target now keeps its own identity (`renderFigure`), and this is the other
+    // half of that ruling - the side that loses is DECLARED rather than
+    // resolved in silence (markup-carve/carve#1721).
+    for (const { node, path, name } of this.displacedFigureAttrs) {
+      this.add(
+        'attribute-dropped',
+        `Dropped ${name} on <figure>: its target's own attribute line sets ${name}, and the merged pair keeps the target's`,
+        'info',
+        path,
+        node,
+      )
     }
   }
 
