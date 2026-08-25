@@ -95,13 +95,17 @@ describe('roundtrip rebuilds a figure only when Carve spells it', () => {
   })
 
   /*
-   * The mode is what moved, and only the mode. `semantic` is allowed to be
-   * lossy - that is the whole distinction between the two - so the paragraph
-   * figure still writes the caption line there, and `safe` with it.
+   * WHAT THIS MODE OWNS IS PRESERVING, not which targets rebuild. `safe` and
+   * `semantic` reach the same verdict on the paragraph and cannot act on it the
+   * same way: with no raw block available they unwrap and declare, which is
+   * ruling markup-carve/carve-php#1731 and is pinned in
+   * `a-figure-unwraps-when-its-target-cannot-carry-a-caption.test.ts`. Kept
+   * here so the two halves of one rule stay visible from either file.
    */
-  it.each(['safe', 'semantic'] as const)('leaves %s mode alone', (mode) => {
+  it.each(['safe', 'semantic'] as const)('unwraps rather than preserves in %s mode', (mode) => {
     const result = htmlToCarve(PARAGRAPH, { mode })
-    expect(result.value).toBe('{#g}\nx\n^ Cap\n')
+    expect(result.value).toBe('x\n\nCap\n')
+    expect(carveToHtml(result.value)).not.toContain('^')
   })
 
   /*

@@ -348,30 +348,33 @@ describe('a caption target is the captioned block, not a paragraph around it', (
     })
   })
 
+  /*
+   * A PARAGRAPH HOST NO LONGER REACHES A FIGURE TARGET AT ALL. A paragraph
+   * cannot carry a caption line, so the lossy modes unwrap the figure and the
+   * paragraph is the first block instead of the target under one (ruling
+   * markup-carve/carve-php#1731). The question this file asks is unchanged and
+   * so are the answers: whether `captionHost` took the wrapper OFF, and on
+   * these shapes it must not.
+   */
+  const host = (html: string) => htmlToAst(html).value.children[0] as { type: string }
+
   it('keeps the paragraph for every host that IS one', () => {
     // The other half of PART 11 §2's "only if": over-escaping and over-
     // unwrapping both pass every gate that only checks the shape it fixed.
     // Prose is not a caption host at all, and a paragraph holding more than the
     // image is not the image - both keep the wrapper, and the loss on those is
     // on the WRITING side, which is a different ticket's subject.
-    const prose = figure('<figure><p>hello</p><figcaption>cap</figcaption></figure>') as { type: string }
-    expect(prose.type).toBe('paragraph')
-    const tail = figure('<figure><p><img src="i.png" alt="a"> tail</p><figcaption>cap</figcaption></figure>') as {
-      type: string
-    }
-    expect(tail.type).toBe('paragraph')
-    const two = figure(
-      '<figure><img src="i.png" alt="a"><img src="j.png" alt="b"><figcaption>cap</figcaption></figure>',
-    ) as { type: string }
-    expect(two.type).toBe('paragraph')
+    expect(host('<figure><p>hello</p><figcaption>cap</figcaption></figure>').type).toBe('paragraph')
+    expect(host('<figure><p><img src="i.png" alt="a"> tail</p><figcaption>cap</figcaption></figure>').type).toBe('paragraph')
+    expect(host('<figure><img src="i.png" alt="a"><img src="j.png" alt="b"><figcaption>cap</figcaption></figure>').type).toBe('paragraph')
   })
 
   it('keeps a <p> that carries its own attributes, because the tree is the exit that still holds them', () => {
     // The one shape where the WRAPPER is the faithful half: this tree renders
-    // back to the input exactly, and the source moves the class onto a block-
-    // attribute line that re-parses onto the figure. Unwrapping here would
-    // delete `x` from the only exit that still records it.
-    expect(figure('<figure><p class="x"><img src="i.png" alt="a"></p><figcaption>cap</figcaption></figure>')).toEqual({
+    // back to the input exactly, and the source keeps the class on a block-
+    // attribute line above the image. Unwrapping here would delete `x` from
+    // the only exit that still records it.
+    expect(host('<figure><p class="x"><img src="i.png" alt="a"></p><figcaption>cap</figcaption></figure>')).toEqual({
       type: 'paragraph',
       children: [{ type: 'image', src: 'i.png', alt: 'a' }],
       attrs: { classes: ['x'] },

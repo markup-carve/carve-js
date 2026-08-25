@@ -169,25 +169,34 @@ function isFlattenedBlock(node: P5Node): boolean {
 const FLATTENED_BLOCK_EXTRA = new Set(['li', 'dt', 'dd', 'td', 'th', 'tr', 'caption', 'figcaption'])
 
 /**
- * The figure targets `roundtrip` REBUILDS from Carve rather than preserving the
- * element (markup-carve/carve#1704).
+ * The figure targets a figure is REBUILT from, in EVERY mode
+ * (markup-carve/carve#1704, ruling markup-carve/carve-php#1731).
  *
  * THE MEMBERSHIP TEST IS A PROPERTY AND THE SET IS ITS ANSWER, not a list of
- * blessed names: a target belongs here when the Carve the importer writes for it
- * parses back to the element it read. `docs/html-import.md` states it that way
- * so a caption target added later inherits the rule instead of needing another
- * sweep of every tag to discover it - a name list is exactly the shape that
- * drifted into that ticket.
+ * blessed names: a target belongs here when it can CARRY the caption line the
+ * importer writes for it, so that the line parses back to the figure it was
+ * written from. `docs/html-import.md` states it that way so a caption target
+ * added later inherits the rule instead of needing another sweep of every tag
+ * to discover it - a name list is exactly the shape that drifted into that
+ * ticket.
  *
  * An image, a quote and a code block are here because their caption line re-parses
  * to the same figure. `table` is the one deliberate carve-out and its exception is
  * written where it is taken, in `figure()` below.
  *
- * Everything else - a paragraph, a list, a heading, a container - has no Carve
- * spelling that reproduces the figure, so `roundtrip` keeps the element and says
- * so. `semantic` is unaffected: being lossy is what distinguishes the two modes.
+ * Everything else - a paragraph, a list, a heading, a container - carries no
+ * caption line, so no Carve spelling reproduces the figure around it.
+ *
+ * ONE SET, AND THE MODES DIFFER ONLY IN WHAT THEY DO WITH THE REST. It was
+ * `roundtrip`'s alone until the paragraph target was measured in the other two:
+ * there the caption line was written anyway and the paragraph SWALLOWED it, so
+ * `{#f .c}` / `x` / `^ Cap` re-rendered as `<p id="f" class="c">x ^ Cap</p>` -
+ * a `^` in the prose the author never wrote, reported by nothing. `roundtrip`
+ * preserves the element for a target outside this set; `safe` and `semantic`
+ * cannot preserve, so they unwrap and declare. Neither mode writes a caption
+ * line the target will absorb.
  */
-const FIGURE_ROUNDTRIP_REBUILDS = new Set(['image', 'block_quote', 'code_block', 'table'])
+const FIGURE_REBUILDS = new Set(['image', 'block_quote', 'code_block', 'table'])
 
 /**
  * ONE MESSAGE FOR AN UNWRAPPED FIGURE, at the severity every other unwrapped
@@ -3206,7 +3215,7 @@ class Importer {
     const before = this.mark()
     const targets = this.blocks(body, path, depth + 1, bodyPaths)
     const target = this.captionHost(targets[0])
-    const captionable = target !== undefined && ['image', 'block_quote', 'table', 'code_block', 'paragraph'].includes(target.type)
+    const captionable = target !== undefined && FIGURE_REBUILDS.has(target.type)
     if (captionable && target.type === 'table' && (target as { caption?: unknown }).caption && captionNode) {
       /*
        * A table brings its own caption slot, so a figure-wrapped table can
@@ -3246,13 +3255,14 @@ class Importer {
     }
     const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
     /*
-     * `roundtrip` REBUILDS A FIGURE ONLY WHEN A CARVE SPELLING REPRODUCES THE
-     * ELEMENT, and preserves the element when none does (markup-carve/carve#1704).
+     * `roundtrip` PRESERVES THE ELEMENT WHEN NO CARVE SPELLING REPRODUCES IT
+     * (markup-carve/carve#1704). It is the only mode that CAN preserve; which
+     * targets rebuild at all is `FIGURE_REBUILDS`, above, and it answers for
+     * every mode.
      *
      * The rebuild is lossless for an image, a quote and a code block: the `^ `
      * line re-parses to the figure it was written from. For every other target
-     * it is not, and until this ruling the mode wrote it anyway. A figure around
-     * a bare PARAGRAPH was the worst of them and the one nobody had named: it
+     * it is not, and a figure around a bare PARAGRAPH is the worst of them: it
      * came back as an `id`-bearing paragraph carrying the body text and a literal
      * `^ Cap` line under it, so the figure was gone and the caption was no longer
      * merely lost but turned into prose the document never said - with ZERO
@@ -3264,6 +3274,13 @@ class Importer {
      * "Silently discarding authored bytes is the failure mode hardest to notice,
      * because the output is well-formed and merely missing something." Here it
      * was worse than missing.
+     *
+     * AND NEITHER MAY A LOSSY ONE INVENT A CHARACTER. `safe` and `semantic` are
+     * allowed to lose the figure; the absorption is not a loss but an ADDITION,
+     * and no mode is licensed to make one (ruling markup-carve/carve-php#1731).
+     * They cannot preserve, so they fall past this arm to the unwrap at the foot
+     * of the function, which writes the body and the caption as two blocks and
+     * declares both the element and the attributes it carried.
      *
      * THE ROWS FROM THE BODY ARE ROLLED BACK, because the element is kept whole
      * and nothing inside it was lost. A diagnostic that named an attribute the
@@ -3287,11 +3304,7 @@ class Importer {
      * with the declared `element-unwrapped` row below, in every mode, and that
      * boundary is unchanged by this ruling.
      */
-    if (
-      this.mode === 'roundtrip' &&
-      this.captionSpellsSomething(caption) &&
-      !(target !== undefined && FIGURE_ROUNDTRIP_REBUILDS.has(target.type))
-    ) {
+    if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && !captionable) {
       this.restore(before)
       this.preserveOwnAttributes(node)
       this.add('raw-preserved', 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target', 'warning', path, node)
@@ -3346,6 +3359,25 @@ class Importer {
       }
       return [{ type: 'figure', target: target as never, caption, ...(attrs ? { attrs } : {}) }, ...targets.slice(1)]
     }
+    /*
+     * A TARGET THAT CANNOT CARRY A CAPTION LINE UNWRAPS AND DECLARES, in every
+     * mode `roundtrip` does not claim (ruling markup-carve/carve-php#1731).
+     *
+     * The body stays as it imported and the caption becomes a paragraph of its
+     * own. The figure is gone either way; what this arm buys over writing the
+     * caption line anyway is that no character is invented. `x` then `^ Cap`
+     * under a paragraph re-reads as ONE paragraph holding a literal caret, so
+     * the document gains a `^` its author never typed. `x`, a blank line, then
+     * `Cap` re-reads as two paragraphs: the association is lost and every byte
+     * the author wrote is still their own.
+     *
+     * THE WRAPPER'S ATTRIBUTES ARE DROPPED RATHER THAN LANDED ON THE BODY.
+     * Writing `{#f}` above the paragraph would keep one anchor resolvable at
+     * one fewer declared loss, and it was considered and rejected: the id
+     * identified a FIGURE, a block with a caption, and moving it to a bare
+     * paragraph makes it identify something the author never marked. A loss
+     * that is declared beats a silent substitution.
+     */
     this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
     this.reportUnwrappedAttributes(node, attrs, 'figure', path)
     return [...targets, ...(captionNode ? [{ type: 'paragraph' as const, children: caption }] : [])]
