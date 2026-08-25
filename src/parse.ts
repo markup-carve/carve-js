@@ -65,6 +65,8 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 import { ownValue } from './own-property.js'
+import { normalizeRefLabel } from './label-key.js'
+export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
   /**
@@ -732,6 +734,8 @@ const RE_ABBR_DEF = /^\*\[([A-Za-z0-9]+)\]: +(?![ \t]*$)([^]+)$/u
  * label (PART 9R R1, carve#604).
  */
 export interface LinkDef {
+  /** Label spelling carried by the winning definition for canonical output. */
+  rawLabel?: string
   /**
    * Zero-based index of the line the definition was written on. Kept so PART 12
    * §10's node can carry a `pos` and so the hoisted definitions come out in
@@ -2146,14 +2150,14 @@ function appendLinkReferenceDefinitions(
   source: string,
 ): void {
   const authored: LinkReferenceDefinition[] = []
-  for (const [label, def] of lexer.linkDefs) {
+  for (const [key, def] of lexer.linkDefs) {
     // A definition with no recorded line came from somewhere other than the
     // source scan (a sub-lexer copy for extension content), so there is no line
     // to reproduce and nothing to hoist.
     if (def.line === undefined) continue
     const node: LinkReferenceDefinition = {
       type: 'link_reference_definition',
-      label,
+      label: def.rawLabel ?? key,
       href: def.href,
     }
     if (def.title !== undefined) node.title = def.title
@@ -2281,10 +2285,6 @@ function tryInlineMatchers(text: string, pos: number): InlineMatch | null {
  * heading references match heading TEXT and are fuzzier (case-insensitive);
  * they wrap this in heading-ids.ts rather than fold case here.
  */
-export function normalizeRefLabel(label: string): string {
-  return label.trim().replace(/\s+/g, ' ')
-}
-
 /**
  * Strip leading block-container prefixes (blockquote `>`, bullet/task and
  * decimal list markers, indentation) so a definition nested inside a real
@@ -3763,18 +3763,12 @@ function collectLinkDefs(lexer: Lexer) {
           def.attrs = parsed
         }
       }
-      // EXACT, not folded. §6 and PART 9R R1 both say matching is
-      // "case-sensitive, no whitespace folding", and this engine folded the
-      // definition key and the lookup symmetrically - so `[t][ b  c]` resolved
-      // against `[b c]: /u`, where the executable spec and carve-rs both leave it
-      // literal (carve-js#673). The label goes in as written.
-      //
-      // `normalizeRefLabel` stays for the IMPLICIT heading-reference path, which
-      // is deliberately fuzzier: heading-ids.ts and lint.ts both wrap it in
-      // `.toLowerCase()`, and all four implementations fold whitespace AND case
-      // when matching `[Some Heading][]` against a heading's text.
+      // Link definitions use the shared, case-sensitive ASCII-whitespace key.
+      // The raw spelling stays on the winning definition for the canonical
+      // writer. Implicit heading references remain a separate, looser path.
       def.line = idx
-      lexer.linkDefs.set(m[1]!, def)
+      def.rawLabel = m[1]!
+      lexer.linkDefs.set(normalizeRefLabel(m[1]!), def)
       continue
     }
   }
@@ -5224,12 +5218,8 @@ function parseCommentBlock(lexer: Lexer): Comment {
 function parseFootnoteDef(lexer: Lexer): null {
   const defLineIndex = lexer.pos
   const m = RE_FOOTNOTE_DEF.exec(lexer.consume())!
-  // EXACT, not trimmed. PART 9 §16 says a label may contain spaces and tabs
-  // and is matched exactly; `footnote_label` runs to the closing `]`, so the
-  // ends are part of the identifier. This engine trimmed both the definition
-  // key and the reference lookup, which resolved `[^ a ]` against `[^a]:`
-  // where carve-php and carve-rs leave it literal. Same defect and same
-  // reasoning as the link-reference labels in carve-js#673.
+  // Preserve the raw label as the AST/source-layout spelling. Resolution and
+  // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
   const bodyLines = [m[2]!]
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]
@@ -13157,7 +13147,10 @@ function applyLinkDefs(
       )
     }
     if (node.type === 'link' && node.ref !== undefined) {
-      const def = defs.get(node.ref)
+      // Normalization does not make a multiline label syntactically valid.
+      // The inline scanner may retain such a bracket run as a placeholder so
+      // it can degrade byte-for-byte, but it must never enter the symbol table.
+      const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
       if (def) {
         node.href = def.href
         if (def.title !== undefined) node.title = def.title
@@ -13184,7 +13177,7 @@ function applyLinkDefs(
       continue
     }
     if (node.type === 'image' && node.ref !== undefined) {
-      const def = defs.get(node.ref)
+      const def = /[\r\n]/.test(node.ref) ? undefined : defs.get(normalizeRefLabel(node.ref))
       if (def) {
         node.src = def.href
         if (def.title !== undefined) node.title = def.title

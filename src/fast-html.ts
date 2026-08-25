@@ -1,6 +1,7 @@
 import { slugify, headingIdSlugOpts } from './heading-ids.js'
 import { escapeAttrValue, escapeHtml, sanitizeUrl, type RenderOptions } from './render-html.js'
 import type { ParseOptions } from './parse.js'
+import { normalizeRefLabel } from './label-key.js'
 
 type Options = ParseOptions & RenderOptions & { profile?: unknown }
 type LinkDef = { href: string; title?: string }
@@ -116,7 +117,7 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
     if (!match || match[1]!.startsWith('@')) return undefined
     if (i > 0 && lines[i - 1]!.trim() !== '') return undefined
     if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') return undefined
-    defs.set(match[1]!, { href: match[2]!, ...(match[3] === undefined ? {} : { title: match[3] }) })
+    defs.set(normalizeRefLabel(match[1]!), { href: match[2]!, ...(match[3] === undefined ? {} : { title: match[3] }) })
     definitionLines?.push(i)
   }
   return { defs, ...(definitionLines ? { definitionLines } : {}) }
@@ -258,7 +259,7 @@ function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options): 
       } else if (text[labelEnd + 1] === '[') {
         const close = text.indexOf(']', labelEnd + 2)
         if (close < 0) return undefined
-        const def = defs.get(text.slice(labelEnd + 2, close))
+        const def = defs.get(normalizeRefLabel(text.slice(labelEnd + 2, close)))
         if (!def) return undefined
         href = def.href; title = def.title; end = close + 1
       } else return undefined

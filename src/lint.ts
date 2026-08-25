@@ -36,6 +36,7 @@ import {
   TABLE_ALIGNMENT_MARKERS,
   type UnclosedContainer,
 } from './parse.js'
+import { normalizeRefLabel } from './label-key.js'
 import {
   slugify,
   inlineText,
@@ -628,23 +629,15 @@ export function lintCarve(
     else defsByWhitespaceKey.set(key, [label])
   }
   for (const { id, node } of footnoteRefs) {
-    referencedFootnotes.add(id)
-    if (hasOwnKey(footnoteDefs, id)) continue
-    // A near miss is worth naming. "No matching definition" is true but leaves
-    // the reader hunting for a difference they cannot see - the definition is
-    // RIGHT THERE and differs by a space. Saying which one, and that matching
-    // is exact, turns a hunt into a fix.
-    const near = (defsByWhitespaceKey.get(whitespaceKey(id)) ?? []).filter((label) => label !== id)
-    const hint =
-      near.length === 1
-        ? ` Definition [^${near[0]}] differs only in whitespace; footnote labels are matched exactly.`
-        : near.length > 1
-          ? ` ${near.length} definitions differ from it only in whitespace; footnote labels are matched exactly.`
-          : ''
+    const matches = defsByWhitespaceKey.get(whitespaceKey(id)) ?? []
+    if (matches.length > 0) {
+      referencedFootnotes.add(matches[0]!)
+      continue
+    }
     out.push({
       ...locate(node, toUtf16),
       rule: 'unresolved-footnote',
-      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.${hint}`,
+      message: `Footnote reference [^${id}] has no matching definition; it renders as literal text.`,
     })
   }
 
@@ -1113,7 +1106,7 @@ function collectSemanticAttributeWarnings(
  * is invisible in rendered output and usually in the editor too.
  */
 function whitespaceKey(label: string): string {
-  return label.trim().replace(/\s+/g, ' ')
+  return normalizeRefLabel(label)
 }
 
 /**
@@ -1518,9 +1511,8 @@ function collectFootnoteDefinitionWarnings(
     const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixesKeepIndent(lines[i - 1] ?? ''))
     const m = FOOTNOTE_DEF.exec(stripContainerPrefixesKeepIndent(line, afterTerm))
     if (!m) continue
-    // Raw, like the parser: a footnote label is matched exactly (PART 9 §16),
-    // so `[^ a ]` and `[^a]` are two different definitions and neither is a
-    // duplicate of the other.
+    // Keep the raw spelling for diagnostics; lookup uses the shared normalized
+    // key below, just as parsing and numbering do.
     const label = m[1]!
     // The parser is the authority on what a definition IS. Stripping prefixes
     // line-by-line has no block context, so on its own it would read a marker
@@ -1542,15 +1534,8 @@ function collectFootnoteDefinitionWarnings(
         end: site.end,
       })
     } else {
-      // Two definitions that differ only in whitespace are LEGAL and distinct -
-      // that is the exact-matching rule working. They are also, almost always,
-      // one definition the author typed twice: the difference does not survive
-      // into rendered output and is invisible in most editors, so a reader
-      // comparing the two sees no reason they are separate footnotes.
-      //
-      // Djot's answer is to merge them, which silently drops one definition's
-      // content and emits duplicate ids. Carve keeps both and says so here
-      // instead, which is the same information without the data loss.
+      // A later raw spelling may normalize to the first definition's key. Its
+      // body is ignored, so report the collision at the losing definition.
       const key = whitespaceKey(label)
       const twin = firstByWhitespaceKey.get(key)
       if (twin !== undefined && twin !== label) {
@@ -1558,7 +1543,7 @@ function collectFootnoteDefinitionWarnings(
           line: site.line,
           column: site.col,
           rule: 'footnote-labels-differ-only-in-whitespace',
-          message: `Footnote definitions [^${twin}] and [^${label}] differ only in whitespace, so they are two separate footnotes; labels are matched exactly.`,
+          message: `Footnote definition [^${label}] normalizes to the same key as [^${twin}]; the first definition wins. Normalized key: ${JSON.stringify(key)}.`,
           start: site.start,
           end: site.end,
         })

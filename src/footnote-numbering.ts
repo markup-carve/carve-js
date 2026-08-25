@@ -27,6 +27,7 @@ import type { BlockNode, Document, FootnoteRef, InlineFootnote, InlineNode } fro
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { ownValue } from './own-property.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
+import { normalizeRefLabel } from './label-key.js'
 
 /** A footnote instance in document order; index + 1 = its assigned number. */
 export interface FootnoteOrderEntry {
@@ -158,6 +159,11 @@ function visitInlineTree(
  */
 export function numberFootnotes(ast: Document): FootnoteNumbering {
   const defs = ast.footnoteDefs ?? {}
+  const definitionByKey = new Map<string, string>()
+  for (const label of Object.keys(defs)) {
+    const key = normalizeRefLabel(label)
+    if (!definitionByKey.has(key)) definitionByKey.set(key, label)
+  }
   const order: FootnoteOrderEntry[] = []
   const refs: FootnoteRefVisit[] = []
   const labelIndexes = new Map<string, number>()
@@ -186,7 +192,10 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       return
     }
     // Reference footnote (`[^label]`): numbered at first resolved reference.
-    if (!n.id || ownValue(defs, n.id) === undefined) {
+    const definitionLabel = n.id && !/[\r\n]/.test(n.id)
+      ? definitionByKey.get(normalizeRefLabel(n.id))
+      : undefined
+    if (!n.id || definitionLabel === undefined) {
       // DELETE rather than skip. Re-running this pass is a no-op only while
       // `defs` is unchanged; the profile filter can take a definition away
       // AFTER the document was numbered, and a skip would leave the number of
@@ -194,14 +203,15 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
       delete n.number
       return
     }
-    let idx = labelIndexes.get(n.id)
+    const key = normalizeRefLabel(n.id)
+    let idx = labelIndexes.get(key)
     if (idx === undefined) {
-      const entry: FootnoteOrderEntry = { label: n.id }
-      const sourceLine = ownValue(defs, n.id)?.[0]?.pos?.startLine
+      const entry: FootnoteOrderEntry = { label: definitionLabel }
+      const sourceLine = ownValue(defs, definitionLabel)?.[0]?.pos?.startLine
       if (sourceLine !== undefined) entry.sourceLine = sourceLine
       order.push(entry)
       idx = order.length - 1
-      labelIndexes.set(n.id, idx)
+      labelIndexes.set(key, idx)
     }
     n.number = idx + 1
     refs.push({ node: n, orderIndex: idx })
