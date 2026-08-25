@@ -5294,7 +5294,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     // A recognized opener at or beyond the note's minimum column establishes
     // its authored column as a local base (carve#1729). The collector has
     // already removed the fixed two-column body margin.
-    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
+    rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
     // The definition runs from its `[^label]:` marker to the last line it
@@ -6520,8 +6520,10 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       break
     }
     // The same authored-base rule list items use, now in the definition body's
-    // coordinate system after its fixed three-column margin was removed.
-    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
+    // coordinate system after its fixed three-column margin was removed - plus
+    // the definition entry carrying its own base, which carve#1763 pins for
+    // these two bodies and not for a list item (carve-js#1514).
+    rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
     const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
     return parseBlocks(sub, 0)
   }
@@ -10758,6 +10760,7 @@ function rebaseOverindentedBlocks(
   eligible?: ReadonlySet<number>,
   leadNestedColumn = -1,
   includeSublists = false,
+  definitionEntriesCarryTheirBase = false,
 ): void {
   const firstVisible = lines.find((line) => !isBlankLine(line))
   const firstMarkerColumn = firstVisible === undefined ? -1 : markerContentColumn(firstVisible)
@@ -10883,12 +10886,21 @@ function rebaseOverindentedBlocks(
           stack.push(width)
         }
       }
-    } else if (RE_DEFLIST_TERM.test(opener) || RE_DEFLIST_DEF.test(opener)) {
-      // A definition entry ends at the separating blank in the exact-column
-      // spelling. Carrying an over-indented authored base through that blank
-      // changed the following sibling block into description content. Keep the
-      // marker/description run together, but leave the next block to the
-      // enclosing container just as the exact-column form does.
+    } else if (
+      !definitionEntriesCarryTheirBase &&
+      (RE_DEFLIST_TERM.test(opener) || RE_DEFLIST_DEF.test(opener))
+    ) {
+      // A LIST ITEM'S DEFINITION ENTRY ENDS AT ITS SEPARATING BLANK, WHATEVER
+      // COLUMN IT WAS AUTHORED AT (carve-js#1514).
+      //
+      // carve#1752 asks a payload to keep its offset from its opener, and in a
+      // list item both spellings have the same offset - so both say the same
+      // thing, and the spec repo's own corpus test pins a definition list under
+      // `over-column list block groups match their exact-column spelling`.
+      //
+      // A footnote body and a definition description are the exception, not
+      // this: carve#1763 pins the two spellings there as two documents, so they
+      // pass `definitionEntriesCarryTheirBase` and take the arm below.
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate) || indentColumns(candidate, base) < base) break
@@ -10896,6 +10908,8 @@ function rebaseOverindentedBlocks(
       }
     } else if (
       RE_BLOCKQUOTE.test(opener) ||
+      RE_DEFLIST_TERM.test(opener) ||
+      RE_DEFLIST_DEF.test(opener) ||
       RE_FOOTNOTE_DEF.test(opener) ||
       RE_LINK_DEF.test(opener)
     ) {
@@ -10935,6 +10949,28 @@ function rebaseOverindentedBlocks(
     }
     i = end
   }
+}
+
+/**
+ * Would a container body's rebase pass MOVE any line of `rendered`?
+ *
+ * The writer asks this, and it asks the rebase itself rather than a copy of its
+ * rule. A definition description's payload sits three columns in from its `::`,
+ * which is ABOVE the body minimum of a footnote body, a list item or a
+ * definition description - so at that minimum the container's rebase claims the
+ * payload as a block of its own and the description loses it (carve-js#1509).
+ * One column further in, the `::` line's own column becomes the entry's base and
+ * the rebase hands the whole run back at the same relative columns.
+ *
+ * Any predicate written out again HERE would be a second spelling of the same
+ * rule and would drift from the first one; running the pass over a copy cannot.
+ */
+export function aBodyRebaseWouldMoveALine(rendered: string): boolean {
+  const lines = rendered.split('\n')
+  const rebased = lines.slice()
+  rebaseOverindentedBlocks(rebased, undefined, -1, true, true)
+
+  return rebased.some((line, index) => line !== lines[index])
 }
 
 /**
