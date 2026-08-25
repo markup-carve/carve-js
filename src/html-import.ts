@@ -151,6 +151,30 @@ const BLOCK = new Set([
   // placement inside the paragraph after it rather than between the two.
   'carve-footnote-placement',
 ])
+
+/**
+ * The media wrappers whose children are FALLBACK CONTENT (ruling
+ * markup-carve/carve#1749).
+ *
+ * A `<video>`'s children are the flow content the author wrote for the case
+ * where the media cannot be shown, and Carve can spell all of it. Flattening it
+ * to one inline run is a CONTENT change rather than a spelling difference: a
+ * document that said two things came back saying one, and no paragraph boundary
+ * the author wrote can be recovered from the run afterwards.
+ *
+ * NOT IN `BLOCK`, deliberately, and that is what this second set is for.
+ * `BLOCK` decides which arm `block()` takes, and the unmapped-block arm
+ * raw-preserves as a `raw_block` in `roundtrip` - where all three engines write
+ * a raw INLINE span for these elements today, because a media wrapper is inline
+ * content in HTML. So the ruling is applied where it was ruled, to the FALLBACK
+ * conversion, and `roundtrip` is untouched.
+ *
+ * `iframe` and `embed` are NOT members and their absence is measured, not an
+ * oversight: parse5 reads an `<iframe>`'s content as raw text, so it has no
+ * child elements to convert, and `<embed>` is void, so it has no children at
+ * all. `map` and `svg` hold their own content models rather than a fallback.
+ */
+const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture'])
 /**
  * Is this node a BLOCK being flattened into an inline slot?
  *
@@ -1779,6 +1803,18 @@ class Importer {
         }
         return
       }
+      /*
+       * A MEDIA WRAPPER'S FALLBACK IS CONVERTED AS BLOCKS (ruling
+       * markup-carve/carve#1749). It is not in `BLOCK` and must not be - see
+       * `MEDIA_FALLBACK` for why `roundtrip` keeps the inline raw span - so the
+       * ruling is applied here, at the one position where the children have
+       * somewhere block-shaped to go.
+       */
+      if (node.tagName && MEDIA_FALLBACK.has(node.tagName) && this.mode !== 'roundtrip') {
+        flush()
+        out.push(...this.mediaFallback(node, node.tagName, path, depth + 1))
+        return
+      }
       if (!node.tagName || !BLOCK.has(node.tagName)) {
         inlineBuffer.push(node)
         inlinePaths.push(path)
@@ -1789,6 +1825,35 @@ class Importer {
     })
     flush()
     return out
+  }
+
+  /**
+   * A media wrapper standing among blocks, unwrapped to its fallback
+   * (markup-carve/carve#1749).
+   *
+   * THE SAME TWO LINES THE UNMAPPED-BLOCK ARM WRITES, deliberately: the row for
+   * the element, the rows for the attributes it could not carry, then the
+   * children as BLOCKS. What changes is only that the children go through
+   * `blocks()` rather than `inlines()`, so a `<p>` inside stays a paragraph, a
+   * `<ul>` stays a list and an `<h2>` stays a heading, as carve-php has always
+   * written them.
+   *
+   * THE INNER ROWS FALL OUT RATHER THAN BEING PORTED. Flattening reported an
+   * `element-unwrapped` for every block it dissolved, and those rows were
+   * truthful about that output; a `<p>` that survives as a paragraph is not
+   * unwrapped and owes none. A fix that kept them while changing the conversion
+   * would start making false statements.
+   *
+   * `roundtrip` NEVER REACHES HERE. Its answer for these elements is the raw
+   * inline span the inline arm writes, which is what all three engines produce
+   * and what this ruling does not touch.
+   */
+  private mediaFallback(node: P5Node, tag: string, path: string, depth: number): BlockNode[] {
+    const attrs = this.attrs(node, path)
+    const unwrapped = this.reportUnsupportedElement(node, tag, path)
+    this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
+
+    return this.blocks(node.childNodes ?? [], path, depth)
   }
 
   private block(node: P5Node, path: string, depth: number): BlockNode[] {
