@@ -3699,6 +3699,10 @@ function collectLinkDefs(lexer: Lexer) {
       (deepest, column) => deepest === null || column > deepest ? column : deepest,
       deepestListColumn,
     )
+    const reachedOuterListColumn = openCols
+      .slice(0, composed.depth)
+      .filter((entry) => !entry.quote)
+      .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
     const reached = (col: number): boolean =>
       (deepestTrackedListColumn === null || col >= deepestTrackedListColumn) &&
       (composed.peeled.some((one) => one.content === col) ||
@@ -3714,7 +3718,7 @@ function collectLinkDefs(lexer: Lexer) {
       composed.depth < openCols.length &&
       openCols[composed.depth]!.quote
     const atAnOpenContentColumn = stoppedAtQuote
-      ? deepestTrackedListColumn !== null && composed.column >= deepestTrackedListColumn
+      ? reachedOuterListColumn !== null && composed.column >= reachedOuterListColumn
       : plusColumn !== null
       ? rawIndent === plusColumn
       : anyReached
@@ -9079,7 +9083,11 @@ function parseList(lexer: Lexer): List {
       RE_TASK.test(content) ||
       extractItemAttr(content) !== null
     if (hasOverindentedBlockCandidate)
-      rebaseOverindentedItemBlocks(nested, authoredBaseEligible)
+      rebaseOverindentedItemBlocks(
+        nested,
+        authoredBaseEligible,
+        leadIsMarker ? markerContentColumn(content) : -1,
+      )
 
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it
@@ -10650,7 +10658,11 @@ function leadingWhitespace(line: string): number {
  * This is one forward pass.  A line is stripped at most once and container
  * scans advance the outer cursor, keeping flat and deeply nested input linear.
  */
-function rebaseOverindentedItemBlocks(lines: string[], eligible?: ReadonlySet<number>): void {
+function rebaseOverindentedItemBlocks(
+  lines: string[],
+  eligible?: ReadonlySet<number>,
+  leadNestedColumn = -1,
+): void {
   const firstVisible = lines.find((line) => !isBlankLine(line))
   const firstMarkerColumn = firstVisible === undefined ? -1 : markerContentColumn(firstVisible)
   if (firstMarkerColumn >= 0) {
@@ -10670,7 +10682,11 @@ function rebaseOverindentedItemBlocks(lines: string[], eligible?: ReadonlySet<nu
     !lines.some(isBlankLine)
   )
     return
-  const nestedColumns: number[] = []
+  // A sub-list may open on the item's marker line, which is not part of
+  // `lines`. Seed its ownership column so a following line at that child's
+  // content column is left for the child's collector (for example
+  // `- > - - x` / `  >     # h`).
+  const nestedColumns: number[] = leadNestedColumn >= 0 ? [leadNestedColumn] : []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!
     if (isBlankLine(line)) continue
@@ -10772,7 +10788,9 @@ function rebaseOverindentedItemBlocks(lines: string[], eligible?: ReadonlySet<nu
     }
 
     for (let j = i; j <= end; j++) {
-      if (!isBlankLine(lines[j]!)) lines[j] = sliceColumns(lines[j]!, base, true)
+      if (!isBlankLine(lines[j]!)) {
+        lines[j] = sliceColumns(lines[j]!, base, true)
+      }
     }
     i = end
   }
