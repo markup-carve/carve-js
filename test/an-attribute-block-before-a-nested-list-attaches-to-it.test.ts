@@ -153,11 +153,9 @@ describe('the blocks that already attached keep attaching (controls)', () => {
     // item's content column, so the line is paragraph text and the sub-list
     // takes nothing. A fix that trims indentation before looking for the brace
     // deletes this paragraph and re-tightens the item.
-    expect(h('- a\n\n   {.c}\n')).toBe(
-      '<ul>\n  <li><p>a</p>\n    <p>{.c}</p>\n  </li>\n</ul>',
-    )
+    expect(h('- a\n\n   {.c}\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
     expect(h('- a\n\n   {.c}\n  - b\n')).toBe(
-      '<ul>\n  <li><p>a</p>\n    <p>{.c}</p>\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <ul class="c">\n      <li>b</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 

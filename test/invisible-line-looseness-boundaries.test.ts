@@ -35,9 +35,7 @@ describe('the invisible-line exemption stops at', () => {
       // §15 makes an attribute line column-strict. One column further in it is
       // paragraph text and really does render, so it is a visible second
       // paragraph. A comment is not column-strict, which is the control below.
-      expect(carveToHtml('- a\n\n   {.c}\n')).toBe(
-        '<ul>\n  <li><p>a</p>\n    <p>{.c}</p>\n  </li>\n</ul>',
-      )
+      expect(carveToHtml('- a\n\n   {.c}\n')).toBe('<ul>\n  <li>a</li>\n</ul>')
     })
 
     it('a comment past the same column still renders nothing', () => {

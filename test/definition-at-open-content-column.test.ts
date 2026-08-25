@@ -25,11 +25,11 @@ describe('a definition at an open content column', () => {
     expect(carveToHtml('- - a\n    [r]: /u\n\nsee [t][r]\n')).toContain('href="/u"')
   })
 
-  it('folds as text between two columns, defining nothing', () => {
+  it('uses a column between canonical columns as an authored base', () => {
     const html = carveToHtml('- - a\n   [r]: /u\n\nsee [t][r]\n')
 
-    expect(html).toContain('[r]: /u')
-    expect(html).toContain('<p>see [t][r]</p>')
+    expect(html).not.toContain('[r]: /u')
+    expect(html).toContain('<a href="/u">t</a>')
   })
 
   it('agrees with the footnote form at the same column', () => {

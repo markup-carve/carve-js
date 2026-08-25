@@ -15,10 +15,9 @@ describe('marker attributes do not move the content column', () => {
     expect(carveToCarve(formatted)).toBe(formatted)
   })
 
-  test('the former full-prefix column is paragraph text inside the item', () => {
+  test('the former full-prefix column is accepted as an authored block base', () => {
     const html = carveToHtml('-{.x1} a\n       # h\n')
-    expect(html).not.toContain('<h1')
-    expect(html).toContain('# h</li>')
+    expect(html).toContain('<h1')
   })
 
   test('different attribute lengths share one continuation column', () => {

@@ -21,15 +21,15 @@ import { carveToHtml } from '../src/index.js'
  */
 const resolves = (src: string) => carveToHtml(src).includes('<a href="/u">t</a>')
 
-describe('a definition past the content column is text, quoted or not', () => {
-  it('does not collect past the column inside a quote', () => {
+describe('a definition past the content column uses an authored list block base', () => {
+  it('collects past the column inside a quote', () => {
     expect(carveToHtml('> - a\n>    [r]: /u\n\nsee [t][r]\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>a\n[r]: /u</li>\n  </ul>\n</blockquote>\n<p>see [t][r]</p>',
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<p>see <a href="/u">t</a></p>',
     )
   })
 
   it('answers the same outside a quote', () => {
-    expect(resolves('- a\n   [r]: /u\n\nsee [t][r]\n')).toBe(false)
+    expect(resolves('- a\n   [r]: /u\n\nsee [t][r]\n')).toBe(true)
   })
 })
 

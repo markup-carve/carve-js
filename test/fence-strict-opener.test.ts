@@ -24,8 +24,8 @@ describe('fenced code: strict opener, lenient closer', () => {
     expect(carveToHtml('- one\n  ```\n  c\n  ```\n')).toContain('<pre><code>c\n</code></pre>')
   })
 
-  it('does NOT open one column past a list item content column', () => {
-    expect(carveToHtml('- one\n   ```\n   c\n   ```\n')).not.toContain('<pre>')
+  it('opens one column past a list item content column at its authored base', () => {
+    expect(carveToHtml('- one\n   ```\n   c\n   ```\n')).toContain('<pre>')
   })
 
   it('opens at a block quote content column', () => {

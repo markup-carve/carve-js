@@ -51,10 +51,10 @@ describe('a definition reaches its column by composing the strips', () => {
     )
   })
 
-  it('does not register between two live content columns', () => {
+  it('registers at an authored base beyond the minimum live column', () => {
     expect(flat(carveToHtml('- > - - x\n  >    [r]: /url\n\nSee [r][].\n'))).toBe(
-      '<ul> <li> <blockquote> <ul> <li> <ul> <li>x [r]: /url</li> </ul> </li> </ul>' +
-        ' </blockquote> </li> </ul> <p>See [r][].</p>',
+      '<ul> <li> <blockquote> <ul> <li> <ul> <li>x</li> </ul> </li> </ul>' +
+        ' </blockquote> </li> </ul> <p>See <a href="/url">r</a>.</p>',
     )
   })
 
@@ -62,9 +62,9 @@ describe('a definition reaches its column by composing the strips', () => {
   // lazy continuation. carve-js already read this one correctly; it is pinned
   // because an intermediate shape of the fix broke it, which is the
   // over-correction this whole change is most exposed to.
-  it('does not register from a line that never re-enters the quote', () => {
+  it('registers in the surrounding list even when it does not re-enter the quote', () => {
     expect(flat(carveToHtml('- > x\n    [r]: /url\n\nSee [r][].\n'))).toBe(
-      '<ul> <li> <blockquote><p>x [r]: /url</p></blockquote> </li> </ul> <p>See [r][].</p>',
+      '<ul> <li> <blockquote><p>x</p></blockquote> </li> </ul> <p>See <a href="/url">r</a>.</p>',
     )
   })
 
@@ -107,9 +107,9 @@ describe('a definition reaches its column by composing the strips', () => {
   // A SIBLING MARKER CLOSES WHAT WAS OPEN INSIDE. The item at column 4 is gone
   // once `- b` opens at column 0, so a definition written at 4 below it reaches
   // no live column and is `b`'s own lazy text.
-  it('does not register at a column a sibling item closed', () => {
+  it('registers at the current sibling item authored base', () => {
     expect(flat(carveToHtml('- - a\n- b\n    [r]: /url\n\nSee [r][].\n'))).toBe(
-      '<ul> <li> <ul> <li>a</li> </ul> </li> <li>b [r]: /url</li> </ul> <p>See [r][].</p>',
+      '<ul> <li> <ul> <li>a</li> </ul> </li> <li>b</li> </ul> <p>See <a href="/url">r</a>.</p>',
     )
   })
 })

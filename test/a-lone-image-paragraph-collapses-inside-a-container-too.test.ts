@@ -60,7 +60,7 @@ describe('a container hosting a lone image past its content column', () => {
 
   it('renders bare inside a list item', () => {
     expect(carveToHtml('- t\n\n   ![a](u)\n')).toBe(
-      '<ul>\n  <li><p>t</p>\n    <img src="u" alt="a">\n  </li>\n</ul>',
+      '<ul>\n  <li>t\n    <img src="u" alt="a">\n  </li>\n</ul>',
     )
   })
 

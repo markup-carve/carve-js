@@ -36,8 +36,8 @@ describe('nested item looseness does not propagate to the outer item (carve#322)
     expect(carveToHtml('- a\n\n  > q\n')).toContain('<li>a\n    <blockquote>')
   })
 
-  it('an above-content-column lazy paragraph still loosens the item (§24 C3)', () => {
-    expect(carveToHtml('- one\n\n   # h\n')).toBe('<ul>\n  <li><p>one</p>\n    <p># h</p>\n  </li>\n</ul>')
+  it('an above-content-column block opener uses its authored base and stays tight (§24 C3)', () => {
+    expect(carveToHtml('- one\n\n   # h\n')).toBe('<ul>\n  <li>one\n    <h1 id="h">h</h1>\n  </li>\n</ul>')
   })
 
   it('a nested TASK item (content column is the bullet width, not the checkbox) keeps the outer tight', () => {
