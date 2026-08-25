@@ -2276,13 +2276,36 @@ function captionLine(caption: InlineNode[], ctx: CarveContext): string {
   return trimNonNbsp(written) === '' ? '' : `\n^ ${written}`
 }
 
+/**
+ * THE TARGET KEEPS ITS OWN ATTRIBUTES (ruling markup-carve/carve#1721).
+ *
+ * Every arm goes through `renderBlock`, which is the only writer that puts a
+ * block's own attribute line above it. The table arm called `renderTable`
+ * instead, one level under that line, so a `<table id="g">` inside a
+ * `<figure id="f">` came back carrying `id="f"` and NOTHING carried `id="g"` -
+ * the id that survived belonged to the element that did not, and the id that
+ * died belonged to the element that did. An id is a link target, so every
+ * anchor pointing at that table broke while the document rendered perfectly.
+ *
+ * The two lines STACK and the parse merges them - the last `id` wins, classes
+ * union - so writing the target's line under the figure's is what hands the
+ * table back its own identity: `{#f}` over `{#g}` over the rows re-reads as
+ * `<table id="g">`. What the merge displaces is the FIGURE's id, and
+ * `html-import.ts` declares it with an `attribute-dropped` row rather than
+ * letting either side go in silence.
+ *
+ * THE OTHER ARMS ALREADY WROTE BOTH LINES, and there the merged pair lands on
+ * the FIGURE the caption line rebuilds rather than on the quote or the fence
+ * inside it. The value that survives is still the target's, which is what the
+ * ruling asks; only the table arm was dropping a line outright.
+ *
+ * AN IMAGE NEVER MEETS THE COLLISION. Its attributes are written INLINE, after
+ * the destination, so `{#f}` above `![A](a.png){#g}` puts one on the figure and
+ * one on the image and both survive. That arm is unchanged, which is what
+ * `renderImage` here says.
+ */
 function renderFigure(node: Figure, ctx: CarveContext): string {
-  const target =
-    node.target.type === 'image'
-      ? renderImage(node.target)
-      : node.target.type === 'table'
-        ? renderTable(node.target, ctx)
-        : renderBlock(node.target, ctx)
+  const target = node.target.type === 'image' ? renderImage(node.target) : renderBlock(node.target, ctx)
   return `${target}${captionLine(node.caption, ctx)}`
 }
 
