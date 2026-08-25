@@ -85,13 +85,10 @@ describe('inline span [text]{attrs}', () => {
     expect(h('[x]{data-x="{y}"}')).toBe('<p><span data-x="{y}">x</span></p>')
   })
 
-  it('rejects a digit-first attribute name (block stays literal)', () => {
-    // An attribute name (id, class, key) is a grammar identifier and may not
-    // start with a digit; the whole block is then not an attribute block and
-    // stays literal (§14), stricter than djot.
-    expect(h('[x]{.123}')).toBe('<p>[x]{.123}</p>')
+  it('accepts digit-first explicit classes but not attribute keys', () => {
+    expect(h('[x]{.123}')).toBe('<p><span class="123">x</span></p>')
     expect(h('[x]{123=v}')).toBe('<p>[x]{123=v}</p>')
-    expect(h('[x]{.1a}')).toBe('<p>[x]{.1a}</p>')
+    expect(h('[x]{.1a}')).toBe('<p><span class="1a">x</span></p>')
   })
 
   it('still accepts a digit AFTER the first identifier character', () => {

@@ -3097,7 +3097,7 @@ function renderAttrs(attrs: Attrs | undefined): string {
   if (!attrs) return ''
   const parts: string[] = []
   const kv = attrs.keyValues ?? {}
-  const idAsKey = attrs.id !== undefined && !isAttrIdentifier(attrs.id)
+  const idAsKey = attrs.id !== undefined && !isExplicitIdOrClassIdentifier(attrs.id)
 
   const emitId = () => {
     if (attrs.id === undefined) return
@@ -4072,14 +4072,18 @@ export function isAttrIdentifier(text: string): boolean {
   return /^[A-Za-z_][\w-]*$/.test(text)
 }
 
+function isExplicitIdOrClassIdentifier(text: string): boolean {
+  return /^[A-Za-z0-9_][\w-]*$/.test(text)
+}
+
 /**
  * Whether a container KIND can be spelled as a colon-fence type word.
  *
  * `renderAdmonition` writes `node.kind` verbatim after the fence, so a kind
  * this refuses would be emitted as source that does not read back as the
- * container it came from: `::: 2col` is an ordinary paragraph, because the
+ * container it came from: `::: -2col` is an ordinary paragraph, because the
  * opener grammar (PART 9, `admonition_open`) reads the word as
- * `[a-zA-Z_][\w-]*` and a digit cannot open it.
+ * `[a-zA-Z0-9_][\w-]*` because the kind is an explicit class value.
  *
  * Exported for the same reason `isAttrIdentifier` is: `html-import.ts` decides
  * whether an element's class can become the fence word of a rebuilt container,
@@ -4087,7 +4091,7 @@ export function isAttrIdentifier(text: string): boolean {
  * from it (markup-carve/carve-js#1316).
  */
 export function isContainerKind(text: string): boolean {
-  return /^[A-Za-z_][\w-]*$/.test(text)
+  return /^[A-Za-z0-9_][\w-]*$/.test(text)
 }
 
 /**

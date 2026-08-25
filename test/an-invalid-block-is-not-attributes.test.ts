@@ -43,10 +43,8 @@ describe('an invalid attribute block is not attributes', () => {
     expect(carveToHtml('[a]: /u {.c !!!}\n\n[a][]\n')).toBe(
       '<p>[a]: /u {.c !!!}</p>\n<p>[a][]</p>',
     )
-    // A digit-first name is the same case: `#1a` is not an identifier, so the
-    // block is invalid, but `parseAttrs` still finds the bareword `a` in it.
-    expect(carveToHtml('[a]: /u {#1a}\n\n[a][]\n')).toContain('<p>[a][]</p>')
-    expect(carveToHtml('[a]: /u {#1a}\n')).not.toContain('<a ')
+    // A digit-first explicit id is valid and reaches the resolved link.
+    expect(carveToHtml('[a]: /u {#1a}\n\n[a][]\n')).toContain('id="1a"')
     // And a digit-first KEY, which reaches the same place by a third route.
     expect(carveToHtml('[a]: /u {.c 2=v}\n\n[a][]\n')).toBe(
       '<p>[a]: /u {.c 2=v}</p>\n<p>[a][]</p>',

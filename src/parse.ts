@@ -585,7 +585,7 @@ const RE_BLOCKQUOTE = /^>(?: (.*)|)$/
 // admits a form feed, a vertical tab and every Unicode space, none of
 // which the grammar names at any position (#786, #795; spec carve#886
 // widened the padding slots and carve#905 reverted them).
-const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?[ \t]*$/
+const RE_ADMONITION_OPEN = /^(:{3,}) +([a-zA-Z0-9_][\w-]*)(?: +("[^"]*"))?(?: +(\[[^\]]*\]))?[ \t]*$/
 // The closer takes the OPENER's trailing run (`TRAILING_WS`), not `\s`. This is
 // the pair carve-js#805 names: carve-js#794 / carve-js#798 narrowed
 // `RE_ADMONITION_OPEN` above to `[ \t]*$` and left this one wide, so a mark that
@@ -7104,7 +7104,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
 function isBlockImageLine(line: string): boolean {
   const m = RE_BARE_IMAGE.exec(line)
   // A trailing attr block must be a valid, non-empty payload; a digit-first /
-  // invalid one (`{#1a}`) is literal (§14), so the line is NOT a bare block
+  // invalid one (`{2=v}`) is literal (§14), so the line is NOT a bare block
   // image -- it falls back to a paragraph (inline image + literal braces).
   return (
     m !== null &&
@@ -11250,6 +11250,9 @@ const WS_NO_NL = /[ \t\r]/
 function isIdentStart(c: string): boolean {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '_'
 }
+function isCssIdentStart(c: string): boolean {
+  return isIdentStart(c) || (c >= '0' && c <= '9')
+}
 function isIdentPart(c: string): boolean {
   return isIdentStart(c) || (c >= '0' && c <= '9') || c === '-'
 }
@@ -11277,10 +11280,11 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
     // Quotes and escapes are subtle — defer to RE_SPAN_TAIL rather than skip.
     if (c === '"' || c === "'" || c === '\\') return false
     if (c === '#' || c === '.') {
-      // `#id` / `.class`: an identifier (letter or `_`, then `[\w-]`) MUST
+      // `#id` / `.class`: an explicit CSS identifier (letter, digit or `_`,
+      // then `[\w-]`) MUST
       // follow, else the token — and the whole payload — is invalid (§14).
       const d = text[i + 1]
-      if (d === undefined || !isIdentStart(d)) return true
+      if (d === undefined || !isCssIdentStart(d)) return true
       i += 2
       while (i < n && isIdentPart(text[i]!)) i++
       continue
@@ -12101,7 +12105,7 @@ function scanInlineInner(
           if (title !== undefined) img.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
-            // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
+            // An invalid payload (`{2=v}`) is literal (§14), and an
             // empty-attr `{…}` is literal too -- neither is consumed.
             if (!isValidInlineAttrPayload(ml[4])) {
               len -= ml[4].length + 2
@@ -12204,7 +12208,7 @@ function scanInlineInner(
           if (title !== undefined) link.title = unescapeAttrValue(title)
           let len = close + 1 + ml[0].length
           if (ml[4]) {
-            // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
+            // An invalid payload (`{2=v}`) is literal (§14), and an
             // empty-attr `{…}` is literal too -- neither is consumed.
             if (!isValidInlineAttrPayload(ml[4])) {
               len -= ml[4].length + 2
@@ -12263,7 +12267,7 @@ function scanInlineInner(
           let len = close + 1 + mref[0].length
           let attrs: Attrs | undefined
           if (mref[2]) {
-            // A digit-first / invalid payload (`{#1a}`) is literal (§14), and an
+            // An invalid payload (`{2=v}`) is literal (§14), and an
             // empty-attr `{…}` is literal too -- neither is consumed.
             if (!isValidInlineAttrPayload(mref[2])) {
               len -= mref[2].length + 2
@@ -12399,7 +12403,7 @@ function scanInlineInner(
         // Optional trailing {attrs} (djot): `<url>{.c}`. An explicit
         // `href` in the block is ignored -- the structural href wins
         // (djot + carve-php), so it never produces a duplicate attribute.
-        // A digit-first / invalid payload (`{#1a}`) is literal (§14), not an
+        // An invalid payload (`{2=v}`) is literal (§14), not an
         // attribute block -- leave it for normal text processing.
         const am = /^\{([^}\n]+)\}/.exec(text.slice(i + consumed))
         if (am && isValidInlineAttrPayload(am[1]!)) {
@@ -12499,7 +12503,7 @@ function scanInlineInner(
       // preceding node and the `{`, so the block is NOT attached -- it stays
       // literal text (`<url> {.x}` keeps `{.x}`). Matches carve-php / carve-rs.
       const attr = !buf && hasBrace ? RE_INLINE_ATTR.exec(rest) : null
-      // A digit-first / otherwise invalid payload (`{#1a}`, `{2=v}`) makes the
+      // A digit-leading key or otherwise invalid payload (`{2=v}`) makes the
       // whole block literal (§14), same strict rule as block/span attrs — so
       // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
       if (attr && out.length && isValidInlineAttrPayload(attr[1]!)) {
@@ -13253,10 +13257,8 @@ function isValidAttrPayload(inner: string): boolean {
   // well as double-quoted) so the same payloads parseAttrs accepts validate
   // as block attributes — otherwise `"a\"b"` strips only to `"a\"` and the
   // rest leaks, falsely rejecting the block.
-  // An attribute name (id, class, key) is a grammar identifier:
-  // `(letter | '_'), {letter | digit | '_' | '-'}` -- it may NOT start with a
-  // digit. A digit-first name (`.123`, `#1`, `2=v`) makes the whole block an
-  // invalid attribute block, so it stays literal (§14) -- stricter than djot.
+  // Explicit ids and classes additionally admit an ASCII digit first. Keys and
+  // booleans keep the narrower identifier grammar, so `2=v` stays literal.
   // The bareword (boolean-attribute) alternative comes after key=value so a
   // `key=value` is consumed whole, and before the separator run. It makes
   // `{disabled}` and `{.c disabled}` valid blocks (boolean attrs) rather than
@@ -13289,7 +13291,7 @@ function isValidAttrPayload(inner: string): boolean {
  * validates as an attribute block that then parses to nothing.
  */
 const ATTR_ITEM_SRC =
-  '(?:#[a-zA-Z_][\\w-]*)|(?:\\.[a-zA-Z_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
+  '(?:#[a-zA-Z0-9_][\\w-]*)|(?:\\.[a-zA-Z0-9_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
 const ATTR_PAYLOAD = new RegExp(
   `^[ \\t\\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\t\\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\t\\n\\r]*)?$`,
 )
@@ -13376,10 +13378,7 @@ export function parseAttrs(src: string): Attrs {
   // strip their delimiters, so `k='{y}'` yields the literal `{y}`. A
   // backslash escapes ASCII punctuation inside a quoted value, so
   // `k="a\"b"` yields the literal `a"b`.
-  // An attribute name is a grammar identifier (letter or `_` first, then
-  // letters / digits / `_` / `-`); a digit-first token is not a valid
-  // attribute and is skipped here (the payload is rejected as invalid
-  // upstream by isValidAttrPayload, so the block stays literal).
+  // Explicit ids/classes admit an ASCII digit first. Keys and booleans do not.
   // The bareword alternative (m[7]) is LAST so `key=value` matches as a
   // key/value, not as a bareword `key` with a leftover `=value`. A bareword is
   // a value-less (boolean) attribute -> rendered `name=""` (djot-php form).
@@ -13389,7 +13388,7 @@ export function parseAttrs(src: string): Attrs {
   // block beneath it to attach to. HTML has no underscore-first boolean
   // attribute to lose, and `{#_id}`, `{._c}` and `{_k=1}` are untouched -
   // none of them ends `_}`, so none of them collides.
-  const re = /(?:#([a-zA-Z_][\w-]*))|(?:\.([a-zA-Z_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
+  const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     if (m[1]) {

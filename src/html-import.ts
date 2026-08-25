@@ -2391,7 +2391,7 @@ class Importer {
           ? classes[0]
           : undefined
     // The writer's own rule, not a copy of it: a class a fence opener cannot
-    // spell (`2col`, `my.class`) would be written after the colons and read
+    // spell (`-2col`, `my.class`) would be written after the colons and read
     // back as a paragraph, so such an element keeps the generic `div` node
     // where the class survives as a class.
     if (kind === undefined || !isContainerKind(kind)) return undefined

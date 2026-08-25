@@ -55,9 +55,9 @@ describe('an inline node spans its trailing attribute block', () => {
   })
 
   it('stops at the content when the payload is invalid', () => {
-    // `{#1a}` is a digit-first identifier: the whole block stays literal (§14),
+    // `{2=v}` is a digit-first attribute key: the whole block stays literal (§14),
     // so it is not the node's markup either.
-    expect(span(first('*x*{#1a}\n'))).toEqual([0, 3])
+    expect(span(first('*x*{2=v}\n'))).toEqual([0, 3])
   })
 
   it('covers both blocks when two are glued in a row', () => {
