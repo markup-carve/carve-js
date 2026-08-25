@@ -908,7 +908,10 @@ function resolveHeadingIdsImpl(
             // target's resolution already wrote in. Repeated crossrefs share
             // the cached immutable tree.
             const source = pristineTargets.get(tgtId) ?? tgt
-            children = deepCloneInlines(source)
+            // A cross-reference label is derived heading display text. Use the
+            // shared R4 path so footnote apparatus and other resolution-only
+            // nodes are not cloned into a second rendered location.
+            children = deriveDisplayNodes(source, true)
             flattenNestedCrossrefs(children)
             // The clone came from the HEADING, so its spans point at the
             // heading's source, not at the `</#id>` this link was written as -
