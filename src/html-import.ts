@@ -1969,9 +1969,14 @@ class Importer {
       // what survived `dropDerived`, so an author's `class` on the section, or
       // an `aria-label` the default does not match, still goes out with a row.
       // Suppressing both together silenced two real losses.
-      if (tag !== 'div' && !this.isDerivedWrapper(node, tag)) {
-        this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
-      }
+      //
+      // WHICH ROW IT EARNS FOLLOWS THE CONTENT, like every other unsupported
+      // element (markup-carve/carve#1738): an empty `<section>` had nothing an
+      // unwrap could preserve. The two exemptions come FIRST and read as
+      // unwrapped, because neither writes an element row at all and the
+      // attribute rows below them keep the sentence they already had.
+      const unwrapped =
+        tag === 'div' || this.isDerivedWrapper(node, tag) || this.reportUnsupportedElement(node, tag, path)
       // THE LABEL IS LIFTED FIRST, because it is half of the test below. This
       // arm never had a lift at all - it lived only on the container-CLASS arm
       // above, so `::: figure [g]` reached it and a plain `<div>` never did.
@@ -2004,6 +2009,7 @@ class Importer {
           this.mode === 'roundtrip' ? restoreHoistedSectionId(tag, attrs, children) : attrs,
           tag,
           path,
+          unwrapped,
         )
       }
       /*
@@ -2053,8 +2059,8 @@ class Importer {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
-    this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
-    this.reportUnwrappedAttributes(node, attrs, tag, path)
+    const unwrapped = this.reportUnsupportedElement(node, tag, path)
+    this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
     return this.blocks(node.childNodes ?? [], path, depth + 1)
   }
 
@@ -2504,10 +2510,79 @@ class Importer {
    * splits `class="a b"` into a row per name; that disagreement is older than
    * this ruling and is not settled here.
    */
-  private reportUnwrappedAttributes(node: P5Node, attrs: Attrs | undefined, tag: string, path: string): void {
+  /**
+   * Whether an element brought anything for an unwrap to leave behind.
+   *
+   * `element-unwrapped` makes a claim about CONTENT: the wrapper went and what
+   * it held stayed. An element that held nothing cannot have been unwrapped -
+   * there was nothing to put in its place - and calling it unwrapped states
+   * something about content that did not happen. `element-dropped` says the
+   * element and its content both went, which for an empty one is exactly true,
+   * and the severity follows: an unwrap preserves text and is `info`, a drop
+   * does not and is `warning` (markup-carve/carve#1738).
+   *
+   * ASKED OF THE INPUT, NOT OF THE OUTPUT. Whether an element had children is a
+   * property of the document handed in, the same framing
+   * markup-carve/carve#1723 used, and it is decidable without correlating the
+   * emitted source back to the node it came from. Reading it off the built
+   * children instead would answer differently for an `<audio><span></span>`,
+   * whose child element is right there in the input and contributes nothing to
+   * the output - and that is a loss belonging to the `<span>`, which reports
+   * its own row.
+   *
+   * NOT A LIST OF TAG NAMES. The four elements markup-carve/carve#1738 names
+   * agree with carve-php whenever they have children and diverge only when they
+   * do not, so the condition is content and a name list would be back next
+   * sweep (markup-carve/carve#1704).
+   *
+   * WHITESPACE IS NOT CONTENT and an ACTIVE element is not either: neither
+   * survives an unwrap, so neither can be what an unwrap preserved. This is
+   * carve-php's `hasImportContentToUnwrap()` predicate, deliberately, because
+   * the point of the ruling is that the two engines answer alike.
+   */
+  private hasContentToUnwrap(node: P5Node): boolean {
+    for (const child of node.childNodes ?? []) {
+      const childTag = child.tagName
+      if (childTag !== undefined) {
+        if (!ACTIVE.has(childTag)) return true
+        continue
+      }
+      if ((child.value ?? child.data ?? '').trim() !== '') return true
+    }
+    return false
+  }
+
+  /**
+   * The row for an element this importer has no mapping for, unwrapped or
+   * dropped by what it carried (markup-carve/carve#1738).
+   *
+   * EVERY ARM THAT WRITES THE GENERAL ROW, which is what keeps the three
+   * engines answering alike. The row is written from three places - a
+   * sectioning wrapper, the four unmapped block tags `address`, `fieldset`,
+   * `form` and `hgroup`, and the inline arm that catches everything else - and
+   * the same tag reaches a different one of them in each engine, so a rule
+   * applied to one arm would have fixed thirty-two shapes and broken seven.
+   *
+   * A `<figure>` is NOT one of them. It has its own rows and its own rulings
+   * (markup-carve/carve#1716, markup-carve/carve#1723), and reaches none of
+   * these three arms.
+   */
+  private reportUnsupportedElement(node: P5Node, tag: string, path: string): boolean {
+    if (this.hasContentToUnwrap(node)) {
+      this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
+
+      return true
+    }
+    this.add('element-dropped', `Dropped empty <${tag}> element`, 'warning', path, node)
+
+    return false
+  }
+
+  private reportUnwrappedAttributes(node: P5Node, attrs: Attrs | undefined, tag: string, path: string, unwrapped = true): void {
     if (attrs === undefined) return
     for (const name of this.attrNames(attrs)) {
-      this.add('attribute-dropped', `Dropped ${name} with the unwrapped <${tag}>: there is no element left to carry it`, 'info', path, node)
+      const what = unwrapped ? `the unwrapped <${tag}>` : `the dropped empty <${tag}>`
+      this.add('attribute-dropped', `Dropped ${name} with ${what}: there is no element left to carry it`, 'info', path, node)
     }
   }
 
@@ -3739,8 +3814,8 @@ class Importer {
       this.add('raw-preserved', `Preserved unsupported <${tag}> element as raw HTML`, 'warning', path, node)
       return [{ type: 'raw_inline', format: 'html', content: serializeOuter(node as never) }]
     }
-    this.add('element-unwrapped', `Unwrapped unsupported <${tag}> element`, 'info', path, node)
-    this.reportUnwrappedAttributes(node, attrs, tag, path)
+    const unwrapped = this.reportUnsupportedElement(node, tag, path)
+    this.reportUnwrappedAttributes(node, attrs, tag, path, unwrapped)
     return children
   }
 
