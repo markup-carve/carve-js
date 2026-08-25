@@ -428,11 +428,21 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
     const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
     const rendered = `| ${cells.join(' | ')} |`
     if (row.cells.every((cell) => cell.header)) {
-      header = rendered
-      headerColumns = cells.length
+      if (header === undefined) aligns.length = 0
       row.cells.forEach((cell, i) => {
-        if (aligns[i] === undefined) aligns[i] = cell.align
+        // Multiple header rows collapse to Markdown's one header row. The
+        // last header that specifies a column alignment wins in Carve, so the
+        // delimiter must use the same effective value.
+        if (cell.align !== undefined) aligns[i] = cell.align
       })
+      if (header === undefined) {
+        header = rendered
+        headerColumns = cells.length
+      } else {
+        // Markdown cannot keep this row as another header, but dropping it
+        // would violate the presentation target's content floor.
+        rows.push(rendered)
+      }
     } else {
       rows.push(rendered)
       // A headerless table still declares its columns somewhere, so fall back to
