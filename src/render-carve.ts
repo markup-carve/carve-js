@@ -2168,7 +2168,8 @@ function renderTable(node: Table, ctx: CarveContext): string {
   if (needsDelimiter) {
     rows.splice(1, 0, `|${Array.from({ length: first!.cells.length }, () => '---').join('|')}|`)
   }
-  if (node.caption) rows.push(`^ ${renderInlines(node.caption, ctx)}`)
+  const caption = node.caption === undefined ? undefined : captionRow(node.caption, ctx)
+  if (caption !== undefined) rows.push(caption)
   return rows.join('\n')
 }
 
@@ -2282,8 +2283,34 @@ function escapeSpanMarkerPayload(payload: string, attrs: Attrs | undefined): str
  * spells something (PART 11 §7) and keeps its line.
  */
 function captionLine(caption: InlineNode[], ctx: CarveContext): string {
+  const row = captionRow(caption, ctx)
+
+  return row === undefined ? '' : `\n${row}`
+}
+
+/**
+ * The same rule for the one caption slot that is not a `^ ` line UNDER a block:
+ * a table's own caption, which is written as the last ROW of the table itself
+ * (markup-carve/carve-js#1496).
+ *
+ * `renderTable` tested `node.caption` for truthiness and wrote the line
+ * unconditionally, so a table carrying an empty caption run - which
+ * `<table><caption></caption>` imports to, and which an AST ingest can hand in
+ * directly - wrote a bare `^`. That is not a caption line: it re-reads as a
+ * paragraph holding a literal caret, so the document came back saying something
+ * the tree never said, with an empty report. Exactly the addition
+ * markup-carve/carve-js#1423 removed for every FIGURE host; the table's own slot
+ * was simply not covered.
+ *
+ * ONE PREDICATE FOR BOTH SLOTS, which is the point of extracting it: the near
+ * miss is a second mechanism that agrees today and drifts on the next clause.
+ * A caption holding a NO-BREAK SPACE spells something (PART 11 §7) and keeps its
+ * line in both.
+ */
+function captionRow(caption: InlineNode[], ctx: CarveContext): string | undefined {
   const written = renderInlines(caption, ctx)
-  return trimNonNbsp(written) === '' ? '' : `\n^ ${written}`
+
+  return trimNonNbsp(written) === '' ? undefined : `^ ${written}`
 }
 
 /**
