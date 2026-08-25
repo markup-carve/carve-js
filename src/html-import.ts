@@ -3573,7 +3573,15 @@ class Importer {
           ;(target as { attrs?: Attrs }).attrs = mergeAttrs(attrs, (target as { attrs?: Attrs }).attrs ?? {})
         }
         this.add('element-unwrapped', FIGCAPTION_DETACHED, 'warning', captionPath, captionNode as P5Node)
-        return [target, ...targets.slice(1), { type: 'paragraph' as const, children: caption }]
+        /*
+         * DIRECTLY AFTER THE TABLE, which is what the row says and what the
+         * ordinary rebuild does: a figure's caption stays with its target, and a
+         * body block the figure also held follows both. Appending it to the end
+         * instead put a trailing `<p>` between the table and its own caption -
+         * so a figure holding a table and a paragraph came back with the caption
+         * text reading as a note on the paragraph.
+         */
+        return [target, { type: 'paragraph' as const, children: caption }, ...targets.slice(1)]
       }
       /*
        * PART 12 §16: the wrapper around a TABLE is the one figure this import

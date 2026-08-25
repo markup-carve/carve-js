@@ -169,6 +169,17 @@ describe('a figure caption and a table caption both survive the import', () => {
     }
   })
 
+  it('writes the detached caption directly after the table it captioned', () => {
+    // A figure's caption stays with its TARGET, so a body block the figure also
+    // held follows both. Appending it to the end put that block between the
+    // table and its own caption, and the row promises a paragraph after the
+    // table.
+    const withBody =
+      '<figure id="f"><table><caption>T</caption><tr><td>a</td></tr></table>' +
+      '<figcaption>Cap</figcaption><p>Next</p></figure>'
+    expect(htmlToCarve(withBody, { mode: 'safe' }).value).toBe('{#f}\n| a |\n^ T\n\nCap\n\nNext\n')
+  })
+
   /*
    * THE TABLE IS THE ONLY TARGET IN THE COLLISION. A quote, a code block and an
    * image have no caption of their own, so the figure's `^ ` line is
