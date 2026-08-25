@@ -271,15 +271,20 @@ describe('table caption on import', () => {
       .toBe('| 1 |\n^ Outer')
   })
 
-  it('keeps the table\'s own caption when a figure also captions it, and says so', () => {
-    // Two captions, one slot. Carve cannot spell the figure WRAPPER around a
-    // table at all, so the figure's caption is the one that cannot survive.
-    // Writing both produced a second `^ ` line that re-read as a paragraph.
+  it('keeps BOTH captions when a figure captions a table that already has one', () => {
+    // Two captions, one slot (ruling markup-carve/carve-js#1488). The table
+    // keeps the `^ ` line and the figcaption's text follows as a paragraph, so
+    // the role is lost and neither author's words are. Writing both `^ ` lines
+    // produced a second one that re-read as a literal paragraph, which is the
+    // addition no mode is licensed to make.
     const html =
       '<figure><table><caption>Inner</caption><tbody><tr><td>1</td></tr></tbody></table><figcaption>Outer</figcaption></figure>'
-    expect(carve(html)).toBe('| 1 |\n^ Inner')
-    expect(codes(html)).toEqual(['table-degraded'])
-    expect(carveToHtml(carve(html))).not.toContain('<p>^')
+    expect(carve(html)).toBe('| 1 |\n^ Inner\n\nOuter')
+    expect(codes(html)).toEqual(['element-unwrapped'])
+    const rendered = carveToHtml(carve(html))
+    expect(rendered).toContain('<caption>Inner</caption>')
+    expect(rendered).toContain('Outer')
+    expect(rendered).not.toContain('^')
   })
 })
 

@@ -74,24 +74,28 @@ describe('an element consumed for its children reports its own attributes', () =
   }
 
   /*
-   * THE SIXTH SITE, and the only one where the element goes WHOLE. A figure
-   * wrapping a table that carries its own `<caption>` drops the `<figcaption>`
-   * entirely - `table-degraded` says so, and says nothing about what rode on
-   * it, so an attribute there was stripped with no `attribute-dropped` row.
-   * That is the same silence as the other five, reached by a different path.
+   * THE SIXTH SITE. A figure wrapping a table that carries its own `<caption>`
+   * used to drop the `<figcaption>` whole, so an attribute there was stripped
+   * with no `attribute-dropped` row - the same silence as the other five,
+   * reached by a different path.
+   *
+   * The element no longer goes whole: markup-carve/carve-js#1488 detaches its
+   * TEXT into a paragraph after the table, because authored text may not be
+   * spent to reach a simpler shape. Its attributes still have nowhere to go,
+   * and the row is now the ordinary caption-slot one the other five print,
+   * which is the point - the site stopped being special.
    */
-  it('says so when it drops a figcaption with the figure-wrapped table it captioned', () => {
+  it('says so when it drops a figcaption from a figure-wrapped captioned table', () => {
     const html =
       '<figure><table><caption>t</caption><tr><td>a</td></tr></table>' +
       '<figcaption onclick="x()">c</figcaption></figure>'
-    const codes = htmlToCarve(html).report.diagnostics.map((d) => d.code)
-    expect(codes).toContain('table-degraded')
-    expect(codes).toContain('attribute-dropped')
+    const dropped = htmlToCarve(html).report.diagnostics.filter(
+      (d) => d.code === 'attribute-dropped',
+    )
+    expect(dropped.map((d) => d.path)).toContain('/figure[1]/figcaption[2]')
   })
 
-  it('names the element rather than the slot when the caption goes whole', () => {
-    // The wording differs from the other five on purpose: nothing was refused
-    // for want of a slot, the element it would have ridden on is gone.
+  it('names the slot for a figcaption whose text is detached into a paragraph', () => {
     const html =
       '<figure><table><caption>t</caption><tr><td>a</td></tr></table>' +
       '<figcaption id="q">c</figcaption></figure>'
@@ -99,7 +103,7 @@ describe('an element consumed for its children reports its own attributes', () =
       (d) => d.code === 'attribute-dropped',
     )
     expect(dropped?.message).toBe(
-      'Dropped id with the <figcaption>: the element itself is not kept',
+      'Dropped id on <figcaption>: a caption line has no attribute slot',
     )
   })
 

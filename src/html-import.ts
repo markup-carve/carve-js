@@ -17,6 +17,7 @@ import type {
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
 import { isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
+import { mergeAttrs } from './parse.js'
 import {
   DANGEROUS_URL_SCHEMES,
   LABEL_DEFAULTS,
@@ -223,6 +224,16 @@ const FIGURE_REBUILDS = new Set(['image', 'block_quote', 'code_block', 'table'])
  * which pins the whole firing surface rather than the two shapes that moved.
  */
 const FIGURE_UNWRAPPED = 'Unwrapped unsupported <figure> element'
+/**
+ * The row a figure-wrapped table's own caption costs the figure's
+ * (markup-carve/carve-js#1488).
+ *
+ * Says where the text WENT, because it did not go anywhere else and a reader of
+ * the report has to be able to find it: the words are in the document, one block
+ * further down, as prose rather than as a caption.
+ */
+const FIGCAPTION_DETACHED =
+  "Detached a <figcaption> into a paragraph after the table: the table's own <caption> fills Carve's one caption slot, so the figure's caption keeps its text and loses its role"
 
 /**
  * Is a separator needed between what is already in the slot and what follows?
@@ -3395,44 +3406,48 @@ class Importer {
     const targets = this.blocks(body, path, depth + 1, bodyPaths)
     const target = this.captionHost(targets[0])
     const captionable = target !== undefined && FIGURE_REBUILDS.has(target.type)
-    if (captionable && target.type === 'table' && (target as { caption?: unknown }).caption && captionNode) {
-      /*
-       * A table brings its own caption slot, so a figure-wrapped table can
-       * arrive carrying TWO captions - its own `<caption>` and the figure's
-       * `<figcaption>`. Carve spells one `^ ` line per host, and the wrapper
-       * itself has no spelling at all, so the figure's caption is the one that
-       * cannot survive. Keeping both wrote two `^ ` lines, and the second
-       * re-read as a literal paragraph.
-       */
-      this.add(
-        'table-degraded',
-        'Dropped a <figcaption> from a figure wrapping a table that carries its own <caption>: Carve spells one caption per table',
-        'warning',
-        captionPath,
-        captionNode,
-      )
-      /*
-       * THE SIXTH CAPTION SITE, and the only one where the element goes WHOLE.
-       * `table-degraded` above says the caption was dropped, and says nothing
-       * about what rode on it - so an `onclick` here was stripped with no
-       * `attribute-dropped` row, which is the same silence this change removes
-       * everywhere else. The call is what reports it: an event handler is
-       * diagnosed inside `attrs()`, and anything it kept is named here, because
-       * the element it would have ridden on is gone.
-       */
-      const own = this.attrs(captionNode, captionPath)
-      if (own) {
-        this.add(
-          'attribute-dropped',
-          `Dropped ${this.attrNames(own).join(', ')} with the <figcaption>: the element itself is not kept`,
-          'warning',
-          captionPath,
-          captionNode,
-        )
-      }
-      return [target, ...targets.slice(1)]
-    }
     const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
+    /*
+     * TWO CAPTIONS AND ONE SLOT (ruling markup-carve/carve-js#1488).
+     *
+     * A table brings its OWN caption slot, so a figure-wrapped table can arrive
+     * carrying two captions - the table's `<caption>` and the figure's
+     * `<figcaption>` - and Carve has one `^ ` line to spell them with. It is the
+     * only target that does this: a quote, a code block and an image have no
+     * caption of their own, so the figure's `^ ` line is uncontested there, and
+     * a nested `<figure>` or a `carve-figure-group` is not a rebuild target at
+     * all and takes the raw-preserve/unwrap pair below instead.
+     *
+     * NEITHER CAPTION MAY BE THROWN AWAY, and neither may be invented. Writing
+     * both `^ ` lines is the invention: the second re-reads as a literal
+     * paragraph, so the document comes back holding a `^` its author never typed
+     * (ruling markup-carve/carve-php#1731). Dropping the `<figcaption>` is the
+     * loss, and it is authored TEXT rather than structure, which is the one
+     * thing an import may not spend to reach a simpler shape.
+     *
+     * So the two exits split, exactly as markup-carve/carve#1704 already splits
+     * every other figure: `roundtrip` PRESERVES the whole element, because no
+     * Carve spelling reproduces it, and `safe`/`semantic` rebuild the table with
+     * its own `<caption>` and write the figcaption as a following PARAGRAPH.
+     * Both texts survive either way. What the lossy modes spend is the caption
+     * ROLE, and one row names it.
+     *
+     * BOTH CAPTIONS HAVE TO SPELL SOMETHING for there to be a collision at all.
+     * An EMPTY `<caption>` fills no slot - the table writes no `^ ` line from it
+     * - so the figure's caption takes the slot as it always did; and an empty
+     * `<figcaption>` is not a caption to detach, so the wrapper unwraps with the
+     * declared row below. Testing the table's caption for mere PRESENCE reads
+     * `[]` as taken and wrote a bare `^` line, which is not a caption line at
+     * all: it re-reads as a literal caret, the exact addition this ruling
+     * removes (markup-carve/carve-js#1423 saw the same shape).
+     */
+    const doubleCaption =
+      captionable &&
+      target !== undefined &&
+      target.type === 'table' &&
+      this.captionSpellsSomething((target as { caption?: InlineNode[] }).caption ?? []) &&
+      captionNode !== undefined &&
+      this.captionSpellsSomething(caption)
     /*
      * `roundtrip` PRESERVES THE ELEMENT WHEN NO CARVE SPELLING REPRODUCES IT
      * (markup-carve/carve#1704). It is the only mode that CAN preserve; which
@@ -3483,7 +3498,7 @@ class Importer {
      * with the declared `element-unwrapped` row below, in every mode, and that
      * boundary is unchanged by this ruling.
      */
-    if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && !captionable) {
+    if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && (!captionable || doubleCaption)) {
       this.restore(before)
       this.preserveOwnAttributes(node)
       this.add('raw-preserved', 'Preserved a <figure> as raw HTML: no Carve spelling reproduces a figure around this target', 'warning', path, node)
@@ -3518,6 +3533,55 @@ class Importer {
         this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
         this.reportUnwrappedAttributes(node, attrs, 'figure', path)
         return targets
+      }
+      /*
+       * AN EMPTY `<caption>` FILLS NO SLOT, so the figure's caption takes it and
+       * the table's own is removed rather than carried. Left in place it reached
+       * the writer as a caption line spelling nothing, which is a bare `^` and
+       * not a caption line at all (markup-carve/carve-js#1423): the table wrote
+       * one caret of its own and the figure wrote another, so an input holding a
+       * single caption came back as two literal ones.
+       */
+      if (
+        target.type === 'table' &&
+        !this.captionSpellsSomething((target as { caption?: InlineNode[] }).caption ?? [])
+      ) {
+        delete (target as { caption?: InlineNode[] }).caption
+      }
+      /*
+       * THE DOUBLE-CAPTION REBUILD (ruling markup-carve/carve-js#1488), reached
+       * only by the modes that could not preserve: `roundtrip` returned above.
+       *
+       * The table is written with its own `<caption>` and the figcaption's text
+       * follows as a paragraph, which loses the association and no bytes. ONE
+       * row is owed and it names the `<figcaption>` - not `table-degraded`,
+       * which says a table was degraded and nothing about where a caption went,
+       * and not `structure-unspellable`, which is the row for the wrapper that
+       * disappears when a figure around a table is BUILT. Nothing is built here.
+       *
+       * THE FIGURE'S ATTRIBUTES RIDE ONTO THE TABLE, under the merge
+       * markup-carve/carve#1721 rules for a rebuilt figure: the figure's
+       * attribute line comes first and the target's wins the names both set. The
+       * arm used to drop them outright, so an `id` an anchor pointed at went
+       * with zero rows - the exact silence that ruling removed for every other
+       * figure, still standing in this one. The collision is declared by the
+       * same buffer as everywhere else, so equal values report too.
+       */
+      if (doubleCaption) {
+        this.recordDisplacedFigureAttrs(node, path, attrs, target)
+        if (attrs) {
+          ;(target as { attrs?: Attrs }).attrs = mergeAttrs(attrs, (target as { attrs?: Attrs }).attrs ?? {})
+        }
+        this.add('element-unwrapped', FIGCAPTION_DETACHED, 'warning', captionPath, captionNode as P5Node)
+        /*
+         * DIRECTLY AFTER THE TABLE, which is what the row says and what the
+         * ordinary rebuild does: a figure's caption stays with its target, and a
+         * body block the figure also held follows both. Appending it to the end
+         * instead put a trailing `<p>` between the table and its own caption -
+         * so a figure holding a table and a paragraph came back with the caption
+         * text reading as a note on the paragraph.
+         */
+        return [target, { type: 'paragraph' as const, children: caption }, ...targets.slice(1)]
       }
       /*
        * PART 12 §16: the wrapper around a TABLE is the one figure this import
