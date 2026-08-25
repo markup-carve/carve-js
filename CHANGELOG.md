@@ -28,6 +28,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A fenced percent block and its payload are one invisible block for list looseness.** Visible-looking payload no longer turns an otherwise tight item into a loose one.
 - **Authored block bases now carry opaque fence payloads and attached captions as one structural group.** Fence-shaped payload text is no longer rescanned, and captions on over-indented images, tables, or code blocks stay attached.
 - **Recognized block groups authored past a definition or footnote body's minimum column now parse at their authored local base and format back to the canonical column** (markup-carve/carve#1729). This aligns those containers with list-item authored bases; plain lazy continuation and below-column behavior are unchanged.
 - **Recognized block groups authored past a list item's canonical content column now parse at their authored local base and format back to the canonical column** (#1470, markup-carve/carve#1705). Exact-column and below-column parsing are unchanged. This is a source-compatibility change: `list-item-block-overindented` identifies spellings whose older literal reading changed, while `list-item-body-detached` identifies block-shaped lines that remain below the minimum column.
