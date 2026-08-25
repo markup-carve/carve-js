@@ -6195,7 +6195,7 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
 
 // Fenced block quote. parseDiv's shape exactly, with no label slot and a
 // block_quote node instead of a div (markup-carve/carve#1718).
-function parseQuoteBlock(lexer: Lexer): BlockQuote {
+function parseQuoteBlock(lexer: Lexer): BlockQuote | Figure {
   const openLineIndex = lexer.pos
   const m = RE_QUOTE_BLOCK_OPEN.exec(lexer.consume())!
   const fence = m[1]!.length
@@ -6205,7 +6205,31 @@ function parseQuoteBlock(lexer: Lexer): BlockQuote {
     fenceWidth: fence,
   })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
-  return { type: 'block_quote', fenced: true, children: parseBlocks(subLexer, 0) }
+  const bq: BlockQuote = { type: 'block_quote', fenced: true, children: parseBlocks(subLexer, 0) }
+  const quoteEndIndex = lexer.pos
+  // §4's seventh caption host. The slot hangs on the CLOSING fence, as the
+  // figure group's does, and what it produces is what the PREFIXED spelling
+  // produces: a captioned quote is a figure either way, because the two
+  // spellings are one node and §4's rule reads the node (carve#1742).
+  // A quote auto-closed at end of input has no closer line to host the slot,
+  // and there the lexer is already exhausted so the lookahead finds nothing.
+  let lookahead = 0
+  while (!lexer.eof() && isBlankLine(lexer.peek(lookahead))) lookahead++
+  const next = lexer.peek(lookahead)
+  if (next) {
+    const cap = RE_CAPTION.exec(next)
+    // §4: adjacent, or across at most ONE blank line.
+    if (cap && lookahead <= 1) {
+      for (let i = 0; i <= lookahead; i++) lexer.consume()
+      // The TARGET keeps its own span, as every other caption host's does.
+      // Wrapping without this left a captioned fenced quote as the one block
+      // quote in the vocabulary with no `pos`, which the position rules would
+      // report the moment a corpus document reached the shape.
+      attachBlockPos(lexer, bq, openLineIndex, quoteEndIndex)
+      return { type: 'figure', target: bq, caption: parseCaptionInline(lexer, cap[1]!) } as Figure
+    }
+  }
+  return bq
 }
 
 function parseDiv(lexer: Lexer): Div {
