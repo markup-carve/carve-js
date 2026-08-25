@@ -139,7 +139,7 @@ export interface ParseOptions {
 }
 
 export interface UnclosedContainer {
-  kind: 'div' | 'admonition' | 'line block' | 'hard-break block'
+  kind: 'div' | 'admonition' | 'line block' | 'hard-break block' | 'block quote'
   line: number
   column: number
   startOffset: number
@@ -607,6 +607,13 @@ const RE_LINE_BLOCK_OPEN = /^(:{3,}) +\|[ \t]*$/
 // with no leading-whitespace preservation. carve spec #207 / 88-line-blocks;
 // matches carve-rs / carve-php (carve-js was the lagging impl).
 const RE_HARDBREAKS_OPEN = /^(:{3,}) +\\[ \t]*$/
+// Fenced block quote: a colon fence plus a bare '>' type token. A second
+// SPELLING of the block quote, not a new block: the body is parsed as ordinary
+// blocks and the node is the one a '> ' prefix produces, so the two forms are
+// the same tree. Third member of the sigil-fence family beside the line block
+// and the hard-break block, and it takes the same required space before the
+// token (markup-carve/carve#1718).
+const RE_QUOTE_BLOCK_OPEN = /^(:{3,}) +>[ \t]*$/
 // Generic fenced div: a bare `:::` opener with NO type word (djot's generic
 // container). A typed `::: word` routes to parseAdmonition. An inline
 // `::: {.class}` is NOT a div (strict djot) -- use a preceding attribute
@@ -2529,7 +2536,8 @@ function isColonFenceOpener(line: string): boolean {
     RE_DIV_OPEN.test(line) ||
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     RE_LINE_BLOCK_OPEN.test(line) ||
-    RE_HARDBREAKS_OPEN.test(line)
+    RE_HARDBREAKS_OPEN.test(line) ||
+    RE_QUOTE_BLOCK_OPEN.test(line)
   )
 }
 
@@ -4198,6 +4206,7 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   }
   if (RE_LINE_BLOCK_OPEN.test(line)) return parseLineBlock(lexer)
   if (RE_HARDBREAKS_OPEN.test(line)) return parseHardBreaksBlock(lexer)
+  if (RE_QUOTE_BLOCK_OPEN.test(line)) return parseQuoteBlock(lexer)
   // A typed `::: word` admonition opens immediately; if no exact closer appears
   // ahead, it auto-closes at EOF.
   if (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line))
@@ -5495,13 +5504,15 @@ function colonFenceOpenerLen(line: string): number | null {
     RE_DIV_OPEN.exec(line) ??
     (RE_ADMONITION_CLOSE.test(line) ? null : RE_ADMONITION_OPEN.exec(line)) ??
     RE_LINE_BLOCK_OPEN.exec(line) ??
-    RE_HARDBREAKS_OPEN.exec(line)
+    RE_HARDBREAKS_OPEN.exec(line) ??
+    RE_QUOTE_BLOCK_OPEN.exec(line)
   return m ? m[1]!.length : null
 }
 
 function colonFenceKind(line: string): UnclosedContainer['kind'] {
   if (RE_LINE_BLOCK_OPEN.test(line)) return 'line block'
   if (RE_HARDBREAKS_OPEN.test(line)) return 'hard-break block'
+  if (RE_QUOTE_BLOCK_OPEN.test(line)) return 'block quote'
   if (RE_ADMONITION_OPEN.test(line)) return 'admonition'
   return 'div'
 }
@@ -6176,6 +6187,21 @@ function parseHardBreaksBlock(lexer: Lexer): Div {
     attrs: { classes: ['hardbreaks'], order: ['.class'] },
     children,
   }
+}
+
+// Fenced block quote. parseDiv's shape exactly, with no label slot and a
+// block_quote node instead of a div (markup-carve/carve#1718).
+function parseQuoteBlock(lexer: Lexer): BlockQuote {
+  const openLineIndex = lexer.pos
+  const m = RE_QUOTE_BLOCK_OPEN.exec(lexer.consume())!
+  const fence = m[1]!.length
+  const inner = collectColonFenceBody(lexer, {
+    kind: 'block quote',
+    lineIndex: openLineIndex,
+    fenceWidth: fence,
+  })
+  const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+  return { type: 'block_quote', fenced: true, children: parseBlocks(subLexer, 0) }
 }
 
 function parseDiv(lexer: Lexer): Div {
@@ -6883,7 +6909,8 @@ function classifyQuotedLine(
     RE_DIV_OPEN.test(content) ||
     (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
     RE_LINE_BLOCK_OPEN.test(content) ||
-    RE_HARDBREAKS_OPEN.test(content)
+    RE_HARDBREAKS_OPEN.test(content) ||
+    RE_QUOTE_BLOCK_OPEN.test(content)
   ) {
     // ...unless the paragraph above already absorbed a MALFORMED fence and this
     // line is a bare run, in which case §12 takes it as text too and the
@@ -7370,7 +7397,8 @@ function lineOpensBlock(line: string): boolean {
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     RE_DIV_OPEN.test(line) ||
     RE_LINE_BLOCK_OPEN.test(line) ||
-    RE_HARDBREAKS_OPEN.test(line)
+    RE_HARDBREAKS_OPEN.test(line) ||
+    RE_QUOTE_BLOCK_OPEN.test(line)
   )
 }
 
@@ -7397,6 +7425,7 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
     RE_DIV_OPEN.test(line) ||
     RE_LINE_BLOCK_OPEN.test(line) ||
     RE_HARDBREAKS_OPEN.test(line) ||
+    RE_QUOTE_BLOCK_OPEN.test(line) ||
     // No RE_ABBR_DEF: a lazy line is item content, so the definition form is
     // not recognized and the line folds into the item as text.
     //
@@ -7451,7 +7480,8 @@ function colonFenceShapeEndsLazyContinuation(line: string): boolean {
     (RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) ||
     RE_DIV_OPEN.test(line) ||
     RE_LINE_BLOCK_OPEN.test(line) ||
-    RE_HARDBREAKS_OPEN.test(line)
+    RE_HARDBREAKS_OPEN.test(line) ||
+    RE_QUOTE_BLOCK_OPEN.test(line)
   )
 }
 
@@ -7463,7 +7493,8 @@ function isLiteralColonFenceLine(line: string): boolean {
     !(RE_ADMONITION_OPEN.test(line) && !RE_ADMONITION_CLOSE.test(line)) &&
     !RE_DIV_OPEN.test(line) &&
     !RE_LINE_BLOCK_OPEN.test(line) &&
-    !RE_HARDBREAKS_OPEN.test(line)
+    !RE_HARDBREAKS_OPEN.test(line) &&
+    !RE_QUOTE_BLOCK_OPEN.test(line)
   )
 }
 
@@ -7665,6 +7696,7 @@ function colonBlockOpenerRun(line: string): number | null {
     (RE_ADMONITION_CLOSE.test(line) ? null : RE_ADMONITION_OPEN.exec(line)) ??
     RE_LINE_BLOCK_OPEN.exec(line) ??
     RE_HARDBREAKS_OPEN.exec(line) ??
+    RE_QUOTE_BLOCK_OPEN.exec(line) ??
     RE_DIV_OPEN.exec(line)
 
   return m ? m[1]!.length : null
@@ -8498,7 +8530,8 @@ function trackItemLazyState(
     RE_DIV_OPEN.test(content) ||
     (RE_ADMONITION_OPEN.test(content) && !RE_ADMONITION_CLOSE.test(content)) ||
     RE_LINE_BLOCK_OPEN.test(content) ||
-    RE_HARDBREAKS_OPEN.test(content)
+    RE_HARDBREAKS_OPEN.test(content) ||
+    RE_QUOTE_BLOCK_OPEN.test(content)
   ) {
     // ...unless the paragraph above it already absorbed a malformed fence AND
     // this line is a BARE run, in which case §12 takes it as text too and the
@@ -8824,7 +8857,8 @@ function parseList(lexer: Lexer): List {
       !RE_DIV_OPEN.test(content) &&
       !RE_ADMONITION_OPEN.test(content) &&
       !RE_LINE_BLOCK_OPEN.test(content) &&
-      !RE_HARDBREAKS_OPEN.test(content)
+      !RE_HARDBREAKS_OPEN.test(content) &&
+      !RE_QUOTE_BLOCK_OPEN.test(content)
     while (!lexer.eof()) {
       const l = lexer.peek()!
       if (isBlankLine(l)) {
@@ -10375,7 +10409,8 @@ function startsInterruptingBlock(
         (RE_ADMONITION_OPEN.test(ln) && !RE_ADMONITION_CLOSE.test(ln)) ||
         RE_DIV_OPEN.test(ln) ||
         RE_LINE_BLOCK_OPEN.test(ln) ||
-        RE_HARDBREAKS_OPEN.test(ln)
+        RE_HARDBREAKS_OPEN.test(ln) ||
+        RE_QUOTE_BLOCK_OPEN.test(ln)
       )
         return true
       // A definition-list term (`::`) is a first-class block opener (carve#295):
