@@ -15,8 +15,8 @@
  *
  * ALL THREE MODES, because the two call sites are reached differently in each:
  * `roundtrip` preserves a captioned figure it cannot rebuild as raw HTML rather
- * than unwrapping it (markup-carve/carve#1704), so three of the shapes below
- * report in `safe` and `semantic` and are silent in `roundtrip`. An earlier
+ * than unwrapping it (markup-carve/carve#1704), so the `UNWRAPS_OUTSIDE_ROUNDTRIP`
+ * shapes report in `safe` and `semantic` and are silent in `roundtrip`. An earlier
  * draft of this file passed a mode name that is not one of the three; the
  * import took it, behaved like none of them, and the file measured a surface
  * the library does not have. `HtmlImportMode` is named here so a typo is a type
@@ -72,18 +72,14 @@ const UNWRAPS_OUTSIDE_ROUNDTRIP: Array<[string, string]> = [
   ['a list', '<figure><ul><li>a</li></ul><figcaption>Cap</figcaption></figure>'],
   ['a heading', '<figure><h2>H</h2><figcaption>Cap</figcaption></figure>'],
   ['a list, with attributes to place', '<figure id="f"><ul><li>a</li></ul><figcaption>Cap</figcaption></figure>'],
-]
-
-/*
- * Two shapes that reached NEITHER call site before the change, so the assertion
- * is bounded on both sides. Whether that silence is right is a different
- * question: measured against the sibling engines on the same inputs, carve-rs
- * and carve-php both report the two-block shape and carve-php also reports the
- * div shape. That is a disagreement about WHETHER the row fires, not about what
- * it says, and carve#1716 ruled only the latter - so it is pinned here as
- * today's behavior for a later ruling to move off, not fixed in passing.
- */
-const SILENT_TODAY: Array<[string, string]> = [
+  // THE THREE ROWS THIS FILE PINNED AS SILENT, now reporting. They were listed
+  // as a bounded absence, with the note that carve-rs and carve-php reported
+  // shapes carve-js did not - a disagreement about WHETHER the row fires, left
+  // for a later ruling. markup-carve/carve-php#1731 is that ruling: a target
+  // that cannot carry a caption line unwraps in the lossy modes rather than
+  // writing a line the target absorbs, so each of these reaches the unwrap and
+  // says the same one sentence as every other.
+  ['a paragraph', '<figure id="f"><p>x</p><figcaption>Cap</figcaption></figure>'],
   ['two body blocks under one caption', '<figure><p>a</p><p>b</p><figcaption>Cap</figcaption></figure>'],
   ['a div body', '<figure><div>x</div><figcaption>Cap</figcaption></figure>'],
 ]
@@ -94,9 +90,6 @@ describe('an unwrapped figure reports like every other unwrapped element', () =>
       expect(rows(html, mode)).toEqual([ROW])
     })
 
-    it.each(SILENT_TODAY)('stays silent where it was silent before: %s', (_name, html) => {
-      expect(rows(html, mode)).toEqual([])
-    })
   })
 
   describe.each(['safe', 'semantic'] as HtmlImportMode[])('in %s mode', (mode) => {
@@ -120,7 +113,7 @@ describe('an unwrapped figure reports like every other unwrapped element', () =>
   it('says one thing at one severity across the whole surface', () => {
     const seen = new Set<string>()
     for (const mode of MODES) {
-      for (const [, html] of [...UNWRAPS_IN_EVERY_MODE, ...UNWRAPS_OUTSIDE_ROUNDTRIP, ...SILENT_TODAY]) {
+      for (const [, html] of [...UNWRAPS_IN_EVERY_MODE, ...UNWRAPS_OUTSIDE_ROUNDTRIP]) {
         for (const row of rows(html, mode)) seen.add(row)
       }
     }
