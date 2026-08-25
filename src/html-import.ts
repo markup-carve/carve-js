@@ -3258,7 +3258,15 @@ class Importer {
    * THE MERGE DECIDES WHICH NAMES ARE LOST, and it treats them differently:
    *
    * - `id` is a single slot, so the later line's value replaces the earlier
-   *   one and the figure's id is gone.
+   *   one and one of the two ids is gone.
+   *
+   *   WHICH ONE depends on the values, which is why the row names the COLLISION
+   *   rather than a side. Different values lose the figure's. EQUAL values
+   *   still lose one: `<figure id="x"><blockquote id="x">` comes back as
+   *   `<figure id="x"><blockquote>`, so the value survives and the target's own
+   *   attribute does not. A row is owed either way, and suppressing it when the
+   *   values match - which reads like the obvious simplification - would turn
+   *   that case into the silent drop this ruling exists to remove.
    * - a key-value pair is the same slot rule under a name.
    * - `class` is a SET: the two lines union, so nothing is displaced and no
    *   row is owed. Reporting one here would name a class the output still
@@ -4184,7 +4192,7 @@ class Importer {
     for (const { node, path, name } of this.displacedFigureAttrs) {
       this.add(
         'attribute-dropped',
-        `Dropped ${name} on <figure>: its target sets ${name} as well, and the two attribute lines merge into one that keeps the target's value`,
+        `Dropped one ${name} on <figure>: the figure and its target both set ${name}, and their two attribute lines merge into a single value`,
         'info',
         path,
         node,

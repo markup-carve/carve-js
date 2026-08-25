@@ -32,6 +32,13 @@
  * pinned below, because a message claiming the target ELEMENT keeps its id
  * would be false on two of the three arms.
  *
+ * EQUAL VALUES STILL LOSE ONE OF THE TWO, which is why the row names the
+ * COLLISION rather than a side. `<figure id="x"><blockquote id="x">` comes back
+ * as `<figure id="x"><blockquote>`: the value survives and the target's own
+ * attribute does not. Suppressing the row when the values match reads like the
+ * obvious simplification and would turn that case into the silent drop this
+ * ruling exists to remove, so a case below pins it firing.
+ *
  * THE IMAGE ARM IS THE CONTROL. An image writes its attributes inline, after
  * the destination, so the figure's line and the image's braces never meet.
  * Nothing about that arm changes, and the case that says so fails if a later
@@ -43,7 +50,7 @@ import { carveToHtml, htmlToCarve } from '../src/index.js'
 
 const MODES: HtmlImportMode[] = ['safe', 'semantic', 'roundtrip']
 
-const DISPLACED_ID = "info :: attribute-dropped :: Dropped id on <figure>: its target sets id as well, and the two attribute lines merge into one that keeps the target's value"
+const DISPLACED_ID = "info :: attribute-dropped :: Dropped one id on <figure>: the figure and its target both set id, and their two attribute lines merge into a single value"
 const UNSPELLABLE =
   'warning :: structure-unspellable :: A figure wrapping a table has no Carve spelling; the caption is written on the table, which renders <caption> inside it'
 
@@ -123,7 +130,7 @@ describe('a figure and its target both carrying attributes', () => {
     const { carve, rows } = imported('<figure data-k="1"><blockquote data-k="2"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)
     expect(carve).toBe('{data-k=1}\n{data-k=2}\n> a\n^ Cap\n')
     expect(rows).toEqual([
-      "info :: attribute-dropped :: Dropped data-k on <figure>: its target sets data-k as well, and the two attribute lines merge into one that keeps the target's value",
+      "info :: attribute-dropped :: Dropped one data-k on <figure>: the figure and its target both set data-k, and their two attribute lines merge into a single value",
     ])
     expect(carveToHtml(carve)).toContain('data-k="2"')
   })
@@ -133,6 +140,21 @@ describe('a figure and its target both carrying attributes', () => {
       carve: '{data-k=1}\n{data-j=2}\n> a\n^ Cap\n',
       rows: [],
     })
+  })
+
+  /*
+   * TWO ATTRIBUTES OF THE SAME NAME WITH THE SAME VALUE still merge into one, so
+   * one of the two elements comes out without it and a row is owed. Measured:
+   * `<figure id="x"><blockquote id="x">` re-renders as
+   * `<figure id="x"><blockquote>`, so it is the TARGET's that is gone.
+   */
+  it.each(MODES)('fires when the two values are equal, because one of them is still gone (%s)', (mode) => {
+    const { carve, rows } = imported('<figure id="x"><blockquote id="x"><p>a</p></blockquote><figcaption>Cap</figcaption></figure>', mode)
+    expect(carve).toBe('{#x}\n{#x}\n> a\n^ Cap\n')
+    expect(rows).toEqual([DISPLACED_ID])
+    const html = carveToHtml(carve)
+    expect(html).toContain('<figure id="x">')
+    expect(html).toContain('<blockquote>')
   })
 
   /*
