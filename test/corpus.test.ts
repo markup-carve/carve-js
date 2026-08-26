@@ -700,6 +700,9 @@ const IMPLEMENTED = new Set([
   'one-authored-base-rule-reaches-a-definition-nested-in-a-list-item',
   'text-block-alignment-renders-the-css-declaration',
   'the-continuation-marker-attaches-one-block-in-every-container',
+  // A wrapped attribute on the marker line is one invisible block, not a
+  // paragraph reopened by its physical continuation line.
+  'a-wrapped-attribute-line-leaves-no-paragraph-open',
 ])
 
 /**

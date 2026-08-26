@@ -21,6 +21,7 @@ import type {
   CriticSubstitute,
   CrossRef,
   CaptionNumber,
+  CitationGroup,
   Comment,
   DefinitionItem,
   DefinitionList,
@@ -12934,7 +12935,9 @@ function scanInlineInner(
       const xm = tryInlineMatchers(text, i)
       if (xm) {
         flush()
-        out.push(withPos(xm.node, source, text, i, xm.end))
+        const node = withPos(xm.node, source, text, i, xm.end)
+        if (node.type === 'citation_group') positionCitationItems(node, source, text, i)
+        out.push(node)
         i = xm.end
         continue
       }
@@ -13086,6 +13089,31 @@ function withPos<T extends InlineNode>(
   const pos = sourcePos(source, text, start, end)
   if (pos) node.pos = pos
   return node
+}
+
+/** Give each semicolon-delimited citation item its own authored span. */
+function positionCitationItems(
+  node: CitationGroup,
+  source: InlineSource,
+  text: string,
+  groupStart: number,
+): void {
+  if (source.anchored === false) return
+  const innerStart = node.mode === 'integral' ? 2 : 1
+  const inner = node.raw.slice(innerStart, -1)
+  let cursor = 0
+  const parts = inner.split(';')
+  for (let index = 0; index < node.items.length; index++) {
+    const part = parts[index]
+    if (part === undefined) return
+    const leading = part.length - part.trimStart().length
+    const trailing = part.length - part.trimEnd().length
+    const start = groupStart + innerStart + cursor + leading
+    const end = groupStart + innerStart + cursor + part.length - trailing
+    const pos = sourcePos(source, text, start, end)
+    if (pos) node.items[index]!.pos = pos
+    cursor += part.length + 1
+  }
 }
 
 /**

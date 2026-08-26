@@ -848,7 +848,8 @@ export interface CaptionNumber extends BaseNode {
 }
 
 /** One citation item inside a citation group. */
-export interface Citation {
+export interface Citation extends BaseNode {
+  type: 'citation'
   key: string
   /** Inline prefix text before the `@` (e.g. "see "). */
   prefix?: InlineNode[]

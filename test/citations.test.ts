@@ -17,6 +17,19 @@ function group(src: string): { items: { key: string; suppressAuthor: boolean }[]
 }
 
 describe('citation matcher', () => {
+  it('types and positions each citation item independently', () => {
+    const source = 'See [@a; see @bb, p. 4].\n'
+    const g = group(source) as never as {
+      items: Array<{ type: string; pos: { startOffset: number; endOffset: number } }>
+    }
+
+    expect(g.items.map((item) => item.type)).toEqual(['citation', 'citation'])
+    expect(g.items.map((item) => source.slice(item.pos.startOffset, item.pos.endOffset))).toEqual([
+      '@a',
+      'see @bb, p. 4',
+    ])
+  })
+
   it('parses [@key] into a citation-group', () => {
     expect(group('[@smith2020]')?.items[0]!.key).toBe('smith2020')
   })

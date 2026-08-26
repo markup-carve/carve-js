@@ -109,6 +109,7 @@ export const CANONICAL_INLINE_TYPES = [
   // disagreed, and `isTypeAllowed(type)` with no axis fell through to step 3 and
   // ALLOWED a type the caller had just denied.
   'caption_number',
+  'citation',
   'citation_group',
   'critic_comment',
   'heading_ref',
