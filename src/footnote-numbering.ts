@@ -229,3 +229,60 @@ export function numberFootnotes(ast: Document): FootnoteNumbering {
   }
   return { order, refs }
 }
+
+/*
+ * Every footnote definition a document collected, in SOURCE ORDER.
+ *
+ * `Document.footnoteDefs` is keyed insertion order, and insertion happens when
+ * a definition's body is finalized - not when the definition opens. A
+ * definition nested inside another note's body therefore lands in the map
+ * BEFORE the note that contains it, because the inner body closes first. On
+ * carve#1802's document
+ *
+ *     [^outer]: intro
+ *
+ *          [^inner]: note
+ *
+ *          see[^inner]
+ *
+ *     see[^outer]
+ *
+ * the map reads `["inner", "outer"]` while the HTML numbers `outer` as 1 and
+ * `inner` as 2 - both definitions are hoisted to the document (§7), so the
+ * nesting that produced the insertion order is gone from the tree by the time a
+ * writer sees it.
+ *
+ * The HTML writer never noticed because it emits its endnotes in NUMBERING
+ * order, and the canonical writer never noticed because it writes each
+ * definition back at its own source line. The three degradation writers
+ * (markdown, plain, ansi) walked the map directly, so they alone reordered the
+ * definitions - and, because a multi-block body renders its later blocks after
+ * the marker line, `outer`'s second paragraph came out below `inner`'s
+ * definition where it reads as document text rather than as part of the note.
+ *
+ * Numbering order cannot be the fix here: these writers emit every DEFINED
+ * footnote, including one nothing references, and an unreferenced definition
+ * has no number. Source order covers both and agrees with the numbering
+ * wherever a number exists.
+ *
+ * The sort is STABLE and positions are optional, so a document parsed without
+ * positions - or ingested from AST JSON, which carries no `footnoteDefPos` -
+ * keeps the map's own order rather than being reshuffled arbitrarily.
+ */
+export function footnoteDefsInSourceOrder(ast: Document): Array<[string, BlockNode[]]> {
+  const entries = Object.entries(ast.footnoteDefs ?? {})
+  const pos = ast.footnoteDefPos
+  if (!pos) return entries
+  const keyed = entries.map((entry, index) => {
+    const p = ownValue(pos, entry[0])
+    return { entry, index, line: p?.startLine, column: p?.startColumn ?? 0 }
+  })
+  // ALL OR NOTHING, so the comparator stays a total order. Mixing "compare by
+  // line" with "keep the map's order" inside one comparator is intransitive
+  // once a positionless entry sits between two positioned ones, and an
+  // intransitive comparator makes `sort` implementation-defined - a silent
+  // cross-engine divergence of exactly the kind this function exists to close.
+  if (keyed.some((k) => k.line === undefined)) return entries
+  keyed.sort((a, b) => a.line! - b.line! || a.column - b.column || a.index - b.index)
+  return keyed.map((k) => k.entry)
+}
