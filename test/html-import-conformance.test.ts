@@ -22,30 +22,7 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
-  // `markup-carve/carve#1827` gave the empty description body the `{empty}`
-  // sentinel, so both of these fixtures are written rather than dropped and
-  // neither owes a diagnostic. The pinned goldens still record the drop, the
-  // `%%` separator that kept the split list apart, and the two rows that
-  // declared them; upstream re-records both, and these entries go out with the
-  // bump that reaches it.
-  [
-    'empty-definition-description',
-    {
-      reason: 'an empty description body is written `: {empty}` (markup-carve/carve#1827)',
-      carve: ':: term\n: {empty}\n',
-      report: { mode: 'safe', adapter: 'generic', diagnostics: [] },
-    },
-  ],
-  [
-    'empty-definition-description-not-last',
-    {
-      reason: 'the sentinel keeps the list whole, so nothing splits (markup-carve/carve#1827)',
-      carve: ':: t1\n: {empty}\n:: t2\n: d2\n',
-      report: { mode: 'safe', adapter: 'generic', diagnostics: [] },
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([])
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.
