@@ -66,6 +66,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { entriesToWire } from './definition-list-wire.js'
 import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 import { ownValue } from './own-property.js'
+import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
 export { normalizeRefLabel } from './label-key.js'
 
@@ -4379,6 +4380,8 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
   const after = lexer.peek(la)
   const blanks = la - 1
   const cap = after !== undefined ? RE_CAPTION.exec(after) : null
+  // A display-math equation line reaches here already dispatched as a block, so
+  // it stands at its container's content column by construction.
   const para: Paragraph = { type: 'paragraph', children: inline }
   // §4: a caption attaches across at most one blank line.
   if (cap && blanks <= 1) {
@@ -10985,7 +10988,7 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
           }
         })
       : undefined
-  return {
+  const paragraphNode: Paragraph = {
     type: 'paragraph',
     children: parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
       anchored: lexer.hasDocumentOffsets,
@@ -10995,6 +10998,13 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
       ...(anchors ? { lineAnchors: anchors } : {}),
     }),
   }
+  // The container prefix is already stripped by the lexer, so a first line with
+  // leading whitespace LEFT sat above the container's content column. Recorded
+  // here because this is the last place the answer exists: the indentation is
+  // thrown away two lines up, and the block-image promotion phase has no way to
+  // recover it from the tree (carve-js#1553).
+  if (firstLead > 0) markAboveContentColumn(paragraphNode)
+  return paragraphNode
 }
 
 function leadingWhitespace(line: string): number {

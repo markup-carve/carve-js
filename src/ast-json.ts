@@ -24,7 +24,8 @@
  * `parse()` directly.
  */
 
-import type { BlockNode, Document, Position } from './ast.js'
+import type { BlockNode, Document, Image, Paragraph, Position } from './ast.js'
+import { isUnresolvedReference } from './unresolved-reference.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { numberCaptionsIn } from './heading-ids.js'
 import {
@@ -352,6 +353,79 @@ export function toAstJson(doc: Document): AstJsonDocument {
   // the same route for the same reason (carve-php#917).
   const out: AstJsonDocument = { type: 'document', children, srcByteLength: doc.srcByteLength ?? 0 }
   return out
+}
+
+/**
+ * PART 12 §23 on ingest: TRUST `blockImage`, and promote only where it is
+ * ABSENT (carve-js#1552).
+ *
+ * The field is a resolution result, and it is the one kind of resolution result
+ * that must NOT be re-derived the way `number` is cleared above. The difference
+ * is what absence means. An orphaned footnote number is a claim the tree can be
+ * checked against - the definition is either here or it is not - so a number it
+ * cannot justify is dropped. A missing `blockImage` is not a claim at all: every
+ * AST JSON document written before the phase existed omits it, so absence says
+ * the producer did not run the phase, NOT that the paragraph is ordinary. A tree
+ * is therefore never refused for omitting it.
+ *
+ * So the pass is deliberately one-directional. Where the field is present it is
+ * left exactly as it arrived, including on a paragraph whose contents this
+ * engine would have read differently - the producer resolved against ITS
+ * document's definitions, and re-deciding here would substitute this tree's
+ * (possibly edited-down) reference table for the answer the producer published.
+ * Where it is absent, the same predicate the promotion phase uses fills it in,
+ * so a legacy payload reaches the renderers with the answer the phase would
+ * have given it.
+ *
+ * All three engines do the same thing here on purpose: footnote and caption
+ * numbers already diverge across engines on ingest, and this must not become
+ * the second one.
+ */
+function promoteIngestedBlockImages(doc: Document): void {
+  const worklist: BlockNode[][] = [doc.children]
+  for (const body of Object.values(doc.footnoteDefs ?? {})) worklist.push(body)
+  while (worklist.length > 0) {
+    for (const block of worklist.pop()!) {
+      if (block.type === 'paragraph' && block.blockImage === undefined && isBlockImageOnIngest(block)) {
+        block.blockImage = true
+      }
+      pushIngestChildBlocks(block, worklist)
+    }
+  }
+}
+
+/**
+ * The promotion phase's predicate, asked of an ingested paragraph: is its whole
+ * content a single image that RESOLVED? An unresolved reference image carries no
+ * destination and renders as its literal source, so it stays inside its
+ * paragraph (PART 12 §3a).
+ */
+function isBlockImageOnIngest(block: Paragraph): boolean {
+  return (
+    block.children.length === 1 &&
+    block.children[0]!.type === 'image' &&
+    !isUnresolvedReference(block.children[0] as Image)
+  )
+}
+
+/** Every nested block list an ingested block can hold. Iterative, like the phase. */
+function pushIngestChildBlocks(block: BlockNode, worklist: BlockNode[][]): void {
+  switch (block.type) {
+    case 'block_quote':
+    case 'admonition':
+    case 'div':
+    case 'figure_group':
+      worklist.push(block.children)
+      break
+    case 'list':
+      for (const item of block.items) worklist.push(item.children)
+      break
+    case 'definition_list':
+      for (const entry of block.items) for (const d of entry.definitions) worklist.push(d)
+      break
+    default:
+      break
+  }
 }
 
 /**
@@ -1442,6 +1516,7 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   // is left alone. Only a reference can be orphaned.
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
   renumberCaptionsIfPublished(doc)
+  promoteIngestedBlockImages(doc)
 
   // WHAT THE SENDER ACTUALLY HAD TO SEND, recorded so the expansion budgets are
   // not sized from a number the payload supplies about itself. Exact when the

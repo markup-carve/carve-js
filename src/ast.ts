@@ -153,6 +153,25 @@ export interface Heading extends BaseNode {
 export interface Paragraph extends BaseNode {
   type: 'paragraph'
   children: InlineNode[]
+  /**
+   * Set by the BLOCK-IMAGE PROMOTION phase, and by nothing else (PART 9R R7,
+   * PART 12 §23): this paragraph's whole content resolves to a single image, so
+   * it is a block-level image and not a paragraph.
+   *
+   * Present ONLY as `true` - a paragraph that is not a block image omits the
+   * field rather than carrying `false`. It is a resolution result published
+   * alongside the authored construct, the same added-alongside rule that lets a
+   * resolved reference link keep `href` beside `ref` and `rawRef` (§3a).
+   *
+   * READ IT, do not re-derive it. Block-image status is a property of the
+   * RESOLVED tree: `![a][r]` is a block image where `[r]: /u` is written and
+   * ordinary prose where it is not, and the definition may sit anywhere in the
+   * document - so re-deriving it means running reference resolution again.
+   * Absence means the producer did not run the phase, NOT that the paragraph is
+   * ordinary, which is why an ingesting consumer promotes only where it is
+   * absent rather than refusing a tree that omits it.
+   */
+  blockImage?: true
 }
 
 export interface BlockQuote extends BaseNode {

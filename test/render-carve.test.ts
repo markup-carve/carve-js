@@ -105,11 +105,22 @@ const tree = (source: string): string => JSON.stringify(canonicalTree(carveToAst
  * label and no value that dissolving it would take with it. That is exactly the
  * bound PART 11 §1c states for the loss it permits - "the content, its
  * attributes and its neighbours all survive as themselves".
+ *
+ * `blockImage` IS ALLOWED AS A THIRD KEY, and it is the one exception the bound
+ * admits by its own terms (PART 12 §23, carve-js#1552). It carries no content,
+ * no attribute and no neighbour: it is the promotion phase's statement that this
+ * paragraph is a block image and not a paragraph - which is to say, a statement
+ * that this wrapper is exactly the one §1c dissolves. Excluding it would reject
+ * the §1c ceiling on the very documents the clause is about, and it does not
+ * survive dissolution anyway: the wrapper is replaced by its child.
  */
+const WRAPPER_KEYS = ['blockImage', 'children', 'type']
+
 function isBareWrapper(node: unknown): node is { type: string; children: unknown[] } {
   if (node === null || typeof node !== 'object' || Array.isArray(node)) return false
   const keys = Object.keys(node).sort()
-  if (keys.length !== 2 || keys[0] !== 'children' || keys[1] !== 'type') return false
+  if (!keys.every((key) => WRAPPER_KEYS.includes(key))) return false
+  if (!keys.includes('children') || !keys.includes('type')) return false
   const children = (node as { children: unknown }).children
   return Array.isArray(children) && children.length === 1 && typeof children[0] === 'object' && children[0] !== null
 }
