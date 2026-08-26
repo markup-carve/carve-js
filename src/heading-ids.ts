@@ -26,6 +26,7 @@ import { SMART_PUNCTUATION_GLYPHS } from './ast.js'
 import { normalizeRefLabel, mergeAttrs, parseRefLabelInlines } from './parse.js'
 import { TRANSLIT_MAP } from './translit-map.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
+import { isAtContentColumn } from './paragraph-indent.js'
 
 /**
  * Implicit heading references match a heading's visible TEXT, which is a
@@ -1429,15 +1430,29 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // not a figure target.
       !isUnresolvedReference(b.children[0] as Image) &&
       // Strict column-0 rule: an image+caption forms a <figure> ONLY when the
-      // image begins at its container's content column. parseParagraph strips a
-      // paragraph's leading indentation, so the AST text alone can't tell an
-      // indented image+caption (which must stay literal) from a flush one; the
-      // image's source column does. A flush image (top level OR the dedented
-      // content column of any container) has startColumn === 1 -- an image
-      // indented ABOVE that column has startColumn > 1 and does not promote. When
-      // positions are suppressed (pos undefined) fall back to the prior behavior.
-      ((b.children[0] as Image).pos === undefined ||
-        (b.children[0] as Image).pos!.startColumn === 1) &&
+      // image begins at its container's CONTENT COLUMN. parseParagraph strips a
+      // paragraph's leading indentation, so the AST text alone cannot tell an
+      // indented image+caption (which must stay literal) from a flush one.
+      //
+      // THE IMAGE'S OWN COLUMN CANNOT TELL THEM APART EITHER, and reading it was
+      // the defect (carve-js#1553). `startColumn === 1` is true only at the top
+      // level, so every container failed it: a list item's content column is 3,
+      // and so is the column of a two-space-indented image at top level. One of
+      // those must promote and the other must not, and the absolute column gives
+      // the same answer for both. So a reference image inside a list item or a
+      // quote promoted to a bare <img> and DROPPED its caption line as stray
+      // text, while the inline form in the same position - which never reaches
+      // this arm, because the parse-time pass claims it - kept the figure.
+      //
+      // The answer is recorded where it still exists, before parseParagraph
+      // throws the indentation away, and kept in a parser-local table rather
+      // than on the node: it is a fact about SOURCE INDENTATION that the schema
+      // does not name, and a runtime-only own property would break §6's
+      // round-trip identity. The table records the EXCEPTION, so a paragraph
+      // nobody registered promotes - the HTML importer builds one per `<p>`
+      // with no source column to report, and such a paragraph is at its
+      // container's content column by construction.
+      isAtContentColumn(b) &&
       b.children[1]!.type === 'soft_break' &&
       // This `text` test is also what keeps an ESCAPED caret literal: `\^`
       // parses to an `escaped_text` node, and coalesceTextRuns never merges one
@@ -1497,6 +1512,28 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       if (b.attrs) figure.attrs = b.attrs
       blocks[i] = figure as unknown as BlockNode
       continue
+    }
+    // THE PHASE PUBLISHES ITS ANSWER (PART 9R R7, PART 12 §23, carve-js#1552).
+    // A paragraph that reaches here was not replaced by a block image or a
+    // figure above -- either because `figuresOnly` is on, or because §15's
+    // strict column-0 rule keeps an indented lone image a paragraph in the tree
+    // (carve#1660). It still RENDERS as a bare <img> at every column, so the
+    // question "is this paragraph a block image" survives into the published
+    // tree, and this is where it is answered rather than left for each consumer
+    // to re-derive by running reference resolution again.
+    //
+    // Recomputed rather than accumulated, so promoting one document twice - or
+    // a tree handed in by an editor, an extension or `--from-json` - cannot
+    // carry a stale `true` from an earlier context. Written only as `true`: a
+    // paragraph that is not a block image omits the field.
+    if (b.type === 'paragraph') {
+      const para: Paragraph = b
+      // Held as a plain boolean rather than tested inline: `isLoneImageParagraph`
+      // is a type guard, so testing it directly narrows the ELSE branch to
+      // `never` and the field cannot be cleared there.
+      const promoted: boolean = isLoneImageParagraph(para)
+      if (promoted) para.blockImage = true
+      else delete para.blockImage
     }
     switch (b.type) {
       case 'block_quote':

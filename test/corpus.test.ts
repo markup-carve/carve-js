@@ -703,6 +703,12 @@ const IMPLEMENTED = new Set([
   // A wrapped attribute on the marker line is one invisible block, not a
   // paragraph reopened by its physical continuation line.
   'a-wrapped-attribute-line-leaves-no-paragraph-open',
+  'a-comment-in-a-footnote-body-is-invisible-in-both-spellings',
+  'a-floating-attribute-under-a-definition-attaches-at-column-zero',
+  'an-abbreviation-definition-outside-document-level-is-not-an-invisible-line',
+  'an-invisible-line-before-the-blank-does-not-cancel-the-separation',
+  'an-unresolved-image-gives-its-whole-caption-slot-back-at-any-depth',
+  'below-a-definition-body-s-column-an-invisible-line-folds-as-text',
 ])
 
 /**

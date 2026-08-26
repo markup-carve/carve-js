@@ -127,12 +127,20 @@ describe('the entry points that read positions force them back on', () => {
     expect(carveToHtml(indented, { positions: false })).toBe('<p><img src="p.png" alt="a">\n^ cap</p>')
   })
 
-  it('a hand-composed pipeline is the callers own to get right', () => {
-    // Stated rather than smoothed over: positions are an INPUT to resolution,
-    // so parse+resolve+renderHtml with the option off promotes what the
-    // convenience entry point leaves alone. This is why carveToHtml forces it.
+  it('a hand-composed pipeline reaches the same answer as the entry point', () => {
+    // THIS USED TO BE THE HAZARD, and the block-image promotion phase removed
+    // it (carve-js#1552). Positions were an INPUT to the figure rule: the gate
+    // read the image's own `startColumn` and promoted when there was none, so
+    // parse+resolve+renderHtml with the option off built a figure the
+    // convenience entry point left alone, and turning positions off silently
+    // changed the parse.
+    //
+    // The phase does not read positions. Whether a paragraph began at its
+    // container's content column is recorded by the parser, where the
+    // indentation still exists, so the answer no longer depends on an option
+    // about spans - and the two pipelines agree.
     const indented = ' ![a](p.png)\n ^ cap\n'
-    expect(renderHtml(resolve(parse(indented, { positions: false })))).toContain('<figure>')
+    expect(renderHtml(resolve(parse(indented, { positions: false })))).not.toContain('<figure>')
     expect(carveToHtml(indented)).not.toContain('<figure>')
   })
 
