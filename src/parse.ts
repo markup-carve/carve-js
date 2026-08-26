@@ -1400,6 +1400,22 @@ class Lexer {
    * anchored.
    */
   rootLines?: readonly string[]
+  /**
+   * Whether an OVER-INDENTED SUBLIST in this lexer's lines carries its own
+   * authored block base.
+   *
+   * A footnote body and a definition body both rebase over-indented blocks with
+   * sublists included (`rebaseOverindentedBlocks(..., true)`), so a list marker
+   * written above the body's minimum content column establishes a base of its
+   * own (PART 9 S24 C3). Its span therefore begins at that marker. Everywhere
+   * else - the document, a block quote, a list item - the run between the
+   * container's content column and the marker is the indentation that PLACES the
+   * marker, and PART 12 section 4 puts it INSIDE the span: "a list item's marker
+   * and the indentation that places it". Anchoring every list at its marker
+   * instead moved nine corpus documents off carve-rs and carve-php
+   * (markup-carve/carve#1797).
+   */
+  sublistsCarryAuthoredBase = false
   suppressPositions = false
   pos = 0
   // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
@@ -4455,8 +4471,15 @@ function attachBlockPos(
   // base. A container span begins at its opening markup (PART 12 §4), not at
   // that indentation. Inline children already account for the residual run;
   // apply the same source adjustment to the list and item containers.
+  //
+  // ONLY WHERE THE SUBLIST REALLY CARRIES THAT BASE - a footnote body or a
+  // definition body, the two containers that rebase with sublists included. In
+  // every other container the leading run is the indentation that PLACES the
+  // marker, which §4 names as part of the span ("a list item's marker and the
+  // indentation that places it"), and skipping it reported a start past the
+  // markup on nine corpus documents (markup-carve/carve#1797).
   const type = (node as { type?: string }).type
-  if (type === 'list' || type === 'list_item') {
+  if ((type === 'list' || type === 'list_item') && lexer.sublistsCarryAuthoredBase) {
     const startLine = lexer.lines[startLineIndex] ?? ''
     const leadChars = leadingWhitespace(startLine)
     if (leadChars > 0) {
@@ -5390,6 +5413,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     // already removed the fixed two-column body margin.
     rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
+    sub.sublistsCarryAuthoredBase = true
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of
@@ -6629,6 +6653,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     // Definition entries use the same exact block extent in every container.
     rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
+    sub.sublistsCarryAuthoredBase = true
     return parseBlocks(sub, 0)
   }
   /**
