@@ -8,6 +8,7 @@ import {
   carveToMarkdown,
   carveToPlainText,
 } from '../src/index.js'
+import { CANONICAL_AHEAD_OF_PIN } from './canonical-ahead-of-pin.js'
 
 const corpusDir = resolve(dirname(fileURLToPath(import.meta.url)), '../spec/tests/corpus')
 
@@ -44,7 +45,21 @@ describe('spec corpus non-HTML render fixtures', () => {
     it(`${fixture.target}: ${fixture.slug}`, () => {
       const source = readFileSync(resolve(corpusDir, `${fixture.slug}.crv`), 'utf8')
       const expected = readFileSync(fixture.path, 'utf8')
-      expect(targets[fixture.target](source)).toBe(expected)
+      // The `fmt` target reads the SAME sidecars `corpus-canonical-form.test.ts`
+      // does, so it honors the same ahead-of-pin declaration rather than a
+      // second copy of it. See `canonical-ahead-of-pin.ts`.
+      const ahead = fixture.target === 'fmt' ? CANONICAL_AHEAD_OF_PIN.get(fixture.slug) : undefined
+      if (ahead === undefined) {
+        expect(targets[fixture.target](source)).toBe(expected)
+        return
+      }
+      expect(targets[fixture.target](source), ahead.reason).toBe(ahead.fmt)
+      // The staleness half: when the pin moves past the clause the sidecar is
+      // rewritten to exactly this value, and the entry must be deleted.
+      expect(
+        expected,
+        `${fixture.slug} now matches: delete its AHEAD_OF_PIN entry`,
+      ).not.toBe(ahead.fmt)
     })
   }
 })

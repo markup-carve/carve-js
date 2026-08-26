@@ -664,7 +664,61 @@ const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
 // already agree on that line and it is a different shape.
 const RE_DEFLIST_MARKER_EMPTY = /^::?(?!:)[ \t]+$/
 
-const RE_DEFLIST_DEF = /^: {2,}(.+)$/
+// A definition body: `:` plus a SEPARATOR RUN of one or more spaces, then
+// content. Group 1 is the run and group 2 the content.
+//
+// THE SEPARATOR IS ANY RUN OF SPACES, AND ITS WIDTH SETS THE BODY'S CONTENT
+// COLUMN (PART 9 §16, markup-carve/carve#1757). The body's column is
+// `1 + separator width`, so `: x` establishes column 2, `:  x` column 3 and
+// `:    x` column 5, and a continuation qualifies by REACHING its own body's
+// column - the PART 9 §24 C1 rule a footnote body and a list item already
+// follow. The pattern used to demand TWO spaces and hand every width the same
+// fixed column 3, which made the definition body the one marker in the language
+// that would not take a single separator space (`- item`, `1. item`, `> quote`
+// and `:: term` all do) and the one that measured its separator against a fixed
+// width instead of its own. A bullet has always answered this way: `-   first`
+// puts its content column at 4 and a continuation at 2 does not reach it.
+//
+// ONE SPACE IS CANONICAL. A wider run is accepted and the writer narrows it -
+// see `renderDefinitionList`, which also carries the body's continuations down
+// by the same amount, because narrowing the separator narrows the column.
+//
+// What changed for `: x` is that it now HAS a meaning. It used to have none,
+// and this engine folded it into the `<dt>` above as term text while the spec's
+// oracle left it a stray paragraph.
+//
+// THE SEPARATOR IS GREEDY AND THE CONTENT CANNOT START WITH A SPACE, which is
+// one statement, not two: the run is the separator, so nothing is left of it
+// for the content to begin with. Written `(.+)` the run BACKTRACKS - `:` plus
+// two spaces and nothing else matched as a one-space separator over a
+// one-space body, which is a `<dd>` where carve-js#731 rules a CONTENT-LESS
+// marker line closes the open term and stays paragraph text, as carve-rs and
+// carve-php both do.
+//
+// It settles the wider content-less line the same way, and that is a change:
+// `:` plus three or more spaces used to backtrack into a body of one space,
+// which trims to an empty `<dd>`, so the same content-less line answered one
+// way at two columns and another at three. Nothing pins either width - no
+// corpus document, no test, and the two answers were an artifact of where
+// backtracking happened to stop rather than a rule anyone wrote. A content-less
+// marker line is content-less at every width now. THE PORTS SHOULD MATCH IT.
+const RE_DEFLIST_DEF = /^:( +)([^ ].*)$/
+
+/**
+ * The content column a description marker hands its body out at: `:` plus the
+ * width of its separator run.
+ *
+ * Named because the prepass, the fence scope and the body collector all measure
+ * against it, and a rule with several spellings is how one of them comes to
+ * answer differently (carve#755) - which is exactly what happened to the fixed
+ * `3` this replaces.
+ */
+function deflistContentCol(separator: string): number {
+  return 1 + separator.length
+}
+
+/** The separator run on a description line, wherever it is indented. */
+const RE_DEFLIST_SEPARATOR = /^[ \t]*:( +)/
 // A definition marker's separator must START with a literal space (U+0020),
 // not a tab (#288) -- matching carve-rs and every marker whose grammar
 // delimiter is `space` (heading `# `, list bullets, task `[ ]`). The `]: \s*`
@@ -3156,6 +3210,7 @@ function collectLinkDefs(lexer: Lexer) {
     // an optional abutting `{…}` attribute block is part of the marker width
     const marker = prepassMarker(unquoted)
     const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
+    let deflistDef: RegExpExecArray | null = null
     // Test the RAW line for a block starter: a blockquote `>` is stripped by
     // stripContainerPrefixes, so check `raw` (trimmed) for it, else a quote
     // interrupting a list item would not pop the stack.
@@ -3195,7 +3250,7 @@ function collectLinkDefs(lexer: Lexer) {
         rest = rest.slice(m2[0].length)
         m2 = prepassMarker(rest)
       }
-    } else if (RE_DEFLIST_DEF.test(unquoted)) {
+    } else if ((deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
       // A DESCRIPTION MARKER OPENS A CONTENT COLUMN, exactly as an item marker
       // does. It was the one container this pass could not see, so a definition
       // written at a description's column read as top-level indentation and was
@@ -3203,12 +3258,15 @@ function collectLinkDefs(lexer: Lexer) {
       // nothing, while the same line one column further left registered
       // (markup-carve/carve#1357, corpus 350-5).
       //
-      // The column is the parser's `DEFLIST_CONTENT_COL` and not the marker's
-      // own width: `:` plus two or more spaces is one marker whose body starts
-      // at column 3 however many spaces were typed, which is what the block
-      // parser slices at.
+      // The column is the marker's OWN width - `1 + separator` - and it is the
+      // same number the block parser slices the body at, read from the same
+      // helper. It used to be a fixed 3 for every width, on the reading that
+      // `:` plus two or more spaces was one marker whose body always started at
+      // column 3; carve#1757 replaced that with the bullet's rule, so `: a` now
+      // opens column 2 and this pass has to move with it or a definition
+      // written at the narrow column reads as top-level indentation again.
       while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
-      listCols.push(indent + DEFLIST_CONTENT_COL)
+      listCols.push(indent + deflistContentCol(deflistDef[1]!))
     } else if (
       !isBlankLine(raw) &&
       // A LINK REFERENCE DEFINITION at column 0 ends the item too, so it has
@@ -3525,12 +3583,14 @@ function collectLinkDefs(lexer: Lexer) {
     // spelling). Only the tracker's CONTAINER records it: the closer keeps
     // re-basing on `contentCol`, unchanged, since a closer written at the
     // description's own column already matches there.
-    // The column is §16's own FIXED body column, not the separator's width: a
-    // wider `:   ` still puts the body at three, so measuring the marker made a
-    // canonical body line look dedented and ended the fence on it (raised by
-    // codex review).
-    const onDescriptionLine = afterTerm && RE_DESCRIPTION_PREFIX.test(unquoted)
-    const scopeCol = Math.max(openerCol, onDescriptionLine ? DEFLIST_CONTENT_COL : 0)
+    // The column is the SEPARATOR'S OWN WIDTH (`1 + run`, carve#1757), read from
+    // the same helper the block parser slices the body at. It was §16's fixed
+    // body column of three for every spelling; once `: d` opens column 2, a
+    // fixed three made a canonical body line at column 2 look dedented and
+    // ended the fence on it - the failure that reading fixed instead of derived
+    // was originally written to avoid, now with the two readings swapped.
+    const descSeparator = afterTerm ? RE_DEFLIST_SEPARATOR.exec(unquoted) : null
+    const scopeCol = Math.max(openerCol, descSeparator ? deflistContentCol(descSeparator[1]!) : 0)
     const deIndented = keptIndent >= openerCol ? kept.slice(openerCol) : kept
     // BOTH fence spellings, not just the code one. `RE_FENCE`'s language slot
     // excludes `=`, so a raw block's ```` ```=FORMAT ```` opener matched nothing
@@ -6288,20 +6348,23 @@ function parseDiv(lexer: Lexer): Div {
 }
 
 // Definition list (§4.5). An entry is 1+ `:: term` lines followed by 1+
-// `:  definition` lines; a definition continues on lines indented to COLUMN 3
-// or beyond. A `:: term` after a definition starts a new entry; a single
-// blank line between entries is allowed, anything else ends the list.
-/**
- * The column a definition body's content sits at - `definition_indent`, the
- * `:` marker plus its two-space separator. Named because the S4 tracker and the
- * two indent tests below all measure against it, and a run of bare `3`s is how a
- * column rule acquires several spellings.
- */
-const DEFLIST_CONTENT_COL = 3
-
+// `: definition` lines; a definition continues on lines that REACH its own
+// body's column, which is `:` plus the width of the separator it was written
+// with (`deflistContentCol`). A `:: term` after a definition starts a new
+// entry; a single blank line between entries is allowed, anything else ends the
+// list.
 function parseDefinitionList(lexer: Lexer): DefinitionList {
   const items: DefinitionItem[] = []
-  const parseDefBody = (first: string, firstLineIndex: number): BlockNode[] => {
+  /**
+   * Collect and parse one body.
+   *
+   * `contentCol` is THE BODY'S OWN COLUMN, passed in rather than read from a
+   * constant: the §4 tracker and the three indent tests below all measure
+   * against it, and two bodies of the same list may be written at different
+   * widths (`: one` beside `:  two`). A run of bare `3`s is how a column rule
+   * acquires several spellings, and a single parameter is how it keeps one.
+   */
+  const parseDefBody = (first: string, firstLineIndex: number, contentCol: number): BlockNode[] => {
     const bodyLines: string[] = []
     const bodyLineNumbers: number[] = []
     // AND A DEFINITION BODY IS SUCH A CONTAINER (PART 0 S4,
@@ -6351,7 +6414,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         (marker) =>
           atLineIndex === undefined
             ? true
-            : itemFenceHasCloser(lexer, marker, atLineIndex, DEFLIST_CONTENT_COL, defFenceMemo),
+            : itemFenceHasCloser(lexer, marker, atLineIndex, contentCol, defFenceMemo),
         atContentColumn,
       )
     }
@@ -6438,7 +6501,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // column - end the body, while three spaces continued it, and made the
       // answer depend on how the author spelled a run rather than where it
       // landed (markup-carve/carve-js#812).
-      if (!isBlankLine(ln) && indentColumns(ln, DEFLIST_CONTENT_COL) >= DEFLIST_CONTENT_COL) {
+      if (!isBlankLine(ln) && indentColumns(ln, contentCol) >= contentCol) {
         // A CONTINUATION INDENTED PAST THE BODY'S COLUMN IS LAZY TEXT
         // (markup-carve/carve#918). `definition_indent` REACHES the body's
         // column and does not measure how far past it a line went, because
@@ -6446,11 +6509,12 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // indented further continues the body's OPEN PARAGRAPH, and a paragraph
         // continuation carries inline content.
         //
-        // This stripped the WHOLE leading run, which delivered a line at column
-        // 4 flush at column 0 - byte-identical to one written at column 3 - so
-        // the two columns could not give different answers and a stray
-        // four-space indent silently opened a block quote. Slicing exactly the
-        // body's three columns and KEEPING the residual is what separates them,
+        // This stripped the WHOLE leading run, which delivered a line one
+        // column past the body flush at column 0 - byte-identical to one written
+        // AT the body's column - so the two columns could not give different
+        // answers and a stray extra indent silently opened a block quote.
+        // Slicing exactly the body's own columns and KEEPING the residual is
+        // what separates them,
         // and it is the same call the list already makes for every line kind
         // (`sliceColumns(l, contentCol, true)`). The residual column then meets
         // the STRICT COLUMN-0 rule for indented top-level block openers, which
@@ -6468,7 +6532,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // A content U+00A0 is still kept: `sliceColumns` counts only spaces and
         // tabs as columns, so a no-break space stops the scan as content.
         const lineIndex = lexer.pos
-        const dedented = sliceColumns(ln, DEFLIST_CONTENT_COL, true)
+        const dedented = sliceColumns(ln, contentCol, true)
         bodyLines.push(dedented)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         track(dedented, lineIndex)
@@ -6490,7 +6554,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         if (
           after !== undefined &&
           !isBlankLine(after) &&
-          indentColumns(after, DEFLIST_CONTENT_COL) >= DEFLIST_CONTENT_COL
+          indentColumns(after, contentCol) >= contentCol
         ) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos
@@ -6554,7 +6618,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       break
     }
     // The same authored-base rule list items use, now in the definition body's
-    // coordinate system after its fixed three-column margin was removed - plus
+    // coordinate system after its own content margin was removed - plus
     // the definition entry carrying its own base, which carve#1763 pins for
     // these two bodies and not for a list item (carve-js#1514).
     rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
@@ -6701,7 +6765,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       if (!d) break
       lexer.consume()
       definitionLines.push(lexer.lineNumber(defLineIndex))
-      definitions.push(parseDefBody(d[1]!, defLineIndex))
+      definitions.push(parseDefBody(d[2]!, defLineIndex, deflistContentCol(d[1]!)))
       // The description's own extent, recorded from the lines it CONSUMED
       // rather than derived from the children it produced - because a
       // description whose only content hoists to the root produces none, and a
@@ -10997,8 +11061,9 @@ function rebaseOverindentedBlocks(
  * Would a container body's rebase pass MOVE any line of `rendered`?
  *
  * The writer asks this, and it asks the rebase itself rather than a copy of its
- * rule. A definition description's payload sits three columns in from its `::`,
- * which is ABOVE the body minimum of a footnote body, a list item or a
+ * rule. A definition description's payload sits at its separator's column, in
+ * from its `::`, which is ABOVE the body minimum of a footnote body, a list
+ * item or a
  * definition description - so at that minimum the container's rebase claims the
  * payload as a block of its own and the description loses it (carve-js#1509).
  * One column further in, the `::` line's own column becomes the entry's base and

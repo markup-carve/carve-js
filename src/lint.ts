@@ -979,7 +979,7 @@ function collectListItemIndentWarnings(
       ? 'quote'
       : isTableRow(authored.rest)
         ? 'table'
-        : (/^::(?: |$)/.test(authored.rest) || /^:  /.test(authored.rest))
+        : (/^::(?: |$)/.test(authored.rest) || /^: /.test(authored.rest))
           ? 'definition-list'
           : (FOOTNOTE_DEF.test(authored.rest) || (
               previousGroup?.kind === 'footnote-definition' &&

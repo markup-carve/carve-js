@@ -74,7 +74,7 @@ describe('a raised definition base in a list item survives the writer', () => {
     const written = carveToCarve(src)
     expect(norm(carveToHtml(src))).toMatch(/<dd[^>]*>(?:(?!<\/dd>).)*<blockquote/)
     expect(norm(carveToHtml(written))).toMatch(/<dd[^>]*>(?:(?!<\/dd>).)*<blockquote/)
-    expect(written).toBe('- intro\n   :: t\n   :  d\n      > q\n')
+    expect(written).toBe('- intro\n   :: t\n   : d\n     > q\n')
   })
 
   /**
@@ -84,22 +84,22 @@ describe('a raised definition base in a list item survives the writer', () => {
    * PART 11 §2 pins, and they are what a raise applied too widely would change.
    */
   const CANONICAL: Array<[string, string, string]> = [
-    ['the document, payload with a blank', ':: t\n:  d\n\n   > q\n', ':: t\n:  d\n\n   > q\n'],
-    ['the document, payload with no blank', ':: t\n:  d\n   > q\n', ':: t\n:  d\n\n   > q\n'],
+    ['the document, payload with a blank', ':: t\n:  d\n\n   > q\n', ':: t\n: d\n\n  > q\n'],
+    ['the document, payload with no blank', ':: t\n:  d\n   > q\n', ':: t\n: d\n\n  > q\n'],
     [
       'a block quote',
       '> :: t\n> :  d\n>\n>    > q\n',
-      '> :: t\n> :  d\n>\n>    > q\n',
+      '> :: t\n> : d\n>\n>   > q\n',
     ],
     [
       'a list item whose payload never needed a raise',
       '- intro\n\n   :: t\n   :  d\n\n      more\n',
-      '- intro\n\n  :: t\n  :  d\n\n     more\n',
+      '- intro\n\n  :: t\n  : d\n\n    more\n',
     ],
     [
       'a list item with two entries',
       '- intro\n\n   :: t\n   :  d\n   :: u\n   :  e\n',
-      '- intro\n  :: t\n  :  d\n  :: u\n  :  e\n',
+      '- intro\n  :: t\n  : d\n  :: u\n  : e\n',
     ],
   ]
 
@@ -119,7 +119,7 @@ describe('a raised definition base in a list item survives the writer', () => {
    * what a blanket drop would take. Raised by codex review.
    */
   it('keeps a paragraph break in a sibling description of a raised list', () => {
-    const src = '- intro\n\n   :: a\n   :  first\n\n      second\n   :: b\n   :  d\n      > q\n'
+    const src = '- intro\n\n   :: a\n   : first\n\n     second\n   :: b\n   : d\n     > q\n'
     expect(carveToCarve(src)).toBe(src)
     expect(roundTrips(src)).toEqual({ html: true, idempotent: true })
     expect(norm(carveToHtml(src))).toContain('<dd><p>first</p><p>second</p></dd>')
