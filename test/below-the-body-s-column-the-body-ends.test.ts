@@ -95,25 +95,38 @@ describe("BELOW the body's column the body ends", () => {
     }
   })
 
-  it('an INVISIBLE opener answers the band too', () => {
-    // Raised by codex review. `startsInterruptingBlock` is a battery of tests on
-    // one string, except for the block-attribute arm, which re-reads the line
-    // from the lexer - so the content override reached every opener kind but
-    // that one, and a below-column `{.x}` stayed lazy text while a below-column
-    // `> q` left the container. One arm answering a different question than the
-    // other twelve is how a rule acquires a second reading.
+  it('an INVISIBLE line is NOT an opener, so the band folds it', () => {
+    // THE BULLET IS ABOUT OPENERS (markup-carve/carve#1809 amended the clause to
+    // say so, corpus category 430). This row used to assert the opposite - that
+    // `{.x}` and `[a]: /u` left the `dd` like a quote does - and that reading is
+    // what §10 I5 now rules out: at a NONZERO column below the content column an
+    // invisible line is "lazy paragraph text of THAT container ... and does not
+    // register". Ending the body and re-emitting the characters one level out is
+    // not carrying that sentence out, whatever the bytes look like.
+    //
+    // The comment stays in the ejecting column: it is column-exempt (PART 9 §24)
+    // and renders nothing at any column, which corpus 430-5 pins.
     const band = (n: number, opener: string) =>
       carveToHtml(body + ' '.repeat(n) + opener + '\npara\n')
-    const left = dd
-    for (const opener of ['{.x}', '[a]: /u', '%% c']) {
-      expect(band(1, opener).startsWith(left)).toBe(true)
-      expect(band(2, opener)).toBe(band(1, opener))
+    for (const opener of ['{.x}', '[a]: /u']) {
+      const folded = `<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n${opener}\npara</dd>\n</dl>`
+      expect(band(1, opener)).toBe(folded)
+      expect(band(2, opener)).toBe(folded)
     }
-    // The whole document for the attribute case, so the row says what it means:
-    // the block attribute did NOT attach to `para`, because the body ended and
-    // the top level's own strict column-0 rule then made the line text.
-    expect(carveToHtml(body + ' {.x}\npara\n')).toBe(dd + '<p>{.x}\npara</p>')
-    // CONTROL at column 0, where the attribute really attaches.
+    expect(band(1, '%% c')).toBe(dd + '<p>para</p>')
+    expect(band(2, '%% c')).toBe(band(1, '%% c'))
+    // AND THE FOLD IS A FOLD, not a half one: the attribute attaches nothing and
+    // the definition registers nothing, so a later reference stays literal.
+    // Characters on the page plus an entry in a symbol table is the shape corpus
+    // 430 exists to catch.
+    expect(carveToHtml(body + ' [a]: /u\npara\n\nSee [text][a].\n')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>body\nmore\n[a]: /u\npara</dd>\n</dl>\n<p>See [text][a].</p>',
+    )
+    // CONTROL at column 0, the document's own opener column: there the attribute
+    // really attaches and the definition really registers.
     expect(carveToHtml(body + '{.x}\npara\n')).toBe(dd + '<p class="x">para</p>')
+    expect(carveToHtml(body + '[a]: /u\n\nSee [text][a].\n')).toBe(
+      dd + '<p>See <a href="/u">text</a>.</p>',
+    )
   })
 })

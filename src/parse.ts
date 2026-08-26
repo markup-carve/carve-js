@@ -6450,6 +6450,14 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         atContentColumn,
       )
     }
+    // Lines admitted by REACHING the body's content column, mirroring the list
+    // item's `authoredBaseEligible` one collector over. A below-column lazy line
+    // keeps a positive residual indent on purpose, and that residue must never
+    // be read as #1705 over-indentation and rebased away: rebasing it delivers
+    // the line FLUSH inside the `dd`, where its shape is recognized again - a
+    // definition registers, an attribute attaches - and the fold §10 I5 asks for
+    // has not happened (markup-carve/carve-js#1550).
+    const bodyBaseEligible = new Set<number>()
     // The boundary set for a `+`-attached block in a definition body: a blank,
     // a further `+`, or the next term / description marker. Whether a line in
     // that set actually ENDS the block is `insideOpenFence`'s answer, layered
@@ -6464,10 +6472,12 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     // block, with no indentation. `:  \+` keeps a literal `+` instead.
     if (/^\+[ \t]*$/.test(first)) {
       const firstBlock = collectAttachedBlock(lexer, isDefBodyBoundary)
+      for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
       bodyLines.push(...firstBlock.lines)
       bodyLineNumbers.push(...firstBlock.lineNumbers)
       for (const a of firstBlock.lines) track(a)
     } else {
+      bodyBaseEligible.add(bodyLines.length)
       bodyLines.push(first)
       bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
       // The MARKER LINE never goes through the tracker in the list either, and
@@ -6513,10 +6523,12 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
           isDefBodyBoundary,
         )
         if (attached.length > 0) {
+          bodyBaseEligible.add(bodyLines.length)
           bodyLines.push('')
           bodyLineNumbers.push(lexer.lineNumber(plusLineIndex))
           track('')
           for (const a of attached) {
+            bodyBaseEligible.add(bodyLines.length)
             bodyLines.push(a)
             track(a)
           }
@@ -6565,6 +6577,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // tabs as columns, so a no-break space stops the scan as content.
         const lineIndex = lexer.pos
         const dedented = sliceColumns(ln, contentCol, true)
+        bodyBaseEligible.add(bodyLines.length)
         bodyLines.push(dedented)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         track(dedented, lineIndex)
@@ -6590,6 +6603,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         ) {
           for (let k = 0; k < look; k++) {
             const lineIndex = lexer.pos
+            bodyBaseEligible.add(bodyLines.length)
             bodyLines.push('')
             bodyLineNumbers.push(lexer.lineNumber(lineIndex))
             track('')
@@ -6644,8 +6658,25 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // container is still deciding on is prose. The link and footnote
       // spellings keep their arms - those ARE recognized inside a container, so
       // they really do open a block and really do end the body.
+      //
+      // WHICH COLUMN THE LINE FELL TO SELECTS THE BAND (§10 I5, carve#1809). At
+      // a NONZERO column below the body's column an invisible line is lazy
+      // paragraph text OF THIS CONTAINER, so the definition and attribute arms
+      // are waived and it folds; at document column 0 they stand, so a
+      // definition registers and a floating attribute attaches forward. The
+      // ABBREVIATION arm is waived at every column, because §7 recognizes that
+      // definition only as a direct child of the document and C3's column-0 test
+      // carries the same exclusion.
+      //
+      // A real OPENER still ends the body from any column - that is what the
+      // BELOW THE BODY'S COLUMN THE BODY ENDS bullet is about - and a heading,
+      // quote or table row one column in is pinned as a control.
       const below = ln.replace(/^[ \t]+/, '')
-      if (lazyState.lazyFoldable && !startsInterruptingBlock(lexer, below, true, false)) {
+      const atDocumentColumn = below === ln
+      if (
+        lazyState.lazyFoldable &&
+        !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
+      ) {
         const lineIndex = lexer.pos
         bodyLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -6658,7 +6689,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     // The same authored-base rule list items use, now in the definition body's
     // coordinate system after its own content margin was removed - plus
     // Definition entries use the same exact block extent in every container.
-    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
+    rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
     return parseBlocks(sub, 0)
@@ -10581,6 +10612,23 @@ function startsInterruptingBlock(
   // (markup-carve/carve-js#1544). The nested spelling folded all along, which is
   // which of the two is right.
   abbreviationArm = true,
+  // AND SO ARE THE OTHER INVISIBLE ARMS, for the band markup-carve/carve#1809
+  // ruled. §10 I5 DEFINITION OWNERSHIP IS COLUMN-SCOPED: at a NONZERO column
+  // below a container's content column a link reference, footnote or
+  // abbreviation definition, or a block-attribute line, "is lazy paragraph text
+  // of THAT container - the one whose content column it fell below - and does
+  // not register". So it may not interrupt there, because interrupting is
+  // exactly what ends the container and re-classifies the line one level out.
+  //
+  // At DOCUMENT COLUMN 0 they interrupt as they always did: that is the
+  // document's own opener column, where a definition registers and a floating
+  // attribute attaches forward. The caller passes its own column, so this one
+  // parameter carries the whole three-band rule.
+  //
+  // THE COMMENT IS NOT IN THE SET. It is column-exempt (PART 9 §24) and renders
+  // nothing at any column, which corpus 430-5 pins - waiving it here would put
+  // the comment's characters on the page.
+  invisibleArms = true,
 ): boolean {
   const ln = content ?? lexer.peek()
   if (ln === undefined) return false
@@ -10656,7 +10704,7 @@ function startsInterruptingBlock(
       // anchor does that work for every other pattern here; RE_LINK_DEF is
       // whitespace-tolerant on purpose (other passes need it to see a quoted or
       // nested def) and so needs the test written out (carve-js#597).
-      return i === 0 && (isLinkDefLine(ln) || RE_FOOTNOTE_DEF.test(ln))
+      return invisibleArms && i === 0 && (isLinkDefLine(ln) || RE_FOOTNOTE_DEF.test(ln))
     case '%':
       // line or block comment (invisible)
       return RE_COMMENT_LINE.test(ln) || RE_COMMENT_BLOCK.test(ln)
@@ -10669,7 +10717,7 @@ function startsInterruptingBlock(
       // line from the lexer instead of testing `ln`, so without it a below-column
       // `{.x}` stayed lazy text while every other opener kind left the container
       // (raised by codex review on markup-carve/carve-js#864).
-      return peekBlockAttributes(lexer, content === undefined ? undefined : ln)
+      return invisibleArms && peekBlockAttributes(lexer, content === undefined ? undefined : ln)
     default:
       // An ordered-list marker does NOT interrupt a paragraph (it needs a blank
       // line, matching Djot): allowing it would require the CommonMark `1.`-only
