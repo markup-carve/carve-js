@@ -9,6 +9,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **An empty description body is written with the `{empty}` sentinel** (#1560, #1559, markup-carve/carve#1833, markup-carve/carve#1827, PART 11 §7d). `carve fmt` writes `: {empty}` where a description holds no blocks, the sentinel PART 11 §7b already gives an empty footnote definition body, so every entry writes its own description line and a `<dl>` reads back as one list with the grouping it parsed. The definition-list import path no longer reports `structure-unspellable` or `structure-split`.
 - **`paragraph.blockImage` is published on the wire and trusted on ingest** (#1556, #1552, #1553, markup-carve/carve#1816, PART 9R R7, PART 12 §23). One promotion phase runs after reference resolution and the renderers read its answer instead of re-deriving it; an ingested tree is promoted only where the field is absent.
 - **Citation items are typed, positioned nodes** (#1538, markup-carve/carve#1799). Each item of a group serializes as `type: "citation"` with its own `pos`, and profile filtering traverses an item's prefix, locator and suffix rather than the group alone.
 - **Checked render APIs and CLI loss reporting** (#1482, markup-carve/carve#1728). `*WithReport` returns bounded `raw-format-dropped` diagnostics with positions; `--strict-losses` refuses lossy output, while `--report-losses` writes JSON and `--allow-loss` records an intentional exception.
@@ -77,6 +78,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A colon followed by only whitespace is not a description** (#1563, #1561, markup-carve/carve#1832, markup-carve/carve#1830, PART 2 MARKER REQUIRES CONTENT). One, two and three spaces, a tab and the bare colon all fold under the open term instead of emitting a stray `<p>:</p>`, and `::` followed straight by a tab folds too where it used to close the list and emit its own paragraph.
 - **A reference image inside a container promotes with its caption** (#1556, #1553). The figure arm gated on the image's absolute column, which no container can satisfy; it now reads whether the paragraph began at its container's content column.
 - **The continuation marker's column gate reaches every container** (#1555, #1554, markup-carve/carve#1817, PART 9 §17 L3). A footnote body, a definition description and a block quote each reached out for a line that is not flush-left, where a list item already refused it.
 - **An invisible line below a definition description's column folds into it** (#1551, #1550, markup-carve/carve#1809, PART 9 §10 I5). The line was ejected to document level from a description while the identical line folded one host over in a list item.
