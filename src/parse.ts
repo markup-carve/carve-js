@@ -657,14 +657,28 @@ const RE_DIV_OPEN = /^(:{3,}) *(\[[^\]]*\])?[ \t]*$/
 // `:: <SOH>` - a C0 control the host class happens not to carry - made the
 // list. One class, two answers, decided by which control the author typed.
 const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
-// A CONTENT-LESS marker line: `::` or `:` followed by whitespace and nothing
-// else. It is not a marker - both patterns above require content - so it stays
+// A CONTENT-LESS TERM marker line: `::` followed by whitespace and nothing
+// else. It is not a marker - `RE_DEFLIST_TERM` requires content - so it stays
 // paragraph text, and it CLOSES any open term or definition rather than folding
-// into it (carve-js#731; carve-rs and carve-php both close).
+// into it (carve-js#731).
 //
-// At least one space is required, so a bare `::` is untouched: all three engines
-// already agree on that line and it is a different shape.
-const RE_DEFLIST_MARKER_EMPTY = /^::?(?!:)[ \t]+$/
+// AT LEAST ONE SPACE IS REQUIRED, so a bare `::` is untouched: that line folds
+// into the term above it as a soft break, which is a different shape.
+//
+// THE DESCRIPTION MARKER IS NOT HERE. `:` plus whitespace and nothing else is a
+// plain line under the open term or description, which folds it as a soft break
+// and drops its trailing run - the same reading the bare `:` line already gets,
+// and the one carve-php gives all four whitespace spellings
+// (markup-carve/carve#1830). Closing there emitted the colon as its own
+// paragraph and ended the list, which is a structure the marker never opened.
+//
+// THE SEPARATOR STILL HAS TO START WITH A LITERAL SPACE, which is why the run
+// is `' ' [ \t]*` and not `[ \t]+`. A MARKER SEPARATOR is spelled `space` and a
+// TAB NEVER SATISFIES IT (PART 1), so `::` followed straight by a tab is not a
+// marker line at all - content-less or otherwise - and folds like the bare `::`
+// above it. Written `[ \t]+` it closed there instead, which is the same
+// divergence from carve-php the description marker had, one marker over.
+const RE_DEFLIST_MARKER_EMPTY = /^::(?!:) [ \t]*$/
 
 // A definition body: `:` plus a SEPARATOR RUN of one or more spaces, then
 // content. Group 1 is the run and group 2 the content.
