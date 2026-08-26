@@ -54,15 +54,23 @@ describe("an abbreviation definition below a description's column folds", () => 
     )
   })
 
-  it('CONTROLS: the link and footnote spellings still end the body', () => {
-    // Recognized inside a container, so they are block openers there and the
-    // band ends the body on them. A fix that waived the whole invisible set
-    // instead of the abbreviation arm fails exactly here.
+  it('the link and footnote spellings fold here too', () => {
+    // These rows asserted the OPPOSITE when this file landed - that the two
+    // definition spellings ended the body - which was the whole band's answer at
+    // the time and is what markup-carve/carve#1809 overturned: §10 I5 makes an
+    // invisible line at a nonzero column below the content column lazy paragraph
+    // text OF THIS CONTAINER, for every kind. Corpus 430 and 430-2 pin them, and
+    // markup-carve/carve-js#1550 is the change that moved them.
+    //
+    // They are kept here rather than deleted because they are still what tells
+    // the abbreviation fix from a blanket one: the abbreviation folds because §7
+    // never recognized it in a container, the other two fold because of the
+    // column. Two reasons, one answer.
     expect(html(':: t\n:  d\n  [r]: /u\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>[r]: /u\ntail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d\n[r]: /u\ntail</dd>\n</dl>',
     )
     expect(html(':: t\n:  d\n  [^f]: n\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>[^f]: n\ntail</p>',
+      '<dl>\n  <dt>t</dt>\n  <dd>d\n[^f]: n\ntail</dd>\n</dl>',
     )
   })
 
