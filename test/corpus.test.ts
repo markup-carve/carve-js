@@ -709,6 +709,28 @@ const IMPLEMENTED = new Set([
   'an-invisible-line-before-the-blank-does-not-cancel-the-separation',
   'an-unresolved-image-gives-its-whole-caption-slot-back-at-any-depth',
   'below-a-definition-body-s-column-an-invisible-line-folds-as-text',
+  // Corpus 435 through 439, which the pin bump to carve `ac2493c0` brings with
+  // it. No engine work in any of them: every document reproduces byte-for-byte
+  // on this build, including the `.fmt` fixtures of 438. They are named rather
+  // than left out because a category absent from this set runs as `.todo`, and
+  // a `.todo` reads as coverage while asserting nothing.
+  //
+  // markup-carve/carve#1817. The continuation marker's column gate is a
+  // property of the marker, so it reaches every container and not only a list.
+  'the-continuation-marker-s-column-gate-reaches-every-container',
+  // markup-carve/carve#1822. An empty description body claims no line below
+  // its column - column 0 included, which is where the claim used to be made.
+  'an-empty-description-body-claims-no-line-below-column',
+  'an-empty-description-body-claims-no-line-below-column-0',
+  // markup-carve/carve#1828. A container reached by its own marker does not
+  // also honor a LEADING continuation marker, so that marker stays text.
+  'a-leading-continuation-marker-in-a-footnote-body-or-a-quote-is-text',
+  // markup-carve/carve#1833. An empty description body is written with the
+  // `{empty}` sentinel rather than dropped, which keeps the list whole.
+  'an-empty-description-body-is-written-with-the-empty-sentinel',
+  // markup-carve/carve#1832. A colon with only whitespace after it opens no
+  // description, so the marker is not a definition separator.
+  'a-colon-followed-by-only-whitespace-is-not-a-description',
 ])
 
 /**
