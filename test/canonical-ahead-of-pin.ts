@@ -13,43 +13,17 @@
  * IT LIVES IN ITS OWN FILE BECAUSE TWO SUITES READ THESE SIDECARS.
  * `corpus-canonical-form.test.ts` reads them as PART 11 §2's canonical bytes and
  * `corpus-render-fixtures.test.ts` reads them as one of four render targets.
- * Declared inside either one, the other would still fail on the same four
- * documents for the same reason - one rule with two spellings, which is the
- * shape markup-carve/carve#755 catalogs and the shape this whole ruling came
- * out of.
+ * Declared inside either one, the other would still fail on the same documents
+ * for the same reason - one rule with two spellings, which is the shape
+ * markup-carve/carve#755 catalogs and the shape this whole ruling came out of.
+ * That is why the file stays when the map is empty: the next window has one
+ * home rather than two.
  *
- * The four below are the sidecars markup-carve/carve#1757 rewrote when it made
- * ONE SPACE the canonical definition separator. Narrowing the separator narrows
- * the body's content column, so 279 also carries its fenced block down two
- * columns - a writer that trimmed the marker and left the fence where it sat
- * would write a document that says something else.
+ * The map is empty right now. Its four entries were the sidecars
+ * markup-carve/carve#1757 rewrote when it made ONE SPACE the canonical
+ * definition separator - narrowing the separator narrows the body's content
+ * column, so 279 also carried its fenced block down two columns. Upstream
+ * re-cut all four, both suites now read the pinned bytes directly, and the
+ * entries went out with the bump that reached them.
  */
-export const CANONICAL_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; fmt: string }> = new Map(
-  (
-    [
-      [
-        '227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace',
-        ':: term\n: [r]: /u\n\nsee [t][r]\n',
-      ],
-      [
-        '227-a-definition-inside-a-definition-list-dd-is-collected-and-the-entry-keeps-no-trace-2',
-        ':: term\n: [^f]: x\n\nsee[^f]\n',
-      ],
-      [
-        '279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-3',
-        ':: t\n: d\n\n  ```\n  a\n\n  b\n  ```\n',
-      ],
-      [
-        '407-one-consumed-boolean-spells-the-looseness-no-blank-line-can-2',
-        '{loose}\n:: Term\n: Definition.\n',
-      ],
-    ] as const
-  ).map(([slug, fmt]): [string, { reason: string; fmt: string }] => [
-    slug,
-    {
-      reason:
-        'one space is the canonical definition separator and the body moves with it (markup-carve/carve#1757); the pinned sidecar still spells the two-space form',
-      fmt,
-    },
-  ]),
-)
+export const CANONICAL_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; fmt: string }> = new Map()

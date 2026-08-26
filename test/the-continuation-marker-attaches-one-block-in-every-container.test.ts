@@ -20,79 +20,28 @@ import { carveToHtml } from '../src/index.js'
  *    same clause forbids one sentence up ("the marker only ATTACHES").
  *  - IT ATTACHES ONE BLOCK. The block after that one stays outside, and a
  *    second block costs a second marker. Removing the `>` test could have been
- *    paid for by a wider reach; it was not, and the four corpus documents below
- *    are what says so - they are the same rule asked of all four containers.
+ *    paid for by a wider reach; it was not, and category 427's four corpus
+ *    documents are what says so - the same rule asked of all four containers.
  *
  * The reach is narrowed in ONE place (`collectAttachedBlock` re-parses the
  * collected lines through `attachedBlockExtent`), which is why every container
  * answers alike. A per-container extent is the drift carve#1782 was filed
  * about; keep it single.
  *
- * The four documents in `corpus documents` are the corpus files verbatim. This
- * engine's spec pin predates them, so `corpus.test.ts` cannot run the category
- * and its ahead-of-pin map cannot name a slug the pinned corpus does not carry
- * - the same position carve-js#1528 and #1529 were in for categories 424 and
- * 422. DELETE the `corpus documents` block when the pin moves past carve
- * 70e794b0 and the corpus runner picks the category up; the bands below it are
+ * The four corpus documents themselves are no longer copied here. They were,
+ * while this engine's spec pin predated them and `corpus.test.ts` could not run
+ * the category - the same position carve-js#1528 and #1529 were in for
+ * categories 424 and 422. The pin has moved past carve 70e794b0, the category is
+ * in the corpus runner's IMPLEMENTED list, and the runner reads the files
+ * themselves rather than a copy that can drift from them. The bands below are
  * this engine's own and stay.
  */
 describe('the continuation marker attaches one block in every container', () => {
-  describe('corpus documents', () => {
-    it('427-… - a list item takes the paragraph and leaves the quote outside', () => {
-      expect(carveToHtml('- a\n+\npara\n> q\n')).toBe(
-        `<ul>
-  <li>a
-    para
-  </li>
-</ul>
-<blockquote><p>q</p></blockquote>`,
-      )
-    })
-
-    it('427-…-2 - a footnote body takes the paragraph and leaves the quote outside', () => {
-      expect(carveToHtml('[^n]: a\n+\npara\n> q\n\nsee[^n]\n')).toBe(
-        `<blockquote><p>q</p></blockquote>
-<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
-<section role="doc-endnotes" aria-label="Footnotes">
-  <hr>
-  <ol>
-    <li id="fn1">
-      <p>a</p>
-      <p>para<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
-    </li>
-  </ol>
-</section>`,
-      )
-    })
-
-    it('427-…-3 - a description takes the paragraph and leaves the quote outside', () => {
-      expect(carveToHtml(':: t\n:  a\n+\npara\n> q\n')).toBe(
-        `<dl>
-  <dt>t</dt>
-  <dd>
-    <p>a</p>
-    <p>para</p>
-  </dd>
-</dl>
-<blockquote><p>q</p></blockquote>`,
-      )
-    })
-
-    it('427-…-4 - a block quote takes a quote, which it used to take as nothing', () => {
-      expect(carveToHtml('> a\n+\n> q\n')).toBe(
-        `<blockquote>
-  <p>a</p>
-  <blockquote><p>q</p></blockquote>
-</blockquote>`,
-      )
-    })
-  })
-
   /*
    * EDGE ONE: the marker attaches, whatever the kind. A quote was the only kind
    * the block quote refused, so the other kinds are carried alongside it - a
    * fix that special-cased the quote back in would satisfy the corpus document
-   * above and still leave the boundary keyed on kind.
+   * for a block quote and still leave the boundary keyed on kind.
    */
   describe('a block quote attaches every kind', () => {
     it('attaches a quote', () => {

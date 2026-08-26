@@ -15,14 +15,14 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
  * reach it.
  *
  * THESE ARE THE SPEC'S OWN SEVEN DOCUMENTS, written out rather than read from
- * the submodule. The category is `424-a-definition-body-s-separator-width-sets-
- * its-content-column` on spec main at 7012107a, which the pin in this repo has
- * not reached yet - `corpus.test.ts` cannot run a category the pinned corpus
- * does not carry, and `AHEAD_OF_PIN` there refuses a slug that is not in it, so
- * a file is the only place this coverage can live until the bump lands. Each
- * `it` below names the document it carries; when the pin moves they become the
- * second reading of a rule the corpus also checks, which is the state every
- * other ruling in this engine is already in.
+ * the submodule. They were the only place this coverage could live while the pin
+ * predated category `424-a-definition-body-s-separator-width-sets-its-content-
+ * column`: `corpus.test.ts` cannot run a category the pinned corpus does not
+ * carry, and `AHEAD_OF_PIN` there refuses a slug that is not in it. The pin has
+ * since reached it and the category is in the corpus runner's IMPLEMENTED list,
+ * so these are now the second reading of a rule the corpus also checks - the
+ * state every other ruling in this engine is already in. Each `it` below names
+ * the document it carries.
  */
 
 const flat = (html: string): string => html.replace(/\s+/g, ' ').trim()
