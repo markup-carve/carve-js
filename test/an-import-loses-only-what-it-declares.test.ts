@@ -34,26 +34,23 @@ const ENDNOTES_LAST =
   '<section role="doc-endnotes"><ol><li id="fn1"><p>n</p></li></ol></section>'
 
 describe('an empty definition description', () => {
-  it('is written as the term alone', () => {
-    expect(htmlToCarve(EMPTY_DD).value).toBe(':: term\n')
+  it('is written with the {empty} sentinel', () => {
+    expect(htmlToCarve(EMPTY_DD).value).toBe(':: term\n: {empty}\n')
   })
 
-  it('leaves the term undamaged on the way back', () => {
-    // The defect was never only the missing description. The bare `:` line
-    // folded into the term, so the `<dt>` came back reading `term\n:`.
-    expect(carveToHtml(htmlToCarve(EMPTY_DD).value)).toBe('<dl>\n  <dt>term</dt>\n</dl>')
-  })
-
-  it('declares the loss it takes', () => {
-    // The ceiling. Losing the description is legitimate BECAUSE this says so.
-    expect(htmlToCarve(EMPTY_DD).report.diagnostics).toContainEqual(
-      expect.objectContaining({ code: 'structure-unspellable', path: '/dl[1]/dd[2]' }),
+  it('reads back as the same list, term and empty description alike', () => {
+    expect(carveToHtml(htmlToCarve(EMPTY_DD).value)).toBe(
+      '<dl>\n  <dt>term</dt>\n  <dd></dd>\n</dl>',
     )
   })
 
-  it('keeps the empty description on the AST exit, and reports nothing there', () => {
-    // The other half of what the diagnostic code means: a consumer that keeps
-    // the AST loses nothing, so there is nothing to report to it.
+  it('declares no loss, because it takes none', () => {
+    // The sentinel spells the shape, so there is nothing for the ceiling to
+    // permit (markup-carve/carve#1827).
+    expect(htmlToCarve(EMPTY_DD).report.diagnostics).toEqual([])
+  })
+
+  it('keeps the empty description on the AST exit too', () => {
     const { value, report } = htmlToAst(EMPTY_DD)
 
     expect(report.diagnostics).toEqual([])
@@ -61,8 +58,9 @@ describe('an empty definition description', () => {
   })
 
   it('leaves a description that writes something alone', () => {
-    // The control. Every assertion above passes for an importer that dropped
-    // every description, and this is what such an importer would break.
+    // The control. Every assertion above passes for an importer that wrote
+    // `: {empty}` for EVERY description, and this is what such an importer
+    // would break.
     expect(htmlToCarve('<dl><dt>term</dt><dd>d</dd></dl>').value).toBe(':: term\n: d\n')
     expect(carveToHtml(htmlToCarve('<dl><dt>term</dt><dd>d</dd></dl>').value)).toContain('<dd>d</dd>')
   })

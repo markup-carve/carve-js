@@ -22,20 +22,29 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown }>([
-  // Empty on purpose, and the guards below still run: the orphan check has
-  // nothing to walk and the fixture sweep compares every fixture against its
-  // pinned golden directly, which is the state an entry exists to leave.
-  //
-  // Three windows have opened and closed here so far, and each closed a
-  // different way. `derived-endnotes-section` went out with the pin bump that
-  // reached carve d2bd801b. `auto-text-link` went out with the fix that made the
-  // `#id` slot writer-only (markup-carve/carve-js#1445) - a window can be open on
-  // the tree exit while the source exit has already closed, so an entry may name
-  // either. `empty-definition-description-not-last` and `traversal-shaped-index`
-  // sat here while markup-carve/carve#1757 made ONE SPACE the canonical
-  // definition separator without reaching these two fixtures; upstream
-  // re-recorded them, so both went out with this bump.
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
+  // `markup-carve/carve#1827` gave the empty description body the `{empty}`
+  // sentinel, so both of these fixtures are written rather than dropped and
+  // neither owes a diagnostic. The pinned goldens still record the drop, the
+  // `%%` separator that kept the split list apart, and the two rows that
+  // declared them; upstream re-records both, and these entries go out with the
+  // bump that reaches it.
+  [
+    'empty-definition-description',
+    {
+      reason: 'an empty description body is written `: {empty}` (markup-carve/carve#1827)',
+      carve: ':: term\n: {empty}\n',
+      report: { mode: 'safe', adapter: 'generic', diagnostics: [] },
+    },
+  ],
+  [
+    'empty-definition-description-not-last',
+    {
+      reason: 'the sentinel keeps the list whole, so nothing splits (markup-carve/carve#1827)',
+      carve: ':: t1\n: {empty}\n:: t2\n: d2\n',
+      report: { mode: 'safe', adapter: 'generic', diagnostics: [] },
+    },
+  ],
 ])
 
 /**
@@ -116,7 +125,16 @@ describe('shared HTML import contract', () => {
       // children, so `htmlToAst` reports a loss it did not take. Reading the
       // tree's report against a source fixture compares two different questions
       // and fails on the answer to the one not asked.
-      expect(carve.report).toMatchObject(expectedReport)
+      if (ahead?.report !== undefined) {
+        expect(carve.report, ahead.reason).toEqual(ahead.report)
+        // The staleness half, as above.
+        expect(
+          expectedReport,
+          `${fixture} now matches: delete its AHEAD_OF_PIN entry`,
+        ).not.toEqual(ahead.report)
+      } else {
+        expect(carve.report).toMatchObject(expectedReport)
+      }
     })
   }
 })
