@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { carveToHtml, parse } from '../src/index.js'
+import { applyProfile, carveToHtml, parse, Profile } from '../src/index.js'
 import { citations, parseLocator } from '../src/citations.js'
 import { perfIt } from './helpers/scaling.js'
 
@@ -65,6 +65,38 @@ describe('citation matcher', () => {
   it('parses multiple ;-separated items', () => {
     const g = group('[@a; @b]')
     expect(g?.items.map((i) => i.key)).toEqual(['a', 'b'])
+  })
+})
+
+describe('citation profiles', () => {
+  it('denies typed citation items by degrading their group to authored text', () => {
+    const doc = parse('See [@a; @b].', { extensions: [citations()] })
+    const result = applyProfile(doc, Profile.full().denyInline(['citation']))
+    const paragraph = result.doc.children[0] as { children: Array<{ type: string; value?: string }> }
+
+    expect(result.violations.map((violation) => violation.nodeType)).toEqual([
+      'citation',
+      'citation',
+    ])
+    expect(paragraph.children).toContainEqual({ type: 'text', value: '[@a; @b]' })
+  })
+
+  it('filters inline nodes nested inside a typed citation item', () => {
+    const doc = parse('[see *also* @a]', { extensions: [citations()] })
+    const result = applyProfile(doc, Profile.full().denyInline(['strong']))
+    const paragraph = result.doc.children[0] as {
+      children: Array<{
+        type: string
+        items?: Array<{ prefix?: Array<{ type: string; value?: string }> }>
+      }>
+    }
+    const item = paragraph.children.find((node) => node.type === 'citation_group')!.items![0]!
+
+    expect(result.violations.map((violation) => violation.nodeType)).toEqual(['strong'])
+    expect(item.prefix).toEqual([
+      expect.objectContaining({ type: 'text', value: 'see ' }),
+      { type: 'text', value: 'also' },
+    ])
   })
 })
 
