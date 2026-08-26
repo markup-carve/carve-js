@@ -33,7 +33,29 @@ describe('lintCarve - a quote fence below a quote', () => {
   it('reports it in a footnote body, which hangs off the document', () => {
     // The body is a block list like any other, and a walk of `children` alone
     // reports the construct on the page and stays silent in the note.
-    expect(reports('[^a]: > q\n      ::: >\n      b\n      :::\n\nsee[^a]\n')).toHaveLength(1)
+    //
+    // AT THE BODY'S OWN COLUMN, which is the only column where the construct
+    // this rule names exists. A footnote body strips a two-column margin, so
+    // `  ` here is the body's column 0 - the same spelling the document-level
+    // row above uses, and the one where a `::: >` opener really does end the
+    // quote above it and open a sibling.
+    expect(reports('[^a]: > q\n  ::: >\n  b\n  :::\n\nsee[^a]\n')).toHaveLength(1)
+  })
+
+  it('says nothing when the fence is INDENTED past the quote it follows', () => {
+    // NOT A HOLE IN THE LINT - there is no second quote to report. Past the
+    // body's own column the fence is a lazy continuation of the quoted
+    // paragraph, exactly as it is at the top level (carve#1781, carve-js#1535;
+    // the equality is pinned across the whole column band in
+    // `a-recognized-opener-in-a-body-needs-no-blank-line-above-it.test.ts`).
+    //
+    // This document USED to report, because the body answered every authored
+    // column the same way and produced two sibling quotes at all of them. The
+    // report was a true statement about a parse that was itself wrong.
+    expect(reports('[^a]: > q\n      ::: >\n      b\n      :::\n\nsee[^a]\n')).toEqual([])
+    expect(carveToHtml('> q\n    ::: >\n    b\n    :::\n').replace(/\s+/g, ' ').trim()).toBe(
+      '<blockquote><p>q ::: &gt; b :::</p></blockquote>',
+    )
   })
 
   it('says nothing about the nested spelling, which needs the marker', () => {

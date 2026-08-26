@@ -695,7 +695,66 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  // THE BASE BELONGS TO THE INNERMOST OPEN CONTAINER (PART 9 §24 C3,
+  // markup-carve/carve#1781, landed in carve#1788; markup-carve/carve-js#1535).
+  //
+  // These two are the ONLY corpus goldens the ruling re-cut - every other
+  // document it touched is a new file the pinned corpus does not carry yet, so
+  // the rest of the category lives in
+  // `a-recognized-opener-in-a-body-needs-no-blank-line-above-it.test.ts` under
+  // this repo's `corpus documents` pattern instead.
+  //
+  // The `.crv` inputs are BYTE-IDENTICAL across the move. Only the goldens
+  // changed, which is why the window has to be declared here rather than read
+  // off a diff: nothing about the pinned input says it is stale.
+  [
+    '419-a-definition-list-inside-a-footnote-body-carries-its-authored-base',
+    {
+      reason:
+        'the quote is written at the nested description body\'s content column, so it is that description\'s block and not the footnote body\'s (markup-carve/carve#1781); the pinned golden still spells the pre-unification reading',
+      html: `<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <p>intro</p>
+      <dl>
+        <dt>term</dt>
+        <dd>
+          <p>definition</p>
+          <blockquote><p>quote</p></blockquote>
+        </dd>
+      </dl>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+  </ol>
+</section>`,
+    },
+  ],
+  [
+    '419-a-definition-list-inside-a-footnote-body-carries-its-authored-base-3',
+    {
+      reason:
+        'below the description body\'s column the description ENDS, and the surviving context is the footnote body - where the quote is still a quote rather than escaped text (markup-carve/carve#1781); the pinned golden still spells it as text',
+      html: `<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <p>intro</p>
+      <dl>
+        <dt>term</dt>
+        <dd>definition</dd>
+      </dl>
+      <blockquote><p>quote</p></blockquote>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+  </ol>
+</section>`,
+    },
+  ],
+])
 
 
 
