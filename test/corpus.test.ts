@@ -703,6 +703,26 @@ const IMPLEMENTED = new Set([
   // A wrapped attribute on the marker line is one invisible block, not a
   // paragraph reopened by its physical continuation line.
   'a-wrapped-attribute-line-leaves-no-paragraph-open',
+  // ARRIVED WITH THE BUMP TO carve 62c28ce. Five categories, eighteen
+  // documents, and every one renders byte-identically to its pinned HTML on
+  // this engine, so all five are IMPLEMENTED rather than deferred - a gap list
+  // would stop asserting them, and AHEAD_OF_PIN is for goldens this engine
+  // DIFFERS from.
+  //
+  // markup-carve/carve#1808: an invisible line before the blank does not
+  // cancel the separation either. Landed here as markup-carve/carve-js#1548.
+  'an-invisible-line-before-the-blank-does-not-cancel-the-separation',
+  // markup-carve/carve#1809: below a definition body's column an invisible
+  // line folds as text, and a floating attribute under a definition attaches
+  // at column zero. Landed here as markup-carve/carve-js#1549 and #1551.
+  'below-a-definition-body-s-column-an-invisible-line-folds-as-text',
+  'a-floating-attribute-under-a-definition-attaches-at-column-zero',
+  // markup-carve/carve#1813: one classification for the invisible lines, and
+  // the semantic action per kind - an abbreviation definition outside document
+  // level is not an invisible line, and a comment in a footnote body is
+  // invisible in both spellings.
+  'an-abbreviation-definition-outside-document-level-is-not-an-invisible-line',
+  'a-comment-in-a-footnote-body-is-invisible-in-both-spellings',
 ])
 
 /**
