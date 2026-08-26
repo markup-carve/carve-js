@@ -5360,6 +5360,15 @@ function parseFootnoteDef(lexer: Lexer): null {
       lexer.consume()
       pendingBlanks = 0
       pendingBlankLineNumbers = []
+      // ...AND THE NOTE ENDS WHERE A COMMENT ENDS IT. The gate below decides
+      // whether this `+` is a marker at all; when it is not, the line is an
+      // ordinary invisible line at document column 0, and a footnote body ends
+      // at one of those exactly as it ends at a comment line there
+      // (markup-carve/carve#1814). Asked one line early because this loop's
+      // own continuation branch would otherwise claim the following line before
+      // any extent is measured. The `+` is consumed either way, so the
+      // enclosing parse resumes on the line the marker did not take.
+      if (!attachesAtDocumentColumnZero(lexer)) break
       const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
         lexer,
         (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) || RE_FOOTNOTE_DEF.test(a),
@@ -6518,6 +6527,14 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       if (/^\+[ \t]*$/.test(ln)) {
         const plusLineIndex = lexer.pos
         lexer.consume()
+        // ...AND THE DESCRIPTION ENDS WHERE A COMMENT ENDS IT. Same shape as
+        // the footnote body (markup-carve/carve#1814): a `+` the gate refuses
+        // is an ordinary invisible line at document column 0, and a `<dd>` ends
+        // at one of those. Asked before the body's own continuation branch can
+        // claim the following line. A block quote does NOT end at a comment
+        // there, so it does not end at a refused marker either - that is each
+        // container's invisible-line rule, not a second column rule.
+        if (!attachesAtDocumentColumnZero(lexer)) break
         const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
           lexer,
           isDefBodyBoundary,
@@ -8089,8 +8106,13 @@ function attachedBlockExtent(
  * attachment.
  */
 function attachesAtDocumentColumnZero(lexer: Lexer): boolean {
-  const root = lexer.rootLines
-  if (!root) return true
+  // THE DOCUMENT'S OWN LINES, OR THIS LEXER'S IF IT IS THE DOCUMENT. Only a
+  // SUB-lexer carries `rootLines`; the root lexer's `lines` ARE the document,
+  // and reading the absence as "cannot answer" made the gate return true for
+  // every container parsed at top level - which is every one of them
+  // (markup-carve/carve#1814). The distinction that matters is source column
+  // versus FRAME column, and at the root those are the same number.
+  const root = lexer.rootLines ?? lexer.lines
   const line = root[lexer.lineNumber(lexer.pos) - 1]
   if (line === undefined) return true
   let rest = line
@@ -8107,6 +8129,20 @@ function collectAttachedBlock(
   isBoundary: (line: string) => boolean,
   transform?: (line: string) => string,
 ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
+  // AND FLUSH-LEFT MEANS COLUMN 0 IS ASKED HERE, ONCE, FOR EVERY CONTAINER
+  // (§17 L3, markup-carve/carve#1814). The predicate existed but only the list
+  // item's three attach paths called it, so the footnote body, the definition
+  // description and the block quote each reached out for a line the clause
+  // leaves where the author wrote it: a `<dd>` whose content column is 3 pulled
+  // in a column-1 or column-2 line, a note pulled in a column-1 line, and a
+  // quote took a column-2 line that A QUOTE IS REACHED BY ITS MARKER (§10 I5,
+  // markup-carve/carve#1384) puts in no quote at all. Every caller already
+  // treats an EMPTY result as "the marker attached nothing" and lets its own
+  // ordinary rules have the line, which is exactly what the clause's comment
+  // spelling does.
+  if (!attachesAtDocumentColumnZero(lexer)) {
+    return { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
+  }
   const fenced = fencedBlockEnd({
     at: (offset) => {
       const line = lexer.peek(offset)
@@ -8942,14 +8978,26 @@ function parseList(lexer: Lexer): List {
     // sole item content is the continuation marker, not literal text
     // (`- + text` keeps `+ text` as literal content). Lets an item start
     // directly with a table, code block, quote or div at column 0.
-    if (isContinuationMarker(content)) {
-      // AND ONLY A FLUSH-LEFT ONE (§17 L3, markup-carve/carve#1436). A candidate
-      // at any other column is not attached: it falls through to the ordinary
-      // column rules, exactly as if this marker line had been a comment. Under a
-      // NESTED marker that is the whole difference - `* * +` used to swallow a
-      // line written at the OUTER item's content column, so outer content could
-      // not be written after a nested marker at all.
-      const attachesHere = attachesAtDocumentColumnZero(lexer)
+    // AND ONLY A FLUSH-LEFT ONE (§17 L3, markup-carve/carve#1436). A candidate
+    // at any other column is not attached: it falls through to the ordinary
+    // column rules, exactly as if this marker line had been a comment. Under a
+    // NESTED marker that is the whole difference - `* * +` used to swallow a
+    // line written at the OUTER item's content column, so outer content could
+    // not be written after a nested marker at all.
+    //
+    // ASKED HERE AS WELL AS IN `collectAttachedBlock`, because the refusal has
+    // to reach further than an empty attachment: `- +` / `  x` leaves an item
+    // whose lead is empty and whose ORDINARY content column then claims the
+    // line, which is what corpus `384-…-5` pins. Publishing the empty item and
+    // moving on would eject a line the item's own column names
+    // (markup-carve/carve#1814).
+    if (isContinuationMarker(content) && !attachesAtDocumentColumnZero(lexer)) {
+      // The marker line is still consumed and contributes nothing; the item
+      // carries an EMPTY lead from here, exactly as a comment on that line
+      // would leave it. `contentCol` is already measured off the marker, so
+      // the column the body is collected at does not move.
+      content = ''
+    } else if (isContinuationMarker(content)) {
       // The attached block is a block: a boundary line inside a fence it opened
       // is that fence's body, not a boundary (see the indented loop's note on
       // carve#975 and corpus category 279). Without this the opener came out an
@@ -8959,10 +9007,7 @@ function parseList(lexer: Lexer): List {
         lines: attached,
         lineNumbers: attachedLineNumbers,
         startLineIndex: attachedStartLineIndex,
-      } =
-        attachesHere ?
-          collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
-        : { lines: [], lineNumbers: [], startLineIndex: lexer.pos }
+      } = collectAttachedBlock(lexer, isItemAttachBoundary, (a) => sliceColumns(a, baseIndent))
       // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
       // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
       // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item
@@ -8977,10 +9022,12 @@ function parseList(lexer: Lexer): List {
       while (!lexer.eof() && isContinuationMarker(lexer.peek()!)) {
         const plusLineIndex = lexer.pos
         lexer.consume()
-        if (!attachesAtDocumentColumnZero(lexer)) break
         const more = collectAttachedBlock(lexer, isItemAttachBoundary, (a) =>
           sliceColumns(a, baseIndent),
         )
+        // An empty result is the column gate's refusal as well as an exhausted
+        // boundary set, and a second marker that attaches nothing ends the run
+        // either way (markup-carve/carve#1814).
         if (more.lines.length === 0) break
         attached.push('')
         attachedLineNumbers.push(lexer.lineNumber(plusLineIndex))
