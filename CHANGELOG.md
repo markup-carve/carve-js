@@ -9,8 +9,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Checked render APIs and CLI loss reporting** (#1728). `*WithReport` returns bounded `raw-format-dropped` diagnostics with positions; `--strict-losses` refuses lossy output, while `--report-losses` writes JSON and `--allow-loss` records an intentional exception.
+- **Checked render APIs and CLI loss reporting** (#1482, markup-carve/carve#1728). `*WithReport` returns bounded `raw-format-dropped` diagnostics with positions; `--strict-losses` refuses lossy output, while `--report-losses` writes JSON and `--allow-loss` records an intentional exception.
 - **`djotToCarve` and `carve migrate --from djot`** (#1367). Code and destinations stay opaque.
+- **A fenced block quote, `::: >`** (#1483, markup-carve/carve#1718). It parses to the node the line-marker form produces, records which spelling was authored, and takes a caption on its closing fence like any other quote (#1502, markup-carve/carve#1742).
+- **`inspectColonFences`, exported, and a `colon-fence-length-mismatch` lint rule** (#1492). `carve lint --json` publishes the structured findings.
+- **A `quote-fence-ends-the-quote-above` lint rule** (#1510), for the one `::: >` authoring hazard no other diagnostic reaches.
+- **Digit-leading explicit ids and classes** (#1486). `{#7-x}`, `{.123}` and the matching generic-div fence kind parse, and survive an HTML import and the canonical writer.
 - **`{loose}` on a container's preceding attribute line renders a list's or a definition list's children as blocks** (#1401, #1407, markup-carve/carve#1612, markup-carve/carve#1623, PART 9 §17 L7).
 - **`createEditorSession` and `EditorSession`, exported** (#1306, #1317). A source-authoritative session whose `snapshot()` and `update(changes)` return the AST with document-space UTF-16 ranges.
 - **Table column metadata: alignment, vertical alignment and widths reach the AST as `table.columns` and `table_cell.valign`, and render as `<colgroup>`** (#1206, markup-carve/carve#1391).
@@ -28,10 +32,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **A fenced percent block and its payload are one invisible block for list looseness.** Visible-looking payload no longer turns an otherwise tight item into a loose one.
-- **Authored block bases now carry opaque fence payloads and attached captions as one structural group.** Fence-shaped payload text is no longer rescanned, and captions on over-indented images, tables, or code blocks stay attached.
+- **A fenced percent block and its payload are one invisible block for list looseness** (#1505). Visible-looking payload no longer turns an otherwise tight item into a loose one.
+- **Authored block bases carry opaque fence payloads and attached captions as one structural group** (#1504). Fence-shaped payload text is no longer rescanned, and a caption on an over-indented image, table or code block stays attached.
 - **Recognized block groups authored past a definition or footnote body's minimum column now parse at their authored local base and format back to the canonical column** (markup-carve/carve#1729). This aligns those containers with list-item authored bases; plain lazy continuation and below-column behavior are unchanged.
 - **Recognized block groups authored past a list item's canonical content column now parse at their authored local base and format back to the canonical column** (#1470, markup-carve/carve#1705). Exact-column and below-column parsing are unchanged. This is a source-compatibility change: `list-item-block-overindented` identifies spellings whose older literal reading changed, while `list-item-body-detached` identifies block-shaped lines that remain below the minimum column.
+- **`{align=left|right|center}` on a text block renders a `text-align` declaration**, not the deprecated presentational attribute (#1507, markup-carve/carve#1755).
+- **A reference label is matched on one ASCII-whitespace-normalized key**, across links, images, footnotes, definitions and lint (#1490). Link definitions stay last-wins and footnote definitions first-wins, and a multiline bracket label is still invalid.
+- **A marker's attached attribute block and a task checkbox contribute nothing to a list item's content column** (#1467, markup-carve/carve#1701).
+- **A ListTable's `<tfoot>` is written one row per line**, as `<tbody>` already was (#1221, #1224).
+- **The escape-escalation search is bounded** (#1312), so a document whose every unit fails no longer costs a whole-document render per block.
 - **`fromAstJson` collapses a carriage return to a line feed**, the way PART 0 normalizes source text (#1352).
 - **`renderCarve` refuses a verbatim value no Carve source can carry**, throwing the exported `SourceUnspellableError` (#1344). Only constructed or ingested trees are affected.
 - **The writer escapes per opener occurrence, not per unit** (markup-carve/carve#1533, PART 11 §2).
@@ -48,7 +57,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A row is a row, in every table section**: `<thead>` and `<tfoot>` write one row per line (markup-carve/carve#1459, PART 10 §7). Nothing renders differently.
 - **Admonitions, task checkboxes, the footnote section and math carry accessible names** (#1253). An authored name wins, and the `labels` map grows nine keys.
 - **A tab set, a code group and a rendered diagram carry an accessible name**, via a `groupLabel` on `tabs()` and `codeGroup()` and a `label` on `fencedRender()` (markup-carve/carve#1468).
-- **One `labels` map localizes every engine-written string**, gaining the `indexBackref`, `tabsGroup` and `codeGroup` keys (PART 9 §16a).
+- **One `labels` map localizes every engine-written string**, gaining the `indexBackref`, `tabsGroup` and `codeGroup` keys (#1254, markup-carve/carve#1468, markup-carve/carve#1469, PART 9 §16a).
 - **Common Tier-1 documents render through a borrowed HTML layout** (#1247). Anything the fast path does not accept falls back for the whole document before any output is published.
 - **Document IDs are carried through conversion instead of rebuilt** (#1239). Public `parse` / `resolve` / `renderHtml` composition is unchanged.
 - **Core inline parsing skips punctuation dispatch for ordinary prose runs** (#1235).
@@ -66,12 +75,29 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- The Markdown target keeps every row from a multi-header table and derives
-  its single delimiter row from the final effective column alignment.
-
-- Definition entries at an authored block base no longer absorb the sibling
-  block after their separating blank; tab-indented forms use visual columns.
-
+- **The Markdown target keeps every row of a multi-header table** (#1517), and derives its single delimiter row from the final effective column alignment.
+- **A definition entry at a raised authored base stops at its separating blank, and the raised base survives the canonical writer** (#1508, #1520, #1522), inside a footnote body and inside a list item. A tab and its four spaces agree at a footnote body's column (#1521).
+- **A blank line between two ordered items loosens the list, it does not end it** (#1272, #1270). The borrowed HTML layout closed the `<ol>` at the blank; three more divergences of the same class went with it, a lone continuation marker, an empty code fence, and a definition line with two spaces before its title (#1273).
+- **`roundtrip` preserves a figure no Carve spelling reproduces** (#1469, markup-carve/carve#1704), and in `safe` and `semantic` a figure whose target cannot carry a caption unwraps and declares, instead of writing a caption line the target absorbs (#1480, markup-carve/carve-php#1731).
+- **A figure's target keeps its own attributes, and the displaced one is reported** (#1485, #1487, markup-carve/carve#1721).
+- **A figure around a self-captioning table keeps both captions** (#1495, #1488).
+- **An unwrapped element reports `element-unwrapped` at `info`**, a figure included, and its dropped attributes report one row each (#1477, #1481, markup-carve/carve#1716, markup-carve/carve-php#1731).
+- **An empty unsupported element is dropped, not unwrapped** (#1489, markup-carve/carve#1738).
+- **A content space survives an unwrapped wrapper** (#1498, #1493). U+00A0 inside a `<div>` or a `<progress>` is content, not whitespace.
+- **A media wrapper's fallback content converts as blocks** (#1501, markup-carve/carve#1749), for `<video>`, `<audio>`, `<object>`, `<canvas>` and `<picture>`.
+- **An `<input>`'s type matches the checkbox keyword case-insensitively** (#1466), so `type="CHECKBOX"` imports as a task list.
+- **An HTML comment imports as a Carve comment** rather than being dropped with nothing reported (#1474, markup-carve/carve#1709).
+- **An attribute the preserved bytes keep is not reported dropped** (#1472, #1468).
+- **`roundtrip` hands a hoisted section id back to its heading** (#1476, #1475).
+- **A cell's `text-align` and `vertical-align` import as the native marker run** in `semantic` and `roundtrip` (#1497, markup-carve/carve#1741, markup-carve/carve#1745, markup-carve/carve#1746). `safe` still drops and reports them.
+- **A rowspan holds its column through its last row** (#1506, #1503), so the cells after it stop shifting a column left.
+- **An attribute block after smart punctuation stays literal text** (#1524), instead of being attached and then discarded.
+- **A heading cross-reference inside a line block resolves** (#1525).
+- **A cross-reference label drops the footnote apparatus it used to clone from the heading** (#1526).
+- **An abbreviation expansion drops its trailing spaces and tabs**, and an unterminated `%%%` opener counts as an erased line comment for block-quote ownership (#1527).
+- **A definition body's separator is any run of one or more spaces, and its width sets the body's content column** (#1528, #1523, markup-carve/carve#1757). One space is canonical.
+- **A payload written directly under a description line is the description's content, at any indent above zero** (#1529, #1518, markup-carve/carve#1769).
+- **An authored-base list's span starts at its marker** (#1516), not at the surrounding body's minimum column.
 - **An imported `<figure>` targets the captioned block, not a synthesized paragraph** (#1381, markup-carve/carve#1619, PART 12 §17).
 - **An HTML import keeps the meaning the HTML held, in three shapes**: a bracket run that would open a note reference, a note referenced from inside another note's body, and an empty `<ins>` or `<del>` (#1380).
 - **An import loses only what it declares**: an empty `<dd>` no longer damages the term above it, and a non-final endnotes section is no longer moved to the document end (#1394, ruling markup-carve/carve#1608).
