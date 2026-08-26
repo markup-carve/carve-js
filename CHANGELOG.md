@@ -9,6 +9,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`paragraph.blockImage` is published on the wire and trusted on ingest** (#1556, #1552, #1553, markup-carve/carve#1816, PART 9R R7, PART 12 §23). One promotion phase runs after reference resolution and the renderers read its answer instead of re-deriving it; an ingested tree is promoted only where the field is absent.
+- **Citation items are typed, positioned nodes** (#1538, markup-carve/carve#1799). Each item of a group serializes as `type: "citation"` with its own `pos`, and profile filtering traverses an item's prefix, locator and suffix rather than the group alone.
 - **Checked render APIs and CLI loss reporting** (#1482, markup-carve/carve#1728). `*WithReport` returns bounded `raw-format-dropped` diagnostics with positions; `--strict-losses` refuses lossy output, while `--report-losses` writes JSON and `--allow-loss` records an intentional exception.
 - **`djotToCarve` and `carve migrate --from djot`** (#1367). Code and destinations stay opaque.
 - **A fenced block quote, `::: >`** (#1483, markup-carve/carve#1718). It parses to the node the line-marker form produces, records which spelling was authored, and takes a caption on its closing fence like any other quote (#1502, markup-carve/carve#1742).
@@ -75,6 +77,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A reference image inside a container promotes with its caption** (#1556, #1553). The figure arm gated on the image's absolute column, which no container can satisfy; it now reads whether the paragraph began at its container's content column.
+- **The continuation marker's column gate reaches every container** (#1555, #1554, markup-carve/carve#1817, PART 9 §17 L3). A footnote body, a definition description and a block quote each reached out for a line that is not flush-left, where a list item already refused it.
+- **An invisible line below a definition description's column folds into it** (#1551, #1550, markup-carve/carve#1809, PART 9 §10 I5). The line was ejected to document level from a description while the identical line folded one host over in a list item.
+- **An abbreviation definition below a definition body's column folds as prose** (#1549, #1544). The arm was gated on the lexer rather than the line, so the same description answered two ways according to how deep it sat.
+- **A comment in a footnote body leaves no blank line in the output** (#1548, #1545). A block that renders to the empty string is dropped before the join, which also lands the backlink on the last visible block.
+- **A hoisted footnote definition degrades in source order** (#1546, markup-carve/carve#1802). The markdown, plain and ANSI writers walked the insertion-ordered definition map, so a definition authored inside another note's body was written first.
+- **A wrapped block-attribute line leaves no item paragraph open** (#1539, markup-carve/carve#1799). Physical wrapping no longer changes ownership of a following column-zero line; an unclosed brace run stays literal prose.
 - **A `+` before a quote line attaches it** (#1533, markup-carve/carve#1782, PART 9 §17 L3/L4). The attach boundary tested for a `>` line, so a block quote was the one kind the continuation marker refused to take and the marker did nothing at all.
 - **The authored block base belongs to the innermost open container** (#1534, markup-carve/carve#1781, markup-carve/carve#1791, PART 9 §24 C3). The base was spelled per container, so an ancestor of a definition list nested in a footnote body or a list item claimed the next opener as a sibling of its own, and a separate adjacency exception let a payload written under a description line lower the body's content column. A nested body now answers the authored column band the way the top level does.
 - **The Markdown target keeps every row of a multi-header table** (#1517), and derives its single delimiter row from the final effective column alignment.
