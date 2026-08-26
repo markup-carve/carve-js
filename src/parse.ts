@@ -7197,12 +7197,22 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // parse as their own block instead of folding into the quoted paragraph.
     if (/^\+[ \t]*$/.test(ln)) {
       lexer.consume()
-      // A blank, a `>` line and a further `+` all end the attached block - but
-      // none of them reaches inside a fence it opened, since a fence body is
-      // opaque to every one of them (corpus category 279).
+      // A blank line and a further `+` end the attached block - but neither
+      // reaches inside a fence it opened, since a fence body is opaque to both
+      // (corpus category 279).
+      //
+      // A `>` LINE IS NOT A BOUNDARY (§17 L3, markup-carve/carve#1782). The
+      // marker takes the next flush-left block whatever KIND it is, and a
+      // quote is a kind like any other: `> a` / `+` / `> q` attaches an inner
+      // quote. Testing for one here made the marker attach NOTHING in exactly
+      // that case, so the `+` line vanished and `> q` folded into the quoted
+      // paragraph above it - the marker doing nothing at all, where L3 says it
+      // only ever ATTACHES. A `>` line after an attached PARAGRAPH still ends
+      // up outside the attachment, because the one-block narrowing below stops
+      // at the paragraph.
       const { lines: attached, lineNumbers: attachedLineNumbers } = collectAttachedBlock(
         lexer,
-        (next) => isBlankLine(next) || RE_BLOCKQUOTE.test(next) || /^\+[ \t]*$/.test(next),
+        (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
       )
       if (attached.length > 0) {
         // `inner` always holds the quote's first content line, so a leading
