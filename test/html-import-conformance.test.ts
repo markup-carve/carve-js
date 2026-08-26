@@ -23,46 +23,19 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *    has to be deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown }>([
-  // `derived-endnotes-section` sat here while PART 9 §17 L7's consumed `loose`
-  // boolean was ruled and implemented (markup-carve/carve#1623,
-  // markup-carve/carve-js#1401) but not yet pinned; carve commit d2bd801b
-  // rewrote the fixture to exactly what this engine already wrote, so that
-  // entry went out with the bump that reached it.
+  // Empty on purpose, and the guards below still run: the orphan check has
+  // nothing to walk and the fixture sweep compares every fixture against its
+  // pinned golden directly, which is the state an entry exists to leave.
   //
-  // AN ENTRY CAN NAME EITHER EXIT. `carve` pins the source exit, `ast` the tree
-  // exit, and a window can be open on one while the other has already closed -
-  // which is exactly the shape below.
-  //
-  // `auto-text-link` sat here while the tree half of that same window was open:
-  // the importer spelled an `#id` slot on BOTH exits, so the published tree
-  // carried `attrs.order` and the fixture - correctly - did not. The slot is a
-  // writer-only channel now (markup-carve/carve-js#1445), the two agree, and the
-  // entry went out with the fix rather than with a pin bump.
-  //
-  // THE TWO BELOW ARE A WIDER WINDOW THAN USUAL, and the reason is worth
-  // recording: markup-carve/carve#1757 made ONE SPACE the canonical definition
-  // separator and rewrote the four corpus `.fmt` sidecars that hold a
-  // definition body, but it did not reach these two html-import fixtures. So
-  // the pinned goldens still spell `:  ` while the spec they belong to states
-  // `: `, and no pin bump alone will close it - the fixtures have to be
-  // re-recorded upstream first. Both entries fail in both directions
-  // meanwhile, which is what keeps the window visible instead of silent.
-  [
-    'empty-definition-description-not-last',
-    {
-      reason:
-        'one space is the canonical definition separator (markup-carve/carve#1757); the pinned fixture still spells the two-space form',
-      carve: ':: t1\n\n%%\n\n:: t2\n: d2\n',
-    },
-  ],
-  [
-    'traversal-shaped-index',
-    {
-      reason:
-        'one space is the canonical definition separator (markup-carve/carve#1757); the pinned fixture still spells the two-space form',
-      carve: '- a\n- b [K]{kbd}\n\n|= h |\n| c | d |\n\n:: t\n: v\n',
-    },
-  ],
+  // Three windows have opened and closed here so far, and each closed a
+  // different way. `derived-endnotes-section` went out with the pin bump that
+  // reached carve d2bd801b. `auto-text-link` went out with the fix that made the
+  // `#id` slot writer-only (markup-carve/carve-js#1445) - a window can be open on
+  // the tree exit while the source exit has already closed, so an entry may name
+  // either. `empty-definition-description-not-last` and `traversal-shaped-index`
+  // sat here while markup-carve/carve#1757 made ONE SPACE the canonical
+  // definition separator without reaching these two fixtures; upstream
+  // re-recorded them, so both went out with this bump.
 ])
 
 /**

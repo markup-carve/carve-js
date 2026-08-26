@@ -359,9 +359,7 @@ const IMPLEMENTED = new Set([
   'a-div-does-not-define-an-abbreviation-either',
   'a-flush-left-line-after-a-footnote-definition-belongs-to-the-document',
   'a-footnote-body-holds-blocks-and-they-render-where-they-were-written',
-  'a-footnote-body-s-own-column-is-two-and-a-third-column-is-its-text',
   'a-definition-below-a-footnote-body-s-column-is-the-document-s-own-text',
-  'a-definition-past-a-footnote-body-s-column-is-the-body-s-own-text',
   'a-heading-in-a-footnote-body-takes-an-id-but-no-section-wrapper',
   // The `[Café][]` half folds NFC, the `[file][]` half must NOT fold
   // compatibility - `# ﬁle` (U+FB01) stays unreachable. #694 landed the folding
@@ -396,7 +394,6 @@ const IMPLEMENTED = new Set([
   'a-reference-definition-is-anchored-at-end-of-line',
   'a-definition-marker-s-separator-is-a-space-and-it-is-a-run',
   'trailing-whitespace-on-a-content-line-is-dropped',
-  'a-definition-body-continuation-indented-past-its-column-is-lazy-text',
   'a-real-div-in-a-container-and-the-flush-left-line-after-it',
   // Added with the spec bump that carries carve#975. Seven of these eight are
   // documents about rules this engine already implements, so they arrive here
@@ -676,6 +673,33 @@ const IMPLEMENTED = new Set([
   // unresolved reference as the counter-case (markup-carve/carve#1666).
   'a-lone-indented-image-is-a-paragraph-and-its-html-cannot-say-so',
   'a-lone-reference-image-at-column-0-in-every-spelling',
+
+  // THE AUTHORED-BASE UNIFICATION AND WHAT ARRIVED WITH IT (categories 420-427).
+  //
+  // 422, 423, 424, 425 and 426 are the corpus half of the rulings this engine
+  // already landed - one authored base for every container
+  // (markup-carve/carve#1781/#1788, carve-js#1534), a separator width that sets
+  // the content column (carve-js#1528, #1529), and the column below which a body
+  // ends. 427 is the continuation marker attaching one block in every container
+  // (carve-js#1533). 420 and 421 are documents about rules that were already
+  // implemented and only now have corpus cases.
+  //
+  // All 55 documents were rendered against their goldens before this list was
+  // touched and every one matched, so the categories arrive here green rather
+  // than as work to do. 218, 220 and 269 above are the same ruling seen from the
+  // other side: it renamed those three categories, so their entries were
+  // orphaned and are gone.
+  'a-definition-body-opener-at-or-past-its-column-stays-structural',
+  'a-definition-body-s-separator-width-sets-its-content-column',
+  'a-definition-past-a-footnote-body-s-column-registers-from-its-authored-base',
+  'a-footnote-body-s-authored-base-can-open-a-table-past-column-two',
+  'a-recognized-opener-in-a-body-needs-no-blank-line-above-it',
+  'a-sigil-fence-takes-its-attribute-line',
+  'an-ordered-item-s-separator-width-sets-its-content-column',
+  'below-a-definition-body-s-column-the-body-ends',
+  'one-authored-base-rule-reaches-a-definition-nested-in-a-list-item',
+  'text-block-alignment-renders-the-css-declaration',
+  'the-continuation-marker-attaches-one-block-in-every-container',
 ])
 
 /**
@@ -695,66 +719,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  // THE BASE BELONGS TO THE INNERMOST OPEN CONTAINER (PART 9 §24 C3,
-  // markup-carve/carve#1781, landed in carve#1788; markup-carve/carve-js#1535).
-  //
-  // These two are the ONLY corpus goldens the ruling re-cut - every other
-  // document it touched is a new file the pinned corpus does not carry yet, so
-  // the rest of the category lives in
-  // `a-recognized-opener-in-a-body-needs-no-blank-line-above-it.test.ts` under
-  // this repo's `corpus documents` pattern instead.
-  //
-  // The `.crv` inputs are BYTE-IDENTICAL across the move. Only the goldens
-  // changed, which is why the window has to be declared here rather than read
-  // off a diff: nothing about the pinned input says it is stale.
-  [
-    '419-a-definition-list-inside-a-footnote-body-carries-its-authored-base',
-    {
-      reason:
-        'the quote is written at the nested description body\'s content column, so it is that description\'s block and not the footnote body\'s (markup-carve/carve#1781); the pinned golden still spells the pre-unification reading',
-      html: `<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
-<section role="doc-endnotes" aria-label="Footnotes">
-  <hr>
-  <ol>
-    <li id="fn1">
-      <p>intro</p>
-      <dl>
-        <dt>term</dt>
-        <dd>
-          <p>definition</p>
-          <blockquote><p>quote</p></blockquote>
-        </dd>
-      </dl>
-      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
-    </li>
-  </ol>
-</section>`,
-    },
-  ],
-  [
-    '419-a-definition-list-inside-a-footnote-body-carries-its-authored-base-3',
-    {
-      reason:
-        'below the description body\'s column the description ENDS, and the surviving context is the footnote body - where the quote is still a quote rather than escaped text (markup-carve/carve#1781); the pinned golden still spells it as text',
-      html: `<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
-<section role="doc-endnotes" aria-label="Footnotes">
-  <hr>
-  <ol>
-    <li id="fn1">
-      <p>intro</p>
-      <dl>
-        <dt>term</dt>
-        <dd>definition</dd>
-      </dl>
-      <blockquote><p>quote</p></blockquote>
-      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
-    </li>
-  </ol>
-</section>`,
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 
 
 
