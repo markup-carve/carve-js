@@ -102,19 +102,21 @@ describe("a definition body's separator width sets its content column", () => {
   })
 
   /*
-   * A CONTENT-LESS MARKER LINE IS CONTENT-LESS AT EVERY WIDTH. The separator run
-   * is greedy, so nothing is left of it for content to begin with, and the line
-   * closes the open term and stays paragraph text (carve-js#731, which carve-rs
-   * and carve-php both agree with).
+   * A CONTENT-LESS MARKER LINE IS CONTENT-LESS AT EVERY WIDTH, and being
+   * content-less it opens nothing: the line is plain text under the open term,
+   * which folds it as a soft break and drops its trailing run
+   * (markup-carve/carve#1830).
    *
    * Written down because the answer used to depend on the width: `:` plus three
    * or more spaces backtracked into a body of one space, which trims to an empty
-   * `<dd>`, while `:` plus exactly two did not. Nothing pinned either.
+   * `<dd>`, while `:` plus exactly two did not. Nothing pinned either. The
+   * greedy separator settled the width question, and the ruling settled what the
+   * content-less line then does.
    */
   it('reads a marker line of nothing but spaces as content-less at every width', () => {
     for (const width of [1, 2, 3, 4]) {
       expect(flat(carveToHtml(`:: t\n:${' '.repeat(width)}\nx\n`)), `width ${width}`).toBe(
-        '<dl> <dt>t</dt> </dl> <p>: x</p>',
+        '<dl> <dt>t : x</dt> </dl>',
       )
     }
   })
