@@ -67,7 +67,14 @@ describe("a definition body's continuation is measured in columns", () => {
     it('leaves one two columns in as lazy text', () => {
       // The boundary. Folding every indented opener would satisfy both
       // assertions above.
-      expect(carveToHtml(':: t\n:  body\n  > q\n')).not.toContain('<blockquote>')
+      //
+      // Measured one line further down, because the line DIRECTLY under the
+      // description is the description's own payload at any indent above zero
+      // (markup-carve/carve#1769, markup-carve/carve-js#1518) - so the boundary
+      // is only visible once something stands between the marker and the
+      // opener. A continuation at the body's own column is that something, and
+      // it leaves the columns being measured untouched.
+      expect(carveToHtml(':: t\n:  body\n   more\n  > q\n')).not.toContain('<blockquote>')
     })
   })
 
