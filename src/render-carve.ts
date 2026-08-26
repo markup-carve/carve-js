@@ -2093,60 +2093,28 @@ function leadingSpaces(line: string): number {
  */
 const DEFINITION_BODY_INDENT = '  '
 
+/**
+ * The body written for a footnote definition or a definition description whose
+ * body holds no blocks (PART 11 §7b).
+ *
+ * A block-attribute line: the block it would attach to does not exist, so the
+ * parse consumes the line and leaves the body empty. It is the only spelling
+ * that renders to nothing on HTML, Markdown, plain text and ANSI alike, and it
+ * is a fixed point in every position - a blank line after it, a flush-left
+ * paragraph after it, or end of input (markup-carve/carve#1827).
+ *
+ * The name inside is discarded by the parse, so it is chosen to be readable
+ * rather than to mean anything.
+ */
+const EMPTY_BODY_SENTINEL = '{empty}'
+
 function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
   const out: string[] = []
-  /*
-   * A DROPPED ENTRY BREAKS THE LIST (markup-carve/carve#1636).
-   *
-   * Consecutive `::` lines SHARE the description written below them - that is
-   * the `<dl>` model the syntax mirrors - so dropping an entry that writes
-   * nothing and continuing the same list hands the surviving term the NEXT
-   * entry's description. `<dl><dt>t1</dt><dd></dd><dt>t2</dt><dd>d2</dd></dl>`
-   * came back as `:: t1` / `:: t2` / `:  d2`, and `t1` acquired `d2`.
-   *
-   * AN ADDITION IS NOT A LOSS, AND NO ROW CAN DECLARE IT. A loss that stays
-   * inside a declared ceiling is acceptable because the reader is told what is
-   * missing; an addition changes what the surviving term MEANS, and a reader
-   * told the empty description was dropped has been told nothing about `t1`
-   * acquiring `d2`. So the ceiling binds in both directions.
-   *
-   * THE SEPARATOR IS A COMMENT LINE, and it is the only construct that can be.
-   * A blank line neither ends a definition list nor loosens one - `:: t1`,
-   * blank, `:: t2`, `:  d2` is ONE list with two terms sharing `d2`, which is
-   * the outcome this rule forbids, and this writer removes the blank line
-   * again. The separator has to render nothing where it stands AND stay where
-   * it was written: a link-reference or footnote definition is hoisted to the
-   * end of the document and lets the two lists re-merge, frontmatter is
-   * document-start only, and an abbreviation definition is a fixed point but
-   * defines an abbreviation the input never had - an addition, which is the
-   * thing being avoided.
-   *
-   * DEFERRED, AND SPENT ONLY ON A TERM. What the break prevents is a term
-   * ABOVE the drop acquiring a description written BELOW it, and only a `::`
-   * line starts a new entry that could carry one. A second description of the
-   * SAME entry is not that: `<dl><dt>t</dt><dd></dd><dd>d2</dd></dl>` is one
-   * entry whose term already has `d2`, so breaking there would strand `:  d2`
-   * outside the list, where it re-reads as a paragraph - a loss the rule was
-   * meant to prevent, not cause. It clears the mark instead.
-   *
-   * A dropped entry with nothing after it needs no separator either, which is
-   * the one-entry shape carve#1627 already ruled - an unspent mark is simply
-   * dropped at the end.
-   */
-  let pendingBreak = false
-  const emitTerm = (line: string): void => {
-    if (pendingBreak) {
-      out.push('', '%%', '')
-      pendingBreak = false
-    }
-    out.push(line)
-  }
-  const emitDefinition = (line: string): void => {
-    pendingBreak = false
-    out.push(line)
-  }
+  // Every entry writes its own description line, so consecutive `::` lines
+  // never end up sharing one: the list writes back with the grouping it
+  // parsed from.
   for (const item of items) {
-    for (const term of item.terms) emitTerm(`:: ${renderInlines(term, ctx)}`)
+    for (const term of item.terms) out.push(`:: ${renderInlines(term, ctx)}`)
     item.definitions.forEach((def, index) => {
       // An EMPTY description whose line carries a hoisted definition is one the
       // author wrote the definition on: write it back there. Without this the
@@ -2160,7 +2128,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           // node in this set, so marking first renders the line away.
           const written = renderBlock(definition, ctx)
           definitionsWrittenInPlace.add(definition as unknown as object)
-          emitDefinition(`: ${written}`)
+          out.push(`: ${written}`)
           return
         }
         const label = line === undefined ? undefined : footnoteDefsByLine.get(line)
@@ -2171,49 +2139,39 @@ function renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): strin
           // A footnote body can be multi-line; its continuation lines carry the
           // body's own two-column indent and sit under the description.
           const [first, ...rest] = written.split('\n')
-          emitDefinition(`: ${first}`)
+          out.push(`: ${first}`)
           for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
           return
         }
       }
       /*
-       * A DESCRIPTION THAT WRITES NOTHING IS NOT WRITTEN AT ALL
-       * (markup-carve/carve#1608, carve-js#1394).
+       * A DESCRIPTION THAT WRITES NOTHING TAKES THE SENTINEL `{empty}`
+       * (PART 11 §7b, markup-carve/carve#1827) - the same body the footnote
+       * definition one construct over is written with.
        *
-       * The bare `:` line it used to emit is not an empty description - the
-       * parser reads it as more of the TERM above it, so `<dl><dt>term</dt>
-       * <dd></dd></dl>` came back as a `<dt>` reading `term\n:` with no `<dd>`
-       * at all. The description was lost AND the term was damaged. Six other
-       * spellings were probed on the ruling and none works: `: `, `:  `,
-       * `: {}` and a tab after the colon each leak a `:` into the text or fold
-       * into the term, and a colon plus three spaces yields `<dd>&nbsp;</dd>`,
-       * which is not empty.
+       * THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
+       * empty". An HTML import, an ingested AST and `fmt` over parsed source
+       * arrive with a different tree for the same shape, and only the written
+       * result is common to them: a `<dd>` holding an invisible paragraph or a
+       * list with no items writes nothing too, and takes the sentinel alike.
        *
-       * Writing the term alone loses exactly the empty description and nothing
-       * else. A declared loss is a CEILING, not a licence: an importer may lose
-       * what it declares and no more, and `structure-unspellable` on the `<dd>`
-       * is what declares it - the HTML importer already reports it, for this
-       * shape and for the two others that write nothing (an empty paragraph, a
-       * list with no items).
+       * The sentinel needs no lookahead. It is empty whether a blank line
+       * follows it, a flush-left paragraph does, or nothing does.
        *
-       * The AST keeps the empty description either way. This is the WRITER, so
-       * it is the exit `structure-unspellable` is about: the structure survives
-       * in the AST and not in written Carve.
+       * `: \{empty}` and `: {empty} x` are content, not sentinels - the first
+       * escapes the brace and the second is not a block-attribute line - so
+       * both keep writing their own text.
        */
       const written = trimNonNbsp(
         atAnAuthoredBodyColumn(ctx, () => renderHostedBlocks(def, ctx)),
       )
-      // THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description is
-      // empty". All three paths that reach this writer - an HTML import, an
-      // ingested AST, and `fmt` over parsed source - arrive with a different
-      // tree for the same shape, and only the written result is common to them.
       if (written === '') {
-        pendingBreak = true
+        out.push(`: ${EMPTY_BODY_SENTINEL}`)
 
         return
       }
       const lines = written.split('\n')
-      emitDefinition(`: ${lines.shift() ?? ''}`)
+      out.push(`: ${lines.shift() ?? ''}`)
       for (const line of lines) out.push(`${DEFINITION_BODY_INDENT}${line}`)
     })
   }
@@ -2509,15 +2467,6 @@ function renderFigure(node: Figure, ctx: CarveContext): string {
  * would be a rule with two implementations - the shape that has produced most of
  * this engine's cross-engine divergences.
  */
-/**
- * The body written for a footnote whose body is empty.
- *
- * A block-attribute line, because that is the only body measured to render to
- * nothing on HTML, Markdown, plain text and ANSI alike. The name inside is
- * discarded by the parse - the block it would attach to does not exist - so it
- * is chosen to be readable rather than to mean anything.
- */
-const EMPTY_FOOTNOTE_BODY = '{empty}'
 
 function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
   const rawBody = atAnAuthoredBodyColumn(ctx, () => renderBlocks(blocks, ctx))
@@ -2544,7 +2493,7 @@ function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveCont
   // is not recorded anywhere in the tree - so it is spelled to say what it is
   // rather than to carry anything.
   if (body === '') {
-    return `[^${writeFlatBracketRun(label)}]: ${EMPTY_FOOTNOTE_BODY}`
+    return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
   }
   const lines = body.split('\n')
   const defLines = [`[^${writeFlatBracketRun(label)}]: ${lines.shift() ?? ''}`]
