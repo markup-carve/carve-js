@@ -6638,8 +6638,14 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // Lazy continuation is unaffected by the second rule and is not its other
       // side: a plain line carries no block opener at any indent, so it folds
       // into the body's open paragraph whenever the first rule allows it.
+      //
+      // The ABBREVIATION arm is waived here and only here: §7 recognizes that
+      // definition only as a direct child of the document, so a line this
+      // container is still deciding on is prose. The link and footnote
+      // spellings keep their arms - those ARE recognized inside a container, so
+      // they really do open a block and really do end the body.
       const below = ln.replace(/^[ \t]+/, '')
-      if (lazyState.lazyFoldable && !startsInterruptingBlock(lexer, below)) {
+      if (lazyState.lazyFoldable && !startsInterruptingBlock(lexer, below, true, false)) {
         const lineIndex = lexer.pos
         bodyLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
@@ -10562,6 +10568,19 @@ function startsInterruptingBlock(
   // marker then reaches the item body, where §24 C3 opens the sublist. That is
   // the near miss carve-js#1200 names, and it stays intact.
   sublistArm = true,
+  // THE ABBREVIATION ARM IS THE CALLER'S TO WAIVE TOO, and exactly one caller
+  // does: a definition description's BELOW-COLUMN band. PART 12 §7 recognizes
+  // `*[A]: a` only as a direct child of the document, so a line the container is
+  // still deciding on is not a definition and cannot interrupt as one - it is
+  // ordinary paragraph text, and text folds.
+  //
+  // `lexer.atDocumentLevel` cannot answer that on its own, because it describes
+  // the LEXER and not the line: `parseDefinitionList` runs on the document lexer
+  // for a top-level list and on a sub-lexer for one inside a list item, so the
+  // identical description got two answers according to how deep it sat
+  // (markup-carve/carve-js#1544). The nested spelling folded all along, which is
+  // which of the two is right.
+  abbreviationArm = true,
 ): boolean {
   const ln = content ?? lexer.peek()
   if (ln === undefined) return false
@@ -10603,7 +10622,7 @@ function startsInterruptingBlock(
       // (§24 C3). Everywhere else a bullet/task does NOT interrupt
       // (symmetric, §10 I2).
       return (
-        (lexer.atDocumentLevel && RE_ABBR_DEF.test(ln)) ||
+        (abbreviationArm && lexer.atDocumentLevel && RE_ABBR_DEF.test(ln)) ||
         RE_HR.test(ln) ||
         opensSublistHere(lexer, ln, i, sublistArm)
       )
