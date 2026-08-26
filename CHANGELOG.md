@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-27
+
 ### Added
 
 - **An empty description body is written with the `{empty}` sentinel** (#1560, #1559, markup-carve/carve#1833, markup-carve/carve#1827, PART 11 §7d). `carve fmt` writes `: {empty}` where a description holds no blocks, the sentinel PART 11 §7b already gives an empty footnote definition body, so every entry writes its own description line and a `<dl>` reads back as one list with the grouping it parsed. The definition-list import path no longer reports `structure-unspellable` or `structure-split`.
