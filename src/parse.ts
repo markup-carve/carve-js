@@ -6364,7 +6364,20 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
    * widths (`: one` beside `:  two`). A run of bare `3`s is how a column rule
    * acquires several spellings, and a single parameter is how it keeps one.
    */
-  const parseDefBody = (first: string, firstLineIndex: number, contentCol: number): BlockNode[] => {
+  const parseDefBody = (
+    first: string,
+    firstLineIndex: number,
+    markerContentCol: number,
+  ): BlockNode[] => {
+    // The body's column, which the marker HANDS OUT and one shape may still
+    // lower: a block opener directly under the description line is the
+    // description's content at any indent above zero
+    // (`isDescriptionPayloadLine`), and taking it in means the body's column is
+    // where the author actually put it. Lowering the ONE column is the whole of
+    // that rule's effect on this collector - the branch below does nothing else
+    // - so every later line, blank lookahead and fence-closer scan keeps
+    // measuring against a single value instead of against a special case.
+    let contentCol = markerContentCol
     const bodyLines: string[] = []
     const bodyLineNumbers: number[] = []
     // AND A DEFINITION BODY IS SUCH A CONTAINER (PART 0 S4,
@@ -6570,6 +6583,34 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // A new term/definition marker ends this definition (the outer loop
       // picks it up).
       if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln) || RE_DEFLIST_MARKER_EMPTY.test(ln)) break
+      // A BLOCK OPENER DIRECTLY UNDER A DESCRIPTION LINE IS THE DESCRIPTION'S
+      // CONTENT AT ANY INDENT ABOVE ZERO (markup-carve/carve#1769, corpus
+      // `422-a-recognized-opener-in-a-body-needs-no-blank-line-above-it` -7,
+      // -8 and -9; markup-carve/carve-js#1518). The predicate is stated once,
+      // next to `lineOpensItemBlock`, because the rebase pass asks it too.
+      //
+      // The BELOW band below this branch is the rule for a payload with
+      // something already above it - the body has said what it holds, and a
+      // line under its column is the surviving context's. The line DIRECTLY
+      // under the `:  ` marker is not that: nothing stands between it and the
+      // description for the separator's width to measure.
+      //
+      // ALL THIS BRANCH DOES IS LOWER THE COLUMN, and then the Form A branch
+      // takes the line on the next turn exactly as it takes one at the marker's
+      // own column. The payload may own MORE THAN ITS OPENING LINE - a quote's
+      // second `>` line, a fence's body and closer - and those continuations
+      // reach the lowered column for the same reason the opener did, so one
+      // assignment is the whole of it. Admitting only the opener here would
+      // have been a second reach rule, and it left a two-line quote's tail
+      // outside the `dd`.
+      if (
+        lexer.pos === firstLineIndex + 1 &&
+        bodyLines.length === 1 &&
+        isDescriptionPayloadLine(lexer.lines[firstLineIndex] ?? '', ln)
+      ) {
+        contentCol = indentColumns(ln)
+        continue
+      }
       // Lazy continuation: a flush-left line (no blank before it) that does not
       // start an interrupting block folds into the open paragraph; a block
       // opener ends the definition.
@@ -10938,6 +10979,15 @@ function rebaseOverindentedBlocks(
     }
     const opener = sliceColumns(line, base, true)
     if (!lineOpensItemBlock(opener)) continue
+    // THE MOVE IS WITHHELD, THE WALK IS NOT. A line directly under a
+    // description line at this container's minimum column is that
+    // description's payload rather than a block of this container
+    // (`isDescriptionPayloadLine`), so it must reach the definition list with
+    // the indentation its author gave it - moved flush, it would arrive at
+    // column 0, where the body ends instead. The run is still walked below so
+    // `i` advances over everything the payload owns, which is what keeps a
+    // closer of its own from being reconsidered as a second authored base.
+    const descriptionPayload = isDescriptionPayloadLine(lines[i - 1] ?? '', line)
     // Sublists already use the containment rule in the item collector. Their
     // residual indentation expresses another nesting level, not an authored
     // base to erase here.
@@ -11048,9 +11098,11 @@ function rebaseOverindentedBlocks(
       end++
     }
 
-    for (let j = i; j <= end; j++) {
-      if (!isBlankLine(lines[j]!)) {
-        lines[j] = sliceColumns(lines[j]!, base, true)
+    if (!descriptionPayload) {
+      for (let j = i; j <= end; j++) {
+        if (!isBlankLine(lines[j]!)) {
+          lines[j] = sliceColumns(lines[j]!, base, true)
+        }
       }
     }
     i = end
@@ -11097,6 +11149,38 @@ export function aBodyRebaseWouldMoveALine(rendered: string): boolean {
  */
 function lineOpensItemBlock(line: string): boolean {
   return lineOpensBlock(line) || isBlockAttributeLine(line) || isBlockImageLine(line)
+}
+
+/**
+ * A BLOCK OPENER DIRECTLY UNDER A DESCRIPTION LINE IS THE DESCRIPTION'S CONTENT
+ * AT ANY INDENT ABOVE ZERO (markup-carve/carve#1769, corpus
+ * `422-a-recognized-opener-in-a-body-needs-no-blank-line-above-it` -7, -8 and
+ * -9; markup-carve/carve-js#1518).
+ *
+ * The authored-base clause says where an opener MAY sit, not what has to sit
+ * above it, and a description line is the place that turns out to reach BELOW
+ * its own content column as well as past it: nothing stands between the `:  `
+ * marker and the line under it, so that line is the description's first payload
+ * rather than a continuation of anything, and the separator's width does not
+ * get to decide whether the author reached it.
+ *
+ * ABOVE ZERO is the whole of the condition. At column 0 the payload is flush
+ * with the entry itself and belongs to the surviving context, which is what
+ * keeps `:: term` / `:  definition` / `> quote` ending the body under
+ * `BELOW THE BODY'S COLUMN THE BODY ENDS` (markup-carve/carve#932).
+ *
+ * ONE PREDICATE, TWO COLLECTORS. The body collector asks it to decide
+ * MEMBERSHIP - whether the line joins the description at all - and the rebase
+ * pass asks it to decide PLACEMENT - whether a container above may claim the
+ * same line as a block of its own before the description is ever parsed. Those
+ * are two questions, and a rule written out at both would drift; `description`
+ * is the raw line above, so both ask it in the coordinate system they hold.
+ */
+function isDescriptionPayloadLine(description: string, payload: string | undefined): boolean {
+  if (payload === undefined || isBlankLine(payload)) return false
+  if (!RE_DEFLIST_DEF.test(description)) return false
+  if (indentColumns(payload, 1) === 0) return false
+  return lineOpensItemBlock(payload.replace(/^[ \t]+/, ''))
 }
 
 // Visual column of the leading whitespace, expanding tabs to the next
