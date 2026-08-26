@@ -40,6 +40,13 @@ function declaredTypes(): string[] {
  */
 const PENDING_SPEC_DECISION = new Set<string>([])
 
+const pendingDecisionDrift = (types: Iterable<string>, pending: Iterable<string>): string[] => {
+  const declared = new Set(types)
+  return [...pending].filter(
+    (type) => !declared.has(type) || /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(type),
+  )
+}
+
 describe('AST node-type vocabulary', () => {
   it('finds the declared types', () => {
     expect(declaredTypes().length).toBeGreaterThan(30)
@@ -50,6 +57,16 @@ describe('AST node-type vocabulary', () => {
       (type) => !PENDING_SPEC_DECISION.has(type) && !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(type),
     )
     expect(offenders).toEqual([])
+  })
+
+  it('is pending only on types that still exist and still need a decision', () => {
+    expect(pendingDecisionDrift(declaredTypes(), PENDING_SPEC_DECISION)).toEqual([])
+  })
+
+  it('the pending-decision guard fails in both stale directions', () => {
+    expect(pendingDecisionDrift(['old-name'], ['old-name'])).toEqual([])
+    expect(pendingDecisionDrift([], ['old-name'])).toEqual(['old-name'])
+    expect(pendingDecisionDrift(['settled_name'], ['settled_name'])).toEqual(['settled_name'])
   })
 
   it('does not reintroduce a renamed type', () => {
