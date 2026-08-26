@@ -74,7 +74,7 @@ describe('a raised definition base in a list item survives the writer', () => {
     const written = carveToCarve(src)
     expect(norm(carveToHtml(src))).toMatch(/<dd[^>]*>(?:(?!<\/dd>).)*<blockquote/)
     expect(norm(carveToHtml(written))).toMatch(/<dd[^>]*>(?:(?!<\/dd>).)*<blockquote/)
-    expect(written).toBe('- intro\n   :: t\n   : d\n     > q\n')
+    expect(written).toBe('- intro\n  :: t\n  : d\n\n    > q\n')
   })
 
   /**
@@ -94,7 +94,7 @@ describe('a raised definition base in a list item survives the writer', () => {
     [
       'a list item whose payload never needed a raise',
       '- intro\n\n   :: t\n   :  d\n\n      more\n',
-      '- intro\n\n  :: t\n  : d\n\n    more\n',
+      '- intro\n  :: t\n  : d\n\n    more\n',
     ],
     [
       'a list item with two entries',
@@ -120,7 +120,7 @@ describe('a raised definition base in a list item survives the writer', () => {
    */
   it('keeps a paragraph break in a sibling description of a raised list', () => {
     const src = '- intro\n\n   :: a\n   : first\n\n     second\n   :: b\n   : d\n     > q\n'
-    expect(carveToCarve(src)).toBe(src)
+    expect(carveToCarve(src)).toBe('- intro\n  :: a\n  : first\n\n    second\n  :: b\n  : d\n\n    > q\n')
     expect(roundTrips(src)).toEqual({ html: true, idempotent: true })
     expect(norm(carveToHtml(src))).toContain('<dd><p>first</p><p>second</p></dd>')
   })

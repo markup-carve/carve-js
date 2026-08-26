@@ -8,26 +8,10 @@ import { carveToCarve, carveToHtml, parse } from '../src/index.js'
  * A description's payload sits three columns in from `::`, so inside a body
  * whose minimum content column is its own - a footnote body, a definition
  * description - that payload is INDENTED relative to the `::` line. At the
- * body's minimum column the body's rebase claims it (PART 9 §24 C3) and the
- * description keeps only its first paragraph; one column further in, the `::`
- * line's own column becomes the entry's base and the payload stays inside the
- * description.
- *
- * The two spellings are therefore two DIFFERENT documents, not two spellings of
- * one, and each has to survive the writer as what it says. The writer used to
- * canonicalize the second back to the first, which moved the quote out of the
- * `<dd>` it was written into.
- *
- * A LIST ITEM IS THE OTHER WAY ROUND, and asserted here too (carve-js#1514).
- * carve#1752 asks a payload to keep its offset from its opener, and in a list
- * item both spellings have that same offset - so both say the same thing, and
- * the spec repo's own corpus test pins a definition list under `over-column
- * list block groups match their exact-column spelling`. This engine was giving
- * a base there that the executable spec does not.
- *
- * So the two readings are not a preference either: a footnote body and a
- * definition description give a definition entry its own base, a list item does
- * not, and the writer's raise follows the reader.
+ * PART 0 now gives every container one rule: a local base owns one complete
+ * block, and a nested body's content column is resolved before an ancestor may
+ * claim another opener. Therefore every outer container and every authored
+ * offset below reads this quote inside the description.
  *
  * KNOWN GAP: a bare tab and its visual-column space spelling do not agree at a
  * footnote body's column - `\t:: t` reads as at-the-minimum where four spaces
@@ -55,8 +39,8 @@ const holdsTheQuote = (html: string) => /<dd>\s*<p>d<\/p>\s*<blockquote>/.test(h
 
 describe('a definition list at an authored block base', () => {
   for (const [name, minimum, wrap] of containers) {
-    it(`keeps the payload out of the description at ${name}'s own column`, () => {
-      expect(holdsTheQuote(carveToHtml(wrap(indent(description, minimum))))).toBe(false)
+    it(`keeps the payload inside the description at ${name}'s own column`, () => {
+      expect(holdsTheQuote(carveToHtml(wrap(indent(description, minimum))))).toBe(true)
     })
 
     for (const over of [minimum + 1, minimum + 2, minimum + 5]) {
@@ -69,11 +53,8 @@ describe('a definition list at an authored block base', () => {
   {
     const [name, minimum, wrap] = aListItem
     for (const width of [minimum, minimum + 1, minimum + 2, minimum + 5]) {
-      it(`keeps the payload out of the description at ${name} + ${width - minimum}`, () => {
-        // The opposite of the two bodies above: in a list item the payload's
-        // offset from its opener is the same in every spelling, so every
-        // spelling says the same thing and the quote is the item's own block.
-        expect(holdsTheQuote(carveToHtml(wrap(indent(description, width))))).toBe(false)
+      it(`keeps the payload inside the description at ${name} + ${width - minimum}`, () => {
+        expect(holdsTheQuote(carveToHtml(wrap(indent(description, width))))).toBe(true)
       })
     }
   }
@@ -115,7 +96,7 @@ describe('a definition list at an authored block base', () => {
     for (const attrs of ['{loose}', '{.k}', '{#id .k}']) {
       const source = `[^n]: intro\n\n   ${attrs}\n   :: term\n   :  definition\n\n      > quote\n\nsee[^n]\n`
       const written = carveToCarve(source)
-      expect(written).toContain(`\n   ${attrs}\n   :: term\n`)
+      expect(written).toContain(`\n  ${attrs}\n  :: term\n`)
       expect(carveToHtml(written)).toBe(carveToHtml(source))
       expect(carveToCarve(written)).toBe(written)
     }

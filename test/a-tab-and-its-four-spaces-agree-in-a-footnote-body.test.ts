@@ -87,9 +87,9 @@ describe('a tab and its four-space spelling in a footnote body', () => {
    */
   const OUT_OF_CLAUSE: Array<[string, (prefix: string) => string, string]> = [
     [
-      'a list item keeps the quote OUTSIDE the description',
+      'a list item keeps the quote INSIDE the description',
       (p) => `- intro\n\n` + PAYLOADS[0]![1].map((l) => (l === '' ? '' : p + l)).join('\n') + `\n`,
-      '<ul><li>intro <dl><dt>t</dt><dd>d</dd></dl><blockquote><p>q</p></blockquote></li></ul>',
+      '<ul><li>intro <dl><dt>t</dt><dd><p>d</p><blockquote><p>q</p></blockquote></dd></dl></li></ul>',
     ],
     [
       'the top level reads an indented opener as text',
