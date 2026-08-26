@@ -75,6 +75,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `+` before a quote line attaches it** (#1533, markup-carve/carve#1782, PART 9 §17 L3/L4). The attach boundary tested for a `>` line, so a block quote was the one kind the continuation marker refused to take and the marker did nothing at all.
+- **The authored block base belongs to the innermost open container** (#1534, markup-carve/carve#1781, markup-carve/carve#1791, PART 9 §24 C3). The base was spelled per container, so an ancestor of a definition list nested in a footnote body or a list item claimed the next opener as a sibling of its own, and a separate adjacency exception let a payload written under a description line lower the body's content column. A nested body now answers the authored column band the way the top level does.
 - **The Markdown target keeps every row of a multi-header table** (#1517), and derives its single delimiter row from the final effective column alignment.
 - **A definition entry at a raised authored base stops at its separating blank, and the raised base survives the canonical writer** (#1508, #1520, #1522), inside a footnote body and inside a list item. A tab and its four spaces agree at a footnote body's column (#1521).
 - **A blank line between two ordered items loosens the list, it does not end it** (#1272, #1270). The borrowed HTML layout closed the `<ol>` at the blank; three more divergences of the same class went with it, a lone continuation marker, an empty code fence, and a definition line with two spaces before its title (#1273).
