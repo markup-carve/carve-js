@@ -124,14 +124,14 @@ describe('a boundary line inside an open fence does not end the container', () =
       // Invisible, so the note body is its definition line and the backlink,
       // and `b` no longer escapes to document level.
       //
-      // The note comes out LOOSE where the oracle renders it tight. That is a
-      // SEPARATE divergence and not this class: it reproduces byte-for-byte
-      // with a comment fence holding no blank at all (`[^f]: n` / `+` / `%%%` /
-      // `a` / `%%%`), which is untouched here, because the footnote body has no
-      // analogue of the list's `+`-separator looseness exemption. Recorded on
-      // markup-carve/carve-php#1047 rather than folded into this fix.
+      // TIGHT since markup-carve/carve-js#1545. This row used to record a
+      // second divergence here - the note came out LOOSE, with the backlink in
+      // a paragraph of its own after an empty one - because the invisible block
+      // was joined into the endnote's lines as an empty string instead of being
+      // dropped. Dropping it puts the backlink on the last VISIBLE block, and
+      // carve-php and carve-rs now agree byte for byte.
       expect(html(doc('[^f]: n', '+', ...COMMENT, '', 'see[^f]'))).toBe(
-        `${REF}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n</p><p>${BACKLINK}</p></li></ol></section>`,
+        `${REF}<section role="doc-endnotes" aria-label="Footnotes"><hr><ol><li id="fn1"><p>n${BACKLINK}</p></li></ol></section>`,
       )
     })
   })

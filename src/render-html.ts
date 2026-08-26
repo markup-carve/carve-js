@@ -811,9 +811,18 @@ function renderFootnoteSectionInner(
   ]
   st.order.forEach((entry, idx) => {
     const number = idx + 1
+    // An invisible block renders to the empty string, and it is DROPPED here
+    // rather than joined: the document-level loop above already filters
+    // `rendered !== ''`, so keeping it would let a comment in a note body emit
+    // an empty line that the same document with a real blank line does not
+    // (markup-carve/carve-js#1545). Filtering also puts the backlink on the
+    // last VISIBLE block instead of stranding it in a paragraph of its own
+    // after a trailing comment.
     const body = entry.inline
       ? [`${indent(3)}<p>${renderInlines(entry.inline, opts)}</p>`]
-      : (ownValue(defs, entry.label!) ?? []).map((b) => renderBlock(b, opts, 3))
+      : (ownValue(defs, entry.label!) ?? [])
+          .map((b) => renderBlock(b, opts, 3))
+          .filter((rendered) => rendered !== '')
     // A note referenced once gets a plain `↩`; a note referenced N>1 times gets
     // one numbered backlink per reference (`↩<sup>k</sup>`, space-separated) so
     // each return arrow is distinct (matches carve-php + pandoc).
