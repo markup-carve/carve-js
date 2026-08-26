@@ -99,7 +99,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **An abbreviation expansion drops its trailing spaces and tabs**, and an unterminated `%%%` opener counts as an erased line comment for block-quote ownership (#1527).
 - **A definition body's separator is any run of one or more spaces, and its width sets the body's content column** (#1528, #1523, markup-carve/carve#1757). One space is canonical.
 - **A payload written directly under a description line is the description's content, at any indent above zero** (#1529, #1518, markup-carve/carve#1769).
-- **An authored-base list's span starts at its marker** (#1516), not at the surrounding body's minimum column.
+- **A list's span starts at its marker only where the marker carries its own authored base** (#1516, #1541, PART 12 §4). Inside a footnote body or a definition body a marker above the body's minimum content column anchors the span at itself; everywhere else the span keeps the indentation that places the marker, as PART 12 §4 requires. #1516 applied the shift unconditionally and moved nine documents off carve-php and carve-rs; #1541 scoped it. Published `pos` values move for `carve --json` consumers.
 - **An imported `<figure>` targets the captioned block, not a synthesized paragraph** (#1381, markup-carve/carve#1619, PART 12 §17).
 - **An HTML import keeps the meaning the HTML held, in three shapes**: a bracket run that would open a note reference, a note referenced from inside another note's body, and an empty `<ins>` or `<del>` (#1380).
 - **An import loses only what it declares**: an empty `<dd>` no longer damages the term above it, and a non-final endnotes section is no longer moved to the document end (#1394, ruling markup-carve/carve#1608).
