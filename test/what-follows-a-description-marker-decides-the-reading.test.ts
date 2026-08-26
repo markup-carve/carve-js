@@ -17,7 +17,8 @@ const read = (body: string): string => flat(carveToHtml(`:: t\n${body}\nx\n`))
  * The table is pinned as a table rather than one case per rule because these
  * shapes were measured against carve-php one by one when
  * `markup-carve/carve#1830` was ported, and the neighbours are what made the
- * ruled rows readable. A single row moving is the thing worth catching.
+ * ruled rows readable. A single row moving is the thing worth catching - and
+ * one moved unnoticed, which is why the table exists.
  */
 describe('what follows a description marker decides the reading', () => {
   const FOLDS = '<dl> <dt>t : x</dt> </dl>'
@@ -44,18 +45,22 @@ describe('what follows a description marker decides the reading', () => {
   })
 
   /**
-   * THE ONE CELL WITH NO RULING, pinned so it cannot move in silence.
+   * THE ONE CELL THIS ENGINE READS WRONG, pinned so it cannot move in silence.
    *
    * A space then a TAB: the greedy run is the space, and what follows is one
-   * tab. This engine and carve-php both take the tab as content and open a
-   * description that then trims to empty; carve-rs closes the list; and MARKER
-   * REQUIRES CONTENT says the rule "ignores trailing whitespace", which points
-   * at a third answer - fold, like the rows above.
+   * tab. `markup-carve/carve#1836` rules that it FOLDS, like the rows above -
+   * MARKER REQUIRES CONTENT ignores trailing whitespace, and after the
+   * separator's space run a lone tab is trailing whitespace and nothing else.
    *
-   * `markup-carve/carve#1836` asks for the ruling. Until it lands this pins what
-   * the engine does, so the answer changes on purpose or not at all.
+   * This engine opens a description that then trims to empty. The port is
+   * carve-js#1564 and is deferred past the release, so the row records what the
+   * engine does rather than what is right - and being an equality assertion it
+   * FAILS the moment the port lands, which is when it has to be deleted.
    */
-  it('opens an empty description on a space then a tab, pending carve#1836', () => {
+  it('opens an empty description on a space then a tab, which carve#1836 rules should fold', () => {
     expect(read(': \t')).toBe(OPENS_EMPTY)
+    // The staleness half: the ruled reading is the FOLDS row, so the day this
+    // stops differing from it the carve-out has caught up and must go.
+    expect(OPENS_EMPTY).not.toBe(FOLDS)
   })
 })
