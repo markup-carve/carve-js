@@ -143,6 +143,14 @@ function childArrays(node: NodeLike): ChildArray[] {
     case 'inline_extension':
       push(node['content'], false)
       break
+    case 'citation_group':
+      push(node['items'], false)
+      break
+    case 'citation':
+      if (node['prefix']) push(node['prefix'], false)
+      if (node['locator']) push(node['locator'], false)
+      if (node['suffix']) push(node['suffix'], false)
+      break
     case 'admonition':
       if (node['title']) push(node['title'], false)
       push(node['children'], true)
@@ -329,6 +337,28 @@ class ProfileFilter {
       const allowed = profile.isTypeAllowed(canonical, block)
       if (!allowed) {
         this.handleViolation(child, slot, profile, 'element_not_allowed')
+        continue
+      }
+
+      // `citation` is a typed node nested in a homogeneous `citation_group`
+      // item array. A text replacement cannot occupy that slot without making
+      // the AST invalid, and profiles are type-wide, so denying `citation`
+      // necessarily denies every item in the group. Degrade or remove the
+      // group at its ordinary inline slot while reporting each denied item.
+      if (child.type === 'citation_group' && !profile.isTypeAllowed('citation', false)) {
+        const items = (child['items'] as NodeLike[] | undefined) ?? []
+        for (let i = 0; i < items.length; i++) {
+          this.violations.push({
+            nodeType: 'citation',
+            reason: 'element_not_allowed',
+            reasonDescription: profile.getReasonDisallowed('citation'),
+          })
+        }
+        if (profile.getDisallowedAction() === Profile.ACTION_ERROR && items.length > 0) {
+          throw new ProfileViolationError(this.violations)
+        }
+        if (profile.getDisallowedAction() === Profile.ACTION_STRIP) this.removeAt(slot)
+        else this.convertToText(child, slot)
         continue
       }
 

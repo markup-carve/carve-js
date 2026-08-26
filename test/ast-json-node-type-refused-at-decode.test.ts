@@ -29,6 +29,14 @@ const doc = (child: unknown) => ({
   srcByteLength: 3,
   children: [child],
 }) as never
+const position = {
+  startLine: 1,
+  endLine: 1,
+  startColumn: 1,
+  endColumn: 4,
+  startOffset: 0,
+  endOffset: 3,
+}
 
 describe('an ingested node', () => {
   it('is refused at decode when it carries no `type` at all', () => {
@@ -103,16 +111,8 @@ describe('an ingested node', () => {
   })
 })
 
-/**
- * The positions where a record with no `type` is what the schema PUTS there.
- * Requiring one would refuse a tree this engine's own parser produced, which
- * §9(a) forbids.
- */
-describe('a record the schema gives no `type`', () => {
-  it('is accepted where a citation group puts its items', () => {
-    // `citation_group.items` holds `{key, suppressAuthor, ...}` records. This is
-    // a tree the parser writes, round-tripped through the decoder: a blanket
-    // "every object in a node position needs a `type`" refuses it outright.
+describe('a citation item is a node', () => {
+  it('round-trips with its type and position', () => {
     const tree = JSON.parse(
       JSON.stringify(
         toAstJson(parse('Text [@smith2020, p. 5; see @jones1999] here.\n', {
@@ -122,14 +122,11 @@ describe('a record the schema gives no `type`', () => {
     )
 
     expect(JSON.stringify(tree)).toContain('"citation_group"')
+    expect(JSON.stringify(tree)).toContain('"type":"citation"')
     expect(() => fromAstJson(tree)).not.toThrow()
   })
 
-  it('is still checked INSIDE a citation item, where real nodes live', () => {
-    // The exemption is for the item record itself, not for everything under it.
-    // A citation's `prefix` and `locator` hold inline nodes, so a bad one there
-    // is still a §12(c) refusal - otherwise the exemption would be a hole the
-    // size of the subtree.
+  it('requires a node type', () => {
     expect(() =>
       fromAstJson(
         doc({
@@ -138,7 +135,7 @@ describe('a record the schema gives no `type`', () => {
             {
               type: 'citation_group',
               raw: '[@a]',
-              items: [{ key: 'a', suppressAuthor: false, prefix: [{ value: 'see' }] }],
+              items: [{ key: 'a', suppressAuthor: false, pos: position }],
             },
           ],
         }),
@@ -146,9 +143,8 @@ describe('a record the schema gives no `type`', () => {
     ).toThrow(AstJsonNodeTypeError)
   })
 
-  it('is still checked INSIDE a legacy definition entry, in both of its slots', () => {
-    // Same rule as the citation item: the exemption is the record, not its
-    // subtree. A legacy entry keeps its content under `terms` and `definitions`,
+  it('still checks nodes inside a legacy definition entry', () => {
+    // A legacy entry keeps its content under `terms` and `definitions`,
     // names the schema does not have, so `NODE_FIELDS` cannot reach them and the
     // walk stopped at the record - leaving every node in a stored definition
     // list unchecked, including against the string-type half of §12(c) that was
@@ -171,7 +167,7 @@ describe('a record the schema gives no `type`', () => {
     // gives no `type` at all, so a CURRENT-form definition item carrying
     // `type: 7` must not ride in on the legacy grouping form's exemption - it
     // was accepted and then silently dropped by `entriesFromWire`. Same for a
-    // citation item that grew one.
+    // citation item with an invalid one.
     expect(() =>
       fromAstJson(doc({ type: 'definition_list', items: [{ type: 7, children: [] }] })),
     ).toThrow(AstJsonNodeTypeError)

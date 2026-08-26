@@ -311,7 +311,7 @@ function parseItem(raw: string, ctx: MatcherContext): Citation | null {
   const m = ITEM_RE.exec(raw.trim())
   if (!m) return null
   const prefixText = m[1]!.replace(/\s+$/, '')
-  const item: Citation = { key: m[3]!, suppressAuthor: m[2] === '-' }
+  const item: Citation = { type: 'citation', key: m[3]!, suppressAuthor: m[2] === '-' }
   if (prefixText !== '') item.prefix = ctx.parseInlines(prefixText)
   const locRaw = m[4]
   if (locRaw !== undefined && locRaw.trim() !== '') {

@@ -137,15 +137,8 @@ export function wireFieldsSource(schema) {
    * leave the same hole one level down.
    *
    * A NODE POSITION IS NOT THIS WALK'S BUSINESS, which is what `holdsNode`
-   * settles. `citation_group.items` holds `citation` records - closed, typeless,
-   * and by every other measure a record - but the node walk already claims that
-   * position as `NODE_POSITION_KIND: "records"` and rules on it deliberately:
-   * requiring a `type` there would refuse a tree this engine's own parser
-   * produced. Claiming it here as well would be two producers of one rule, and
-   * it measurably changes an existing answer - a citation item carrying
-   * `type: null` is a section 12(c) node-type error today, and would become a
-   * section 11 unknown-field error instead. What a citation item's own fields
-   * are checked against is a separate question from this one.
+   * settles. Claiming a node position here as well would give two producers to
+   * one validation rule.
    *
    * `attrs.keyValues` is deliberately not one of these either. Its
    * `additionalProperties` is a SCHEMA rather than `false` - an open map of
@@ -441,8 +434,7 @@ export function wireFieldsSource(schema) {
     " * and by its dotted POSITION where the schema writes it inline and it has no",
     " * other name: `table.rowGroups`, `table.rowGroups.bodies`.",
     " *",
-    " * A position the NODE walk already claims is absent: `citation_group.items`",
-    " * holds records, and `NODE_POSITION_KIND` rules on it.",
+    " * Positions claimed by the node walk are absent from this map.",
     " */",
     "export const WIRE_RECORD_FIELDS: Readonly<Record<string, readonly string[]>> = {",
   ].join("\n");
@@ -484,12 +476,9 @@ export function wireFieldsSource(schema) {
     ' * - `"node"` - a single node, e.g. `figure.target`; the object itself carries',
     " *   one.",
     ' * - `"records"` - an array of plain records the schema gives no `type` at all.',
-    " *   Only `citation_group.items` today: a citation item is",
-    " *   `{key, suppressAuthor, prefix?, locator?, suffix?}`.",
     " *",
     " * The owning type is part of the key because one field name means different",
-    " * things in different places: `items` holds nodes on `list` and plain records",
-    " * on `citation_group`.",
+    " * things in different places.",
     " */",
     "export const NODE_POSITION_KIND: Readonly<Record<string, 'nodes' | 'node' | 'records'>> = {",
   ].join("\n");
@@ -553,9 +542,8 @@ export function wireFieldsSource(schema) {
     " * `children` is a block where the schema names `inlineNode`, and it decoded",
     " * cleanly and then threw an untyped error from inside the renderer.",
     " *",
-    " * Positions whose kind is `records` are absent on purpose - those hold plain",
-    " * records with no `type`, and requiring one would refuse a tree this engine's",
-    " * own parser produced (section 9(a)).",
+    " * Positions whose kind is `records` are absent on purpose because their",
+    " * elements have no node type.",
     " */",
     "export const NODE_POSITION_TYPES: Readonly<Record<string, readonly string[]>> = {",
   ].join("\n");
