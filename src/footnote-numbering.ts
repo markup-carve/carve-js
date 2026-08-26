@@ -54,6 +54,24 @@ export interface FootnoteNumbering {
   refs: FootnoteRefVisit[]
 }
 
+/** Referenced definitions in first-reference order, then any unused ones. */
+export function orderedFootnoteDefinitions(ast: Document): Array<[string, BlockNode[]]> {
+  const defs = ast.footnoteDefs ?? {}
+  const seen = new Set<string>()
+  const ordered: Array<[string, BlockNode[]]> = []
+  for (const entry of numberFootnotes(ast).order) {
+    if (entry.label === undefined || seen.has(entry.label)) continue
+    const blocks = ownValue(defs, entry.label)
+    if (blocks === undefined) continue
+    seen.add(entry.label)
+    ordered.push([entry.label, blocks])
+  }
+  for (const [label, blocks] of Object.entries(defs)) {
+    if (!seen.has(label)) ordered.push([label, blocks])
+  }
+  return ordered
+}
+
 /**
  * Visit every inline array under a block subtree (depth-first).
  *

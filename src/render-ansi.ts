@@ -11,6 +11,7 @@ import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { orderedFootnoteDefinitions } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -424,7 +425,7 @@ function renderPanelFigure(node: Figure, ctx: AnsiContext): string {
 function renderFootnoteDefs(ast: Document, ctx: AnsiContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
-  for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
+  for (const [label, blocks] of orderedFootnoteDefinitions(ast)) {
     // The marker as written (PART 11 §10a): the caret is part of the construct.
     out += `${style(`[^${stripControls(label)}]`, FG_CYAN + DIM)} ${trimNonNbsp(outsideLink(() => renderBlocks(blocks, ctx)))}\n`
   }

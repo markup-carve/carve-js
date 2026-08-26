@@ -9,6 +9,7 @@ import { trimEndNonNbsp, trimNonNbsp } from './trim-non-nbsp.js'
 import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { orderedFootnoteDefinitions } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -299,7 +300,7 @@ function renderPanelFigure(node: Figure, ctx: PlainContext): string {
 function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
-  for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
+  for (const [label, blocks] of orderedFootnoteDefinitions(ast)) {
     // The MARKER AS WRITTEN (PART 11 §10a): `[n]: …` is a link reference
     // definition, so emitting one where the author wrote a footnote definition
     // turns it into a different construct on the way back.

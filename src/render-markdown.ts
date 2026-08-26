@@ -21,6 +21,7 @@ import { stripBidiControls } from './bidi-controls.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
+import { orderedFootnoteDefinitions } from './footnote-numbering.js'
 
 // Set while rendering a span that carries an authored `abbr`, so a resolved
 // abbreviation inside it contributes only its visible text (carve#1127).
@@ -532,7 +533,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
 function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   if (!ast.footnoteDefs) return ''
   let out = ''
-  for (const [label, blocks] of Object.entries(ast.footnoteDefs)) {
+  for (const [label, blocks] of orderedFootnoteDefinitions(ast)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
     out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))}\n`
