@@ -8311,6 +8311,7 @@ function markerLineState(content: string): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
   bottomIsContinuationMarker: boolean
+  wrappedAttributeRun: string | null
   quote: BlockQuoteLazyState | null
 } {
   const bottom = markerLineBottomBlock(content)
@@ -8324,6 +8325,7 @@ function markerLineState(content: string): {
     // prose, so it opens no paragraph an INDENTED line could fold into - see
     // the fold branch that reads this (markup-carve/carve#1436).
     bottomIsContinuationMarker: quote === null && isContinuationMarker(bottom),
+    wrappedAttributeRun: opensWrappedAttributeBlock(bottom) ? bottom : null,
     quote,
   }
 }
@@ -8976,7 +8978,7 @@ function parseList(lexer: Lexer): List {
       inTable: leadState.endsOnTableRow,
       quoteInner: leadState.quote,
       inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
-      attrRun: null,
+      attrRun: leadState.wrappedAttributeRun,
     }
     // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
     // The lead line never went through `trackItemLazyState`, so `- ``` ` left
