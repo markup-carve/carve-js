@@ -417,35 +417,25 @@ describe('definition lists on import', () => {
     expect(carveToHtml(carve(html))).toBe('<p>::\n: A description whose term was deleted.</p>')
   })
 
-  it('drops an empty description and reports it, leaving the term alone', () => {
-    // The bare `:` line the writer used to emit is not an empty description: the
-    // parser reads it as more of the TERM, so this came back as a `<dt>` reading
-    // `Term\n:` with no `<dd>` at all - the description lost AND the term
-    // damaged. Writing the term alone loses exactly the empty description and
-    // nothing else, which is the ceiling the diagnostic declares (carve#1608).
+  it('writes an empty description with the sentinel, reporting nothing', () => {
+    // `: {empty}` is a block-attribute line whose block does not exist, so the
+    // parse consumes it and the description reads back empty. Nothing is lost,
+    // so nothing is declared (markup-carve/carve#1827).
     const html = '<dl><dt>Term</dt><dd></dd></dl>'
     expect(htmlToAst(html).report.diagnostics).toEqual([])
-    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
-      code: 'structure-unspellable',
-      severity: 'warning',
-      message: expect.stringContaining('<dd> that writes nothing'),
-      path: '/dl[1]/dd[2]',
-    }))
-    expect(htmlToCarve(html).value).toBe(':: Term\n')
-    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term</dt>\n</dl>')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).value).toBe(':: Term\n: {empty}\n')
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term</dt>\n  <dd></dd>\n</dl>')
   })
 
-  it('reports a description whose blocks write nothing, not only an empty one', () => {
+  it('takes the sentinel for a description whose blocks write nothing too', () => {
     // `<dd><p></p></dd>` is a NON-empty block list holding a block that writes
-    // nothing, so an array-length check reports no loss - and the writer drops
-    // it for the same reason it drops the empty array, since what decides is
-    // whether anything reaches the source, not how long the list is.
+    // nothing, so a length check answers differently from the writer - and what
+    // decides is whether anything reaches the source, not how long the list is.
     const html = '<dl><dt>Term</dt><dd><p></p></dd></dl>'
-    expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
-      code: 'structure-unspellable',
-      message: expect.stringContaining('<dd> that writes nothing'),
-    }))
-    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term</dt>\n</dl>')
+    expect(htmlToCarve(html).report.diagnostics).toEqual([])
+    expect(htmlToCarve(html).value).toBe(':: Term\n: {empty}\n')
+    expect(carveToHtml(carve(html))).toBe('<dl>\n  <dt>Term</dt>\n  <dd></dd>\n</dl>')
   })
 
   it('leaves a description that writes SOMETHING alone', () => {

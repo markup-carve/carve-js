@@ -2375,11 +2375,14 @@ class Importer {
    * kept, as blocks AFTER the list rather than dropped, and reported: moving it
    * changes the document order, which is a smaller loss than deleting it.
    *
-   * Three shapes are valid HTML that Carve SOURCE cannot spell, so they are
-   * built into the AST and reported by whoever writes (§16): a `<dd>` with no
-   * `<dt>` before it, an EMPTY `<dt>` and an EMPTY `<dd>`. Each one writes a
-   * line the parser reads as something else, and the tests assert what it
-   * reads as rather than only that a diagnostic appeared.
+   * TWO shapes are valid HTML that Carve SOURCE cannot spell, so they are built
+   * into the AST and reported by whoever writes (§16): a `<dd>` with no `<dt>`
+   * before it, and an EMPTY `<dt>`. Each one writes a line the parser reads as
+   * something else, and the tests assert what it reads as rather than only that
+   * a diagnostic appeared.
+   *
+   * An empty `<dd>` is not one of them: the writer spells it `: {empty}`, so
+   * the entry survives and no row is owed for it.
    *
    * `block()` has already counted this node against `maxNodes`, so this walk
    * counts only the elements it visits itself.
@@ -2388,19 +2391,8 @@ class Importer {
     const items: DefinitionItem[] = []
     const trailing: P5Node[] = []
     const trailingPaths: string[] = []
-    // A DROPPED ENTRY BREAKS THE LIST, and the break is a real loss
-    // (markup-carve/carve#1636). Consecutive `::` lines SHARE the description
-    // below them, so writing both terms into one list would hand the surviving
-    // term the NEXT entry's description - an ADDITION, which no row can declare
-    // and which the ceiling forbids outright. The writer splits instead; what
-    // that costs is the grouping, and this is the row that declares it.
-    //
-    // Only a drop with a TERM after it splits anything. The last-entry shape
-    // writes the term alone and stays one list, which is what carve#1627 ruled;
-    // and a second description of the SAME entry is not a new entry at all -
-    // that term already has it, so nothing is gained and nothing is split.
-    let dropped = false
-    let splitsHere = false
+    // Every entry is written, so a `<dl>` imports and writes back as ONE list:
+    // no term acquires the next entry's description and nothing splits.
     let current: DefinitionItem | undefined
     const openEntry = (): DefinitionItem => {
       const entry: DefinitionItem = { terms: [], definitions: [] }
@@ -2429,7 +2421,6 @@ class Importer {
           // term joins the one being opened.
           if (current === undefined || current.definitions.length > 0) current = openEntry()
           this.entryAttributes(child, childPath, 'dt')
-          if (dropped) splitsHere = true
           const term = this.blockInlines(child.childNodes ?? [], childPath, level + 1)
           if (!this.visible(term)) {
             this.unspellable.push({
@@ -2456,19 +2447,9 @@ class Importer {
           }
           this.entryAttributes(child, childPath, 'dd')
           const definition = this.blocks(child.childNodes ?? [], childPath, level + 1)
-          // THE CONDITION IS "THIS ENTRY WRITES NOTHING", not "the description
-          // is empty": a `<dd>` holding an invisible paragraph or an empty list
-          // writes nothing either, and the writer drops all three alike.
-          if (this.writesNothing(definition)) {
-            dropped = true
-            this.unspellable.push({
-              node: child,
-              path: childPath,
-              message: 'A <dd> that writes nothing has no Carve spelling; the empty description is dropped, because the only line that could carry it is read as more of the term above it',
-            })
-          } else {
-            dropped = false
-          }
+          // A `<dd>` that writes nothing takes the `{empty}` sentinel, which
+          // reads back as a description holding no blocks, so the entry
+          // survives the round trip and owes no row (markup-carve/carve#1827).
           current.definitions.push(definition)
           return
         }
@@ -2478,13 +2459,6 @@ class Importer {
       })
     }
     visit(node.childNodes ?? [], path, depth + 1)
-    if (splitsHere) {
-      this.split.push({
-        node,
-        path,
-        message: 'A <dd> that writes nothing ends the list it is in; the entries after it are written as a second <dl>, because one list would give the term above it the next entry\'s description',
-      })
-    }
     const list: BlockNode = { type: 'definition_list', items, ...(attrs ? { attrs } : {}) }
     return [...(items.length ? [list] : []), ...this.blocks(trailing, path, depth + 1, trailingPaths)]
   }
@@ -2748,30 +2722,6 @@ class Importer {
       const what = unwrapped ? `the unwrapped <${tag}>` : `the dropped empty <${tag}>`
       this.add('attribute-dropped', `Dropped ${name} with ${what}: there is no element left to carry it`, 'info', path, node)
     }
-  }
-
-  /**
-   * Whether a description's blocks reach the written source at all.
-   *
-   * An empty ARRAY is the obvious case, and it is not the only one: the two
-   * further shapes measured against the writer are a paragraph with no visible
-   * text (`<dd><p></p></dd>`) and a list with no items (`<dd><ul></ul></dd>`).
-   * None of the three reaches the source: the writer drops a description that
-   * would write nothing, because the bare `:` line it used to emit is read as
-   * more of the TERM above it - losing the description AND damaging the term
-   * (carve#1608). Everything else writes something the reparse keeps - an empty
-   * `<li>` comes back as `:  - +` and an empty `<blockquote>` as `:  >`, which
-   * are descriptions, not losses.
-   *
-   * A DECLARED LOSS IS A CEILING, NOT A LICENCE: this is what declares the one
-   * the writer takes, and dropping the description is all it covers.
-   */
-  private writesNothing(blocks: BlockNode[]): boolean {
-    return blocks.every(
-      (block) =>
-        (block.type === 'paragraph' && !this.visible(block.children)) ||
-        (block.type === 'list' && block.items.length === 0),
-    )
   }
 
   /**
