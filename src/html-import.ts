@@ -1671,8 +1671,9 @@ class Importer {
          * slug a fresh Carve parse would generate - EXCEPT where the element
          * itself says the renderer wrote it. `roundtrip` mode's input is
          * Carve-produced HTML BY DEFINITION, so there the id can be read back
-         * as generated rather than authored; the two forms render attributes in
-         * different positions (markup-carve/carve-js#1459).
+         * as generated rather than authored. A generated id follows every
+         * authored attribute, which is what `idInGeneratedPosition` recognizes
+         * (markup-carve/carve-js#1459).
          */
         if (
           this.mode === 'roundtrip' &&
@@ -1983,7 +1984,7 @@ class Importer {
    * those took the WHOLE of anything else the list carried:
    * `<ul><div id="stray">z</div><li>a</li></ul>` came back as one item and an
    * EMPTY report. Stray children therefore take the ordinary block walk ahead
-   * of the list, preserving their content and diagnostics (carve-js#1340).
+   * of the list, preserving their content and diagnostics.
    */
   private list(node: P5Node, path: string, depth: number, ordered: boolean, attrs?: Attrs): BlockNode[] {
     const listItems: P5Node[] = []
@@ -2258,7 +2259,7 @@ class Importer {
   /** Whether a non-final generated endnotes section has already left a placement marker. */
   private footnotePlacementMarked = false
 
-  /** Whether the renderer derives this wrapper rather than preserving authored structure. */
+  /** Whether the renderer derives this wrapper rather than the author writing it. */
   private isDerivedWrapper(node: P5Node, tag: string): boolean {
     return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
   }
@@ -2338,7 +2339,7 @@ class Importer {
     return false
   }
 
-  /** Report each attribute lost with an unwrapped or dropped element. */
+  /** One `info` row per attribute lost with an unwrapped or dropped element (carve-php#1731). */
   private reportUnwrappedAttributes(node: P5Node, attrs: Attrs | undefined, tag: string, path: string, unwrapped = true): void {
     if (attrs === undefined) return
     for (const name of this.attrNames(attrs)) {
