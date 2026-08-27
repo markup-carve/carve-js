@@ -210,6 +210,20 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(w[0]!.column).toBe(1)
   })
 
+  it('does not flag a table continuation row as a Djot `+` bullet', () => {
+    const src = [
+      '| a | b |',
+      '|---|---|',
+      '| shipped | with the same corpus |',
+      '+ | | more |',
+    ].join('\n')
+    expect(rules(src)).toEqual([])
+  })
+
+  it('still flags the same `+ |` shape when no table row consumes it', () => {
+    expect(rules('+ | | more |')).toEqual(['djot-plus-bullet'])
+  })
+
   it('flags a Djot heading continuation line and joins it', () => {
     // Djot folds the line under a heading into it; Carve does not, so the
     // heading text and its auto-id both change. Valid Carve either way, hence
