@@ -1,6 +1,6 @@
 /*
  * Public API for @markup-carve/carve.
-  */
+ */
 
 import type { Document } from './ast.js'
 import type { BeforeRenderContext, CarveExtension } from './extension.js'

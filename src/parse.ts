@@ -3268,7 +3268,7 @@ function parseEquationBlock(lexer: Lexer): Paragraph | Figure | null {
 /*
  * A CONTAINER ENDS AT ITS LAST PLACED CHILD (PART 12 §4, markup-carve/carve#1522
  * and markup-carve/carve#1524).
-  */
+ */
 const ENDS_AT_LAST_PLACED_CHILD = new Set([
   'block_quote',
   'definition_list',

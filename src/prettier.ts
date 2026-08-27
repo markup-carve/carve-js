@@ -1,6 +1,6 @@
 /*
  * Prettier plugin for Carve.
-  */
+ */
 
 import { carveToCarve } from './index.js'
 

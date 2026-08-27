@@ -1666,13 +1666,14 @@ class Importer {
       const children = this.blockInlines(node.childNodes ?? [], path, depth + 1)
       let held = attrs
       if (held?.id !== undefined) {
-/*
+        /*
          * A heading id from HTML is authored input, even when it equals the
          * slug a fresh Carve parse would generate - EXCEPT where the element
          * itself says the renderer wrote it. `roundtrip` mode's input is
          * Carve-produced HTML BY DEFINITION, so there the id can be read back
-         * as the generated one rather than assumed authored, and re-emitting it
-          */
+         * as generated rather than authored; the two forms render attributes in
+         * different positions (markup-carve/carve-js#1459).
+         */
         if (
           this.mode === 'roundtrip' &&
           idInGeneratedPosition(node) &&
@@ -1945,13 +1946,13 @@ class Importer {
           unwrapped,
         )
       }
-/*
+      /*
        * A DIV CARRYING NOTHING ONLY A CONTAINER CAN HOLD IS NOT A CONTAINER
        * WORTH SPELLING, so it unwraps to its content and the `:::` fence is not
        * written (markup-carve/carve#1578). A bare `<div>` carries no meaning of
        * its own: the fence buys the reader nothing and costs two lines of markup
        * nobody asked for.
-        */
+       */
       if (tag !== 'div' || (!attrs && !lifted)) return children
       return [
         {
@@ -1981,7 +1982,8 @@ class Importer {
    * (carve-js#1340). Filtering the children down to `<li>` and walking only
    * those took the WHOLE of anything else the list carried:
    * `<ul><div id="stray">z</div><li>a</li></ul>` came back as one item and an
-   * EMPTY report, so the text `z` left the document with nothing anywhere
+   * EMPTY report. Stray children therefore take the ordinary block walk ahead
+   * of the list, preserving their content and diagnostics (carve-js#1340).
    */
   private list(node: P5Node, path: string, depth: number, ordered: boolean, attrs?: Attrs): BlockNode[] {
     const listItems: P5Node[] = []
@@ -2253,30 +2255,14 @@ class Importer {
     ]
   }
 
-/**
- * The attributes an UNWRAPPED element takes with it.
- *
- * `attrs()` reports the ones it cannot represent, and keeps the rest - an id
- * an anchor points at, a class a stylesheet selects on, a `data-` pair an
- * editor round-trips. When the element itself is then unwrapped there is
- * nothing left to hang them on, and they went in silence: a
- * `<video id="player">` reported that the element was unwrapped and never
- * that the id had gone with it.
- */
-  /**
-   * Is the ELEMENT itself one the renderer derives, rather than one the author
-   * wrote?
-   */
+  /** Whether a non-final generated endnotes section has already left a placement marker. */
   private footnotePlacementMarked = false
 
+  /** Whether the renderer derives this wrapper rather than preserving authored structure. */
   private isDerivedWrapper(node: P5Node, tag: string): boolean {
     return tag === 'section' && this.attr(node, 'role') === 'doc-endnotes'
   }
 
-  /**
-   * The attributes an UNWRAPPED element took with it: ONE ROW PER ATTRIBUTE, at
-   * `info` (ruling markup-carve/carve-php#1731).
-   */
   /**
    * Whether an element brought anything for an unwrap to leave behind.
    *
@@ -2352,6 +2338,7 @@ class Importer {
     return false
   }
 
+  /** Report each attribute lost with an unwrapped or dropped element. */
   private reportUnwrappedAttributes(node: P5Node, attrs: Attrs | undefined, tag: string, path: string, unwrapped = true): void {
     if (attrs === undefined) return
     for (const name of this.attrNames(attrs)) {
@@ -3197,9 +3184,9 @@ class Importer {
     const target = this.captionHost(targets[0])
     const captionable = target !== undefined && FIGURE_REBUILDS.has(target.type)
     const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
-/*
+    /*
      * TWO CAPTIONS AND ONE SLOT (ruling markup-carve/carve-js#1488).
-      */
+     */
     const doubleCaption =
       captionable &&
       target !== undefined &&
@@ -3207,12 +3194,12 @@ class Importer {
       this.captionSpellsSomething((target as { caption?: InlineNode[] }).caption ?? []) &&
       captionNode !== undefined &&
       this.captionSpellsSomething(caption)
-/*
+    /*
      * `roundtrip` PRESERVES THE ELEMENT WHEN NO CARVE SPELLING REPRODUCES IT
      * (markup-carve/carve#1704). It is the only mode that CAN preserve; which
      * targets rebuild at all is `FIGURE_REBUILDS`, above, and it answers for
      * every mode.
-      */
+     */
     if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && (!captionable || doubleCaption)) {
       this.restore(before)
       this.preserveOwnAttributes(node)
@@ -3220,13 +3207,14 @@ class Importer {
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     if (captionable) {
-/*
+      /*
        * A FIGURE WITH NO CAPTION IS NOT A FIGURE (PART 9 §4b: the node is the
        * GENERIC CAPTIONED WRAPPER, and Carve builds one only from a `^ ` line on
        * a captionable host). A `<figure>` carrying no `<figcaption>`, or one
        * whose caption contributes nothing, therefore has nothing to build a
-       * figure FROM, and building one anyway made the two exits disagree: the
-        */
+       * figure from; building one would add structure that cannot round-trip
+       * (markup-carve/carve-js#1423).
+       */
       if (!this.captionSpellsSomething(caption)) {
         this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
         this.reportUnwrappedAttributes(node, attrs, 'figure', path)
@@ -3401,10 +3389,10 @@ class Importer {
     // text and its `cite` goes with it - so this mapping is the safe/semantic
     // answer and the raw fallback is the round-tripping one.
     if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
-/*
+    /*
      * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
      * TeX that is already in the source, and no MathML-to-TeX converter.
-      */
+     */
     if (tag === 'math') {
       /*
        * Charged once, before anything reads the subtree: every arm below

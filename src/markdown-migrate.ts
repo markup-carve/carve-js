@@ -1,6 +1,6 @@
 /*
  * Markdown -> Carve converter.
-  */
+ */
 
 import {
   escapeAttributeBlockOpener,

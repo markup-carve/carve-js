@@ -1,6 +1,6 @@
 /*
  * The definition list's wire shape (PART 12).
-  */
+ */
 
 import type { BlockNode, DefinitionItem, InlineNode, Position } from './ast.js'
 

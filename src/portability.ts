@@ -1,6 +1,6 @@
 /*
  * Is this document portable to Djot - does it MEAN the same thing there?
-  */
+ */
 
 /**
  * The slice of djot.js this check needs. Structural, so a caller can pass the

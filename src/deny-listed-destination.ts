@@ -1,6 +1,6 @@
 /*
  * Blank a destination whose scheme PART 9 §25 denies.
-  */
+ */
 
 import { DANGEROUS_URL_SCHEMES, SCHEME_PROBE_STRIP_RE } from './render-html.js'
 

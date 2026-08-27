@@ -1,6 +1,6 @@
 /*
  * Shared footnote-numbering pass (carve-js#479).
-  */
+ */
 
 import type { BlockNode, Document, FootnoteRef, InlineFootnote, InlineNode } from './ast.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
