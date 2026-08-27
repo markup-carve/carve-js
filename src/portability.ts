@@ -1,34 +1,6 @@
 /*
  * Is this document portable to Djot - does it MEAN the same thing there?
- *
- * The first attempt at this question was a lint rule that reasoned about it
- * (carve-js#546): flag a block opener sitting directly under a paragraph line,
- * because Carve interrupts the paragraph and Djot folds the opener into it.
- * The divergence is real, but the rule tested a predicate about the CARVE tree
- * and the divergence is a statement about DJOT's block model. Those came apart
- * in three ways - a Djot construct that absorbs the paragraph (multi-line
- * heading, `: term`, footnote-definition lazy continuation), a remedy that
- * split a blockquote in two, and an opener set that included shapes the two
- * engines already agree on. Measured false-positive rates ran 11.5% to 36.5%
- * depending on the generator, and each patch that removed one shape left
- * another. It converges on reimplementing Djot's block model.
- *
- * So do not reason about it. RUN both engines and compare. There is no
- * predicate left to be unsound: the check reports a divergence exactly when
- * the two renderings differ, which is the property the lint rule was trying to
- * approximate. What used to be the rule's correctness argument is now a
- * one-line definition.
- *
- * That moves the whole judgment surface into one place - what counts as "the
- * same rendering" - and that surface is small, inspectable and unit-testable,
- * which the withdrawn predicate was not. `normalizeHtml` below is where every
- * remaining decision lives, each one documented with the reason it is not a
- * difference in meaning.
- *
- * Djot is not a dependency of this package. The engine is INJECTED (see
- * `DjotEngine`), so this module stays dependency-free and testable with a stub;
- * the CLI does the lazy import and produces the install hint when it is absent.
- */
+  */
 
 /**
  * The slice of djot.js this check needs. Structural, so a caller can pass the

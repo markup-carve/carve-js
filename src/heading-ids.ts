@@ -81,27 +81,6 @@ export function headingRefKeyFromLabel(label: string): string {
 /**
  * The DERIVED label of a collapsed reference: the label's own inline content
  * rendered to plain text (PART 12 §3a, markup-carve/carve#962).
- *
- * §3a defines `ref` as "the label the reference resolves by", with the authored
- * spelling kept in `rawRef`. Where the heading index answers on the stripped key
- * - `[`code()` heading][]` reaching `# `code()` heading` - the label it resolved
- * by is `code() heading`, so that is what `ref` publishes. carve-js published
- * the authored spelling in BOTH fields, which left §3a's two fields carrying one
- * string and made `ref` unusable as the resolution key it is defined to be.
- *
- * DERIVED, NOT NORMALIZED. The four normalizations in
- * {@link normalizeHeadingRefLabel} (trim, whitespace collapse, NFC, case fold)
- * belong to MATCHING, not to the label: `[Getting Started][]` under
- * `# getting started` has always published `Getting Started`, and folding the
- * published value would rewrite every plain label to make one markup-bearing one
- * right. Rendering the label's inlines is the whole derivation, which is also
- * why a label with no markup, no escape and no smart-punctuation trigger derives
- * to itself byte for byte.
- *
- * Escapes and smart punctuation ride along for free and correctly:
- * `[\*bold\* heading][]` derives `*bold* heading`, and `[a -- b][]` derives the
- * en-dash spelling, because those are equally "what the label renders as", which
- * is the only string the heading index ever compared.
  */
 export function derivedRefLabel(label: string): string {
   return inlineText(parseRefLabelInlines(label))
@@ -109,30 +88,6 @@ export function derivedRefLabel(label: string): string {
 
 /**
  * Whether a reference link was written in the COLLAPSED `[text][]` spelling.
- *
- * PART 9R R1: the heading-index fallback is scoped to the collapsed form and to
- * nothing else, so an explicit `[text][label]` that no linkDefs entry matches is
- * unresolved and renders as its literal source at ANY spelling, folded or exact
- * (markup-carve/carve#742). The asymmetry is the one R1 already states: a
- * collapsed label is the author quoting prose from elsewhere in the document,
- * which is why its matching is loose; an explicit label is an identifier the
- * author wrote twice and can keep identical, which is why its matching is exact.
- * An identifier that names nothing names nothing; it is not retried as prose.
- *
- * The test reads `rawRef` rather than a flag set at parse time, because it has
- * to hold for a tree that arrived through INGEST too: `ref` and `rawRef` are the
- * two fields PART 12 §3a puts on the wire for a reference, and the collapsed
- * spelling is recoverable from them and from nothing else. `ref` alone cannot
- * tell the two apart - a collapsed `[a][]` and an explicit `[a][a]` both carry
- * `ref: "a"`.
- *
- * A label holds no `]` (the reference tail is `[` up to the first `]`), so
- * `[<ref>][]` is a prefix of the source exactly when the label was empty and the
- * collapsed form reused the text as the label.
- *
- * A node with no `rawRef` is treated as NOT collapsed. It is degenerate either
- * way - the renderers need `rawRef` to write an unresolved reference back out as
- * literal source - and refusing the fallback is the side this clause narrows to.
  */
 /**
  * A deep copy of an inline run, for a consumer that DERIVES display text from a
@@ -252,24 +207,6 @@ export function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): I
  * R4, markup-carve/carve#915 and markup-carve/carve#957): a deep clone, its
  * footnote apparatus removed, its nested anchors unwrapped for the link the
  * label renders inside.
- *
- * One function because the clause binds every such consumer and names three -
- * a numbered cross-reference label, an index term's display, a
- * table-of-contents entry. Each answering the two follow-on questions on its own
- * is how one rule acquires four readings.
- *
- * `insideLink` is the CALLER's context, as it is for `unwrapNestedAnchors`, and
- * it is NOT a property of being derived: a cross-reference label and a
- * table-of-contents entry render inside an `<a>` and pass `true`, while an index
- * list item is not an anchor - only the backrefs after the display are - and
- * passes `false`, keeping an authored link the author put in the term (raised by
- * codex review).
- *
- * THE LABEL IS THE HEADING'S AUTHORED CONTENT, which is what
- * `stripResolutionApparatus` below leaves behind. R4 names one such addition
- * explicitly - a render-stage `section-number` span - and the argument is about
- * the SIDE of the injection the label comes from, not about which transform did
- * the injecting.
  */
 export function deriveDisplayNodes(nodes: InlineNode[], insideLink: boolean): InlineNode[] {
   return unwrapNestedAnchors(stripResolutionApparatus(deepCloneInlines(nodes)), insideLink)
@@ -590,19 +527,6 @@ function resolveHeadingIdsImpl(
   // exactly — no regex pre-pass guesswork.
   const headingRefs = new Map<string, string>()
 
-  // Assign every heading an id in DOCUMENT ORDER, descending into nested
-  // containers (list items, blockquotes, divs/admonitions, definition lists,
-  // tables, figures) so a heading inside a list item carries its slug id on
-  // the <h*> just like a top-level one (Bug A; carve-php parity). The dedup
-  // counter and the implicit-reference/crossref target index are shared across
-  // top-level and nested headings, matching carve-php's single document-order
-  // pass. The <section> wrapper stays a top-level-only concern in render-html;
-  // nested headings emit just <h* id> with no section.
-  // `inBlockquote`: a heading with ANY blockquote ancestor still gets an id and
-  // is a valid `</#id>` crossref target, but is NOT registered as an implicit
-  // `[label][]` reference target -- matching carve-php, where a blockquote
-  // ancestor (in either nesting order) suppresses the implicit-ref index entry
-  // while list/div/deflist nesting does not.
   const assignHeadingId = (
     heading: { attrs?: Attrs; children: InlineNode[] },
     inBlockquote: boolean,
@@ -720,30 +644,6 @@ function resolveHeadingIdsImpl(
       // PART 12 §3a keeps `ref` on a resolved reference, so the test is the
       // destination itself (carve#596).
       if (n.type === 'link' && isUnresolvedReference(n)) {
-        // No explicit `[label]: url` def matched in applyLinkDefs.
-        // Try the implicit-heading index; otherwise fall back to the
-        // raw source text. Explicit defs win because applyLinkDefs
-        // already resolved those before this pass.
-        // The label AS WRITTEN first, then its RENDERED PLAIN TEXT. Both, and
-        // in that order, because the two keys differ only when the label
-        // carries markup: a label with none produces the same string twice, and
-        // one that does must still lose to a heading whose text literally
-        // contains the markup characters.
-        //
-        // ONLY the collapsed spelling reaches the index (PART 9R R1,
-        // markup-carve/carve#742). The gate is on the SPELLING, not on
-        // "unresolved": an explicit `[text][label]` naming a real linkDefs entry
-        // still resolves - it resolved in applyLinkDefs, before this pass ever
-        // saw it - and a collapsed one still reaches the heading index.
-        //
-        // WHICH KEY ANSWERED IS RECORDED, not just that one did. PART 12 §3a
-        // defines `ref` as the label the reference RESOLVES BY, so when the
-        // second key is the one the index answered on, `ref` publishes that
-        // derived label and `rawRef` keeps the authored spelling
-        // (markup-carve/carve#962). Taking the first key's answer leaves `ref`
-        // authored, which is what §3a already gave `rawRef` - two fields, one
-        // string, and no field naming the key a consumer would have to
-        // recompute.
         if (isCollapsedRef(n.ref, n.rawRef)) {
           const asWritten = headingRefs.get(normalizeHeadingRefLabel(n.ref))
           if (asWritten !== undefined) {
@@ -1092,34 +992,6 @@ function resolveHeadingIdsImpl(
   for (const block of doc.children) walkBlock(block, resolveCrossrefs)
   for (const body of footnoteBodies) for (const b of body) walkBlock(b, resolveCrossrefs)
 
-  // Pass 3 USED TO BE HERE and is gone: "links never nest" is a RENDERING rule.
-  //
-  // A NESTED LINK AND AN AUTOLINK STAY NODES -- NORMATIVE (PART 12 §3a,
-  // markup-carve/carve#817). An anchor may not contain another anchor, and that
-  // binds the renderer, not the encoder. A link or an autolink inside a link's
-  // label is serialized as the node the author wrote, and every renderer unwraps
-  // it at the render seam.
-  //
-  // Flattening it here was strictly lossier than the case §3a opens with. An
-  // unresolved reference at least keeps enough to be written back; a nested
-  // link's destination did not survive at all. `[[x](y)](z)` published a link to
-  // `z` whose only child was the text `x`, so `y` was gone from the tree - `fmt`
-  // on the parsed document wrote `[[x](y)](z)` back and `fmt` on the same
-  // document taken through the AST wrote `[x](z)`, which is the §6 round trip
-  // failing. An autolink flattened the same way returned as a bare URL, and that
-  // is a DIFFERENT document: a bare URL stays literal where an autolink is a
-  // link.
-  //
-  // The precedent was already inside this rule. A `heading_ref` inside a link
-  // was exempt for exactly this reason - it reached the serialized tree and the
-  // renderers suppressed the nested anchor instead - and an image and a code
-  // span inside a label were never flattened at all. A link and an autolink are
-  // the same case.
-  //
-  // `unwrapNestedAnchors` stays, and stays exported: the renderers call it, and
-  // so does every consumer that derives runtime-only display text from a
-  // heading. What moved is WHERE it runs.
-
   // Promote paragraphs that are really block images / figures (see
   // promoteBlockImages). Runs at the end of resolve() so reference images are
   // already resolved; also invoked by carveToCarve so `carve fmt` emits an
@@ -1146,18 +1018,6 @@ export function resolveHeadingIdsWithRegistry(
   return resolveHeadingIdsImpl(doc, opts, documentIds)
 }
 
-// "Content" is any character that is not one of Carve's four whitespace
-// characters - U+0020, U+0009, U+000A, U+000D (markup-carve/carve#977, PART 7:
-// ONE WHITESPACE DEFINITION, IN EVERY CONSTRUCT). A non-breaking space
-// (U+00A0) counts as content, matching RE_CAPTION and the parser's NBSP
-// handling elsewhere. (String.trim() is Unicode-aware and would wrongly drop
-// NBSP, so test against this class instead.)
-//
-// THE FORM FEED CAME OUT OF THIS CLASS. It read `[^ \t\n\r\f]`, so U+000C was
-// not content here while it was content one line below the marker - the
-// per-construct derivation carve#977 names as the source of the divergence.
-// U+000B was never in it, which is the asymmetry that gives the game away:
-// nothing in the grammar distinguishes the two.
 const RE_HAS_CONTENT = /[^ \t\n\r]/
 
 /**
@@ -1206,20 +1066,7 @@ function captionFirstLineHasContent(children: InlineNode[]): boolean {
  * losing the figure). Emitting the promoted figure yields a portable
  * unescaped `^ …` line, matching carve-php.
  */
-/**
- * A paragraph whose entire content is one REAL image.
- *
- * "Real" means direct or resolved-reference: an unresolved reference image
- * renders as literal source text and keeps its `<p>` wrapper, so it is not a
- * block image at any column. UNRESOLVED means no destination - PART 12 §3a
- * keeps `ref` on a resolved reference too (carve#596).
- *
- * Shared by the two passes that act on this shape and disagree about the
- * column: `promoteBlockImages` (parse/resolve time, column-gated) and
- * `collapseLoneImageParagraphs` (render time, ungated). Keeping the predicate
- * in one place is what stops the two from drifting into disagreeing about which
- * paragraphs they are even talking about.
- */
+/** Whether a paragraph contains one resolved image. */
 function isLoneImageParagraph(b: BlockNode): b is Paragraph {
   return (
     b.type === 'paragraph' &&
@@ -1230,42 +1077,9 @@ function isLoneImageParagraph(b: BlockNode): b is Paragraph {
 }
 
 /**
- * Render-time half of markup-carve/carve#1660: a sole-image paragraph is a bare
- * `<img>` at EVERY column.
- *
- * The parse tree keeps an INDENTED lone image as `paragraph > image`, because a
- * block image is a top-level block opener and §15's strict column-0 rule reaches
- * it (`promoteBlockImages` above declines to promote one). The HTML cannot say
- * so: corpus `411-a-lone-indented-image-is-a-paragraph-and-its-html-cannot-say-so`
- * is one indented image and its `.html` is exactly `<img src="a.jpg"
- * alt="Apollo">`, which is what carve-rs and carve-php both emit. The document's
- * own name is the ruling - the tree says paragraph and the HTML does not repeat
- * it.
- *
- * So the column gate is lifted here, once, ahead of every layout decision the
- * renderer makes. That matters beyond the `<p>` itself: the blockquote, `<li>`
- * and `<dd>` compact forms all fire on "one visible child and it is a
- * paragraph", so collapsing inside `renderBlock` would still have wrapped
- * `>   ![a](u)` as `<blockquote><p><img></p></blockquote>` where the other two
- * engines give the expanded bare-image form. carve-rs took the same shape for
- * the same reason (carve-rs#1347).
- *
- * The FIGURE half of `promoteBlockImages` stays column-gated on both paths, and
- * deliberately: an indented image with a `^ ` caption is literal paragraph text
- * in the HTML too (corpus `158-indented-image-and-caption-stay-literal`), so
- * lifting the gate there would build a figure the author did not write. This
- * pass cannot reach that shape anyway - a captioned paragraph holds three
- * inlines, not one.
- *
- * COPY ON WRITE, because `renderHtml` is public API and the caller owns the
- * `Document` it passed. A document with no lone-image paragraph is returned
- * unchanged and allocates nothing; only when one exists is the block spine
- * cloned down to the paragraphs that move.
- *
- * ITERATIVE, for the reason `documentHasAbbreviationDef` gives: a renderer
- * refuses a tree past `MAX_RENDER_DEPTH` with a typed `RenderDepthError`, and
- * this runs BEFORE that refusal, so a recursive walk would turn a documented
- * refusal into a stack overflow on exactly the trees the refusal exists for.
+ * Collapse lone-image paragraphs for HTML without mutating the caller's tree.
+ * The iterative walk runs before the renderer's depth check, so it must not
+ * turn an over-depth tree's typed refusal into a stack overflow.
  */
 export function collapseLoneImageParagraphs(doc: Document): Document {
   if (!hasLoneImageParagraph(doc)) return doc
@@ -1390,19 +1204,6 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
     if (
       !figuresOnly &&
       isLoneImageParagraph(b) &&
-      // Strict column-0 rule, the same one the figure arm below applies and for
-      // the same reason (carve#1660): a top-level block opener must start at
-      // column 0, so an image indented above its container's content column is
-      // not a block image. `parseParagraph` strips a paragraph's leading
-      // indentation, so the AST text cannot tell an indented image from a flush
-      // one -- the image's own source column can. A flush image, at top level OR
-      // at the dedented content column of any container, has startColumn === 1.
-      //
-      // THIS ARM RUNS FROM resolve(), so without the check the ruling held on
-      // the parse tree and was lost on the PUBLISHED one: the syntactic
-      // block-image pass declines an indented image at parse time, and this
-      // promoted it again afterwards on "is it a real image" alone. carve-js was
-      // the only engine still promoting it (carve-js#1437).
       ((b.children[0] as Image).pos === undefined ||
         (b.children[0] as Image).pos!.startColumn === 1)
     ) {
@@ -1429,29 +1230,6 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       // A REAL image only (see above): an unresolved reference is literal text,
       // not a figure target.
       !isUnresolvedReference(b.children[0] as Image) &&
-      // Strict column-0 rule: an image+caption forms a <figure> ONLY when the
-      // image begins at its container's CONTENT COLUMN. parseParagraph strips a
-      // paragraph's leading indentation, so the AST text alone cannot tell an
-      // indented image+caption (which must stay literal) from a flush one.
-      //
-      // THE IMAGE'S OWN COLUMN CANNOT TELL THEM APART EITHER, and reading it was
-      // the defect (carve-js#1553). `startColumn === 1` is true only at the top
-      // level, so every container failed it: a list item's content column is 3,
-      // and so is the column of a two-space-indented image at top level. One of
-      // those must promote and the other must not, and the absolute column gives
-      // the same answer for both. So a reference image inside a list item or a
-      // quote promoted to a bare <img> and DROPPED its caption line as stray
-      // text, while the inline form in the same position - which never reaches
-      // this arm, because the parse-time pass claims it - kept the figure.
-      //
-      // The answer is recorded where it still exists, before parseParagraph
-      // throws the indentation away, and kept in a parser-local table rather
-      // than on the node: it is a fact about SOURCE INDENTATION that the schema
-      // does not name, and a runtime-only own property would break §6's
-      // round-trip identity. The table records the EXCEPTION, so a paragraph
-      // nobody registered promotes - the HTML importer builds one per `<p>`
-      // with no source column to report, and such a paragraph is at its
-      // container's content column by construction.
       isAtContentColumn(b) &&
       b.children[1]!.type === 'soft_break' &&
       // This `text` test is also what keeps an ESCAPED caret literal: `\^`
@@ -1513,19 +1291,7 @@ export function promoteBlockImages(blocks: BlockNode[], figuresOnly = false): vo
       blocks[i] = figure as unknown as BlockNode
       continue
     }
-    // THE PHASE PUBLISHES ITS ANSWER (PART 9R R7, PART 12 §23, carve-js#1552).
-    // A paragraph that reaches here was not replaced by a block image or a
-    // figure above -- either because `figuresOnly` is on, or because §15's
-    // strict column-0 rule keeps an indented lone image a paragraph in the tree
-    // (carve#1660). It still RENDERS as a bare <img> at every column, so the
-    // question "is this paragraph a block image" survives into the published
-    // tree, and this is where it is answered rather than left for each consumer
-    // to re-derive by running reference resolution again.
-    //
-    // Recomputed rather than accumulated, so promoting one document twice - or
-    // a tree handed in by an editor, an extension or `--from-json` - cannot
-    // carry a stale `true` from an earlier context. Written only as `true`: a
-    // paragraph that is not a block image omits the field.
+    // The field records render semantics, so it is not column-gated.
     if (b.type === 'paragraph') {
       const para: Paragraph = b
       // Held as a plain boolean rather than tested inline: `isLoneImageParagraph`

@@ -91,39 +91,8 @@ export interface Document extends BaseNode {
   footnoteDefPos?: Record<string, Position>
   children: BlockNode[]
   /**
-   * Blocks that belong to the DOCUMENT, wherever `children` happens to hold
-   * them - emitted by the HTML renderer after every `<section>` has closed.
-   *
-   * Holds REFERENCES to nodes that are also in `children`, so a renderer that
-   * does not know about this field still emits them exactly where they sit.
-   * Only the HTML renderer honors it, because it is the only one that wraps
-   * content in `<section>` at all (PART 9 §13); markdown, plain text and ANSI
-   * have no container for a trailer to escape from.
-   *
-   * The case it exists for is a bottom-positioned table of contents. Appending
-   * a block to `children` puts it inside whatever section the last heading
-   * opened, so ONE option produced four placements - inside the last section,
-   * inside the INNERMOST of two nested sections, inside the section of a
-   * heading several paragraphs back, or at document level when the document
-   * had no headings at all (markup-carve/carve-js#728). A `<section>` is a
-   * rendering artifact, not a container the author wrote, so "the bottom of
-   * the document" must not be captured by one.
-   *
-   * Runtime only, and not serialized: `toAstJson` builds the root from `type`,
-   * `children` and `srcByteLength` alone (PART 12 §7). The same arrangement
-   * `footnoteDefPos` above uses.
-   *
-   * So the PLACEMENT does not cross the wire. Serializing a tree an extension
-   * has already transformed and rendering the result puts the nav back inside
-   * the last section, because the wire carries the appended `raw_block` and no
-   * mark. §6 is unaffected - the round trip is still identity, since the field
-   * was never serialized in either direction - and this is the render-after-
-   * ingest family rather than a serializer defect.
-   *
-   * Deliberately not fixed here: carrying it would mean new PART 12 vocabulary,
-   * which is the spec's to name and all three engines' to implement, and the
-   * ruling on markup-carve/carve-js#728 authorized the placement rather than an
-   * addition to the format.
+   * Blocks emitted by HTML after every generated section has closed. Runtime
+   * only: this placement metadata is not serialized in the PART 12 AST.
    */
   trailerBlocks?: BlockNode[]
   /**
@@ -153,24 +122,7 @@ export interface Heading extends BaseNode {
 export interface Paragraph extends BaseNode {
   type: 'paragraph'
   children: InlineNode[]
-  /**
-   * Set by the BLOCK-IMAGE PROMOTION phase, and by nothing else (PART 9R R7,
-   * PART 12 §23): this paragraph's whole content resolves to a single image, so
-   * it is a block-level image and not a paragraph.
-   *
-   * Present ONLY as `true` - a paragraph that is not a block image omits the
-   * field rather than carrying `false`. It is a resolution result published
-   * alongside the authored construct, the same added-alongside rule that lets a
-   * resolved reference link keep `href` beside `ref` and `rawRef` (§3a).
-   *
-   * READ IT, do not re-derive it. Block-image status is a property of the
-   * RESOLVED tree: `![a][r]` is a block image where `[r]: /u` is written and
-   * ordinary prose where it is not, and the definition may sit anywhere in the
-   * document - so re-deriving it means running reference resolution again.
-   * Absence means the producer did not run the phase, NOT that the paragraph is
-   * ordinary, which is why an ingesting consumer promotes only where it is
-   * absent rather than refusing a tree that omits it.
-   */
+  /** Set after reference resolution when the paragraph contains one resolved image. */
   blockImage?: true
 }
 
@@ -459,27 +411,6 @@ export interface DefinitionList extends BaseNode {
   /**
    * PART 9 §17 L7: the container's descriptions render as BLOCKS rather than as
    * inline runs, because a preceding `{loose}` block-attribute line said so.
-   *
-   * It reaches the one shape a blank line cannot spell. A blank line between two
-   * ENTRIES does not loosen a `<dl>` at all - only a second block inside the
-   * description wraps it - so `<dd><p>x</p></dd>` has no blank-line spelling at
-   * any entry count.
-   *
-   * PUBLISHED, and `const: true` rather than a boolean. PART 12 §8 names the
-   * field (markup-carve/carve#1624, spec `cfb8d7bf`), so the flag rides the wire
-   * and survives an AST round trip in both directions.
-   *
-   * PRESENT means the looseness was SPELLED; ABSENT means each description
-   * derives its own wrapper from its block count, which is what every other
-   * definition list does. There is no `false` to write, and that asymmetry is
-   * the point: only the spelled fact is underivable, because a `<dl>` has no
-   * blank-line spelling for a one-block description at any entry count, so a
-   * tree carrying no flag could not otherwise say which spelling it came from.
-   *
-   * NOT the arrangement `footnote_ref.refId` and `heading_ref.resolvedText` use.
-   * Those are resolution RESULTS a consumer recomputes from the document, so
-   * echoing them would republish the previous document's answer. This is
-   * authored input, and nothing downstream can recompute it.
    */
   loose?: true
 }
@@ -546,23 +477,6 @@ export interface LinkReferenceDefinition extends BaseNode {
 
 /**
  * The `[@key]: {author= year=} entry` bibliography line (Tier-2, citations).
- *
- * PART 12 §18 (NORMATIVE): a citation definition is a NODE, shaped after §10's
- * link reference definition rather than after the footnote. A footnote body
- * holds BLOCKS; this holds a metadata run plus one line of rendered text, so
- * the entry is `children` of INLINE nodes and the metadata lands in `attrs` -
- * the same two slots §10 spends on a definition line's tail. `key` rather than
- * `label` because `citation.key` already names the same string at the use site.
- *
- * Of the four definition kinds this was the only one with no node, and both
- * behaviors on record lost a different half of what §10 keeps: carve-php
- * consumed the line at parse time, discarding `pos` so nothing could put the
- * line back, and carve-js left it a paragraph whose first child is a
- * `citation_group` followed by the literal text `: {author=` - the parser's
- * failure to recognize the line, published (markup-carve/carve#1276).
- *
- * Renders nothing where it sits, on every target: the entry's text renders in
- * the references list the citations extension builds, exactly as before.
  */
 export interface CitationDefinition extends BaseNode {
   type: 'citation_definition'

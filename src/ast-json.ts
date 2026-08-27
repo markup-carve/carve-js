@@ -183,38 +183,6 @@ function definitionListsToWire<T>(node: T): T {
     out = rest
   }
 
-  // PART 9 §17 L7's `loose` on a DEFINITION LIST used to be dropped here, on
-  // the reading that PART 12 §8 named no looseness field so publishing one
-  // would put a property on the wire the schema does not name - which §11
-  // refuses on the way back in. §8 NAMES IT NOW (markup-carve/carve#1624, spec
-  // `cfb8d7bf`), so the drop is gone and the flag rides the wire.
-  //
-  // The distinction that made the drop wrong is the one §8's `const: true`
-  // encodes: the `<dd>` wrapper is derived from the description's block count
-  // in every OTHER definition list, but a blank line between two ENTRIES does
-  // not loosen a `<dl>` at all, so a SPELLED looseness is underivable at any
-  // entry count. Dropping it did not withhold a derivable fact, it deleted the
-  // only record of which of two spellings the document came from
-  // (markup-carve/carve-js#1409).
-  //
-  // Nothing replaces it: the record is copied wholesale, so `loose` now
-  // survives in both directions on its own. That is what separates this from
-  // `refId` and `resolvedText` above - those are RESOLUTION results a consumer
-  // recomputes, and this is authored input nothing can recompute.
-
-  // `start: 1` is the ordered-list default spelled out, and the schema says the
-  // field is written only "when it is not 1". An encoder is the thing that has
-  // to honor that, so a 1 is normalized away here rather than published.
-  //
-  // Same shape as `refId` above: this engine never WRITES one - `parse("1. a")`
-  // emits no `start` - it ECHOED one, because an ingested record is copied
-  // wholesale. So the encoder's output depended on where the tree came from,
-  // and a hand-built payload came back as a tree that does not match the
-  // documented shape (carve#1615, carve-js#1391).
-  //
-  // Lossless: `start: 1` and no `start` describe the same document. Only 1 is
-  // touched - `0` and `2` are meaningful and stay, which is what separates this
-  // from dropping `start` outright.
   if ((out ?? record)['type'] === 'list' && (out ?? record)['start'] === 1) {
     const { start: _start, ...rest } = out ?? record
     out = rest
@@ -355,32 +323,7 @@ export function toAstJson(doc: Document): AstJsonDocument {
   return out
 }
 
-/**
- * PART 12 §23 on ingest: TRUST `blockImage`, and promote only where it is
- * ABSENT (carve-js#1552).
- *
- * The field is a resolution result, and it is the one kind of resolution result
- * that must NOT be re-derived the way `number` is cleared above. The difference
- * is what absence means. An orphaned footnote number is a claim the tree can be
- * checked against - the definition is either here or it is not - so a number it
- * cannot justify is dropped. A missing `blockImage` is not a claim at all: every
- * AST JSON document written before the phase existed omits it, so absence says
- * the producer did not run the phase, NOT that the paragraph is ordinary. A tree
- * is therefore never refused for omitting it.
- *
- * So the pass is deliberately one-directional. Where the field is present it is
- * left exactly as it arrived, including on a paragraph whose contents this
- * engine would have read differently - the producer resolved against ITS
- * document's definitions, and re-deciding here would substitute this tree's
- * (possibly edited-down) reference table for the answer the producer published.
- * Where it is absent, the same predicate the promotion phase uses fills it in,
- * so a legacy payload reaches the renderers with the answer the phase would
- * have given it.
- *
- * All three engines do the same thing here on purpose: footnote and caption
- * numbers already diverge across engines on ingest, and this must not become
- * the second one.
- */
+/** Preserve a published result; compute it only for legacy payloads that omit it. */
 function promoteIngestedBlockImages(doc: Document): void {
   const worklist: BlockNode[][] = [doc.children]
   for (const body of Object.values(doc.footnoteDefs ?? {})) worklist.push(body)
@@ -394,12 +337,7 @@ function promoteIngestedBlockImages(doc: Document): void {
   }
 }
 
-/**
- * The promotion phase's predicate, asked of an ingested paragraph: is its whole
- * content a single image that RESOLVED? An unresolved reference image carries no
- * destination and renders as its literal source, so it stays inside its
- * paragraph (PART 12 §3a).
- */
+/** Whether the paragraph contains one resolved image. */
 function isBlockImageOnIngest(block: Paragraph): boolean {
   return (
     block.children.length === 1 &&
@@ -537,24 +475,6 @@ export class AstJsonUnknownNodeTypeError extends Error {
 /**
  * Thrown when a node in a node position has no usable `type` at all - the key is
  * absent, or it is present carrying something that is not a string.
- *
- * The SAME clause as the error above, §12(c), and separated from it only because
- * that one's `nodeType` is typed `string` and there is no string to report here.
- * A `type` of `7` or `null` or `{}` names no schema type just as surely as
- * `"wat"` does, so the refusal belongs at decode for the same reason:
- *
- *     (c) A NODE WHOSE `type` THE SCHEMA DOES NOT NAME, AT DECODE. Not in a
- *     renderer, one step later.
- *
- * This engine used to carry such a node all the way into `renderHtml`, which
- * reported `unknown block undefined` - a RENDERING problem for what is a payload
- * problem, and one that never arrives at all for a caller that holds the tree
- * without rendering it: `carve fmt --from-json`, a linter, a language server, an
- * indexer. carve-rs and carve-php both refuse at decode
- * (markup-carve/carve#881).
- *
- * The reported value is `typeof`-and-JSON rather than the raw value, because the
- * raw value is what produced `[object Object]` in the old message.
  */
 export class AstJsonNodeTypeError extends Error {
   constructor(
@@ -719,31 +639,6 @@ function matchesKind(value: unknown, kind: string): boolean {
 
 /**
  * PART 12 §12(d), over the whole payload (markup-carve/carve#881).
- *
- * An ingest validates the WHOLE payload against `resources/ast-schema.json` -
- * types and REQUIRED fields together - at DECODE, refused with the same typed
- * error §12(a), (b) and (c) already require.
- *
- * NOT a fourth list of leniency points. The schema is the list; it already
- * described every row that diverged across the three engines, and those rows
- * were only ever divergent because nothing consulted it. Two of them are worth
- * naming, because they are what a producer actually does: `children: null` read
- * as an empty document is §12's own objection arriving through a door the clause
- * did not cover - "a reader that supplies a default has turned a truncated
- * document into an empty one" - and `attrs: {"class": "x"}` is the mistake a
- * producer will make, since `class` is what the rendered HTML calls the thing.
- *
- * WHAT THIS DOES NOT ANNEX. A `srcByteLength` that is PRESENT but wrong stays
- * accepted: it is derivable and nothing in the tree depends on it. §12(a) is
- * about the field's presence and (d) about its type and sign, not about the
- * number being right. Nor does this restate §12(c)'s `type` rule, which carries
- * its own error - two producers of one rule is the hazard, not the gap.
- *
- * The cost, stated rather than discovered later: this rejects trees two engines
- * accept today, and every future schema addition becomes a potential rejection
- * for a producer that has not caught up. That last one is the point rather than
- * a side effect - it is what makes the schema the contract instead of a
- * description of it.
  */
 function refuseSchemaViolations(node: unknown, path: string): void {
   if (Array.isArray(node)) {
@@ -1008,22 +903,6 @@ function refuseUnknownFields(node: unknown, path: string): void {
   // the decoder turns an unusable kind away on its own terms, and reporting a
   // field on a type nobody names would send the caller after the wrong thing.
   const known = typeof type === 'string' ? ownValue(WIRE_FIELDS, type) : undefined
-  // A LEGACY DEFINITION ENTRY IS CLOSED TOO.
-  //
-  // This check is keyed by `record.type`, and the legacy definition-list entry
-  // has none - the schema gives it none, which is why `LEGACY_TYPELESS_POSITIONS`
-  // exempts it from the node-type rule. It was thereby exempt from the FIELD
-  // rule as well, and nothing else reached it: an entry carrying `bogus: 'x'`
-  // decoded, and `definitionListsFromWire` copies the record through, so the
-  // property survived into the tree and would be re-published in a payload the
-  // schema rejects. That is the exact class §11 exists for and the exemption was
-  // never meant to cover it - the exemption is about the missing `type`, not
-  // about everything else on the record.
-  //
-  // Found by sweeping for other spellings while removing the `footnote.id`
-  // alias (markup-carve/carve-js#907), which is the same clause failing at a
-  // second site. The allowed set is the runtime `DefinitionItem`'s own fields,
-  // because that is precisely the record the old publisher stringified.
   if (known === undefined && isLegacyDefinitionEntry(record)) {
     for (const key of Object.keys(record)) {
       if (!LEGACY_DEFINITION_ENTRY_FIELDS.has(key)) {
@@ -1047,25 +926,6 @@ function refuseUnknownFields(node: unknown, path: string): void {
 
 /**
  * A node position where a LEGACY payload carries a record with no `type`.
- *
- * The same shape of exception as `LEGACY_ALIASES` above, and it earns its place
- * the same way: the decoder demonstrably reads the old form. A definition list
- * used to be published as `items: [{terms, definitions}]` - a grouping record,
- * not a node - and `definitionListsFromWire` still maps it, because trees
- * written then are stored and a stored document cannot be recalled.
- *
- * Deliberately ONE entry and hand written rather than generated: the schema
- * describes the CURRENT form, where `definition_list.items` holds
- * `definition_term` and `definition_description` nodes, and it is right to. This
- * records that the decoder accepts more than the schema describes at exactly one
- * position, which is a fact about this engine's history rather than about the
- * format.
- *
- * The value is the KEYS that identify the legacy record, and the exemption is
- * conditional on one of them being there. Exempting the whole POSITION would
- * excuse any untyped object in it - `items: [{children: []}]` is neither a
- * legacy entry nor a node, and `entriesFromWire` drops it silently, so the
- * payload would be accepted and the content would vanish.
  */
 const LEGACY_TYPELESS_POSITIONS: ReadonlyMap<string, readonly string[]> = new Map([
   ['definition_list.items', ['terms', 'definitions']],
@@ -1167,31 +1027,6 @@ function refuseUnknownNodeTypes(
 
 /**
  * Deepest node nesting `fromAstJson` will ingest.
- *
- * PART 12 §9 states the contract as a property, not a number: ingest MUST
- * accept anything this engine's own parser can produce at `MAX_NESTING_DEPTH`,
- * and MUST refuse deeper input with an error of its own rather than a
- * `RangeError` at whatever depth the JS stack happens to give out.
- *
- * Counted in NODES, and the number is DERIVED from the worst per-level cost of
- * the encoding, never restated from the parser's cap. The parser counts
- * CONTAINER nesting; a container costs a different number of nodes depending on
- * which container it is:
- *
- * - a div or blockquote is one node per level
- * - a LIST is two - the list and its item
- *
- * Measured at the parser's cap of 200: div ladder 202 nodes, blockquote chain
- * 202, table under a deep chain 201, and a LIST LADDER 402. A cap derived as
- * "the parser's number plus a small margin" therefore rejects a document the
- * parser just produced - which is how carve-rs#389 happened, and what the first
- * draft of this constant (`MAX_NESTING_DEPTH + 8`) did to a 200-deep list.
- *
- * So: three nodes per level, which covers the two-node list with room for a
- * container that costs more, plus a constant for the innermost leaf. That
- * lands far below the depth where the decoder's own recursion gives out
- * (measured: 1500 levels decode, 2000 raise a RangeError), so the typed error
- * always wins the race against the stack.
  */
 export const MAX_AST_JSON_DEPTH = MAX_NESTING_DEPTH * 3 + 32
 
@@ -1265,37 +1100,6 @@ function astJsonDepth(
 /**
  * One string value of an ingested payload, normalized the way the parse
  * boundary normalizes the same characters in source text.
- *
- * TWO CHARACTERS, ONE PASS, and both for the same reason: the AST is a SECOND
- * DOOR into the same renderers, and a character the source door rewrites before
- * the first line is read must not arrive through this one still spelled the way
- * the source door refuses to keep it.
- *
- * U+0000 becomes U+FFFD. See the clause discussion on the walk below.
- *
- * A CARRIAGE RETURN BECOMES A LINE FEED, and a CRLF pair becomes one
- * (markup-carve/carve-js#1352, ruled on the ticket). PART 0 splits input on
- * `'\n'`, `'\r\n'` or a lone `'\r'` and `newline = '\n' | '\r\n' | '\r'` - all
- * three engines have agreed since markup-carve/carve#872 - so NO SOURCE TEXT
- * CAN PRODUCE A VALUE HOLDING A LITERAL CR. It arrives only by constructing a
- * tree or by ingesting one, and through this door it arrives routinely, because
- * a payload built from a CRLF document carries the pair in every multi-line
- * value it has.
- *
- * COLLAPSING IS LOSSLESS, which is what makes normalizing right here where
- * refusing was right for the shapes in markup-carve/carve-js#1344. A carriage
- * return already means exactly "line terminator" everywhere else in the
- * language, so nothing about the value survives the collapse except its
- * spelling; #1344's subject is whitespace SHAPES - a run at a line edge, a pad
- * before a terminator - for which no normalization preserves intent, so there
- * the only honest answer was to refuse. Refusing a CR would also turn away
- * CRLF-sourced input that is completely ordinary in provenance, a cost #1344
- * never had to pay.
- *
- * THE WRITER IS THEREFORE NEVER HANDED ONE from this door, which is why the
- * normalization lives here and not there: a constructed tree and an ingested
- * one reach `renderCarve` in the same shape, rather than the writer holding a
- * rule that only one of its two callers can trip.
  */
 function normalizeIngestedValue(text: string): string {
   const denulled = text.includes('\0') ? text.replace(/\0/g, '\ufffd') : text
@@ -1306,49 +1110,6 @@ function normalizeIngestedValue(text: string): string {
  * Replace every U+0000 with U+FFFD in every string value of an ingested
  * payload, before anything reads one of them (PART 12 section 21), and collapse
  * every carriage return to a line feed alongside it.
- *
- * THE PARSE BOUNDARY ALREADY DOES THIS. `normalizeSource` in `parse.ts`
- * replaces an authored NUL before the first line of a document is read, and
- * PART 9 section 29 carves the character out of the content class on that
- * basis. The AST is a SECOND DOOR into the same renderers and it had no
- * equivalent, so an authored NUL and an ingested one stood on different
- * footings - one replaced, one content - which is the divergence section 29
- * exists to remove.
- *
- * THE SUBJECT IS THE DECODED VALUE, not the bytes of a JSON document. RFC 8259
- * forbids an unescaped U+0000 inside a string, so a raw byte in JSON text is a
- * syntax error `JSON.parse` raises before any Carve rule is reached, and stays
- * one. What reaches here is the `\u0000` escape, or a string a host built in
- * memory and handed to `fromAstJson` directly - and the in-memory door has no
- * JSON layer at all, which is why the rule is stated on the value.
- *
- * NOT A REFUSAL, unlike section 11's unknown property and section 12's deviant
- * root. Those are structure a producer got wrong. This is the opposite case:
- * the replacement is what the parse boundary already does to the identical
- * string, so performing it is the documented reading rather than a repair, and
- * refusing would make an ingested document stricter than the same document
- * written as source.
- *
- * WHAT IT MAKES SAFE HERE. `abbreviationPairKey` joins an abbreviation term and
- * expansion on a NUL, on the premise that the parser strips the character from
- * both halves. That premise held on the parse path and not on this one, so
- * `("A" NUL "b", "c")` and `("A", "b" NUL "c")` keyed identically and a document
- * carrying both definitions with an occurrence of only the first DROPPED the
- * second definition line - deleting the author's text, which is the direction
- * PART 11 section 10f names as the one its two-pass design exists to avoid
- * (carve-js#1294). The sentinel does not have to change once the character
- * cannot arrive; carve-rs keeps its NUL-wrapped footnote placement marker for
- * the same reason.
- *
- * STRUCTURALLY SHARED, like `definitionListsToWire`: a branch with neither
- * character in it comes back as the SAME object, so a payload without them -
- * every realistic one - pays a walk and no copy, and the caller's tree is never
- * mutated either way.
- *
- * ONE WALK FOR BOTH CHARACTERS. They are two rules, and `normalizeIngestedValue`
- * states each on its own, but a second full traversal of the payload would be
- * paid by every ingest to answer a question the first traversal already had the
- * string in hand for.
  */
 function normalizeIngestedValues<T>(node: T): T {
   if (typeof node === 'string') {
@@ -1492,28 +1253,6 @@ export function fromAstJson(json: AstJsonDocument, payloadByteLength?: number): 
   if (Object.keys(footnoteDefPos).length > 0) doc.footnoteDefPos = footnoteDefPos
   if (tree.srcByteLength !== undefined) doc.srcByteLength = tree.srcByteLength
 
-  // RE-DERIVED, not adopted. `number` is a resolution result PART 12 §5
-  // serializes, and the payload's value describes the document the payload was
-  // made from - not this one. An editor that deletes a footnote definition and
-  // hands the tree back leaves a reference whose definition is gone, and copying
-  // its number republished the number of a footnote that is not in the document,
-  // while this engine's own renderer showed the reference as literal `[^a]`
-  // (carve#758).
-  //
-  // The same argument the profile filter already makes, from the other
-  // direction: `footnote-numbering.ts` clears a number it cannot justify because
-  // "the profile filter can take a definition away AFTER the document was
-  // numbered". Deserializing an edited tree is the other way for that to happen,
-  // and it lands in the same place. carve-php recomputes here too.
-  //
-  // CLEARS, NEVER ASSIGNS. Running the full numbering pass here breaks §6: the
-  // round trip is `parse(x)` serialized and deserialized, and `parse()` alone
-  // does no numbering - resolution does - so a tree that legitimately carries no
-  // numbers would come back carrying them. What this must not do is keep a
-  // number it can no longer justify; inventing one is a different act entirely.
-  //
-  // An inline footnote carries its own body, so it cannot lose a definition and
-  // is left alone. Only a reference can be orphaned.
   clearUnbackedFootnoteNumbers(doc, footnoteDefs)
   renumberCaptionsIfPublished(doc)
   promoteIngestedBlockImages(doc)
@@ -1548,23 +1287,6 @@ function measurePayload(json: AstJsonDocument): number {
 
 /**
  * Re-derive `caption_number.n` when the payload published numbers at all.
- *
- * The other PART 12 §5 result on this path, and the worse one: a stale footnote
- * number contradicted the renderer, a stale caption number is what the renderer
- * PRINTS. Delete the first of two numbered figures from a published tree and the
- * survivor still rendered `Figure 2` - for the only figure in the document,
- * where a fresh parse gives `Figure 1` (carve#758).
- *
- * CONDITIONAL, for the same §6 reason the footnote pass clears rather than
- * assigns: `parse()` alone does no numbering in this engine, so its serialized
- * tree carries no `n`, and assigning here unconditionally would make the round
- * trip add numbers that were never there. A payload that published numbers is
- * one whose numbers have to describe THIS document; a payload that published
- * none is pre-resolve and stays that way.
- *
- * carve-rs runs its pass unconditionally instead, and is right to: numbering
- * happens during `parse` there, so an ingested tree numbered the same way agrees
- * with a parsed one.
  */
 function renumberCaptionsIfPublished(doc: Document): void {
   const bodies = doc.footnoteDefs ? Object.values(doc.footnoteDefs) : []

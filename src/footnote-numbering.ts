@@ -1,27 +1,6 @@
 /*
  * Shared footnote-numbering pass (carve-js#479).
- *
- * A footnote's `number` is document reference order - a value that is
- * renderer-independent and always recomputable from the parsed AST alone.
- * PART 12 §5 keeps a resolution result like this OUT of a consumer's hands to
- * reimplement, so `resolve()` calls this pass to fill `number` before a
- * document is serialized.
- *
- * `renderHtml()` is ALSO a public entry point callable without `resolve()`
- * having run, so it must number footnotes standalone - and must land on the
- * exact same numbers `resolve()` would have, or the two code paths silently
- * disagree. Rather than keep two implementations of the numbering rule in
- * sync by hand, both call sites share this one. Re-running it against an
- * already-numbered document is a no-op (same document order, same numbers),
- * never a renumbering - PROVIDED the set of definitions has not moved. When it
- * has, re-running is exactly what is wanted, and the pass clears the number of
- * any reference that no longer resolves rather than leaving the old one in
- * place (carve-js#698).
- *
- * `refId` (the backlink anchor id) is deliberately NOT assigned here - it is
- * a rendering concern, format chosen by whichever renderer builds the
- * endnotes section, and must not leak into a serialized parse-only AST.
- */
+  */
 
 import type { BlockNode, Document, FootnoteRef, InlineFootnote, InlineNode } from './ast.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'

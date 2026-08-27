@@ -419,28 +419,6 @@ function takeLeadingAttrBlock(rest: InlineNode[]): string | null {
 /**
  * PART 12 §18: turn every top-level `[@key]: entry` line into a
  * `citation_definition` node.
- *
- * A PARSE-STAGE pass, and that is the point of it. The definition used to be
- * recognized in the extension's `afterParse` hook, which `parse` does not call:
- * the published tree - the one `toAstJson` serializes, which §3a makes the
- * PRE-RESOLVE one - therefore carried the parser's failure to recognize the
- * line, a paragraph whose first child is a `citation_group` followed by the
- * literal text `: {author=`. A ProseMirror bridge reading that tree received
- * citation-shaped prose and round-tripped it as prose (carve#1276).
- *
- * WHAT IT RECOGNIZES IS UNCHANGED, deliberately: the same line shape the
- * collect pass took, in the same place. Consecutive definitions parse as ONE
- * paragraph separated by soft breaks, so a paragraph is split per line; the
- * lines that are not definitions are rejoined into one paragraph sitting where
- * its first surviving line was, which is what keeps `a`/`[@k]: e`/`b` one
- * paragraph rather than two. Only the DOCUMENT's own children are offered:
- * measured on carve-js `45efe0ab`, a definition line inside a block quote or a
- * list item is paragraph text and defines nothing, and §18 rules on the node's
- * shape rather than on where a definition is recognized.
- *
- * Tier-2 without a flag to say so: a `citation_group` is produced by the
- * citations extension's matcher and by nothing else, so with the extension off
- * there is no line here to promote.
  */
 export function promoteCitationDefinitions(blocks: BlockNode[]): BlockNode[] {
   let out: BlockNode[] | null = null

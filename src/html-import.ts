@@ -155,24 +155,6 @@ const BLOCK = new Set([
 /**
  * The media wrappers whose children are FALLBACK CONTENT (ruling
  * markup-carve/carve#1749).
- *
- * A `<video>`'s children are the flow content the author wrote for the case
- * where the media cannot be shown, and Carve can spell all of it. Flattening it
- * to one inline run is a CONTENT change rather than a spelling difference: a
- * document that said two things came back saying one, and no paragraph boundary
- * the author wrote can be recovered from the run afterwards.
- *
- * NOT IN `BLOCK`, deliberately, and that is what this second set is for.
- * `BLOCK` decides which arm `block()` takes, and the unmapped-block arm
- * raw-preserves as a `raw_block` in `roundtrip` - where all three engines write
- * a raw INLINE span for these elements today, because a media wrapper is inline
- * content in HTML. So the ruling is applied where it was ruled, to the FALLBACK
- * conversion, and `roundtrip` is untouched.
- *
- * `iframe` and `embed` are NOT members and their absence is measured, not an
- * oversight: parse5 reads an `<iframe>`'s content as raw text, so it has no
- * child elements to convert, and `<embed>` is void, so it has no children at
- * all. `map` and `svg` hold their own content models rather than a fallback.
  */
 const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture'])
 /**
@@ -196,56 +178,12 @@ const FLATTENED_BLOCK_EXTRA = new Set(['li', 'dt', 'dd', 'td', 'th', 'tr', 'capt
 /**
  * The figure targets a figure is REBUILT from, in EVERY mode
  * (markup-carve/carve#1704, ruling markup-carve/carve-php#1731).
- *
- * THE MEMBERSHIP TEST IS A PROPERTY AND THE SET IS ITS ANSWER, not a list of
- * blessed names: a target belongs here when it can CARRY the caption line the
- * importer writes for it, so that the line parses back to the figure it was
- * written from. `docs/html-import.md` states it that way so a caption target
- * added later inherits the rule instead of needing another sweep of every tag
- * to discover it - a name list is exactly the shape that drifted into that
- * ticket.
- *
- * An image, a quote and a code block are here because their caption line re-parses
- * to the same figure. `table` is the one deliberate carve-out and its exception is
- * written where it is taken, in `figure()` below.
- *
- * Everything else - a paragraph, a list, a heading, a container - carries no
- * caption line, so no Carve spelling reproduces the figure around it.
- *
- * ONE SET, AND THE MODES DIFFER ONLY IN WHAT THEY DO WITH THE REST. It was
- * `roundtrip`'s alone until the paragraph target was measured in the other two:
- * there the caption line was written anyway and the paragraph SWALLOWED it, so
- * `{#f .c}` / `x` / `^ Cap` re-rendered as `<p id="f" class="c">x ^ Cap</p>` -
- * a `^` in the prose the author never wrote, reported by nothing. `roundtrip`
- * preserves the element for a target outside this set; `safe` and `semantic`
- * cannot preserve, so they unwrap and declare. Neither mode writes a caption
- * line the target will absorb.
  */
 const FIGURE_REBUILDS = new Set(['image', 'block_quote', 'code_block', 'table'])
 
 /**
  * ONE MESSAGE FOR AN UNWRAPPED FIGURE, at the severity every other unwrapped
  * element already reports (ruling markup-carve/carve#1716).
- *
- * `element-unwrapped` means one thing wherever it appears: the content
- * survived, the element around it did not. That is the same event for a
- * `<figure>` as for a `<section>`, an `<article>` or an `<address>`, every one
- * of which is `info` here - so rating the figure `warning` said a figure's
- * disappearance costs more than a section's, which nothing in
- * `docs/html-import.md` supports and no clause distinguishes.
- *
- * AND THE TEXT MAY NOT VARY WITH THIS ENGINE'S CAPABILITY SET. The two call
- * sites below used to say different things, split by whether the target was
- * one THIS engine can write a caption line for - so the same document read
- * differently from different engines, and the text would move again whenever
- * the target set did. That is an implementation detail in the wire format. The
- * constant exists so the split cannot quietly regrow: there is one string, and
- * a new arm has to reuse it.
- *
- * IT IS A WORDING AND SEVERITY CHANGE, NOT A NARROWING. Both call sites keep
- * firing on exactly the inputs they fired on before; see
- * `test/an-unwrapped-figure-reports-like-every-other-unwrapped-element.test.ts`,
- * which pins the whole firing surface rather than the two shapes that moved.
  */
 const FIGURE_UNWRAPPED = 'Unwrapped unsupported <figure> element'
 /**
@@ -627,46 +565,6 @@ function isGeneratedHeadingId(id: string, text: string): boolean {
 /**
  * Put a `<section id>` back on the heading the renderer hoisted it off
  * (markup-carve/carve-js#1475), and return what the wrapper still carries.
- *
- * THE INVERSE OF ONE KNOWN TRANSFORMATION, not a general rescue. With
- * `sections` on, `renderHtml` writes the heading's id on the WRAPPER and leaves
- * the heading without one. So once the mode unwraps the wrapper - which is
- * right, a `<section>` is not a shape Carve cannot express - the single
- * attribute the wrapper carried is the single thing the import needs, and
- * `{#install .featured}` over `## Setup` came back as `{.featured}`, which
- * re-renders as `<section id="Setup">`. The author's id was gone and a
- * different one had taken its place, so every anchor pointing at `#install`
- * broke on a round trip through this engine's own output.
- *
- * `roundtrip` ONLY, on the same ground carve-js#1459 stands on: that mode's
- * input is Carve-produced HTML by definition, so a `<section id>` there IS the
- * hoist. In arbitrary HTML it is a landmark's own id, which names the REGION
- * rather than the heading, and moving it onto the heading would invent a fact.
- * Elsewhere the id keeps being reported as dropped.
- *
- * `<section>` ONLY, for the same reason: `renderHtml` hoists onto that tag
- * alone, and the other six sectioning names that unwrap here never carry a
- * heading's id. And the ID ONLY: `<section id="x">` is the whole of what the
- * renderer writes there, so a class or a data attribute on a wrapper is
- * somebody else's markup, and putting it on the heading would render an
- * attribute the input never had on an element that never had it. Those keep
- * the `attribute-dropped` row they have always had.
- *
- * A DERIVED ID IS STILL DROPPED, and silently, exactly as `dropDerived`
- * documents for every other derived value: the renderer computes the same slug
- * again from the same heading, so nothing is lost. This is what keeps
- * carve-js#1459's ruling intact through the wrapper - `{.k}` over `# H` renders
- * `<section id="H">` and must not come back as `{#H .k}`, which is a different
- * document. The POSITION half that ruling reads off the element does not exist
- * here: a hoisted id is the wrapper's only attribute, so slug equality is the
- * whole test.
- *
- * And where the inline projection MOVED the slug - a crossref that comes back
- * as an explicit link, an index marker that comes back as its text - the
- * wrapper's id no longer equals the slug of what survived, so it is kept and
- * written. That is the right answer rather than a lucky one: the section id is
- * a fact of the RENDERED document, not something to recompute from what the
- * import left behind.
  */
 function restoreHoistedSectionId(
   tag: string,
@@ -722,23 +620,6 @@ class Importer {
   /**
    * Every node of the parsed tree, numbered in DOCUMENT ORDER
    * (markup-carve/carve#1586).
-   *
-   * A REPORT IS ORDERED BY WHERE THE LOSS IS, NOT BY WHEN IT WAS NOTICED.
-   * docs/html-import.md always said the diagnostic list is ordered and, until
-   * that ticket, never said ordered by what - so each engine's list came out in
-   * whatever order its own walk happened to construct the rows in. This
-   * importer reads a table's cells before its `<caption>`, because the caption
-   * fills a slot on the finished table, so a `<table>` losing something on both
-   * reported the cell first and the caption second for a document that spells
-   * them the other way round.
-   *
-   * Numbering the tree once and sorting at the end fixes the whole class rather
-   * than that one shape: no handler has to be rewritten to visit its parent's
-   * children in source order, and none can reintroduce the defect by choosing a
-   * convenient traversal. The number is the node's own position, which is why a
-   * footnote definition lifted out of the end of the document by the adapter
-   * pass - imported FIRST, long before the body it is referenced from - still
-   * reports at the end, where the author wrote it.
    */
   /**
    * The cell alignment a `style` attribute mapped, keyed by the cell it was
@@ -1126,34 +1007,6 @@ class Importer {
    * The attributes whose value EQUALS what the renderer derives for this
    * element, removed (PART 9 §16a, markup-carve/carve#1500, reconciled with
    * Extensions §1.5 in markup-carve/carve#1511).
-   *
-   * THE RULE IS VALUE-MATCHED, NOT NAME-MATCHED. Nothing in the HTML says who
-   * wrote an attribute, so provenance cannot be the test and is not one. Where
-   * the value equals the generated one the output is identical whichever side
-   * wrote it, so the drop is a no-op for what a reader hears; where it differs
-   * the attribute is kept, always. That second half is what a blanket
-   * `aria-label` drop cost before (carve-php#1337, carve-rs#1060), and this
-   * rule does not spend it again.
-   *
-   * WHAT IT BUYS is the only thing keeping a `labels` map alive across an
-   * import. A kept `aria-label="Tabs"` is indistinguishable from an authored
-   * one, and the author-wins precedence then makes the imported copy WIN on
-   * every later render: the same source re-rendered with `tabsGroup` set to
-   * `Registerkarten` still says `Tabs`. The document has been permanently
-   * unlocalized while no byte of today's output moved - which is also why a
-   * round trip cannot detect this and the test asserts ABSENCE instead.
-   *
-   * NOTHING IS DIAGNOSED. The renderer writes the value back, so this is not a
-   * lossy decision and emits no `attribute-dropped` - the same reason the
-   * `<figure>` and `<blockquote cite>` imports report nothing. A drop of the
-   * OTHER kind, where the value could not be represented, is diagnosed in
-   * `attrs()` as it always was.
-   *
-   * IT CATCHES THE DEFAULT ONLY, which §16a states as an accepted limit: HTML
-   * rendered with a German map carries a value no default equals, so it is kept
-   * and laundered. An importer cannot know the render's configuration and a
-   * non-default value is indistinguishable from an authored one, so failing
-   * SAFE - keep - is the side to err on.
    */
   private dropDerived(node: P5Node, classes: string[], attrs: Attrs): void {
     const derived = this.derivedAttributes(node, classes)
@@ -1239,21 +1092,6 @@ class Importer {
       return derivedId === undefined ? undefined : { id: [derivedId] }
     }
 
-    // A TITLED ADMONITION points `aria-labelledby` at the id on its own title
-    // paragraph, and both halves are the renderer's: the id is the counter's
-    // (dropped by the `<p>` arm above) and the reference is written from it.
-    // Left standing it is a DANGLING reference - the paragraph it names becomes
-    // the container's title and stops being an element with an id - which is
-    // the defect carve-php#1542 records, and one this engine could not reach
-    // until the aside survived the import at all (carve-js#1316).
-    // The value matched is the title's OWN id rather than the counter's,
-    // because what makes the reference derived here is not where the id came
-    // from but that the ELEMENT it names is consumed: the paragraph becomes the
-    // container's title, so any `aria-labelledby` still pointing at it names
-    // nothing. The counter id is dropped by the `<p>` arm above when it is the
-    // counter's; an authored one is reported as dropped where the title is
-    // lifted. Either way the renderer writes a fresh reference on the next
-    // render, so keeping this one could only ever preserve a dangling name.
     if (tag === 'aside' && has('admonition')) {
       const derived: Record<string, string[]> = {}
       // AN UNTITLED CALLOUT IS NAMED BY ITS TYPE WORD, through the `labels` key
@@ -1634,29 +1472,6 @@ class Importer {
   /**
    * The Carve slot a CSS declaration maps to, or `undefined` where nothing in
    * the language spells it.
-   *
-   * THE TEST IS THIS RENDERER. `text-align: right` maps because a Carve cell
-   * alignment is written back as `style="text-align: right;"` - the very
-   * declaration the import was handed - and `vertical-align: top` maps for the
-   * same reason through the cell's `valign`. Refusing either declared a loss
-   * the engine did not have to take, and `docs/html-import.md` makes a declared
-   * loss a ceiling rather than a licence (markup-carve/carve#1741,
-   * markup-carve/carve#1746).
-   *
-   * WHAT STAYS UNMAPPED, and why the list is short:
-   *
-   * - `text-align: justify` / `start` / `end` and `vertical-align: baseline` /
-   *   `sub` / a length are outside Carve's enums (`left`, `right`, `center`;
-   *   `top`, `middle`, `bottom`), so there is no value to write.
-   * - `width` and `height` reach no per-cell slot. A `table.columns` entry
-   *   carries a width, but nothing writes one from a cell and the column model
-   *   is its own question (markup-carve/carve#1092).
-   * - `color`, `background`, `border`, `padding`, `margin`, `font-*`,
-   *   `white-space` and the rest of CSS have no Carve construct at all. Their
-   *   loss is a real ceiling and stays reported.
-   *
-   * `safe` maps NOTHING. It is the conservative mode: a declaration it declines
-   * is dropped and reported.
    */
   private mappedStyleDeclaration(property: string, value: string): { key: 'align' | 'valign'; value: string } | undefined {
     if (this.mode === 'safe') return undefined
@@ -1830,23 +1645,6 @@ class Importer {
   /**
    * A media wrapper standing among blocks, unwrapped to its fallback
    * (markup-carve/carve#1749).
-   *
-   * THE SAME TWO LINES THE UNMAPPED-BLOCK ARM WRITES, deliberately: the row for
-   * the element, the rows for the attributes it could not carry, then the
-   * children as BLOCKS. What changes is only that the children go through
-   * `blocks()` rather than `inlines()`, so a `<p>` inside stays a paragraph, a
-   * `<ul>` stays a list and an `<h2>` stays a heading, as carve-php has always
-   * written them.
-   *
-   * THE INNER ROWS FALL OUT RATHER THAN BEING PORTED. Flattening reported an
-   * `element-unwrapped` for every block it dissolved, and those rows were
-   * truthful about that output; a `<p>` that survives as a paragraph is not
-   * unwrapped and owes none. A fix that kept them while changing the conversion
-   * would start making false statements.
-   *
-   * `roundtrip` NEVER REACHES HERE. Its answer for these elements is the raw
-   * inline span the inline arm writes, which is what all three engines produce
-   * and what this ruling does not touch.
    */
   private mediaFallback(node: P5Node, tag: string, path: string, depth: number): BlockNode[] {
     const attrs = this.attrs(node, path)
@@ -1868,35 +1666,13 @@ class Importer {
       const children = this.blockInlines(node.childNodes ?? [], path, depth + 1)
       let held = attrs
       if (held?.id !== undefined) {
-        /*
+/*
          * A heading id from HTML is authored input, even when it equals the
          * slug a fresh Carve parse would generate - EXCEPT where the element
          * itself says the renderer wrote it. `roundtrip` mode's input is
          * Carve-produced HTML BY DEFINITION, so there the id can be read back
          * as the generated one rather than assumed authored, and re-emitting it
-         * CHANGES THE RENDER: `renderHtml` puts a generated id after every
-         * authored attribute and an authored one in the slot it was written in,
-         * so `{.k}` and `{.k #H}` are two different documents. carve-rs ruled
-         * this in carve-rs#1354 / carve-rs#1355; this is the port
-         * (markup-carve/carve-js#1459).
-         *
-         * WHICH ELEMENT CARRIES THE ID, measured on this engine rather than
-         * assumed. A TOP-LEVEL heading is wrapped - `# H` renders
-         * `<section id="H"><h1>H</h1></section>` and the `<h1>` carries no id
-         * at all - so that id belongs to the SECTION, which is an unsupported
-         * element the importer unwraps before any heading arm sees it. A
-         * heading INSIDE a container is not sectioned, so the id sits on the
-         * `<h1>` itself, and so it does at top level under `sections: false`.
-         * This arm is that second placement, and it is the only one where the
-         * id is a heading attribute; reading a wrapper's id as a heading's
-         * would be a different claim about a different element.
-         *
-         * BOTH HALVES, AND NEITHER ALONE IS ENOUGH. Position alone eats the id
-         * an author wrote LAST (`{.k #Other}`); slug equality alone cannot tell
-         * `{.k}` from an id an author wrote FIRST whose value happens to be the
-         * slug (`{#H .k}`), which is the shape that makes this a combination
-         * bug rather than a defect in either half.
-         */
+          */
         if (
           this.mode === 'roundtrip' &&
           idInGeneratedPosition(node) &&
@@ -2169,34 +1945,13 @@ class Importer {
           unwrapped,
         )
       }
-      /*
+/*
        * A DIV CARRYING NOTHING ONLY A CONTAINER CAN HOLD IS NOT A CONTAINER
        * WORTH SPELLING, so it unwraps to its content and the `:::` fence is not
        * written (markup-carve/carve#1578). A bare `<div>` carries no meaning of
        * its own: the fence buys the reader nothing and costs two lines of markup
        * nobody asked for.
-       *
-       * THE BOUNDARY IS WHAT ONLY A CONTAINER CAN HOLD, rather than the tag -
-       * and today that is an attribute the language can hold OR a grouping
-       * label. carve#1578 wrote the test as `attrs` as a proxy for that
-       * principle, and its own rationale said why: "the moment a div carries any
-       * attribute the language can hold, the fence comes back, because then
-       * there IS something only the container can hold." A label has no spelling
-       * anywhere but on an opener, so it is exactly as much "only a container
-       * can hold it" as an attribute is; the proxy was simply narrower than the
-       * principle it stood in for, and when the two disagree the rationale
-       * governs (markup-carve/carve-rs#1315, markup-carve/carve#1650).
-       *
-       * Keeping the narrow test was not a declarable loss either, which is what
-       * settles it. `::: [g]` came back as a `{.div-label}` PARAGRAPH - the
-       * container gone and the label now body content, so the document said
-       * something it never said. A loss can be declared and an ADDITION cannot.
-       *
-       * The test is still on what the div KEPT, not on its markup: a label the
-       * lift REFUSED was never lifted, so such a div kept nothing and unwraps
-       * exactly as before, and `<div style="color:red">` keeps nothing after the
-       * style map refuses the declaration.
-       */
+        */
       if (tag !== 'div' || (!attrs && !lifted)) return children
       return [
         {
@@ -2227,39 +1982,6 @@ class Importer {
    * those took the WHOLE of anything else the list carried:
    * `<ul><div id="stray">z</div><li>a</li></ul>` came back as one item and an
    * EMPTY report, so the text `z` left the document with nothing anywhere
-   * saying it had.
-   *
-   * HTML5 does not allow the shape. A sliced-up editor export produces it
-   * anyway, and that is the input an importer exists for.
-   *
-   * The content is emitted as blocks AHEAD OF THE LIST: it keeps every word
-   * and stays valid Carve, where a list holding a non-item has no Carve
-   * spelling at all. The stray child goes through the ORDINARY block walk
-   * rather than being unwrapped by hand, so it keeps its own element and its
-   * attributes too - a `<div id="stray">` comes back as a Carve div still
-   * carrying the id. Unwrapping it, the way a `<dd>` with no `<dt>` has to,
-   * would drop the id for no reason: a `<dd>` has no standalone spelling and a
-   * div has one, so the loss the `<dd>` is forced into is not forced here.
-   *
-   * `element-unwrapped` is the code: a structural note about the INPUT that
-   * loses no meaning, which is what the vocabulary says that code is for. No
-   * engine spells "moved", and inventing a code for it is a three-engine
-   * decision rather than this defect's.
-   *
-   * Delegating to `blocks()` also settles the kinds that are not elements at
-   * all: a margin between pretty-printed items is blank text and produces
-   * nothing, a comment produces nothing, bare text directly inside the list is
-   * wrapped in the paragraph it needs, and an ACTIVE element (`script`,
-   * `style`, `template`, `noscript`) keeps the `element-dropped` every other
-   * site gives it. That drop was a SECOND silence the filtered walk carried:
-   * the element never reached the arm that reports it, so a `<script>` in a
-   * list was dropped with no diagnostic at all. It gets no position note
-   * beside the drop - saying it was kept ahead of the list would tell the
-   * reader a script survived somewhere.
-   *
-   * The paths are the child's OWN indices among the LIST's children, so the
-   * report points where the node sits and not where it sits in the filtered
-   * array (PART 12 §16).
    */
   private list(node: P5Node, path: string, depth: number, ordered: boolean, attrs?: Attrs): BlockNode[] {
     const listItems: P5Node[] = []
@@ -2489,30 +2211,6 @@ class Importer {
 
   /**
    * The container an `<aside>` or `<div>` was RENDERED FROM, rebuilt.
-   *
-   * This is `renderAdmonition` read backwards, and it is written as that
-   * inverse rather than as a list of names on purpose. The renderer sends an
-   * `admonition` to one of exactly two shapes: a kind in
-   * `CANONICAL_ADMONITION_KINDS` becomes
-   * `<aside class="admonition {kind}">`, and every other kind - a tab set, a
-   * code group, a panel, a Tier-2 container an extension invented - becomes
-   * `<div class="{kind}">`, with the node's own extra classes appended after
-   * the structural one. Inverting the mapping therefore covers the constructs
-   * nobody has thought of yet; naming `tabs` and `code-group` would have
-   * covered two and gone on losing the rest (markup-carve/carve-js#1316).
-   *
-   * WHAT IT COSTS TO UNWRAP INSTEAD is a node, not bytes, which is why an
-   * HTML-to-HTML check never found it: an unwrapped `<aside>` re-renders as
-   * the same `<p>` it went in as, and a `<div class="tabs">` kept as a `div`
-   * node with a `.tabs` class re-renders byte-identically too. Only the AST
-   * moved - `admonition` became `div`, or vanished - and the document stopped
-   * being a callout while looking exactly like one
-   * (markup-carve/carve-js#1295).
-   *
-   * THE STRUCTURAL CLASS IS CONSUMED, not kept beside the fence word, because
-   * the renderer writes it back from the kind. Keeping it would make the next
-   * render emit `class="tabs tabs"`, and `dropDerived` already relies on the
-   * same reading to recognize the naming attributes that ride these elements.
    */
   private containerFrom(tag: string, attrs: Attrs | undefined): { kind: string; attrs?: Attrs } | undefined {
     const classes = attrs?.classes ?? []
@@ -2541,25 +2239,6 @@ class Importer {
 
   /**
    * A CAPTION's inlines, with the caption ELEMENT accounted for.
-   *
-   * A caption line holds inline content and has no attribute slot, so a
-   * `<figcaption>` or a table `<caption>` is consumed for its CHILDREN and the
-   * element itself contributes no node. Reading `childNodes` straight past it -
-   * which all four caption sites did - meant the element's own attributes were
-   * never looked at, so nothing was kept and nothing was said: an
-   * `onclick` on a `<figcaption>` was stripped in silence, and a silent drop is
-   * the one failure mode the report exists to prevent
-   * (markup-carve/carve-js#1332).
-   *
-   * THIS IS THE CATEGORY, not the element. The importer already had the answer
-   * for a `<dt>`, a `<dd>`, a `<dl>`'s group wrapper and a `<summary>` - route
-   * the node through `attrs()` for its diagnostics even though the model has
-   * nowhere to put the result - and `entryAttributes` is that answer. The two
-   * caption slots were simply not wired to it, which is why the comment there
-   * claiming those were "the only places where active markup was dropped in
-   * silence" had stopped being true. Every consumed-for-its-children element
-   * now goes through one helper, so the next slot added inherits the report
-   * rather than having to remember it.
    */
   private captionInlines(node: P5Node, path: string, depth: number, tag: 'figcaption' | 'caption'): InlineNode[] {
     this.entryAttributes(node, path, tag, 'a caption line')
@@ -2574,37 +2253,19 @@ class Importer {
     ]
   }
 
-  /**
-   * The attributes an UNWRAPPED element takes with it.
-   *
-   * `attrs()` reports the ones it cannot represent, and keeps the rest - an id
-   * an anchor points at, a class a stylesheet selects on, a `data-` pair an
-   * editor round-trips. When the element itself is then unwrapped there is
-   * nothing left to hang them on, and they went in silence: a
-   * `<video id="player">` reported that the element was unwrapped and never
-   * that the id had gone with it.
-   */
+/**
+ * The attributes an UNWRAPPED element takes with it.
+ *
+ * `attrs()` reports the ones it cannot represent, and keeps the rest - an id
+ * an anchor points at, a class a stylesheet selects on, a `data-` pair an
+ * editor round-trips. When the element itself is then unwrapped there is
+ * nothing left to hang them on, and they went in silence: a
+ * `<video id="player">` reported that the element was unwrapped and never
+ * that the id had gone with it.
+ */
   /**
    * Is the ELEMENT itself one the renderer derives, rather than one the author
    * wrote?
-   *
-   * The same property `derivedAttributes()` answers for a value, asked of the
-   * wrapper: an endnotes `<section>` is reconstructable from the document -
-   * `render-html.ts` writes one around the notes whenever the document has any
-   * - and no Carve construct spells a `<section>`, so nothing the AUTHOR wrote
-   * goes when it is unwrapped. `element-unwrapped` names a loss, and there is
-   * none to name (markup-carve/carve-php#1588).
-   *
-   * IT DOES NOT DEPEND ON WHAT THIS IMPORT DOES NEXT. The referenced form is
-   * consumed into footnote definitions and the renderer writes the section back;
-   * the reference-less form degrades to the `<hr>` and `<ol>` it is built from
-   * and the renderer writes no section at all (markup-carve/carve#1558). Either
-   * way the author never wrote the wrapper, so neither way is a loss. Asking
-   * the OUTPUT instead is the question that made the report contradict the
-   * conversion, which is what markup-carve/carve#1502 measured.
-   *
-   * SCOPED TO THE ROLE, not to `<section>`. A `<section id="intro">` an author
-   * wrote is unwrapped and still reports both rows, because nothing derives it.
    */
   private footnotePlacementMarked = false
 
@@ -2615,31 +2276,6 @@ class Importer {
   /**
    * The attributes an UNWRAPPED element took with it: ONE ROW PER ATTRIBUTE, at
    * `info` (ruling markup-carve/carve-php#1731).
-   *
-   * IT USED TO BE ONE ROW AT `warning`, NAMING THEM ALL. Both halves of that
-   * were this engine alone: carve-php and carve-rs each emit a row per
-   * attribute and each rates it `info`, so the same document read differently
-   * depending on which engine read it, and a consumer counting rows to size a
-   * loss got a different number from each.
-   *
-   * `info` IS WHAT THIS ENGINE ALREADY SAYS ABOUT AN ORDINARY ATTRIBUTE.
-   * `refuseAttribute` spends `warning` on the SAFETY half - an event handler, a
-   * value carrying a denied scheme - and on a value whose shape no Carve
-   * attribute can hold; it spends `info` on an ordinary one it cannot spell, on
-   * a round-trip marker and on a declaration something else already sets. An
-   * `id` or a `class` losing its carrier is the ordinary case, so `warning`
-   * here rated the same attribute higher for the reason it went than for what
-   * it was.
-   *
-   * ONE ROW PER ATTRIBUTE, because a row is what names a loss and there is one
-   * loss per attribute. The joined form also collapsed at the wrong place: a
-   * reader had to split a message to learn how much went, and a filter had no
-   * way to act on the `id` without acting on the `class` beside it.
-   *
-   * A CLASS ATTRIBUTE IS ONE ATTRIBUTE, however many names it holds, which is
-   * what `attrNames` already answers and what carve-php reports. carve-rs
-   * splits `class="a b"` into a row per name; that disagreement is older than
-   * this ruling and is not settled here.
    */
   /**
    * Whether an element brought anything for an unwrap to leave behind.
@@ -3503,28 +3139,6 @@ class Importer {
   /**
    * The captionable host a `<figure>` body offers, with a SYNTHESIZED paragraph
    * wrapper taken off an image (PART 9 §4b; markup-carve/carve#1606).
-   *
-   * §4b enumerates what a caption makes of its host - "an image, a quote, a
-   * code block, a display-math paragraph" - and PART 12 §17 and
-   * `docs/ast-json.md` repeat the enumeration verbatim. The image host is the
-   * IMAGE; only the math host is a paragraph, which §4b spells out for that one
-   * case. So the asymmetry is named rather than an omission, and a paragraph
-   * around an image target is not an equivalent spelling of the same tree: it
-   * renders `<figure><p><img></p>`, which is not the input, and it disagrees
-   * with the source this importer writes beside it - `![a](i.png)` under a `^ `
-   * line parses to `figure{target: image}`.
-   *
-   * The wrapper is OURS, not the author's. HTML has no block/inline slot
-   * distinction, so `blocks()` puts a stray inline into a paragraph to have
-   * somewhere to put it; taking that paragraph back off drops nothing the
-   * document held.
-   *
-   * AN ATTRIBUTE-CARRYING `<p>` IS THE AUTHOR'S AND STAYS. Its tree renders
-   * back to the input exactly - `<figure><p class="x"><img></p></figure>` - so
-   * on that shape the wrapper is the faithful half and the loss is on the
-   * writing side, where the class rides a block-attribute line that re-parses
-   * onto the figure. Unwrapping it here would delete an attribute from the one
-   * exit that still records it.
    */
   private captionHost(target: BlockNode | undefined): BlockNode | undefined {
     if (!target || target.type !== 'paragraph') return target
@@ -3537,40 +3151,6 @@ class Importer {
   /**
    * The figure attributes its TARGET's own attribute line displaces (§16,
    * ruling markup-carve/carve#1721).
-   *
-   * A rebuilt figure is written as the figure's block attribute line, then the
-   * target's, then the target, then the `^ ` caption line. Two adjacent
-   * attribute lines are ONE attribute set to the parse, so the pair that comes
-   * back is a merge rather than either line - and the ruling is that the merge
-   * has to keep the TARGET'S value, because the target is the element that
-   * survives the rebuild and the wrapper is the one that does not.
-   *
-   * WHERE THE MERGED SET LANDS DIFFERS BY ARM and is not what this row is
-   * about. A table re-reads as `<table id="g"><caption>`, so the pair sits on
-   * the table itself; a quote or a fence re-reads as a figure around them, so
-   * it sits on that figure. The surviving value is the target's either way,
-   * and the figure's is the one gone.
-   *
-   * THE MERGE DECIDES WHICH NAMES ARE LOST, and it treats them differently:
-   *
-   * - `id` is a single slot, so the later line's value replaces the earlier
-   *   one and one of the two ids is gone.
-   *
-   *   WHICH ONE depends on the values, which is why the row names the COLLISION
-   *   rather than a side. Different values lose the figure's. EQUAL values
-   *   still lose one: `<figure id="x"><blockquote id="x">` comes back as
-   *   `<figure id="x"><blockquote>`, so the value survives and the target's own
-   *   attribute does not. A row is owed either way, and suppressing it when the
-   *   values match - which reads like the obvious simplification - would turn
-   *   that case into the silent drop this ruling exists to remove.
-   * - a key-value pair is the same slot rule under a name.
-   * - `class` is a SET: the two lines union, so nothing is displaced and no
-   *   row is owed. Reporting one here would name a class the output still
-   *   carries, which is the mirror of the silence this ruling removes.
-   *
-   * AN IMAGE TARGET IS NOT IN THE COLLISION AT ALL. Its attributes are written
-   * inline after the destination rather than on a line of their own, so the
-   * figure's line and the image's braces never meet and both survive intact.
    */
   private recordDisplacedFigureAttrs(node: P5Node, path: string, own: Attrs | undefined, target: BlockNode): void {
     if (!own || target.type === 'image') return
@@ -3617,40 +3197,9 @@ class Importer {
     const target = this.captionHost(targets[0])
     const captionable = target !== undefined && FIGURE_REBUILDS.has(target.type)
     const caption = captionNode ? this.captionInlines(captionNode, captionPath, depth + 1, 'figcaption') : []
-    /*
+/*
      * TWO CAPTIONS AND ONE SLOT (ruling markup-carve/carve-js#1488).
-     *
-     * A table brings its OWN caption slot, so a figure-wrapped table can arrive
-     * carrying two captions - the table's `<caption>` and the figure's
-     * `<figcaption>` - and Carve has one `^ ` line to spell them with. It is the
-     * only target that does this: a quote, a code block and an image have no
-     * caption of their own, so the figure's `^ ` line is uncontested there, and
-     * a nested `<figure>` or a `carve-figure-group` is not a rebuild target at
-     * all and takes the raw-preserve/unwrap pair below instead.
-     *
-     * NEITHER CAPTION MAY BE THROWN AWAY, and neither may be invented. Writing
-     * both `^ ` lines is the invention: the second re-reads as a literal
-     * paragraph, so the document comes back holding a `^` its author never typed
-     * (ruling markup-carve/carve-php#1731). Dropping the `<figcaption>` is the
-     * loss, and it is authored TEXT rather than structure, which is the one
-     * thing an import may not spend to reach a simpler shape.
-     *
-     * So the two exits split, exactly as markup-carve/carve#1704 already splits
-     * every other figure: `roundtrip` PRESERVES the whole element, because no
-     * Carve spelling reproduces it, and `safe`/`semantic` rebuild the table with
-     * its own `<caption>` and write the figcaption as a following PARAGRAPH.
-     * Both texts survive either way. What the lossy modes spend is the caption
-     * ROLE, and one row names it.
-     *
-     * BOTH CAPTIONS HAVE TO SPELL SOMETHING for there to be a collision at all.
-     * An EMPTY `<caption>` fills no slot - the table writes no `^ ` line from it
-     * - so the figure's caption takes the slot as it always did; and an empty
-     * `<figcaption>` is not a caption to detach, so the wrapper unwraps with the
-     * declared row below. Testing the table's caption for mere PRESENCE reads
-     * `[]` as taken and wrote a bare `^` line, which is not a caption line at
-     * all: it re-reads as a literal caret, the exact addition this ruling
-     * removes (markup-carve/carve-js#1423 saw the same shape).
-     */
+      */
     const doubleCaption =
       captionable &&
       target !== undefined &&
@@ -3658,56 +3207,12 @@ class Importer {
       this.captionSpellsSomething((target as { caption?: InlineNode[] }).caption ?? []) &&
       captionNode !== undefined &&
       this.captionSpellsSomething(caption)
-    /*
+/*
      * `roundtrip` PRESERVES THE ELEMENT WHEN NO CARVE SPELLING REPRODUCES IT
      * (markup-carve/carve#1704). It is the only mode that CAN preserve; which
      * targets rebuild at all is `FIGURE_REBUILDS`, above, and it answers for
      * every mode.
-     *
-     * The rebuild is lossless for an image, a quote and a code block: the `^ `
-     * line re-parses to the figure it was written from. For every other target
-     * it is not, and a figure around a bare PARAGRAPH is the worst of them: it
-     * came back as an `id`-bearing paragraph carrying the body text and a literal
-     * `^ Cap` line under it, so the figure was gone and the caption was no longer
-     * merely lost but turned into prose the document never said - with ZERO
-     * diagnostics. A figure around a LIST detached the caption into a paragraph
-     * of its own; that one at least warned.
-     *
-     * A MODE WHOSE JOB IS FIDELITY MAY NOT SPEND IT ON A SIMPLER RULE.
-     * `docs/divergence-from-djot.md` PART 18 already rules against the shape:
-     * "Silently discarding authored bytes is the failure mode hardest to notice,
-     * because the output is well-formed and merely missing something." Here it
-     * was worse than missing.
-     *
-     * AND NEITHER MAY A LOSSY ONE INVENT A CHARACTER. `safe` and `semantic` are
-     * allowed to lose the figure; the absorption is not a loss but an ADDITION,
-     * and no mode is licensed to make one (ruling markup-carve/carve-php#1731).
-     * They cannot preserve, so they fall past this arm to the unwrap at the foot
-     * of the function, which writes the body and the caption as two blocks and
-     * declares both the element and the attributes it carried.
-     *
-     * THE ROWS FROM THE BODY ARE ROLLED BACK, because the element is kept whole
-     * and nothing inside it was lost. A diagnostic that named an attribute the
-     * preserved bytes still carry would be a false report, and the one row this
-     * arm owes is the `raw-preserved` it adds.
-     *
-     * THE FIGURE'S OWN ATTRIBUTE ROWS ARE RESTATED rather than rolled back
-     * (markup-carve/carve-js#1468). `block()` reads them before this handler is
-     * entered, so an `onclick` on the `<figure>` used to report
-     * `attribute-dropped` while the raw bytes kept it - false in the same way,
-     * and it was EVERY raw-preserve arm's behavior in this mode rather than
-     * this one's. Deleting them would have been the same defect pointed the
-     * other way: the row saying an event handler SURVIVED into the output is
-     * the one a consumer might act on, and losing it is silent. So
-     * `preserveOwnAttributes` turns each of them into `attribute-preserved`,
-     * in every arm at once.
-     *
-     * A CAPTION-LESS FIGURE NEVER REACHES HERE. A figure is the CAPTIONED
-     * wrapper (PART 9 §4b), so a `<figure>` with no `<figcaption>`, or one whose
-     * caption spells nothing, is not a figure to preserve or rebuild; it unwraps
-     * with the declared `element-unwrapped` row below, in every mode, and that
-     * boundary is unchanged by this ruling.
-     */
+      */
     if (this.mode === 'roundtrip' && this.captionSpellsSomething(caption) && (!captionable || doubleCaption)) {
       this.restore(before)
       this.preserveOwnAttributes(node)
@@ -3715,30 +3220,13 @@ class Importer {
       return [{ type: 'raw_block', format: 'html', content: serializeOuter(node as never) }]
     }
     if (captionable) {
-      /*
+/*
        * A FIGURE WITH NO CAPTION IS NOT A FIGURE (PART 9 §4b: the node is the
        * GENERIC CAPTIONED WRAPPER, and Carve builds one only from a `^ ` line on
        * a captionable host). A `<figure>` carrying no `<figcaption>`, or one
        * whose caption contributes nothing, therefore has nothing to build a
        * figure FROM, and building one anyway made the two exits disagree: the
-       * tree said `figure` while the source said the target plus a literal `^`,
-       * because a caret with nothing after it is not a caption line
-       * (markup-carve/carve-js#1423). It reached every target - an image and a
-       * quote came back as a paragraph, a code block and a table gained a stray
-       * `<p>^</p>` after them.
-       *
-       * IT IS AN ADDITION AND NOT A LOSS, so it is fixed rather than declared:
-       * the `^` is the document coming back saying something it never said, and
-       * a `structure-unspellable` row is a ceiling an import may SIT inside, not
-       * a licence to change what the document means (`bareBlockImage`, below, says the
-       * same thing about the wrapper it takes off).
-       *
-       * The unwrap keeps `targets` as the body imported them rather than the
-       * caption HOST: `captionHost` takes a wrapper off an image because a
-       * figure's image target is the image itself, and with no figure there is
-       * no such slot - an authored `<p>` around the image stays a paragraph and
-       * takes its own declared row (markup-carve/carve-js#1422).
-       */
+        */
       if (!this.captionSpellsSomething(caption)) {
         this.add('element-unwrapped', FIGURE_UNWRAPPED, 'info', path, node)
         this.reportUnwrappedAttributes(node, attrs, 'figure', path)
@@ -3913,26 +3401,10 @@ class Importer {
     // text and its `cite` goes with it - so this mapping is the safe/semantic
     // answer and the raw fallback is the round-tripping one.
     if (tag === 'q' && this.mode !== 'roundtrip') return this.quotation(node, path, depth)
-    /*
+/*
      * MathML -> `math`, as carve#1210's D6 rules it: a three-tier lookup for
      * TeX that is already in the source, and no MathML-to-TeX converter.
-     *
-     * THE DECISION IS THE THIRD TIER, and it is a drop rather than a degrade.
-     * MathML's children are a token stream, so concatenating them is not a
-     * lossy rendering of the equation but a different value: the children of
-     * `<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>` concatenate to `12`,
-     * which is what this importer wrote before this branch existed. One half
-     * arriving as twelve is a plausible wrong value, and a plausible wrong
-     * value survives review, where a missing equation and a warning naming it
-     * do not. This is the line between math and the EMBEDS below: a `<video>`'s
-     * children are fallback content the author wrote for exactly this case.
-     *
-     * `roundtrip` keeps the whole element instead, through the raw arm at the
-     * end of this method, which is where a `<math>` already went - Carve's own
-     * HTML spells math as `<span class="math">`, so a `<math>` in that mode's
-     * input is foreign markup by definition and the mode's contract is to
-     * preserve it verbatim.
-     */
+      */
     if (tag === 'math') {
       /*
        * Charged once, before anything reads the subtree: every arm below
@@ -4095,37 +3567,6 @@ class Importer {
 
   /**
    * Tiers 1 and 2 of D6: the TeX the producer already put in the element.
-   *
-   * 1. an `<annotation>` whose encoding DECLARES TeX, taken verbatim;
-   * 2. else the `alttext` attribute, plus an `encoding-assumed` recording
-   *    that its encoding was guessed - MathML does not declare what `alttext`
-   *    holds, and `<math alttext="x squared">` is as valid as one holding TeX.
-   *
-   * Tier 2 reports `encoding-assumed` and not `element-unwrapped` because the
-   * two say different things. Unwrapping describes the INPUT's structure and
-   * loses no meaning; an assumed encoding is a claim about the OUTPUT, which
-   * is only correct while the guess holds. A consumer told that an element is
-   * gone cannot separate a harmless structural event from a math node whose
-   * content may not be TeX at all, and that second one is the signal it could
-   * act on.
-   *
-   * Annotation first, and the order carries a ruling: where the two disagree,
-   * a declared encoding beats an undeclared attribute. carve-php's own
-   * docblock documents the reverse order and is corrected to this one.
-   *
-   * The content keeps the TeX byte for byte, `{\displaystyle …}` wrapper and
-   * all: Carve's math content is opaque TeX and unwrapping it would be a
-   * second decision. Only the surrounding whitespace goes, which is the
-   * pretty-printer's and not the equation's - and carve-php, which shipped
-   * this ruling first, trims it too, so the two engines write one byte
-   * sequence for one input.
-   *
-   * Whitespace-only content is treated as absent, because it is: an empty
-   * `alttext` or a pretty-printed empty annotation says nothing about the
-   * equation, and falling to the next tier reports the loss instead of
-   * writing an empty math node.
-   *
-   * Returns `undefined` for tier 3, whose two answers are the caller's.
    */
   /**
    * Carve's OWN HTML spelling of math, read back as a `math` node.
@@ -4403,25 +3844,6 @@ class Importer {
   /**
    * An HTML comment in an INLINE position, as the delimited Carve comment
    * (markup-carve/carve#1709).
-   *
-   * TWO PAYLOADS HAVE NO INLINE SPELLING, and both close the comment EARLY
-   * rather than being escapable:
-   *
-   * - text holding `%}`, which is the closer. `{% has %} in %}` re-reads as a
-   *   comment saying `has` followed by the prose ` in %}`.
-   * - text holding a BLANK line, which ends the paragraph the run is in, so
-   *   both halves come back as prose and the comment is gone.
-   *
-   * Those are DROPPED, with one row saying so. Not truncated and not escaped
-   * into the form: a comment that came back shorter, or carrying characters the
-   * author did not write, is a silent content change, and the row is the point.
-   *
-   * NOT RELOCATED to the block form either. Moving it would put text somewhere
-   * the author did not write it, and `roundtrip` reading its own output would
-   * then find the document had moved.
-   *
-   * A newline is NOT one of the two: `{% a\nb %}` re-reads intact, because a
-   * single newline is a soft wrap inside the run rather than its end.
    */
   private comment(node: P5Node, path: string): InlineNode[] {
     const content = node.data ?? ''
@@ -4457,43 +3879,6 @@ class Importer {
   /**
    * The IMAGE a synthesized wrapper was built to hold, when that is all it holds
    * (PART 9 §4b; markup-carve/carve-js#1411).
-   *
-   * `captionHost` already takes this wrapper off a `<figure>` body, and says why:
-   * HTML has no block/inline slot distinction, so `blocks()` puts a stray inline
-   * into a paragraph to have somewhere to put it, and the wrapper is OURS rather
-   * than the author's. None of that depended on a `<figure>` being present -
-   * `captionHost` is simply the only place that was reached from. Everywhere
-   * else, a bare `<img>` built `paragraph{image}` while the SOURCE exit wrote
-   * `![G](g.jpg)`, which re-parses to a bare `image` block, so this importer's
-   * two exits disagreed about a document it built itself.
-   *
-   * THE ASYMMETRY IS WHY THE WRAPPER GOES RATHER THAN THE DISAGREEMENT BEING
-   * DECLARED. A declared LOSS is a ceiling an import may sit inside; an ADDITION
-   * is the document coming back saying something it never said. Only the second
-   * changes what the document means, so it does not get a diagnostic row - it
-   * gets fixed.
-   *
-   * ONLY A RUN THAT HOLDS NOTHING ELSE - one image, and nothing beside it. A run
-   * carrying text, or a second image, is a paragraph the document really has: it
-   * is what `![a](i.png) folding content` parses to as well.
-   *
-   * NO WHITESPACE TOLERANCE HERE, AND THAT WAS MEASURED RATHER THAN ASSUMED. The
-   * `\n` between an `<img>` and the block after it IS buffered into the wrapper
-   * by `blocks()`, which reads as needing a whitespace-skipping predicate so the
-   * image is not left beside a whitespace-only sibling - and the spec's own
-   * declared-lag note for `detached-caption-caret` records a tree carrying
-   * exactly such a node. In THIS engine `blockInlines` has already trimmed it by
-   * the time the run arrives: a sweep of 1,920 shapes - eight block levels,
-   * six whitespace paddings on each side, five following blocks - produced ZERO
-   * runs holding an image beside whitespace-only text, on unmodified `main`. A
-   * tolerance clause would therefore be a branch no input reaches, which is the
-   * check-that-cannot-fail shape (markup-carve/carve#755), so the predicate is
-   * the strict one the engine can actually exercise.
-   *
-   * This does not reach a `<p>` the AUTHOR wrote. That arrives through `block()`
-   * and never through this buffer, which is the boundary rather than an
-   * oversight: taking off a wrapper the document held would be a loss, and a
-   * loss is a different call from removing an addition.
    */
   private bareBlockImage(children: InlineNode[]): BlockNode | undefined {
     if (children.length !== 1 || children[0]!.type !== 'image') return undefined
@@ -4618,26 +4003,6 @@ class Importer {
     if (groupAttrs) group.attrs = groupAttrs
     return [group]
   }
-
-  // --------------------------------------------------------------------------
-  // Adapter footnotes: word-processor footnote-shaped HTML to footnote nodes.
-  //
-  // Ports markup-carve/carve-php#1303 (and the branch pins of #1307). The
-  // shapes were measured, not recalled - Word's two saves, Google Docs,
-  // LibreOffice and Pandoc 1.x agree on almost nothing, and what all of them
-  // do have is a MUTUALLY LINKED ANCHOR PAIR: the body reference addresses
-  // the note and the note addresses the reference back. That pair, not a
-  // vendor class name and not the `fn1`/`fnref1` id convention, is the
-  // signature this matches.
-  //
-  // The spec permits this shape of work - "Adapters may normalize
-  // editor-specific markup before the core policy" (docs/html-import.md,
-  // "Required API surface") - but it does not rule on footnote import, so
-  // every decision below is this importer's, written down rather than left
-  // silent. No diagnostics on the edge cases, deliberately: in each of them
-  // the Carve source keeps what the HTML said, so there is nothing lossy to
-  // report.
-  // --------------------------------------------------------------------------
 
   /**
    * Recognize footnote pairs, rewrite each reference site to a synthetic
@@ -5221,24 +4586,6 @@ class Importer {
 
   /**
    * An endnotes section that is not last: POSITION IS MEANING.
-   *
-   * The notes are consumed into `footnoteDefs`, and the renderer appends the
-   * section it rebuilds at DOCUMENT END. That reproduces the input exactly when
-   * the section was already last, and silently moves it when it was not: the
-   * same characters in the wrong order, with nothing said (carve#1608,
-   * carve-js#1394).
-   *
-   * This is NOT `structure-unspellable`. Carve HAS a spelling for the position -
-   * the `::: footnotes` placement directive - so discarding a position the
-   * language can express is a loss with no justification. A marker goes back
-   * where the section sat, and the AST-returning exit gets the placement node in
-   * the same slot.
-   *
-   * ONLY when something actually follows it, checked outward through the
-   * ancestors rather than among the immediate siblings alone: a section last in
-   * a `<div>` that is itself followed by a paragraph is still not last in the
-   * document. A section that IS last needs no marker, and gets none, so every
-   * document that was already right stays byte-identical.
    */
   private markFootnotePlacement(removedFrom: { parent: P5Node; index: number } | undefined): void {
     if (removedFrom === undefined) return

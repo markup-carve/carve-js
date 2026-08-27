@@ -246,26 +246,6 @@ function escapeLineInitialBlockOpeners(text: string): string {
 /**
  * The runs whose content is LITERAL for the whole pipeline, hidden behind a
  * key and put back at the very end.
- *
- * {@link escapePlainBbcodeText} protects spans while it escapes and restores
- * them before it returns, so every pass below used to see the enclosed markup
- * and rewrite it. Two families need more than that:
- *
- * `[code]`, `[c]` and `[icode]` hold text the author wants SHOWN, which is most
- * of what a forum uses them for. Only the CONTENT is hidden here; the tags stay
- * visible so `convertCode` still recognizes the run and builds its fence.
- *
- * `[noparse]` has no Carve construct to become at all. Its whole effect is
- * "the enclosed text is literal", so the TAGS are consumed and the content is
- * left as the escaper already wrote it - escaping it a second time would double
- * the backslash and render a literal one beside the bold it was meant to
- * prevent. Keeping the tags emitted them verbatim, and `cleanup` then ate the
- * closer, leaving an unbalanced `[noparse]` in a document that has no such
- * construct (carve-js#1368, carve-php#1209).
- *
- * RESTORED AFTER `cleanup`, because cleanup strips leftover BBCode tags and
- * this content legitimately contains some - a `[code]` block showing `[b]` is
- * the whole point of it.
  */
 function stashLiteralRuns(text: string): { text: string; restore: (out: string) => string } {
   const occupied = occupiedPrivateUse(text)
@@ -312,18 +292,6 @@ function stashLiteralRuns(text: string): { text: string; restore: (out: string) 
 
   return {
     text: out,
-    // ONE PASS IS NOT ENOUGH WHEN THE RUNS NEST. `[noparse]` is stashed after
-    // the code runs, so its body can hold a key of its own, and a single
-    // replace walks PAST the key it just spliced in - carve-php restores in one
-    // pass and emits the raw private-use characters for exactly that input.
-    // The loop is bounded by the number of spans, since every pass that changes
-    // the text consumes at least one.
-    // THE KEY IS ONE LINE STANDING IN FOR MANY. Every pass that owns layout has
-    // run by the time the body comes back, so `convertQuotes` wrote ONE `> ` for
-    // however many lines the run holds and the rest of them arrived at column 0
-    // - leaving both the quote and the fence the importer had just written, and
-    // delivering the literal code text to the document as structure
-    // (carve-js#1384). The body is spliced at the column its key stood in.
     restore: (result: string): string => {
       let restored = result
       for (let i = 0; i <= spans.length; i++) {
@@ -628,26 +596,6 @@ function renderList(frame: ListFrame): string {
 /**
  * Convert the `[list]` family with a stack rather than a pair of non-greedy
  * regexes.
- *
- * `/\[list\]([\s\S]*?)\[\/list\]/` pairs an outer opener with the INNER
- * closer, so a nested source left a literal `[list]` inside item one, promoted
- * the inner item to an outer sibling, and dropped the rest of the outer list
- * outside every match, where `cleanup` does not strip a valueless opener or a
- * `[*]` (carve-js#1387). A stack pairs each closer with the opener it belongs
- * to, which is the same reason `convertQuotes` already runs on one.
- *
- * BOTH OF PART 9 SECTION 11 N1'S MARKER AXES ARE SPENT NOW. The bullet path
- * already alternated `-` and `*` so two adjacent lists stay two lists; the
- * ordered path always wrote `1. ` and two adjacent `[list=1]` blocks merged
- * into one `<ol>`, taking the second list's restart with them (carve-js#1385).
- * The ordered delimiter is the axis N1 gives that path, so it alternates `.`
- * and `)` on the same counter. The counter is per SIBLING GROUP rather than per
- * document: a global one would hand two adjacent siblings the same marker
- * whenever a nested list had consumed an index between them.
- *
- * N1a's other separator - three or more blank lines - could not be used here
- * even if it were written, because `cleanup` collapses any such run to the
- * ordinary loose separator on the way out.
  */
 function convertLists(text: string): string {
   const openTag = /\[list(?:=([^\]]*))?\]/iy
@@ -822,23 +770,6 @@ function cleanup(text: string): string {
 
 /**
  * Convert BBCode markup to Carve markup.
- *
- * A U+0000 IN THE INPUT IS REPLACED BY U+FFFD, before anything reads the text.
- * An importer is the same boundary as an ingest, and PART 12 section 21 says so
- * as a SHOULD rather than a MUST because the format being read may have a rule
- * of its own - BBCode has none, so Carve's applies. The Markdown importer
- * already does this, following CommonMark 2.3 (carve-js#1291); this one passed
- * the raw byte straight through into its Carve output, which is a writer
- * emitting a character the Carve parser replaces on read.
- *
- * Not the same act as picking the stash key (carve-js#1290): a picked run is
- * drawn from characters the input MAY legitimately carry, so it needs a scan
- * and a refusal when the private-use area is full. NUL is not a character this
- * converter may emit at all.
- *
- * @throws {BbcodeInputTooLargeError} when the input exceeds the length cap.
- * @throws {BbcodeSentinelSpaceExhaustedError} when the input leaves no
- *   private-use run free for the stash key.
  */
 export function bbcodeToCarve(bbcode: string): string {
   if (bbcode.length > BBCODE_MAX_INPUT_LENGTH) {

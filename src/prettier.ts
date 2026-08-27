@@ -1,29 +1,6 @@
 /*
  * Prettier plugin for Carve.
- *
- * Carve already has a canonical form - `carve fmt` writes it, and PART 11 of
- * the grammar defines it. This plugin does not reimplement that: it hands the
- * source to the same formatter and returns the result, so a repository that
- * runs Prettier over everything gets Carve formatted the same way `carve fmt`
- * and the language server format it, rather than three answers to one question.
- *
- * That is also why Prettier's layout options are ignored. `printWidth`,
- * `tabWidth` and `useTabs` describe a formatter's freedom; Carve's canonical
- * form has none to describe - the spec fixes it, so honoring `printWidth` here
- * would produce output `carve fmt --check` then rejects.
- *
- * Usage:
- *
- *   // .prettierrc
- *   { "plugins": ["@markup-carve/carve/prettier"] }
- *
- * Prettier resolves `.crv` through the language entry below, so no `overrides`
- * block is needed. `.crv` is the ONLY Carve extension - the spec states it and
- * nothing else, intellij-carve dropped `.carve` in 0.1.2 with an instruction to
- * rename, and jekyll-carve and mkdocs-carve each carry a test asserting they do
- * NOT match it. Claiming it here made this plugin the one tool in the org that
- * formatted a file the rest of the ecosystem refuses to render.
- */
+  */
 
 import { carveToCarve } from './index.js'
 

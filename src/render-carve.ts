@@ -61,30 +61,6 @@ export interface CarveRenderOptions {}
  * these two patterns (carve-js#638). A scan from the end is linear in the
  * run it removes.
  */
-// SPACE, TAB, and the two line terminators - and NOTHING ELSE.
-//
-// It was `\s` minus NBSP and minus U+FEFF, and each of those two exceptions was
-// added the same way: a character that every engine renders as ordinary content
-// was being trimmed out of the written form, so `to_html(fmt(x)) == to_html(x)`
-// went false for a document containing it (carve#844 for U+FEFF). The list was
-// one character long, then two, and the general rule was already written down -
-// `whitespace` in this language is SPACE or TAB (PART 1, carve#890), and
-// U+000B, U+000C, U+0085 and every Unicode space are CONTENT. Enumerating the
-// exceptions to `\s` was chasing the complement of that rule one character at a
-// time; three more were waiting in the corpus that carve#924 added.
-//
-// The two LINE TERMINATORS stay trimmable because this trim is also what strips
-// the padding off a rendered SUBTREE, where a leading or trailing newline is
-// the writer's own layout and not anything the author wrote.
-//
-// NO LONGER in step with `isTrimmable` in src/trim-non-nbsp.ts, which answers
-// the same question for the markdown, plain-text and ANSI targets and still
-// takes the whole Unicode class. That is deliberate and is the reason this is
-// spelled out rather than shared: those three targets are LOSSY by design and
-// carry no round-trip invariant, and their output is pinned byte-for-byte
-// against carve-php and carve-rs, so narrowing them here would break parity
-// for a rule no ruling has extended to them. The Carve writer is the only one
-// of the four that has to reproduce its input.
 function isWsNonNbsp(ch: string): boolean {
   return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
 }
@@ -134,84 +110,16 @@ interface CarveContext {
 /**
  * Render canonical Carve source.
  *
- * The contract is on the node's own content: a node whose value no Carve source
- * can carry is refused rather than written as the nearest form that can be
- * spelled, because the nearest form re-reads as a different tree and the
- * difference is silent (carve-js#1209, carve-js#1344). It covers an empty raw
- * inline, and a verbatim value the block layer would take apart - one carrying
- * whitespace at a line's edge, and one needing the verbatim padding pair while
- * ending in a line terminator.
+ * Each is a CLASS of structural carve-out from exact round-tripping:
+ * - BLOCK WHOSE OWN CONTENT SPELLS IT AWAY (PART 11 §1c)
+ * - BLOCK THAT SPELLS NOTHING AT ALL (PART 11 §10j)
+ * - FLATTEN INTO AN INLINE-ONLY SLOT (PART 11 §1b)
  *
- * What it does NOT cover is a value that IS spellable and is defeated by where
- * its node sits: a backtick-run span opening a block or carrying an attribute
- * block (see `unclosedVerbatimSpells`), and a blank line, which a line block
- * spells as `%%` and a paragraph cannot spell at all. Those keep the closed
- * form.
+ * Some arise only from a hand-built or ingested tree. These are the shapes
+ * which are written and
+ * lost rather than refused.
  *
- * THE CONTRACT, AND WHAT IT DOES NOT COVER. What this writer returns re-reads as
- * what it was given - EXCEPT for the shapes named below, which it writes as the
- * nearest source Carve has and which therefore re-read as something else.
- *
- * The list is the point. A contract stated as an absolute while carrying an
- * exception nothing declares is worse than a narrower one that is true as
- * written, because every reader of the first is entitled to rely on it
- * (markup-carve/carve#1658). So the invariant holds AS WRITTEN, and these sit
- * outside it rather than being places where it quietly fails. Each is a CLASS
- * with a normative home, not an example: a later shape that falls into one is
- * already covered, and a shape that falls into none is a defect to file.
- *
- * - A BLOCK WHOSE OWN CONTENT SPELLS IT AWAY (PART 11 §1c). Where a block's
- *   whole content is a single node whose spelling, at that block's column, is
- *   read back as a block opener of the node's kind, the writer emits that
- *   spelling and the WRAPPER is lost. There is no smaller departure available:
- *   every spelling of the content is the content's own. Two shapes reach it
- *   here - a `paragraph` holding one `image`, written `![a](u)` and re-read as
- *   the standalone image, and a `paragraph` holding one `comment`, written
- *   `%% c` and re-read as the block comment.
- *
- *   THE INDENTED FORM IS NOT A SPELLING, and on this engine that has to be said
- *   rather than assumed: carve-php and carve-rs read an indented image as a
- *   block image at every indent, while HERE ` ![a](u)` really does parse as a
- *   paragraph. The ruling rejected it anyway. Inside a list item or a definition
- *   description the marker's content column absorbs the padding at every width,
- *   so `list_item > paragraph > image` has no spelling at all - a writer that
- *   preserved the shape at top level and lost it one level down would be two
- *   rules with nothing declaring the difference - and it emits meaning-bearing
- *   leading whitespace, which editors and pipelines strip.
- *
- * - A BLOCK THAT SPELLS NOTHING AT ALL (PART 11 §10j). It is simply not in the
- *   source, so the re-read document is a block shorter. An empty `paragraph` and
- *   a whitespace-only one both reach it: no source spells either, because a
- *   blank line is a separator rather than a block. §10j bounds the loss TO the
- *   block - the boundary it stood between survives - and does not pretend the
- *   block itself does.
- *
- * - A FLATTEN INTO AN INLINE-ONLY SLOT (PART 11 §1b). A caption line, a fence
- *   title, a table cell, an image's alt text and a definition term take no
- *   blocks, so block content handed to one is flattened and the emitted document
- *   holds fewer blocks than the tree. What survives is the BOUNDARY: a separator
- *   between two former siblings that each contribute a token.
- *
- * THE PARSER REACHES ALMOST NONE OF THIS. An empty paragraph, a whitespace-only
- * paragraph and a lone-comment paragraph are all unbuildable from source, so
- * they arrive only from a hand-built or ingested tree - which is exactly why
- * they are NAMED. A carve-out a caller discovers is the defect this list exists
- * to remove.
- *
- * NOT SILENT WHERE THERE IS SOMEWHERE TO SAY IT. This function has no diagnostic
- * channel and can only throw, and refusing would break an editor's round trip on
- * a tree the HTML renderer accepts. A CALLER that writes source and has a
- * channel declares the loss instead: `htmlToCarve` reports a
- * `structure-unspellable` row (docs/html-import.md, carve-js#1422).
- *
- * Where it CAN see that emitting source would change the tree, and no carve-out
- * above covers the shape, it refuses rather than emitting the nearest form. That
- * is a statement about the shapes it detects, not a second absolute: the list
- * above is what a caller may rely on.
- *
- * @throws {SourceUnspellableError} when no source can carry an AST node's own
- *   content. Never for the structural carve-outs above, which are written and
- *   lost rather than refused.
+ * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
@@ -247,26 +155,6 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   const minimal = withFreshWriteBackState(() => renderWithEscapes(ast, 'minimal'))
   const conservative = withFreshWriteBackState(() => renderWithEscapes(ast, 'conservative'))
   if (minimal === conservative) return minimal
-  // A cheaper sufficient reason to prefer the minimal form: it RE-PARSES TO THE
-  // TREE WE WERE GIVEN. That is strictly stronger than "the two renders agree" -
-  // a form that reproduces the input tree cannot have changed the document, so
-  // there is nothing left for the comparison below to decide.
-  //
-  // Worth a tier of its own because that comparison costs TWO full parses, and
-  // it was paid by every document holding a single escapable character in text,
-  // which is nearly all of them. It showed up as depth sensitivity rather than
-  // as what it is: on a 40 KB `- x` ladder, adding one `-` to a paragraph took
-  // `fmt` from 6 ms to 186 ms - about twice the parse - while the ladder alone
-  // stayed at 6 ms.
-  //
-  // A MISS costs nothing but the parse it just did: it falls through to the same
-  // comparison as before. The tree here is parse-only plus block-image
-  // promotion, so a document whose sole image was promoted misses and is decided
-  // the old way.
-  // ONE parse of the minimal form, reused by both tiers below. Parsing it here
-  // and again inside the comparison would make a MISS cost three parses where it
-  // used to cost two - paying for the shortcut exactly on the documents it
-  // cannot help.
   const minimalTree = treeOf(minimal)
   if (minimalTree !== null && minimalTree === stableJson(ast)) return minimal
   // ONE parse of the conservative form as well, for the same reason as the
@@ -645,37 +533,6 @@ let thematicBreakMarker: string | null = null
 /**
  * Render, and fall back to a break spelling that cannot be read as frontmatter
  * when the finished bytes would be.
- *
- * THE WRITER MANUFACTURED FRONTMATTER. A frontmatter block is an opening fence
- * at byte 0 plus a bare `---` CLOSER anywhere below it, so the collision is a
- * property of the whole emitted document rather than of its first line. Two
- * unrelated writer decisions reach it:
- *
- * - an authored `---` break can open the document and gain a closer from any
- *   later break (markup-carve/carve-js#899).
- * - a hoisted link or footnote definition is written after the body, promoting
- *   whatever stood second to byte 0 (markup-carve/carve-js#901). Nothing is
- *   respelled there - the `---` was already in the source - so fixing the first
- *   cause does not fix this one.
- *
- * And a THIRD shape neither ticket names falls out of the same check: a hoisted
- * definition can promote a PARAGRAPH whose first line is `---yaml`-shaped, which
- * no head-of-document respelling can repair, because the paragraph's text is not
- * the writer's to change. That document is saved by respelling the CLOSER
- * instead - which is why the fallback moves every break in the document rather
- * than the one at the head.
- *
- * So the FINISHED bytes are handed to the PARSER'S own opener test, twice: once
- * to ask whether the default spelling is misread, and once to confirm the
- * fallback is not. A document that is still misread with `***` - a `---` closer
- * that came from somewhere other than a break, such as the inside of a fenced
- * block - keeps the canonical spelling rather than paying a respelling that buys
- * nothing.
- *
- * A leading break with nothing below it to close a block keeps `---`, which is
- * what corpus `132-thematic-break-requires-contiguous-markers-4` asks for and
- * what carve-php and carve-rs write. It is a CONTROL here: no mutation of this
- * fallback changes it.
  */
 function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): string {
   const canonicalForm = renderOnePass(ast, mode)
@@ -771,43 +628,6 @@ function stableJson(value: unknown): string {
 
 /**
  * Key-order-insensitive view of a node tree.
- *
- * A parsed document and a re-parsed one carry the same fields in different
- * insertion order - `attrs` before `children` in one, after it in the other -
- * so a plain JSON.stringify comparison reports a difference that does not
- * exist and escalates the whole document to conservative escaping for nothing.
- *
- * `pos`, `footnoteDefPos` and `srcByteLength` describe where the text sat
- * rather than what it says, and the writer legitimately renormalizes
- * indentation, so they are dropped rather than compared.
- *
- * `footnoteDefPos` is the one that bites: it is a root-level MAP of positions
- * whose key is not `pos`, so the name-based skip missed it. Adding an escape
- * lengthens the source and shifts every offset in that map, so the comparison
- * reported a difference on EVERY document carrying a footnote and escalated it
- * to conservative escaping - 12 of the 14 cross-engine writer diffs in
- * carve#478 were this one line.
- *
- * `definitionSpans` is the SECOND one, and it arrived the same way: a positions
- * array on a definition-list entry, added for markup-carve/carve-js#813 so an
- * emptied description could still be placed. Escaping a character in ANY
- * description shifts every offset after it, so with the key compared, every
- * document carrying a definition list escalated to conservative escaping and two
- * corpus round-trips came back with escapes the formatter would not have written.
- *
- * `termSpans` is the THIRD, sitting on the same entry as `definitionSpans` and
- * missed when that one was added. It hid behind the fast path above this
- * comparison: a document that was PARSED re-parses to the tree it came from, so
- * the minimal form wins before the comparison runs, and only a tree BUILT
- * without positions - what the HTML importer and `--from-json` hand the writer -
- * reaches it. Such a document escalated whenever an escape candidate stood
- * anywhere before its last term, which is why `<dl><dt>A<dd>x language.<dt>B`
- * came out of the importer as `x language\.`.
- *
- * The rule, since this is now three times: a NAME-based skip is the whole hazard
- * here. Any field holding offsets belongs on this list whatever it is called,
- * and the test that catches a missing one is the corpus round-trip, not this
- * comment.
  */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return mergeTextRuns(value).map(canonical)
@@ -891,24 +711,6 @@ function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   ctx.afterCaptionHost = false
   try {
     const parts: string[] = []
-    // TWO ADJACENT SIBLING LISTS NEED SOMETHING BETWEEN THEM. Written at the
-    // same column with matching markers they merge on re-parse, so
-    // `parse(fmt(x)) == parse(x)` is false for a document the parser reads as
-    // two lists (carve#1088). carve#286 spent the marker axis - "emit the
-    // marker as authored" - which separates them only while the markers differ;
-    // when both are `1.` at column 0 there is nothing left to preserve.
-    //
-    // THE SEPARATOR IS THE HARD BOUNDARY (§11 N1a): three blank lines. That is
-    // the language's own way of saying "these are two lists", so the writer
-    // says it instead of encoding the same fact as layout.
-    //
-    // It REPLACES the one-space cumulative offset this used to emit. That
-    // offset existed because no separator was spelled - it was the only thing
-    // left - and it cost real correctness: the second list came back indented
-    // (`- a` / blank / ` - b`), a third had to go to two spaces, and at two
-    // spaces a bullet's content column NESTS the later list inside the earlier
-    // one. Three blank lines separate any number of sibling lists at the
-    // column the author wrote them.
     let previousList: List | null = null
     let listSeparated = false
     let previousBlock: BlockNode | null = null
@@ -1328,23 +1130,6 @@ function needsLooseKey(node: List | DefinitionList, body: string): boolean {
     const reparsed = treeOf(body) === null ? undefined : parse(body).children[0]
     return reparsed === undefined || reparsed.type !== 'list' || reparsed.tight
   }
-  // ON A DEFINITION LIST THE ANSWER IS UNCONDITIONAL (§17 L7,
-  // markup-carve/carve-rs#1305, markup-carve/carve#1639). The looseness field is
-  // set ONLY where the key was spelled - a `<dl>`'s own derivation gets it from
-  // nowhere else, because a blank line between two ENTRIES does not loosen a
-  // `<dl>` at any count - so a body written without the key can never read back
-  // with the field set, and the re-parse test says "emit" every time.
-  //
-  // A DESCRIPTION THAT ALREADY HOLDS TWO BLOCKS DOES NOT CHANGE IT. There the
-  // key is redundant in the RENDER, which is why redundant use is a no-op, and
-  // it is not redundant in the TREE - and the tree is what the equality is taken
-  // over. Reading the redundancy off the render is what this used to do, and it
-  // dropped the key from `{loose}` over a two-block description, so `fmt`
-  // silently deleted a fact the document stated.
-  //
-  // That is the same asymmetry the two fields have: `list.tight` is total and
-  // derived from the source, so the writer above has a real question to answer,
-  // while a definition list's field records only what its own derivation misses.
   return node.loose === true
 }
 
@@ -1418,19 +1203,6 @@ function renderList(node: List, ctx: CarveContext): string {
       const lines = content ? content.split('\n') : ['']
       const first = lines.shift() ?? ''
       out += `${indent}${prefix}${first || '+'}\n`
-      // A TASK ITEM'S `[x] ` IS CONTENT and an attribute block is METADATA, so
-      // neither moves the bare marker's content column. `- [x] ` and
-      // `-{#k} [x] ` both have column 2 (carve#1701).
-      //
-      // Writing the continuation at the marker's full width put every block
-      // after the first four columns too far in, where an INDENTED block opener
-      // opens nothing: `# h` came back as the text of the marker line's
-      // paragraph, so a document imported from
-      // `<li><input type="checkbox" checked> <h1 id="h">h</h1></li>` rendered
-      // its visible text as `# h` rather than `h` (carve-js#1450). A fence, a
-      // quote and a heading after a first paragraph were all lost the same way;
-      // an ordinary paragraph was not, which is why it stayed unseen.
-      //
       const continuation = ' '.repeat(continuationWidth)
       // An EMPTY continuation line stays empty. Indenting it produces a line of
       // nothing but spaces, which the writer must never emit - the blank line
@@ -1533,23 +1305,6 @@ const A_BLOCK_ATTRIBUTES_LINE = /^\{.*\}$/
 
 /**
  * Does the written form of a block OPEN with a block-attributes line?
- *
- * The three kinds above fold into an open paragraph one column in because their
- * canonical source is a bare inline run. That stops being true the moment the
- * writer has to put the block's attributes on a line of their own ahead of it:
- * `block_attributes` is one of PART 9 §10's INVISIBLE CONSTRUCTS, so it
- * INTERRUPTS the open paragraph, and the block below it opens its own.
- *
- * So this is not a preference between two spellings. Where the attribute line is
- * written, the fold this rule exists to prevent cannot happen, and the `+` costs
- * a construct the document did not have. `- a` / `{.x}` / `para` and
- * `- a` / `  {.x}` / `  para` render the same document in carve-js, carve-php
- * and carve-rs alike - and the indented one is what the corpus source and
- * carve-rs write, so writing the marker was this engine disagreeing with the
- * other two (markup-carve/carve#1275).
- *
- * A paragraph whose own text is `{…}` does not reach this: the writer escapes
- * that leading brace (`\{.c\}`), precisely so it cannot come back as attributes.
  */
 function opensWithAnAttributeLine(rendered: string): boolean {
   return A_BLOCK_ATTRIBUTES_LINE.test(rendered.split('\n', 1)[0])
@@ -1708,29 +1463,6 @@ function theLastBlockInside(node: BlockNode): BlockNode | undefined {
 /**
  * Whether a sub-list written at the item's content column needs a blank line
  * above it to open at all.
- *
- * THE MARKER COLUMN. A block attached by §17 L3's marker sits at column 0, and
- * a sub-list at the item's content column below it is INDENTED under an open
- * paragraph - lazy continuation, so the list never opens and its markers come
- * back as text.
- *
- * A BLOCKQUOTE. It takes any non-blank line below it as lazy continuation,
- * bullet line included, so `- x` / `  > q` / `  - b` came back as a quote whose
- * paragraph carries `- b` as text. That shape holds no §11 N1a boundary at all:
- * it failed on its own account before markup-carve/carve#1501, and the same rule
- * settles it.
- *
- * A PARAGRAPH BELOW A SUB-LIST THAT ALREADY OPENED. Once a sub-list has opened
- * at the item's content column, a bullet written at that column below a
- * paragraph joins THAT list instead of opening under the paragraph - so the
- * paragraph keeps the line and the list keeps the marker. Without an earlier
- * sub-list the same two lines open a list, which is why this is conditional
- * rather than a blanket blank line after every paragraph: writing one there
- * would re-spell every nested list in the corpus.
- *
- * A BLANK LINE IS SAFE HERE. It loosens an item only before a PARAGRAPH; before
- * a sub-list the item stays tight, which is why `- outer` / blank / `  - a` and
- * `- outer` / `  - a` are the same document.
  */
 function needsABlankLineAbove(
   previousEmitted: BlockNode | null,
@@ -1847,66 +1579,6 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
       if (b.type === 'paragraph' && rendered.includes('\n ')) {
         rendered = rendered.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${markerColumnTag()} `)
       }
-      // §17 L3: a PARAGRAPH after a paragraph needs the continuation marker
-      // written back. Indented under the item it is a LAZY CONTINUATION of the
-      // paragraph above (§10 I2), so the item comes back holding ONE block
-      // where the author wrote two, and `to_html(fmt(x)) != to_html(x)`
-      // (carve#861).
-      //
-      // Only a paragraph reaches this. A fence, quote, heading, table, div or
-      // thematic break cannot fold into an open paragraph, so indenting them
-      // into the item is a different SPELLING of the same document and the
-      // invariant already held - which is why the corpus, which pinned exactly
-      // those kinds, never saw this.
-      //
-      // WHICH BLOCKS FOLD. The claim that "only a paragraph reaches this" was
-      // measured across twenty block constructs and is wrong for two of them: a
-      // standalone `image` and a `figure` are both written as a bare inline run
-      // on its own line (`![a](i.png)`, plus a `^ cap` line), so at the item's
-      // content column they are lazy continuation exactly as a paragraph is.
-      // `- x` / `+` / `![a](i.png)` / `^ cap` came back as one paragraph holding
-      // an inline image and the literal text `^ cap`: the `<figure>` and its
-      // `<figcaption>` were gone (markup-carve/carve-js#902). Every other
-      // construct measured - fence, quote, heading, table, break, div, list,
-      // definition list, admonition, line block, math, raw block, comment -
-      // opens its own block at that column and is unaffected.
-      //
-      // AND ONCE ONE CHILD IS AT THE MARKER COLUMN, EVERY LATER ONE MUST BE.
-      // The marker column is column 0, so a following child written at the
-      // item's content column is INDENTED relative to the block above it and
-      // becomes that block's lazy continuation. `- x` / `+` / `---yaml` /
-      // `k: v` / `---` wrote the paragraph flush and the thematic break at two
-      // columns, and the break was absorbed into the paragraph and folded to an
-      // em dash. Mixed indentation inside one attached run is not a form any
-      // reader can round-trip, so it is not written.
-      // A LIST CHILD NEVER GOES TO THE MARKER COLUMN. The marker column is
-      // column 0, which is where the list this item belongs to writes ITS
-      // markers - so a sub-list put there is not attached to the item, it is
-      // dissolved into the list around it, and the `+` above it is read as the
-      // sibling item's own text. `- outer` / `+` / `- a` / `+` / `- b` came back
-      // as one flat list of three items with both sub-lists and the boundary
-      // between them gone (markup-carve/carve#1501). §17 L3's marker cannot help
-      // here: it attaches a block that could not open at column 0 on its own,
-      // and a list opens there in preference to being attached.
-      //
-      // So a sub-list is written at the item's CONTENT column, and what it needs
-      // there is the right separator above it. Three shapes, one question each -
-      // what would eat this list if nothing separated it:
-      //
-      //   - THE LIST ABOVE IT WOULD SWALLOW IT. Two sibling sub-lists whose
-      //     markers match are one list when written adjacent, which is the whole
-      //     of §11 N1's merge rule; §11 N1a's boundary is the language's way of
-      //     saying they are two, and §10i fixes its length at three blank lines.
-      //   - THE BLOCK ABOVE IT SITS AT COLUMN 0, or is a BLOCKQUOTE. Either way
-      //     a line at the item's content column is INDENTED under it and reads
-      //     as its lazy continuation, so the list never opens. One blank line
-      //     closes the block above without loosening the item - a blank line
-      //     before a sub-list does not make a list loose, only a blank line
-      //     before a paragraph does.
-      //   - NOTHING ABOVE IT REACHES DOWN. Every other block kind was swept:
-      //     heading, fence, table, break, div, definition list, admonition, and
-      //     a sub-list with a different marker all close at their last line, and
-      //     the list opens on the next one with no separator at all.
       if (b.type === 'list') {
         if (!separated && previousEmitted !== null && adjacentBlocksMerge(previousEmitted, b)) {
           parts.push(`${boundaryTag()}${rendered}`)
@@ -1996,31 +1668,6 @@ function romanMarker(n: number): string {
 
 /**
  * One extra column, when a definition list's payload needs a base of its own.
- *
- * A DESCRIPTION'S PAYLOAD LIVES ABOVE ITS OPENER'S COLUMN. `:: term` sits at the
- * list's own column and everything under `: ` sits two columns in, so a
- * quote, a fence, a heading or a table inside a description is INDENTED
- * relative to the `::` line. At a body's minimum column that indentation is an
- * authored block base of its own (PART 9 §24 C3), and the body's rebase claims
- * the block - the description keeps only its first paragraph and the block
- * re-reads as the body's next sibling.
- *
- * Written one column in, the `::` line is the over-indented opener instead, its
- * own column becomes the entry's base, and the rebase hands the whole run back
- * with its relative columns intact. That is the spelling carve#1763 pins for a
- * definition list inside a footnote body, and it is the only spelling of the
- * document that exists: at the body minimum the description CANNOT hold the
- * block at any payload column, measured across eight (carve-js#1509).
- *
- * SO IT IS NOT A PREFERENCE BETWEEN TWO CANONICAL FORMS. Where the un-raised
- * spelling still says what the document says - a single-line description, a
- * soft-wrapped one, a second paragraph, a sub-list - nothing is raised and the
- * canonical bytes are unchanged; PART 11 §2 pins those and they stay pinned.
- *
- * A LIST ITEM ASKS FOR NOTHING HERE, because its two spellings are one
- * document: carve#1752 asks a payload to keep its offset from its opener, and
- * in a list item both spellings have the same offset. The reader was giving a
- * base there anyway (carve-js#1514) and no longer does.
  */
 function atARaisedBase(rendered: string, atAnAuthoredBodyColumn: boolean): string {
   if (!atAnAuthoredBodyColumn) return rendered
@@ -2236,31 +1883,6 @@ function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
 /**
  * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
  * per-cell `<`/`>`/`~` alignment markers.
- *
- * The GFM delimiter row is an accepted alias on input, but it says something
- * the AST does not: its alignment applies to the WHOLE column, header and body
- * alike (PART 9 T7), while alignment on the AST belongs to each cell. Writing a
- * delimiter row for the ordinary shape - an aligned header over unaligned body
- * cells - brought every body cell back aligned, so `parse(fmt(x)) == parse(x)`
- * did not hold (issue 359).
- *
- * ONE header shape has no native spelling: a SPAN marker promoted to a header
- * cell (`| < | b |`), which `header_cell` does not admit.
- *
- *   | < | b |     a span marker promoted to a header cell
- *
- * That still needs a delimiter row to promote the first row. It is emitted BARE
- * (`|---|---|`), never with colons: the cells keep their own alignment markers,
- * so the delimiter contributes structure only and cannot spill alignment down
- * the column.
- *
- * An ATTRIBUTED header cell used to be in that list, for the reason the whole
- * order changed: `header_cell` had no attributes slot, so the only shape
- * available was `|{.x}=a |`, which the grammar reads as a data cell whose
- * content starts with `=`. Falling back to a delimiter row avoided writing it,
- * at the cost of promoting the row with syntax the AST did not ask for. §5 T10
- * gives `header_cell` the slot, after the markers, so `|={.x} a |` is a real
- * spelling now and the fallback is not needed for it.
  */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
@@ -2337,26 +1959,6 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
   const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
-  // The space `padCell` writes after the prefix is what keeps a content sigil
-  // content: the alignment scan runs right after `|` or `|=` and consumes one
-  // `<`, `>` or `~`, so `| ~x~ |` written glued came back as CENTER alignment
-  // holding `x~` - the strikethrough gone and the column centered by a marker
-  // nobody wrote (markup-carve/carve-js#903). This used to be a guard that
-  // fired only on those three characters and only where the prefix was a bare
-  // `=`; padding every cell covers it without enumerating anything.
-  //
-  // A PAYLOAD THAT IS ITSELF A SPAN MARKER is the one thing the padding cannot
-  // keep as content, because the span cell's own production is written with the
-  // padding inside it (PART 11 section 6f). It LOSES THE CELL rather than a
-  // byte of spelling, which is why it is a section 1 failure and not an
-  // under-escaped character: a lone caret in a two-cell row came back as
-  // `| ^ |`, the cell ABOVE grew a rowspan nobody wrote, and the caret's own
-  // cell was deleted outright.
-  //
-  // The markers written for a REAL span are pushed onto the row by the branch
-  // above and are markers on purpose, so they never reach this. An ATTRIBUTED
-  // cell is not asked either, for the reason the parser does not ask it - an
-  // attribute block ahead of the payload already makes the cell content.
   return padCell(prefix, escapeSpanMarkerPayload(renderInlines(cell.children, ctx), cell.attrs))
 }
 
@@ -2376,24 +1978,6 @@ function escapeSpanMarkerPayload(payload: string, attrs: Attrs | undefined): str
 
 /**
  * A caption line for a caption that spells something, and NOTHING otherwise.
- *
- * `^` with nothing after it is not a caption line: `caption_line` is the marker,
- * its separator and inline content (PART 2), so a caption run that reaches the
- * page as nothing leaves a bare caret behind, which the reparse reads as more of
- * the block ABOVE it. The figure is lost AND the target is damaged - an image
- * comes back as a paragraph holding the image and a literal `^`, a code block
- * gains a `<p>^</p>` after it (markup-carve/carve-js#1423).
- *
- * SO THE LINE IS DROPPED RATHER THAN EMITTED EMPTY, which is the call carve#1608
- * already made one construct over: a description that would write nothing is
- * dropped, because the bare `:` line it used to emit was read as more of the
- * TERM above it. Same shape, same answer - the loss is bounded to the caption
- * instead of taking the target's own parse with it (PART 11 §10j).
- *
- * NO CARVE SOURCE REACHES THIS. A parsed caption always has content, so the
- * empty run arrives from the AST ingest or from an importer, and the trim is
- * Carve's whitespace rather than the host's: a caption holding a NO-BREAK SPACE
- * spells something (PART 11 §7) and keeps its line.
  */
 function captionLine(caption: InlineNode[], ctx: CarveContext): string {
   const row = captionRow(caption, ctx)
@@ -2428,31 +2012,6 @@ function captionRow(caption: InlineNode[], ctx: CarveContext): string | undefine
 
 /**
  * THE TARGET KEEPS ITS OWN ATTRIBUTES (ruling markup-carve/carve#1721).
- *
- * Every arm goes through `renderBlock`, which is the only writer that puts a
- * block's own attribute line above it. The table arm called `renderTable`
- * instead, one level under that line, so a `<table id="g">` inside a
- * `<figure id="f">` came back carrying `id="f"` and NOTHING carried `id="g"` -
- * the id that survived belonged to the element that did not, and the id that
- * died belonged to the element that did. An id is a link target, so every
- * anchor pointing at that table broke while the document rendered perfectly.
- *
- * The two lines STACK and the parse merges them - the last `id` wins, classes
- * union - so writing the target's line under the figure's is what hands the
- * table back its own identity: `{#f}` over `{#g}` over the rows re-reads as
- * `<table id="g">`. What the merge displaces is the FIGURE's id, and
- * `html-import.ts` declares it with an `attribute-dropped` row rather than
- * letting either side go in silence.
- *
- * THE OTHER ARMS ALREADY WROTE BOTH LINES, and there the merged pair lands on
- * the FIGURE the caption line rebuilds rather than on the quote or the fence
- * inside it. The value that survives is still the target's, which is what the
- * ruling asks; only the table arm was dropping a line outright.
- *
- * AN IMAGE NEVER MEETS THE COLLISION. Its attributes are written INLINE, after
- * the destination, so `{#f}` above `![A](a.png){#g}` puts one on the figure and
- * one on the image and both survive. That arm is unchanged, which is what
- * `renderImage` here says.
  */
 function renderFigure(node: Figure, ctx: CarveContext): string {
   const target = node.target.type === 'image' ? renderImage(node.target) : renderBlock(node.target, ctx)
@@ -2471,27 +2030,6 @@ function renderFigure(node: Figure, ctx: CarveContext): string {
 function renderOneFootnoteDef(label: string, blocks: BlockNode[], ctx: CarveContext): string {
   const rawBody = atAnAuthoredBodyColumn(ctx, () => renderBlocks(blocks, ctx))
   const body = trimNonNbsp(blocks.length === 1 ? rawBody.replace(/\n\n/g, '\n') : rawBody)
-  // AN EMPTY BODY IS NOT SPELLABLE, so it is written as something the reader
-  // consumes back to nothing.
-  //
-  // `footnote_definition = "[^", footnote_label, "]:", space+, inline_content`
-  // and `inline_content` is one-or-more, so a definition ALWAYS has content:
-  // `[^f]:` and `[^f]: ` are both paragraphs, not definitions. An empty-bodied
-  // footnote is therefore a state the source language cannot express directly.
-  // It is still reachable, because a body holding only a block-attribute line
-  // (`[^f]: {x}`) has that line consumed as attributes, leaving nothing behind -
-  // and the writer then emitted `[^f]:`, which un-defined the note and turned
-  // both the definition and its reference into literal text
-  // (markup-carve/carve-js#904).
-  //
-  // So the body is written as the construct that PRODUCED the empty body. A
-  // block-attribute line with nothing under it is dropped, which is what the
-  // document already does with `{x}` at top level, and it is the only spelling
-  // measured to render identically on all four targets: a `%%` comment and a
-  // `%%%` block both leave an extra newline inside the `<li>`, so HTML moves.
-  // The attribute name is arbitrary because the parse discards it - the payload
-  // is not recorded anywhere in the tree - so it is spelled to say what it is
-  // rather than to carry anything.
   if (body === '') {
     return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
   }
@@ -2650,57 +2188,8 @@ function renderInlines(
       // character, not the backtick that actually ends the line.
       const atLineStart = lineLength === 0
 
-      // THE SEPARATOR SPACE IS ONLY A SEPARATOR (PART 11 §1; §21). `%%` is
-      // recognized after whitespace OR at the start of its line, so a comment
-      // that already STARTS its line has nothing to separate from and must not
-      // be given a space it did not have.
-      //
-      // Everywhere else the space was cosmetic - leading whitespace is stripped
-      // on the way back in - which is why it went unnoticed. A LINE BLOCK is
-      // the one place it is not: there leading whitespace is preserved CONTENT
-      // (PART 9 §23), so the space pushed the marker off column 0, the reparse
-      // read `%%` as ordinary verse, and `carve fmt` PUBLISHED the text the
-      // author hid (carve-js#1170; carve-php fixed the same defect in
-      // markup-carve/carve-php#1394, carve-rs never had it).
       if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
 
-      // A LINE BLOCK'S HARD BREAK KEEPS ITS BACKSLASH WHERE THE BARE NEWLINE
-      // WOULD BE RE-READ (PART 11 §7c, NORMATIVE). The container hardens every
-      // line boundary of its own accord, so the bare newline is right for most
-      // lines and wrong for exactly two - the two where §7's precondition
-      // fails, because the parser does NOT discard the trailing run when a
-      // backslash follows it (PART 7 makes that run INTERIOR).
-      //
-      //   - the line's content is EMPTY. A bare newline is a BLANK line, which
-      //     ends the stanza, so one stanza comes back as two.
-      //   - the line's content ends in a LONE space. A bare newline makes that
-      //     space line-trailing, where PART 2 drops it. A run of TWO OR MORE
-      //     columns is already NBSP content (§23 MEDIAL GAPS) and needs none -
-      //     it reaches here sentinel-encoded, so it is not a space to this
-      //     test either.
-      //   - the break ENDS THE STANZA. §7c's third sentence excuses a line with
-      //     no trailing whitespace because its "tree is identical either way",
-      //     and on a line INSIDE a stanza it is: the boundary hardens whether or
-      //     not a backslash spells it. At the stanza's end there is no boundary
-      //     to harden - the next newline belongs to the blank line or the
-      //     closing fence - so the bare spelling drops the break outright. The
-      //     ruling measured this as "a last body line loses a trailing `<br>`
-      //     WITH ITS SPACE"; the space is incidental, the loss is the break, and
-      //     `a\` and `a  \` lose it with no space involved.
-      //
-      // This is PART 11 §1a, not an exemption from it: the per-construct
-      // spelling emits bytes that do not re-parse to the tree they came from,
-      // so §1 wins and the spelling yields to another spelling of the SAME
-      // construct - which for a `hard_break` is its own PART 3 form
-      // (markup-carve/carve#1334).
-      //
-      // A LINE THAT ENDS IN A COMMENT IS EXEMPT. `%%` runs to end of line, so a
-      // trailing space there is INSIDE the comment, not content the parser is
-      // about to lose - stripping it leaves the same node. Protecting it with a
-      // backslash does not: the `\` lands inside the comment's own content, and
-      // the block layer, which takes the whole line before the inline parser
-      // sees it, reads the note back as `\`. A comment is always the last thing
-      // on its line, so the node before the break is the whole test.
       if (
         ctx.lineBlockDepth > 0 &&
         node.type === 'hard_break' &&
@@ -2960,19 +2449,6 @@ function renderLink(node: Link, ctx: CarveContext): string {
   if (node.ref !== undefined && node.rawRef !== undefined && !node.href) {
     return node.rawRef
   }
-  // A RESOLVED reference stays a reference. Inlining it satisfied
-  // toHtml(fmt(x)) == toHtml(x) and broke PART 11 §1: `ref`/`rawRef` - which §3a
-  // keeps so `[a][r]` and `[a](/u)` stay distinguishable - were absent from the
-  // reparse, and one destination became N after a single pass, which is the
-  // duplication the definition form exists to avoid (carve-js#690, carve#642).
-  //
-  // `rawRef` is the authored source VERBATIM and already carries any attribute
-  // block written at the reference, so it is emitted as-is rather than having
-  // renderAttrs appended - which would write the block twice.
-  // No heading-reference guard is needed here, unlike carve-php's: this engine
-  // DELETES `ref`/`rawRef` when a heading resolves a reference, and `carveToCarve`
-  // does not run resolve() at all - so a heading-derived link never reaches this
-  // branch carrying a ref.
   if (node.ref !== undefined && node.rawRef !== undefined) {
     return node.rawRef
   }
@@ -3096,53 +2572,6 @@ function unclosedVerbatimSpells(content: string): boolean {
 /**
  * Why NO Carve source reproduces this verbatim value, or `undefined` when one
  * does (carve-js#1344).
- *
- * `unclosedVerbatimSpells` above asks the narrower question - whether the BARE
- * OPENER serves - and two of its answers are not about that form at all: they
- * are properties of the block layer, which strips a line's trailing run and a
- * continuation line's indent before the inline scanner ever sees a backtick. A
- * value carrying either cannot be written in the closed form either, or in any
- * other, because the loss happens on the way back IN. So the same two
- * conditions answer the wider question, and they are spelled here rather than
- * shared with the narrower predicate, which reads its own list for its own
- * reason.
- *
- * The third condition is the padding pair. Content touching a backtick has to
- * be padded or it merges with the delimiter, and a TRAILING pad after a line
- * terminator is the last line's leading indent, which the block layer takes -
- * so the value comes back holding the leading pad and missing the trailing one.
- * A value ending in a terminator that needs NO pad is spelled fine, which is
- * why the pad is part of the question and not just the terminator.
- *
- * A BLANK LINE IS DELIBERATELY NOT HERE, even though `unclosedVerbatimSpells`
- * rejects one and a paragraph really cannot carry it. Inside a line block it is
- * spellable, and spelled: §23 makes a comment-only line the one construct that
- * leaves an empty verse line, so `renderBlock` writes the emptied line as `%%`
- * and it re-reads exactly. Corpus 344 is that document. The question this
- * predicate answers is about the VALUE alone, so a loss that only one position
- * inflicts belongs with the other positional guards, not here.
- *
- * THE TERMINATOR CLASS IS `[\r\n]`, not `\r?\n`. A lone CR is a line
- * terminator in PART 2's list, so `a \rb` loses its space exactly as `a \nb`
- * does; reading only the CRLF pair would have let the CR spellings through the
- * two edge rules while the pad rule below caught them, which is one rule
- * answered two ways.
- *
- * Nothing this rejects is reachable by parsing a document: the parser drops
- * that whitespace before the inline scan, in a line block as much as in a
- * paragraph, and normalizes every terminator to LF before that, so no document
- * produces one. They arrive by constructing a tree or by ingesting one.
- *
- * THIS IS NOT A RULE ABOUT THE CARRIAGE RETURN, and the `[\r\n]` class above
- * should not be read as one. Every condition here is about a SHAPE - a run at a
- * line edge, a pad before a terminator - and the terminator is only how the
- * shape is delimited; CR is in the class because it delimits one, not because
- * the character is itself unspellable. A CR ALONE IS FINE AND IS NORMALIZED,
- * not refused: `normalizeIngestedValue` in `ast-json.ts` collapses it to LF at
- * the ingest boundary, so it is lossless and it never reaches here from that
- * door (markup-carve/carve-js#1352). Widening any condition here to catch the
- * character would refuse CRLF-sourced input that is ordinary in provenance -
- * the opposite of what these three conditions were ruled for.
  */
 function unspellableVerbatimReason(content: string, needsPad: boolean): string | undefined {
   if (/[ \t][\r\n]/.test(content)) {
@@ -3166,20 +2595,6 @@ function renderCode(content: string, allowUnclosed = false, nodeType = 'code'): 
   // it as itself here.
   content = content.replace(/\ue000/g, sentinels[3])
   const fence = safeFence(content, 1)
-  // Pad exactly when the parser will strip, so the strip is reversible and fmt
-  // stays idempotent; the padding sits INSIDE the fence, so a trailing attribute
-  // block still attaches to the closing run. The parser strips one leading and
-  // one trailing space when the content BOTH begins and ends with a space but is
-  // NOT entirely spaces (see stripVerbatimPadding in parse.ts), and needs a space
-  // around backtick-adjacent content. All-space content must therefore NOT be
-  // padded: it is emitted verbatim and read back unchanged. Padding it instead
-  // grew the span by two spaces on every fmt pass.
-  //
-  // "ENTIRELY SPACES" IS MEASURED IN CARVE'S WHITESPACE, the four characters
-  // PART 7 names (markup-carve/carve#977), not the host language's `\s`. This
-  // read a native `.trim()`, so ` <VT> ` counted as all-space here while the
-  // parser - once it read the same four characters - strips its padding. The
-  // two halves of one reversible operation have to spell the test once.
   const needsPad =
     content.startsWith('`') ||
     content.endsWith('`') ||
@@ -3446,27 +2861,6 @@ function dropTrailingWs(line: string): string {
 }
 
 function normalize(text: string): string {
-  // The placeholder means the author wrote an ESCAPED SPACE, so the writer says
-  // that again. Resolving it to a literal non-breaking space instead lost the
-  // distinction the parser draws - `10\ kg` came back carrying U+00A0, which
-  // re-parses as a literal nbsp rather than as an escape, so the text node
-  // differed even though the HTML did not (carve#369).
-  //
-  // A line block's indent is the other user of this sentinel and is already
-  // routed through the verbatim scheme before this runs, so what is left here
-  // is an escaped space and nothing else.
-  //
-  // EXCEPT IN THE LAST COLUMN OF A LINE, where the escape has no spelling any
-  // more (markup-carve/carve#1027): the trailing run goes before the escape is
-  // read, so `\ ` there re-parses as a hard break and so does the `\` it
-  // reduces to. No parse can build such a node now, but `fromAstJson` can, and
-  // PART 11 section 1a holds for a tree however it arrived - so the character
-  // is written as itself. That is not the escape and the re-parsed text node
-  // carries U+00A0 rather than the sentinel, but it is the same rendered
-  // document and it survives another pass, which is what section 1 asks. A
-  // trailing whitespace run after the sentinel is part of the same last column,
-  // so it is looked past here rather than left for `dropTrailingWs` to remove
-  // once the substitution can no longer see it.
   const lines = trimNonNbspKeepingGuard(
     text.replace(/\ue000(?=[ \t]*(?:\n|$))/g, '\u00a0').replace(/\ue000/g, '\\ '),
   ).split('\n')
@@ -3513,31 +2907,6 @@ function normalize(text: string): string {
 /**
  * The writer-only sentinels, chosen per render from code points the DOCUMENT
  * does not contain.
- *
- * SIX SLOTS: the four that carry verbatim content through whole-document
- * normalization, §11 N1a's list boundary, and the marker-column tag.
- *
- * They used to be fixed. An author who wrote one in a code block - where
- * arbitrary bytes are the whole point - had it silently rewritten on the way
- * out: the first became a space, the second a tab, the third nothing at all.
- * Three of those are worse than a deletion, because a space or a tab in a code
- * block is plausible content and the diff reads as whitespace (carve#678).
- *
- * The LAST slot arrived last and by the other door. The marker-column tag sat
- * beside the run at a fixed address, and `renderList` strips it back off BY
- * POSITION, so a continuation line the AUTHOR opened with it lost the character
- * AND the item's content column - the paragraph walked out of the list item, and
- * `toHtml(fmt(x)) == toHtml(x)` failed with it (carve-js#1280). Beside the run
- * was also where the tag could collide with the run ITSELF: its fixed code point
- * was the one the fifth slot takes by default, so one character stood for the
- * list boundary and for the marker column at the same time. In the run it can be
- * neither.
- *
- * U+E000 is NOT here. It is the parser's in-band marker for a non-breaking
- * space, shared with the HTML, plain, ANSI and Markdown renderers, so an
- * authored U+E000 is already indistinguishable from a parsed nbsp before the
- * writer runs. That is the other half of carve#678 and needs a decision about
- * what the parsed text of an nbsp is, not a change here.
  */
 const SENTINEL_BASE = 0xe001
 const SENTINEL_COUNT = 6
@@ -3574,27 +2943,6 @@ function protectVerbatim(content: string): string {
 function restoreVerbatim(text: string): string {
   return (
     text
-      // A blank line inside verbatim content is carried as U+E003 so trimming
-      // cannot eat it - which also makes it NON-EMPTY while a host indents its
-      // lines, so a list item turned it into a line of nothing but spaces. The
-      // host's indent goes with the sentinel: the line was blank in the source
-      // and stays blank, and the reader strips those columns back off anyway.
-      //
-      // A BLOCKQUOTE PREFIX GOES THE SAME WAY, minus its `>`. Everything to the
-      // left of the marker is the prefix its host already wrote - two columns
-      // from a list item, `> ` from a quote, both together when a list sits in a
-      // quote - and the blank the marker stands for is spelled the way that host
-      // spells a blank line: an item writes nothing, a quote writes `>`. The
-      // marker itself may not go with it, because an EMPTY line would close the
-      // quote and take the open fence with it, so what goes is the prefix's
-      // TRAILING whitespace. Matching whitespace alone left the space behind, so
-      // a blank line inside a fenced block inside a quote came out as `> ` - a
-      // line with a trailing run, which every tool that strips trailing
-      // whitespace rewrites behind the formatter (PART 11 §7), and which no
-      // other path here emits: the §11 N1a boundary below already drops the same
-      // run for the same reason, and an authored blank quote line is written
-      // `>`. carve-rs writes `>` here; this was the divergence in
-      // markup-carve/carve#1544.
       .replace(new RegExp(`^([ \\t>]*)${sentinels[2]}$`, 'gm'), (_match, prefix: string) =>
         dropTrailingWs(prefix),
       )
@@ -3612,35 +2960,6 @@ function trimNonNbsp(text: string): string {
 
 /**
  * A heading's text with only the run its marker separator takes back.
- *
- * THE SEPARATOR AFTER A HEADING MARKER IS ASCII SPACES AND NOTHING ELSE
- * (`resources/grammar.ebnf`, `heading`: the `space` terminal, U+0020). So the
- * first character that is NOT a space begins the heading text, and a TAB
- * standing there is CONTENT - the parser here already reads it that way, and
- * the corpus pins it at
- * `406-a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content-3`.
- *
- * The leading end used to go through `trimNonNbsp`, which removes all four of
- * PART 7's whitespace characters, so the writer ate that tab and `## <TAB>x`
- * came back `## x` - a different document, which PART 11 §1 forbids twice over
- * (`parse(fmt(x)) == parse(x)`, and the weaker `to_html(fmt(x)) ==
- * to_html(x)`). Dropping the SPACES is still right and still minimal (PART 11
- * §2): a re-parse folds every one of them back into the separator run, so
- * writing them changes nothing but the length.
- *
- * THE TRAILING END KEEPS THE FULL TRIM, because PART 2 discards a line's
- * trailing whitespace before a heading is read at all - there the run is not
- * content in the first place, and leaving it would only emit a trailing run for
- * the next tool to strip (PART 11 §7).
- *
- * A NEWLINE NEEDS NO MENTION HERE. A heading is single-line, so the arm's own
- * collapse rewrites every newline to a space before this trim's second pass
- * sees it, and a lone CR never survives the inline layer.
- *
- * The neighbouring constructs place the same boundary two other ways, and both
- * are already right: a CAPTION writes `^ ` + its inlines with no trim at all,
- * and a BULLET's leading tab is structural - it never reaches the item's
- * content, so there is nothing there to keep (markup-carve/carve#698).
  */
 function trimHeadingText(text: string): string {
   return trimEndNonNbsp(text.replace(/^ +/, ''))
@@ -3673,26 +2992,6 @@ function cleanEscapedText(node: Text): string {
   return node.value
 }
 
-  // `,` needs no escape: there is no bare subscript delimiter, and the braced
-  // `{,` opener is neutralized by the `{` escape. `^` stays escaped for the
-  // inline-footnote (`^[`) and caption (line-leading `^`) channels.
-// PART 11 section 5. The UNCONDITIONAL set is escaped in every mode: a
-// backslash and a backtick are never re-derivable, and a bare quote
-// re-derives as smart punctuation (PART 9 section 8), so a quote that reached
-// the writer as TEXT is one the author escaped and stays escaped. The
-// CANDIDATE set is every other character the grammar can read as an opener,
-// escaped only when the minimal form fails to round-trip.
-// The caret is examined as a candidate, but escaped only when it can open an
-// inline construct or a caption in the exact block slot being rendered. That
-// keeps an unrelated orphan caret bare when another caret in the document is
-// load-bearing (carve#1028).
-//
-// It used to be unconditional because the parser carried a boolean recording
-// that a text node's leading caret came from an escape, and comparing that
-// boolean escalated any document whose text started with a caret. The boolean
-// is gone (carve-js#1259): where the escape actually matters, the two renders
-// differ by a FIGURE node rather than by a flag, and that difference this
-// comparison already sees.
 const UNCONDITIONAL_ESCAPES = /[\\`"']/g
 const CANDIDATE_ESCAPES = /[\\`*_{}\[\]()#+\-.!~^/<>@%|=:;"']/g
 
@@ -4048,27 +3347,6 @@ function escapePlainLine(text: string): string {
 
 /**
  * An image's ALT TEXT, written between `![` and `]`.
- *
- * ALT IS RAW. It is an HTML attribute, so nothing inside is inline-parsed and
- * no escape inside it is resolved: `![t\]z](/i.png)` gives `alt="t\]z"`, with
- * the backslash in the value. That is what makes escaping the wrong tool here -
- * a `\]` the writer emits is not a neutralized bracket, it is two more
- * characters of alt text, and the document says something else on the next
- * read. It compounded, too: each pass escaped the backslash the last pass
- * wrote (markup-carve/carve#1197).
- *
- * The run closes at the MATCHING `]`, by the balanced, escape- and
- * literal-span-aware scan a link's text closes by - so the alt an author can
- * write is exactly the alt that re-reads as itself, and the writer's job is to
- * put it back verbatim rather than to neutralize anything
- * (markup-carve/carve#1206).
- *
- * The fallback covers an alt that has NO Carve spelling - a bare unbalanced
- * `]`, or a run ending inside an unclosed code span. `parse` cannot produce
- * one; an ingested AST can. Escaping is not a representation of that value
- * either, but it keeps the image a well-formed image instead of letting a
- * stray `]` split the line, and it settles: the escaped alt IS representable,
- * so the pass after it writes the same bytes.
  */
 function escapeImageAlt(text: string): string {
   return rawBracketRunCloses(text) ? text : text.replace(/[\\[\]]/g, '\\$&')
@@ -4104,21 +3382,6 @@ function escapeDestinationEscapes(text: string): string {
 function escapeDestination(text: string): string {
   const scheme = /^[\u0000-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(text)?.[1]?.toLowerCase()
   const sanitizeBlank = scheme !== undefined && ['javascript', 'vbscript', 'data', 'file'].includes(scheme)
-  // Whitespace is percent-encoded (it would otherwise end the destination),
-  // and the test is the Unicode White_Space property -- the same one the reader
-  // uses (`RE_DESTINATION_WHITESPACE` in parse.ts). NOT `/\s/`: that also holds
-  // U+FEFF, which is an ordinary destination character, so a BOM came back out
-  // as the literal text `%FEFF` -- not even a well-formed percent escape. The
-  // reader was corrected for that in carve-js#751 and the writer was not, so
-  // `toHtml(fmt(x)) === toHtml(x)` stopped holding for any destination carrying
-  // one, and a `javascript:` scheme PART 9 §25 had blanked came back visible
-  // behind a prefix the probe no longer recognized (markup-carve/carve#806).
-  //
-  // A parenthesis only needs escaping when it is unbalanced, because a
-  // balanced pair survives the scan as-is -- and leaving it bare is what keeps
-  // the common case (`.../Foo_(bar)`) readable. A backslash is escaped only
-  // in front of the three characters the destination scan treats as escapes,
-  // so backslashes elsewhere in a URL are emitted verbatim.
   const escaped = escapeDestinationEscapes(text)
   return escaped
     .replace(/\p{White_Space}/gu, (ch) => (ch === ' ' ? '%20' : `%${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`))

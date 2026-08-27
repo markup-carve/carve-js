@@ -412,18 +412,6 @@ function renderTable(node: Table, ctx: MarkdownContext): string {
   let header: string | undefined
   let headerColumns = 0
   const rows: string[] = []
-  // Per-column alignment for the Markdown delimiter row, which is the only place
-  // Markdown can express it.
-  //
-  // COLUMN alignment is declared on the HEADER cells - that is where `|=> Age`
-  // puts it, and the HTML renderer applies it to every cell in the column. This
-  // used to read the first NON-header row instead, where `align` is set only by a
-  // per-CELL override, so ordinary aligned tables lost their alignment entirely
-  // and a table with one overridden cell reported that cell's alignment as the
-  // whole column's (carve#352, corpus 48/49/52/53).
-  //
-  // A per-cell override cannot be expressed in a Markdown table at all, so it is
-  // deliberately not consulted here; the column keeps what the header declared.
   const aligns: (('left' | 'right' | 'center') | undefined)[] = []
   for (const row of node.rows) {
     const cells = row.cells.map((cell) => trimNonNbsp(renderInlines(cell.children, ctx)))
@@ -910,25 +898,6 @@ function markdownFragmentDestination(id: string): string {
  * (markup-carve/carve-js#893).
  */
 function markdownDestination(url: string): string {
-  // 1. Strip first, probe second, and strip BROADLY. The strip drops all of
-  //    `\p{Cc}`, the probe skips only up to U+001F plus whitespace, so
-  //    `java<DEL>script:` and the C1 range walked straight through and came out
-  //    clean on the far side. This is why the destination has its own strip and
-  //    does not share the emit path's: PART 9 section 29 narrowed that one to
-  //    let the non-whitespace C0 controls through as content, which is a
-  //    statement about TEXT and not about a URL heading for a scheme probe.
-  //    The ANSI target of this same engine already strips before it probes
-  //    (`render-ansi.ts`), and carve-php strips inside its probe.
-  //
-  // 1b. PROBE the broad form, EMIT the narrow one. PART 9 section 29 makes the
-  //    non-whitespace C0 controls content on this target, and a destination is
-  //    content too - carve-php and carve-rs both emit `/u<SOH>v` where this
-  //    writer deleted the character. Emitting the authored bytes is safe
-  //    precisely because the probe ran on the stripped form: stripping only
-  //    REMOVES characters, so a denied scheme in the authored form is still
-  //    denied in the stripped one, and a consumer that ignores the controls
-  //    sees exactly the string that was already dismissed. Sharing one strip
-  //    between the two would have to pick a side, and either side is a defect.
   const probed = sanitizeMdUrl(stripDestinationControls(url))
   const encoded = (probed === '' ? probed : stripControls(url)).replace(/[ ()<>]/g, (ch) => {
     switch (ch) {
@@ -1105,32 +1074,6 @@ function sanitizeMdUrl(url: string): string {
 /**
  * Drop what this target cannot carry, from author content on its way to the
  * output.
- *
- * THE NON-WHITESPACE C0 CONTROLS ARE CONTENT AND ARE EMITTED. PART 9 \u00a729 T2
- * rules that U+0000..U+0008, U+000B, U+000C and U+000E..U+001F are ordinary
- * content on this target, because after markup-carve/carve#963 the whitespace
- * of the language is exactly U+0020, U+0009, U+000A and U+000D. This renderer
- * deleted the whole `\p{Cc}` block, which made Carve the lossy party: four
- * Markdown readers were measured - the CommonMark reference implementation and
- * markdown-it in default, commonmark and typographer modes - and all four KEEP
- * these characters inline, on a lone line, in a code span, after a list marker
- * and after an ATX hash. `-<VT>item` opens no list in any of them
- * (markup-carve/carve-js#896).
- *
- * What is still dropped, and why each one is not that class:
- *
- * - U+000D is WHITESPACE after carve#963, so \u00a729 excludes it.
- * - DEL (U+007F) and the C1 controls (U+0080..U+009F) sit outside \u00a729 by T5,
- *   and CSI (U+009B) and OSC (U+009D) are single-character forms of the
- *   sequences \u00a725 exists to stop.
- * The section 8a carriers were dropped here too, and that was the defect
- * carve-js#1281: they are this renderer's own markers, and deleting the range
- * they occupied was how author content was kept off them. They are picked per
- * document now, so no authored character can be one and nothing has to be
- * deleted to keep it that way.
- *
- * The ANSI target keeps the broad strip and MUST: it is the one consumer that
- * acts on the character (\u00a729 T4).
  */
 function stripControls(s: string): string {
   return s.replace(/[\u000d\u007f-\u009f]/gu, '')
@@ -1369,29 +1312,6 @@ function resolveNarrowedEscapes(text: string): string {
 /**
  * Answer PART 11 section 8b M2b for every authored hash in one block's text,
  * on the line THAT BLOCK writes (markup-carve/carve#1330).
- *
- * M2b's position is measured on the emitted line, and A LINE'S CONTENT
- * POSITION IS AFTER ITS CONTAINER PREFIX - the block quote marker, the list or
- * task marker, the definition marker, the alignment section 10 gives a
- * continuation line, in whatever combination and to whatever depth. Deriving
- * that from the finished document would mean parsing the prefixes back off it,
- * and the item-alignment case cannot be recovered that way at all: a
- * continuation line under `10. ` carries four spaces of pad, which reads as an
- * over-indent to anything that does not already know the marker's width. That
- * is section 10's own reason for refusing to reason about the content alone.
- *
- * So it is not derived. The pass runs where the writer HAS the answer: a block
- * emits its own line, this decides on it, and everything the containers add
- * afterwards is a prefix by construction, without any of them being named. A
- * heading is not a container and its `## ` belongs to the block's own line, so
- * a hash behind it is mid-line and loses the escape - which is the reading
- * CommonMark gives it.
- *
- * THE NARROWING IS UNTOUCHED, and that is the half a correction like this
- * loses first. Standing behind a prefix is not enough on its own: a hash mid
- * line still drops its escape inside a quote, and one at the content position
- * whose run is closed by a letter drops it too, because M2b's reading is
- * CommonMark's and neither of those opens a heading.
  */
 function decideAuthoredHashes(text: string): string {
   if (!HAS_UNDECIDED_HASH.test(text)) return text
@@ -1405,33 +1325,6 @@ function decideAuthoredHashes(text: string): string {
 /**
  * Whether the `#` at `offset` would open an ATX heading (PART 11 section 8b
  * M2b).
- *
- * `line` is the assembled output with every candidate resolved to its BARE
- * character, the same view M1b decides on. The offset carries across directly
- * because a sentinel is one UTF-16 unit exactly like the character it stands
- * for - carve-php cannot do that, since its sentinel is three bytes and the
- * character is one.
- *
- * Three conditions, all of them CommonMark's: the character stands at the
- * line's content position, which admits up to three leading spaces; the run of
- * hashes starting there is one to six long; and the run is closed by a space, a
- * tab or the end of the line. A tag, an issue reference and a hex colour fail
- * the third even at a line's start, which is why the test is spelled on the run
- * rather than on the position alone.
- *
- * BOTH CONDITIONS ARE ANSWERED WITHOUT READING THE LINE (carve#1331). The
- * first spelling searched backward for the line's newline and counted the whole
- * run of hashes, so a candidate cost O(line) and a line of adjacent authored
- * hashes - which is all candidates - cost O(n^2): 128KB took 3.3s against 0.1s
- * before section 8b existed. Neither answer needs the line, because both
- * conditions are bounded:
- *
- * - At most three spaces may precede the character, so the walk back stops
- *   after four steps and the fourth decides. Anything else standing there means
- *   the content position is elsewhere on the line, whatever the rest of it
- *   holds.
- * - The run has to be six or shorter, so counting stops at seven. The seventh
- *   hash settles the question and the eight-thousandth cannot change it.
  */
 function opensAnAtxHeading(line: string, offset: number): boolean {
   // The walk back over the indent, bounded at the four positions that can

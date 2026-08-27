@@ -1,37 +1,5 @@
 /**
  * Picking a run of in-band markers a document cannot collide with.
- *
- * Two writers need one. The canonical writer carries verbatim whitespace, blank
- * lines, an authored nbsp marker, §11 N1a's list boundary and the marker-column
- * tag through whole-document normalization; the Markdown target carries §8a and
- * §8b's three deferred escape decisions to the line it emits them on. Both do it
- * by putting a private-use character in the text and taking it back out later.
- *
- * A FIXED character cannot be told apart from an authored one, and the failure
- * is silent in both directions: the writer eats the author's character, and the
- * author's character makes the writer act on text it never wrote. That is the
- * rule carve#678 settled, and it has now been re-broken once per new marker -
- * carve-js#1276, #1280 and #1281 - which is why the allocation lives here
- * instead of being spelled again at each site.
- *
- * Escaping the authored occurrences cannot fix it: any escape needs a reserved
- * character, and that character has the same collision. Picking characters the
- * document does not use does fix it, and cannot fail in practice - the BMP
- * private-use area alone has 6400 code points.
- *
- * WHAT IS SHARED IS THE ALLOCATOR, NOT THE RUN. Each writer keeps its own run
- * and its own slot meanings, because the two have different lifetimes: the
- * canonical writer's spans one document's line assembly, the Markdown target's
- * spans one document's line emission, and neither is ever live while the other
- * runs. A single shared run would tie the two together for no gain and make a
- * slot added on one side a renumbering on the other.
- *
- * U+E000 is NOT allocatable here, and no caller should ask for it. It is the
- * parser's in-band marker for a non-breaking space, shared with the HTML, plain,
- * ANSI and Markdown renderers, so an authored U+E000 is already
- * indistinguishable from a parsed nbsp before any writer runs. That is the other
- * half of carve#678 and needs a decision about what the parsed text of an nbsp
- * is, not a change here.
  */
 
 /**

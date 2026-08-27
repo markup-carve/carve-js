@@ -49,25 +49,6 @@ const RE_COMMENT_ONLY_LINE = /^[ \t]*%%/
 
 /**
  * The literal source a RENDER TARGET writes for an unresolved reference.
- *
- * `rawRef` is the authored source VERBATIM, which is what the Carve writer
- * needs: without it `carve fmt` rewrites a comment written inside a reference
- * label as a bare `%%` and the author's text is gone (carve-js#1183,
- * markup-carve/carve-php#1417). A render target needs the other string. The
- * block layer EMPTIES a comment-only line before the stanza is scanned as one
- * inline run, so the text the inline layer was handed has no comment in it -
- * and "a comment renders nothing at any indent" leaves no reading on which its
- * bytes may reach the page.
- *
- * One field, two contracts, so the split is here rather than at eight call
- * sites: every target renders THIS, and only `render-carve` renders `rawRef`.
- * Without it `#1187`'s document-slice capture published the comment
- * (carve-js#1192) - `[a` / `%% secret` / `c][missing]` in a line block came out
- * of `carveToHtml` with `%% secret` in it.
- *
- * The line is emptied rather than dropped, because the boundary it carried is
- * still there: the block layer leaves an empty line where it stood, and carve-php
- * `925f7dc` renders exactly that.
  */
 export function referenceSourceText(rawRef: string | undefined): string {
   if (rawRef === undefined) return ''

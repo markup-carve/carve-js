@@ -45,23 +45,6 @@ export function autolink(opts: AutolinkOptions = {}): CarveExtension {
   const urlSchemes = schemes.filter((s) => s !== 'mailto').map(escapeRe)
   const mailto = schemes.includes('mailto')
 
-  // Scheme URL: stop before trailing whitespace, brackets, and sentence
-  // punctuation, so `https://x.com.` links `https://x.com` (matches php).
-  // Stop before whitespace, brackets, braces, and trailing sentence
-  // punctuation. Excluding `{}` leaves a trailing inline-attribute block
-  // (`https://x.com{.external}`) for the core attribute pass, like angle autolinks.
-  // Sticky (`y`) regexes anchored at the scan position via `lastIndex`, so the
-  // match starts exactly at `pos` without a per-position `text.slice(pos)`
-  // (the old slice made the whole inline scan O(n^2) on adversarial input).
-  //
-  // THE BODY IS SPELLED ONCE, in `AUTOLINK_BODY_EXCLUDED`, and it is the
-  // White_Space PROPERTY rather than `\s`. In JavaScript `\s` is White_Space
-  // PLUS U+FEFF MINUS U+0085, so this matcher linkified a bare URL straight
-  // through a U+0085 and carried the invisible character into the href, exactly
-  // as the core angle autolink did (carve-js#810). The class appears TWICE in
-  // this one pattern -- the body run and the last-character guard -- and a
-  // narrowing that reached only the first would leave a URL that may not
-  // CONTAIN the character still able to END with it.
   const urlRe = urlSchemes.length
     ? new RegExp(
         '(?:' +

@@ -92,25 +92,6 @@ interface Positioned {
 
 /**
  * Parser offset -> UTF-16 offset into the source the CALLER passed.
- *
- * Two things separate the two units, and the map has to undo both:
- *
- *   ASTRAL CHARACTERS. The AST carries codepoint positions (PART 12 section 4);
- *   a LintWarning reports the unit its JavaScript consumers index a string with.
- *   UTF-16 and codepoints agree across the whole Basic Multilingual Plane, so
- *   this only matters above it.
- *
- * CRLF USED TO BE A SECOND CONCERN HERE AND NO LONGER IS. The parser measured
- * offsets over line-ending-normalized text, so every preceding CRLF line made a
- * raw offset undercount by one against the original string, and this map
- * compensated by skipping the `\r` of each pair. The undercount was missed for
- * a long time because the map returned identity whenever the document had no
- * astral character - exactly the CRLF case (carve-js#545).
- *
- * The parser now measures the source as given (carve#876), so the compensation
- * would double-count and this is a plain codepoint-to-UTF-16 map again. The
- * CRLF tests in `test/lint-offsets-crlf.test.ts` still hold, which is what says
- * the fix moved rather than disappeared.
  */
 function codepointToUtf16Map(source: string): Uint32Array | undefined {
   let needsMap = false
@@ -1434,25 +1415,6 @@ function collectSilentFailures(
     )
   }
 
-  // 6. A cell attribute block written BEFORE an alignment marker, which is the
-  //    order §5 T10 retired. `|{#x}< content |` used to be read as attributes
-  //    plus a left-alignment marker; the marker run now comes first, so the `<`
-  //    is literal content. Under §5 T11 the block is part of that run and ends
-  //    at a space, so this spelling has no run at all and the braces reach the
-  //    output too - which is what the message now says.
-  //
-  //    REPORTED, NOT REWRITTEN. `fmt` must not turn `|{#x}< content |` into
-  //    `|<{#x} content |` in its default path: that ADDS `text-align: left` and
-  //    REMOVES a literal `<` from the content, so it would break
-  //    `toHtml(fmt(x)) == toHtml(x)` on a document that is currently correct.
-  //    Every engine measured renders this source as attributes plus a literal
-  //    `<` today, which is exactly why the author has to be the one to choose.
-  //    The message therefore names both spellings.
-  //
-  //    SPLIT WITH THE PARSER'S OWN SPLITTER, not with a pipe regex. A pipe
-  //    inside a code span or behind a backslash does not open a cell, so a
-  //    regex over the raw line reported `| a \|{#x}< b |` - where the block is
-  //    ordinary content and there is no cell to align.
   for (let i = 0; i < lines.length; i++) {
     if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
@@ -1678,25 +1640,6 @@ export type LintPlatform = 'github'
 /**
  * The two platform-autolink rules (markup-carve/carve#297,
  * markup-carve/carve-js#848).
- *
- * THE SOURCE IS THE ONLY PLACE THE AUTHOR'S INTENT STILL EXISTS. No
- * render-time construct prevents a host from re-linkifying published output,
- * so a bare hash-number becomes a link to an unrelated issue and a bare at-word
- * becomes a mention that notifies an uninvolved person.
- *
- * TWO IDS RATHER THAN ONE, because the two token shapes have different
- * false-positive profiles and an author will want to silence one without the
- * other - and a rule people disable wholesale is the failure the ruling names.
- *
- * DEFAULT OFF, and that is the ruled behavior rather than a convenience: every
- * other rule in this file reports a silent failure IN CARVE, while these two
- * are target-specific. An over-eager rule people turn off entirely would be
- * worse than none.
- *
- * WHERE THEY LOOK: prose and INLINE CODE SPANS, which are not reliably safe -
- * some host surfaces (a pull-request list, a commit log view) still linkify
- * inside them. Not fenced code blocks, which are reliably safe, and not raw
- * blocks or comments.
  */
 const PLATFORM_RULES: Record<LintPlatform, { mention: RegExp; issue: RegExp }> = {
   github: {
