@@ -20,6 +20,8 @@
  * whereas a missed real mis-render is not — so the bias is intentional.
  */
 
+import { parse } from './parse.js'
+
 export interface MigrationWarning {
   /** 1-based line number. */
   line: number
@@ -457,6 +459,28 @@ export function djotMigrationWarnings(source: string): MigrationWarning[] {
   return scanHits(source).map(stripHit)
 }
 
+/** Lines consumed by a table row after the row's own opening line. */
+function tableContinuationLines(source: string): Set<number> {
+  const lines = new Set<number>()
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child)
+      return
+    }
+    const node = value as Record<string, unknown>
+    if (node.type === 'table_row') {
+      const pos = node.pos as { startLine?: number; endLine?: number } | undefined
+      if (pos?.startLine !== undefined && pos.endLine !== undefined) {
+        for (let line = pos.startLine + 1; line <= pos.endLine; line++) lines.add(line)
+      }
+    }
+    for (const child of Object.values(node)) visit(child)
+  }
+  visit(parse(source))
+  return lines
+}
+
 /** The full scan, carrying the fix edits used by `applyMigrationFixes`. */
 function scanHits(source: string): ScanHit[] {
   const out: ScanHit[] = []
@@ -470,6 +494,14 @@ function scanHits(source: string): ScanHit[] {
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
   const masked = maskDjotCodeAndDestinations(norm)
+  // `+ | ...` is ambiguous by text alone: without a table above it, it is a
+  // Djot bullet that degrades to prose in Carve; after a table row, it is
+  // Carve's native continuation-row syntax. Ask the parser only when that
+  // candidate shape exists, then exempt exactly the lines it consumed into a
+  // table row. Row positions include continuation lines by contract.
+  const continuationLines = /^[ \t]*\+[ \t]+\|/m.test(masked)
+    ? tableContinuationLines(norm)
+    : new Set<number>()
 
   // index -> {line, column} (both 1-based), via newline prefix sums.
   const nlAt: number[] = []
@@ -552,6 +584,7 @@ function scanHits(source: string): ScanHit[] {
       let bs = 0
       for (let k = start - 1; k >= 0 && masked[k] === '\\'; k--) bs++
       if (bs % 2 === 1) continue
+      if (rule.id === 'djot-plus-bullet' && continuationLines.has(posOf(start).line)) continue
       if (sameFamilyOverlap(start, end, rule.family)) continue
       recordTaken(start, end, rule.family)
       const { line, column } = posOf(start)
