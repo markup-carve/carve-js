@@ -124,23 +124,6 @@ function tocHeadingNodes(children: Heading['children']): InlineNode[] {
 }
 
 function renderInlineHtml(nodes: InlineNode[], opts: Readonly<RenderOptions> | undefined): string {
-  // This beforeRender path assembles raw nav HTML before any block renderer
-  // exists, so there is no `ctx.renderInlines` seam; it calls the core's inline
-  // renderer directly (markup-carve/carve#957).
-  //
-  // IN THE LINK CONTEXT, because the run is about to be interpolated into the
-  // entry's own `<a>`. A synthetic one-paragraph document render was the first
-  // spelling and was wrong twice over: it renders OUTSIDE a link, so a resolved
-  // crossref in a heading published a nested anchor, and it renders a DOCUMENT,
-  // so an inline footnote in a heading dragged a whole endnotes section into the
-  // nav (both raised by codex review).
-  //
-  // WITH THE CALLER'S OPTIONS. There is no active render to inherit from at
-  // `beforeRender` time, so this used to render with defaults: a `symbols` map
-  // reached the heading and not the entry cloned from the same nodes, and every
-  // other option that reaches inline rendering diverged the same way
-  // (carve-js#871). The `::: toc` directive never had the problem because it
-  // renders during the render, through `ctx`.
   return renderInlinesInLinkContext(nodes, opts)
 }
 
@@ -215,28 +198,6 @@ function tocNavLabel(opts: Readonly<RenderOptions> | undefined): string {
  * carve-php's TableOfContentsExtension. A `beforeRender` transform that
  * collects headings (with their resolved ids) and injects a `<nav>` of nested
  * links at the top or bottom of the document.
- *
- * ```ts
- * carveToHtml(src, { extensions: [tableOfContents()] })
- * ```
- *
- * The nav is emitted at column 0 with ONE TAG PER LINE, which extensions §8b.1
- * requires so the list fragment stays byte-identical to the `::: toc`
- * directive's:
- *
- * ```html
- * <nav class="toc" aria-label="Table of contents">
- * <ul>
- * <li><a href="#intro">Intro</a></li>
- * </ul>
- * </nav>
- * ```
- *
- * ...followed by the document.
- *
- * Configurable `minLevel`, `maxLevel`, `listType`, `cssClass`, and `position`.
- * Set `collapsible: true` to wrap the TOC in a `<details>`/`<summary>` disclosure
- * (closed unless `open: true`), with the label from `summary`.
  */
 export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtension {
   const minLevel = opts.minLevel ?? 1
@@ -285,19 +246,6 @@ export function tableOfContents(opts: TableOfContentsOptions = {}): CarveExtensi
         return doc
       }
       doc.children.push(toc)
-      // BOTTOM means the bottom of the DOCUMENT, not the bottom of whatever
-      // section the last heading opened. Appended to `children` alone, the
-      // `<section>` wrapper that a heading opens (PART 9 §13) took the nav in -
-      // so a document ending in a heading's section never got a document-level
-      // TOC, and with nested headings it landed in the INNERMOST section, two
-      // levels deep. One option, four placements, decided by what the document
-      // happened to end with (markup-carve/carve-js#728).
-      //
-      // `top` never had the problem for an accidental reason: nothing has
-      // opened a section yet when it is inserted.
-      //
-      // Marked rather than moved, so the renderers that do not emit sections
-      // still write it where it sits and their output does not change.
       doc.trailerBlocks = [...(doc.trailerBlocks ?? []), toc]
       return doc
     },

@@ -26,27 +26,6 @@
 
 /**
  * Whether the code unit at `index` is whitespace this trim may remove.
- *
- * CARVE'S WHITESPACE IS FOUR CHARACTERS: U+0020, U+0009, U+000A and U+000D
- * (markup-carve/carve#977, PART 7: ONE WHITESPACE DEFINITION, IN EVERY
- * CONSTRUCT). EVERY OTHER CHARACTER IS CONTENT, and the clause names the two
- * an implementation is likeliest to admit by accident - VERTICAL TAB (U+000B)
- * and FORM FEED (U+000C) - so their absence here cannot be read as an
- * oversight.
- *
- * THIS USED TO BE `\s` MINUS TWO EXCEPTIONS. It removed U+0009 through U+000D
- * as a range (so both characters above), and deferred every non-ASCII code
- * point to the host language's `\s` (so U+1680, U+2000-U+200A, U+2028, U+3000
- * and the rest). NBSP and U+FEFF were carved back out one at a time, each with
- * its own bug behind it - which is the shape of a definition that belongs to
- * the host language rather than to Carve. Naming the four characters directly
- * makes both exceptions disappear: U+00A0 and U+FEFF are simply not among
- * them, and neither is any other Unicode space.
- *
- * This trim runs on RENDERED text for the non-HTML targets, so what it removes
- * is what those targets DROP from a document. It dropped a trailing vertical
- * tab from a heading and a form feed from a paragraph, each of which the HTML
- * target kept - the same document, two answers, from one class.
  */
 function isTrimmable(text: string, index: number): boolean {
   const code = text.charCodeAt(index)

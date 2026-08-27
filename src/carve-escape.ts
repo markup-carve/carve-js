@@ -308,68 +308,14 @@ export function escapePlainCarveInlineSyntax(
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])(?<!(?<!\\)\{)_(?![_\s])([^_\n]+?)(?<!\s)_(?![A-Za-z0-9_])/g, out)
   }
 
-  // A TAG is the one construct here that is not a pair: `#x` opens on its own
-  // and needs no closer, so nothing downstream neutralizes it and the brace
-  // escaping above cannot either - `\{#y#}` still rendered a tag span inside
-  // literal braces (carve-php#1191).
-  //
-  // Source languages do not share it. Djot and Markdown both mean literal text
-  // by `#y`, so every `#word` in their prose became a Carve tag, of which the
-  // braced case was only the rarest instance.
-  //
-  // Mirrors the parser's opener rather than approximating it: a tag opens on a
-  // `#` NOT preceded by an alphanumeric and followed by an alphanumeric or `-`.
-  // That leaves a heading alone, since `# ` is followed by a space, and leaves
-  // `a#y` alone, which is not a tag either.
-  //
-  // `&` joins the exclusion for a reason the tag rule does not care about but
-  // this converter does: `&#8212;` is a NUMERIC CHARACTER REFERENCE, and
-  // escaping its `#` stops it decoding, so `a &#8212; b` kept the entity
-  // instead of becoming an em dash.
   if (!bareHandled.includes('#')) {
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9&])(?<!(?<!\\)\{)#(?=[A-Za-z0-9-])/g, out)
   }
 
-  // A MENTION is the tag's sibling and needs the same rule for the same
-  // reason: it opens on its own, so nothing downstream neutralizes it. Ported
-  // from carve-php#1381, which fixed the same gap there. None of the source
-  // languages here means a mention by that character, so prose that quoted a
-  // framework directive came back as a span.
-  //
-  // Mirrors the parser's opener (`RE_MENTION` and its preceding-character
-  // guard) rather than approximating it: a mention opens on an `@` NOT
-  // preceded by an alphanumeric or `_` and followed by one of those or `-`.
-  // The lookbehind is what leaves an email address alone, since `foo@bar` has
-  // a letter before the `@`.
-  //
-  // No brace guard, unlike the tag: `{@x@}` is not an attribute block and not
-  // a braced pair, so there is nothing above for this rule to duplicate.
-  //
-  // Goes through `escapeUnlessAlreadyEscaped`, like every bare rule above, so
-  // an at-sign the source already escaped is left alone.
   if (!bareHandled.includes('@')) {
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_])@(?=[A-Za-z0-9_-])/g, out)
   }
 
-  // A SYMBOL SHORTCODE is the third member of that family and the one that was
-  // missing. `a :rocket: b` came back bare and re-parses as a `symbol` node, so
-  // under a configured symbol map the prose stopped being the prose the source
-  // held. PART 11 section 2 already asks for the escape - omitting it changes
-  // the re-parsed AST - and `:` is already in section 5's candidate set, which
-  // is why the tag and mention sigils beside it are hardened and this one was
-  // not. Ported from carve-php#1610, which fixed the same gap there.
-  //
-  // ONLY THE OPENING COLON is escaped, because only the opening colon opens
-  // anything: the closing one is preceded by a name character, so the lookbehind
-  // declines it and `a \:rocket: b` is the whole escape.
-  //
-  // Mirrors `RE_SYMBOL` and its preceding-character guard in parse.ts rather
-  // than approximating it: a symbol opens on a `:` NOT preceded by `_` or an
-  // alphanumeric and followed by a name that closes on another `:`, where the
-  // first name character is a letter, a digit, `+` or `-` and the rest adds `_`.
-  // Requiring the CLOSER too is what leaves `a : b : c` alone - a colon that
-  // closes no shortcode opens no symbol - and the lookbehind is what leaves a
-  // URL alone, since `http://x` has a letter before its colon.
   if (!bareHandled.includes(':')) {
     out = escapeUnlessAlreadyEscaped(/(?<![A-Za-z0-9_]):(?=[A-Za-z0-9+-][\w+-]*:)/g, out)
   }

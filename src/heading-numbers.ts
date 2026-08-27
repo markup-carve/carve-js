@@ -67,22 +67,6 @@ export function headingNumbers(opts: HeadingNumbersOptions = {}): CarveExtension
         }
         const number = numbers.join('.')
 
-        // DERIVED DISPLAY TEXT CLONES THE SAME NODES (PART 9R R4,
-        // markup-carve/carve#957). The TITLE part of a numbered label is display
-        // text derived from a heading, so it is the heading's inline NODES, not
-        // a rendered string. A node carries its SOURCE RUN and a string does
-        // not, so flattening here destroys the run before any renderer is
-        // invoked - smart typography's SOURCE mode cannot recover it on ANY
-        // target, and no renderer change reaches the loss. This published
-        // `Section 1 - bold heading` for a `# *bold* heading`, with the emphasis
-        // gone.
-        //
-        // THE LABEL IS TAKEN BEFORE ANY RENDER-STAGE INJECTION, which the
-        // capture point already honored and the clone has to keep: the span
-        // below is a render-stage addition and is not part of the label.
-        //
-        // A deep clone, because the label and the heading are then two trees: a
-        // renderer that rewrote one in place would otherwise rewrite the other.
         const title = deepCloneInlines(h.children)
         if (id !== undefined && !taken) byId.set(id, { number, title })
         const span: Span = {

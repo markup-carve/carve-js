@@ -57,33 +57,6 @@ function guardScriptClose(s: string): string {
  * passed through verbatim (no Carve parsing). This is the same client-hydration
  * shape {@link mermaid} uses - Mermaid is one preset of it - generalized so D2,
  * Graphviz, WaveDrom, ABC, Vega-Lite, Chart.js, etc. need no new code.
- *
- * - `text` mode (Mermaid, D2, Graphviz, WaveDrom, ABC): body is HTML-escaped
- *   text inside the wrapper (`&` and `<` escaped, `>` preserved).
- *
- *       ``` d2
- *       a -> b
- *       ```
- *   → `<pre class="d2">a -> b</pre>`
- *
- * - `json` mode (Vega-Lite, Chart.js): body is emitted verbatim inside a
- *   `<script type="application/json">` (default wrapper `<div>`), with `</`
- *   guarded so the JSON cannot close the script element early.
- *
- *       ``` vega-lite
- *       {"mark": "bar"}
- *       ```
- *   → `<div class="vega-lite"><script type="application/json">{"mark": "bar"}</script></div>`
- *
- *   Note: json mode emits a `<script type="application/json">`, so consumers
- *   that sanitize the HTML after conversion should whitelist that tag or use
- *   text mode (the config then rides in a `<pre>` as escaped text).
- *
- * Author attributes on the fence are copied through `ctx.renderAttrs`, which
- * applies the always-on attribute hardening (strips `on*` / `srcdoc` /
- * `formaction`, neutralizes dangerous URL / `expression()` values), so a
- * `{onclick=…}` fence cannot inject. Ported alongside carve-php's
- * `FencedRenderExtension`.
  */
 export function fencedRender(opts: FencedRenderOptions): CarveExtension {
   const languages = (Array.isArray(opts.language) ? opts.language : [opts.language]).filter(

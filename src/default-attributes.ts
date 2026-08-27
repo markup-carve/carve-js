@@ -15,18 +15,6 @@ export interface DefaultAttributesOptions {
   defaults?: DefaultAttributesMap
 }
 
-// carve-php uses snake_case node-type names; carve-js uses its own AST `type`
-// strings. This maps each carve-php type to the carve-js AST type(s) it targets.
-//
-// The set mirrors carve-php's ACTUAL behavior, which differs from its docblock:
-// carve-php applies a default only when a node's getType() equals the key, and
-// its sub-structural nodes (list_item, table_cell, table_row) are rendered
-// inline by their parent without a dispatch the extension can catch, so a
-// default keyed on them never applies. We exclude those here to match. A php
-// `div` default applies to BOTH a bare div and an admonition (carve-php has one
-// Div node covering both; carve-js splits them), so `div` maps to both. Emphasis
-// kinds map to the carve-js emphasis `type`: `emphasis` -> italic (`/x/`),
-// `superscript` -> super (`{^x^}`), `strike` -> strike (`~x~`).
 const TYPE_MAP: Record<string, string[]> = {
   paragraph: ['paragraph'],
   heading: ['heading'],
@@ -139,23 +127,6 @@ function visit(node: AnyNode, byType: Map<string, Record<string, string>>): void
 /**
  * Apply configured default attributes to nodes by type, ported from carve-php's
  * DefaultAttributesExtension. Useful for adding CSS classes, lazy-loading, etc.
- *
- * A `beforeRender` transform. A `class` default is merged with any existing
- * classes; any other attribute is only set when the node does not already
- * carry it. Element types use carve-php's snake_case names (e.g. `code_block`,
- * `block_quote`); the carve-js AST equivalents are bridged via {@link TYPE_MAP}.
- *
- * Coverage matches carve-php's actual behavior: the sub-structural types
- * `list_item`, `table_cell`, and `table_row` are NOT targetable (carve-php does
- * not apply defaults to them either), and a `div` default also covers
- * admonitions. An unknown type key is a no-op.
- *
- * ```ts
- * carveToHtml('![x](a.jpg)', {
- *   extensions: [defaultAttributes({ defaults: { image: { loading: 'lazy' } } })],
- * })
- * // <img src="a.jpg" alt="x" loading="lazy">
- * ```
  */
 export function defaultAttributes(opts: DefaultAttributesOptions = {}): CarveExtension {
   const defaults = opts.defaults ?? {}

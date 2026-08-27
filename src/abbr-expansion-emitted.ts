@@ -51,21 +51,6 @@ import type { BlockNode, Document } from './ast.js'
 
 /** The set key for one `(term, expansion)` pair. */
 export function abbreviationPairKey(abbr: string, expansion: string): string {
-  // NUL cannot occur in either half, so it separates them without a collision
-  // between, say, `("A", "b c")` and `("A b", "c")`.
-  //
-  // TRUE AT BOTH DOORS, which it was not. The premise was "the parser strips
-  // control characters from both", and the parser is one of two ways a tree
-  // reaches a renderer: through the AST-JSON ingest the pairs above DID key
-  // identically, and one occurrence of the first dropped the second's
-  // definition line - the deletion this file's two-pass design exists to
-  // avoid. PART 12 section 21 now replaces U+0000 at that boundary too
-  // (carve-js#1294), so no string reaching here can carry one by any route.
-  //
-  // The pair, not the term: under PART 9R R3 (last wins) `*[A]: a` and
-  // `*[A]: b` are one term and two definitions, only one of which is emitted.
-  // Keying by the term alone would drop both lines and delete the string `a`
-  // from the document, which §10f considered and rejected for that reason.
   return `${abbr}\u0000${expansion}`
 }
 

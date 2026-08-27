@@ -268,27 +268,6 @@ export const DANGEROUS_URL_SCHEMES = [
  * every whitespace character. Written as explicit ranges rather than
  * `[\p{Cc}\s]` - which it is exactly equal to - so the class is auditable in a
  * diff and a future narrowing has to name what it drops.
- *
- * The `\s` class (with the `u` flag) covers every Unicode space separator -
- * NBSP (U+00A0), NARROW NO-BREAK SPACE (U+202F), the U+2000..U+200A spaces,
- * MEDIUM MATHEMATICAL SPACE (U+205F), IDEOGRAPHIC SPACE (U+3000), OGHAM SPACE
- * MARK (U+1680), line/paragraph separators (U+2028 / U+2029), the BOM /
- * zero-width no-break space (U+FEFF), and ASCII whitespace - while the explicit
- * ranges strip the non-whitespace controls `\s` omits: U+0000..U+0008,
- * U+000E..U+001F, DEL (U+007F) and the C1 block (U+0080..U+009F).
- *
- * THIS IS A PROBE CLASS AND IT IS DELIBERATELY WIDER THAN PART 9 section 29's
- * EMIT CLASS. Section 29 governs what a target may write; this governs what the
- * scheme probe must see THROUGH, and the two answer different questions. DEL
- * and the C1 block sit OUTSIDE section 29 by T5, and that is precisely why they
- * have to be named here: while the class was the section 29 one,
- * `java<DEL>script:alert(1)` reached an `href` with the raw `7f` byte intact
- * while the plain spelling was blanked (markup-carve/carve-js#915).
- *
- * The membership test is "may a URL consumer discard this character before it
- * reads the scheme", NOT "is this character a control". Stripping only ever
- * REMOVES characters, so widening the class can deny more and can never allow
- * more - which is what makes the wide class the safe default here.
  */
 export const SCHEME_PROBE_STRIP_RE = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\s]+/gu
 
@@ -351,21 +330,6 @@ const ASCII_WHITESPACE = '\\t\\n\\f\\r '
  * uses. Probed at every candidate rather than at the value's head, because the
  * leading-scheme probe vouches for the whole value only where the whole value
  * is one URL (markup-carve/carve#1320).
- *
- * THE TWO HALVES SPLIT DIFFERENTLY AND THAT IS THE RULE, NOT AN OVERSIGHT.
- * `ping` (on `a`/`area`) and `attributionsrc` (on `a`/`img`/`script`) are
- * space-separated sets whose grammars hold no comma, so splitting them on one
- * would blank a lone legitimate URL that merely carries a comma in its path.
- * `srcset` (on `img`/`source`) and `imagesrcset` (on `link`) are comma-separated
- * candidate strings, and there the comma really does end a candidate: a
- * whitespace-only split misses `safe.png 1x,javascript:alert(1) 2x` outright,
- * one absent space hiding the second candidate inside the first's descriptor.
- *
- * The comma split over-blanks `srcset="https://example.com/a,data:x 1x"`, which
- * is ONE candidate to a consumer. The spec pins that shape blanked and its
- * `ping` counterpart kept, so the engines cannot each pick a tokenization;
- * reading it exactly would take the HTML candidate-list algorithm, descriptor
- * scan included, from three engines that must agree byte for byte.
  */
 const URL_LIST_SEPARATORS = new Map<string, RegExp>([
   ['srcset', new RegExp(`[,${ASCII_WHITESPACE}]+`)],
@@ -1420,18 +1384,6 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
     case 'abbreviation_def':
       return ''
     case 'raw_block':
-      // Raw HTML passthrough; escape it instead when raw HTML is disabled
-      // (untrusted input). Non-HTML raw formats are always dropped.
-      //
-      // `pad` places the block where any other block would sit - inside a
-      // footnote body or a list item it had been emitted flush at column 0,
-      // breaking the surrounding markup's indentation (carve-js#727, corpus
-      // 225-...-for-the-backlink-5). Only the OPENING position is indented: the
-      // content's own line structure is passed through untouched, because
-      // re-indenting a raw block's interior changes bytes the author wrote and
-      // is visible inside a `<pre>`. Which of the three readings is canonical
-      // for a multi-line raw block is open at markup-carve/carve#800; this
-      // matches what the corpus pins without deciding it.
       if (node.format !== 'html') {
         rawFormatDropped(opts, node, 'html')
         return ''
@@ -1462,20 +1414,6 @@ function renderBlockNode(node: BlockNode, opts: RenderOptions, level: number): s
 function renderBlockQuote(node: BlockQuote, opts: RenderOptions, level: number): string {
   const pad = indent(level)
   const attrs = sourceLineAttr(opts, node.pos?.startLine, node.attrs) + renderAttrs(node.attrs)
-  // FRAMING COUNTS ONLY CHILDREN THAT RENDER SOMETHING, exactly as it does for
-  // a list item. A comment (PART 9 section 4.13) and a raw block for another
-  // target both render '', and an invisible child was enough to push a
-  // single-paragraph quote into the expanded form: `> %% c` then `> y` gave
-  // `<blockquote>\n  <p>y</p>\n</blockquote>` where the oracle gives the
-  // compact one (markup-carve/carve#1106).
-  //
-  // Decided by rendering rather than by a type list, so a third node type that
-  // renders nothing cannot be added silently.
-  // Rendered ONCE and reused for the expanded form below. Calling `renderBlock`
-  // here and letting `renderBlocks` render the same children again doubles the
-  // work at every nesting level, which is exponential in depth: a 24-deep quote
-  // went from under a millisecond to 3.6 seconds, and a 32-deep one did not
-  // finish. The list-item renderer caches for the same reason.
   const rendered = node.children.map((child) =>
     child.type === 'paragraph' ? null : renderBlock(child, opts, level + 1),
   )
@@ -1565,18 +1503,6 @@ function renderListItem(
   // indented one level deeper, with the closing </li> back at item indent.
   let head = `${pad}<li${renderAttrs(item.attrs)}${sourceLineAttr(opts, item.pos?.startLine, item.attrs)}>${checkbox}`
   const body: string[] = []
-  // TIGHTNESS IS A PROPERTY OF THE WHOLE ITEM, not of an individual block. PART 9
-  // §17 L1 is explicit (grammar.ebnf:2991-2994): "a tight item's paragraphs ALL
-  // render WITHOUT `<p>`, every one of them, not only the first".
-  //
-  // This carried an exception for a paragraph in the consecutive run from index
-  // 0 - a `+`-attached second paragraph - which rendered a real `<p>` in a tight
-  // item, on the belief that carve-php did the same. Measured, it does not:
-  // carve-php and carve-rs both render it bare, and the exception was this
-  // engine alone against the stated rule (carve-js#749, markup-carve/carve#809).
-  //
-  // It is also what made corpus 228 fail here: the item is tight, and the second
-  // paragraph was the one getting wrapped.
   let seenVisible = 0
   item.children.forEach((child, i) => {
     if (child.type === 'paragraph') {

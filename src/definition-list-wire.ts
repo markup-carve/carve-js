@@ -1,34 +1,5 @@
 /*
  * The definition list's wire shape (PART 12).
- *
- * This engine models an entry as a plain object - `{terms, definitions}`, arrays
- * of arrays - which is convenient in memory and the wrong thing to publish, for
- * three reasons that only became visible once every engine was measured against
- * one schema:
- *
- * 1. §4 requires a position on every node but the root, and a plain object
- *    cannot carry one. A term was the only content in a serialized document an
- *    editor could not navigate to - the same argument §7 used to move
- *    frontmatter and footnote definitions out of root FIELDS and into the tree.
- * 2. `definition_term` and `definition_description` are in the normative block
- *    vocabulary (profiles.md). Under the object form those two entries named
- *    nothing, so a profile denying either was a silent no-op - the specific
- *    failure a normative vocabulary exists to prevent.
- * 3. The grouping was not agreed. Given `:: a` / `:: b` / `:  x` / `:  y`,
- *    carve-js published one entry with two terms and two definitions and
- *    carve-rs published three entries split differently - while all three
- *    engines rendered the same `<dl>`. A structure two producers disagree about,
- *    which no output depends on, is an internal.
- *
- * So the wire carries what the renderers agree on: a FLAT sequence of
- * `definition_term` and `definition_description` nodes, in document order,
- * exactly as `<dt>` and `<dd>` appear in the rendered list. The grouping is
- * recovered on the way in by the rule the renderers already use - a run of
- * descriptions belongs to the run of terms before it.
- *
- * The runtime shape is deliberately left alone (§1: an implementation whose
- * internals differ MAPS on the way out), so renderers and extensions that read
- * `items[].terms` keep working.
  */
 
 import type { BlockNode, DefinitionItem, InlineNode, Position } from './ast.js'
@@ -74,21 +45,6 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
   for (const item of items) {
     for (const [index, term] of (item.terms ?? []).entries()) {
       const node: DefinitionTermNode = { type: 'definition_term', children: term }
-      // A TERM IS BLENDED THE SAME WAY THE DESCRIPTION BELOW IS, and for the
-      // same two halves (markup-carve/carve-js#1349). The recorded span owns
-      // the `::` marker, which is part of no child, so the START has to come
-      // from it. The END cannot: the parser recorded the LINES the term took,
-      // and a content line may end in a whitespace run PART 2's NO TRAILING
-      // WHITESPACE clause rules is "DROPPED. It does not reach the output, and
-      // it is not content" - naming a definition term among the lines it holds
-      // for. The run is stripped out of the text the inlines are parsed from,
-      // so it reaches no child, and the term was left owning source that is not
-      // content: PART 12 §4's closerless-container rule, which ends a term at
-      // its last placed child exactly as it ends the description.
-      //
-      // `span` yields nothing at all rather than something short when a child
-      // is unplaced, so a term with an unplaced inline keeps the recorded
-      // extent instead of a bound that only looks complete.
       const recorded = item.termSpans?.[index]
       const derived = span(term)
       const pos = recorded ? { ...recorded } : derived
@@ -105,21 +61,6 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
         type: 'definition_description',
         children: definition,
       }
-      // A description whose only content HOISTED to the document root - a link
-      // reference, footnote or abbreviation definition, PART 12 §7 - has no
-      // children left, so `span` derives nothing and the `<dd>` was the one
-      // thing in the document an editor could not navigate to
-      // (markup-carve/carve-js#813).
-      //
-      // That is not §4's exemption. §4 exempts a node the producer REASSEMBLED,
-      // because its value is not a slice of the source at any offset. These
-      // lines are contiguous, unmoved and still in the source; the parser
-      // recorded exactly which ones it consumed, and `definitionSpans` carries
-      // that. docs/ast-json.md:116-117 narrows the exemption to "nodes that
-      // *cannot* be placed, not nodes that have not been placed yet".
-      //
-      // The recorded start owns the `:  ` marker. When children remain, their
-      // exact end excludes trailing layout the parser dropped.
       const recorded = item.definitionSpans?.[index]
       const derived = span(definition)
       const pos = recorded ? { ...recorded } : derived
@@ -146,33 +87,6 @@ function readPos(value: unknown): Position | undefined {
 
 /**
  * The flat wire sequence back to runtime entries.
- *
- * The grouping rule is the renderer's: a run of terms opens an entry, the
- * descriptions that follow belong to it, and the next term after a description
- * starts the next entry. A description with no term before it - which the parser
- * cannot produce but a hand-built payload can - opens an entry with no terms
- * rather than being dropped.
- *
- * A description's `pos` is READ BACK, not just dropped, and that is what makes
- * §6 a round trip for an EMPTIED description. `entriesToWire` derives a
- * description's position from its children and falls back to
- * `definitionSpans` - so a description whose only content hoisted to the root
- * (§7: a link reference, footnote or abbreviation definition) has no children
- * to derive from and NOTHING BUT that fallback. Discarding it here meant this
- * engine's own decoder could not reproduce what its own encoder had just
- * written: the `pos` added for markup-carve/carve-js#813 survived one direction
- * only, and the trip came back short a field on corpus 227.
- *
- * `definitionLines` comes back the same way and for a second reason. It is what
- * `renderCarve` uses to write a hoisted definition back onto the `:  ` line the
- * author wrote it on (markup-carve/carve#805), and what `renderHtml` anchors a
- * `<dd>` to. Without it, formatting an INGESTED tree emitted the bare `:` that
- * fix exists to prevent, while formatting the parsed tree did not - the same
- * document, two answers, decided by whether it had been through JSON.
- *
- * A description that HAS children is unaffected either way: `entriesToWire`
- * prefers the derived span, and `renderHtml` already fell back to the first
- * child's line, which is the value restored here.
  */
 export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
   const items: DefinitionItem[] = []

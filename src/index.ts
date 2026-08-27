@@ -1,22 +1,5 @@
 /*
  * Public API for @markup-carve/carve.
- *
- * Implementation status:
- *   ✓ Headings (M1, step 1)
- *   - Paragraphs, lists, blockquotes, fences, tables, frontmatter, hr,
- *     admonitions, captions — to come in M1
- *   - All inline constructs — to come in M2
- *
- * Processing pipeline: parse -> resolve -> renderHtml.
- * Callers using parse() + renderHtml() directly must call resolve() in
- * between to enable:
- *   - heading id assignment (`# Foo` -> id `foo`)
- *   - `</#id>` cross-reference resolution
- *   - implicit heading references (`[Foo][]` -> `#foo`)
- *   - finalization of any unresolved reference link (a Link node with
- *     `ref` still set, e.g. `[never defined][]`) to its literal source
- *     text — parse() leaves it as a placeholder so the implicit-heading
- *     pass can see it.
  */
 
 import type { Document } from './ast.js'
@@ -346,24 +329,6 @@ function byteLength(s: string): number {
  */
 export function parse(source: string, opts: ParseOptions = {}): Document {
   const doc = parseImpl(source, opts)
-  // A reference image with a caption is a FIGURE in the published tree, not a
-  // paragraph holding `[Image, SoftBreak, "^ cap"]`. The syntactic
-  // block-image/caption pass runs during parsing and only knows the inline
-  // `![…](…)` form, so the reference form arrives here unpromoted - and the
-  // reference itself was already resolved during parsing (`src` is filled in),
-  // which is what made the leftover paragraph inconsistent: a resolved image
-  // whose caption was still sitting in a text node as `^ cap` (carve-js#680).
-  //
-  // `figuresOnly` deliberately: the sole-image -> block-image promotion stays
-  // out of `parse`, because a one-image PARAGRAPH can carry a leading
-  // block-attribute line (`{#id}`) that a bare block image would have to move
-  // inline, which the formatter relies on. That leaves `![a][ok]` alone still a
-  // paragraph here where carve-rs gives an image - reported separately rather
-  // than traded for a formatter change.
-  //
-  // This is representation, not resolution: no ids, numbering or default attrs
-  // are applied, and `carveToHtml` / `carveToCarve` produce byte-identical
-  // output before and after, since both already ran this pass themselves.
   promoteBlockImages(doc.children, true)
   if (doc.footnoteDefs) {
     for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
@@ -578,20 +543,6 @@ function applyTransforms(
   if (!exts) return doc
   let out = doc
   for (const ext of exts) if (ext.afterParse) out = ext.afterParse(out)
-  // A frozen SHALLOW COPY, not the caller's object. A hook that renders
-  // something needs to read `symbols` / `allowRawHtml` / `sanitizeUrls`
-  // (carve-js#871), and it must not be able to write them: the renderer is
-  // handed the caller's options a few lines later, so handing the same object
-  // to arbitrary extension code would let a hook clear the very setting a guard
-  // downstream of it reads. carve-rs hit that exact shape from the other side -
-  // its length cap sat BEHIND the hooks, so a hook could empty the field the cap
-  // measured.
-  //
-  // Shallow is the honest bound: the nested `symbols`, `renderers` and
-  // `extensions` values are the caller's own objects and are shared by
-  // reference, because deep-freezing them would freeze objects this package does
-  // not own. Read-only is the contract, and the copy makes the flat options -
-  // where every guard lives - enforce it.
   const options = Object.freeze({ ...opts })
   // The EFFECTIVE mode, which is the caller's only on the HTML path. Static
   // rendering is an HTML-only concern (spec §2.5): the Markdown, plain-text and

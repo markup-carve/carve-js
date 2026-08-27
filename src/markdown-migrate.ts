@@ -1,73 +1,5 @@
 /*
  * Markdown -> Carve converter.
- *
- * Source-to-source transformation (not parsing) that rewrites common
- * Markdown into equivalent Carve. Two things differ from Markdown and from
- * Djot, and both are handled here:
- *
- *   1. Block spacing. Carve requires blank lines around block elements
- *      (headings, fenced code, lists, blockquotes); Markdown does not.
- *   2. Inline delimiters. Carve diverged from Djot/Markdown:
- *        emphasis      asterisk/underscore pairs -> slash pairs  /x/
- *                      ( _x_ is UNDERLINE in Carve, not emphasis )
- *        strong        double-star / double-underscore -> single star *x*
- *        bold-italic   triple-star / triple-underscore -> star+slash
- *        strikethrough one OR two tildes -> single tilde ~x~
- *
- * The dialect is CommonMark + GFM. Constructs that exist only in a wider
- * flavour are OPT-IN via `MarkdownDialect`, because converting one that was
- * not in the source invents markup the author never saw:
- *
- *        highlight     ==x==  -> =x=     ( dialect.highlight  — Obsidian, Quarto )
- *        superscript   ^x^    -> {^x^}   ( dialect.superscript — Pandoc )
- *        inline math   $x$    -> $`x`    ( dialect.math — Pandoc, GitHub )
- *
- *      All three are LITERAL text in CommonMark and GFM; `marked` renders
- *      `a ==b== c`, `a ^b^ c` and `a $x+y$ c` unchanged. Carve's highlight
- *      marker is a single char (`=x=`), and superscript has no bare form in
- *      Carve, so `^x^` maps to the braced `{^x^}`, which renders anywhere.
- *
- * Four more flavour constructs need no rewrite at all, because Carve spells
- * them the way the source does - so leaving them alone WAS the conversion, and
- * a CommonMark document grew markup it never had. They are escaped unless the
- * flag is on:
- *
- *        inline note   ^[x]         ( dialect.inlineFootnotes — Pandoc )
- *        abbreviation  *[HTML]: …   ( dialect.abbreviations — Markdown Extra )
- *        fenced div    ::: note     ( dialect.fencedDivs — Pandoc, Quarto )
- *        attributes    [t]{.c}      ( dialect.attributes — Pandoc, kramdown )
- *
- * Carve constructs that no Markdown flavour spells at all are escaped
- * unconditionally - see `escapeCarveConstructsSpelledLikeText`.
- *
- * The `_x_` -> `/x/` rule is the critical one: a naive Markdown->Djot port
- * keeps `_x_`, which Carve renders as underline — a silent mis-render.
- *
- * Delimiters inside inline code and fenced code blocks are never rewritten.
- *
- * Carve has no indented code block (like Djot), so a Markdown 4-space one is
- * rewritten as a FENCE rather than carried across; and Carve gives trailing
- * spaces no meaning, so a Markdown hard break becomes a trailing backslash.
- * Both used to pass through unchanged, which lost them.
- *
- * Known limitations:
- *  - Markdown lazy continuation is not preserved — Carve has none. A non-`>`
- *    line after a blockquote, or an unindented line after a list item, stays
- *    a separate paragraph rather than folding into the quote/item. Put `>` on
- *    every quoted line, and indent list-item continuation lines, to keep them.
- *  - Intraword emphasis (`foo*bar*baz`) is not converted: Carve's `/` cannot
- *    open or close next to an alphanumeric, so it has no intraword form.
- *  - Reference definitions nested inside a blockquote or list container are
- *    not recognized as such — only top-level ones are. Their delimiters may be
- *    rewritten. Keep reference definitions at the top level for a faithful
- *    migration.
- *  - Image alt text is preserved verbatim, not flattened to plain text as
- *    CommonMark does, so `![*x*](u)` keeps `*x*` in the Carve alt attribute.
- *  - A document opening with `---`, at least one non-blank line, and a closing
- *    `---` is migrated as frontmatter, even where CommonMark alone would read a
- *    thematic break followed by a setext h2. Every Markdown toolchain that
- *    supports frontmatter resolves that ambiguity the same way, and so does
- *    Carve. An EMPTY fence pair carries no metadata and stays two rules.
  */
 
 import {
@@ -79,23 +11,6 @@ import {
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
- *
- * The `.*` tail is the info string, and CommonMark 4.5 puts one rule on it that
- * this converter used to ignore: *"If the info string comes after a backtick
- * code fence, it may not contain any backtick characters."* So ```` ```a`b ````
- * is a PARAGRAPH to cmark, not a code block, and a tilde fence is unaffected.
- *
- * Ignoring it lost bytes. The opener's info was reduced to its first token
- * over Carve's fence-language charset, which for ```` ```foo`bar ```` is
- * `foo` - so `` `bar `` was gone from the output with no diagnostic and no way
- * to read it back (carve-js#1392). The other engines lose nothing here:
- * carve-php preserves the info string verbatim, and carve-rs reads the line
- * through pulldown-cmark, which applies this rule and hands back a paragraph.
- *
- * The converter's own note on the list-marker path said this reading "is asked
- * of the whole file or not at all", which is why the predicate is shared by
- * every place that decides whether a line is a fence rather than tightened in
- * the one spot the loss was noticed.
  */
 const RE_MD_FENCE_LINE = /^([ \t]{0,3})(`{3,}|~{3,})(.*)$/
 /**
@@ -1220,19 +1135,6 @@ function convertInline(
 
   line = decodeHtmlEntities(line)
 
-  // Restore stashes and protected spans until stable: a protected/stashed
-  // span may itself contain placeholders (e.g. a reference-definition line
-  // that wrapped an already-protected URL), so a single pass is not enough.
-  //
-  // BOUNDED. A slot only ever holds placeholders that were allocated before it,
-  // so the nesting a legitimate document produces is at most one level per slot
-  // and this many passes always reaches the fixed point. The bound is what turns
-  // the one shape that does not terminate into a return: a slot holding its OWN
-  // key is a cycle, and the loop spun on it forever rather than finishing
-  // (carve-js#1291, ``a `b<NUL>P0<NUL>c` d `code` e``). The NUL replacement in
-  // `markdownToCarve` is what stops such a slot being built at all; this is the
-  // second lock, so a future path into `convertInline` that skipped the
-  // replacement would emit the text unrestored instead of hanging the host.
   const maxRestorePasses = protectedSpans.length + stash.length + 1
   for (let pass = 0; pass < maxRestorePasses; pass++) {
     const prev = line
@@ -1512,25 +1414,6 @@ function restorePrefixedInlineRun(
   run: readonly PrefixedInlineLine[],
   dialect: MarkdownDialect,
 ): string[] {
-  // A run whose FIRST line opens a code fence is block markup a collector could
-  // not peel: the list collector declines a fence on a continuation line but the
-  // marker line carries its own, so `- ` plus three backticks arrives here as
-  // one run. `convertInline` is documented for one paragraph-ish run and this is
-  // a code block, which is why the verbatim escape has to be told: a backtick in
-  // ordinary Markdown prose is literal text and gets escaped, while THIS run's
-  // backticks are the fence and its body, and escaping them turned the item's
-  // code block into escaped prose.
-  //
-  // Only the verbatim escape is suppressed, not the rest of the conversion. The
-  // other rewrites have always run over such a run, and widening the fix to stop
-  // them is a separate question about where a container's fence is peeled.
-  //
-  // DELIBERATELY the same predicate the collector above and the main loop's own
-  // fence branch use, rather than a stricter one - and that predicate has since
-  // been ASKED of the whole file, which is the only way this note said it could
-  // be asked: `isMarkdownFenceLine` applies CommonMark's rule that a BACKTICK
-  // fence's info string may hold no backtick, so ```` ```a`b ```` is now a
-  // paragraph here, at top level and everywhere else alike (carve-js#1392).
   const opensFence = isMarkdownFenceLine(run[0]?.text ?? '')
   const converted = convertInline(
     run.map((part) => part.text).join('\n'),
@@ -1551,19 +1434,6 @@ function restorePrefixedInlineRun(
   )
   if (!modellable) return run.map((part, idx) => part.prefix + (converted[idx] ?? ''))
 
-  // A container holds tables too, and the source decides which of its lines are
-  // rows exactly as it does at the top level - so the same question is asked of
-  // what each container HOLDS (markup-carve/carve-js#1061).
-  //
-  // ONE CONTAINER AT A TIME. Asked of the whole run, lines from different
-  // containers form a header/delimiter/body sequence that exists in none of
-  // them: `> | a | b |` over `> > |---|---|` over `> | x | y |` is a quoted
-  // paragraph, a deeper quote and another quoted paragraph, and reading it as
-  // one table left all three unescaped. The item's own columns are already in
-  // `prefix`, whose WIDTH is what separates two items - `- ` and the `  ` under
-  // it are one item, the same rule `containerSetextHeading` states - and the
-  // quote levels are counted off the text, since a list collector leaves them
-  // there.
   const container = run.map((part, idx) => `${part.prefix.length}:${quoteDepth(held[idx]!.marker)}`)
   const inTable = new Array<boolean>(run.length).fill(false)
   for (let start = 0; start < run.length; ) {
@@ -2065,37 +1935,6 @@ function splitFrontmatter(lines: readonly string[]): { frontmatter: string[]; bo
 
 /**
  * Convert a Markdown document to Carve.
- *
- * The dialect is CommonMark + GFM. Pass a {@link MarkdownDialect} to opt into
- * constructs that exist only in a wider flavour.
- *
- * A U+0000 IN THE INPUT IS REPLACED BY U+FFFD, before anything reads the text.
- * That is CommonMark 2.3's own rule for the flavour this converter reads, and it
- * is what `parse` already does for Carve source (`parse.ts`, "decided cross-impl
- * behavior"), and what {@link decodeCodePoint} already did for a NUL spelled as
- * a numeric entity - a raw one was the only spelling that reached the output, so
- * the converter disagreed with both the spec it converts FROM and the engine it
- * converts FOR.
- *
- * It is also what makes this file's placeholders safe. `convertInline` protects
- * code spans, escapes and converted emphasis behind `\x00P<n>\x00` /
- * `\x00S<n>\x00` under a comment claiming NUL "cannot occur in the source
- * text" - an assumption about a SOURCE FILE, while the node API hands this
- * function whatever string a host has. An authored `\x00P0\x00` answered the
- * restore pass and came back as the code span stored in slot 0, so text from
- * elsewhere in the document landed where the author's characters were; an
- * authored placeholder INSIDE a code span made that span hold its own key, and
- * the restore loop - which repeats until the text stops changing - never
- * terminated (carve-js#1291).
- *
- * Normalizing here rather than picking a private-use run, the way the BBCode
- * importer's stash key is picked (carve-js#1290, carve-js#1292): the two are not
- * equivalent. A picked run is drawn from characters the input MAY legitimately
- * carry, so it needs a scan, a refusal when the private-use area is full, and an
- * exported error for it. NUL is not text this converter may emit at all - the
- * engine downstream replaces it, and this converter now does the same - so after
- * the replacement the wrapper's alphabet is provably absent from the text it
- * wraps, with no failure mode to expose.
  */
 export function markdownToCarve(
   markdown: string,
@@ -2207,23 +2046,6 @@ export function markdownToCarve(
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      // A BACKTICK IN THE FIRST INFO WORD carries no language at all.
-      //
-      // The reduction is an UNANCHORED search for the first run over the
-      // charset, which is right for the shapes it was written for: a separate
-      // word (```js title="x") and a Pandoc brace (```{.python .numberLines})
-      // both reduce to a language the source really named. A backtick inside
-      // the word is neither. Truncating there does not reduce a word, it
-      // TRUNCATES one: a tilde fence's ```` foo`bar ```` came out as `foo`, a
-      // different and entirely plausible language the source never named, with
-      // the rest of the word simply gone (carve-js#1392). Dropping the word
-      // says "this language does not fit"; keeping half of it says something
-      // untrue, which is the worse of the two.
-      //
-      // A BACKTICK fence never reaches here with a backtick in its info -
-      // `fenceRunIsAFence` above reads that line as CommonMark does, as a
-      // paragraph - so this is the tilde fence, where the info string may hold
-      // one and the language it names is simply unspellable in a Carve fence.
       const firstInfoWord = open[3]!.trim().split(/[ \t]/, 1)[0] ?? ''
       const info = firstInfoWord.includes('`')
         ? ''
