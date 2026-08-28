@@ -703,6 +703,15 @@ function isTaskList(list: List): boolean {
   return list.items.some((item) => item.checked !== undefined)
 }
 
+/**
+ * The task marker, with the state the author chose (PART 11 §6g). An absent
+ * `taskState` is the default for the box, which is what a hand-built tree and
+ * every document written before the field carry.
+ */
+function taskMarker(item: ListItem): string {
+  return `[${item.taskState ?? (item.checked ? 'x' : ' ')}]`
+}
+
 function renderBlocks(blocks: BlockNode[], ctx: CarveContext): string {
   if (ctx.blockDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
   ctx.blockDepth++
@@ -1188,7 +1197,7 @@ function renderList(node: List, ctx: CarveContext): string {
         prefix = bareDot ? `${delim} ` : `${orderedMarker(counter, node.olType)}${delim} `
         counter++
       } else if (item.checked !== undefined) {
-        prefix = `${bullet} ${item.checked ? '[x]' : '[ ]'} `
+        prefix = `${bullet} ${taskMarker(item)} `
       } else {
         prefix = `${bullet} `
       }
@@ -1197,7 +1206,7 @@ function renderList(node: List, ctx: CarveContext): string {
       if (itemAttrs) {
         prefix = node.ordered
           ? `${prefix.trimEnd()}${itemAttrs} `
-          : `${bullet}${itemAttrs}${item.checked !== undefined ? ` [${item.checked ? 'x' : ' '}] ` : ' '}`
+          : `${bullet}${itemAttrs}${item.checked !== undefined ? ` ${taskMarker(item)} ` : ' '}`
       }
       let content = trimNonNbsp(renderListItem(item, ctx, node.tight))
       const lines = content ? content.split('\n') : ['']
