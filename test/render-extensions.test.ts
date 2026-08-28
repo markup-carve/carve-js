@@ -29,6 +29,14 @@ describe('externalLinks extension', () => {
     ).toBe('<p><a href="https://x.com" target="_top" rel="external">x</a></p>')
   })
 
+  it('omits an empty target while retaining rel', () => {
+    expect(
+      carveToHtml('[x](https://x.com){target=_self}', {
+        extensions: [externalLinks({ target: '', rel: 'external', nofollow: true })],
+      }),
+    ).toBe('<p><a href="https://x.com" rel="external nofollow">x</a></p>')
+  })
+
   it('also marks an autolinked external URL', () => {
     // Composes with the link tree regardless of how the link was produced.
     expect(carveToHtml('<https://x.com>', { extensions: [externalLinks()] })).toBe(

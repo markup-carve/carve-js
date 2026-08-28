@@ -29,6 +29,17 @@ function setAttr(attrs: Attrs, name: string, value: string): void {
   kv[name] = value
 }
 
+function removeAttr(attrs: Attrs, name: string): void {
+  const kv = attrs.keyValues
+  if (!kv) return
+  for (const key of Object.keys(kv)) {
+    if (key.toLowerCase() === name) {
+      delete kv[key]
+      if (attrs.order) attrs.order = attrs.order.filter((o) => o !== key)
+    }
+  }
+}
+
 /**
  * Add `target` and `rel` to external links (`http(s)://…`), ported from
  * carve-php's ExternalLinksExtension. Runs as a `beforeRender` transform, so
@@ -65,7 +76,8 @@ export function externalLinks(opts: ExternalLinksOptions = {}): CarveExtension {
       isExternal(node.href)
     ) {
       const attrs = (node.attrs ??= {})
-      setAttr(attrs, 'target', target)
+      if (target === '') removeAttr(attrs, 'target')
+      else setAttr(attrs, 'target', target)
       setAttr(attrs, 'rel', rel)
     }
     for (const child of Object.values(value as Record<string, unknown>)) visit(child)
