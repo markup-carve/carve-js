@@ -1464,10 +1464,7 @@ function renderListItem(
       : item.checked
         ? `<input type="checkbox" checked disabled${taskNameAttr}> `
         : `<input type="checkbox" disabled${taskNameAttr}> `
-  // PART 10 §11: the four extended states render the same box as `[ ]`, so the
-  // item names the state it was written with and a stylesheet can reach it.
-  // `[ ]` and `[x]` carry nothing - the box already says which they are. It is
-  // STRUCTURAL, so it leads the authored attributes (§1).
+  // PART 10 §11. Structural, so it leads the authored attributes (§1).
   const taskStateAttr =
     item.taskState === undefined ? '' : ` data-task-state="${escapeAttr(item.taskState)}"`
 

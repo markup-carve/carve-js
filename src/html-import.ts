@@ -160,12 +160,8 @@ const BLOCK = new Set([
 const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture'])
 
 /**
- * The states an item can be READ into (PART 10 §11).
- *
- * `x` and ` ` are not among them, and not because they are unspellable: they
- * are the two the BOX already says. An unchecked box beside `data-task-state="x"`
- * is a contradiction the renderer cannot have written, and reading it would
- * both build a tree the schema refuses and tick a box the HTML left empty.
+ * The states an item can be READ into (PART 10 §11). Not `x` or ` `: the box
+ * says those, and reading `x` off an empty box would tick it.
  */
 const READABLE_TASK_STATES = new Set(['-', '_', '>', '?'])
 
@@ -1435,20 +1431,8 @@ class Importer {
   }
 
   /**
-   * Whether the importer already READ this attribute somewhere else - as the
-   * node's own content, or as an instruction about what node to build.
-   *
-   * These are neither kept by `attrs()` nor reported: a `<a href>` reaches the
-   * link's destination and a `<td colspan>` reaches the cell's span, so keeping
-   * the name as well would give one source two spellings, and reporting it
-   * would name a loss that does not happen.
-   */
-  /**
-   * Whether this item's `data-task-state` is the state it says it is, and so is
-   * read rather than kept. It has to name one of the four states the box cannot
-   * show, on an item whose box is present and EMPTY. Anything else - no box, a
-   * ticked one, a value outside that set - was not written by a renderer, so
-   * nothing reads it and it stays the author's attribute.
+   * Whether `data-task-state` IS this item's state: one PART 10 §11 writes, on
+   * an EMPTY box. Anything else is the author's attribute, and kept.
    */
   private readsTaskState(li: P5Node): boolean {
     if (!isReadableTaskState(this.attr(li, 'data-task-state'))) return false
@@ -1463,6 +1447,15 @@ class Importer {
     )
   }
 
+  /**
+   * Whether the importer already READ this attribute somewhere else - as the
+   * node's own content, or as an instruction about what node to build.
+   *
+   * These are neither kept by `attrs()` nor reported: a `<a href>` reaches the
+   * link's destination and a `<td colspan>` reaches the cell's span, so keeping
+   * the name as well would give one source two spellings, and reporting it
+   * would name a loss that does not happen.
+   */
   private isConsumedHtmlAttribute(node: P5Node, tag: string, name: string): boolean {
     // `title` on a link or an image is the node's own `title` field, written
     // back as the `"…"` after the destination - so it must not ALSO ride along
@@ -1490,12 +1483,6 @@ class Importer {
     }
     if (tag === 'ol') return name === 'start' || name === 'type'
     if (tag === 'li' && name === 'data-task-state') return this.readsTaskState(node)
-    // The item's task state (PART 10 §11), read below into `taskState` beside
-    // the checkbox that carries the other half of it. Consumed only where it
-    // IS that half: the value has to be one PART 2 enumerates, and the item has
-    // to carry a checkbox. On an item with no box, or holding anything else,
-    // nothing reads it and it stays the author's attribute - dropping it there
-    // would lose an attribute this predicate promised was read somewhere.
     if (tag === 'input') return name === 'type' || name === 'checked'
     if (tag === 'td' || tag === 'th') return name === 'colspan' || name === 'rowspan'
     // `datetime` is the VALUE of the `time` span attribute, not an extra:
