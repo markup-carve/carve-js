@@ -703,11 +703,7 @@ function isTaskList(list: List): boolean {
   return list.items.some((item) => item.checked !== undefined)
 }
 
-/**
- * The task marker, with the state the author chose (PART 11 §6g). An absent
- * `taskState` is the default for the box, which is what a hand-built tree and
- * every document written before the field carry.
- */
+/** PART 11 §6g. An absent state is the default for the box. */
 function taskMarker(item: ListItem): string {
   return `[${item.taskState ?? (item.checked ? 'x' : ' ')}]`
 }

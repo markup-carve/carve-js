@@ -776,10 +776,8 @@ function refusePartition(record: Record<string, unknown>, path: string): void {
 }
 
 /**
- * The schema's `if`/`then` on a task item: `taskState` is `x` if and only if
- * `checked` is true (PART 11 §6g). `WIRE_VALUE_KINDS` sees one field at a time,
- * so the PAIR is unchecked there - a payload claiming a dropped task with a
- * ticked box would decode and then write a marker its own `checked` denies.
+ * The schema's `if`/`then` on a task item. `WIRE_VALUE_KINDS` sees one field at
+ * a time, so the PAIR is unchecked there.
  */
 function refuseTaskState(record: Record<string, unknown>, path: string): void {
   if (record.type !== 'list_item' || record.taskState === undefined) return

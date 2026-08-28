@@ -187,10 +187,7 @@ export interface ListItem extends BaseNode {
   type: 'list_item'
   /** undefined = plain bullet, true/false = task list (checked / unchecked) */
   checked?: boolean
-  /**
-   * Task marker character as authored, when it is not the default for
-   * `checked` (`x` when true, a space when false). `X` folds to `x`.
-   */
+  /** Marker character as authored, when it is not the default for `checked`. */
   taskState?: TaskState
   children: BlockNode[]
 }

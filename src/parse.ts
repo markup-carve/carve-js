@@ -198,11 +198,7 @@ const RE_ORDERED =
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*([^ \t].*)$/
 
-/**
- * The authored state, when it is not the default for the box (PART 11 §6g).
- * A checked box records nothing: `[X]` folds to `[x]`, so recording the case
- * would make two spellings of one state two documents.
- */
+/** PART 11 §6g. A checked box records nothing: `[X]` and `[x]` are one state. */
 function authoredTaskState(state: string, checked: boolean): TaskState | undefined {
   if (checked || state === ' ') return undefined
   return state as TaskState
