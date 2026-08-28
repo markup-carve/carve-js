@@ -7,6 +7,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- An empty `externalLinks` target omits the `target` attribute while retaining the configured `rel` policy.
+
 ## [0.1.5] - 2026-08-27
 
 ### Added
