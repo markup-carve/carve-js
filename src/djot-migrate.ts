@@ -494,12 +494,21 @@ function scanHits(source: string): ScanHit[] {
   // `norm` — masking only ever blanks the *content*, never the delimiters.
   const norm = source.replace(/\r\n?/g, '\n')
   const masked = maskDjotCodeAndDestinations(norm)
-  // `+ | ...` is ambiguous by text alone: without a table above it, it is a
-  // Djot bullet that degrades to prose in Carve; after a table row, it is
-  // Carve's native continuation-row syntax. Ask the parser only when that
-  // candidate shape exists, then exempt exactly the lines it consumed into a
-  // table row. Row positions include continuation lines by contract.
-  const continuationLines = /^[ \t]*\+[ \t]+\|/m.test(masked)
+  // A `+ ` line carrying a pipe is ambiguous by text alone: without a table
+  // above it, it is a Djot bullet that degrades to prose in Carve; after a
+  // table row, it is Carve's native continuation-row syntax. Ask the parser
+  // only when that candidate shape exists, then exempt exactly the lines it
+  // consumed into a table row. Row positions include continuation lines by
+  // contract.
+  //
+  // THE PIPE NEED NOT BE THE FIRST THING AFTER THE MARKER. A continuation row
+  // whose first cell carries content is spelled `+ text | more |`, and the
+  // predicate used to require `+ |` - so exactly the rows that continue a
+  // non-empty cell, which is the common case, kept reporting. Widening it only
+  // costs a parse on a line that turns out not to be a row: the parser is
+  // still what decides, and a real Djot bullet holding a pipe comes back with
+  // no continuation lines and reports as before.
+  const continuationLines = /^[ \t]*\+[ \t][^\n]*\|/m.test(masked)
     ? tableContinuationLines(norm)
     : new Set<number>()
 

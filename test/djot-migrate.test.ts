@@ -224,6 +224,29 @@ describe('djotMigrationWarnings — silent mis-render detection', () => {
     expect(rules('+ | | more |')).toEqual(['djot-plus-bullet'])
   })
 
+  it('does not flag a continuation row whose first cell carries content', () => {
+    // The pipe need not be the first thing after the marker. The predicate
+    // that decides whether to ask the parser required `+ |`, so exactly the
+    // rows that continue a NON-EMPTY cell kept reporting - which is the
+    // common shape, and the one the cheatsheet writes.
+    const src = [
+      '| a | b |',
+      '|---|---|',
+      '| a cell that is | x |',
+      '+ continues here | y |',
+    ].join('\n')
+    expect(rules(src)).toEqual([])
+  })
+
+  it('still flags a Djot bullet that merely holds a pipe', () => {
+    // Widening the predicate only decides whether the PARSER is asked. A `+`
+    // line no table row consumes comes back with no continuation lines and
+    // reports exactly as before.
+    expect(rules('A paragraph.\n\n+ a bullet with a | pipe\n')).toEqual([
+      'djot-plus-bullet',
+    ])
+  })
+
   it('flags a Djot heading continuation line and joins it', () => {
     // Djot folds the line under a heading into it; Carve does not, so the
     // heading text and its auto-id both change. Valid Carve either way, hence
