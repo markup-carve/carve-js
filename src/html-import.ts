@@ -7,6 +7,7 @@ import type {
   FigureGroup,
   InlineNode,
   List,
+  ListItem,
   Math,
   Paragraph,
   TableBodyGroup,
@@ -157,6 +158,20 @@ const BLOCK = new Set([
  * markup-carve/carve#1749).
  */
 const MEDIA_FALLBACK = new Set(['video', 'audio', 'object', 'canvas', 'picture'])
+
+/**
+ * The states an item can be READ into (PART 10 §11).
+ *
+ * `x` and ` ` are not among them, and not because they are unspellable: they
+ * are the two the BOX already says. An unchecked box beside `data-task-state="x"`
+ * is a contradiction the renderer cannot have written, and reading it would
+ * both build a tree the schema refuses and tick a box the HTML left empty.
+ */
+const READABLE_TASK_STATES = new Set(['-', '_', '>', '?'])
+
+function isReadableTaskState(value: string | undefined): value is NonNullable<ListItem['taskState']> {
+  return value !== undefined && READABLE_TASK_STATES.has(value)
+}
 /**
  * Is this node a BLOCK being flattened into an inline slot?
  *
@@ -1428,6 +1443,26 @@ class Importer {
    * the name as well would give one source two spellings, and reporting it
    * would name a loss that does not happen.
    */
+  /**
+   * Whether this item's `data-task-state` is the state it says it is, and so is
+   * read rather than kept. It has to name one of the four states the box cannot
+   * show, on an item whose box is present and EMPTY. Anything else - no box, a
+   * ticked one, a value outside that set - was not written by a renderer, so
+   * nothing reads it and it stays the author's attribute.
+   */
+  private readsTaskState(li: P5Node): boolean {
+    if (!isReadableTaskState(this.attr(li, 'data-task-state'))) return false
+    const input = this.taskCheckbox(li)
+    return input !== undefined && this.attr(input, 'checked') === undefined
+  }
+
+  /** The item's task-list checkbox, which carries half of its state. */
+  private taskCheckbox(li: P5Node): P5Node | undefined {
+    return li.childNodes?.find(
+      (n) => n.tagName === 'input' && this.isEnumeratedKeyword(this.attr(n, 'type'), 'checkbox'),
+    )
+  }
+
   private isConsumedHtmlAttribute(node: P5Node, tag: string, name: string): boolean {
     // `title` on a link or an image is the node's own `title` field, written
     // back as the `"…"` after the destination - so it must not ALSO ride along
@@ -1454,6 +1489,13 @@ class Importer {
       return name === 'title' && !destinationIsEmpty(this.attr(node, 'src'))
     }
     if (tag === 'ol') return name === 'start' || name === 'type'
+    if (tag === 'li' && name === 'data-task-state') return this.readsTaskState(node)
+    // The item's task state (PART 10 §11), read below into `taskState` beside
+    // the checkbox that carries the other half of it. Consumed only where it
+    // IS that half: the value has to be one PART 2 enumerates, and the item has
+    // to carry a checkbox. On an item with no box, or holding anything else,
+    // nothing reads it and it stays the author's attribute - dropping it there
+    // would lose an attribute this predicate promised was read somewhere.
     if (tag === 'input') return name === 'type' || name === 'checked'
     if (tag === 'td' || tag === 'th') return name === 'colspan' || name === 'rowspan'
     // `datetime` is the VALUE of the `time` span attribute, not an extra:
@@ -2047,13 +2089,19 @@ class Importer {
     const before = stray.length ? this.blocks(stray, path, depth + 1, strayPaths) : []
     const items = listItems.map((li, i) => {
       const liPath = `${path}/li[${i + 1}]`
-      const input = li.childNodes?.find(
-        (n) => n.tagName === 'input' && this.isEnumeratedKeyword(this.attr(n, 'type'), 'checkbox'),
-      )
+      const input = this.taskCheckbox(li)
       const liAttrs = this.attrs(li, liPath)
+      // The state the renderer wrote (PART 10 §11), which is the only place an
+      // extended state survives: all five unchecked spellings render the same
+      // box, so without this `[-]` comes back as `[ ]` and nothing can see the
+      // difference. It is READ rather than dropped as derived - the same
+      // treatment the checkbox `<input>` already gets.
+      const checked = input ? this.attr(input, 'checked') !== undefined : undefined
+      const taskState = this.readsTaskState(li) ? (this.attr(li, 'data-task-state') as NonNullable<ListItem['taskState']>) : undefined
       return {
         type: 'list_item' as const,
-        ...(input ? { checked: this.attr(input, 'checked') !== undefined } : {}),
+        ...(checked !== undefined ? { checked } : {}),
+        ...(taskState !== undefined ? { taskState } : {}),
         children: this.blocks((li.childNodes ?? []).filter((n) => n !== input), liPath, depth + 1),
         ...(liAttrs ? { attrs: liAttrs } : {}),
       }
