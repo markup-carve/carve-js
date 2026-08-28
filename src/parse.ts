@@ -349,7 +349,17 @@ const RE_DIV_OPEN = /^(:{3,}) *(\[[^\]]*\])?[ \t]*$/
 const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
 const RE_DEFLIST_MARKER_EMPTY = /^::(?!:) [ \t]*$/
 
-const RE_DEFLIST_DEF = /^:( +)([^ ].*)$/
+// MARKER REQUIRES CONTENT ignores TRAILING WHITESPACE, and NO TRAILING
+// WHITESPACE spells whitespace `' ' | '\t'` here - so a body of nothing but
+// tabs is a trailing run and opens no description. `: <TAB>` folds into the
+// term, the way `:` + tab already does without the space, and the way the term
+// marker's own RE_DEFLIST_MARKER_EMPTY already reads `[ \t]*$`
+// (markup-carve/carve#1836).
+//
+// The separator run is SPACES ONLY, so a body may still START with a tab:
+// `: <TAB>text` opens with the tab as content, and a vertical tab or a no-break
+// space is content too.
+const RE_DEFLIST_DEF = /^:( +)(?=.*[^ \t])([^ ].*)$/
 
 /**
  * The content column a description marker hands its body out at: `:` plus the

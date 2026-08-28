@@ -22,7 +22,6 @@ const read = (body: string): string => flat(carveToHtml(`:: t\n${body}\nx\n`))
  */
 describe('what follows a description marker decides the reading', () => {
   const FOLDS = '<dl> <dt>t : x</dt> </dl>'
-  const OPENS_EMPTY = '<dl> <dt>t</dt> <dd></dd> </dl> <p>x</p>'
 
   it.each([
     // No separator at all: not a marker, so the line folds.
@@ -33,6 +32,9 @@ describe('what follows a description marker decides the reading', () => {
     ['one space', ': ', FOLDS],
     ['two spaces', ':  ', FOLDS],
     ['three spaces', ':   ', FOLDS],
+    // A separator, then a lone TAB: trailing whitespace, not content, so the
+    // line folds like the rows above (markup-carve/carve#1836).
+    ['a space then a tab', ': \t', FOLDS],
     // A separator and content: the description opens.
     ['a space then text', ': y', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],
     ['two spaces then text', ':  y', '<dl> <dt>t</dt> <dd>y x</dd> </dl>'],
@@ -44,23 +46,4 @@ describe('what follows a description marker decides the reading', () => {
     expect(read(body)).toBe(expected)
   })
 
-  /**
-   * THE ONE CELL THIS ENGINE READS WRONG, pinned so it cannot move in silence.
-   *
-   * A space then a TAB: the greedy run is the space, and what follows is one
-   * tab. `markup-carve/carve#1836` rules that it FOLDS, like the rows above -
-   * MARKER REQUIRES CONTENT ignores trailing whitespace, and after the
-   * separator's space run a lone tab is trailing whitespace and nothing else.
-   *
-   * This engine opens a description that then trims to empty. The port is
-   * carve-js#1564 and is deferred past the release, so the row records what the
-   * engine does rather than what is right - and being an equality assertion it
-   * FAILS the moment the port lands, which is when it has to be deleted.
-   */
-  it('opens an empty description on a space then a tab, which carve#1836 rules should fold', () => {
-    expect(read(': \t')).toBe(OPENS_EMPTY)
-    // The staleness half: the ruled reading is the FOLDS row, so the day this
-    // stops differing from it the carve-out has caught up and must go.
-    expect(OPENS_EMPTY).not.toBe(FOLDS)
-  })
 })
