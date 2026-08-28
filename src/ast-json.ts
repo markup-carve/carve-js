@@ -669,6 +669,7 @@ function refuseSchemaViolations(node: unknown, path: string): void {
     // because those two were named here by hand rather than derived.
     refuseNestedRecordShapes(type as string, record, path)
     refusePartition(record, path)
+    refuseTaskState(record, path)
   }
   for (const [key, value] of Object.entries(record)) {
     // A NODE POSITION holds nodes, so an element that is not an object is not a
@@ -772,6 +773,23 @@ function refusePartition(record: Record<string, unknown>, path: string): void {
   const counted = (groups.headRows ?? 0) + (groups.footRows ?? 0) +
     (groups.bodies ?? []).reduce((total, body) => total + (body.headRows ?? 0) + (body.bodyRows ?? 0), 0)
   if (counted !== rows) throw new AstJsonPartitionError(counted, rows, path)
+}
+
+/**
+ * The schema's `if`/`then` on a task item: `taskState` is `x` if and only if
+ * `checked` is true (PART 11 §6g). `WIRE_VALUE_KINDS` sees one field at a time,
+ * so the PAIR is unchecked there - a payload claiming a dropped task with a
+ * ticked box would decode and then write a marker its own `checked` denies.
+ */
+function refuseTaskState(record: Record<string, unknown>, path: string): void {
+  if (record.type !== 'list_item' || record.taskState === undefined) return
+  const implied = record.taskState === 'x'
+  if (record.checked !== implied) {
+    throw new AstJsonSchemaError(
+      `taskState ${JSON.stringify(record.taskState)} needs checked ${implied}`,
+      path,
+    )
+  }
 }
 
 /** The required fields and value shapes of one closed record. */

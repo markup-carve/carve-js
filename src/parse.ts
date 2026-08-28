@@ -53,6 +53,7 @@ import type {
   TableCell,
   TableRow,
   Tag,
+  TaskState,
   Text,
   ThematicBreak,
   FootnoteRef,
@@ -196,6 +197,16 @@ const RE_ORDERED =
 // Task states (matches djot-php): `x`/`X` are checked; ` `, `-`, `_`,
 // `>`, `?` are all accepted and render as an unchecked checkbox.
 const RE_TASK = /^(?=([ \t]*))\1[-*] +\[([ xX\-_>?])\] +[ \t]*([^ \t].*)$/
+
+/**
+ * The authored state, when it is not the default for the box (PART 11 §6g).
+ * A checked box records nothing: `[X]` folds to `[x]`, so recording the case
+ * would make two spellings of one state two documents.
+ */
+function authoredTaskState(state: string, checked: boolean): TaskState | undefined {
+  if (checked || state === ' ') return undefined
+  return state as TaskState
+}
 // A list-item attribute block ABUTTING the marker: a bullet (`-`/`*`) or an
 // ordered marker directly followed by `{...}` (no space), then the marker's
 // required space and content. The brace attaches its attributes to the <li>
@@ -7169,8 +7180,10 @@ function parseList(lexer: Lexer): List {
 
     let content: string
     let checked: boolean | undefined
+    let taskState: TaskState | undefined
     if (isTask) {
       checked = m[2]!.toLowerCase() === 'x'
+      taskState = authoredTaskState(m[2]!, checked)
       content = m[3]!
     } else if (isOrdered) {
       content = m[4]!
@@ -7242,6 +7255,7 @@ function parseList(lexer: Lexer): List {
       const fbItem: ListItem = { type: 'list_item', children: fbChildren }
       attachBlockPos(lexer, fbItem, itemStartLineIndex, lexer.pos)
       if (checked !== undefined) fbItem.checked = checked
+      if (taskState !== undefined) fbItem.taskState = taskState
       if (itemAttrs) fbItem.attrs = itemAttrs
       items.push(fbItem)
       continue
@@ -7872,6 +7886,7 @@ function parseList(lexer: Lexer): List {
     // rather than to items alone (markup-carve/carve#1522).
     attachBlockPos(lexer, item, itemStartLineIndex, itemEnd)
     if (checked !== undefined) item.checked = checked
+    if (taskState !== undefined) item.taskState = taskState
     if (itemAttrs) item.attrs = itemAttrs
     items.push(item)
     if (hardBoundary) break
