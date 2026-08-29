@@ -73,7 +73,6 @@ export const HTML_IMPORT_DIAGNOSTIC_CODES = [
   'style-unmapped',
   'table-degraded',
   'structure-unspellable',
-  'structure-split',
   'raw-preserved',
   'encoding-assumed',
   'diagnostics-truncated',
@@ -652,17 +651,6 @@ class Importer {
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
   /**
-   * Where a WRITER has to spell one source structure as more than one (§16,
-   * markup-carve/carve#1636).
-   *
-   * Kept apart from `unspellable` because the two say different things and the
-   * page keeps them apart: `structure-unspellable` is for a shape the syntax
-   * cannot spell at all, and here every part is spellable, present and exact -
-   * what the source cannot say is that they were ONE list. Reported by the
-   * source-writing exit only, like every other serialization loss.
-   */
-  private readonly split: Array<{ node: P5Node; path: string; message: string }> = []
-  /**
    * Where a figure's own attribute is DISPLACED by its target's (§16, ruling
    * markup-carve/carve#1721).
    *
@@ -856,23 +844,21 @@ class Importer {
    * something the document did not keep. When `figure()` decides to hand the
    * element back verbatim, the walk's claims are all false - the attribute it
    * called dropped rides on bytes the output still carries - so the mark is
-   * taken before the walk and the arm rewinds to it. Nothing outside these five
+   * taken before the walk and the arm rewinds to it. Nothing outside these four
    * lists survives a walk, which is why rewinding them is the whole of it.
    */
-  private mark(): [number, number, number, number, number] {
+  private mark(): [number, number, number, number] {
     return [
       this.entries.length,
       this.unspellable.length,
-      this.split.length,
       this.loneImageParagraphs.length,
       this.displacedFigureAttrs.length,
     ]
   }
 
-  private restore([entries, unspellable, split, loneImages, displaced]: [number, number, number, number, number]): void {
+  private restore([entries, unspellable, loneImages, displaced]: [number, number, number, number]): void {
     this.entries.length = entries
     this.unspellable.length = unspellable
-    this.split.length = split
     this.loneImageParagraphs.length = loneImages
     this.displacedFigureAttrs.length = displaced
   }
@@ -3948,9 +3934,6 @@ class Importer {
           ? `${head}, so the <p> is lost and the attributes it carried are written on the image instead`
           : `${head}, so the <p> is lost and the attributes it carried are written on the image - except ${overwritten.join(', ')}, which the image's own value overwrites`
       this.add('structure-unspellable', message, 'warning', path, node)
-    }
-    for (const { node, path, message } of this.split) {
-      this.add('structure-split', message, 'warning', path, node)
     }
     // ONE ROW PER DISPLACED NAME, at `info`, which is what this code means
     // everywhere else: an attribute the output does not carry. The figure's
