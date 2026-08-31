@@ -134,11 +134,19 @@ describe('the lazy guard with a block matcher registered', () => {
     expect(calls).toBeLessThan(100)
   })
 
-  it('collects after the byte budget is exhausted', () => {
+  it('keeps the text and collects nothing after the byte budget is exhausted', () => {
+    // THIS ROW ASSERTED THE OPPOSITE, by name (markup-carve/carve#1881). PART 9R
+    // R1a now rules that a probe which cannot afford to decide collects nothing:
+    // the fallback is conservative, so it may decline a definition an affordable
+    // probe would have taken, and it never removes a character the author typed.
     const inert: CarveExtension = { name: 'inert', matchBlock: () => null }
     const lines = ['x'.repeat(5000)]
     for (let i = 0; i < 20; i++) lines.push(`- [d${i}]: /${i}`)
     lines.push('', '[go][d19]')
-    expect(carveToHtml(lines.join('\n'), { extensions: [inert] })).toContain('<a href="/19">go</a>')
+    const html = carveToHtml(lines.join('\n'), { extensions: [inert] })
+
+    expect(html).not.toContain('<a href="/19">go</a>')
+    // The lines are all still there - which is the half the old row never read.
+    expect(html).toContain('[d19]: /19')
   })
 })
