@@ -1960,10 +1960,17 @@ function spendLazyProbeBudget(lexer: Lexer, candidate: number, budget: number): 
  * carve-rs and carve-php probe the same fragment - so the limitation is shared
  * rather than an engine quirk (markup-carve/carve#1437).
  */
-function lineFoldsIntoOpenParagraph(lexer: Lexer, candidate: number, budget: number): boolean {
-  if (probingLazyParagraph) return false
+function lineFoldsIntoOpenParagraph(
+  lexer: Lexer,
+  candidate: number,
+  budget: number,
+): boolean | 'unknown' {
+  // OUT OF BUDGET IS NOT AN ANSWER. Both of these mean the probe did not run,
+  // which PART 9R R1a separates from "it does not fold": a line the pre-pass
+  // could not price defines nothing, and its text stays (markup-carve/carve#1881).
+  if (probingLazyParagraph) return 'unknown'
   const priced = lazyProbeCost(lexer, candidate)
-  if (!priced || priced.cost > budget) return false
+  if (!priced || priced.cost > budget) return 'unknown'
   const before = lexer.lines.slice(priced.start, candidate).join('\n')
   const after = `${before}\n${lexer.lines[candidate]!}`
   const probe = (source: string): LazyProbeFrame => {
@@ -2069,6 +2076,7 @@ function collectLinkDefs(lexer: Lexer) {
   // This separates a real sibling marker after item prose from a marker that
   // merely looks like a new item while folding into document/quote prose.
   let paraDepth = 0
+  let paragraphFoldedAbove: boolean = false
   // A BLOCK-ATTRIBUTE RUN MAY SPAN LINES (`{.a` / `.b}`), and every line of it
   // is invisible. `prepassOpensBlock` sees only the leading brace, so the
   // continuation lines read as prose and reopened a paragraph over a run the
@@ -2464,6 +2472,13 @@ function collectLinkDefs(lexer: Lexer) {
     // A FOOTNOTE BODY TAKES NO LAZY CONTINUATION FROM COLUMN 0 - see the note on
     // `paraState`. Read here, where `inFootnoteBody` still describes the line
     // above; the expensive half is deferred to the opener below.
+    // DID THE LINE ABOVE FOLD INTO THIS PARAGRAPH? `prepassOpensBlock` answers
+    // whether it LOOKS like an opener, and a definition-shaped line looks like
+    // one whether or not it was collected - so asking it about the line above
+    // assumes the answer to the question being asked. A line the pass already
+    // decided was lazy opened nothing, and the paragraph is still open below it
+    // (markup-carve/carve-js#1580).
+    const foldedAbove: boolean = paragraphFoldedAbove
     const paraWasOpen =
       paraState !== 'no' && !(inFootnoteBody && !isBlankLine(raw) && leadingWhitespace(raw) === 0)
     const paraAsk = paraState === 'ask'
@@ -2493,12 +2508,18 @@ function collectLinkDefs(lexer: Lexer) {
         RE_LINK_DEF.test(splitTrailingAttrBlock(line)[0])) ||
         RE_FENCE.test(line) ||
         RE_RAW_FENCE.test(line))
-    const paragraphReallyOpen =
-      paraWasOpen &&
-      !markerInterruptsParagraph &&
-      (matcherProbeCandidate
-        ? lineFoldsIntoOpenParagraph(lexer, idx, lazyProbeBudget)
-        : !paraAsk || !prepassOpensBlock(paraLineAbove))
+    const folds: boolean | 'unknown' = matcherProbeCandidate
+      ? lineFoldsIntoOpenParagraph(lexer, idx, lazyProbeBudget)
+      : !paraAsk || foldedAbove || !prepassOpensBlock(paraLineAbove)
+    // FOLDING AND NOT BEING ABLE TO TELL ARE ONE CONDITION (R1a), everywhere -
+    // not only at the collection gates. Splitting them so `paraDepth` followed
+    // only what the probe ESTABLISHED leaked the bug back at scale: an unknown
+    // line changed the recorded depth, which made the next marker read as
+    // interrupting, which collected it. carve-rs holds the same line for the
+    // same reason.
+    const paragraphReallyOpen: boolean =
+      paraWasOpen && !markerInterruptsParagraph && folds !== false
+    const collectsNothing = paragraphReallyOpen
     if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
       lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
     }
@@ -2507,6 +2528,13 @@ function collectLinkDefs(lexer: Lexer) {
     paraState = isBlankLine(raw) || inAttrRun ? 'no' : 'ask'
     paraDepth =
       paraState === 'no' ? 0 : paragraphReallyOpen ? paraDepthAbove : openCols.length
+    // WHAT CARRIES IS "THIS LINE FOLDED", NOT "A PARAGRAPH WAS OPEN ABOVE IT".
+    // The two differ on exactly the openers PART 9 §10 calls invisible: a
+    // top-level `[q]: /q` has a paragraph open above it and interrupts it all
+    // the same. Only a line the pass decided was lazy - marker-carried, inside a
+    // list, in an open paragraph - opened nothing and leaves it open below.
+    paragraphFoldedAbove =
+      paragraphReallyOpen && composed.peeled.some((one) => !one.quote)
     paraLine = line
     const quoteIndent = leadingWhitespace(raw)
     const quoteAtWrongColumn =
@@ -2557,7 +2585,7 @@ function collectLinkDefs(lexer: Lexer) {
         }
       }
       if (
-        !paragraphReallyOpen ||
+        !collectsNothing ||
         codeCloserPossibleIn(
           (prepassClosers ??= buildCodeCloserIndex(lexer.lines, RE_PREPASS_ANY_FENCE_CLOSER)),
           run,
@@ -2714,7 +2742,7 @@ function collectLinkDefs(lexer: Lexer) {
     const m =
       topLevelIndentedDef ||
       notAtContentColumn ||
-      (paragraphReallyOpen && composed.peeled.some((one) => !one.quote))
+      (collectsNothing && composed.peeled.some((one) => !one.quote))
         ? null
         : RE_LINK_DEF.exec(defLine)
     if (m) {
