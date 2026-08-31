@@ -42,6 +42,45 @@ const withoutLocations = (value: unknown): unknown => {
   )
 }
 
+/**
+ * A fixture's rows are a SUBSEQUENCE of the report's, not an array to match
+ * element for element (markup-carve/carve#1884).
+ *
+ * How many rows one loss takes is engine-defined: a table whose `<thead>` sits
+ * between two `<tbody>` runs is one degradation, and carve-php itemizes the
+ * distinct losses where this engine coalesces them. Comparing lengths pins
+ * whichever granularity the fixture's author generated.
+ *
+ * So the fixture's codes must appear in order, and no row may carry a code the
+ * fixture does not name. Fields are read off the row each expectation MATCHED -
+ * a split earlier in the report shifts every index after it.
+ */
+function expectDiagnosticsSubsequence(
+  wanted: Array<Record<string, unknown>>,
+  got: Array<Record<string, unknown>>,
+  fixture: string,
+): void {
+  const allowed = new Set(wanted.map((row) => row.code))
+  expect(
+    got.filter((row) => !allowed.has(row.code)).map((row) => row.code),
+    `${fixture}: report adds code(s) the fixture does not name`,
+  ).toEqual([])
+
+  let at = 0
+  for (const row of got) {
+    if (at < wanted.length && row.code === wanted[at]!.code) {
+      expect(row, `${fixture} #${at}`).toMatchObject(wanted[at]!)
+      at++
+    }
+  }
+  expect(
+    at,
+    `${fixture}: fixture rows [${wanted.map((r) => r.code).join(', ')}] are not a subsequence of [${got
+      .map((r) => r.code)
+      .join(', ')}]`,
+  ).toBe(wanted.length)
+}
+
 describe('shared HTML import contract', () => {
   for (const fixture of readdirSync(root)) {
     it(fixture, () => {
@@ -110,7 +149,9 @@ describe('shared HTML import contract', () => {
           `${fixture} now matches: delete its AHEAD_OF_PIN entry`,
         ).not.toEqual(ahead.report)
       } else {
-        expect(carve.report).toMatchObject(expectedReport)
+        const { diagnostics: wantedRows = [], ...expectedRest } = expectedReport
+        expect(carve.report).toMatchObject(expectedRest)
+        expectDiagnosticsSubsequence(wantedRows, carve.report.diagnostics ?? [], fixture)
       }
     })
   }
