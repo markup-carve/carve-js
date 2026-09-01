@@ -2048,7 +2048,13 @@ function collectLinkDefs(lexer: Lexer) {
   // stack the Markdown migrator uses. (Blockquote prefixes are handled by
   // stripContainerPrefixes; a list nested inside a blockquote is not tracked
   // here — a rarer residual case.)
-  const listCols: number[] = []
+  // Each entry remembers whether its item was opened BEHIND A QUOTE MARKER.
+  // A blank line ends every open quote, so a column opened inside one dies
+  // with it, and a later line that writes the marker again opens a NEW quote
+  // that inherits nothing (PART 0, A NEW MARKER DOES NOT REACH A DEAD
+  // CONTAINER'S COLUMN; carve#1892). A column opened at document level is not
+  // affected: a list item is transparent across a blank.
+  const listCols: Array<{ col: number; inQuote: boolean }> = []
   // A definition list STARTS only on a `::` term (PART 2; the parser enters
   // parseDefinitionList from RE_DEFLIST_TERM alone), so a single-colon `: body`
   // line is a description marker only once one has been seen. Ungated, `: term`
@@ -2283,17 +2289,17 @@ function collectLinkDefs(lexer: Lexer) {
       let rest = unquoted
       let base = 0
       for (let m2: RegExpMatchArray | null = marker; m2 && /\S/.test(rest.slice(m2[0].length)); ) {
-        while (listCols.length && listCols[listCols.length - 1]! > base + m2[1]!.length) {
+        while (listCols.length && listCols[listCols.length - 1]!.col > base + m2[1]!.length) {
           listCols.pop()
         }
         base += m2[0].length
-        listCols.push(base)
+        listCols.push({ col: base, inQuote: unquoted !== raw })
         rest = rest.slice(m2[0].length)
         m2 = prepassMarker(rest)
       }
     } else if (sawDeflistTerm && (deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
-      while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
-      listCols.push(indent + deflistContentCol(deflistDef[1]!))
+      while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
+      listCols.push({ col: indent + deflistContentCol(deflistDef[1]!), inQuote: unquoted !== raw })
     } else if (
       // BLANK BEHIND ITS OWN MARKER IS STILL BLANK. `raw` carries the container
       // prefix, so a quote-marked empty line (`>`) failed this test, matched
@@ -2304,7 +2310,16 @@ function collectLinkDefs(lexer: Lexer) {
       !isBlankLine(unquoted) &&
       (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
     ) {
-      while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
+      while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
+    }
+    // A BLANK ENDS EVERY OPEN QUOTE, so every column opened inside one goes
+    // with it. Without this the item column survived its own quote, a later
+    // `>   [r]: /u` reached it, and a definition the page printed as ordinary
+    // text registered document-wide as well - both halves at once, which I5
+    // permits under neither reading (carve#1892).
+    if (isBlankLine(raw)) {
+      const firstQuoted = listCols.findIndex((entry) => entry.inQuote)
+      if (firstQuoted >= 0) listCols.length = firstQuoted
     }
     // THE COMPOSED STACK IS MAINTAINED ON THE SAME THREE BRANCHES, over the
     // whole container prefix rather than over list markers alone.
@@ -2337,7 +2352,7 @@ function collectLinkDefs(lexer: Lexer) {
     }
     // strip the enclosing content column so a fence delimiter at that column
     // is recognized (kept-indent view keeps residual indent after markers)
-    const contentCol = listCols.length ? listCols[listCols.length - 1]! : 0
+    const contentCol = listCols.length ? listCols[listCols.length - 1]!.col : 0
     // A comment fence's closer is a leading `%` run of the SAME length;
     // trailing text is allowed, so `%%% end` closes a `%%%` fence.
     if (commentFence !== null) {
@@ -2565,7 +2580,7 @@ function collectLinkDefs(lexer: Lexer) {
     const quoteAtWrongColumn =
       quoteIndent > 0 &&
       raw.slice(quoteIndent).startsWith('>') &&
-      (listCols.length === 0 || quoteIndent < Math.max(...listCols))
+      (listCols.length === 0 || quoteIndent < Math.max(...listCols.map((entry) => entry.col)))
     if (quoteAtWrongColumn) continue
     const kept = stripContainerPrefixesKeepIndent(raw, afterTerm)
     const keptIndent = kept.length - kept.replace(/^[ \t]+/, '').length
@@ -2711,7 +2726,7 @@ function collectLinkDefs(lexer: Lexer) {
       .filter((entry) => !entry.quote)
       .reduce<number | null>((deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest, null)
     const deepestTrackedListColumn = listCols.reduce<number | null>(
-      (deepest, column) => deepest === null || column > deepest ? column : deepest,
+      (deepest, entry) => deepest === null || entry.col > deepest ? entry.col : deepest,
       deepestListColumn,
     )
     const reachedOuterListColumn = openCols
