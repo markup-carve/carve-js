@@ -32,6 +32,7 @@ import {
   rowAttrsFromLine,
   splitTableRowSpans,
   stripContainerPrefixesKeepIndent,
+  isBlankLine,
   RE_AFTER_TERM,
   TABLE_ALIGNMENT_MARKERS,
   type UnclosedContainer,
@@ -1540,7 +1541,18 @@ function collectFootnoteDefinitionWarnings(
 
   const defs = doc.footnoteDefs ?? {}
 
+  // THE PREVIOUS NON-BLANK LINE, the same gate the parser reads (carve-js#1589).
+  // A blank between description entries does not end a definition list, so a
+  // `: ` marker below one is still a description marker. Reading the line
+  // directly above left the marker unstripped after a blank, FOOTNOTE_DEF did
+  // not match, and every rule below this scan went blind to a definition the
+  // parser collects - a duplicate written that way was reported to nobody
+  // (carve-js#1592). Captured before the verbatim skip so a fenced line counts
+  // as the line above here exactly as it does in the parser.
+  let prevNonBlankLine = ''
   for (let i = 0; i < lines.length; i++) {
+    const previousNonBlank = prevNonBlankLine
+    if (!isBlankLine(lines[i])) prevNonBlankLine = lines[i]!
     if (verbatimLines.has(i + 1)) continue
     const line = lines[i]!
     // A definition inside a block quote or list item is a definition: the
@@ -1552,7 +1564,7 @@ function collectFootnoteDefinitionWarnings(
     // from a line merely indented under something else. Dropping it made an
     // over-indented literal `    [^a]: x` match, and a real definition for the
     // same label elsewhere then made it look like a duplicate.
-    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixesKeepIndent(lines[i - 1] ?? ''))
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixesKeepIndent(previousNonBlank))
     const m = FOOTNOTE_DEF.exec(stripContainerPrefixesKeepIndent(line, afterTerm))
     if (!m) continue
     // Keep the raw spelling for diagnostics; lookup uses the shared normalized
