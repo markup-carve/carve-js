@@ -2049,6 +2049,11 @@ function collectLinkDefs(lexer: Lexer) {
   // stripContainerPrefixes; a list nested inside a blockquote is not tracked
   // here — a rarer residual case.)
   const listCols: number[] = []
+  // A definition list STARTS only on a `::` term (PART 2; the parser enters
+  // parseDefinitionList from RE_DEFLIST_TERM alone), so a single-colon `: body`
+  // line is a description marker only once one has been seen. Ungated, `: term`
+  // in ordinary prose pushed a content column the parser never opens.
+  let sawDeflistTerm = false
   // THE COMPOSED CONTENT-COLUMN STACK, absolute, outermost first - `listCols`
   // read through every container rather than through list markers alone.
   //
@@ -2231,6 +2236,7 @@ function collectLinkDefs(lexer: Lexer) {
       fence = null
     }
     const marker = prepassMarker(unquoted)
+    if (RE_DEFLIST_TERM.test(unquoted)) sawDeflistTerm = true
     const indent = unquoted.length - unquoted.replace(/^[ \t]+/, '').length
     let deflistDef: RegExpExecArray | null = null
     // Test the RAW line for a block starter: a blockquote `>` is stripped by
@@ -2272,11 +2278,17 @@ function collectLinkDefs(lexer: Lexer) {
         rest = rest.slice(m2[0].length)
         m2 = prepassMarker(rest)
       }
-    } else if ((deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
+    } else if (sawDeflistTerm && (deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
       while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
       listCols.push(indent + deflistContentCol(deflistDef[1]!))
     } else if (
-      !isBlankLine(raw) &&
+      // BLANK BEHIND ITS OWN MARKER IS STILL BLANK. `raw` carries the container
+      // prefix, so a quote-marked empty line (`>`) failed this test, matched
+      // `startsBlock` through RE_BLOCKQUOTE, and popped the list column its own
+      // quote still holds open - the definition below it then read as top-level
+      // indentation and never registered (carve-js#1584). A list item is
+      // transparent across a blank whatever marks it.
+      !isBlankLine(unquoted) &&
       (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed))
     ) {
       while (listCols.length && listCols[listCols.length - 1]! > indent) listCols.pop()
