@@ -52,6 +52,7 @@ const IMPLEMENTED = new Set([
   'pipe-tables-can-state-head-and-foot-row-counts',
   'the-doubled-run-is-the-canonical-arrow-in-both-families',
   'a-raw-block-keeps-the-blank-line-at-the-end-of-its-payload-too',
+  'a-raw-block-passes-its-attributes-through-untouched',
   'an-unterminated-fence-at-a-content-column-opens-no-block-so-the-paragraph-stays-open',
   'table-columns-carry-alignment-vertical-alignment-and-widths',
   'a-table-alignment-run-carries-two-independent-axes',
