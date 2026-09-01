@@ -2066,6 +2066,9 @@ function collectLinkDefs(lexer: Lexer) {
   // above keep `listCols`, whose answers they already agree with.
   const openCols: OpenContainer[] = []
   let prevBlank = true
+  // Carried rather than scanned backwards: a document of blank lines would make
+  // a backward walk quadratic, and this pre-pass is on the parse hot path.
+  let prevNonBlankLine = ''
   // Track whether we are inside a footnote body. A footnote continuation is
   // indented, so an indented link def inside a note body must still be collected
   // (the note's content column, not column 0) -- matching the spec oracle, which
@@ -2113,7 +2116,17 @@ function collectLinkDefs(lexer: Lexer) {
     // emptied, so the author's line vanished and a reference to it stayed
     // literal (carve#840). A div was the one container that worked, because it
     // adds no per-line prefix for this to hide behind.
-    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(lexer.lines[idx - 1] ?? ''))
+    // THE PREVIOUS NON-BLANK LINE, because a blank between description entries
+    // does not end the list - it only makes it loose, and the parser reads
+    // `:  a` over a blank over `:  b` exactly as it reads them adjacent. Asking
+    // the line directly above meant a description marker after a blank went
+    // unstripped, so the `dd` was emptied while the definition on it was
+    // collected by nobody: the author's line vanished and the reference to it
+    // stayed literal, the same outcome carve#840 named one blank line further
+    // up (carve-js#1586). A blank that really ends the list still refuses, its
+    // previous non-blank line being the prose that ended it.
+    const afterTerm = RE_AFTER_TERM.test(stripContainerPrefixes(prevNonBlankLine))
+    if (!isBlankLine(raw)) prevNonBlankLine = raw
     const line = stripContainerPrefixes(raw, afterTerm)
     // Content columns are measured INSIDE the block quote. `> - a` puts the
     // item's content column at 2 of the quoted content, not of the raw line -
