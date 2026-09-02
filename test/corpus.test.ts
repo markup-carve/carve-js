@@ -732,6 +732,13 @@ const IMPLEMENTED = new Set([
   // markup-carve/carve#1832. A colon with only whitespace after it opens no
   // description, so the marker is not a definition separator.
   'a-colon-followed-by-only-whitespace-is-not-a-description',
+  // markup-carve/carve#1897, the clause CARVE-P0-020 the pin bump to carve
+  // `549f2a5` brings with it: "at or past" means the deepest column the LINE
+  // reaches, so a definition anywhere between two open content columns
+  // registers at the outer one. No engine work: this build renders all four
+  // documents of the category byte-for-byte, and renders the four to the same
+  // bytes as each other - which is the rule the category exists to pin.
+  'a-definition-between-two-open-content-columns-reaches-the-outer-one',
 ])
 
 /**
