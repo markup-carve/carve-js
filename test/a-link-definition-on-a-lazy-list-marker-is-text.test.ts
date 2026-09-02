@@ -134,19 +134,96 @@ describe('the lazy guard with a block matcher registered', () => {
     expect(calls).toBeLessThan(100)
   })
 
-  it('keeps the text and collects nothing after the byte budget is exhausted', () => {
-    // THIS ROW ASSERTED THE OPPOSITE, by name (markup-carve/carve#1881). PART 9R
-    // R1a now rules that a probe which cannot afford to decide collects nothing:
-    // the fallback is conservative, so it may decline a definition an affordable
-    // probe would have taken, and it never removes a character the author typed.
-    const inert: CarveExtension = { name: 'inert', matchBlock: () => null }
+  const inert: CarveExtension = { name: 'inert', matchBlock: () => null }
+
+  // A LAZY MARKER RUN AT SCALE still answers the way the rows at the top of this
+  // file do: nothing is collected and every character stays. It pins the
+  // lazy-marker rule at length, NOT the byte budget - the document below is
+  // declined with the budget removed and with no extension registered at all
+  // (measured four ways in markup-carve/carve-js#1595), which is why the row
+  // that used to claim the budget here was rewritten into the three under it.
+  it('keeps a long run of lazy markers as text', () => {
     const lines = ['x'.repeat(5000)]
     for (let i = 0; i < 20; i++) lines.push(`- [d${i}]: /${i}`)
     lines.push('', '[go][d19]')
     const html = carveToHtml(lines.join('\n'), { extensions: [inert] })
 
     expect(html).not.toContain('<a href="/19">go</a>')
-    // The lines are all still there - which is the half the old row never read.
     expect(html).toContain('[d19]: /19')
+  })
+
+  // ---------------------------------------------------------------------------
+  // THE BYTE BUDGET (PART 9R R1a, markup-carve/carve#1895).
+  //
+  // Bounding the probe is sound; spending the bound as an ANSWER is not. Every
+  // row below changes its answer when the budget mechanism changes, which the
+  // row it replaced did not.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * A run of matcher-consumed lines above the candidate, optionally behind an
+   * earlier run that drinks the budget first. Only the matcher knows `@@@ n`
+   * leaves no paragraph open, so this document collects EXACTLY when the probe
+   * is affordable - which makes it the witness that the budget really runs out.
+   */
+  const consumedAbove = (drained: boolean): string => {
+    const lines: string[] = []
+    if (drained) {
+      lines.push('p'.repeat(200))
+      for (let i = 0; i < 60; i++) lines.push(`- [d${i}]: /${i}`)
+      lines.push('')
+    }
+    for (let i = 0; i < 50; i++) lines.push(`@@@ ${i}`)
+    lines.push('- [target]: /target', '', '[go][target]')
+    return `${lines.join('\n')}\n`
+  }
+
+  /**
+   * The same candidate under a HEADING, which is a core opener - so no matcher
+   * can have consumed the line above and the position is derivable without the
+   * probe. The clause requires the same answer at both sizes.
+   */
+  const underHeading = (long: boolean): string => {
+    const lines: string[] = []
+    if (long) {
+      lines.push('x'.repeat(5000))
+      for (let i = 0; i < 20; i++) lines.push(`- [d${i}]: /${i}`)
+    }
+    lines.push('# h', '- [target]: /target', '', '[go][target]')
+    return `${lines.join('\n')}\n`
+  }
+
+  it('stops probing once the byte budget is spent', () => {
+    // Both documents end in the same three lines and differ only in whether an
+    // earlier run drank the budget. Raising the budget to Infinity collects in
+    // BOTH, so the decline below is the bound and nothing else.
+    expect(carveToHtml(consumedAbove(false), { extensions: [claiming] })).toContain(
+      '<a href="/target">go</a>',
+    )
+    expect(carveToHtml(consumedAbove(true), { extensions: [claiming] })).not.toContain(
+      '<a href="/target">go</a>',
+    )
+  })
+
+  it('still collects where the position is derivable without the probe', () => {
+    // THE CLAUSE: a processor that CAN determine a candidate line's position
+    // collects the definition at ANY document size. The long document's probe is
+    // unaffordable - the row above measures that on the same filler - so the
+    // answer has to come from the static reading instead of from the bound.
+    for (const long of [false, true]) {
+      expect(carveToHtml(underHeading(long), { extensions: [inert] })).toContain(
+        '<a href="/target">go</a>',
+      )
+    }
+  })
+
+  it('answers a spent budget the way a matcher-free parse answers it', () => {
+    // The user-visible shape of the bug: registering an unrelated extension used
+    // to drop a definition that the same document collects without it, once the
+    // document was long enough.
+    for (const long of [false, true]) {
+      const source = underHeading(long)
+      expect(carveToHtml(source, { extensions: [inert] })).toBe(carveToHtml(source))
+    }
   })
 })
