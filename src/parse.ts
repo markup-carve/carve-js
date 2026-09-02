@@ -285,7 +285,7 @@ const trimCellPadding = (text: string): string => {
 // fast path `trimStructural` takes carries the legacy set too.
 const RE_BLANK_LINE = /^[ \t]*$/
 
-function isBlankLine(line: string | undefined): boolean {
+export function isBlankLine(line: string | undefined): boolean {
   // A non-existent line (past EOF) is NOT a blank line: lookahead loops must
   // terminate at EOF, not treat it as an endless run of blank lines.
   //
