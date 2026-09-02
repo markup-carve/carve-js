@@ -1965,9 +1965,9 @@ function lineFoldsIntoOpenParagraph(
   candidate: number,
   budget: number,
 ): boolean | 'unknown' {
-  // OUT OF BUDGET IS NOT AN ANSWER. Both of these mean the probe did not run,
-  // which PART 9R R1a separates from "it does not fold": a line the pre-pass
-  // could not price defines nothing, and its text stays (markup-carve/carve#1881).
+  // `'unknown'` means THE PROBE DID NOT RUN, not "it does not fold". PART 9R
+  // R1a lets the bound stay but forbids spending it as an answer, so the caller
+  // reaches the answer statically instead (markup-carve/carve#1895).
   if (probingLazyParagraph) return 'unknown'
   const priced = lazyProbeCost(lexer, candidate)
   if (!priced || priced.cost > budget) return 'unknown'
@@ -2548,17 +2548,33 @@ function collectLinkDefs(lexer: Lexer) {
         RE_LINK_DEF.test(splitTrailingAttrBlock(line)[0])) ||
         RE_FENCE.test(line) ||
         RE_RAW_FENCE.test(line))
-    const folds: boolean | 'unknown' = matcherProbeCandidate
+    const probed: boolean | 'unknown' = matcherProbeCandidate
       ? lineFoldsIntoOpenParagraph(lexer, idx, lazyProbeBudget)
-      : !paraAsk || foldedAbove || !prepassOpensBlock(paraLineAbove)
-    // FOLDING AND NOT BEING ABLE TO TELL ARE ONE CONDITION (R1a), everywhere -
-    // not only at the collection gates. Splitting them so `paraDepth` followed
-    // only what the probe ESTABLISHED leaked the bug back at scale: an unknown
-    // line changed the recorded depth, which made the next marker read as
-    // interrupting, which collected it. carve-rs holds the same line for the
-    // same reason.
+      : 'unknown'
+    // AN EXHAUSTED BUDGET IS NOT AN ANSWER (PART 9R R1a, markup-carve/carve#1895).
+    // Bounding the probe stays sound; what the clause forbids is declining the
+    // line because the bound ran out, which made an unrelated extension drop a
+    // definition a matcher-free parse of the same document collects. So a probe
+    // that did not run falls back to the static reading - the same one every
+    // matcher-free document uses.
+    //
+    // THE STATIC READING IS BLIND IN EXACTLY ONE DIRECTION, and it is the safe
+    // one. Core block constructs are dispatched before `matchBlock`, so a line
+    // `prepassOpensBlock` claims is one no matcher can have consumed, and
+    // `false` here is sound. Where it says `true` a matcher may have eaten the
+    // line above unseen - and `true` collects nothing, which is the outcome the
+    // clause still licenses there.
+    const folds: boolean =
+      probed === 'unknown'
+        ? !paraAsk || foldedAbove || !prepassOpensBlock(paraLineAbove)
+        : probed
+    // ONE `folds` FEEDS EVERY CONSUMER (R1a), the collection gates and
+    // `paraDepth` alike. Giving the depth a narrower answer than the gate leaked
+    // the bug back at scale: a line the two disagreed on changed the recorded
+    // depth, which made the next marker read as interrupting, which collected
+    // it. carve-rs holds the same line for the same reason.
     const paragraphReallyOpen: boolean =
-      paraWasOpen && !markerInterruptsParagraph && folds !== false
+      paraWasOpen && !markerInterruptsParagraph && folds
     const collectsNothing = paragraphReallyOpen
     if (matcherProbeCandidate && paraWasOpen && !markerInterruptsParagraph) {
       lazyProbeBudget = spendLazyProbeBudget(lexer, idx, lazyProbeBudget)
