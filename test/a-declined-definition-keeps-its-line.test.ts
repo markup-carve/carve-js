@@ -76,25 +76,13 @@ describe('a definition the pre-pass declined keeps its line', () => {
   // NO EXTENSION AND NO BUDGET IN SIGHT. The issue called the shape narrow -
   // "an extension matcher consumed the line above AND the probe that would have
   // seen it did not run" - and the sweep for neighbouring paths found it wider
-  // than that. A sibling marker of a DIFFERENT family disagrees on its own: the
-  // pre-pass reads `1.` under a `-` item as lazy paragraph text and collects
-  // nothing, while the block parser ends the list and opens a real `<ol>` whose
-  // line it strips. Two authored lines are enough.
-  it.each([
-    ['an item lead', '- lead\n1. [target]: /target'],
-    ['item continuation prose', '- lead\nmore\n1. [target]: /target'],
-    ['an ordered sibling already open', '- lead\n1. x\n1. [target]: /target'],
-  ])('keeps the line on a sibling ordered marker below %s', (_name, source) => {
-    const html = carveToHtml(`${source}\n\n[go][target]\n`)
-
-    expect(html).toContain('[target]: /target')
-    expect(html).not.toContain('href="/target"')
-  })
-
-  it('leaves no empty item behind where nothing collected the line', () => {
-    // The render shape the bug produced, stated once as its own row: an item the
-    // marker opened, emptied by a layer that believed the other layer had taken
-    // its only line.
-    expect(carveToHtml('- lead\n1. [target]: /target\n')).not.toMatch(/<li>\s*<\/li>/)
-  })
+  // than that: a sibling marker of a DIFFERENT family made the two layers
+  // disagree on its own, and two authored lines were enough to lose one.
+  //
+  // Those rows lived here, pinned to "the line survives", which is all this fix
+  // could give them. markup-carve/carve-js#1598 then settled the reading itself
+  // - the marker opens a real item, so the definition IS metadata - and they
+  // moved to a-marker-outside-the-fold-window-opens-an-item.test.ts with the
+  // answer flipped to collection. Nothing about the guard below rests on them:
+  // every row that remains here still fails with the guard removed.
 })

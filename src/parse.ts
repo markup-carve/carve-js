@@ -1831,6 +1831,8 @@ function prepassOpensBlock(line: string): boolean {
 interface OpenContainer {
   col: number
   quote: boolean
+  /** The column the container's own marker starts at. */
+  base: number
 }
 
 /** One container peeled off a line's own prefix by `composeContainerPrefix`. */
@@ -1840,6 +1842,27 @@ interface PeeledContainer {
   quote: boolean
   /** Whether it CONTINUES a container already open, rather than opening one. */
   matched: boolean
+  /** The column this marker itself starts at. */
+  marker: number
+  /**
+   * Whether this marker FOLDS into the open item's lead text instead of
+   * opening one. PART 9 §24 C3: below an item's content column no opener
+   * nests, and at the base column a marker starts a sibling - so the fold
+   * window is the columns strictly BETWEEN the two, and nowhere else
+   * (markup-carve/carve-js#1598).
+   *
+   * A marker that folds opens NOTHING, so the container stack does not move
+   * under it either.
+   */
+  folds: boolean
+  /**
+   * Whether the walk was standing in a QUOTE this line did not re-mark. The
+   * line never reached the list inside that quote, so its marker is the
+   * quote's lazy paragraph text whatever column it sits at - a different
+   * question from the item window above, and one the container stack answers
+   * on its own.
+   */
+  behindQuote: boolean
 }
 
 /**
@@ -1872,7 +1895,7 @@ function composeContainerPrefix(
       const content = col + (after.length === 1 ? 1 : 2)
       const matched = depth < open.length && open[depth]!.quote && open[depth]!.col === content
       if (matched) depth++
-      peeled.push({ content, quote: true, matched })
+      peeled.push({ content, quote: true, matched, marker: col, folds: false, behindQuote: false })
       handed = content
       pos = content
       continue
@@ -1888,8 +1911,18 @@ function composeContainerPrefix(
     }
     const content = col + marker[0].length
     const matched = depth < open.length && !open[depth]!.quote && open[depth]!.col === content
+    // THE CONTAINER THIS MARKER IS WRITTEN INSIDE, if the walk is still
+    // standing in one. An ITEM folds the marker into its lead text over the
+    // columns strictly between its base and its content column, and nowhere
+    // else. A QUOTE the line did not re-mark is a different answer, kept apart
+    // from the window: the marker is that quote's lazy text whatever its
+    // column, but the container stack still moves under it. Past the last open
+    // container there is no owner and the marker nests.
+    const owner = depth < open.length ? open[depth]! : null
+    const behindQuote = owner !== null && owner.quote
+    const folds = owner !== null && !owner.quote && col > owner.base && col < owner.col
     if (matched) depth++
-    peeled.push({ content, quote: false, matched })
+    peeled.push({ content, quote: false, matched, marker: col, folds, behindQuote })
     handed = content
     pos = content
   }
@@ -2351,12 +2384,21 @@ function collectLinkDefs(lexer: Lexer) {
       const firstQuote = openCols.findIndex((e) => e.quote)
       if (firstQuote >= 0) openCols.length = firstQuote
     } else if (composed.peeled.length) {
-      // The walk confirmed `depth` of the open containers. Anything past that
-      // is gone: a sibling list marker at an open item's own column closes that
-      // item, and everything written inside it goes with it.
-      openCols.length = composed.depth
-      for (const one of composed.peeled) {
-        if (!one.matched) openCols.push({ col: one.content, quote: one.quote })
+      // A FOLDED MARKER OPENS NOTHING, so the stack the window is measured
+      // against must not move under it. The first folding marker is the item's
+      // lead text and so is everything after it on the line; recording it as a
+      // container replaced the real owner with the folded marker's own columns,
+      // and the next line was then measured against a window that never
+      // existed (raised by codex review on markup-carve/carve-js#1598).
+      const foldAt = composed.peeled.findIndex((one) => one.folds)
+      if (foldAt !== 0) {
+        // The walk confirmed `depth` of the open containers. Anything past that
+        // is gone: a sibling list marker at an open item's own column closes
+        // that item, and everything written inside it goes with it.
+        openCols.length = composed.depth
+        for (const one of foldAt < 0 ? composed.peeled : composed.peeled.slice(0, foldAt)) {
+          if (!one.matched) openCols.push({ col: one.content, quote: one.quote, base: one.marker })
+        }
       }
     } else if (wasPrevBlank || startsBlock || isLinkDefLine(rawTrimmed)) {
       while (openCols.length && openCols[openCols.length - 1]!.col > composed.column) {
@@ -2537,18 +2579,30 @@ function collectLinkDefs(lexer: Lexer) {
     const paraAsk = paraState === 'ask'
     const paraLineAbove = paraLine
     const paraDepthAbove = paraDepth
-    // Lists do not interrupt an open paragraph. A matched marker interrupts
-    // only when it replaces a container that OWNS that paragraph; a marker
-    // deeper than the owner is itself a lazy paragraph line. A newly opened
-    // quote interrupts only when every marker before it continues the open
-    // paragraph's containers: `para` / `> - [d]: u` does, but `para` /
-    // `- > [d]: u` does not because the lazy list marker owns the quote too.
+    // Lists do not interrupt an open paragraph AT DOCUMENT LEVEL. Inside an
+    // item they do: §24 C3 folds a marker only where it is below the item's
+    // content column and past its base, and everywhere else - at the base
+    // column, or at/past the content column - the marker opens a real item
+    // whose definition line is metadata. A newly opened quote interrupts only
+    // when every marker before it continues the open paragraph's containers:
+    // `para` / `> - [d]: u` does, but `para` / `- > [d]: u` does not because
+    // the lazy list marker owns the quote too.
+    //
+    // THE TEST USED TO BE `one.matched`, which is column EQUALITY with the open
+    // item rather than the window, so it was wrong in both directions: a
+    // sibling of a different marker width (`- lead` / `1. [d]: u`) collected
+    // nothing though the block parser opened a real `ol` for it, and a marker
+    // inside the window that happened to land on the open column (`-   lead` /
+    // `  - [d]: u`) collected though the item's lead text is where it belongs.
+    // Measured against the executable spec on 42 column shapes
+    // (markup-carve/carve-js#1598).
     let markerInterruptsParagraph = false
     let prefixOwnedByParagraph = true
     for (let depth = 0; depth < composed.peeled.length; depth++) {
       const one = composed.peeled[depth]!
       if (one.quote && !one.matched && prefixOwnedByParagraph) markerInterruptsParagraph = true
-      if (!one.quote && one.matched && depth < paraDepthAbove) markerInterruptsParagraph = true
+      if (!one.quote && !one.folds && !one.behindQuote && depth < paraDepthAbove)
+        markerInterruptsParagraph = true
       if (!one.matched) prefixOwnedByParagraph = false
     }
     // Only a definition behind a list marker and a fence-shaped line consume
