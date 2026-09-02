@@ -730,6 +730,20 @@ class Lexer {
    */
   quoteLazyMarkerLines: Set<number> = new Set()
   /**
+   * EVERY line a block quote admitted as lazy continuation text.
+   *
+   * `quoteLazyMarkerLines` above records one SHAPE; this records the FACT, for
+   * a consumer that needs it about a line of another shape. The fact is the
+   * same one PART 0 states: a lazy line supplies no `>`, so it is not the
+   * quote's content at any column and its indentation inside the quote body
+   * means nothing - it reached the innermost open paragraph by the fold and is
+   * that paragraph's text wherever it landed.
+   *
+   * Read today only by the list collector's description-marker arm
+   * (markup-carve/carve-js#1606).
+   */
+  quoteLazyLines: Set<number> = new Set()
+  /**
    * Definition-shaped lines the pre-pass looked at and DID NOT collect.
    *
    * The two layers decide the same line independently, and the block parser
@@ -1027,6 +1041,7 @@ function nestedSubLexer(
   sub.linkDefs = parent.linkDefs
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
+  sub.quoteLazyLines = parent.quoteLazyLines
   sub.withinItemBody = parent.withinItemBody || parent.markerOpensSublist
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
@@ -5949,6 +5964,9 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     if (!lexer.markerOpensSublist && !lexer.withinItemBody && isListMarkerLine(ln)) {
       lexer.quoteLazyMarkerLines.add(lexer.lineNumber(lineIndex))
     }
+    // The shape-blind half of the same fact, for the consumers the two sets
+    // above do not serve.
+    lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
     trackBlockQuoteLazyState(
@@ -6348,6 +6366,12 @@ function isLiteralColonFenceLine(line: string): boolean {
   )
 }
 
+/**
+ * Which half of a definition-list entry the item's tracker last saw open: the
+ * TERM (a `::` line), its DESCRIPTION body (a `:` line), or neither.
+ */
+type DefListOpening = false | 'term' | 'description'
+
 interface ItemLazyState {
   inFence: boolean
   fenceClose: RegExp | null
@@ -6421,7 +6445,12 @@ interface ItemLazyState {
   // an under-indented `:  def` as a `<dd>`, and carve-js must match (decision
   // D, "lenient - still a definition"). An OVER-indented marker still folds
   // (it reaches the item via sliceColumns, not this lazy path).
-  inDefList: boolean
+  //
+  // WHICH HALF OF THE ENTRY IS OPEN, not just whether one is: with a
+  // description body already open, a lazy `:` line folds into that body instead
+  // of registering a second one, and the quoted-item arm below has to tell the
+  // two apart (markup-carve/carve-js#1606).
+  inDefList: DefListOpening
   // Whether the item's open paragraph has absorbed a MALFORMED colon fence and
   // is therefore taking the next fence-shaped line as text too (PART 9 §12,
   // "a colon-fence line that fails the opener test leaves the paragraph
@@ -7172,7 +7201,7 @@ function trackItemLazyState(
   // A definition-list term or definition marker opens (or continues) a def
   // list in this item, and leaves an open paragraph for its body.
   if (RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content)) {
-    state.inDefList = true
+    state.inDefList = RE_DEFLIST_TERM.test(content) ? 'term' : 'description'
     state.lazyFoldable = true
     return
   }
@@ -7620,7 +7649,11 @@ function parseList(lexer: Lexer): List {
       lazyFoldable: leadState.leavesParagraphOpen,
       inTable: leadState.endsOnTableRow,
       quoteInner: leadState.quote,
-      inDefList: RE_DEFLIST_TERM.test(content) || RE_DEFLIST_DEF.test(content),
+      inDefList: RE_DEFLIST_TERM.test(content)
+        ? 'term'
+        : RE_DEFLIST_DEF.test(content)
+          ? 'description'
+          : false,
       attrRun: leadState.wrappedAttributeRun,
     }
     // A FENCE OPENED ON THE MARKER LINE IS AN OPEN FENCE (markup-carve/carve#950).
@@ -7730,7 +7763,38 @@ function parseList(lexer: Lexer): List {
       // paragraph, which is this item's. Sending it down the content-column arm
       // dedents it to the body's column 0, where §24 C3 opens a SUBLIST; the
       // lazy arm below keeps its indent and the fold holds.
-      if (lw >= contentCol && !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
+      // A DESCRIPTION MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT
+      // COLUMN EITHER (markup-carve/carve-js#1606). Same fact as the marker
+      // above, asked of the other line the item re-classifies by column: the
+      // content-column arm dedents by the item's own column and leaves
+      // everything past it as residual indent, and an indented `:` is no longer
+      // a marker - so `> - :: t` over a column-4 `:  a` folded the description
+      // into the term while the unquoted spelling of the same document read the
+      // body. The lazy arm below strips the indent instead, which is PART 9
+      // §24 C3's LENIENT def-list entry: a `:` attaches a fresh description to
+      // an open term from at or below column 0.
+      //
+      // UNLESS A DESCRIPTION BODY IS ALREADY OPEN, where the same line is that
+      // body's own lazy continuation rather than a second entry. That is where
+      // the oracle's two collectors differ - the term's fold tests for an entry
+      // AFTER unframing a lazy line and the description body's fold tests
+      // before it - and it is the only state that has to be excluded: with no
+      // def list open at all there is no body to continue, and holding the arm
+      // back there too left 20 documents on the old answer for no reason the
+      // clause states.
+      //
+      // ONE SHAPE, DELIBERATELY. Every quote-lazy line has this much in common,
+      // but sending them all down the lazy arm moves fence-shaped lines off the
+      // oracle's answer as well - the general port is its own measurement.
+      const quoteLazyDescription =
+        lazyState.inDefList !== 'description' &&
+        lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+        RE_DEFLIST_DEF.test(l.replace(/^[ \t]+/, ''))
+      if (
+        lw >= contentCol &&
+        !quoteLazyDescription &&
+        !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))
+      ) {
         bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
           nested.push('')
@@ -7796,7 +7860,10 @@ function parseList(lexer: Lexer): List {
         let lazyLine = l
         if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
           lazyLine = l.replace(/^[ \t]+/, '')
-        } else if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
+        } else if (
+          quoteLazyDescription ||
+          (lazyState.inDefList && indentColumns(l, contentCol) < contentCol)
+        ) {
           lazyLine = l.replace(/^[ \t]+/, '')
         } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
           // A block-SHAPED line below the content column opens nothing (§24 C3:
