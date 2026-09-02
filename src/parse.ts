@@ -719,6 +719,17 @@ class Lexer {
   /** Document lines admitted only as a block quote's lazy paragraph text. */
   literalLazyLinkDefLines: Set<number> = new Set()
   /**
+   * List-marker lines a block quote admitted as LAZY PARAGRAPH TEXT.
+   *
+   * PART 0 lazy continuation is explicit that a list marker is not one of the
+   * exclusions that end a quote: an unmarked line folds into the innermost open
+   * paragraph at whatever depth that paragraph sits. Where the quote's trailing
+   * block is a list, that paragraph is the open item's, and the line reaches it
+   * through the quote's own sub-parse - which read the marker again and opened
+   * an item inside the quote instead (markup-carve/carve#1904).
+   */
+  quoteLazyMarkerLines: Set<number> = new Set()
+  /**
    * Definition-shaped lines the pre-pass looked at and DID NOT collect.
    *
    * The two layers decide the same line independently, and the block parser
@@ -754,6 +765,16 @@ class Lexer {
    * True for the sub-lexer over a LIST ITEM's own body, and for that body only.
    */
   markerOpensSublist = false
+  /**
+   * True once ANY enclosing lexer was a list item's body - unlike
+   * `markerOpensSublist`, this one travels into every container inside it.
+   *
+   * A line reaching a quote inside an item reaches the ITEM's content column
+   * too, so PART 9 §24 C3 has something to say about it and the clauses point
+   * two ways (markup-carve/carve#1905). The quote's own lazy-marker fold is
+   * held back there, and only there.
+   */
+  withinItemBody = false
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead), the same entry the container-local scans keep: per fence
@@ -1005,6 +1026,8 @@ function nestedSubLexer(
   sub.abbrDefs = parent.abbrDefs
   sub.linkDefs = parent.linkDefs
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
+  sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
+  sub.withinItemBody = parent.withinItemBody || parent.markerOpensSublist
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
   sub.footnoteDefPos = parent.footnoteDefPos
@@ -5912,6 +5935,20 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     if (lazyLinkDef) {
       lexer.literalLazyLinkDefLines.add(lexer.lineNumber(lineIndex))
     }
+    // THE LINE IS THE QUOTE'S LAZY TEXT, AND A MARKER DOES NOT SURVIVE THE
+    // HAND-OVER (PART 0 lazy continuation, markup-carve/carve#1904). Below it
+    // parses as the quote's body, where the marker read as an opener again and
+    // put an item INSIDE the quote for a line carrying no `>`.
+    //
+    // Only where §24 C3 has nothing to say. Inside a LIST ITEM's body - the
+    // item's own lexer, or any container nested in it - column 0 IS the item's
+    // content column, so the line reaches a container column and the two
+    // clauses point two ways: the band markup-carve/carve#1905 is open on. It
+    // is left exactly as it was. The second flag is what makes that hold one
+    // quote deeper, where the first does not travel.
+    if (!lexer.markerOpensSublist && !lexer.withinItemBody && isListMarkerLine(ln)) {
+      lexer.quoteLazyMarkerLines.add(lexer.lineNumber(lineIndex))
+    }
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
     trackBlockQuoteLazyState(
@@ -6226,7 +6263,27 @@ function lineOpensBlock(line: string): boolean {
   )
 }
 
+/**
+ * A line whose only shape is a LIST MARKER - the four spellings an item opens
+ * with. Kept apart from `lineOpensBlock`, which answers for every opener.
+ */
+function isListMarkerLine(line: string): boolean {
+  return (
+    RE_TASK.test(line) ||
+    RE_UNORDERED.test(line) ||
+    RE_ORDERED.test(line) ||
+    extractItemAttr(line) !== null
+  )
+}
+
 function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
+  // A MARKER THE QUOTE ABOVE ALREADY TOOK AS LAZY TEXT OPENS NOTHING HERE.
+  // PART 0 lazy continuation folds an unmarked line into the innermost open
+  // paragraph and names a list marker as NOT an exclusion, so `> - a` / `- m`
+  // is one quote whose item paragraph is `a\n- m`. The quote collects the line
+  // and hands it to this sub-parse, which read the marker a second time and
+  // started a sibling item inside the quote (markup-carve/carve#1904).
+  if (lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) return false
   // A VERBATIM fence ends the fold only WITH a closer ahead (§10 I4): an
   // unterminated ``` is not a code block, it is an inline verbatim run that
   // belongs to the item's paragraph. Without this the item was closed and the
@@ -7667,7 +7724,13 @@ function parseList(lexer: Lexer): List {
       // (falling through to the lazy-fold / detach branch below). Intentional
       // divergence from djot, which attaches at any indent past the marker.
       const lw = indentColumns(l, contentCol)
-      if (lw >= contentCol) {
+      // A MARKER THE QUOTE TOOK AS LAZY TEXT REACHES NO CONTENT COLUMN HERE
+      // (markup-carve/carve#1904). It carried no `>`, so it is not inside the
+      // quote as a block at any column - it folds into the innermost open
+      // paragraph, which is this item's. Sending it down the content-column arm
+      // dedents it to the body's column 0, where §24 C3 opens a SUBLIST; the
+      // lazy arm below keeps its indent and the fold holds.
+      if (lw >= contentCol && !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
         bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
           nested.push('')
