@@ -4119,6 +4119,74 @@ function itemFenceHasCloser(
   return false
 }
 
+/**
+ * The item-local COMMENT closer index, built once per scope.
+ *
+ * `from`/`end` are the half-open line range it covers and `byWidth` maps a
+ * delimiter run to the ASCENDING lines carrying it there. Every opener inside
+ * one scope shares the range - the scope ends at the first line that leaves the
+ * item, which does not move as the opener does - so one walk answers all of
+ * them and a run of unterminated openers stays linear.
+ *
+ * A NEGATIVE cache of the widths seen - the shape the code fence's `maxRun`
+ * bound takes - cannot do this job: §28 matches the closer on EXACT length, so
+ * openers of DISTINCT widths put every width into the cache and it refutes
+ * none of them, leaving one walk per opener. This one is positive, so it
+ * answers them all from the same walk.
+ */
+interface ItemCommentCloserIndex {
+  from: number
+  end: number
+  byWidth: Map<number, number[]>
+}
+type ItemCommentCloserMemo = { index: ItemCommentCloserIndex | null }
+
+/**
+ * Whether a comment fence of width `fence` closes LATER IN THIS ITEM.
+ *
+ * PART 9 §28's closer lookahead, restated over the item's own content stream -
+ * the same question `quotedCommentHasCloser` asks for a quote, and the reason
+ * is the same: the tracker runs while the item is still being collected, so it
+ * cannot defer to the block parser's document-wide index.
+ *
+ * THE SCOPE ENDS WHERE THE ITEM DOES. A run written below the item's content
+ * column is not inside the fence's container and closes nothing - the bound
+ * `commentCloserInScope` applies in the definition prepass - so the walk STOPS
+ * at the first such line rather than skipping it. Blanks are transparent: a
+ * blank followed by an indented line has not left the item, and inside a
+ * comment body it is body.
+ */
+function itemCommentHasCloser(
+  lexer: Lexer,
+  fence: number,
+  fromIndex: number,
+  contentCol: number,
+  memo: ItemCommentCloserMemo,
+): boolean {
+  const start = fromIndex + 1
+  let index = memo.index
+  if (index === null || start < index.from || start >= index.end) {
+    const byWidth = new Map<number, number[]>()
+    let i = start
+    for (; i < lexer.lines.length; i++) {
+      const line = lexer.lines[i]!
+      if (isBlankLine(line)) continue
+      if (indentColumns(line, contentCol) < contentCol) break
+      const run = commentFenceRun(sliceColumns(line, contentCol, true))
+      if (run === undefined) continue
+      const at = byWidth.get(run)
+      if (at === undefined) byWidth.set(run, [i])
+      else at.push(i)
+    }
+    index = { from: start, end: i, byWidth }
+    memo.index = index
+  }
+  const at = index.byWidth.get(fence)
+  if (at === undefined) return false
+
+  return at[at.length - 1]! >= start
+}
+
 /** Whether the memo already proves no closer for `len` of `char` from `start`. */
 function fenceCloserMemoRefutes(
   memo: QuotedFenceCloserMemo,
@@ -6941,6 +7009,14 @@ function trackItemLazyState(
    * at its own column arrives here as true; the two lazy call sites pass false.
    */
   atContentColumn = true,
+  /**
+   * Does a comment fence of this width close later in this item (PART 9 §28)?
+   *
+   * The default answers "yes" for the same reason `hasFenceCloser`'s does: the
+   * callers that cannot look ahead - the synthetic blank at a `+` marker and an
+   * attached block's own lines - keep the old unconditional behavior.
+   */
+  hasCommentCloser: (fence: number) => boolean = () => true,
 ): void {
   // Absorption belongs to ONE open paragraph, so it ends wherever that
   // paragraph does. Clearing it here and re-arming it only in the two branches
@@ -7079,7 +7155,20 @@ function trackItemLazyState(
   // unfoldable, the item ended at the fence, and a following sibling marker
   // started a SECOND list (carve-js#659).
   const commentRun = commentFenceRun(content)
-  if (commentRun !== undefined) {
+  // AN UNTERMINATED OPENER DOES NOT OPEN A BLOCK (PART 9 §28): it degrades to a
+  // `comment_line`, and PART 0's COMMENTS ARE CLASSIFIED BEFORE BLOCK OWNERSHIP
+  // says the same from the layout side - "an opener without an exact-width
+  // closer is one `%%` line comment; later lines are classified normally". The
+  // quote's tracker has asked this all along; this one opened on every fence,
+  // so `- x` / `  %%%` / `y` kept `y` inside the item where the `%%` line form
+  // at that column ended it (markup-carve/carve-js#1600).
+  //
+  // THE BELOW-COLUMN BAND IS UNTOUCHED, and it is the two lazy call sites'
+  // default callback that keeps it so: no reader applies the substitution
+  // there, the reading is open at markup-carve/carve#1903, and degrading it
+  // here would take carve-js away from the executable spec, carve-rs and
+  // carve-php at once.
+  if (commentRun !== undefined && hasCommentCloser(commentRun)) {
     state.inComment = true
     state.commentLen = commentRun
     state.lazyFoldableBeforeComment = state.lazyFoldable
@@ -7484,6 +7573,7 @@ function parseList(lexer: Lexer): List {
     // both. Nothing precedes the lead, so no closer lookahead applies: the
     // fence opens unconditionally, exactly as it does at the top of a quote.
     const itemFenceMemo: QuotedFenceCloserMemo = new Map()
+    const itemCommentMemo: ItemCommentCloserMemo = { index: null }
     const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
     if (leadFence) {
       lazyState.inFence = true
@@ -7606,8 +7696,12 @@ function parseList(lexer: Lexer): List {
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         const fenceLineIndex = lexer.pos
-        trackItemLazyState(dedented, lazyState, (marker) =>
-          itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol, itemFenceMemo),
+        trackItemLazyState(
+          dedented,
+          lazyState,
+          (marker) => itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol, itemFenceMemo),
+          true,
+          (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
         )
         lexer.consume()
       } else if (
