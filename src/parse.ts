@@ -718,6 +718,18 @@ class Lexer {
   linkDefs: Map<string, LinkDef> = new Map()
   /** Document lines admitted only as a block quote's lazy paragraph text. */
   literalLazyLinkDefLines: Set<number> = new Set()
+  /**
+   * Definition-shaped lines the pre-pass looked at and DID NOT collect.
+   *
+   * The two layers decide the same line independently, and the block parser
+   * strips a definition line because the pre-pass is supposed to have taken it.
+   * Where they disagree the line is collected by nobody and removed by someone,
+   * so the render loses text the author typed - which PART 9R R1a rules out
+   * even for its own conservative fallback, and markup-carve/carve#1883 makes
+   * normative. This set is the pre-pass's answer, and the strip consults it
+   * instead of re-deciding (markup-carve/carve-js#1597).
+   */
+  declinedLinkDefLines: Set<number> = new Set()
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
   footnoteDefs: Map<string, BlockNode[]> = new Map()
@@ -993,6 +1005,7 @@ function nestedSubLexer(
   sub.abbrDefs = parent.abbrDefs
   sub.linkDefs = parent.linkDefs
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
+  sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
   sub.footnoteDefPos = parent.footnoteDefPos
   sub.nested = true
@@ -2795,12 +2808,19 @@ function collectLinkDefs(lexer: Lexer) {
     // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0). Once the block parser would
     // fold this marker into the paragraph above, its definition-shaped content
     // is visible text and cannot also define a reference.
-    const m =
+    const declines =
       topLevelIndentedDef ||
       notAtContentColumn ||
       (collectsNothing && composed.peeled.some((one) => !one.quote))
-        ? null
-        : RE_LINK_DEF.exec(defLine)
+    const m = declines ? null : RE_LINK_DEF.exec(defLine)
+    // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
+    // reading the line as something other than a definition; the block parser
+    // reaches its own reading and, where that one says "definition", removes
+    // the line on the strength of a collection that never happened. Recording
+    // the decline is what lets the strip ask instead of assume.
+    if (declines && RE_LINK_DEF.test(defLine)) {
+      lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
+    }
     if (m) {
       const def: LinkDef = { href: m[2]! }
       const title = m[3] ?? m[4]
@@ -3274,7 +3294,13 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   if (
     leadingWhitespace(line) === 0 &&
     isLinkDefLine(line) &&
-    !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))
+    !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
+    // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
+    // error PART 9R R1a licenses; deleting the author's line is the one it
+    // rules out, and carve#1883 forbids returning a document missing text the
+    // author typed. Falling through leaves the line as the paragraph it looks
+    // like (markup-carve/carve-js#1597).
+    !lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos))
   ) {
     lexer.consume()
     return null
