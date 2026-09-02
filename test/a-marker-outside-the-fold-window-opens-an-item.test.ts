@@ -115,6 +115,25 @@ describe('a list marker outside the fold window opens an item', () => {
     expect(html).not.toContain('href="/t"')
   })
 
+  // A FOLDED MARKER MOVES NOTHING. It is the item's lead text, so the container
+  // it is measured against stays exactly where it was; recording it as a
+  // container of its own replaced the real owner with the folded marker's
+  // columns, and the NEXT line was then measured against a window that never
+  // existed. Raised by codex review, measured against the executable spec on
+  // 392 three-line column shapes: 209 diverged before this file's change, 34
+  // still diverged with the window alone, none do with the stack held still.
+  it.each([
+    ['a fold under a four-column item', '-   lead\n - prose\n - [t]: /t', 'text'],
+    ['a wider fold under the same item', '-   lead\n - prose\n   - [t]: /t', 'text'],
+    ['a nest below a fold', '- lead\n - prose\n  - [t]: /t', 'collect'],
+    ['a nest below a fold under an ordered item', '1. lead\n  - prose\n   - [t]: /t', 'collect'],
+  ])('measures the line after %s against the item that is really open', (_name, source, answer) => {
+    const html = carveToHtml(`${source}\n\n[go][t]\n`)
+
+    expect(html.includes('href="/t"')).toBe(answer === 'collect')
+    expect(html.includes('[t]: /t')).toBe(answer === 'text')
+  })
+
   it('still folds a marker under a document-level paragraph', () => {
     // §10: no list marker interrupts a paragraph that no item owns. The window
     // is a rule about being INSIDE an item and does not reach this line.
