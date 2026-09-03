@@ -5289,6 +5289,20 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     // definition registers, an attribute attaches - and the fold §10 I5 asks for
     // has not happened (markup-carve/carve-js#1550).
     const bodyBaseEligible = new Set<number>()
+    // Has any line of this body been a block QUOTE?
+    //
+    // Once one has, the body's paragraph is no longer necessarily the innermost
+    // OPEN one - the quote's is - and SS10 I2 hands a line below to THAT
+    // paragraph instead. markup-carve/carve#1911 carves exactly this out and
+    // names the block quote for it; corpus section 444 row 11 is the case where
+    // the quote IS the payload, and this flag is that row generalized to a
+    // quote opened anywhere above it. Asked of the FLUSH spelling, because that
+    // is the spelling the body reads - an over-indented `> q` is still a quote.
+    //
+    // The flag is only half of it: a quote opened on the DESCRIPTION MARKER
+    // line (`: > q`) is already in `lazyState.quoteInner` before this loop
+    // runs and never passes through the flag, so the gate below asks both.
+    let bodyHoldsQuote = false
     // The boundary set for a `+`-attached block in a definition body: a blank,
     // a further `+`, or the next term / description marker. Whether a line in
     // that set actually ENDS the block is `insideOpenFence`'s answer, layered
@@ -5390,7 +5404,44 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         bodyBaseEligible.add(bodyLines.length)
         bodyLines.push(dedented)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
-        track(dedented, lineIndex)
+        // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
+        // (markup-carve/carve#1911). `sliceColumns` removes the body's content
+        // column and KEEPS the rest, so an opener written one column past it
+        // arrives here as ` # H` - and every VISIBLE-opener arm of the tracker is
+        // column-0 strict, so it read prose and left the paragraph open. The line
+        // is not prose: `rebaseOverindentedBlocks` below gives it ONE AUTHORED
+        // BLOCK BASE and the body parses a heading. The paragraph was decided
+        // from a spelling the body never reads, one pass before the pass that
+        // normalizes it. The INVISIBLE arms are whitespace-tolerant and were
+        // already right, which is exactly the split between the corpus rows that
+        // passed and the ones that did not - and why row 7 contradicted itself,
+        // ending the body at the column and keeping it open one past.
+        //
+        // SS10 I1 closes the paragraph for a visible opener at or past the column
+        // and SS10 I5 closes it for a definition or an attribute block, so the two
+        // columns answer alike - an answer that MOVES between the body's column
+        // and one past it is reading indentation rather than the rule.
+        //
+        // AN OPENER THAT LEAVES A PARAGRAPH OPEN IS NOT COVERED, which the ruling
+        // states: a `:::` container keeps collecting, so the line below it is
+        // INSIDE the admonition rather than after the body. That is asked of the
+        // tracker rather than enumerated here, so it cannot drift out of step
+        // with the shapes the tracker knows.
+        const flush = dedented.replace(/^[ \t]+/, '')
+        if (flush.startsWith('>')) bodyHoldsQuote = true
+        let bodyReadsFlush = false
+        if (!bodyHoldsQuote && lazyState.quoteInner === null && flush !== dedented && lineOpensItemBlock(flush)) {
+          // A COPY, and one that cannot write back. `quoteInner` is the state's
+          // only mutable object and `trackBlockQuoteLazyState` advances it IN
+          // PLACE, so a plain spread would let this probe move the real quote
+          // tracker and `track` below would then move it a second time. The gate
+          // above already means no quote is open here, so seeding it null is both
+          // free and true - and it stays safe if that gate is ever relaxed.
+          const probe: ItemLazyState = { ...lazyState, quoteInner: null }
+          trackItemLazyState(flush, probe, () => true, true)
+          bodyReadsFlush = !probe.lazyFoldable && !insideOpenFence(probe)
+        }
+        track(bodyReadsFlush ? flush : dedented, lineIndex)
         lexer.consume()
         continue
       }
