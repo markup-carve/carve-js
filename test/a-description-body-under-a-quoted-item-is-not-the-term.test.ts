@@ -37,19 +37,21 @@ import { carveToHtml } from '../src/index.js'
  * does not matter here. carve-php reads the shape correctly already, per the
  * ticket's own measurement; nothing here re-ran it.
  *
- * WHAT DOES NOT MOVE. The change is gated on three things at once: the line
- * reached here as the QUOTE's lazy text, no description body is open, and the
- * flush line is a `:` DESCRIPTION marker. The last two describes pin those
- * gates from outside - a line that carries its `>`, a line under an open
- * description, and a non-description payload at the same column. Three of the
- * final block's five expectations - the list marker, the heading and the plain
- * prose - are pre-existing divergences from the oracle that this change
- * deliberately leaves where they are; the other two already agreed with it.
+ * WHAT DOES NOT MOVE. What the line reached here AS is the whole condition: a
+ * line that carries its own `>` is the quote's content and keeps its column.
+ * That control is pinned below and is what localizes everything here to the
+ * quote's lazy fold.
  *
- * The SHAPE gate is a deliberate scope limit rather than a rule: every
- * quote-lazy line has no column here, but sending them all down the lazy arm
- * also moved 22 fence-shaped documents OFF the oracle's answer, so the general
- * port wants its own measurement and its own ticket.
+ * TWO OF THIS CHANGE'S GATES ARE GONE, both removed by
+ * markup-carve/carve-js#1609, which ported the oracle's FRAME rather than
+ * widening the dedent. The SHAPE gate (the flush line must be a `:` marker)
+ * was always a scope limit rather than a rule, and the frame made it general -
+ * so the final block's marker, heading and plain-prose rows now AGREE with the
+ * oracle instead of diverging from it. The DESCRIPTION-OPEN gate went with it,
+ * because the frame reaches that answer structurally: the body's fold tests a
+ * lazy line before anything unframes it and reads plain text, while the term's
+ * fold tests for an entry after. The behavior it protected is unchanged and
+ * still pinned below; only the now-unfirable condition is gone.
  */
 
 const QUOTED_DD =
@@ -162,21 +164,22 @@ describe('the three gates, pinned from outside', () => {
   })
 })
 
-describe('a non-description payload at the same column does not move', () => {
-  // Gate: RE_DEFLIST_DEF. Every expectation here is what carve-js produced
-  // BEFORE this change. The marker, the heading and the plain prose diverge from
-  // the oracle, which folds all three into the term; they are pinned so the fix
-  // cannot reach them by accident, not endorsed. The fence and the second term
-  // already agree with it.
-  it('a list marker keeps the sublist it opened', () => {
+describe('a non-description payload at the same column', () => {
+  // The shape gate this change installed (RE_DEFLIST_DEF) was a scope limit,
+  // not a rule, and markup-carve/carve-js#1609 removed it: EVERY quote-lazy
+  // line is now framed, so the marker, the heading and the plain prose fold
+  // into the term the way the oracle always read them. They were pinned here
+  // as divergences this change deliberately did not reach; they are pinned now
+  // as agreements. The fence and the second term never moved.
+  it('a list marker folds into the term', () => {
     expect(carveToHtml('> - :: t\n    - m\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <ul>\n        <li>m</li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n- m</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
 
-  it('a heading keeps the heading it opened', () => {
+  it('a heading folds into the term', () => {
     expect(carveToHtml('> - :: t\n    # h\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t</dt>\n      </dl>\n      <h1 id="h">h</h1>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n# h</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
 
@@ -192,9 +195,9 @@ describe('a non-description payload at the same column does not move', () => {
     )
   })
 
-  it('plain prose keeps its residual indent in the term', () => {
+  it('plain prose folds into the term with no residual indent', () => {
     expect(carveToHtml('> - :: t\n    plain\n')).toBe(
-      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\n  plain</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
+      '<blockquote>\n  <ul>\n    <li>\n      <dl>\n        <dt>t\nplain</dt>\n      </dl>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
 })
