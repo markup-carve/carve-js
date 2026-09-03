@@ -5468,8 +5468,21 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln) || RE_DEFLIST_MARKER_EMPTY.test(ln)) break
       const below = ln.replace(/^[ \t]+/, '')
       const atDocumentColumn = below === ln
+      // A `:::` CONTAINER OPENED IN THE BODY IS STILL COLLECTING, so the line
+      // below it is INSIDE that container rather than after the body
+      // (markup-carve/carve-js#1613). This is markup-carve/carve#1911's own
+      // carve-out - an opener that leaves something OPEN keeps its flush-left
+      // follower - and the same reason a block quote keeps `tail` in corpus
+      // section 444 row 11. Without it the two columns answered differently:
+      // one PAST the body's column reaches the Form A probe, which asks the
+      // tracker and finds the container open, while AT the column the line is
+      // already flush and the probe never runs.
+      //
+      // `divDepth` ONLY, not `insideOpenFence`. An unterminated comment fence
+      // is not a container that collects, and widening this to the fence and
+      // comment arms moved 54 comment-payload documents OFF the oracle.
       if (
-        lazyState.lazyFoldable &&
+        (lazyState.lazyFoldable || lazyState.divDepth > 0) &&
         !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
       ) {
         const lineIndex = lexer.pos

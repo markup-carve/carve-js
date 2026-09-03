@@ -38,6 +38,15 @@ import { carveToHtml } from '../src/index.js'
  * 36750-document sweep of quoted containers inside a description body, which
  * is the shape neither corpus behind this change could express.
  *
+ * THE `:::` CARVE-OUT NOW REACHES THE COLUMN ITSELF (carve-js#1613). It used to
+ * hold only one column PAST the body's, because that is where the Form A probe
+ * runs; AT the column the line is already flush, the probe never runs, and the
+ * body ended. The two columns therefore answered differently, which is the very
+ * shape markup-carve/carve#1911 calls reading indentation rather than the rule.
+ * The body now goes on collecting while a `:::` container it opened is still
+ * open - `divDepth` only: an unterminated COMMENT fence is not a container that
+ * collects, and widening it to that arm moved 54 documents off the oracle.
+ *
  * ORACLE. `spec/scripts/spec/layout.mjs` into `spec/scripts/spec/html.mjs` at
  * spec main (35148309). THE PIN MATTERS HERE, unlike most of these tickets: the
  * pinned submodule (549f2a52) predates carve#1917 and still answers the
@@ -145,13 +154,31 @@ describe('an opener that leaves a container OPEN is not covered', () => {
     )
   })
 
-  it("admonition at the column [PRE-EXISTING divergence, pinned as carve-js reads it]", () => {
-    // NOT the oracle's answer, and NOT moved by this change: at the column the
-    // line is already flush, so the fix's test cannot reach it. carve-js ends
-    // the body and lets `tail` escape the admonition, where the oracle keeps it
-    // inside. Pinned so the divergence is visible rather than silent.
+  it("admonition AT the column - the same answer (carve-js#1613)", () => {
     expect(carveToHtml(":: term\n:  definition\n   ::: note\ntail\n")).toBe(
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>tail</p>\n    </aside>\n  </dd>\n</dl>",
+    )
+  })
+
+  it("line block AT the column keeps its follower too", () => {
+    expect(carveToHtml(":: term\n:  definition\n   ::: |\ntail\n")).toBe(
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <div class=\"line-block\">\n      <p>tail</p>\n    </div>\n  </dd>\n</dl>",
+    )
+  })
+
+  it("a CLOSED container at the column ends the body [PRE-EXISTING divergence]", () => {
+    // The container no longer collects, so the body ends - but the oracle keeps
+    // `tail` in the `dd` as a sibling paragraph and carve-js publishes it
+    // outside the list. Unmoved by this change (measured on main), pinned so the
+    // remaining gap is visible rather than silent.
+    expect(carveToHtml(":: term\n:  definition\n   ::: note\n   :::\ntail\n")).toBe(
       "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>",
+    )
+  })
+
+  it("control: an unterminated COMMENT fence at the column still ends the body", () => {
+    expect(carveToHtml(":: term\n:  definition\n   %%%\ntail\n")).toBe(
+      "<dl>\n  <dt>term</dt>\n  <dd>definition</dd>\n</dl>\n<p>tail</p>",
     )
   })
 
