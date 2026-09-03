@@ -9673,21 +9673,50 @@ function rebaseOverindentedBlocks(
       }
     } else if (!definitionEntry && (
       RE_BLOCKQUOTE.test(opener) ||
-      RE_FOOTNOTE_DEF.test(opener) ||
-      RE_LINK_DEF.test(opener)
+      // A LINK REFERENCE DEFINITION HAS NO BODY, so it owns no run at all - it
+      // is one line by construction, since a definition cannot take its
+      // destination from the next line. Listing it here let it swallow the line
+      // below, which is how a SECOND definition written between two open
+      // content columns kept its residual indent and reached the page as
+      // characters while still registering.
+      RE_FOOTNOTE_DEF.test(opener)
     )) {
       // These families own continuation/body lines.  A blank remains part of
       // the run only when another line at the authored base follows it.
+      //
+      // A FOOTNOTE BODY HAS A COLUMN OF ITS OWN, and a line below it is not the
+      // body's (markup-carve/carve#1918). PART 0's AT OR PAST MEANS THE DEEPEST
+      // COLUMN THE LINE REACHES is written about CONTAINERS, and DEFINITION
+      // BODIES FOLLOW THE SAME CONTAINER REACH RULE names the footnote body as
+      // one of them - so a definition written strictly BETWEEN this body's
+      // column and the container's belongs to the CONTAINER, and needs an
+      // authored base of its own rather than riding along inside this run. The
+      // run used to reach every line at or past the DEFINITION's column, which
+      // swallowed exactly that band and left the line one column in, where the
+      // strict column-0 rule reads it as text - so it registered in the
+      // pre-pass and was published as characters too.
+      //
+      // The body's column is ABSOLUTE, not measured from the definition:
+      // `parseFootnoteDef` admits a continuation line at column two of the
+      // coordinate system it is reading, wherever the definition itself sits.
+      // So the floor is whichever is deeper - the block's own base, or that
+      // column. Measuring `base + 2` instead cut a nested definition's body
+      // off from it, which is what the hoisting tests caught.
+      //
+      // The other two families keep the definition's own column: a quote is
+      // reached by its marker rather than by a column, and a link definition
+      // has no body at all.
+      const runColumn = RE_FOOTNOTE_DEF.test(opener) ? Math.max(base, FOOTNOTE_BODY_COLUMN) : base
       for (let j = i + 1; j < lines.length; j++) {
         const candidate = lines[j]!
         if (isBlankLine(candidate)) {
           let k = j + 1
           while (k < lines.length && isBlankLine(lines[k]!)) k++
-          if (k >= lines.length || indentColumns(lines[k]!, base) < base) break
+          if (k >= lines.length || indentColumns(lines[k]!, runColumn) < runColumn) break
           end = j
           continue
         }
-        if (indentColumns(candidate, base) < base) break
+        if (indentColumns(candidate, runColumn) < runColumn) break
         end = j
       }
     }
