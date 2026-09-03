@@ -24,7 +24,7 @@
  * `parse()` directly.
  */
 
-import type { BlockNode, Document, Image, Paragraph, Position } from './ast.js'
+import type { BlockNode, DefinitionItem, Document, Image, Paragraph, Position } from './ast.js'
 import { isUnresolvedReference } from './unresolved-reference.js'
 import { MAX_NESTING_DEPTH } from './parse.js'
 import { numberCaptionsIn } from './heading-ids.js'
@@ -208,9 +208,21 @@ function definitionListsFromWire<T>(node: T): T {
   if (record['type'] === 'definition_list' && Array.isArray(record['items'])) {
     // A payload already in the runtime form decodes unchanged: older stored
     // trees carry it, and this engine produced them.
-    record['items'] = record['items'].every(isRuntimeEntry)
-      ? record['items']
+    const entries = record['items'].every(isRuntimeEntry)
+      ? (record['items'] as DefinitionItem[])
       : entriesFromWire(record['items'])
+    // A runtime entry is a RECORD, not a node, and `definitions` is not a
+    // CHILD_FIELD - so the generic walk below cannot reach a definition list
+    // nested inside a description. Returning here without this left that inner
+    // list in its wire shape, and `promoteIngestedBlockImages` then read
+    // `entry.definitions` off a `definition_description` (carve-js#1616).
+    // `terms` needs no pass: it holds inline content, which no definition list
+    // can appear in.
+    record['items'] = entries.map((entry) =>
+      Array.isArray(entry.definitions)
+        ? { ...entry, definitions: definitionListsFromWire(entry.definitions) }
+        : entry,
+    )
     return record as T
   }
 
