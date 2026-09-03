@@ -150,6 +150,12 @@ describe('an unmarked marker at an enclosing item content column folds', () => {
     )
   })
 
+  it('prose between them folds too - the quote survives its own lazy line', () => {
+    expect(carveToHtml('- a\n  > - x\n  p\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+    )
+  })
+
   // CONTROLS. A blank line is the only exit, and with no quote above it the
   // marker opens an item as it always has.
   it('control: a blank line escapes the quote', () => {
@@ -161,6 +167,12 @@ describe('an unmarked marker at an enclosing item content column folds', () => {
   it('control: the paragraph twin, which already folded', () => {
     expect(carveToHtml('- a\n  > q\n  - m\n')).toBe(
       '<ul>\n  <li>a\n    <blockquote><p>q\n- m</p></blockquote>\n  </li>\n</ul>',
+    )
+  })
+
+  it('control: a blank line after the prose escapes it too', () => {
+    expect(carveToHtml('- a\n  > - x\n  p\n\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 

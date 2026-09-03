@@ -7517,6 +7517,22 @@ function trackItemLazyState(
   // absorption already under way survives it.
   state.absorbingFence = wasAbsorbing
   state.lazyFoldable = true
+  // A QUOTE SURVIVES ITS OWN LAZY LINE. Prose here is the quote's lazy text,
+  // not a line that ended it, so dropping `quoteInner` told the collector one
+  // line later that no quote was open and the marker below opened an item at
+  // the item's content column instead of folding (carve-js#1615). No "and its
+  // paragraph is still open" guard: the tracker below records that fact and
+  // every consumer re-reads it, and adding one changed no output over 8992
+  // documents.
+  if (wasQuote !== null) {
+    trackBlockQuoteLazyState(
+      content,
+      wasQuote,
+      () => true,
+      () => true,
+    )
+    state.quoteInner = wasQuote
+  }
 }
 
 function parseList(lexer: Lexer): List {
