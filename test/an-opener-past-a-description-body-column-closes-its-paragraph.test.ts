@@ -166,11 +166,12 @@ describe('an opener that leaves a container OPEN is not covered', () => {
     )
   })
 
-  it("a CLOSED container at the column ends the body [PRE-EXISTING divergence]", () => {
-    // The container no longer collects, so the body ends - but the oracle keeps
-    // `tail` in the `dd` as a sibling paragraph and carve-js publishes it
-    // outside the list. Unmoved by this change (measured on main), pinned so the
-    // remaining gap is visible rather than silent.
+  it("a CLOSED container at the column ends the body", () => {
+    // The container no longer collects, so the body ends and `tail` is a
+    // document paragraph. carve-js#1620 read the oracle's contrary answer as a
+    // carve-js defect; re-measured it is the oracle's description-body arm that
+    // diverges, and the rows are pinned in
+    // a-description-body-ends-where-every-other-container-ends.test.ts.
     expect(carveToHtml(":: term\n:  definition\n   ::: note\n   :::\ntail\n")).toBe(
       "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>",
     )
