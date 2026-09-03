@@ -8027,7 +8027,25 @@ function parseList(lexer: Lexer): List {
           // which is what `-   x` / `    - a` / `  - b` did, nesting `b` under
           // `a` where the executable spec folds it (carve#603). One column
           // reaches no content column at all, so the fold holds at every depth.
-          lazyLine = ' ' + l.replace(/^[ \t]+/, '')
+          //
+          // A COMMENT ALREADY AT COLUMN 0 KEEPS IT (carve-js#1623). The column
+          // is a clamp on a line that has indentation to reduce; added to a
+          // line authored flush left it is not a clamp but source the author
+          // never wrote, and `attachDocumentOffsets` charges it back to the
+          // document - the sub-line is one character longer than its document
+          // line, the prefix goes to -1, and the span starts on the newline
+          // ENDING THE LINE ABOVE with `startColumn: 0`, below the AST schema's
+          // integer>=1. Only a DEGRADED comment fence reaches here at column 0,
+          // and only since carve-js#1607 stopped it ending the item; its `%%`
+          // spelling never took this branch at all, which is the control for
+          // the position it should have had.
+          //
+          // The exemption is the comment's alone. An unterminated code fence
+          // arrives here flush left too and NEEDS the column: without it the
+          // line opens a code block at the item's own column 0 instead of
+          // staying the paragraph's inline verbatim run (carve-js#540).
+          const flushed = l.replace(/^[ \t]+/, '')
+          lazyLine = flushed === l && RE_COMMENT_LINE.test(flushed) ? l : ' ' + flushed
         }
         nested.push(lazyLine)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
