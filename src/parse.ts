@@ -1122,10 +1122,25 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     const subLine = sub.lines[i]
     if (subLine === undefined) return
     let literalSuffix: boolean | undefined
+    // A LAZY-FRAMED LINE IS STILL PLACEABLE (markup-carve/carve-js#1624). The
+    // frame is three characters no document can spell, prepended by the quote
+    // collector, and the line's indentation is stripped with it - so the frame
+    // makes the sub-line neither a suffix of its document line nor a
+    // synthetic-indent case, and this used to decline the whole sub-lexer.
+    // Declining costs every position under it: the folded paragraph and each of
+    // its inlines came out with no `pos` at all, while the containers above
+    // ended at the line before the text they own. The real content IS a suffix,
+    // which is all an anchor needs.
+    const unframed = stripLazyFrame(subLine)
+    const framed = unframed !== subLine
     const anchorsTo = (candidate: number): boolean => {
       const parentLine = parent.lines[candidate] ?? ''
       literalSuffix = parentLine.endsWith(subLine)
-      return literalSuffix || parentLine.endsWith(withoutSyntheticIndent(subLine))
+      return (
+        literalSuffix ||
+        parentLine.endsWith(withoutSyntheticIndent(subLine)) ||
+        (framed && parentLine.endsWith(unframed))
+      )
     }
     const parentIndex =
       mapped === undefined
@@ -1153,7 +1168,14 @@ function attachDocumentOffsets(sub: Lexer, parent: Lexer, startLineIndex: number
     // not, there is no honest offset to record and this declines - which now
     // means NO positions rather than local ones (see below).
     let prefix = parentLine.length - subLine.length
-    if (!(literalSuffix ?? parentLine.endsWith(subLine))) {
+    if (framed && parentLine.endsWith(unframed)) {
+      // The frame occupies no source, so the anchor is the unframed content's
+      // own prefix - the three characters are charged nowhere. The frame is
+      // gone before any length is measured off this line: the paragraph
+      // collector strips it as it pushes, which is where a framed line becomes
+      // text.
+      prefix = parentLine.length - unframed.length
+    } else if (!(literalSuffix ?? parentLine.endsWith(subLine))) {
       // Only reached when the line is NOT a literal suffix, which is the
       // straddling-tab case alone - so the synthetic-indent trim is computed
       // here rather than for every line.
