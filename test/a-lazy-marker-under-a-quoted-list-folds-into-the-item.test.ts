@@ -32,13 +32,15 @@ import { carveToHtml } from '../src/index.js'
  * them carries a COMMENT payload (markup-carve/carve#1902's quote-host
  * exemption), while all 562 documents carrying a `- m` payload agree.
  *
- * THE BAND LEFT ALONE. markup-carve/carve#1905 is open on the shape where the
- * unmarked line reaches an ENCLOSING ITEM's content column - `- a` / `  > - x`
- * / `  - m`. There §24 C3 also speaks and the clauses point two ways, so it
- * wants a ruling rather than an engine fix. An unmarked line can never be
- * inside anything under a `>`, so the columns it can reach are exactly those of
- * items OUTSIDE the quote; the fix is held back there and nowhere else, and the
- * last block below pins that the answer did not move.
+ * THE ENCLOSING-COLUMN BAND FOLDS TOO, ruled on markup-carve/carve#1905 and
+ * ported here (carve-js#1615). `- a` / `  > - x` / `  - m` puts the unmarked
+ * line on the enclosing item's content column, and §24 C3 was read as speaking
+ * there. It does not: A QUOTE IS REACHED BY ITS MARKER, AND A COLUMN NEVER
+ * REACHES INTO ONE (`01-layout.ebnf:330`), so a line writing no `>` is in no
+ * quote whatever column it lands on and only PART 0's lazy fold touches it.
+ * The paragraph twin already folded at that column in every reader; this makes
+ * the marker twin agree with it. The last block below pins the band and the
+ * controls that bound it.
  */
 
 describe('a lazy marker under a quoted list folds into the open item', () => {
@@ -121,33 +123,62 @@ describe('what the fold does not reach', () => {
   })
 })
 
-describe('the band markup-carve/carve#1905 is open on does not move', () => {
-  // Each of these puts the unmarked line on an ENCLOSING ITEM's content column,
-  // which is the one place §24 C3 has something to say. The answers below are
-  // what carve-js produced BEFORE this change, pinned so the fix cannot reach
-  // them by accident; they are NOT the oracle's, and the ticket decides which
-  // of the three answers is right.
-  it('a quote below the item lead keeps its sibling item', () => {
+describe('an unmarked marker at an enclosing item content column folds', () => {
+  // Each of these puts the unmarked line on an ENCLOSING ITEM's content column.
+  // The answers are the executable spec's, at spec main `1a50d213`.
+  it('a quote below the item lead', () => {
     expect(carveToHtml('- a\n  > - x\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x</li>\n        <li>m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
     )
   })
 
-  it('one quote deeper keeps it too - the hold-back travels', () => {
+  it('one quote deeper', () => {
     expect(carveToHtml('- a\n  > > - x\n  - m\n')).toBe(
-      '<ul>\n  <li>a\n    <blockquote>\n      <blockquote>\n        <ul>\n          <li>x</li>\n          <li>m</li>\n        </ul>\n      </blockquote>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>a\n    <blockquote>\n      <blockquote>\n        <ul>\n          <li>x\n- m</li>\n        </ul>\n      </blockquote>\n    </blockquote>\n  </li>\n</ul>',
     )
   })
 
-  it('a quote ON the item lead keeps it - same column, same band', () => {
+  it('a quote ON the item lead - the marker-lead spelling', () => {
     expect(carveToHtml('- > - a\n  - m\n')).toBe(
-      '<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>a</li>\n        <li>m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <blockquote>\n      <ul>\n        <li>a\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
     )
   })
 
   it('two items deep, at the inner item content column', () => {
     expect(carveToHtml('- - > - a\n    - m\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <ul>\n            <li>a</li>\n            <li>m</li>\n          </ul>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>',
+      '<ul>\n  <li>\n    <ul>\n      <li>\n        <blockquote>\n          <ul>\n            <li>a\n- m</li>\n          </ul>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  it('prose between them folds too - the quote survives its own lazy line', () => {
+    expect(carveToHtml('- a\n  > - x\n  p\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np\n- m</li>\n      </ul>\n    </blockquote>\n  </li>\n</ul>',
+    )
+  })
+
+  // CONTROLS. A blank line is the only exit, and with no quote above it the
+  // marker opens an item as it always has.
+  it('control: a blank line escapes the quote', () => {
+    expect(carveToHtml('- a\n  > - x\n\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  it('control: the paragraph twin, which already folded', () => {
+    expect(carveToHtml('- a\n  > q\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <blockquote><p>q\n- m</p></blockquote>\n  </li>\n</ul>',
+    )
+  })
+
+  it('control: a blank line after the prose escapes it too', () => {
+    expect(carveToHtml('- a\n  > - x\n  p\n\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <blockquote>\n      <ul>\n        <li>x\np</li>\n      </ul>\n    </blockquote>\n    <ul>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
+
+  it('control: no quote, a sibling item above', () => {
+    expect(carveToHtml('- a\n  - b\n  - m\n')).toBe(
+      '<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n      <li>m</li>\n    </ul>\n  </li>\n</ul>',
     )
   })
 })

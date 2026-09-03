@@ -779,16 +779,6 @@ class Lexer {
    * True for the sub-lexer over a LIST ITEM's own body, and for that body only.
    */
   markerOpensSublist = false
-  /**
-   * True once ANY enclosing lexer was a list item's body - unlike
-   * `markerOpensSublist`, this one travels into every container inside it.
-   *
-   * A line reaching a quote inside an item reaches the ITEM's content column
-   * too, so PART 9 §24 C3 has something to say about it and the clauses point
-   * two ways (markup-carve/carve#1905). The quote's own lazy-marker fold is
-   * held back there, and only there.
-   */
-  withinItemBody = false
 
   // Negative cache for fenceHasCloser (paragraph-interruption closer
   // lookahead), the same entry the container-local scans keep: per fence
@@ -1070,7 +1060,6 @@ function nestedSubLexer(
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
   sub.quoteLazyLines = parent.quoteLazyLines
-  sub.withinItemBody = parent.withinItemBody || parent.markerOpensSublist
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
   sub.footnoteDefPos = parent.footnoteDefPos
@@ -6053,13 +6042,13 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     // parses as the quote's body, where the marker read as an opener again and
     // put an item INSIDE the quote for a line carrying no `>`.
     //
-    // Only where §24 C3 has nothing to say. Inside a LIST ITEM's body - the
-    // item's own lexer, or any container nested in it - column 0 IS the item's
-    // content column, so the line reaches a container column and the two
-    // clauses point two ways: the band markup-carve/carve#1905 is open on. It
-    // is left exactly as it was. The second flag is what makes that hold one
-    // quote deeper, where the first does not travel.
-    if (!lexer.markerOpensSublist && !lexer.withinItemBody && isListMarkerLine(ln)) {
+    // AT EVERY COLUMN, including one an enclosing item hands out (ruled on
+    // markup-carve/carve#1905, ported at carve-js#1615). A QUOTE IS REACHED BY
+    // ITS MARKER, AND A COLUMN NEVER REACHES INTO ONE - so a line writing no
+    // `>` is in no quote wherever it lands, and §24 C3 never governs it. The
+    // hold-back this used to carry made the marker twin differ from the
+    // paragraph twin, which folds there in every reader.
+    if (isListMarkerLine(ln)) {
       lexer.quoteLazyMarkerLines.add(lexer.lineNumber(lineIndex))
     }
     // The shape-blind half of the same fact, for the consumers the two sets
@@ -7528,6 +7517,22 @@ function trackItemLazyState(
   // absorption already under way survives it.
   state.absorbingFence = wasAbsorbing
   state.lazyFoldable = true
+  // A QUOTE SURVIVES ITS OWN LAZY LINE. Prose here is the quote's lazy text,
+  // not a line that ended it, so dropping `quoteInner` told the collector one
+  // line later that no quote was open and the marker below opened an item at
+  // the item's content column instead of folding (carve-js#1615). No "and its
+  // paragraph is still open" guard: the tracker below records that fact and
+  // every consumer re-reads it, and adding one changed no output over 8992
+  // documents.
+  if (wasQuote !== null) {
+    trackBlockQuoteLazyState(
+      content,
+      wasQuote,
+      () => true,
+      () => true,
+    )
+    state.quoteInner = wasQuote
+  }
 }
 
 function parseList(lexer: Lexer): List {
