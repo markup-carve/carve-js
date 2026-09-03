@@ -1018,6 +1018,34 @@ function subLexer(
  * parent split on the same normalization - except the trailing-blank drop,
  * which the Lexer now reproduces directly.
  */
+/**
+ * THE LAZY FRAME (PART 9 SS10 I2, markup-carve/carve-js#1609).
+ *
+ * Prepended to a line a block quote admitted as LAZY continuation text. Its
+ * first character is not whitespace, so the line stands at column 0 AND
+ * matches no block opener at all - which is the whole difference between a
+ * frame and a dedent. A dedented line still re-classifies at the column it
+ * was dedented to, and that is what opened a real code fence under
+ * `> - :: t` for a line the quote had already folded into the term.
+ *
+ * Unforgeable rather than merely unlikely: `parse` replaces every U+0000 with
+ * U+FFFD before the first line is read (PART 0 INPUT), so no document can
+ * spell it.
+ */
+const LAZY_FRAME = '\u0000L\u0000'
+
+/**
+ * A line with the LAZY frame removed.
+ *
+ * Every consumer that turns a line into TEXT calls this; the predicates
+ * deliberately do not, because failing them is what the frame is for. The
+ * def-list ENTRY matcher is the one predicate that unframes, which is PART 9
+ * SS24 C3's lenient entry.
+ */
+function stripLazyFrame(line: string): string {
+  return line.startsWith(LAZY_FRAME) ? line.slice(LAZY_FRAME.length) : line
+}
+
 function nestedSubLexer(
   parent: Lexer,
   lines: readonly string[],
@@ -5435,7 +5463,8 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
    * rather than shipping as a guard nothing can exercise (markup-carve/carve#755).
    */
   function lineRange(lx: Lexer, first: number, last: number): Position | undefined {
-    const lastLine = lx.lines[last]
+    // Unframed for the same reason, and unobservable for the same one.
+    const lastLine = lx.lines[last] === undefined ? undefined : stripLazyFrame(lx.lines[last]!)
     if (lastLine === undefined) return undefined
 
     return {
@@ -5448,14 +5477,20 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     }
   }
 
-  while (!lexer.eof() && RE_DEFLIST_TERM.test(lexer.peek()!)) {
+  // THE ENTRY MATCHER IS THE ONE PREDICATE THAT SEES THROUGH THE FRAME
+  // (PART 9 SS24 C3's LENIENT def-list entry). A `::` or `:` line a quote
+  // folded in reaches no column here, so it attaches to the open term from
+  // wherever it landed - which is why this collector unframes before every
+  // entry test while the block dispatch never does.
+  const peekEntry = (n = 0) => stripLazyFrame(lexer.peek(n) ?? '')
+  while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry())) {
     const terms: InlineNode[][] = []
     const termSpans: (Position | undefined)[] = []
     const definitions: BlockNode[][] = []
     const definitionLines: number[] = []
     const definitionSpans: (Position | undefined)[] = []
     while (!lexer.eof()) {
-      const t = RE_DEFLIST_TERM.exec(lexer.peek()!)
+      const t = RE_DEFLIST_TERM.exec(peekEntry())
       if (!t) break
       const termLineIndex = lexer.pos
       lexer.consume()
@@ -5470,20 +5505,32 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       let continuationLines = 0
       while (!lexer.eof()) {
         const next = lexer.peek()!
+        // The ENTRY tests unframe; `endsHeadingOrQuote` deliberately does not,
+        // because a framed heading is the term's text rather than a block.
+        const nextEntry = stripLazyFrame(next)
         if (
           isBlankLine(next) ||
-          RE_DEFLIST_TERM.test(next) ||
-          RE_DEFLIST_DEF.test(next) ||
-          RE_DEFLIST_MARKER_EMPTY.test(next) ||
+          RE_DEFLIST_TERM.test(nextEntry) ||
+          RE_DEFLIST_DEF.test(nextEntry) ||
+          RE_DEFLIST_MARKER_EMPTY.test(nextEntry) ||
           endsHeadingOrQuote(lexer)
         )
           break
-        termText += '\n' + next
+        // The term is the other place a framed line becomes text. The frame
+        // kept the opener tests above from claiming it; it comes off before
+        // the fold, exactly as the oracle unframes here.
+        termText += '\n' + stripLazyFrame(next)
         continuationLines++
         lexer.consume()
       }
       termText = dropTrailingWhitespace(termText)
-      const termStart = lexer.lines[termLineIndex]!.indexOf(t[1]!)
+      // `t` was matched against the UNFRAMED line, so the index comes from
+      // that same string: the frame is not in the author's source and must
+      // not be counted into the offset. This corrects arithmetic rather than
+      // output - a framed line only ever reaches an item body sub-lexer, which
+      // is unanchored and publishes no positions, so no document of the 13790
+      // swept moves. It is here so the two halves read the same string.
+      const termStart = stripLazyFrame(lexer.lines[termLineIndex]!).indexOf(t[1]!)
       // A continuation line folds in whole, indent included, and the scanner
       // strips that indent when it builds the text node - so a single base
       // offset drifts by the indent on every line after the first. Each line
@@ -5527,11 +5574,11 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       if (isBlankLine(lexer.peek()!)) {
         let look = 1
         while (isBlankLine(lexer.peek(look))) look++
-        if (!RE_DEFLIST_DEF.test(lexer.peek(look) ?? '')) break
+        if (!RE_DEFLIST_DEF.test(peekEntry(look))) break
         for (let k = 0; k < look; k++) lexer.consume()
       }
       const defLineIndex = lexer.pos
-      const d = RE_DEFLIST_DEF.exec(lexer.peek()!)
+      const d = RE_DEFLIST_DEF.exec(peekEntry())
       if (!d) break
       lexer.consume()
       definitionLines.push(lexer.lineNumber(defLineIndex))
@@ -7786,15 +7833,34 @@ function parseList(lexer: Lexer): List {
       // ONE SHAPE, DELIBERATELY. Every quote-lazy line has this much in common,
       // but sending them all down the lazy arm moves fence-shaped lines off the
       // oracle's answer as well - the general port is its own measurement.
-      const quoteLazyDescription =
-        lazyState.inDefList !== 'description' &&
+      // EVERY quote-lazy line, not the three shapes ported one at a time (a
+      // link definition, a list marker at markup-carve/carve#1904, a description
+      // marker at markup-carve/carve-js#1606). They shared one fact and it is
+      // general: the line carries no `>`, so PART 0 makes it the innermost open
+      // paragraph's text wherever it landed, and it reaches no content column
+      // inside the item at all.
+      //
+      // #1606'S DESCRIPTION-OPEN GATE IS GONE, and the frame is why. That gate
+      // held a `:` line back from the lazy arm while a description body was
+      // open, so the body would read it as its own continuation rather than a
+      // second entry. The frame gets the same answer structurally, because it is
+      // the ORDER of the oracle's two collectors: the body's fold tests a lazy
+      // line BEFORE anything unframes it and so sees plain text, while the
+      // term's fold tests for an entry AFTER. Measured dead over 5880 documents
+      // written to exercise exactly that state, so it is not carried here as a
+      // condition that cannot fire.
+      const quoteLazyFramed =
         lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
-        RE_DEFLIST_DEF.test(l.replace(/^[ \t]+/, ''))
-      if (
-        lw >= contentCol &&
-        !quoteLazyDescription &&
-        !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))
-      ) {
+        // AN OPEN FENCE CLASSIFIES NOTHING, so the frame has no work to do
+        // inside one and must not divert the line: a fence body takes every
+        // line it is given, and it needs this one at the column the item's
+        // content column leaves it at.
+        !insideOpenFence(lazyState)
+      if (lw >= contentCol && !quoteLazyFramed &&
+        // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
+        // quote-lazy MARKER line never reaches the content-column arm, not even
+        // inside an open fence, where the gate above hands the line back.
+        !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
         bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
           nested.push('')
@@ -7860,10 +7926,16 @@ function parseList(lexer: Lexer): List {
         let lazyLine = l
         if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
           lazyLine = l.replace(/^[ \t]+/, '')
-        } else if (
-          quoteLazyDescription ||
-          (lazyState.inDefList && indentColumns(l, contentCol) < contentCol)
-        ) {
+        } else if (quoteLazyFramed) {
+          // Stripped WHOLE and framed. Its indentation inside the quote body
+          // means nothing, and the frame - not a leftover column of indent - is
+          // what now keeps it from re-classifying, so there is no reason to keep
+          // any of it. That residue is what put two columns of indent inside a
+          // `dt`.
+          lazyLine = l.startsWith(LAZY_FRAME)
+            ? l
+            : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+        } else if (lazyState.inDefList && indentColumns(l, contentCol) < contentCol) {
           lazyLine = l.replace(/^[ \t]+/, '')
         } else if (indentColumns(l, contentCol) < contentCol && lineOpensBlock(l.replace(/^[ \t]+/, ''))) {
           // A block-SHAPED line below the content column opens nothing (§24 C3:
@@ -9307,7 +9379,9 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     )
       break
     lexer.consume()
-    lines.push(ln)
+    // The frame did its work in the interruption test above; a paragraph is
+    // where a framed line becomes text, so it comes off here.
+    lines.push(stripLazyFrame(ln))
   }
   // Every paragraph line has its leading whitespace stripped (djot /
   // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
