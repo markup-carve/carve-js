@@ -6414,8 +6414,20 @@ function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
   // separate reason.
   if (RE_RAW_FENCE.test(line)) return fenceHasCloser(lexer, RE_RAW_FENCE.exec(line)![1]!)
   if (RE_FENCE.test(line)) return fenceHasCloser(lexer, RE_FENCE.exec(line)![2]!)
+  // A DEGRADED COMMENT FENCE ENDS NOTHING (§28, markup-carve/carve#1903, ported
+  // at carve-js#1607). With no exact-width closer ahead the opener is one
+  // `comment_line` for every question the layout asks, container OWNERSHIP
+  // included - and a `%%` line leaves the item open in every reader, so this
+  // must too. The lookahead is the one §10 I4 already makes for a verbatim
+  // fence, two lines up.
+  //
+  // A TERMINATED `%%%` here is untouched: a comment BLOCK written at the
+  // document's own opener column still ends the item (corpus 214). The closer
+  // is looked for AHEAD rather than on the next line, which is corpus 445 row 9.
+  if (RE_COMMENT_BLOCK.test(line)) {
+    return commentBlockHasCloser(lexer, RE_COMMENT_BLOCK.exec(line)![1]!.length)
+  }
   return (
-    RE_COMMENT_BLOCK.test(line) ||
     // A flush-left colon-fence shaped line ends list lazy continuation
     // regardless of outer-stream closer lookahead. If the line belongs to the
     // item, it must be indented and parsed by the item sub-lexer; otherwise a
