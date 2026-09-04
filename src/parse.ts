@@ -4169,6 +4169,18 @@ type QuotedFenceCloserMemo = Map<string, FenceCloserMemoEntry>
 /**
  * Whether a code or raw fence opened inside a LIST ITEM closes later in that
  * item's content stream (PART 9 §10's CLOSER LOOKAHEAD, markup-carve/carve#950).
+ *
+ * THE MEMO IS KEYED BY FENCE CHARACTER ALONE, DELIBERATELY, even though a
+ * description body now asks at more than one column. Adding `contentCol` to the
+ * key is the obvious reading, and measuring it against the executable spec at
+ * carve `063656e` refuses it twice over: on 162 mixed-COLUMN fence bodies the
+ * column-keyed memo agrees on 28 where this one agrees on 56, and on 144
+ * mixed-WIDTH ones it agrees on NONE where this one agrees on 22. In both it
+ * removes no divergence and adds only divergence. The oracle reaches its answer
+ * from a body scan that is flat in the same way, so partitioning by column buys
+ * self-consistency at the cost of the arbiter. Raised three times by `codex
+ * review` on this change, the third time with a worked example; each time the
+ * measurement went the other way. Re-measure before changing it.
  */
 function itemFenceHasCloser(
   lexer: Lexer,
@@ -5280,15 +5292,28 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
      * `atContentColumn` is false only for a line the body took LAZILY, from
      * below its content column. An invisible line there adds no block, so the
      * paragraph it was folded into is still open behind it.
+     *
+     * `openerCol` is the column the fence on this line is READ at, which is the
+     * body's own column plus whatever residual indent the flush reading below
+     * stripped. THE LOOKAHEAD MUST ASK IN THE SPELLING THE TRACKER READS
+     * (markup-carve/carve#1930): with the opener read flush and the closer
+     * sought at the body's column, an over-indented pair never matched, the
+     * fence degraded to inline verbatim and its paragraph stayed open one column
+     * past where the same fence ends the body.
      */
-    const track = (content: string, atLineIndex?: number, atContentColumn = true): void => {
+    const track = (
+      content: string,
+      atLineIndex?: number,
+      atContentColumn = true,
+      openerCol = contentCol,
+    ): void => {
       trackItemLazyState(
         content,
         lazyState,
         (marker) =>
           atLineIndex === undefined
             ? true
-            : itemFenceHasCloser(lexer, marker, atLineIndex, contentCol, defFenceMemo),
+            : itemFenceHasCloser(lexer, marker, atLineIndex, openerCol, defFenceMemo),
         atContentColumn,
       )
     }
@@ -5314,6 +5339,17 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     // line (`: > q`) is already in `lazyState.quoteInner` before this loop
     // runs and never passes through the flag, so the gate below asks both.
     let bodyHoldsQuote = false
+    /**
+     * The residual indent the currently open block's OPENER was written at, or
+     * null while nothing is open.
+     *
+     * `normalizeAuthoredBodyBases` dedents a block by the one column its opener
+     * established, so only lines written at that column are the block's own
+     * structure and anything deeper is payload. The tracker reads the body one
+     * line at a time and has to carry the same base to reach the same answer
+     * (markup-carve/carve#1930).
+     */
+    let authoredBase: number | null = null
     // The boundary set for a `+`-attached block in a definition body: a blank,
     // a further `+`, or the next term / description marker. Whether a line in
     // that set actually ENDS the block is `insideOpenFence`'s answer, layered
@@ -5433,13 +5469,24 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         // columns answer alike - an answer that MOVES between the body's column
         // and one past it is reading indentation rather than the rule.
         //
-        // AN OPENER THAT LEAVES A PARAGRAPH OPEN IS NOT COVERED, which the ruling
-        // states: a `:::` container keeps collecting, so the line below it is
-        // INSIDE the admonition rather than after the body. That is asked of the
-        // tracker rather than enumerated here, so it cannot drift out of step
-        // with the shapes the tracker knows.
+        // AN OPENER THAT LEAVES A BLOCK OPEN IS READ IN THE SAME SPELLING, AT ONE
+        // AUTHORED BASE (markup-carve/carve#1930). Refusing the flush reading for
+        // those left the body's fence state untracked across this whole band:
+        // `::: note` one column past never reached `divDepth`, its `:::` was never
+        // a closer, and the body ended on prose - so a CLOSED fence held the
+        // paragraph open and `tail` folded in, where the same body written AT the
+        // column ends it.
+        //
+        // The base is the OPENER's residual indent, and only lines written at it
+        // are that block's structure. `normalizeAuthoredBodyBases` dedents a block
+        // by the one column its opener established and leaves anything deeper
+        // alone, so `::: note` at the column with its `:::` one deeper closes
+        // nothing - the run is payload and the container is still collecting.
+        // Reading every over-indented line flush on its own closed those, and
+        // moved 26 documents off the oracle while fixing 72.
         const flush = dedented.replace(/^[ \t]+/, '')
         if (flush.startsWith('>')) bodyHoldsQuote = true
+        const residual = indentColumns(ln) - contentCol
         let bodyReadsFlush = false
         if (!bodyHoldsQuote && lazyState.quoteInner === null && flush !== dedented && lineOpensItemBlock(flush)) {
           // A COPY, and one that cannot write back. `quoteInner` is the state's
@@ -5450,9 +5497,36 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
           // free and true - and it stays safe if that gate is ever relaxed.
           const probe: ItemLazyState = { ...lazyState, quoteInner: null }
           trackItemLazyState(flush, probe, () => true, true)
-          bodyReadsFlush = !probe.lazyFoldable && !insideOpenFence(probe)
+          if (!probe.lazyFoldable) {
+            if (insideOpenFence(lazyState)) {
+              // Inside an open block: structure at the block's own base, payload
+              // below it. This is what keeps a deeper `:::` from closing an
+              // admonition its opener wrote one column shallower.
+              //
+              // AND NOT A DEEPER CONTAINER. `bodyClosesAFenceAt` scans the body
+              // flat - it closes a colon fence on the first bare run of its own
+              // width and steps over code-fence payload, with no stack - so a
+              // nested opener is not structure to it. Reading one as an opener
+              // here made the inner closer close the outer block and published a
+              // follower the oracle keeps in the body, on 10 documents.
+              bodyReadsFlush = residual === authoredBase && probe.divDepth <= lazyState.divDepth
+            } else {
+              // Nothing open. A LEAF block (a heading, a table, a definition)
+              // needs no base - that arm is carve#1911's, unchanged. A line that
+              // OPENS one fixes the base the rest of that block is read at.
+              bodyReadsFlush = true
+              if (insideOpenFence(probe)) authoredBase = residual
+            }
+          }
         }
-        track(bodyReadsFlush ? flush : dedented, lineIndex)
+        track(
+          bodyReadsFlush ? flush : dedented,
+          lineIndex,
+          true,
+          bodyReadsFlush ? contentCol + residual : contentCol,
+        )
+        // The base belongs to the block that established it and dies with it.
+        if (!insideOpenFence(lazyState)) authoredBase = null
         lexer.consume()
         continue
       }
