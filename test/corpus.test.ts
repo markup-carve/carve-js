@@ -739,6 +739,24 @@ const IMPLEMENTED = new Set([
   // documents of the category byte-for-byte, and renders the four to the same
   // bytes as each other - which is the rule the category exists to pin.
   'a-definition-between-two-open-content-columns-reaches-the-outer-one',
+  // markup-carve/carve#1930, the ruling this pin bump carries: a description
+  // body whose last block is a CLOSED fence has no open paragraph, so the
+  // flush-left line below it is the document's. The engine change is in
+  // `parseDefBody`; the UNTERMINATED twin is row 3 and keeps the other answer.
+  'a-closed-fence-in-a-description-body-ends-it',
+  // The eight below need no engine work at this pin: each one's fix merged
+  // while the submodule still pointed at an older spec, so the rows landed
+  // upstream with nothing here to run them. Measured 104 rows, all byte-exact
+  // on this build before the entries were added - the pin, not the parser, is
+  // what was holding them back.
+  'a-comment-below-a-description-body-s-column-ends-the-body',
+  'a-degraded-comment-fence-at-a-container-s-column-0-keeps-the-follower-in-the-item',
+  'a-degraded-comment-fence-leaves-a-lazy-follower-where-the-line-form-does',
+  'a-marker-folds-into-a-quote-below-it',
+  'a-marker-folds-only-strictly-between-the-item-s-base-and-content-column',
+  'an-opener-at-or-past-a-description-body-s-column-closes-its-paragraph',
+  'an-unterminated-comment-fence-in-a-list-item-is-the-line-form',
+  'the-host-does-not-change-which-column-a-definition-reaches',
 ])
 
 /**

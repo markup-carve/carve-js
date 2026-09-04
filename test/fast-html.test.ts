@@ -60,10 +60,12 @@ describe('borrowed HTML layout', () => {
     }
     // The population this sweep compares, so a fast path that quietly stopped
     // accepting anything cannot pass by comparing nothing. It moves only when
-    // the pinned corpus does: the bump to carve `d0b6c92` added
-    // `406-a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content`,
-    // whose shadow render already matches the authoritative pipeline above.
-    expect(accepted).toBe(52)
+    // the pinned corpus does: the bump to carve `063656e` added
+    // `448-a-marker-folds-into-a-quote-below-it-6`, the one document new at
+    // this pin that the fast path accepts. Acceptance cannot move with a parser
+    // change - `fast-html.ts` takes only a TYPE from `parse.ts` - so a shift
+    // here is a corpus-population fact and is re-derived, never just bumped.
+    expect(accepted).toBe(53)
   })
 
   it('falls back for normalization-sensitive or stateful shapes', () => {
