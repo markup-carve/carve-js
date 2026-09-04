@@ -96,7 +96,13 @@ describe('the span a degraded comment fence publishes is the fence', () => {
 describe('the clamp still applies where the line has indentation to reduce', () => {
   it('an indented comment fence stays with the item [corpus 187]', () => {
     const src = '- a\n %%% n\n x\n %%%\n tail\n'
-    expect(spans(src)).toEqual([' %%% n\n x\n %%%'])
+    // THE CLAMP IS ABOUT THE PARSE, NOT THE SPAN. It still reduces the line to
+    // one column - the HTML below is what says so, and it has not moved - but
+    // the span no longer opens on that column. A comment is a LEAF, and a leaf
+    // begins at its markup (markup-carve/carve#1928, carve-js#1631); only a
+    // container keeps the latitude to begin inside the indentation that places
+    // its child's marker. This row read `' %%% n...'`, one space early.
+    expect(spans(src)).toEqual(['%%% n\n x\n %%%'])
     expect(carveToHtml(src)).toBe('<ul>\n  <li>a\n    tail\n  </li>\n</ul>')
   })
 

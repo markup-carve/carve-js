@@ -3550,6 +3550,31 @@ const ENDS_AT_LAST_PLACED_CHILD = new Set([
 ])
 
 /*
+ * The block types whose span may begin PART WAY INTO the leading indentation,
+ * mirroring `INDENT_LATITUDE` in the spec's `scripts/spec/ast-positions.mjs`.
+ *
+ * The indent is what places a nested item's marker, so a CONTAINER's span
+ * legitimately starts inside it - at its parent's content column. A LEAF has no
+ * child to place, so PART 12 §4 reads literally there and its span begins at
+ * its own markup (markup-carve/carve#1928, ruled for this engine as
+ * markup-carve/carve-js#1631).
+ *
+ * A TYPE SET rather than "has children", for the reason the spec gives: an
+ * EMPTY container is still a container, and a leaf that happens to hold inline
+ * children is still reached by its own markup.
+ */
+const INDENT_LATITUDE = new Set([
+  'admonition',
+  'block_quote',
+  'definition_list',
+  'div',
+  'line_block',
+  'list',
+  'list_item',
+  'table',
+])
+
+/*
  * What an EMPTIED container of each kind spans instead: the markup that opened
  * it, and the whitespace separating that markup from the content it never got.
  *
@@ -3584,6 +3609,19 @@ function attachBlockPos(
     endOffset: lexer.lineOffset(endLineIndex) + endLine.length,
   }
   const type = (node as { type?: string }).type
+  // A LEAF BEGINS AT ITS MARKUP. The line offset above is the start of the
+  // LINE, which for an indented leaf is the first space of a run that places
+  // nothing - a `comment` at a description body's column started on the fourth
+  // space rather than on its `%`. Containers keep the latitude and are excluded;
+  // `paragraph` is in neither camp and is overwritten by its first inline below.
+  if (type !== undefined && !INDENT_LATITUDE.has(type)) {
+    const startLine = lexer.lines[startLineIndex] ?? ''
+    const lead = leadingWhitespace(startLine)
+    if (lead > 0) {
+      node.pos.startOffset = (node.pos.startOffset ?? 0) + lead
+      node.pos.startColumn = (node.pos.startColumn ?? 1) + lead
+    }
+  }
   if ((type === 'list' || type === 'list_item') && lexer.sublistsCarryAuthoredBase) {
     const startLine = lexer.lines[startLineIndex] ?? ''
     const leadChars = leadingWhitespace(startLine)
