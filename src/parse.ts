@@ -3750,7 +3750,13 @@ function parseRawBlock(lexer: Lexer): RawBlock {
       break
     }
     lexer.consume()
-    lines.push(ln)
+    // SAME AS `parseFence`, and for the same reason: the frame did its work in
+    // the closer test above, keeping a closing run the CONTAINER folded in from
+    // closing this block, and a verbatim body is where a framed line becomes
+    // text. Without this the sentinel reached rendered raw output on 180 of 400
+    // nested raw-fence documents - a `=FORMAT` lead is a fence too, so the
+    // collector frames its folded lines exactly as it does a code fence's.
+    lines.push(stripLazyFrame(ln))
   }
   // `join` collapses both no payload lines and one blank payload line to the
   // same empty string. They render differently: the former contributes

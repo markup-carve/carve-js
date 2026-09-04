@@ -121,8 +121,35 @@ describe('an unfinished fence on a nested item lead owns its body', () => {
       "C3-at-content-col": "- - ``` x\n    code\n    ```\n",
       "C5-blank-body": "- - ``` x\n\ncode\n```\n",
       "C4-div-nested": "- - ::: d\nbody\n:::\n",
+      /*
+       * A `=FORMAT` LEAD IS A FENCE TOO, and every row above is a CODE fence -
+       * so without these the check could not fail. `leadFence` matches
+       * `RE_RAW_FENCE` as well, the collector frames a raw fence's folded lines
+       * exactly as it does a code fence's, and `parseRawBlock` did not strip the
+       * frame the way `parseFence` does: the sentinel reached rendered output on
+       * 180 of 400 nested raw-fence documents. Raised by `codex review`.
+       */
+      "R11-raw-html": "- - ```=html\n<b>x</b>\n```\n",
+      "R12-raw-no-closer": "- - ```=html\n<b>x</b>\n",
+      "R13-raw-tilde": "- - ~~~=html\n<b>x</b>\n~~~\n",
+      "R14-raw-quote-host": "> - ```=html\n<b>x</b>\n```\n",
+      "R15-raw-ordered": "1. 1. ```=html\n<b>x</b>\n```\n",
+      "R16-raw-mismatched-closer": "- - ```=html\n<b>x</b>\n~~~\n",
+      "C6-raw-depth1": "- ```=html\n<b>x</b>\n```\n",
     })) {
       expect(carveToHtml(src)).not.toContain('\u0000')
     }
+  })
+
+  /*
+   * The frame comes off, and the folded closer stays BODY TEXT - the same two
+   * halves `parseFence` gets, asserted on the raw arm so a future change cannot
+   * satisfy the leak check above by dropping the line instead of unframing it.
+   */
+  it("a nested raw fence owns what the container folded in", () => {
+    const out = carveToHtml("- - ```=html\n<b>x</b>\n```\n")
+    expect(out).not.toContain('\u0000')
+    expect(out).toContain("<b>x</b>")
+    expect(out).toContain("```")
   })
 })
