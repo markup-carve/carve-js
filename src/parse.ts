@@ -730,6 +730,19 @@ class Lexer {
    */
   quoteLazyMarkerLines: Set<number> = new Set()
   /**
+   * Lines a LIST ITEM admitted below its content column as lazy text.
+   *
+   * The item's own reparse reads them again, and at that depth their column
+   * says nothing: the enclosing item already decided they were its lazy
+   * continuation, and clamped a block-shaped one to a single column so it
+   * reaches no content column below. What the clamp cannot carry is WHERE the
+   * line came from, and an item whose lead line opened an unfinished fence
+   * needs exactly that - a line the container folded in is the fence's body,
+   * while one written at that column in the source ends the item
+   * (markup-carve/carve-js#1630).
+   */
+  itemLazyLines: Set<number> = new Set()
+  /**
    * EVERY line a block quote admitted as lazy continuation text.
    *
    * `quoteLazyMarkerLines` above records one SHAPE; this records the FACT, for
@@ -1059,6 +1072,7 @@ function nestedSubLexer(
   sub.linkDefs = parent.linkDefs
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
+  sub.itemLazyLines = parent.itemLazyLines
   sub.quoteLazyLines = parent.quoteLazyLines
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
@@ -3682,8 +3696,13 @@ function parseFence(lexer: Lexer): CodeBlock | Figure {
       break
     }
     lexer.consume()
+    // The frame did its work in the closer test above - it is what keeps a
+    // closing run the CONTAINER folded in from closing this block - and a
+    // verbatim body is where a framed line becomes text, so it comes off here
+    // (markup-carve/carve-js#1630).
+    const body = stripLazyFrame(ln)
     // Strip the common indent of the opening fence (Djot rule)
-    lines.push(ln.slice(Math.min(indent, leadingWhitespace(ln))))
+    lines.push(body.slice(Math.min(indent, leadingWhitespace(body))))
   }
   const fenceEndIndex = lexer.pos
   const cb: CodeBlock = { type: 'code_block', content: lines.join('\n') }
@@ -3731,7 +3750,13 @@ function parseRawBlock(lexer: Lexer): RawBlock {
       break
     }
     lexer.consume()
-    lines.push(ln)
+    // SAME AS `parseFence`, and for the same reason: the frame did its work in
+    // the closer test above, keeping a closing run the CONTAINER folded in from
+    // closing this block, and a verbatim body is where a framed line becomes
+    // text. Without this the sentinel reached rendered raw output on 180 of 400
+    // nested raw-fence documents - a `=FORMAT` lead is a fence too, so the
+    // collector frames its folded lines exactly as it does a code fence's.
+    lines.push(stripLazyFrame(ln))
   }
   // `join` collapses both no payload lines and one blank payload line to the
   // same empty string. They render differently: the former contributes
@@ -8145,10 +8170,50 @@ function parseList(lexer: Lexer): List {
         }
         nested.push(lazyLine)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+        // The item's own reparse cannot see this from the column alone - the
+        // clamp above rewrote it - so record the FACT for the arm below.
+        if (indentColumns(l, contentCol) < contentCol) {
+          lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+        }
         // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
         // is the lazy continuation of the paragraph above it, which stays open
         // behind it (corpus 183, 197, 358).
         trackItemLazyState(lazyLine, lazyState, () => true, false)
+        lexer.consume()
+      } else if (
+        leadFence !== null &&
+        lazyState.inFence &&
+        pendingBlanks === 0 &&
+        indentColumns(l, contentCol) < contentCol &&
+        (lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
+          lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
+      ) {
+        // AN UNFINISHED FENCE ON THE LEAD LINE OWNS WHAT THE CONTAINER FOLDED
+        // IN (markup-carve/carve-js#1630). A fence at an item's block start
+        // runs to the end of its container, and a line the ENCLOSING item
+        // already admitted as lazy text is inside that container - so it is
+        // fence body, and a closing run written among those lines is body text
+        // too, because a fence's content is not re-scanned for structure.
+        //
+        // The `itemLazyLines` test is the whole rule. Without it this arm would
+        // also take a line the AUTHOR wrote below the column, and the outermost
+        // spelling of the document - `- ``` x` with a flush-left body, where no
+        // container folded anything - must keep ending the item and leaking the
+        // body to the document, which is what the executable spec does there
+        // and what every engine already agreed on.
+        //
+        // The leading whitespace goes: it is the enclosing item's one-column
+        // clamp, not the author's indentation, and the fence's body is measured
+        // from its own column.
+        // FRAMED, not merely dedented. The frame's first character is not
+        // whitespace and matches no block opener, which is what keeps a closing
+        // run among these lines from CLOSING the fence: it is content, and a
+        // fence's content is not re-scanned for structure. A dedent alone left
+        // the run closing the block it was written inside.
+        const framed = l.startsWith(LAZY_FRAME) ? l : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+        nested.push(framed)
+        nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
+        trackItemLazyState(framed, lazyState, () => true, false)
         lexer.consume()
       } else {
         break
