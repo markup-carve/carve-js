@@ -5697,6 +5697,17 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
       ) {
         const lineIndex = lexer.pos
+        // RECORD THE FOLD so the reparse can read it (markup-carve/carve-js#1650,
+        // carve#1947). A flush-left line this body folds in is invisible from the
+        // column alone; the description body is a container above the item just
+        // as a list is, so when that item's lead opened an unfinished fence the
+        // folded line is the fence's BODY - and parseList's fence-owns-its-body
+        // arm keys off exactly this set (carve-js#1630). Unconditional like the
+        // list collector's own recording; the reparse consumes it only for an
+        // item whose lead actually opened a fence.
+        if (indentColumns(ln, contentCol) < contentCol) {
+          lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
+        }
         bodyLines.push(ln)
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         track(ln, undefined, false)
