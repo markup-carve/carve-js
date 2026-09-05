@@ -542,10 +542,16 @@ export const isTableRow = (line: string): boolean => {
   if (!RE_TABLE_ROW.test(line)) return false
   if (!/\|[ \t]*$/.test(line) && rowAttrsFromLine(line).attrs === undefined) return false
   const cells = splitTableRow(rowAttrsFromLine(line).body)
-  // A row needs a non-empty cell OR at least two cells: `|||` (two empty cells)
-  // is a valid all-empty body row, but `||` (a single empty cell) is not a
-  // table. Matches carve-php / carve-rs.
-  return cells.some((cell) => cell.trim().length > 0) || cells.length >= 2
+  return cells.some((cell) => {
+    const parsed = parseCellMarkers(cell)
+    return (
+      parsed.content.trim().length > 0 ||
+      parsed.attrs !== undefined ||
+      parsed.align !== undefined ||
+      parsed.valign !== undefined ||
+      parsed.span !== undefined
+    )
+  })
 }
 // A `+`-prefixed continuation row (multi-line cell). Like the grammar's
 // continuation_row it ends with `|`; that trailing pipe distinguishes
@@ -5502,9 +5508,11 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       // on the `:  ` marker leaves no paragraph open for exactly the reason it
       // leaves none on a `- ` marker.
       const firstState = markerLineState(first)
-      lazyState.lazyFoldable = firstState.leavesParagraphOpen
+      const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
+      lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
       lazyState.inTable = firstState.endsOnTableRow
       lazyState.quoteInner = firstState.quote
+      if (firstIsColonContainer) lazyState.divDepth = 1
       const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
       if (leadFence) {
         lazyState.inFence = true
@@ -5684,21 +5692,8 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln) || RE_DEFLIST_MARKER_EMPTY.test(ln)) break
       const below = ln.replace(/^[ \t]+/, '')
       const atDocumentColumn = below === ln
-      // A `:::` CONTAINER OPENED IN THE BODY IS STILL COLLECTING, so the line
-      // below it is INSIDE that container rather than after the body
-      // (markup-carve/carve-js#1613). This is markup-carve/carve#1911's own
-      // carve-out - an opener that leaves something OPEN keeps its flush-left
-      // follower - and the same reason a block quote keeps `tail` in corpus
-      // section 444 row 11. Without it the two columns answered differently:
-      // one PAST the body's column reaches the Form A probe, which asks the
-      // tracker and finds the container open, while AT the column the line is
-      // already flush and the probe never runs.
-      //
-      // `divDepth` ONLY, not `insideOpenFence`. An unterminated comment fence
-      // is not a container that collects, and widening this to the fence and
-      // comment arms moved 54 comment-payload documents OFF the oracle.
       if (
-        (lazyState.lazyFoldable || lazyState.divDepth > 0) &&
+        lazyState.lazyFoldable &&
         !startsInterruptingBlock(lexer, below, true, false, atDocumentColumn)
       ) {
         const lineIndex = lexer.pos

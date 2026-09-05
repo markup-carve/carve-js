@@ -78,9 +78,13 @@ describe('a closed block at a description body column ends the body (carve-js#16
     )
   })
 
-  it('an OPEN container still collects [control: carve-js#1613 must not move]', () => {
+  it('an EMPTY unterminated container also ends at a flush-left line (carve-js#1641)', () => {
+    // Superseded carve-js#1613: an empty unterminated admonition no longer
+    // keeps its flush-left follower - it ends like a closed one, and `tail` is
+    // a document paragraph. Pinned as corpus
+    // 452-an-empty-unterminated-container-ends-at-a-flush-left-line.
     expect(carveToHtml(':: term\n:  definition\n   ::: note\ntail\n')).toBe(
-      '<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class="admonition note" aria-label="Note">\n      <p>tail</p>\n    </aside>\n  </dd>\n</dl>',
+      '<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class="admonition note" aria-label="Note">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>',
     )
   })
 })

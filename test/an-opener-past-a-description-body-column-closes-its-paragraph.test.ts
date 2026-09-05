@@ -147,22 +147,30 @@ describe('corpus 444: an opener at or past a description body column', () => {
   })
 })
 
-describe('an opener that leaves a container OPEN is not covered', () => {
+// An EMPTY UNTERMINATED container ends at a flush-left line, exactly as a
+// closed one does (markup-carve/carve-js#1641, pinned as corpus
+// 452-an-empty-unterminated-container-ends-at-a-flush-left-line). This
+// supersedes the old carve-js#1613 reading, where an open admonition kept its
+// flush-left follower - the oracle now puts `tail` outside the empty container.
+describe('an empty unterminated container ends at a flush-left line', () => {
   it("admonition past the column", () => {
     expect(carveToHtml(":: term\n:  definition\n    ::: note\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>tail</p>\n    </aside>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
-  it("admonition AT the column - the same answer (carve-js#1613)", () => {
+  it("admonition AT the column - the same answer", () => {
     expect(carveToHtml(":: term\n:  definition\n   ::: note\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>tail</p>\n    </aside>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
-  it("line block AT the column keeps its follower too", () => {
+  it("line block AT the column ends the body too", () => {
+    // The empty line-block div's interior has a known pre-existing difference
+    // from the oracle (a missing blank line, unrelated to this ruling); the
+    // point pinned here is that `tail` lands OUTSIDE it.
     expect(carveToHtml(":: term\n:  definition\n   ::: |\ntail\n")).toBe(
-      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <div class=\"line-block\">\n      <p>tail</p>\n    </div>\n  </dd>\n</dl>",
+      "<dl>\n  <dt>term</dt>\n  <dd>\n    <p>definition</p>\n    <div class=\"line-block\">\n    </div>\n  </dd>\n</dl>\n<p>tail</p>",
     )
   })
 
