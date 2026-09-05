@@ -758,6 +758,9 @@ const IMPLEMENTED = new Set([
   'an-unterminated-comment-fence-in-a-list-item-is-the-line-form',
   'the-host-does-not-change-which-column-a-definition-reaches',
   'a-container-in-a-host-body-owns-a-line-past-its-own-content-column',
+  'an-empty-unterminated-container-ends-at-a-flush-left-line',
+  'a-row-whose-every-cell-is-blank-is-not-a-table',
+  'a-block-opener-past-a-nested-footnote-definition-opens-in-the-item',
 ])
 
 /**

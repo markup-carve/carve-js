@@ -10,13 +10,12 @@ describe('a table row needs a closing pipe', () => {
   })
 
   it('a single empty cell is paragraph text, but two empty cells are a table', () => {
-    // `|` / `||` (zero or one empty cell) stay paragraphs; `|||` (two empty
-    // cells) is a valid all-empty body row, matching carve-php / carve-rs.
+    // A ROW WHOSE EVERY CELL IS BLANK IS NOT A TABLE (markup-carve/carve#1954):
+    // the detector counts delimiter slots but must find one cell with content.
+    // `|` / `||` / `|||` are all all-blank rows, so all three are paragraphs.
     expect(html('|')).toBe('<p>|</p>')
     expect(html('||')).toBe('<p>||</p>')
-    expect(html('|||')).toBe(
-      '<table>\n  <tbody>\n    <tr><td></td><td></td></tr>\n  </tbody>\n</table>',
-    )
+    expect(html('|||')).toBe('<p>|||</p>')
   })
 
   it('a complete row (opens and closes with `|`) is a table', () => {
