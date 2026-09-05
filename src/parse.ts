@@ -3460,6 +3460,19 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // Footnote definition: consume the def line + indented continuation
   // and stash the parsed body (tested before RE_LINK_DEF).
   if (RE_FOOTNOTE_DEF.test(line)) return parseFootnoteDef(lexer)
+  // A NESTED footnote def, indented past a consuming container's own content
+  // column, is registered on the host's behalf exactly as a link def is
+  // (markup-carve/carve-js#1638). The flush test above misses it - the marker
+  // sits past column 0 - but a container that consumes hosted definitions
+  // consumes an indented footnote def the same way; parseFootnoteDef strips the
+  // marker's indent. Footnote-shaped, so it is NOT caught by the link-def arm
+  // below, which excludes `[^`.
+  if (
+    (lexer.inFootnoteBody || hostedLinkDef) &&
+    RE_FOOTNOTE_DEF.test(hostedLinkDefLine.replace(/^[ \t]+/, ''))
+  ) {
+    return parseFootnoteDef(lexer)
+  }
   // Reference-link definitions were collected in the first pass; the
   // line itself produces no block (consume it so it is not a paragraph).
   // Strict column-0 rule: RE_LINK_DEF is whitespace-tolerant (its leading
@@ -4463,7 +4476,7 @@ function parseCommentBlock(lexer: Lexer): Comment {
 // rendered in the endnotes section.
 function parseFootnoteDef(lexer: Lexer): null {
   const defLineIndex = lexer.pos
-  const m = RE_FOOTNOTE_DEF.exec(lexer.consume())!
+  const m = RE_FOOTNOTE_DEF.exec(lexer.consume().replace(/^[ \t]+/, ''))!
   // Preserve the raw label as the AST/source-layout spelling. Resolution and
   // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
