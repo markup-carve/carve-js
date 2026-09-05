@@ -757,6 +757,7 @@ const IMPLEMENTED = new Set([
   'an-opener-at-or-past-a-description-body-s-column-closes-its-paragraph',
   'an-unterminated-comment-fence-in-a-list-item-is-the-line-form',
   'the-host-does-not-change-which-column-a-definition-reaches',
+  'a-container-in-a-host-body-owns-a-line-past-its-own-content-column',
 ])
 
 /**

@@ -700,6 +700,10 @@ class Lexer {
   sublistsCarryAuthoredBase = false
   /** This lexer parses content hosted by a footnote body. */
   inFootnoteBody = false
+  /** The body whose content column owns this nested parse. */
+  hostBody: 'list' | 'description' | 'footnote' | null = null
+  /** This container consumes indented link definitions on its host's behalf. */
+  consumesHostedLinkDefs: false | 'all' | 'lazy' = false
   suppressPositions = false
   pos = 0
   // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
@@ -1084,6 +1088,8 @@ function nestedSubLexer(
   sub.depth = parent.depth + 1
   sub.inFigureGroup = parent.inFigureGroup
   sub.inFootnoteBody = parent.inFootnoteBody
+  sub.hostBody = parent.hostBody
+  sub.consumesHostedLinkDefs = parent.consumesHostedLinkDefs
   attachDocumentOffsets(sub, parent, startLineIndex)
   return sub
 }
@@ -2179,7 +2185,12 @@ function collectLinkDefs(lexer: Lexer) {
   // the quote ended - leaving it non-empty for the rest of the document, and
   // the abbreviation branch requires document level, so every abbreviation
   // below a one-line quoted div stopped registering (carve-js#1139).
-  const divs: { width: number; opens: boolean; scope: PrepassScope }[] = []
+  const divs: {
+    width: number
+    opens: boolean
+    scope: PrepassScope
+    host: 'list' | 'description' | 'footnote' | null
+  }[] = []
   // Track the enclosing list item's content column so a fenced-code delimiter
   // is tested at its container's content column (PART 2), not blindly at
   // column 0. Without this the prepass cannot tell a real fence nested at a
@@ -2194,7 +2205,7 @@ function collectLinkDefs(lexer: Lexer) {
   // that inherits nothing (PART 0, A NEW MARKER DOES NOT REACH A DEAD
   // CONTAINER'S COLUMN; carve#1892). A column opened at document level is not
   // affected: a list item is transparent across a blank.
-  const listCols: Array<{ col: number; inQuote: boolean }> = []
+  const listCols: Array<{ col: number; inQuote: boolean; kind: 'list' | 'description' }> = []
   // A definition list STARTS only on a `::` term (PART 2; the parser enters
   // parseDefinitionList from RE_DEFLIST_TERM alone), so a single-colon `: body`
   // line is a description marker only once one has been seen. Ungated, `: term`
@@ -2433,13 +2444,17 @@ function collectLinkDefs(lexer: Lexer) {
           listCols.pop()
         }
         base += m2[0].length
-        listCols.push({ col: base, inQuote: unquoted !== raw })
+        listCols.push({ col: base, inQuote: unquoted !== raw, kind: 'list' })
         rest = rest.slice(m2[0].length)
         m2 = prepassMarker(rest)
       }
     } else if (sawDeflistTerm && (deflistDef = RE_DEFLIST_DEF.exec(unquoted))) {
       while (listCols.length && listCols[listCols.length - 1]!.col > indent) listCols.pop()
-      listCols.push({ col: indent + deflistContentCol(deflistDef[1]!), inQuote: unquoted !== raw })
+      listCols.push({
+        col: indent + deflistContentCol(deflistDef[1]!),
+        inQuote: unquoted !== raw,
+        kind: 'description',
+      })
     } else if (
       // BLANK BEHIND ITS OWN MARKER IS STILL BLANK. `raw` carries the container
       // prefix, so a quote-marked empty line (`>`) failed this test, matched
@@ -2636,6 +2651,7 @@ function collectLinkDefs(lexer: Lexer) {
           width,
           opens: isColonFenceOpener(line),
           scope: { quoteDepth: rawQuoteDepth, contentCol },
+          host: inFootnoteBody ? 'footnote' : (listCols[listCols.length - 1]?.kind ?? null),
         })
       }
     }
@@ -2966,6 +2982,8 @@ function collectLinkDefs(lexer: Lexer) {
     const declines =
       topLevelIndentedDef ||
       notAtContentColumn ||
+      (divs[divs.length - 1]?.host === 'list' &&
+        composed.column > divs[divs.length - 1]!.scope.contentCol) ||
       (collectsNothing && composed.peeled.some((one) => !one.quote))
     const m = declines ? null : RE_LINK_DEF.exec(defLine)
     // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
@@ -3393,6 +3411,11 @@ function parseBlock(lexer: Lexer): BlockNode | null {
 
 function parseBlockInner(lexer: Lexer): BlockNode | null {
   const line = lexer.peek()!
+  const hostedLinkDef =
+    lexer.consumesHostedLinkDefs === 'all' ||
+    (lexer.consumesHostedLinkDefs === 'lazy' &&
+      lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
+  const hostedLinkDefLine = hostedLinkDef ? stripLazyFrame(line) : line
 
   // Past the nesting limit, stop opening recursive containers and treat the
   // line as paragraph text. Prevents a call-stack overflow on pathologically
@@ -3448,20 +3471,21 @@ function parseBlockInner(lexer: Lexer): BlockNode | null {
   // must not be swallowed here either. A footnote body is the exception: its
   // containers absorb residual indentation at or past their content column.
   if (
-    (leadingWhitespace(line) === 0 ||
+    (leadingWhitespace(hostedLinkDefLine) === 0 ||
       // A FOOTNOTE DEF IS NOT A LINK DEF, though `RE_LINK_DEF` matches both.
       // The flush-anchored test above missed an indented one, so without this
       // the note body's leniency swallowed a NESTED footnote definition and its
       // reference dangled (the oracle registers it).
-      (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(line))) &&
-    isLinkDefLine(line) &&
-    !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
+      (lexer.inFootnoteBody && !/^[ \t]*\[\^/.test(hostedLinkDefLine)) ||
+      (hostedLinkDef && !/^[ \t]*\[\^/.test(hostedLinkDefLine))) &&
+    isLinkDefLine(hostedLinkDefLine) &&
+    (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef) &&
     // NOTHING COLLECTED IT, SO NOTHING MAY REMOVE IT. Under-collecting is the
     // error PART 9R R1a licenses; deleting the author's line is the one it
     // rules out, and carve#1883 forbids returning a document missing text the
     // author typed. Falling through leaves the line as the paragraph it looks
     // like (markup-carve/carve-js#1597).
-    !lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos))
+    (!lexer.declinedLinkDefLines.has(lexer.lineNumber(lexer.pos)) || hostedLinkDef)
   ) {
     lexer.consume()
     return null
@@ -4515,6 +4539,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
+    sub.hostBody = 'footnote'
     lexer.footnoteDefs.set(label, parseBlocks(sub, 0))
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of
@@ -4579,6 +4604,8 @@ function parseAdmonition(lexer: Lexer): Admonition | FigureGroup {
     fenceWidth: fence,
   })
   const subLexer = nestedSubLexer(lexer, inner.map((line) => line.text), openLineIndex + 1)
+  subLexer.consumesHostedLinkDefs =
+    lexer.hostBody === 'description' || lexer.hostBody === 'footnote' ? 'all' : false
   if (isFigureGroup) subLexer.inFigureGroup = true
   const children = parseBlocks(subLexer, 0)
   if (isFigureGroup) {
@@ -5676,6 +5703,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
     rebaseOverindentedBlocks(bodyLines, bodyBaseEligible, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, firstLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
+    sub.hostBody = 'description'
     return parseBlocks(sub, 0)
   }
   /**
@@ -6245,12 +6273,14 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
     lexer.quoteLazyLines.add(lexer.lineNumber(lineIndex))
     inner.push(ln)
     innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    trackBlockQuoteLazyState(
-      ln,
-      state,
-      (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
-      (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
-    )
+    if (!lazyLinkDef) {
+      trackBlockQuoteLazyState(
+        ln,
+        state,
+        (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
+        (marker) => quotedFenceHasCloser(lexer, marker, lineIndex, fenceCloserMemo),
+      )
+    }
   }
   const subLexer = nestedSubLexer(lexer, inner, firstLineIndex, innerLineNumbers)
   // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
@@ -6259,6 +6289,7 @@ function parseBlockQuote(lexer: Lexer): BlockQuote | Figure {
   // definition after `>` is literal text there exactly as at top level
   // (markup-carve/carve-js#1628).
   subLexer.inFootnoteBody = false
+  subLexer.consumesHostedLinkDefs = lexer.hostBody === null ? false : 'lazy'
   const children = parseBlocks(subLexer, 0)
   const bq: BlockQuote = { type: 'block_quote', children }
   const quoteEndIndex = lexer.pos
@@ -8640,6 +8671,7 @@ function parseList(lexer: Lexer): List {
       // the item gets its own lexer without it, and a marker there folds as §10
       // I2 says.
       sub.markerOpensSublist = true
+      sub.hostBody = 'list'
       return sub
     }
     const carry: PendingAttrCarry = { attrs: null }
@@ -9694,8 +9726,12 @@ function parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     if (
       !flattened &&
       lines.length > 0 &&
-      !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
-      startsInterruptingBlock(lexer) &&
+      (((lexer.consumesHostedLinkDefs === 'all' ||
+        (lexer.consumesHostedLinkDefs === 'lazy' &&
+          lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))) &&
+        isLinkDefLine(stripLazyFrame(ln))) ||
+        (!lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
+          startsInterruptingBlock(lexer))) &&
       !(RE_ADMONITION_CLOSE.test(ln) && lines.some((line) => isLiteralColonFenceLine(line)))
     )
       break
