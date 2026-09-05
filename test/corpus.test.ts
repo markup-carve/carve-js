@@ -761,6 +761,8 @@ const IMPLEMENTED = new Set([
   'an-empty-unterminated-container-ends-at-a-flush-left-line',
   'a-row-whose-every-cell-is-blank-is-not-a-table',
   'a-block-opener-past-a-nested-footnote-definition-opens-in-the-item',
+  'an-unterminated-fence-on-a-nested-lead-in-a-description-body-owns-its-body',
+  'a-definition-nested-past-a-footnote-body-is-a-note-and-a-reference-below-it-resolves',
 ])
 
 /**
