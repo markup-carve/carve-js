@@ -9,14 +9,17 @@
 //   • inline   — host does `element.innerHTML = svg` (HTML-context reparse).
 //                Fires `<img onerror>`, `<foreignObject>` HTML, video/audio.
 //   • svgdoc   — `DOMParser().parseFromString(svg, 'image/svg+xml')` + import
-//                (SVG-document context). Fires `<script>`, svg `<image onerror>`.
+//                (SVG-document context). Fires svg `<image onerror>`. Current
+//                Chromium no longer runs an inline `<script>` here (see the
+//                self-check); the sanitizer strips it regardless.
 //   • sandbox  — `<img src="data:image/svg+xml,…">`. The browser sandboxes it;
 //                this must be inert regardless (baseline).
 //
 // Detection is dialog-based (a fired alert/confirm/prompt raises a real dialog)
 // plus any fetch to the flagged `evil.example` host. A `--selfcheck` run feeds
-// RAW (unsanitized) payloads first and asserts the harness ACTUALLY detects them
-// in the relevant path — a security test that cannot fail is worthless.
+// RAW (unsanitized) payloads first and asserts the harness ACTUALLY detects the
+// ones a current browser still executes, and confirms a browser-hardened vector
+// stays inert - a security test that cannot fail is worthless.
 //
 // Run: `npm run build && node test/mxss.browser.mjs` (needs `npx playwright
 // install chromium`). Exits non-zero on any fired vector.
@@ -93,26 +96,55 @@ async function fires(markup, mode) {
 }
 
 if (process.argv.includes('--selfcheck')) {
-  // Each RAW payload paired with the insertion mode it is known to execute in.
-  // If the harness fails to detect these, its detection is broken.
-  const raw = [
+  // Live detection controls: RAW payloads a current browser STILL executes, so
+  // the harness proves it can detect a fired vector in each insertion mode the
+  // real run below tests. Every one MUST fire.
+  const mustFire = [
     ['<img src=q onerror=alert(1)>', 'inline'],
     ['<svg><foreignObject><img src=q onerror=alert(1)></foreignObject></svg>', 'inline'],
-    ['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'svgdoc'],
     ['<svg xmlns="http://www.w3.org/2000/svg"><image href="q" onerror="alert(1)"/></svg>', 'svgdoc'],
   ]
-  let caught = 0
-  for (const [p, mode] of raw) {
+  // A control a BROWSER CHANGE turned inert: current Chromium no longer runs an
+  // inline <script> inside an SVG parsed via DOMParser(image/svg+xml) and
+  // imported into an HTML document (a browser hardening, not a Carve change).
+  // It stays here asserted NOT to fire, so the harness documents the shift and
+  // fails LOUDLY if a browser ever re-enables it. Carve strips <script>
+  // regardless, so the sanitized real run below is unaffected either way
+  // (markup-carve/carve-js#1647).
+  const expectedInert = [
+    ['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'svgdoc'],
+  ]
+  let broken = false
+  for (const [p, mode] of mustFire) {
     const hits = await fires(p, mode)
     console.log(`${hits.length ? 'DETECTED' : 'MISSED  '} [${mode}]  ${p}`)
-    if (hits.length) caught++
+    if (!hits.length) broken = true
+  }
+  for (const [p, mode] of expectedInert) {
+    const hits = await fires(p, mode)
+    console.log(`${hits.length ? 'FIRED!  ' : 'inert   '} [${mode}]  ${p}`)
+    if (hits.length) {
+      broken = true
+      console.error(`A payload expected inert FIRED [${mode}] - the threat surface changed; review the harness and the sanitizer.`)
+    }
+  }
+  // Every insertion mode the real run checks for firing must keep a live
+  // control, or a future browser change could silently leave a mode unproven.
+  for (const mode of ['inline', 'svgdoc']) {
+    if (!mustFire.some(([, m]) => m === mode)) {
+      broken = true
+      console.error(`No live detection control remains for mode "${mode}".`)
+    }
   }
   await browser.close()
-  if (caught !== raw.length) {
-    console.error(`\nSELF-CHECK FAILED: harness caught only ${caught}/${raw.length} raw XSS — detection is broken.`)
+  if (broken) {
+    console.error(`\nSELF-CHECK FAILED: harness detection is broken or the threat surface changed.`)
     process.exit(2)
   }
-  console.log(`\nself-check OK: harness detected ${caught}/${raw.length} raw XSS payloads across insertion modes.`)
+  console.log(
+    `\nself-check OK: ${mustFire.length} live controls detected, ` +
+      `${expectedInert.length} documented-inert confirmed inert.`,
+  )
   process.exit(0)
 }
 
