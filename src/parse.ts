@@ -8178,8 +8178,17 @@ function parseList(lexer: Lexer): List {
           firstBlockIdx = nested.length
         }
         const dedented = sliceColumns(l, contentCol, true)
-        authoredBaseEligible.add(nested.length)
-        if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
+        // A line collected INSIDE AN OPEN FENCE is verbatim body, never an
+        // authored base. Without this guard the rebase saw an over-indented
+        // fence CLOSER - one written past its opener, which is body text, not a
+        // closer - as a fresh opener (the real opener is the item's lead line
+        // and is not in `nested`), dedented it to column 0, and parseFence then
+        // closed the fence there, losing the rest of its body
+        // (markup-carve/carve-js#1636). carve-rs keeps it as body already.
+        if (!lazyState.inFence) {
+          authoredBaseEligible.add(nested.length)
+          if (dedented[0] === ' ' || dedented[0] === '\t') hasOverindentedBlockCandidate = true
+        }
         nested.push(dedented)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         const fenceLineIndex = lexer.pos
