@@ -4554,7 +4554,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     // A recognized opener at or beyond the note's minimum column establishes
     // its authored column as a local base (carve#1729). The collector has
     // already removed the fixed two-column body margin.
-    rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
+    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
@@ -9816,74 +9816,6 @@ function leadingWhitespace(line: string): number {
 }
 
 
-/*
- * Does a definition the collector will CONSUME sit between `from` and `to`?
- *
- * FENCE OPACITY IS THE WHOLE POINT (raised by `codex review` on
- * markup-carve/carve-js#1628). A definition-shaped line inside a code, raw or
- * comment fence is payload and is consumed by nothing, so counting it here left
- * an admonition's closer indented and published it as `<p>:::</p>` - the
- * container's own markup surfacing as text because of a string inside a code
- * sample. Asking the SHAPE of the line was never enough; the region it sits in
- * decides whether anything can take it.
- */
-function hasConsumedDefinition(
-  lines: readonly string[],
-  from: number,
-  to: number,
-  base: number,
-): boolean {
-  // The flush spelling of each line, once. These lines sit PAST `base` - that is
-  // what makes the block raised - so a fence opener keeps a leading space after
-  // the dedent and the anchored fence patterns miss it. `RE_LINK_DEF` is
-  // whitespace-tolerant and did not, which is exactly how a fenced payload
-  // counted as a definition.
-  const flush: string[] = []
-  for (let k = from; k < to; k++) {
-    flush.push(sliceColumns(lines[k]!, base, true).replace(/^[ \t]+/, ''))
-  }
-  // WIDEST COMMENT CLOSER AT OR AFTER EACH LINE, precomputed. A comment fence
-  // needs a closer to BE one - unterminated, `%%%` is a single-LINE comment, so
-  // the lines under it are ordinary content and a definition among them is
-  // consumed. Asking that per opener walked the rest of the block each time,
-  // which is quadratic on a deeply-indented staircase and tripped the scaling
-  // guard; the suffix scan answers the same question in one pass.
-  const widestCloserAhead = new Array<number>(flush.length + 1).fill(0)
-  for (let k = flush.length - 1; k >= 0; k--) {
-    const closer = RE_COMMENT_BLOCK.exec(flush[k]!)
-    const width = closer !== null && closer[2]!.trim() === '' ? closer[1]!.length : 0
-    widestCloserAhead[k] = Math.max(widestCloserAhead[k + 1]!, width)
-  }
-  let openFence: string | null = null
-  for (let k = 0; k < flush.length; k++) {
-    const line = flush[k]!
-    if (openFence !== null) {
-      if (fenceCloseRe(openFence).test(line)) openFence = null
-      continue
-    }
-    const fence = RE_FENCE.exec(line)
-    const raw = fence ? null : RE_RAW_FENCE.exec(line)
-    const comment = fence ?? raw ? null : RE_COMMENT_BLOCK.exec(line)
-    // A code or raw fence is opaque even unterminated - it owns the rest - which
-    // is why only the comment arm consults the lookahead above. The unterminated
-    // code twin is the control that pins the asymmetry.
-    const commentMarker =
-      comment !== null && widestCloserAhead[k + 1]! >= comment[1]!.length
-        ? comment[1]!
-        : undefined
-    const marker = fence?.[2] ?? raw?.[1] ?? commentMarker
-    if (marker) {
-      openFence = marker
-      continue
-    }
-    if (indentColumns(lines[from + k]!) > base && isLinkDefLine(sliceColumns(lines[from + k]!, base, true))) {
-      return true
-    }
-  }
-
-  return false
-}
-
 /**
  * Apply an over-indented list block opener's authored column as a temporary
  * local block base (PART 9 §24 C3, carve#1705).
@@ -9907,7 +9839,6 @@ function rebaseOverindentedBlocks(
   eligible?: ReadonlySet<number>,
   leadNestedColumn = -1,
   includeSublists = false,
-  inFootnoteBody = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const firstVisible = lines.find((line) => !isBlankLine(line))
@@ -10138,28 +10069,7 @@ function rebaseOverindentedBlocks(
       end++
     }
 
-    // A CONSUMED DEFINITION LEAVES THE CLOSER BEHIND. In a raised footnote-body
-    // div, a deeper definition is absorbed at the div's column - but the closer
-    // is not promoted with it, and the oracle then reads the `:::` as body text
-    // and ends the admonition at the note body instead.
-    //
-    // THE DEPENDENCE ON A DEFINITION IS REAL, not a fit to one document: with
-    // the same geometry and a plain line inside, the oracle keeps the closer a
-    // closer; with a definition inside - any label, and whether or not anything
-    // references it - it does not. Measured both ways, with the footnote
-    // referenced in each so the note is actually rendered; asking with an
-    // unreferenced note renders no footnote at all and answers `false` for
-    // reasons that have nothing to do with the closer.
-    const stripEnd =
-      inFootnoteBody &&
-      colon !== null &&
-      base > 0 &&
-      end > i &&
-      RE_ADMONITION_CLOSE.test(sliceColumns(lines[end]!, base, true)) &&
-      hasConsumedDefinition(lines, i + 1, end, base)
-        ? end - 1
-        : end
-    for (let j = i; j <= stripEnd; j++) {
+    for (let j = i; j <= end; j++) {
       if (!isBlankLine(lines[j]!)) {
         lines[j] = sliceColumns(lines[j]!, base, true)
       }
