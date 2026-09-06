@@ -110,14 +110,14 @@ describe('a definition in a container in a note body', () => {
   })
 
   /*
-   * FENCE OPACITY. A raised container's closer is left indented only when a
-   * definition inside it was really CONSUMED - and a definition-shaped line
-   * inside a code, raw or comment fence is payload that nothing consumes.
-   * Asking the shape of the line instead of the region it sits in published the
-   * container's own `:::` as text because of a string in a code sample.
-   *
-   * These rows are the ones that can fail the guard: every case above holds a
-   * BARE definition, so a scan blind to fences passes all of them.
+   * FENCE OPACITY governs whether the DEFINITION is consumed, not whether the
+   * closer closes. A `:::` at its opener's column always closes the container
+   * now (markup-carve/carve#1948, ported as carve-js#1654), so the container's
+   * own `:::` never surfaces as text. What still turns on the fence is the
+   * definition: a definition-shaped line inside a code, raw or comment fence is
+   * payload that nothing consumes, so nothing resolves against it, while a bare
+   * definition - or one under an unterminated `%%%`, which is a single-line
+   * comment - is consumed and resolves.
    */
   describe('fence opacity', () => {
     const raised = (inner: string[]) =>
@@ -140,15 +140,14 @@ describe('a definition in a container in a note body', () => {
 
     /*
      * A COMMENT FENCE NEEDS A CLOSER TO BE ONE. Unterminated, `%%%` is a
-     * single-LINE comment, so a definition below it IS consumed and the closer
-     * stays behind. A code fence is the other way round - unterminated it owns
-     * the rest - and that twin is the control. Every opacity row above is
-     * TERMINATED, so without these the closer-lookahead cannot be exercised.
+     * single-LINE comment, so a definition below it IS consumed (it resolves).
+     * A code fence is the other way round - unterminated it owns the rest - and
+     * that twin is the control below. The closer closes either way.
      */
     it('treats an unterminated comment as one line, not an opaque region', () => {
       const out = html(raised(['%%% c', '[r]: /url']))
       expect(/href="\/url"/.test(out), out).toBe(true)
-      expect(out, out).toContain(':::')
+      expect(out, out).not.toContain('<p>:::</p>')
     })
 
     it('lets an unterminated CODE fence own the rest', () => {
@@ -156,9 +155,9 @@ describe('a definition in a container in a note body', () => {
       expect(/href="\/url"/.test(out), out).toBe(false)
     })
 
-    it('still leaves the closer behind for a BARE definition', () => {
+    it('closes the container for a BARE definition', () => {
       const out = html(raised(['[r]: /url']))
-      expect(out, out).toContain(':::')
+      expect(out, out).not.toContain('<p>:::</p>')
       expect(/href="\/url"/.test(out), out).toBe(true)
     })
   })
