@@ -162,12 +162,21 @@ describe('the frame never leaks into rendered text', () => {
     // framed reaches the inner item already framed, and framing it twice leaks a
     // sentinel that `stripLazyFrame` takes off only once. Neither sweep behind
     // this commit could express that shape; the repo's own #1606 test caught it.
+    // A RAW fence needs a fence run in front of the format (`` ```=html ``); a
+    // bare `=html` is not one. Without the three raw-fence leads and the
+    // `` ```=html `` payload below, the set spelled only CODE fences and could
+    // not reach `parseRawBlock` - the collector that leaked the frame for the
+    // whole life of the mechanism and stayed green on the leaking build
+    // (markup-carve/carve-js#1640, the leak itself #1630/#1633).
     const leads = [
       '> - :: t',
       '> - x',
       '> - ```',
       '> - ~~~',
       '> - =html',
+      '> - ```=html',
+      '- - ```=html',
+      '> - ~~~=html',
       '> - :  d',
       '> - | a |',
       '> - - :: t',
@@ -175,7 +184,7 @@ describe('the frame never leaks into rendered text', () => {
       '> > - :: t',
       '> - - - :: t',
     ]
-    const payloads = ['plain', '- m', '# h', '```', '~~~', ':  a', ':: t2', '{.k}', '| a |', '=html']
+    const payloads = ['plain', '- m', '# h', '```', '~~~', '```=html', ':  a', ':: t2', '{.k}', '| a |', '=html']
     const offenders: string[] = []
     for (const lead of leads) {
       for (const payload of payloads) {
