@@ -10,12 +10,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Source-preserving UTF-8 patch creation, application, and canonical-format
-  APIs with stale-source preconditions and a shared JSON shape.
+  APIs with stale-source preconditions and a shared JSON shape (#1660).
+- An authored extended task state (beyond `[ ]` and `[x]`) is carried through the tree and named in the rendered HTML (#1575, #1576).
 
 ### Fixed
 
-- A code or raw fence body inside a blockquote-nested list item (`> - `) is stripped of the quote's alignment indent instead of keeping two residual columns on every line (#1645, #1630, #1636).
-- An empty `externalLinks` target omits the `target` attribute while retaining the configured `rel` policy.
+- A code or raw fence body inside a blockquote-nested list item (`> - `) is stripped of the quote's alignment indent instead of keeping two residual columns on every line (#1645, #1630, #1636, #1658, #1659).
+- An unterminated, closed or degraded fence inside a list item, description body or footnote body owns the right body and closes at the correct column (#1655, #1656, #1646, #1633, #1632, #1627, #1626, #1622, #1619, #1602).
+- A definition or footnote definition nested inside a container, quote, description body or footnote body is consumed and registered, including across a blank line (#1642, #1649, #1617, #1614, #1589, #1599).
+- A block opener, list marker or lazy line is placed against the correct container column instead of leaking into or out of a nested quote or list item (#1644, #1608, #1611, #1612, #1618, #1605, #1601, #1591, #1587, #1581).
+- A colon followed by a space and a tab opens no description (#1578).
+- An all-blank table row is not a table, and an empty unterminated container ends at a flush-left line (#1651).
+- A Djot table continuation row is preserved on migration and ignored by the Djot lint instead of being rewritten as a bullet (#1571, #1572).
+- An exhausted probe budget no longer drops authored text (#1596).
+- The AST span of a leaf inline and of a footnote reference begins at its markup, and an emptied description narrows to its marker line; published `pos` values move (#1634, #1661).
+- The lint scan reads the previous non-blank line (#1593).
+- An empty `externalLinks` target omits the `target` attribute while retaining the configured `rel` policy (#1573).
 
 ## [0.1.5] - 2026-08-27
 
