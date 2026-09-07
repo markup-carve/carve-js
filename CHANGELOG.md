@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-07
+
 ### Added
 
 - Source-preserving UTF-8 patch creation, application, and canonical-format
@@ -1423,7 +1425,9 @@ implementations are byte-matched against.
   zero-width Unicode control characters stripped from text and code content (§26)
 - Uniform nesting depth cap of 200
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.4...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.6...HEAD
+[0.1.6]: https://github.com/markup-carve/carve-js/compare/0.1.5...0.1.6
+[0.1.5]: https://github.com/markup-carve/carve-js/compare/0.1.4...0.1.5
 [0.1.4]: https://github.com/markup-carve/carve-js/compare/0.1.3...0.1.4
 [0.1.3]: https://github.com/markup-carve/carve-js/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/markup-carve/carve-js/compare/0.1.1...0.1.2
