@@ -4579,12 +4579,18 @@ function parseFootnoteDef(lexer: Lexer): null {
       let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
       while (lastIndex > defLineIndex && isBlankLine(lexer.lines[lastIndex] ?? '')) lastIndex--
       const lastLine = lexer.lines[lastIndex] ?? ''
+      // A span begins at the `[^label]:` marker, not at the line start. When
+      // this definition is nested one column shy of its parent's body margin,
+      // the sub-lexer strips a fixed margin and leaves a residual space ahead
+      // of the marker; the start must skip it (PART 12 §4, carve#1963).
+      const defLine = lexer.lines[defLineIndex] ?? ''
+      const defLead = defLine.length - defLine.replace(/^[ \t]+/, '').length
       const pos: Position = {
         startLine: lexer.lineNumber(defLineIndex),
         endLine: lexer.lineNumber(lastIndex),
-        startColumn: lexer.lineStartColumn(defLineIndex),
+        startColumn: lexer.lineStartColumn(defLineIndex) + defLead,
         endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
-        startOffset: lexer.lineOffset(defLineIndex),
+        startOffset: lexer.lineOffset(defLineIndex) + defLead,
         endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
       }
       const lastOwned = [...(lexer.footnoteDefs.get(label) ?? [])]
@@ -5867,17 +5873,18 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       lexer.consume()
       definitionLines.push(lexer.lineNumber(defLineIndex))
       definitions.push(parseDefBody(d[2]!, defLineIndex, deflistContentCol(d[1]!)))
-      // The description's own extent, recorded from the lines it CONSUMED
-      // rather than derived from the children it produced - because a
-      // description whose only content hoists to the root produces none, and a
-      // derived span then reports absence for a construct that is still sitting
-      // in the source (markup-carve/carve-js#813).
-      //
-      // `parseDefBody` has returned, so `lexer.pos - 1` is the last line it
-      // took. It always takes at least the marker line, so the range is never
-      // empty and never runs backwards.
+      // The description's own extent anchors to its MARKER LINE. The wire
+      // derives the END from the placed children (definition-list-wire.ts), so
+      // this only supplies the start and the fallback when the body produced no
+      // placed child at all - a description whose only content hoists to the
+      // root (carve-js#813). In that case the span is the marker line and stops
+      // there: §4 ends a closerless container at its last placed child, and a
+      // hoisted sibling is not a child (carve#1522), so the continuation lines
+      // that carried the hoisted definitions are not part of the description
+      // (carve#1963). It always takes at least the marker line, so the range is
+      // never empty and never runs backwards.
       definitionSpans.push(
-        lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, lexer.pos - 1) : undefined,
+        lexer.hasDocumentOffsets ? lineRange(lexer, defLineIndex, defLineIndex) : undefined,
       )
     }
     items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
