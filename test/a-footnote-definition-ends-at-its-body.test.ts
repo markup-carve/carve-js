@@ -68,3 +68,18 @@ describe('a footnote definition ends at its body', () => {
     expect(covered(source, footnoteSpan(source, 1))).toBe('[^y]: two')
   })
 })
+
+describe('a footnote definition begins at its marker', () => {
+  it('a nested definition starts at its `[`, not the indentation before it', () => {
+    // A footnote nested one column shy of its parent body's margin leaves a
+    // residual space ahead of the `[^label]:` marker once the sub-lexer has
+    // stripped that margin. The span used to start ON that space, one codepoint
+    // early; §4 begins a span at the markup that opens the construct
+    // (carve#1963). carve-rs and carve-php always started at the marker; this
+    // is the corpus 456 divergence.
+    const source =
+      '[^f]: outer\n\n   [^g]: mid\n\n    [^h]: inner\n\n  [r]: /url\n  TAILWORD\n\nx[^f] [^g] [^h] [t][r]\n'
+    expect(footnoteSpan(source, 2)).toEqual([31, 42])
+    expect(covered(source, footnoteSpan(source, 2))).toBe('[^h]: inner')
+  })
+})

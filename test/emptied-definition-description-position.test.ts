@@ -93,24 +93,27 @@ describe('a description emptied by hoisting keeps its place', () => {
     expect(slice(source)).toEqual([':  [r]: /u', ':  body'])
   })
 
-  it('covers every line the description consumed, not just its marker line', () => {
-    // A second definition on a CONTINUATION line empties the same description,
-    // so the emptied case is not always one line. A span recorded from the
-    // marker line alone would stop at the first newline and report a `<dd>`
-    // shorter than the one the author wrote.
+  it('stops at its marker line when a continuation line also hoists out', () => {
+    // A second definition on a CONTINUATION line empties the same description
+    // too, but §4 ends a closerless container at its last PLACED child and a
+    // hoisted sibling is not a child (carve#1522). With every line hoisted the
+    // description has no placed child, so its span is its own marker line and
+    // stops there - the continuation line belongs to the hoisted definition,
+    // not to the `<dd>` (carve#1963). It used to reach over that line, which
+    // put carve-js one column wide of carve-php on corpus 447.
     const source = ':: term\n:  [r]: /u\n   [q]: /v\n\nsee [t][r] [t][q]\n'
 
-    expect(slice(source)).toEqual([':  [r]: /u\n   [q]: /v'])
+    expect(slice(source)).toEqual([':  [r]: /u'])
   })
 
-  it('keeps an interior blank line inside the span', () => {
-    // The blank is absorbed as a paragraph separator because a later line still
-    // continues the body, so it is INTERIOR and belongs to the description. A
-    // fix that stopped the span at the first blank would cut the second
-    // definition out of a `<dd>` that owns it.
+  it('does not reach over a hoisted definition past an interior blank line', () => {
+    // Same reading with a blank line between the two hoisted definitions: the
+    // description still has no placed child, so it ends at its marker line and
+    // reaches neither the blank nor the second definition below it (carve#1522,
+    // carve#1963).
     const source = ':: term\n:  [r]: /u\n\n   [q]: /v\n\nsee [t][r]\n'
 
-    expect(slice(source)).toEqual([':  [r]: /u\n\n   [q]: /v'])
+    expect(slice(source)).toEqual([':  [r]: /u'])
   })
 
   it('CONTROL: a description whose content does not hoist is unchanged', () => {
