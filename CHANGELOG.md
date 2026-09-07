@@ -9,6 +9,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A code or raw fence body inside a blockquote-nested list item (`> - `) is stripped of the quote's alignment indent instead of keeping two residual columns on every line (#1645, #1630, #1636).
 - An empty `externalLinks` target omits the `target` attribute while retaining the configured `rel` policy.
 
 ## [0.1.5] - 2026-08-27
