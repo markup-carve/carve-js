@@ -42,6 +42,7 @@ import {
   type CheckedRenderOptions,
   type RenderResult,
 } from './render-loss.js'
+import { createSourcePatch, type SourcePatch } from './source-patch.js'
 
 export * from './ast.js'
 export {
@@ -70,6 +71,14 @@ export {
   type EditorUpdate,
 } from './editor-session.js'
 export { diffAst, formatChanges, type Change, type ChangeKind } from './diff.js'
+export {
+  applySourcePatch,
+  createSourcePatch,
+  sourceFingerprint,
+  type SourceEdit,
+  type SourcePatch,
+  type SourceSuggestion,
+} from './source-patch.js'
 export {
   applyAstPatch,
   applyReversibleAstPatch,
@@ -660,6 +669,27 @@ export function carveToCarveWithReport(
   opts: ParseOptions & CarveRenderOptions & CheckedRenderOptions = {},
 ): RenderResult {
   return checkedRender(() => carveToCarve(source, opts), opts)
+}
+
+/** Prepare a stale-safe patch without changing the caller's source. */
+export function carveToCarvePatch(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions & CheckedRenderOptions = {},
+): SourcePatch {
+  const result = carveToCarveWithReport(source, opts)
+  const patch = createSourcePatch(source, result.value, 'formatting', 'canonical-format')
+  if (result.totalLosses > 0) {
+    patch.edits = []
+    patch.unresolved = [{
+      start: 0,
+      end: patch.sourceBytes,
+      replacement: result.value,
+      kind: 'formatting',
+      code: 'format-loss',
+      message: `Canonical formatting reports ${result.totalLosses} rendering loss${result.totalLosses === 1 ? '' : 'es'}; review the proposed source.`,
+    }]
+  }
+  return patch
 }
 
 /** Convenience: parse + resolve + render plain text in one call. */

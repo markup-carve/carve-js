@@ -7,6 +7,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Source-preserving UTF-8 patch creation, application, and canonical-format
+  APIs with stale-source preconditions and a shared JSON shape.
+
 ### Fixed
 
 - A code or raw fence body inside a blockquote-nested list item (`> - `) is stripped of the quote's alignment indent instead of keeping two residual columns on every line (#1645, #1630, #1636).

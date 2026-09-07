@@ -70,6 +70,10 @@ Reports are bounded to 100 entries by default while `totalLosses` retains the
 complete count. Set `maxRenderLosses` to change the bound. The compatible
 string-returning APIs remain available.
 
+Tools that need to retain unrelated source bytes can use `carveToCarvePatch`
+and `applySourcePatch`; see
+[source-preserving patches](https://github.com/markup-carve/carve-js/blob/main/docs/source-patches.md).
+
 HTML rendering accepts a `symbols` map for symbol shortcodes (e.g. emoji):
 mapped values are trusted raw HTML output, and unmapped `:name:` shortcodes
 render literally.
@@ -135,6 +139,7 @@ default. The threat model and every knob is in [docs/security.md](https://github
 - [Accessibility lint](https://github.com/markup-carve/carve-js/blob/main/docs/accessibility-lint.md) - the accessibility rules.
 - [Streaming render](https://github.com/markup-carve/carve-js/blob/main/docs/streaming-render.md) - rendering without buffering.
 - [Reversible patches](https://github.com/markup-carve/carve-js/blob/main/docs/reversible-patches.md) - editing an AST in place.
+- [Source-preserving patches](https://github.com/markup-carve/carve-js/blob/main/docs/source-patches.md) - stale-safe UTF-8 edits.
 - [Development](https://github.com/markup-carve/carve-js/blob/main/docs/development.md) - the checkout, the layout, the roadmap.
 
 Try Carve live in the [playground](https://markup-carve.github.io/carve/playground),
