@@ -3658,7 +3658,15 @@ function attachBlockPos(
 ): void {
   if (lexer.suppressPositions) return
   const endLineIndex = Math.max(startLineIndex, endLineIndexExclusive - 1)
-  const endLine = lexer.lines[endLineIndex] ?? ''
+  // A LAZY-FRAMED end line carries three codepoints the source never held (the
+  // #1630 frame that keeps a container-folded closer from closing an
+  // unterminated fence). `lineOffset`/`lineStartColumn` already anchor to the
+  // UNFRAMED content (attachDocumentOffsets discounts the frame from the line's
+  // prefix), so the end must be measured from the unframed length too - counting
+  // the frame here leaked its width into every span whose end fell on a framed
+  // line, running a fence's end three columns past its last character and its
+  // end offset past document length (carve-js#1963, mirroring carve-rs#1559).
+  const endLine = stripLazyFrame(lexer.lines[endLineIndex] ?? '')
   node.pos = {
     startLine: lexer.lineNumber(startLineIndex),
     endLine: lexer.lineNumber(endLineIndex),
