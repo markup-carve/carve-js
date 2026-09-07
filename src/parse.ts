@@ -8196,7 +8196,25 @@ function parseList(lexer: Lexer): List {
         if (firstBlockIdx === -1 && isMarker) {
           firstBlockIdx = nested.length
         }
-        const dedented = sliceColumns(l, contentCol, true)
+        // A QUOTE-LAZY LINE INSIDE AN OPEN FENCE IS FRAMED, NOT DEDENTED BY THE
+        // CONTENT COLUMN (markup-carve/carve-js#1645). It carries no `>`, so its
+        // leading whitespace is alignment under the quoted item, not source the
+        // author put inside the fence body; the executable spec and carve-php
+        // strip it whole. `sliceColumns` removed only the item's content column
+        // and left the rest, so a body aligned under `> - ` kept two columns of
+        // indent on every line. The frame is what the #1630 arm below already
+        // uses for the below-column case: its first character is not whitespace,
+        // so a closing run among these lines matches no closer and stays body,
+        // the fence running to the end of its container - which is the answer
+        // both references give at every closer offset. A MARKED line (`>  code`)
+        // is not quote-lazy and keeps the content-column dedent that preserves
+        // its authored indentation.
+        const dedented =
+          lazyState.inFence && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
+            ? l.startsWith(LAZY_FRAME)
+              ? l
+              : LAZY_FRAME + l.replace(/^[ \t]+/, '')
+            : sliceColumns(l, contentCol, true)
         // A line collected INSIDE AN OPEN FENCE is verbatim body, never an
         // authored base. Without this guard the rebase saw an over-indented
         // fence CLOSER - one written past its opener, which is body text, not a
