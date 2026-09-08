@@ -1450,9 +1450,16 @@ function anOpenParagraphReachesDown(previous: BlockNode): boolean {
 }
 
 /**
- * The block a line written BELOW `node` is read against, for the two kinds that
+ * The block a line written BELOW `node` is read against, for the kinds that
  * host one. `undefined` for every other kind, and for an EMPTY host - which is
  * the answer that keeps an emptied last item from costing a marker.
+ *
+ * A definition list hands the question to its last description's last block,
+ * the same way a quote and a list hand it to their last child. Answering it by
+ * TYPE instead - `definition_list` in `LEAVES_A_PARAGRAPH_OPEN` - over-claims:
+ * a description ending in a heading, table or fence leaves nothing open, so a
+ * trailing item line below it is written at the content column rather than
+ * behind a `+`, matching the other engines (markup-carve/carve#1970).
  */
 function theLastBlockInside(node: BlockNode): BlockNode | undefined {
   if (node.type === 'block_quote') return node.children[node.children.length - 1]
@@ -1460,6 +1467,12 @@ function theLastBlockInside(node: BlockNode): BlockNode | undefined {
     const last = node.items[node.items.length - 1]
 
     return last === undefined ? undefined : last.children[last.children.length - 1]
+  }
+  if (node.type === 'definition_list') {
+    const lastItem = node.items[node.items.length - 1]
+    const lastBody = lastItem?.definitions[lastItem.definitions.length - 1]
+
+    return lastBody === undefined ? undefined : lastBody[lastBody.length - 1]
   }
 
   return undefined
