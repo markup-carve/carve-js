@@ -7,6 +7,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `carve fmt` re-emits trailing list-item content with a 2-space continuation, matching the other engines (markup-carve/carve#1970).
+
 ## [0.1.6] - 2026-09-07
 
 ### Added
