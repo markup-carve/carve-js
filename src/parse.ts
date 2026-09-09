@@ -4490,7 +4490,20 @@ function parseCommentBlock(lexer: Lexer): Comment {
 // rendered in the endnotes section.
 function parseFootnoteDef(lexer: Lexer): null {
   const defLineIndex = lexer.pos
-  const m = RE_FOOTNOTE_DEF.exec(lexer.consume().replace(/^[ \t]+/, ''))!
+  const defLineRaw = lexer.consume()
+  // A note's body column is measured from its OWN marker: §16 asks for two
+  // columns past the marker, not two past the frame's zero. A properly nested
+  // note rebases to column zero, so `markerColumn` is 0 and `bodyColumn` is the
+  // fixed minimum of two. A note that opens one column shy of its host's body
+  // column keeps a residual marker indent here (the `i < m+2` nested-note
+  // geometry of carve-js#1653 / markup-carve/carve#1946): its body column is
+  // then `markerColumn + 2`, so a trailing line below the note's own content
+  // column is NOT claimed by it and falls to the surviving ancestor note. Left
+  // at the fixed 2 the innermost note over-reached, taking a line that belongs
+  // to the outer note.
+  const markerColumn = indentColumns(defLineRaw)
+  const bodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
+  const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
   // Preserve the raw label as the AST/source-layout spelling. Resolution and
   // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
@@ -4544,14 +4557,14 @@ function parseFootnoteDef(lexer: Lexer): null {
     // tab: three engines, three readings (carve#796, carve-js#725). A rejected
     // continuation does not indent differently, it LEAVES the note and lands in
     // the document body, so the split moved content between blocks.
-    if (indentColumns(ln, FOOTNOTE_BODY_COLUMN) >= FOOTNOTE_BODY_COLUMN) {
+    if (indentColumns(ln, bodyColumn) >= bodyColumn) {
       for (let k = 0; k < pendingBlanks; k++) {
         bodyLines.push('')
         bodyLineNumbers.push(pendingBlankLineNumbers[k]!)
       }
       pendingBlanks = 0
       pendingBlankLineNumbers = []
-      bodyLines.push(sliceColumns(ln, FOOTNOTE_BODY_COLUMN, true))
+      bodyLines.push(sliceColumns(ln, bodyColumn, true))
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       lexer.consume()
     } else {
