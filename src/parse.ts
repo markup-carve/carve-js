@@ -4575,7 +4575,7 @@ function parseFootnoteDef(lexer: Lexer): null {
     // A recognized opener at or beyond the note's minimum column establishes
     // its authored column as a local base (carve#1729). The collector has
     // already removed the fixed two-column body margin.
-    rebaseOverindentedBlocks(bodyLines, undefined, -1, true)
+    rebaseOverindentedBlocks(bodyLines, undefined, -1, true, true)
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
@@ -9885,6 +9885,10 @@ function rebaseOverindentedBlocks(
   eligible?: ReadonlySet<number>,
   leadNestedColumn = -1,
   includeSublists = false,
+  // Set only when rebasing a FOOTNOTE body, where a nested note keeps its
+  // authored column - see the flatten note at the dedent below. Every other
+  // host still rebases an over-indented note so it registers (corpus 447).
+  hostIsFootnoteBody = false,
 ): Set<number> {
   const ownedBlanks = new Set<number>()
   const firstVisible = lines.find((line) => !isBlankLine(line))
@@ -10115,9 +10119,20 @@ function rebaseOverindentedBlocks(
       end++
     }
 
-    for (let j = i; j <= end; j++) {
-      if (!isBlankLine(lines[j]!)) {
-        lines[j] = sliceColumns(lines[j]!, base, true)
+    // A NESTED NOTE KEEPS ITS AUTHORED COLUMN. Flattening one to column zero
+    // collapses the geometry the per-marker body column measures (carve-js#1664):
+    // the run dedents by the marker's own column, but a trailing line BELOW that
+    // column cannot move with it, so it lands exactly on the note's new floor and
+    // the note claims a line PART 0 gives to the nearest surviving ancestor
+    // (markup-carve/carve#1971). Left authored, `parseFootnoteDef` measures
+    // `markerColumn + 2` and the line falls out of the note as it should.
+    // carve-rs holds the same line for the same reason (carve-rs#1573).
+    const keepsAuthoredColumn = hostIsFootnoteBody && RE_FOOTNOTE_DEF.test(opener) && base > 0
+    if (!keepsAuthoredColumn) {
+      for (let j = i; j <= end; j++) {
+        if (!isBlankLine(lines[j]!)) {
+          lines[j] = sliceColumns(lines[j]!, base, true)
+        }
       }
     }
     i = end
