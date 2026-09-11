@@ -763,6 +763,15 @@ const IMPLEMENTED = new Set([
   'a-block-opener-past-a-nested-footnote-definition-opens-in-the-item',
   'an-unterminated-fence-on-a-nested-lead-in-a-description-body-owns-its-body',
   'a-definition-nested-past-a-footnote-body-is-a-note-and-a-reference-below-it-resolves',
+  // ARRIVED WITH THIS PIN BUMP (spec 95a72c8c). All ten rows are byte-exact on
+  // this build before the entries were added. The closer ruling landed in
+  // #1656 and the two halves of the nested-note floor in #1664 and #1666; the
+  // wrapped attribute block needed no change here. The pin, not the parser, is
+  // what was holding them back.
+  'a-container-closer-closes-its-container-in-a-footnote-body-too',
+  'a-wrapped-attribute-block-ends-at-its-quote-and-reaches-no-line-below-it',
+  'a-trailing-line-after-a-consumed-definition-is-placed-by-column-reach',
+  'a-nested-note-s-floor-is-two-columns-past-its-own-marker',
 ])
 
 /**
