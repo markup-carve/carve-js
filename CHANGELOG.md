@@ -9,6 +9,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A footnote definition on a description marker line whose floor takes a nested
+  opener no longer keeps a following column-0 line in the `dd`: the line is at
+  or below the description's base column, so it falls to a top-level sibling
+  paragraph, while a line at the description's own content column stays in the
+  `dd` (markup-carve/carve#1974).
 - A nested footnote definition keeps its authored column, so a trailing line
   at or below that column belongs to the surviving outer note rather than the
   nested one (markup-carve/carve#1971).
