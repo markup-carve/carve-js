@@ -5539,6 +5539,15 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
       lazyState.inTable = firstState.endsOnTableRow
       lazyState.quoteInner = firstState.quote
+      // A FOOTNOTE DEFINITION ON THE MARKER LINE OPENS A BODY RUN, exactly as
+      // one on a continuation line does through the tracker (§16, the arm at
+      // `RE_FOOTNOTE_DEF.test(content)` further down). The marker line never
+      // passes through `track`, so without this the run went untracked: a note
+      // continuation at the note's floor re-armed `lazyFoldable`, and a column-0
+      // trailing line then folded into the `dd` instead of falling to the
+      // document, where PART 0's owner selection places a line below the dd's
+      // base column (markup-carve/carve#1974).
+      lazyState.inFootnoteBody = RE_FOOTNOTE_DEF.test(first)
       if (firstIsColonContainer) lazyState.divDepth = 1
       const leadFence = RE_FENCE.exec(first) ?? RE_RAW_FENCE.exec(first)
       if (leadFence) {
