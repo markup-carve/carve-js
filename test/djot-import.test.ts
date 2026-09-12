@@ -91,4 +91,23 @@ describe('djotToCarve', () => {
   it('recognizes an empty frontmatter envelope before a definition list', () => {
     expect(carveToHtml(djotToCarve('---\n---\n: term\n\n  body'))).toContain('<dl>')
   })
+
+  it.each([
+    ['* * *', '<hr>'],
+    ['-  -\t-', '<hr>'],
+    ['      * * * *', '<hr>'],
+    ['> * * *', '<hr>'],
+    ['- item\n\n  * * *', '<li>item\n    <hr>'],
+  ])('preserves a Djot thematic break in %s', (source, needle) => {
+    expect(carveToHtml(djotToCarve(source))).toContain(needle)
+  })
+
+  it.each([
+    ['(1) one\n(2) two', '<ol>'],
+    ['(a) one\n(b) two', '<ol type="a">'],
+    ['(i) one\n(ii) two', '<ol type="i">'],
+    ['> (1) one\n> (2) two', '<ol>'],
+  ])('preserves a Djot parenthesized ordered list in %s', (source, needle) => {
+    expect(carveToHtml(djotToCarve(source))).toContain(needle)
+  })
 })
