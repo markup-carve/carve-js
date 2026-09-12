@@ -122,6 +122,42 @@ function convertDefinitionLists(source: string): string {
   return lines.join('\n')
 }
 
+/** Rewrite Djot block spellings that Carve does not recognize. */
+function convertDjotBlockMarkers(source: string): string {
+  const lines = source.split('\n')
+  const masked = maskDjotCodeAndDestinations(source).split('\n')
+  const isNestedAt = (line: number, quote: string, columns: number): boolean => {
+    for (let j = line - 1; j >= 0; j--) {
+      if (!(masked[j] ?? '').startsWith(quote)) break
+      const candidate = (masked[j] ?? '').slice(quote.length)
+      if (candidate.trim() === '') continue
+      const [candidateColumns] = leadingIndent(candidate)
+      if (candidateColumns >= columns) continue
+      if (/^(?:([*-])[ \t]*){3,}$/.test(candidate.trim())) return false
+      return /^(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+\S/.test(candidate.trimStart())
+    }
+    return false
+  }
+  for (let i = 0; i < lines.length; i++) {
+    if ((masked[i] ?? '').trim() === '') continue
+    const enclosed = /^((?:[ \t]*>[ \t]*)*)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
+    if (enclosed) {
+      const authored = /^((?:[ \t]*>[ \t]*)*)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)
+      const [columns] = leadingIndent(enclosed[2]!)
+      if (authored) lines[i] = `${authored[1]}${isNestedAt(i, enclosed[1]!, columns) ? authored[2] : ''}${authored[3]}.${authored[4]}`
+      continue
+    }
+    const rule = /^((?:[ \t]*>[ \t]*)*)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.exec(masked[i]!)
+    if (!rule) continue
+    const quote = rule[1]!
+    const indent = rule[2]!
+    const [columns] = leadingIndent(indent)
+    const nested = isNestedAt(i, quote, columns)
+    lines[i] = `${quote}${nested ? indent : ''}***`
+  }
+  return lines.join('\n')
+}
+
 /** Keep a Djot loose list from becoming two Carve lists after 3+ blank lines. */
 function collapseFalseListBoundaries(source: string): string {
   const lines = source.split('\n')
@@ -181,7 +217,7 @@ export function djotToCarve(djot: string): string {
   const normalized = djot.replace(/\r\n?/g, '\n')
   const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
   const converted = collapseFalseListBoundaries(
-    applyMigrationFixes(escapePlainDjotText(convertDefinitionLists(body))).output,
+    applyMigrationFixes(escapePlainDjotText(convertDefinitionLists(convertDjotBlockMarkers(body)))).output,
   )
   return frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`
 }
