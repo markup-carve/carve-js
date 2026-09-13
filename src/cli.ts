@@ -89,6 +89,10 @@ Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
   carve fmt [-w|--check] [--stamp] [files...] Format Carve source canonically
+  carve flatten [--include-root DIR] [file]
+                                   Write the document as ONE self-contained
+                                   file, every include expanded in place (the
+                                   opposite of fmt, which leaves them alone)
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
   carve diff [--json] a.crv b.crv  Report what changed in the DOCUMENT
@@ -401,6 +405,82 @@ function formatIncludeWarnings(warnings: IncludeWarning[], file: string): string
     // deliberately NOT printed here -- see IncludeWarning.detail, spec I7.
     .map((w) => `${w.file ?? file}:${w.line}:${w.column} ${w.rule} - ${w.message}`)
     .join('\n')
+}
+
+/**
+ * `carve flatten` - write the document back as ONE self-contained Carve file,
+ * with every include expanded in place.
+ *
+ * The deliberate opposite of `carve fmt`, and the reason both exist. Formatting
+ * round-trips the author's document, so it leaves directives alone (I15);
+ * flattening asks for the OTHER document, the one with the children merged in,
+ * because that is what can be handed to something with no filesystem behind it.
+ *
+ * Two effects beyond inlining, both reported on stderr rather than left to be
+ * found in a published page: the output is CANONICAL Carve, so formatting is
+ * normalized, and colliding explicit ids and footnote labels are renamed (I5).
+ * The renames are written into the source, so the flattened file renders
+ * exactly like the expanded original.
+ */
+async function runFlatten(args: string[], io: CliIO): Promise<number> {
+  let values: { 'include-root'?: string; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        'include-root': { type: 'string' },
+        help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve flatten: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const inputPath = positionals[0] && positionals[0] !== '-' ? resolvePath(positionals[0]) : undefined
+  let src: string
+  try {
+    src = inputPath !== undefined ? io.readFile(inputPath) : await io.readStdin()
+  } catch {
+    io.writeErr(`carve flatten: cannot read ${positionals[0]}\n`)
+    return 2
+  }
+
+  const root = values['include-root'] ?? (inputPath !== undefined ? dirname(inputPath) : undefined)
+  if (root === undefined) {
+    // "Flatten this" with nothing to resolve against cannot be honoured, and
+    // echoing the document back would look like it had no includes.
+    io.writeErr(
+      'carve flatten: stdin has no directory to resolve includes against; pass --include-root DIR\n',
+    )
+    return 2
+  }
+
+  let resolver: ReturnType<typeof fileSystemResolver>
+  try {
+    resolver = fileSystemResolver(root)
+  } catch {
+    io.writeErr(`carve flatten: cannot use include root ${root}\n`)
+    return 2
+  }
+
+  const expanded = expandIncludes(parse(src, { positions: true }), src, {
+    resolve: resolver,
+    ...(inputPath !== undefined ? { sourcePath: inputPath } : {}),
+  })
+  if (expanded.warnings.length) {
+    io.writeErr(formatIncludeWarnings(expanded.warnings, positionals[0] ?? '<stdin>') + '\n')
+  }
+  io.write(renderCarve(expanded.doc))
+  return 0
 }
 
 async function runFmt(args: string[], io: CliIO): Promise<number> {
@@ -989,6 +1069,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === undefined) return runRender([], io)
   if (sub === 'render') return runRender(rest, io)
   if (sub === 'fmt') return runFmt(rest, io)
+  if (sub === 'flatten') return runFlatten(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   if (sub === 'diff') return runDiff(rest, io)

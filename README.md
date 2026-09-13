@@ -164,6 +164,22 @@ slots in wherever it is included. Content with no headings is left alone.
 Heading ids and slugs never change, so cross-references into shifted headings
 keep resolving.
 
+`carve flatten` writes the document back as Carve with every include expanded in
+place - the deliberate opposite of `carve fmt`, which leaves directives alone so
+formatting returns the author's document. Flattening is for handing the document
+to something with no filesystem behind it: a web editor, a paste box, a
+colleague.
+
+```bash
+carve flatten book/main.crv > one-file.crv
+carve flatten --include-root ./book < main.crv
+```
+
+The output is canonical Carve, so formatting is normalized rather than
+preserved, and colliding explicit ids and footnote labels are renamed. The
+renames are written into the source, so the flattened file renders exactly like
+the expanded original.
+
 Resolvers are deliberately host-supplied. Do not enable includes for untrusted
 input unless the resolver canonicalizes paths, rejects root escapes, and applies
 the same parsing and sanitization policy as the parent document. A Node helper,

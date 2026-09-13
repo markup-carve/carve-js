@@ -991,6 +991,46 @@ describe('carve render includes', () => {
     expect(t.out).not.toContain('Included.')
   })
 
+  it('flatten inlines every include into one document', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-flatten-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Child body.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: 'Intro.\n\n{{ child.crv }}\n' } })
+    expect(await run(['flatten', input], t.io)).toBe(0)
+    expect(t.out).toContain('Child body.')
+    expect(t.out).not.toContain('{{')
+  })
+
+  it('flatten is the only carve output that expands', async () => {
+    // The pair that says why both commands exist: fmt round-trips the author's
+    // document (I15), flatten asks for the other one.
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-flatten-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Child body.', 'utf8')
+    const input = path.join(root, 'main.crv')
+
+    const fmt = makeIO({ files: { [input]: '{{ child.crv }}\n' } })
+    expect(await run(['fmt', input], fmt.io)).toBe(0)
+    expect(fmt.out).toContain('{{ child.crv }}')
+
+    const flat = makeIO({ files: { [input]: '{{ child.crv }}\n' } })
+    expect(await run(['flatten', input], flat.io)).toBe(0)
+    expect(flat.out).toContain('Child body.')
+  })
+
+  it('flatten refuses stdin with no root rather than echoing it back', async () => {
+    const t = makeIO({ stdin: '{{ child.crv }}\n' })
+    expect(await run(['flatten'], t.io)).toBe(2)
+    expect(t.err).toContain('--include-root')
+  })
+
+  it('flatten takes an explicit root for stdin', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-flatten-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Child body.', 'utf8')
+    const t = makeIO({ stdin: '{{ child.crv }}\n' })
+    expect(await run(['flatten', '--include-root', root], t.io)).toBe(0)
+    expect(t.out).toContain('Child body.')
+  })
+
   it('does not resolve includes reaching outside the default input-file root', async () => {
     const base = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
     const root = path.join(base, 'docs')
