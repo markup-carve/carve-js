@@ -60,6 +60,7 @@
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
     "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "test:watch": "vitest",
+    "test:includes": "vitest run test/include-conformance.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
