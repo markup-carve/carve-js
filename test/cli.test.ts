@@ -966,6 +966,31 @@ describe('carve render includes', () => {
     expect(t.err).toBe('')
   })
 
+  it('leaves the directive alone for the carve target, which round-trips the document', async () => {
+    // Writing a document back as Carve has to return the document it was
+    // given. Expanding first returns a different one, with every child inlined
+    // - and the writer preserves a directive verbatim for the same reason.
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: 'Intro.\n\n{{ child.crv }}\n' } })
+    expect(await run(['render', '--carve', input], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.out).not.toContain('Included.')
+  })
+
+  it('leaves the directive alone for the carve target even with an explicit root', async () => {
+    // The explicit flag is a request to widen the root, not a request to
+    // rewrite the document the writer is asked to reproduce.
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}\n' } })
+    expect(await run(['render', '--carve', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.out).not.toContain('Included.')
+  })
+
   it('does not resolve includes reaching outside the default input-file root', async () => {
     const base = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
     const root = path.join(base, 'docs')

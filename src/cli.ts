@@ -868,8 +868,18 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   const includeRoot = values['include-root'] ?? (inputPath !== undefined ? dirname(inputPath) : undefined)
   // The implicit root only engages for sources that actually carry a
   // directive, so directive-free files keep the plain source render path.
+  //
+  // The `carve` TARGET IS EXCLUDED, which is not a performance shortcut: that
+  // target writes the document back as Carve, and expanding first would hand
+  // back a different document than the author wrote, with every child inlined.
+  // The writer preserves a directive verbatim for exactly this reason - a
+  // round trip has to return the document it was given. carve-rs excludes it
+  // the same way; this engine used to inline, so `render --carve` disagreed
+  // across engines on a document neither corpus covers.
   const useIncludes =
-    includeRoot !== undefined && (values['include-root'] !== undefined || src.includes('{{'))
+    includeRoot !== undefined &&
+    target !== 'carve' &&
+    (values['include-root'] !== undefined || src.includes('{{'))
 
   // fileSystemResolver canonicalizes its root eagerly, so a root that is not a
   // real directory throws. With the implicit root that is reachable without the
@@ -902,10 +912,10 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       io.writeErr(formatIncludeWarnings(expanded.warnings, positionals[0] ?? '<stdin>') + '\n')
     }
     // The expanded tree takes the SAME renderer path as --from-json, so an
-    // expanded document still gets the loss report and the profile pass. The
-    // `carve` target keeps the unresolved tree: the writer spells source, and
-    // resolution would bake reference results into it.
-    let doc = target === 'carve' ? expanded.doc : resolve(expanded.doc)
+    // expanded document still gets the loss report and the profile pass.
+    // Resolution is unconditional here because the `carve` target never
+    // reaches this branch (see `useIncludes` above).
+    let doc = resolve(expanded.doc)
     if (opts.profile) doc = applyProfile(doc, opts.profile, opts.profileBaseHost ?? null).doc
     let result: RenderResult
     try {
