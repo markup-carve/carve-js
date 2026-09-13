@@ -548,8 +548,34 @@ function expandChild(
   // Measured after expansion so a child that only passes through to nested
   // includes is levelled by the headings those actually contributed.
   shiftBlocks(child.children, auto ? autoShift(child, state) : stated, state)
+  stampSourceFile(child, resolved.id)
   state.file = outerFile
   return { doc: child, file: resolved.id }
+}
+
+/**
+ * Record which file a position is measured in, for every node of a resolved
+ * child (spec section 19, source mapping).
+ *
+ * Runs AFTER the child's own includes are expanded and only where no identity
+ * is set yet, so a grandchild keeps the file IT came from rather than being
+ * overwritten by the file that pulled its parent in.
+ */
+function stampSourceFile(child: Document, file: string): void {
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    const node = value as { pos?: { file?: string } }
+    if (node.pos && node.pos.file === undefined) node.pos.file = file
+    for (const [key, inner] of Object.entries(value)) {
+      if (key !== 'pos') visit(inner)
+    }
+  }
+  visit(child.children)
+  if (child.footnoteDefs) visit(Object.values(child.footnoteDefs))
 }
 
 /**

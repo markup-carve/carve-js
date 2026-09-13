@@ -48,6 +48,17 @@ export interface Position {
   startOffset?: number
   /** 0-based CODEPOINT offset into the source, exclusive (PART 12 §4). */
   endOffset?: number
+  /**
+   * Identity of the file these coordinates are measured in, when that is NOT
+   * the document being parsed - the canonical id of the file an include pulled
+   * the node in from (PART 9 §19).
+   *
+   * Absent means the top-level document, so a tree with no includes is
+   * unchanged. Without it every included span is ambiguous: a child's first
+   * paragraph and the parent's first paragraph both report line 1, and a
+   * source-mapped host has no way to tell them apart.
+   */
+  file?: string
 }
 
 export interface Attrs {

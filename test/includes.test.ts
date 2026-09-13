@@ -1208,3 +1208,48 @@ describe('expandIncludes resource bounds', () => {
     }
   })
 })
+
+describe('expandIncludes source mapping', () => {
+  const expandWith = (source: string, files: Record<string, string>) => {
+    const doc = parse(source, { positions: true })
+    return expandIncludes(doc, source, {
+      sourcePath: 'main.crv',
+      resolve: (path) => (path in files ? { source: files[path]!, id: path } : null),
+    })
+  }
+
+  it('attributes an included node to the file it came from', () => {
+    const r = expandWith('Parent one.\n\n{{ child.crv }}\n\nParent two.\n', {
+      'child.crv': 'Child A.\n\nChild B.\n',
+    })
+    // Three paragraphs report line 1, 1 and 3; without the file they would be
+    // indistinguishable from the parent's own coordinates.
+    expect(r.doc.children.map((b) => [b.pos?.startLine, b.pos?.file])).toEqual([
+      [1, undefined],
+      [1, 'child.crv'],
+      [3, 'child.crv'],
+      [5, undefined],
+    ])
+  })
+
+  it('attributes a nested include to the grandchild, not to the child', () => {
+    const r = expandWith('{{ child.crv }}\n', {
+      'child.crv': 'Child A.\n\n{{ deep.crv }}\n',
+      'deep.crv': 'Deep one.\n',
+    })
+    expect(r.doc.children.map((b) => b.pos?.file)).toEqual(['child.crv', 'deep.crv'])
+  })
+
+  it('leaves a document with no includes free of the field', () => {
+    const source = 'Only a parent.\n'
+    const doc = parse(source, { positions: true })
+    const r = expandIncludes(doc, source, { sourcePath: 'main.crv', resolve: () => null })
+    expect(JSON.stringify(r.doc)).not.toContain('"file"')
+  })
+
+  it('stamps inline nodes as well as blocks', () => {
+    const r = expandWith('{{ child.crv }}\n', { 'child.crv': 'Some /emphasis/ here.\n' })
+    const para = r.doc.children[0] as { children: { pos?: { file?: string } }[] }
+    expect(para.children.every((n) => n.pos?.file === 'child.crv')).toBe(true)
+  })
+})
