@@ -50,11 +50,12 @@ import {
   type AstJsonDocument,
   type MigrationWarning,
   type ProfileOptions,
-  htmlToCarve,
-  markdownToCarve,
-  bbcodeToCarve,
-  djotToCarve,
+  migrateHtml,
+  migrateMarkdown,
+  migrateBbcode,
+  migrateDjot,
   type HtmlImportAdapter,
+  HtmlImportLimitError,
   type HtmlImportMode,
   type RenderResult,
 } from './index.js'
@@ -91,9 +92,8 @@ Usage:
                                    in Djot (needs @djot/djot)
   carve migrate --from FORMAT [options] [file]
                                    Convert html, markdown (md), djot or bbcode to
-                                   Carve. --mode, --adapter, --report and
-                                   --check-loss are html's alone: it is the
-                                   only importer that drops anything
+                                   Carve. --mode and --adapter are HTML-only;
+                                   --report and --check-loss apply to all
 
 render - convert Carve source to an output format (reads a file or stdin).
 The 'render' subcommand is optional: \`carve --ansi file\` works the same.
@@ -236,10 +236,8 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
   const adapters = new Set(['generic', 'tiptap', 'prosemirror', 'ckeditor', 'tinymce', 'word', 'google-docs'])
   const mode = values.mode ?? 'safe'
   const adapter = values.adapter ?? 'generic'
-  // Only the HTML importer drops anything: the other two parse their source
-  // whole, so --mode, --adapter, --report and --check-loss describe decisions
-  // they never make. They stay unvalidated and unused there rather than
-  // rejected, which is how carve-rs already treats them on its markdown path.
+  // Mode and adapter are HTML-only. They stay unvalidated and unused for the
+  // other importers for compatibility with the existing CLI.
   if (from === 'html') {
     if (!modes.has(mode)) { io.writeErr(`carve migrate: unknown mode ${mode}\n`); return 2 }
     if (!adapters.has(adapter)) { io.writeErr(`carve migrate: unknown adapter ${adapter}\n`); return 2 }
@@ -247,16 +245,26 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
   let source: string
   try { source = positionals[0] ? io.readFile(positionals[0]) : await io.readStdin() }
   catch { io.writeErr(`carve migrate: cannot read ${positionals[0]}\n`); return 2 }
-  if (from !== 'html') {
-    io.write(from === 'bbcode' ? bbcodeToCarve(source) : from === 'djot' ? djotToCarve(source) : markdownToCarve(source))
-    return 0
+  let result
+  try {
+    result = from === 'html'
+      ? migrateHtml(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })
+      : from === 'bbcode'
+        ? migrateBbcode(source)
+        : from === 'djot'
+          ? migrateDjot(source)
+          : migrateMarkdown(source)
+  } catch (error) {
+    if (!(error instanceof HtmlImportLimitError)) throw error
+    io.writeErr(`carve migrate: ${error.message}\n`)
+    return 2
   }
-  const result = htmlToCarve(source, { mode: mode as HtmlImportMode, adapter: adapter as HtmlImportAdapter })
   io.write(result.value)
   const report = JSON.stringify(result.report, null, 2) + '\n'
   if (values.report === '-') io.writeErr(report)
   else if (values.report) io.writeFile(values.report, report)
-  return values['check-loss'] && result.report.diagnostics.length > 0 ? 1 : 0
+  const hasLoss = result.report.diagnostics.some(({ fidelity }) => fidelity === 'degraded' || fidelity === 'dropped')
+  return values['check-loss'] && hasLoss ? 1 : 0
 }
 
 /** Report the un-auto-fixable (overlapping) warnings for one input. */

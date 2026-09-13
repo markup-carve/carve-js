@@ -16,6 +16,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   diagnostic `code` type is widened for cross-importer codes, and consumers
   that treated an empty diagnostics array as verified fidelity must now handle
   the explicit fallback finding. Release this change as 0.2.0.
+- **BREAKING:** The migration CLI now writes version 2 reports for every importer, and
+  `--check-loss` exits 1 only when a report contains degraded or dropped content.
 
 ### Added
 

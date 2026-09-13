@@ -43,11 +43,19 @@ function fidelity(code: HtmlImportDiagnosticCode): MigrationFidelity {
     code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
     code === 'diagnostics-truncated'
   ) return 'degraded'
-  // Everything else is PRESERVED, and `attribute-preserved` belongs here rather
-  // than beside `attribute-dropped` above: it is the row saying an attribute
-  // reached the output inside preserved raw bytes, so filing it as a drop would
-  // restate the false claim it exists to remove (markup-carve/carve-js#1468).
-  return 'preserved'
+  if (code === 'attribute-preserved' || code === 'raw-preserved') return 'preserved'
+  return 'dropped'
+}
+
+function confidence(code: HtmlImportDiagnosticCode): MigrationConfidence {
+  if (code === 'encoding-assumed') return 'inferred'
+  if (code === 'diagnostics-truncated') return 'fallback'
+  if (
+    code === 'element-dropped' || code === 'attribute-dropped' || code === 'structure-unspellable' ||
+    code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' ||
+    code === 'attribute-preserved' || code === 'raw-preserved'
+  ) return 'exact'
+  return 'fallback'
 }
 
 export function migrateHtml(source: string, options: HtmlImportOptions = {}): MigrationResult {
@@ -62,9 +70,7 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
       diagnostics: result.report.diagnostics.map((diagnostic) => ({
         ...diagnostic,
         fidelity: fidelity(diagnostic.code),
-        confidence: diagnostic.code === 'encoding-assumed'
-          ? 'inferred'
-          : diagnostic.code === 'diagnostics-truncated' ? 'fallback' : 'exact',
+        confidence: confidence(diagnostic.code),
       })),
     },
   }

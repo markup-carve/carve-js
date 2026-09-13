@@ -33,3 +33,8 @@ ranges, safe fixes, and batch reporting have a compatible place to land.
 
 The existing `htmlToCarve`, `markdownToCarve`, and `djotToCarve` convenience
 functions remain available.
+
+The CLI exposes the same contract through `carve migrate --report FILE` (use
+`-` for stderr). `--check-loss` exits 1 when the report contains degraded or
+dropped content, so currently unverified Markdown, Djot, and BBCode imports fail
+closed. `--mode` and `--adapter` remain HTML-only.
