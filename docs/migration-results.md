@@ -20,10 +20,12 @@ confidence. Format-specific codes and messages remain explicit.
 
 Version 2 renames version 1's `carried` fidelity to `preserved`, adds
 `normalized`, and adds non-HTML diagnostics. Markdown, Djot, and BBCode emit
-`fidelity-unverified` as degraded/fallback on
+`fidelity-unverified` as dropped/fallback on
 every import until those paths expose construct-level loss information. The
 report does not infer exact outcomes by rescanning source independently of the
 importer.
+`Normalized` remains reserved for a future importer that can prove a
+semantics-preserving rewrite from its own applied-operation record.
 
 The value is one migration pipeline for browser tools, Node applications, and
 bindings. Consumers no longer need HTML-only branching, and future source

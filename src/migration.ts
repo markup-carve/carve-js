@@ -73,9 +73,9 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
 function unverified(value: string, sourceFormat: Exclude<SourceFormat, 'html'>): MigrationResult {
   const diagnostics: MigrationDiagnostic[] = [{
     code: 'fidelity-unverified',
-    message: `Fidelity was not reported by the ${sourceFormat} importer; degraded is a conservative release-gate classification`,
+    message: `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
     severity: 'warning',
-    fidelity: 'degraded',
+    fidelity: 'dropped',
     confidence: 'fallback',
   }]
   return { value, report: { schemaVersion: 2, sourceFormat, diagnostics } }
