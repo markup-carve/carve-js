@@ -245,6 +245,7 @@ export { headingLevelShift, type HeadingLevelShiftOptions } from './heading-leve
 // entry is bundled for the browser verbatim. It lives on the `./node` subpath.
 export {
   expandIncludes,
+  expandsForTarget,
   type IncludeContext,
   type IncludeDependency,
   type IncludeOptions,

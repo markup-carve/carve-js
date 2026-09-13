@@ -52,6 +52,7 @@ import {
   parse,
   resolve,
   expandIncludes,
+  expandsForTarget,
   type IncludeWarning,
   type Document,
   type MigrationWarning,
@@ -878,7 +879,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   // across engines on a document neither corpus covers.
   const useIncludes =
     includeRoot !== undefined &&
-    target !== 'carve' &&
+    expandsForTarget(target) &&
     (values['include-root'] !== undefined || src.includes('{{'))
 
   // fileSystemResolver canonicalizes its root eagerly, so a root that is not a

@@ -956,6 +956,24 @@ function nextFree(base: string, used: Set<string>): string {
  *
  * With no resolver, directives remain ordinary text and no warnings are emitted.
  */
+/**
+ * Whether the include pass runs for a given render target (spec I15).
+ *
+ * Only the Carve target opts out, and the reason is not performance: that
+ * target writes the document back as Carve source, and expanding first returns
+ * a DIFFERENT document, with every child inlined and the directives gone. The
+ * writer already preserves a directive verbatim (I12); expanding before it runs
+ * takes that away by another route.
+ *
+ * Exported, and read by both the CLI and the include-conformance suite, so the
+ * rule has ONE home. It used to be an inline comparison in the CLI, which is
+ * how this engine came to inline includes on `render --carve` while carve-rs
+ * and carve-php returned the author's source.
+ */
+export function expandsForTarget(target: string): boolean {
+  return target !== 'carve'
+}
+
 export function expandIncludes(doc: Document, source: string, options: IncludeOptions = {}): IncludeResult {
   const state: State = {
     opts: options,

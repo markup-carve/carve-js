@@ -56,6 +56,11 @@ interface Vector {
   rules: string[]
   forbiddenSubstrings?: string[]
   checkFmtExpandEquivalence?: boolean
+  checkCarveTarget?: boolean
+  mode?: string
+  entry?: string
+  files?: Record<string, string>
+  options?: Record<string, unknown>
   expected: Record<string, unknown>
 }
 
@@ -98,6 +103,34 @@ describe('include-conformance vectors (spec §19)', () => {
             `${vector.name}: warning message leaked ${JSON.stringify(forbidden)} (I7)`,
           ).toBe(false)
         }
+      }
+
+      /*
+       * I15, and deliberately NOT read off the shared runner's result.
+       *
+       * The runner is carve-js driving carve-js, so a `carveTarget` it computed
+       * would grade this engine against the spec repo's copy of the rule rather
+       * than against this engine's own. What has to be exercised is the code
+       * the CLI runs, which is why `expandsForTarget` is exported from the
+       * library: flip it, and this vector fails here as well as in the CLI
+       * tests.
+       */
+      if (vector.checkCarveTarget) {
+        expect(vector.mode, `${vector.name}: carveTarget needs a virtual vector`).toBe('virtual')
+        const resolver = (p: string) => {
+          const source = vector.files?.[p]
+          return source === undefined ? null : { source, id: p }
+        }
+        const entry = vector.entry!
+        const doc = carveApi.parse(entry, { positions: true })
+        // The pipeline decision, spelled the way the CLI spells it.
+        const forCarve = carveApi.expandsForTarget('carve')
+          ? carveApi.expandIncludes(doc, entry, { resolve: resolver }).doc
+          : doc
+        expect(
+          carveApi.renderCarve(forCarve),
+          `${vector.name}: the carve target expanded (I15)`,
+        ).toBe(vector.expected.carveTarget)
       }
 
       // I12 stronger invariant: expanding the formatted document matches.
