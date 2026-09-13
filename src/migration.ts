@@ -28,6 +28,8 @@ export interface MigrationResult {
   report: {
     schemaVersion: 2
     sourceFormat: SourceFormat
+    mode?: string
+    adapter?: string
     diagnostics: MigrationDiagnostic[]
   }
 }
@@ -37,10 +39,9 @@ function fidelity(code: HtmlImportDiagnosticCode): MigrationFidelity {
     return 'dropped'
   }
   if (
-    code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
+    code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
     code === 'diagnostics-truncated'
   ) return 'degraded'
-  if (code === 'element-unwrapped') return 'normalized'
   // Everything else is PRESERVED, and `attribute-preserved` belongs here rather
   // than beside `attribute-dropped` above: it is the row saying an attribute
   // reached the output inside preserved raw bytes, so filing it as a drop would
@@ -55,22 +56,26 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
     report: {
       schemaVersion: 2,
       sourceFormat: 'html',
+      mode: result.report.mode,
+      adapter: result.report.adapter,
       diagnostics: result.report.diagnostics.map((diagnostic) => ({
         ...diagnostic,
         fidelity: fidelity(diagnostic.code),
-        confidence: diagnostic.code === 'encoding-assumed' ? 'inferred' : 'exact',
+        confidence: diagnostic.code === 'encoding-assumed'
+          ? 'inferred'
+          : diagnostic.code === 'diagnostics-truncated' ? 'fallback' : 'exact',
       })),
     },
   }
 }
 
-function normalized(value: string, source: string, sourceFormat: Exclude<SourceFormat, 'html'>): MigrationResult {
-  const diagnostics: MigrationDiagnostic[] = value === source ? [] : [{
-    code: 'syntax-normalized',
-    message: `Converted ${sourceFormat} syntax to canonical Carve source`,
-    severity: 'info',
-    fidelity: 'normalized',
-    confidence: 'exact',
+function unverified(value: string, sourceFormat: Exclude<SourceFormat, 'html'>): MigrationResult {
+  const diagnostics: MigrationDiagnostic[] = [{
+    code: 'fidelity-unverified',
+    message: `Fidelity was not reported by the ${sourceFormat} importer; degraded is a conservative release-gate classification`,
+    severity: 'warning',
+    fidelity: 'degraded',
+    confidence: 'fallback',
   }]
   return { value, report: { schemaVersion: 2, sourceFormat, diagnostics } }
 }
@@ -79,11 +84,11 @@ export function migrateMarkdown(
   source: string,
   options: { dialect?: MarkdownDialect } = {},
 ): MigrationResult {
-  return normalized(markdownToCarve(source, options.dialect), source, 'markdown')
+  return unverified(markdownToCarve(source, options.dialect), 'markdown')
 }
 
 export function migrateDjot(source: string): MigrationResult {
-  const result = normalized(djotToCarve(source), source, 'djot')
+  const result = unverified(djotToCarve(source), 'djot')
   const decisions = djotMigrationWarnings(source).map((warning): MigrationDiagnostic => ({
     code: warning.rule,
     message: `Normalized ${warning.rule} to Carve-compatible syntax`,
@@ -98,5 +103,5 @@ export function migrateDjot(source: string): MigrationResult {
 }
 
 export function migrateBbcode(source: string): MigrationResult {
-  return normalized(bbcodeToCarve(source), source, 'bbcode')
+  return unverified(bbcodeToCarve(source), 'bbcode')
 }

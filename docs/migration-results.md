@@ -19,8 +19,10 @@ source format and use the same `preserved`, `normalized`, `degraded`, or
 confidence. Format-specific codes and messages remain explicit.
 
 Version 2 renames version 1's `carried` fidelity to `preserved`, adds
-`normalized`, and adds non-HTML diagnostics. A semantics-preserving source
-rewrite emits `syntax-normalized`; Djot delimiter rewrites additionally retain
+`normalized`, and adds non-HTML diagnostics. Markdown, Djot, and BBCode emit
+`fidelity-unverified` as degraded/fallback on
+every import until those paths expose construct-level loss information. Djot
+delimiter rewrites additionally retain
 their specific migration-rule codes.
 
 The value is one migration pipeline for browser tools, Node applications, and

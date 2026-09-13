@@ -28,7 +28,7 @@ describe('shared migration result', () => {
       migrateDjot('_emphasis_').report.diagnostics,
       migrateBbcode('[b]strong[/b]').report.diagnostics,
     ].flat().map(diagnostic => diagnostic.fidelity)
-    expect(outcomes).toContain('normalized')
+    expect(outcomes).toContain('degraded')
     expect(outcomes.every(outcome => ['preserved', 'normalized', 'degraded', 'dropped'].includes(outcome))).toBe(true)
   })
 
@@ -36,7 +36,7 @@ describe('shared migration result', () => {
     const result = migrateDjot('_emphasis_ and **strong**')
     expect(result.value).toBe('/emphasis/ and *strong*')
     expect(result.report.diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'syntax-normalized', fidelity: 'normalized' }),
+      expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'degraded', confidence: 'fallback' }),
       expect.objectContaining({ code: 'djot-emphasis-underscore', fidelity: 'normalized' }),
       expect.objectContaining({ code: 'markdown-strong-double-star', fidelity: 'normalized' }),
     ]))
@@ -48,5 +48,13 @@ describe('shared migration result', () => {
     expect(result.report.diagnostics).toContainEqual(
       expect.objectContaining({ code: 'attribute-dropped', fidelity: 'dropped', confidence: 'exact' }),
     )
+  })
+
+  it('does not mistake byte equality or whitespace rewrites for verified fidelity', () => {
+    for (const source of ['plain text', 'plain text\r\n\r\n', 'term\n: definition']) {
+      expect(migrateMarkdown(source).report.diagnostics).toContainEqual(
+        expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'degraded', confidence: 'fallback' }),
+      )
+    }
   })
 })
