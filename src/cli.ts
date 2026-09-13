@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
+import { fileSystemResolver } from './includes-fs.js'
 import {
   applyMigrationFixes,
   djotMigrationWarnings,
@@ -51,7 +52,6 @@ import {
   parse,
   resolve,
   expandIncludes,
-  fileSystemResolver,
   type IncludeWarning,
   type Document,
   type MigrationWarning,

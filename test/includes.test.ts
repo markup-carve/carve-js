@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   expandIncludes,
-  fileSystemResolver,
   parse,
   renderCarve,
   renderHtml,
   resolve,
   type IncludeOptions,
 } from '../src/index.js'
+import { fileSystemResolver } from '../src/includes-fs.js'
 
 function expand(
   source: string,

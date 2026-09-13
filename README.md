@@ -113,10 +113,32 @@ child. The value is the resolver's canonical id when it supplies one, and the
 `sourcePath` option for the top-level document. It is **absent** when the
 top-level document has no `sourcePath`: no placeholder path is invented.
 
-`line` / `column` / `start` / `end` are positions in that `file`'s own source.
-Positions on merged AST nodes are not yet remapped into the assembled
-document - see the follow-up on source-position remapping (spec section 19,
-I4).
+`line` / `column` / `start` / `end` are positions in that `file`'s own source,
+and so are the positions on the merged AST nodes: a node an include pulled in
+keeps its own file's coordinates and names that file in `pos.file`. A node from
+the document being parsed has no `pos.file`, so a tree with no includes is
+unchanged. Without it an included span would be ambiguous - a child's first
+paragraph and the parent's first paragraph both report line 1.
+
+On Node, `fileSystemResolver` is a ready-made resolver with canonical
+root-containment checks. It lives on the `./node` subpath rather than the main
+entry, because it needs `node:fs` and the browser bundle is built from that
+entry verbatim:
+
+```ts
+import { fileSystemResolver } from '@markup-carve/carve/node'
+
+const expanded = expandIncludes(doc, source, {
+  // Canonicalizes first, then rejects any target outside the root - symlink
+  // escapes and dot-dot alike. Absolute paths are denied by default, and no
+  // target over 4 MiB is read.
+  resolve: fileSystemResolver('/srv/docs'),
+})
+```
+
+A browser or WASM host supplies its own resolver instead, which is the
+arrangement the spec describes: the parser performs no file I/O and the host
+owns containment.
 
 `expanded.dependencies` lists every include target touched by the whole
 recursive expansion (`{ id, resolved }`, de-duplicated, in first-encounter

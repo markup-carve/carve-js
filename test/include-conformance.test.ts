@@ -28,7 +28,15 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as carve from '../src/index.js'
+import * as carveApi from '../src/index.js'
+import { fileSystemResolver } from '../src/includes-fs.js'
+
+// The shared runner reads `fileSystemResolver` off the module namespace.
+// It is not on this package's main entry - it needs `node:fs`, and that
+// entry is bundled for the browser verbatim - so the Node-only resolver is
+// handed over alongside rather than exported into a bundle that cannot
+// have it.
+const carve = { ...carveApi, fileSystemResolver }
 // @ts-expect-error - vendored spec-repo ESM helper, no type declarations.
 import { runVector, EXPECTED_FIELDS } from '../spec/scripts/include-conformance-lib.mjs'
 

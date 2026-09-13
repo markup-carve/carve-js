@@ -34,6 +34,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./node": {
+      "import": "./dist/node.js",
+      "types": "./dist/node.d.ts"
+    },
     "./prettier": {
       "import": "./dist/prettier.js",
       "types": "./dist/prettier.d.ts"
