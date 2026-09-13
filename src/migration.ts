@@ -1,9 +1,10 @@
 import { djotToCarve } from './djot-import.js'
-import { djotMigrationWarnings } from './djot-migrate.js'
 import { bbcodeToCarve } from './bbcode-migrate.js'
 import {
   htmlToCarve,
   type HtmlImportDiagnosticCode,
+  type HtmlImportAdapter,
+  type HtmlImportMode,
   type HtmlImportOptions,
 } from './html-import.js'
 import { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
@@ -28,8 +29,8 @@ export interface MigrationResult {
   report: {
     schemaVersion: 2
     sourceFormat: SourceFormat
-    mode?: string
-    adapter?: string
+    mode?: HtmlImportMode
+    adapter?: HtmlImportAdapter
     diagnostics: MigrationDiagnostic[]
   }
 }
@@ -88,18 +89,7 @@ export function migrateMarkdown(
 }
 
 export function migrateDjot(source: string): MigrationResult {
-  const result = unverified(djotToCarve(source), 'djot')
-  const decisions = djotMigrationWarnings(source).map((warning): MigrationDiagnostic => ({
-    code: warning.rule,
-    message: `Normalized ${warning.rule} to Carve-compatible syntax`,
-    severity: 'info',
-    fidelity: 'normalized',
-    confidence: 'exact',
-    line: warning.line,
-    column: warning.column,
-  }))
-  if (decisions.length) result.report.diagnostics.push(...decisions)
-  return result
+  return unverified(djotToCarve(source), 'djot')
 }
 
 export function migrateBbcode(source: string): MigrationResult {

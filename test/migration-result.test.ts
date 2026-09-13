@@ -28,25 +28,25 @@ describe('shared migration result', () => {
       migrateDjot('_emphasis_').report.diagnostics,
       migrateBbcode('[b]strong[/b]').report.diagnostics,
     ].flat().map(diagnostic => diagnostic.fidelity)
-    expect(outcomes).toContain('degraded')
+    expect(outcomes).toEqual(['degraded', 'degraded', 'degraded', 'degraded'])
     expect(outcomes.every(outcome => ['preserved', 'normalized', 'degraded', 'dropped'].includes(outcome))).toBe(true)
   })
 
-  it('reports concrete Djot rewrites without describing the repaired output as broken', () => {
+  it('does not claim a Djot rewrite was applied without importer evidence', () => {
     const result = migrateDjot('_emphasis_ and **strong**')
     expect(result.value).toBe('/emphasis/ and *strong*')
-    expect(result.report.diagnostics).toEqual(expect.arrayContaining([
+    expect(result.report.diagnostics).toEqual([
       expect.objectContaining({ code: 'fidelity-unverified', fidelity: 'degraded', confidence: 'fallback' }),
-      expect.objectContaining({ code: 'djot-emphasis-underscore', fidelity: 'normalized' }),
-      expect.objectContaining({ code: 'markdown-strong-double-star', fidelity: 'normalized' }),
-    ]))
-    expect(result.report.diagnostics.every(diagnostic => !diagnostic.message.includes('renders with literal'))).toBe(true)
+    ])
   })
 
   it('classifies HTML losses', () => {
     const result = migrateHtml('<p><kbd kbd=lit>text</kbd></p>')
     expect(result.report.diagnostics).toContainEqual(
       expect.objectContaining({ code: 'attribute-dropped', fidelity: 'dropped', confidence: 'exact' }),
+    )
+    expect(migrateHtml('<ruby>x<rt>y</rt></ruby>').report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'element-unwrapped', fidelity: 'degraded', confidence: 'exact' }),
     )
   })
 

@@ -21,9 +21,9 @@ confidence. Format-specific codes and messages remain explicit.
 Version 2 renames version 1's `carried` fidelity to `preserved`, adds
 `normalized`, and adds non-HTML diagnostics. Markdown, Djot, and BBCode emit
 `fidelity-unverified` as degraded/fallback on
-every import until those paths expose construct-level loss information. Djot
-delimiter rewrites additionally retain
-their specific migration-rule codes.
+every import until those paths expose construct-level loss information. The
+report does not infer exact outcomes by rescanning source independently of the
+importer.
 
 The value is one migration pipeline for browser tools, Node applications, and
 bindings. Consumers no longer need HTML-only branching, and future source
