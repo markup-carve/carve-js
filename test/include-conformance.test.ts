@@ -57,6 +57,7 @@ interface Vector {
   forbiddenSubstrings?: string[]
   checkFmtExpandEquivalence?: boolean
   checkCarveTarget?: boolean
+  checkFlattened?: boolean
   mode?: string
   entry?: string
   files?: Record<string, string>
@@ -67,6 +68,7 @@ interface Vector {
 interface VectorResult {
   html: string
   fmt: string
+  flattened?: string
   warnings: unknown[]
   dependencies: unknown[]
   rawWarningMessages: string[]
@@ -103,6 +105,15 @@ describe('include-conformance vectors (spec §19)', () => {
             `${vector.name}: warning message leaked ${JSON.stringify(forbidden)} (I7)`,
           ).toBe(false)
         }
+      }
+
+      // The EXPANDED document through the writer, which is what `carve flatten`
+      // emits. The html golden cannot see the assembled tree's shape, since
+      // footnotes are collected globally at render time either way.
+      if (vector.checkFlattened) {
+        expect(result.flattened, `${vector.name}: flattened mismatch`).toBe(
+          vector.expected.flattened,
+        )
       }
 
       /*
