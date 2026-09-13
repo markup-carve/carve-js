@@ -7,6 +7,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Migration reports advance to schema version 2: `carried` is renamed to
+  `preserved`, `normalized` distinguishes semantics-preserving rewrites, and
+  Markdown and Djot now emit conversion diagnostics with confidence.
+
+### Added
+
+- `migrateBbcode()` exposes BBCode conversion through the shared migration
+  result envelope.
+
 ### Fixed
 
 - A footnote definition on a description marker line whose floor takes a nested

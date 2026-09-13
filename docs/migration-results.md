@@ -1,6 +1,6 @@
 # Shared migration results
 
-Use `migrateHtml`, `migrateMarkdown`, or `migrateDjot` when an application needs
+Use `migrateHtml`, `migrateMarkdown`, `migrateDjot`, or `migrateBbcode` when an application needs
 both converted Carve source and a stable report envelope.
 
 ```ts
@@ -13,9 +13,15 @@ for (const diagnostic of result.report.diagnostics) {
 await save(result.value)
 ```
 
-All three functions return `{ value, report }`. Reports identify their schema
-version and source format. HTML diagnostics add `fidelity` and `confidence`;
-Markdown and Djot currently return explicit empty diagnostic arrays.
+All four functions return `{ value, report }`. Version 2 reports identify their
+source format and use the same `preserved`, `normalized`, `degraded`, or
+`dropped` fidelity vocabulary plus an `exact`, `inferred`, or `fallback`
+confidence. Format-specific codes and messages remain explicit.
+
+Version 2 renames version 1's `carried` fidelity to `preserved`, adds
+`normalized`, and adds non-HTML diagnostics. A semantics-preserving source
+rewrite emits `syntax-normalized`; Djot delimiter rewrites additionally retain
+their specific migration-rule codes.
 
 The value is one migration pipeline for browser tools, Node applications, and
 bindings. Consumers no longer need HTML-only branching, and future source
