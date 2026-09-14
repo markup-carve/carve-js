@@ -1,17 +1,25 @@
 import { djotToCarve } from './djot-import.js'
+import { bbcodeToCarve } from './bbcode-migrate.js'
 import {
   htmlToCarve,
-  type HtmlImportDiagnostic,
   type HtmlImportDiagnosticCode,
+  type HtmlImportAdapter,
+  type HtmlImportMode,
   type HtmlImportOptions,
 } from './html-import.js'
 import { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
 
-export type SourceFormat = 'html' | 'markdown' | 'djot'
-export type MigrationFidelity = 'carried' | 'degraded' | 'dropped'
+export type SourceFormat = 'html' | 'markdown' | 'djot' | 'bbcode'
+export type MigrationFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
 export type MigrationConfidence = 'exact' | 'inferred' | 'fallback'
 
-export interface MigrationDiagnostic extends HtmlImportDiagnostic {
+export interface MigrationDiagnostic {
+  code: string
+  message: string
+  severity: 'info' | 'warning' | 'error'
+  path?: string
+  line?: number
+  column?: number
   fidelity: MigrationFidelity
   confidence: MigrationConfidence
 }
@@ -19,8 +27,10 @@ export interface MigrationDiagnostic extends HtmlImportDiagnostic {
 export interface MigrationResult {
   value: string
   report: {
-    schemaVersion: 1
+    schemaVersion: 2
     sourceFormat: SourceFormat
+    mode?: HtmlImportMode
+    adapter?: HtmlImportAdapter
     diagnostics: MigrationDiagnostic[]
   }
 }
@@ -30,14 +40,23 @@ function fidelity(code: HtmlImportDiagnosticCode): MigrationFidelity {
     return 'dropped'
   }
   if (
-    code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
-    code === 'diagnostics-truncated'
+    code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
+    code === 'raw-preserved'
   ) return 'degraded'
-  // Everything else is CARRIED, and `attribute-preserved` belongs here rather
-  // than beside `attribute-dropped` above: it is the row saying an attribute
-  // reached the output inside preserved raw bytes, so filing it as a drop would
-  // restate the false claim it exists to remove (markup-carve/carve-js#1468).
-  return 'carried'
+  if (code === 'diagnostics-truncated') return 'dropped'
+  if (code === 'attribute-preserved') return 'preserved'
+  return 'dropped'
+}
+
+function confidence(code: HtmlImportDiagnosticCode): MigrationConfidence {
+  if (code === 'encoding-assumed') return 'inferred'
+  if (code === 'diagnostics-truncated') return 'fallback'
+  if (
+    code === 'element-dropped' || code === 'attribute-dropped' || code === 'structure-unspellable' ||
+    code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' ||
+    code === 'attribute-preserved' || code === 'raw-preserved'
+  ) return 'exact'
+  return 'fallback'
 }
 
 export function migrateHtml(source: string, options: HtmlImportOptions = {}): MigrationResult {
@@ -45,28 +64,41 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
   return {
     value: result.value,
     report: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       sourceFormat: 'html',
+      mode: result.report.mode,
+      adapter: result.report.adapter,
       diagnostics: result.report.diagnostics.map((diagnostic) => ({
         ...diagnostic,
         fidelity: fidelity(diagnostic.code),
-        confidence: diagnostic.code === 'encoding-assumed' ? 'inferred' : 'exact',
+        confidence: confidence(diagnostic.code),
       })),
     },
   }
 }
 
-function exact(value: string, sourceFormat: Exclude<SourceFormat, 'html'>): MigrationResult {
-  return { value, report: { schemaVersion: 1, sourceFormat, diagnostics: [] } }
+function unverified(value: string, sourceFormat: Exclude<SourceFormat, 'html'>): MigrationResult {
+  const diagnostics: MigrationDiagnostic[] = [{
+    code: 'fidelity-unverified',
+    message: `Fidelity was not reported by the ${sourceFormat} importer; dropped is a conservative worst-case release-gate classification`,
+    severity: 'warning',
+    fidelity: 'dropped',
+    confidence: 'fallback',
+  }]
+  return { value, report: { schemaVersion: 2, sourceFormat, diagnostics } }
 }
 
 export function migrateMarkdown(
   source: string,
   options: { dialect?: MarkdownDialect } = {},
 ): MigrationResult {
-  return exact(markdownToCarve(source, options.dialect), 'markdown')
+  return unverified(markdownToCarve(source, options.dialect), 'markdown')
 }
 
 export function migrateDjot(source: string): MigrationResult {
-  return exact(djotToCarve(source), 'djot')
+  return unverified(djotToCarve(source), 'djot')
+}
+
+export function migrateBbcode(source: string): MigrationResult {
+  return unverified(bbcodeToCarve(source), 'bbcode')
 }

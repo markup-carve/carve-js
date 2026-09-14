@@ -170,6 +170,7 @@ export { markdownToCarve, type MarkdownDialect } from './markdown-migrate.js'
 export { djotToCarve } from './djot-import.js'
 export {
   migrateDjot,
+  migrateBbcode,
   migrateHtml,
   migrateMarkdown,
   type MigrationConfidence,
