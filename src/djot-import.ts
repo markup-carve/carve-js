@@ -32,6 +32,132 @@ const quoted = (line: string): [number, string] => {
 const isMarkerLine = (line: string): boolean =>
   /^[ \t]*(?:[-*+]|[0-9A-Za-z]+[.)])[ \t]+\S/.test(line)
 
+function splitSiteFrontmatter(source: string): [string, string, string] {
+  const lines = source.split('\n')
+  if (!/^--- ?\w*[ \t]*$/.test(lines[0] ?? '')) return ['', '', source]
+  for (let i = 1; i < lines.length; i++) {
+    if (/^---[ \t]*$/.test(lines[i]!)) {
+      const frontmatter = lines.slice(0, i + 1).join('\n')
+      const offset = frontmatter.length
+      const separator = source.startsWith('\n\n', offset) ? '\n\n' : source.startsWith('\n', offset) ? '\n' : ''
+      return [frontmatter, separator, source.slice(offset + separator.length)]
+    }
+  }
+  return ['', '', source]
+}
+
+function leadingIndent(line: string): [number, number] {
+  let columns = 0
+  let chars = 0
+  while (chars < line.length && (line[chars] === ' ' || line[chars] === '\t')) {
+    columns = line[chars] === '\t' ? columns + (4 - columns % 4) : columns + 1
+    chars++
+  }
+  return [columns, chars]
+}
+
+function charsThroughColumns(line: string, wanted: number): number {
+  let columns = 0
+  let chars = 0
+  while (chars < line.length && columns < wanted && (line[chars] === ' ' || line[chars] === '\t')) {
+    columns = line[chars] === '\t' ? columns + (4 - columns % 4) : columns + 1
+    chars++
+  }
+  return chars
+}
+
+/** Translate Djot definition-item structure without touching unrelated source. */
+function convertDefinitionLists(source: string): string {
+  const lines = source.split('\n')
+  const masked = maskDjotCodeAndDestinations(source).split('\n')
+  const stack: Array<{ source: number; target: number; body: boolean; ready: boolean }> = []
+  for (let i = 0; i < lines.length; i++) {
+    const term = /^([ \t]*):[ \t]+(\S.*)$/.exec(masked[i] ?? '')
+    if (term) {
+      const [indent] = leadingIndent(term[1]!)
+      while (stack.length && indent < stack.at(-1)!.source) stack.pop()
+      const top = stack.at(-1)
+      const mayStart = top !== undefined || i === 0 || lines[i - 1]!.trim() === ''
+      if (mayStart) {
+        const authoredTerm = /^([ \t]*):[ \t]+(\S.*)$/.exec(lines[i]!)
+        const termText = authoredTerm?.[2] ?? term[2]!
+        if (!top || indent === top.source) {
+          const target = top?.target ?? indent
+          if (!top) stack.push({ source: indent, target, body: false, ready: false })
+          else {
+            top.body = false
+            top.ready = false
+          }
+          const prefix = ' '.repeat(target)
+          lines[i] = `${top ? '' : `${prefix}{loose}\n`}${prefix}:: ${termText}`
+          continue
+        }
+        if (top.ready && indent >= top.source + 2) {
+          const target = top.target + 3
+          const lead = top.body ? ' '.repeat(target) : `${' '.repeat(top.target)}:  `
+          top.body = true
+          lines[i] = `${lead}{loose}\n${' '.repeat(target)}:: ${termText}`
+          stack.push({ source: indent, target, body: false, ready: false })
+          continue
+        }
+      }
+    }
+    if (!stack.length) continue
+    if (lines[i]!.trim() === '') {
+      stack.at(-1)!.ready = true
+      continue
+    }
+    if (!stack.at(-1)!.ready) continue
+    const [indent] = leadingIndent(lines[i]!)
+    while (stack.length && indent < stack.at(-1)!.source + 2) stack.pop()
+    const context = stack.at(-1)
+    if (!context) continue
+    const payload = lines[i]!.slice(charsThroughColumns(lines[i]!, context.source + 2))
+    const extra = Math.max(0, indent - context.source - 2)
+    lines[i] = context.body
+      ? `${' '.repeat(context.target + 3 + extra)}${payload}`
+      : `${' '.repeat(context.target)}:  ${' '.repeat(extra)}${payload}`
+    context.body = true
+  }
+  return lines.join('\n')
+}
+
+/** Rewrite Djot block spellings that Carve does not recognize. */
+function convertDjotBlockMarkers(source: string): string {
+  const lines = source.split('\n')
+  const masked = maskDjotCodeAndDestinations(source).split('\n')
+  const isNestedAt = (line: number, quote: string, columns: number): boolean => {
+    for (let j = line - 1; j >= 0; j--) {
+      if (!(masked[j] ?? '').startsWith(quote)) break
+      const candidate = (masked[j] ?? '').slice(quote.length)
+      if (candidate.trim() === '') continue
+      const [candidateColumns] = leadingIndent(candidate)
+      if (candidateColumns >= columns) continue
+      if (/^(?:([*-])[ \t]*){3,}$/.test(candidate.trim())) return false
+      return /^(?:[-*+]|[0-9A-Za-z]+[.)]|\([0-9A-Za-z]+\)|:)[ \t]+\S/.test(candidate.trimStart())
+    }
+    return false
+  }
+  for (let i = 0; i < lines.length; i++) {
+    if ((masked[i] ?? '').trim() === '') continue
+    const enclosed = /^((?:[ \t]*>[ \t]*)*)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(masked[i]!)
+    if (enclosed) {
+      const authored = /^((?:[ \t]*>[ \t]*)*)([ \t]*)\(([0-9A-Za-z]+)\)([ \t]+\S.*)$/.exec(lines[i]!)
+      const [columns] = leadingIndent(enclosed[2]!)
+      if (authored) lines[i] = `${authored[1]}${isNestedAt(i, enclosed[1]!, columns) ? authored[2] : ''}${authored[3]}.${authored[4]}`
+      continue
+    }
+    const rule = /^((?:[ \t]*>[ \t]*)*)([ \t]*)([*-])(?:[ \t]*\3){2,}[ \t]*$/.exec(masked[i]!)
+    if (!rule) continue
+    const quote = rule[1]!
+    const indent = rule[2]!
+    const [columns] = leadingIndent(indent)
+    const nested = isNestedAt(i, quote, columns)
+    lines[i] = `${quote}${nested ? indent : ''}***`
+  }
+  return lines.join('\n')
+}
+
 /** Keep a Djot loose list from becoming two Carve lists after 3+ blank lines. */
 function collapseFalseListBoundaries(source: string): string {
   const lines = source.split('\n')
@@ -89,6 +215,9 @@ function escapePlainDjotText(source: string): string {
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   const normalized = djot.replace(/\r\n?/g, '\n')
-  const escaped = escapePlainDjotText(normalized)
-  return collapseFalseListBoundaries(applyMigrationFixes(escaped).output)
+  const [frontmatter, separator, body] = splitSiteFrontmatter(normalized)
+  const converted = collapseFalseListBoundaries(
+    applyMigrationFixes(escapePlainDjotText(convertDefinitionLists(convertDjotBlockMarkers(body)))).output,
+  )
+  return frontmatter === '' ? converted : `${frontmatter}${separator}${converted}`
 }
