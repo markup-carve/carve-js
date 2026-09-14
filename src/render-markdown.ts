@@ -272,15 +272,15 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Escape the label the same way text is escaped (HTML + Markdown
       // metacharacters), not just strip controls: a label like `[<img …>]`
       // must not emit live HTML when the Markdown is re-rendered.
-      const labelLine = node.label ? `**${escapeText(node.label)}**\n\n` : ''
+      const labelLine = node.label ? `${delimited(escapeText(node.label), '**', 'strong')}\n\n` : ''
       if (title !== '') {
-        return `**${title}**\n\n${labelLine}${body}`
+        return `${delimited(title, '**', 'strong')}\n\n${labelLine}${body}`
       }
       return `${labelLine}${body}`
     }
     case 'div':
       return node.label
-        ? `**${escapeText(node.label)}**\n\n${renderBlocks(node.children, ctx)}`
+        ? `${delimited(escapeText(node.label), '**', 'strong')}\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
     case 'line_block':
       return renderBlocks(node.children, ctx)
@@ -299,7 +299,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
         out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
       }
       if (node.caption !== undefined) {
-        out += `**${trimNonNbsp(renderInlines(node.caption, ctx))}**\n\n`
+        out += `${delimited(trimNonNbsp(renderInlines(node.caption, ctx)), '**', 'strong')}\n\n`
       }
       return out
     }
@@ -401,7 +401,7 @@ function renderListItem(item: ListItem, ctx: MarkdownContext): string {
 function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, trailingBlank: boolean): string {
   let out = ''
   for (const item of items) {
-    for (const term of item.terms) out += `**${renderInlines(term, ctx)}**\n`
+    for (const term of item.terms) out += `${delimited(renderInlines(term, ctx), '**', 'strong')}\n`
     for (const def of item.definitions)
       out += `${withMarker(': ', containerContent(ctx, () => renderBlocks(def, ctx)))}\n`
   }
@@ -515,7 +515,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
-  return `${target}\n\n*${trimNonNbsp(renderInlines(node.caption, ctx))}*\n\n`
+  return `${target}\n\n${delimited(trimNonNbsp(renderInlines(node.caption, ctx)), '*', 'em')}\n\n`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
@@ -537,6 +537,38 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
   } finally {
     ctx.inlineDepth--
   }
+}
+
+/**
+ * Whitespace at either end of a delimiter run's content, CommonMark's class:
+ * the Unicode Zs category plus tab, line feed, form feed and carriage return
+ * (CommonMark 2.1), and U+E000 for the NBSP `normalize` has not resolved yet.
+ *
+ * Deliberately NOT `isCarveWhitespace`, which excludes NBSP: NBSP is Zs, so it
+ * blocks flanking exactly like a space even though Carve's own trim keeps it.
+ * The parser's `isFlankSpace` counts both spellings for the same reason.
+ */
+const BLOCKS_FLANKING = /^[\t\n\f\r\ue000\p{Zs}]|[\t\n\f\r\ue000\p{Zs}]$/u
+
+/**
+ * `content` wrapped so a reader gets the node back.
+ *
+ * A delimiter run only opens while it is left-flanking and only closes while it
+ * is right-flanking, and a run adjacent to whitespace is neither (CommonMark
+ * 6.2). Padded content therefore has no delimiter spelling at all: `** a **`
+ * comes back as literal text and `** **` as a THEMATIC BREAK, so the node is
+ * lost either way (carve-js#1683).
+ *
+ * The padding is authored content - NBSP arrives as a `\ ` escape or a
+ * `:nbsp:` symbol - so it is neither trimmed nor moved outside the run. The
+ * inline-HTML form this renderer already uses for the types Markdown cannot
+ * spell carries it exactly, and unlike a moved space it cannot open an indented
+ * code block at column 0 or a hard break at the end of a line.
+ */
+function delimited(content: string, delimiter: string, tag: string): string {
+  if (!BLOCKS_FLANKING.test(content)) return `${delimiter}${content}${delimiter}`
+
+  return `<${tag}>${content}</${tag}>`
 }
 
 function renderInline(node: InlineNode, ctx: MarkdownContext): string {
@@ -572,13 +604,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       }
       return '\\' + node.value
     case 'emphasis':
-      return `*${renderInlines(node.children, ctx)}*`
+      return delimited(renderInlines(node.children, ctx), '*', 'em')
     case 'strong':
-      return `**${renderInlines(node.children, ctx)}**`
+      return delimited(renderInlines(node.children, ctx), '**', 'strong')
     case 'underline':
       return `<u>${renderInlines(node.children, ctx)}</u>`
     case 'strike':
-      return `~~${renderInlines(node.children, ctx)}~~`
+      return delimited(renderInlines(node.children, ctx), '~~', 's')
     case 'subscript':
       // Subscript is NOT strikethrough; mirror super's inline-HTML fallback.
       return `<sub>${renderInlines(node.children, ctx)}</sub>`
