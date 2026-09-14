@@ -240,6 +240,8 @@ describe('a derived accessible name does not come back from an HTML import', () 
       expect(result.report.diagnostics).toEqual([
         {
           code: 'attribute-dropped',
+          fidelity: 'dropped',
+          confidence: 'exact',
           message: 'Dropped id on <p>: an admonition title has no attribute slot',
           severity: 'warning',
           path: '/aside[1]/p[1]',
@@ -327,6 +329,8 @@ describe('a derived accessible name does not come back from an HTML import', () 
       expect(result.report.diagnostics).toEqual([
         {
           code: 'attribute-dropped',
+          fidelity: 'dropped',
+          confidence: 'exact',
           message: 'Dropped id on <p>: an admonition title has no attribute slot',
           severity: 'warning',
           path: '/aside[1]/p[1]',

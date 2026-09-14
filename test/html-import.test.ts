@@ -84,6 +84,8 @@ describe('unspellable HTML import structures', () => {
     )
     expect(htmlToCarve(tableFigure).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
+      fidelity: 'dropped',
+      confidence: 'exact',
       severity: 'warning',
       message: expect.stringContaining('figure wrapping a table'),
       path: '/figure[1]',
@@ -104,6 +106,8 @@ describe('unspellable HTML import structures', () => {
     const result = htmlToCarve(`<div class="outer">${tableFigure}</div>`)
     expect(result.report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
+      fidelity: 'dropped',
+      confidence: 'exact',
       path: '/div[1]/figure[1]',
     }))
   })
@@ -362,6 +366,8 @@ describe('definition lists on import', () => {
     ])
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
+      fidelity: 'dropped',
+      confidence: 'exact',
       message: expect.stringContaining('<dd> with no <dt>'),
       path: '/dl[1]/div[2]/dd[1]',
     }))
@@ -395,6 +401,8 @@ describe('definition lists on import', () => {
     expect(htmlToAst(html).report.diagnostics).toEqual([])
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
+      fidelity: 'dropped',
+      confidence: 'exact',
       severity: 'warning',
       message: expect.stringContaining('<dd> with no <dt>'),
       path: '/dl[1]/dd[1]',
@@ -408,6 +416,8 @@ describe('definition lists on import', () => {
     expect(htmlToAst(html).report.diagnostics).toEqual([])
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'structure-unspellable',
+      fidelity: 'dropped',
+      confidence: 'exact',
       severity: 'warning',
       message: expect.stringContaining('empty <dt>'),
       path: '/dl[1]/dt[1]',
@@ -480,6 +490,8 @@ describe('definition lists on import', () => {
     expect(carve(html)).toBe(':: T\n: D\n\nAn editor stray.')
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'element-unwrapped',
+      fidelity: 'degraded',
+      confidence: 'exact',
       severity: 'warning',
       message: expect.stringContaining('Moved <p> content out of the <dl>'),
     }))
@@ -530,6 +542,8 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToCarve('<ol type="q"><li>x</li></ol>').report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'attribute-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'warning',
         message: 'Dropped type="q" on <ol>: an ordered list counts in 1, a, A, i or I',
         path: '/ol[1]',
@@ -574,6 +588,8 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(htmlToCarve('<ol type="a" start="27"><li>x</li></ol>').report.diagnostics).toContainEqual(
       expect.objectContaining({
         code: 'structure-unspellable',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'warning',
         message: expect.stringContaining('alphabetic list starting at 27'),
       }),
@@ -601,6 +617,8 @@ describe('change tracking and ordered-list alphabets on import', () => {
     expect(zero.report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'attribute-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'warning',
         message: 'Dropped type="a" on <ol> with start="0": an alphabet has no letter before the first',
       }),
@@ -733,6 +751,8 @@ describe('disclosures and quotations on import', () => {
     )
     expect(htmlToCarve(html).report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'element-unwrapped',
+      fidelity: 'degraded',
+      confidence: 'exact',
       severity: 'warning',
       message: expect.stringContaining('cannot spell a double quote or a line break'),
       path: '/details[1]/summary[1]',
@@ -777,6 +797,8 @@ describe('disclosures and quotations on import', () => {
     expect(htmlToCarve('<details><summary id="sum" class="k">T</summary><p>b</p></details>').report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'attribute-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'warning',
         message: 'Dropped id, class on <summary>: a disclosure label has no attribute slot',
         path: '/details[1]/summary[1]',
@@ -820,6 +842,8 @@ describe('disclosures and quotations on import', () => {
     expect(htmlToCarve('<p>He said <q>hi</q>.</p>').report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'element-unwrapped',
+        fidelity: 'degraded',
+        confidence: 'exact',
         severity: 'info',
         message: 'Read <q> as quotation marks: Carve has no quotation element, so the marks are the mapping',
         path: '/p[1]/q[2]',
@@ -982,6 +1006,8 @@ describe('table spans on import', () => {
     expect(htmlToCarve(html).report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'table-degraded',
+        fidelity: 'degraded',
+        confidence: 'exact',
         severity: 'warning',
         message: expect.stringContaining('Clipped a rowspan at the header rows'),
         path: '/table[1]/tr[1]/th[1]',
@@ -1025,6 +1051,8 @@ describe('table spans on import', () => {
     expect(htmlToCarve(html).report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'table-degraded',
+        fidelity: 'degraded',
+        confidence: 'exact',
         severity: 'warning',
         message: 'Dropped a second <caption>: a table has one caption, and the first one wins',
         path: '/table[1]/caption[3]',
@@ -1085,16 +1113,22 @@ describe('the import decisions that are policy', () => {
       expect.objectContaining({ code: 'element-unwrapped' }),
       expect.objectContaining({
         code: 'attribute-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'info',
         message: 'Dropped id with the unwrapped <video>: there is no element left to carry it',
       }),
       expect.objectContaining({
         code: 'attribute-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'info',
         message: 'Dropped class with the unwrapped <video>: there is no element left to carry it',
       }),
       expect.objectContaining({
         code: 'attribute-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'info',
         message: 'Dropped data-x with the unwrapped <video>: there is no element left to carry it',
       }),
@@ -1249,6 +1283,8 @@ describe('table row groups on import', () => {
     expect(htmlToCarve(html).report.diagnostics).toEqual([
       expect.objectContaining({
         code: 'structure-unspellable',
+        fidelity: 'dropped',
+        confidence: 'exact',
         severity: 'warning',
         message: expect.stringContaining('explicit head/body/foot grouping'),
         path: '/table[1]',
@@ -1403,6 +1439,8 @@ describe('MathML on import', () => {
         // is about the OUTPUT, whose content is only TeX while the guess
         // holds, and not about an element the input structured differently.
         code: 'encoding-assumed',
+        fidelity: 'degraded',
+        confidence: 'inferred',
         severity: 'info',
         message: 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed',
         path: '/p[1]/math[2]',
@@ -1424,6 +1462,8 @@ describe('MathML on import', () => {
       expect(result.report.diagnostics).toEqual([
         {
           code: 'element-dropped',
+          fidelity: 'dropped',
+          confidence: 'exact',
           severity: 'warning',
           message: 'Dropped <math>: no TeX annotation and no alttext, and its children are a token stream, not an equation',
           path: '/p[1]/math[2]',
@@ -1493,6 +1533,8 @@ describe('MathML on import', () => {
     expect(result.report.diagnostics).toEqual([
       {
         code: 'encoding-assumed',
+        fidelity: 'degraded',
+        confidence: 'inferred',
         severity: 'info',
         message: 'Read <math> through its alttext: MathML does not declare the encoding of alttext, so TeX is assumed',
         path: '/p[1]/math[1]',
@@ -1565,7 +1607,14 @@ describe('MathML on import', () => {
       // descendant on the way past. The descendants are not preserved
       // separately - they are inside this one raw span.
       expect(result.report.diagnostics).toEqual([
-        { code: 'raw-preserved', severity: 'warning', message: 'Preserved unsupported <math> element as raw HTML', path: '/p[1]/math[2]' },
+        {
+          code: 'raw-preserved',
+          fidelity: 'degraded',
+          confidence: 'exact',
+          severity: 'warning',
+          message: 'Preserved unsupported <math> element as raw HTML',
+          path: '/p[1]/math[2]',
+        },
       ])
     }
     expect(htmlToCarve(HAND_WRITTEN, { mode: 'roundtrip' }).value)
