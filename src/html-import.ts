@@ -140,11 +140,24 @@ export function diagnosticConfidence(code: HtmlImportDiagnosticCode): HtmlImport
     // The importer assumed an encoding the source never declared.
     case 'encoding-assumed':
       return 'inferred'
-    // The report is a sample, so nothing about the omitted findings is known.
-    case 'diagnostics-truncated':
-      return 'fallback'
-    default:
+    // Every code whose decision the importer can see for itself.
+    case 'element-dropped':
+    case 'attribute-dropped':
+    case 'attribute-preserved':
+    case 'element-unwrapped':
+    case 'style-unmapped':
+    case 'table-degraded':
+    case 'raw-preserved':
+    case 'structure-unspellable':
       return 'exact'
+    // FAILS CLOSED. `diagnostics-truncated` reports a sample, so nothing about
+    // the omitted findings is known - and a code a future version adds, arriving
+    // here through a cast or a bindings boundary, says nothing about how sure
+    // anyone can be either. Both take the weakest answer rather than the
+    // strongest, which is what carve-php's own test for an unknown code
+    // requires.
+    default:
+      return 'fallback'
   }
 }
 
