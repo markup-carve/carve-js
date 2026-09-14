@@ -32,6 +32,7 @@ import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
  * anything implausibly large is rejected rather than converted slowly.
  */
 export const BBCODE_MAX_INPUT_LENGTH = 262144
+const UTF8_ENCODER = new TextEncoder()
 
 /** Thrown when the input exceeds {@link BBCODE_MAX_INPUT_LENGTH}. */
 export class BbcodeInputTooLargeError extends Error {
@@ -772,8 +773,9 @@ function cleanup(text: string): string {
  * Convert BBCode markup to Carve markup.
  */
 export function bbcodeToCarve(bbcode: string): string {
-  if (bbcode.length > BBCODE_MAX_INPUT_LENGTH) {
-    throw new BbcodeInputTooLargeError(bbcode.length)
+  const inputBytes = UTF8_ENCODER.encode(bbcode).byteLength
+  if (inputBytes > BBCODE_MAX_INPUT_LENGTH) {
+    throw new BbcodeInputTooLargeError(inputBytes)
   }
 
   let text = bbcode.replace(/\0/g, '\ufffd').replace(/\r\n?/g, '\n')
