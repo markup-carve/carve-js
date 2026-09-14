@@ -1071,6 +1071,12 @@ function renderBlockBody(
       return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
     }
     case 'comment':
+      // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
+      // inline one (carve#581) in joining a percent-leading content onto the
+      // marker. At block level the comment-LINE marker is exactly `%%`; a run
+      // of three or more is a comment FENCE (PART 9 §28), so `%%` + `%` is a
+      // different construct that pairs with any later same-width run and
+      // swallows everything between (markup-carve/carve-js#1674).
       return node.block
         ? renderBlockComment(node.content)
         : node.delimited
