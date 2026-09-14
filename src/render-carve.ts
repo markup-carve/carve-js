@@ -1636,6 +1636,23 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
         previousEmitted = b
         return
       }
+      // A LINE COMMENT WRITTEN AT THE ITEM'S CONTENT COLUMN IS READ AGAINST THE
+      // SUB-LIST ABOVE IT: that column is the sub-list's MARKER column, and a
+      // `%%` line there joins the sub-list's last item instead of opening a
+      // block of the hosting item. The comment comes back one level in, and the
+      // next writer pass spells it at the deeper column - so the source keeps
+      // moving right while the HTML never changes (carve-js#1676). The blank
+      // line closes the sub-list; it does not loosen the item, because a
+      // comment spells no paragraph for the blank line to part.
+      //
+      // ONLY BELOW A LIST, and only for the LINE form. A comment below a
+      // paragraph, quote, definition list or fence already opens its own block
+      // at that column, and a `%%%` fence opener closes the sub-list on its own.
+      if (b.type === 'comment' && !b.block && !separated && previousEmitted?.type === 'list') {
+        parts.push('', rendered)
+        previousEmitted = b
+        return
+      }
       parts.push(rendered)
       previousEmitted = b
     })
