@@ -244,6 +244,16 @@ function sliceLines(source: string, range: { start: number; end: number }): stri
   return sourceLines(source).slice(range.start - 1, range.end).join('\n')
 }
 
+function runAnchor(run: RunNode[], offset: number): Text {
+  let cursor = 0
+  for (const node of run) {
+    const end = cursor + runNodeText(node).length
+    if (offset < end && node.type === 'text') return node
+    cursor = end
+  }
+  return run.find((node): node is Text => node.type === 'text') ?? ({ type: 'text', value: '' } as Text)
+}
+
 function childContext(state: State): IncludeContext {
   const ctx: IncludeContext = {
     stack: [...state.stack],
@@ -347,6 +357,10 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
     return null
   }
   state.usedBytes += bytes
+  if (d.lines && d.lines.start > sourceLines(source).length) {
+    warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
+    return null
+  }
   return { source: d.lines ? sliceLines(source, d.lines) : source, id }
 }
 
@@ -685,11 +699,11 @@ function sliceRun(run: RunNode[], from: number, to: number): InlineNode[] {
  */
 function expandRun(run: RunNode[], state: State): InlineNode[] {
   const full = run.map(runNodeText).join('')
-  const anchor = run.find((n): n is Text => n.type === 'text') ?? ({ type: 'text', value: full } as Text)
   const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
   const spans: { start: number; end: number; replacement: InlineNode[] }[] = []
   for (let m = re.exec(full); m; m = re.exec(full)) {
     const raw = m[0]
+    const anchor = runAnchor(run, m.index)
     const d = parseDirective(raw, (part) =>
       warn(state, 'include-unknown-option', `Unknown include option "${part}".`, anchor),
     )

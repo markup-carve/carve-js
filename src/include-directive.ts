@@ -37,6 +37,7 @@ export function parseDirective(raw: string, onInvalidOption?: (part: string) => 
   const m = DIRECTIVE_FULL_RE.exec(raw)
   if (!m) return null
   const path = m[1] !== undefined ? unescapeQuotedPath(m[1]) : m[2] ?? m[3]!
+  if (path === '') return null
   const sectionPart = m[4]?.trim()
   const section = sectionPart ? sectionPart.slice(1) : undefined
   let lines: Directive['lines']

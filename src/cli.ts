@@ -122,6 +122,7 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                    Containment root for {{ path }} includes. Defaults to the
                    input file's directory; pass this to widen it to a docs
                    root or narrow it. Required to enable includes on stdin.
+    --no-includes   leave include directives literal. --safe implies this.
 
   input options:
     --from-json    read an encoded AST instead of Carve source, and render it
@@ -776,6 +777,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     'allow-loss'?: string[]
     'max-render-losses'?: string
     'include-root'?: string
+    'no-includes'?: boolean
     help?: boolean
   }
   let positionals: string[]
@@ -804,6 +806,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         'allow-loss': { type: 'string', multiple: true },
         'max-render-losses': { type: 'string' },
         'include-root': { type: 'string' },
+        'no-includes': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -958,6 +961,8 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   // the same way; this engine used to inline, so `render --carve` disagreed
   // across engines on a document neither corpus covers.
   const useIncludes =
+    !values['no-includes'] &&
+    !values.safe &&
     includeRoot !== undefined &&
     expandsForTarget(target) &&
     (values['include-root'] !== undefined || src.includes('{{'))
@@ -991,6 +996,9 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     })
     if (expanded.warnings.length) {
       io.writeErr(formatIncludeWarnings(expanded.warnings, positionals[0] ?? '<stdin>') + '\n')
+    }
+    if (expanded.suppressedWarnings > 0) {
+      io.writeErr(`carve render: ${expanded.suppressedWarnings} additional include warning(s) suppressed\n`)
     }
     // The expanded tree takes the SAME renderer path as --from-json, so an
     // expanded document still gets the loss report and the profile pass.
