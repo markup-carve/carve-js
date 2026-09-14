@@ -487,6 +487,7 @@ const IMPLEMENTED = new Set([
   'a-line-block-s-hard-break-keeps-its-backslash',
   'a-line-block-s-last-body-line-keeps-its-backslash',
   'which-inline-content-a-heading-id-is-derived-from',
+  'a-column-0-line-after-a-description-hosted-note-is-a-document-sibling',
   'a-column-0-line-after-a-container-s-last-block-when-that-block-left-no-paragraph-open',
   'a-continuation-marker-attaches-one-block-and-the-boundary-is-that-block-s-extent',
   'an-unclosed-verbatim-run-in-a-row-stops-at-the-closing-pipe',
