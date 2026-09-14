@@ -37,4 +37,5 @@ functions remain available.
 The CLI exposes the same contract through `carve migrate --report FILE` (use
 `-` for stderr). `--check-loss` exits 1 when the report contains degraded or
 dropped content, so currently unverified Markdown, Djot, and BBCode imports fail
-closed. `--mode` and `--adapter` remain HTML-only.
+closed. Opaque raw HTML is `degraded` even when its bytes are preserved because
+the importer cannot model or edit it. `--mode` and `--adapter` remain HTML-only.

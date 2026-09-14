@@ -55,7 +55,6 @@ import {
   migrateBbcode,
   migrateDjot,
   type HtmlImportAdapter,
-  HtmlImportLimitError,
   type HtmlImportMode,
   type RenderResult,
 } from './index.js'
@@ -255,14 +254,19 @@ async function runMigrate(args: string[], io: CliIO): Promise<number> {
           ? migrateDjot(source)
           : migrateMarkdown(source)
   } catch (error) {
-    if (!(error instanceof HtmlImportLimitError)) throw error
-    io.writeErr(`carve migrate: ${error.message}\n`)
+    io.writeErr(`carve migrate: ${error instanceof Error ? error.message : String(error)}\n`)
     return 2
   }
-  io.write(result.value)
   const report = JSON.stringify(result.report, null, 2) + '\n'
   if (values.report === '-') io.writeErr(report)
-  else if (values.report) io.writeFile(values.report, report)
+  else if (values.report) {
+    try { io.writeFile(values.report, report) }
+    catch {
+      io.writeErr(`carve migrate: cannot write ${values.report}\n`)
+      return 2
+    }
+  }
+  io.write(result.value)
   const hasLoss = result.report.diagnostics.some(({ fidelity }) => fidelity === 'degraded' || fidelity === 'dropped')
   return values['check-loss'] && hasLoss ? 1 : 0
 }

@@ -41,9 +41,10 @@ function fidelity(code: HtmlImportDiagnosticCode): MigrationFidelity {
   }
   if (
     code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
-    code === 'diagnostics-truncated'
+    code === 'raw-preserved'
   ) return 'degraded'
-  if (code === 'attribute-preserved' || code === 'raw-preserved') return 'preserved'
+  if (code === 'diagnostics-truncated') return 'dropped'
+  if (code === 'attribute-preserved') return 'preserved'
   return 'dropped'
 }
 
