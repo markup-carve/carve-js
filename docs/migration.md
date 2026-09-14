@@ -238,6 +238,7 @@ lintCarve('# Setup\n\n## Setup\n\nSee </#ghost>.')
 | `list-item-block-overindented` | a recognized block group authored past a list item's canonical content column; current readers parse it structurally and `carve fmt` dedents it, while older readers may have treated the marker literally (dedent for explicit structural intent, or escape the opener for literal intent) |
 | `list-item-body-detached` | a block-shaped line that does not reach the preceding list item's minimum content column and therefore parses outside the item; indent it to the reported column to attach it, or escape the opener to keep literal text |
 | `blockquote-marker-without-space` | a `>` blockquote marker with no space after it. Carve requires the separator space, so the marker does not open a quote |
+| `empty-include-path` | a `{{ … }}` run shaped like an include directive but with no path (empty braces, or only a `#section` / `@option`); an empty path is not a directive, so it renders as literal text - add a path or remove the braces |
 
 The `carve lint` CLI reports both the collision warnings and these lint
 findings as `file:line:col rule - message`, and exits non-zero if anything is

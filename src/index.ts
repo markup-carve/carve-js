@@ -241,6 +241,19 @@ export { headingPermalinks, type HeadingPermalinksOptions } from './heading-perm
 export { codeGroup, type CodeGroupOptions } from './code-group.js'
 export { tabs, type TabsOptions, type TabsMode } from './tabs.js'
 export { headingLevelShift, type HeadingLevelShiftOptions } from './heading-level-shift.js'
+// `fileSystemResolver` is NOT re-exported here: it needs `node:fs`, and this
+// entry is bundled for the browser verbatim. It lives on the `./node` subpath.
+export {
+  expandIncludes,
+  expandsForTarget,
+  type IncludeContext,
+  type IncludeDependency,
+  type IncludeOptions,
+  type IncludeResult,
+  type IncludeWarning,
+  type IncludeResolver,
+  type IncludeResolved,
+} from './includes.js'
 export { headingReference, type HeadingReferenceOptions } from './heading-reference.js'
 export {
   defaultAttributes,

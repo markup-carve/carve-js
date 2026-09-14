@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { run, type CliIO } from '../src/cli.js'
 
 /**
@@ -939,5 +942,139 @@ describe('carve portability', () => {
     const t = makeIO()
     await run(['--help'], t.io)
     expect(t.out).toContain('carve portability')
+  })
+})
+
+describe('carve render includes', () => {
+  it('expands includes with --include-root', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Included.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('defaults the include root to the input file directory when --include-root is omitted', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Included.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('leaves the directive alone for the carve target, which round-trips the document', async () => {
+    // Writing a document back as Carve has to return the document it was
+    // given. Expanding first returns a different one, with every child inlined
+    // - and the writer preserves a directive verbatim for the same reason.
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: 'Intro.\n\n{{ child.crv }}\n' } })
+    expect(await run(['render', '--carve', input], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.out).not.toContain('Included.')
+  })
+
+  it('leaves the directive alone for the carve target even with an explicit root', async () => {
+    // The explicit flag is a request to widen the root, not a request to
+    // rewrite the document the writer is asked to reproduce.
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}\n' } })
+    expect(await run(['render', '--carve', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.out).not.toContain('Included.')
+  })
+
+  it('flatten inlines every include into one document', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-flatten-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Child body.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: 'Intro.\n\n{{ child.crv }}\n' } })
+    expect(await run(['flatten', input], t.io)).toBe(0)
+    expect(t.out).toContain('Child body.')
+    expect(t.out).not.toContain('{{')
+  })
+
+  it('flatten is the only carve output that expands', async () => {
+    // The pair that says why both commands exist: fmt round-trips the author's
+    // document (I15), flatten asks for the other one.
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-flatten-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Child body.', 'utf8')
+    const input = path.join(root, 'main.crv')
+
+    const fmt = makeIO({ files: { [input]: '{{ child.crv }}\n' } })
+    expect(await run(['fmt', input], fmt.io)).toBe(0)
+    expect(fmt.out).toContain('{{ child.crv }}')
+
+    const flat = makeIO({ files: { [input]: '{{ child.crv }}\n' } })
+    expect(await run(['flatten', input], flat.io)).toBe(0)
+    expect(flat.out).toContain('Child body.')
+  })
+
+  it('flatten refuses stdin with no root rather than echoing it back', async () => {
+    const t = makeIO({ stdin: '{{ child.crv }}\n' })
+    expect(await run(['flatten'], t.io)).toBe(2)
+    expect(t.err).toContain('--include-root')
+  })
+
+  it('flatten takes an explicit root for stdin', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-flatten-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Child body.', 'utf8')
+    const t = makeIO({ stdin: '{{ child.crv }}\n' })
+    expect(await run(['flatten', '--include-root', root], t.io)).toBe(0)
+    expect(t.out).toContain('Child body.')
+  })
+
+  it('does not resolve includes reaching outside the default input-file root', async () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    const root = path.join(base, 'docs')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(path.join(base, 'secret.crv'), 'TOP SECRET', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ ../secret.crv }}' } })
+    expect(await run(['render', input], t.io)).toBe(0)
+    expect(t.out).not.toContain('TOP SECRET')
+    expect(t.err).toContain('include-unresolved')
+  })
+
+  it('widens the include root past the input file directory with --include-root', async () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    const root = path.join(base, 'docs')
+    mkdirSync(path.join(root, 'chapters'), { recursive: true })
+    mkdirSync(path.join(root, 'shared'), { recursive: true })
+    writeFileSync(path.join(root, 'shared/glossary.crv'), 'Glossary body.', 'utf8')
+    const input = path.join(root, 'chapters', 'ch1.crv')
+    const t = makeIO({ files: { [input]: '{{ ../shared/glossary.crv }}' } })
+    expect(await run(['render', '--include-root', root, input], t.io)).toBe(0)
+    expect(t.out).toBe('<p>Glossary body.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  it('renders normally when the implicit include root is not a real directory', async () => {
+    const input = path.join(tmpdir(), 'carve-no-such-dir-xyz', 'main.crv')
+    const t = makeIO({ files: { [input]: 'Body {{ child.crv }} tail.' } })
+    expect(await run(['render', input], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.err).toBe('')
+  })
+
+  it('reports an explicit --include-root that is not a real directory', async () => {
+    const input = path.join(tmpdir(), 'carve-no-such-dir-xyz', 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    expect(await run(['render', '--include-root', path.join(tmpdir(), 'carve-nope-xyz'), input], t.io)).toBe(2)
+    expect(t.err).toContain('cannot use include root')
+  })
+
+  it('leaves include directives literal on stdin without --include-root', async () => {
+    const t = makeIO({ stdin: '{{ child.crv }}' })
+    expect(await run(['render'], t.io)).toBe(0)
+    expect(t.out).toContain('{{ child.crv }}')
+    expect(t.err).toBe('')
   })
 })

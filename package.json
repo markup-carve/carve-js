@@ -34,6 +34,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./node": {
+      "import": "./dist/node.js",
+      "types": "./dist/node.d.ts"
+    },
     "./prettier": {
       "import": "./dist/prettier.js",
       "types": "./dist/prettier.d.ts"
@@ -60,6 +64,7 @@
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
     "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "test:watch": "vitest",
+    "test:includes": "vitest run test/include-conformance.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

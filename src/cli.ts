@@ -14,9 +14,10 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { dirname, join, resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
+import { fileSystemResolver } from './includes-fs.js'
 import {
   applyMigrationFixes,
   djotMigrationWarnings,
@@ -48,6 +49,12 @@ import {
   Profile,
   ProfileViolationError,
   type AstJsonDocument,
+  parse,
+  resolve,
+  expandIncludes,
+  expandsForTarget,
+  type IncludeWarning,
+  type Document,
   type MigrationWarning,
   type ProfileOptions,
   migrateHtml,
@@ -82,6 +89,10 @@ Usage:
   carve [options] [file]           Render (default; the 'render' word is optional)
   carve render [options] [file]    Render Carve to HTML / Markdown / text / ANSI / Carve
   carve fmt [-w|--check] [--stamp] [files...] Format Carve source canonically
+  carve flatten [--include-root DIR] [file]
+                                   Write the document as ONE self-contained
+                                   file, every include expanded in place (the
+                                   opposite of fmt, which leaves them alone)
   carve fix [options] [files...]   Auto-fix delimiter collisions
   carve lint [files...]            Report problems without changing anything
   carve diff [--json] a.crv b.crv  Report what changed in the DOCUMENT
@@ -107,6 +118,11 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
     --stamp-info   report the document's provenance marker
     --stamp-check  exit 1 when the document predates this spec version
     --carve        canonical Carve source
+    --include-root <dir>
+                   Containment root for {{ path }} includes. Defaults to the
+                   input file's directory; pass this to widen it to a docs
+                   root or narrow it. Required to enable includes on stdin.
+    --no-includes   leave include directives literal. --safe implies this.
 
   input options:
     --from-json    read an encoded AST instead of Carve source, and render it
@@ -382,6 +398,92 @@ async function runFix(args: string[], io: CliIO): Promise<number> {
   return 0
 }
 
+function formatIncludeWarnings(warnings: IncludeWarning[], file: string): string {
+  return warnings
+    // A warning raised inside an included file names that file, so the
+    // location points at the source the reader has to edit. `w.detail` (the
+    // raw resolver error, which can carry absolute host paths) is
+    // deliberately NOT printed here -- see IncludeWarning.detail, spec I7.
+    .map((w) => `${w.file ?? file}:${w.line}:${w.column} ${w.rule} - ${w.message}`)
+    .join('\n')
+}
+
+/**
+ * `carve flatten` - write the document back as ONE self-contained Carve file,
+ * with every include expanded in place.
+ *
+ * The deliberate opposite of `carve fmt`, and the reason both exist. Formatting
+ * round-trips the author's document, so it leaves directives alone (I15);
+ * flattening asks for the OTHER document, the one with the children merged in,
+ * because that is what can be handed to something with no filesystem behind it.
+ *
+ * Two effects beyond inlining, both reported on stderr rather than left to be
+ * found in a published page: the output is CANONICAL Carve, so formatting is
+ * normalized, and colliding explicit ids and footnote labels are renamed (I5).
+ * The renames are written into the source, so the flattened file renders
+ * exactly like the expanded original.
+ */
+async function runFlatten(args: string[], io: CliIO): Promise<number> {
+  let values: { 'include-root'?: string; help?: boolean }
+  let positionals: string[]
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        'include-root': { type: 'string' },
+        help: { type: 'boolean', short: 'h' },
+      },
+      allowPositionals: true,
+    })
+    values = parsed.values
+    positionals = parsed.positionals
+  } catch (e) {
+    io.writeErr(`carve flatten: ${(e as Error).message}\n`)
+    return 2
+  }
+  if (values.help) {
+    io.write(HELP)
+    return 0
+  }
+
+  const inputPath = positionals[0] && positionals[0] !== '-' ? resolvePath(positionals[0]) : undefined
+  let src: string
+  try {
+    src = inputPath !== undefined ? io.readFile(inputPath) : await io.readStdin()
+  } catch {
+    io.writeErr(`carve flatten: cannot read ${positionals[0]}\n`)
+    return 2
+  }
+
+  const root = values['include-root'] ?? (inputPath !== undefined ? dirname(inputPath) : undefined)
+  if (root === undefined) {
+    // "Flatten this" with nothing to resolve against cannot be honoured, and
+    // echoing the document back would look like it had no includes.
+    io.writeErr(
+      'carve flatten: stdin has no directory to resolve includes against; pass --include-root DIR\n',
+    )
+    return 2
+  }
+
+  let resolver: ReturnType<typeof fileSystemResolver>
+  try {
+    resolver = fileSystemResolver(root)
+  } catch {
+    io.writeErr(`carve flatten: cannot use include root ${root}\n`)
+    return 2
+  }
+
+  const expanded = expandIncludes(parse(src, { positions: true }), src, {
+    resolve: resolver,
+    ...(inputPath !== undefined ? { sourcePath: inputPath } : {}),
+  })
+  if (expanded.warnings.length) {
+    io.writeErr(formatIncludeWarnings(expanded.warnings, positionals[0] ?? '<stdin>') + '\n')
+  }
+  io.write(renderCarve(expanded.doc))
+  return 0
+}
+
 async function runFmt(args: string[], io: CliIO): Promise<number> {
   let values: {
     write?: boolean
@@ -487,6 +589,41 @@ async function runFmt(args: string[], io: CliIO): Promise<number> {
 }
 
 /**
+ * Render an already-built document to one target.
+ *
+ * Shared by the two paths that hold a tree rather than source - an encoded AST
+ * from --from-json, and an include-expanded document - so both report losses
+ * the same way. The profile pass is the caller's: each path measures a
+ * different thing as its untrusted input.
+ */
+function renderDocumentTarget(
+  doc: Document,
+  target: 'html' | 'markdown' | 'plain' | 'ansi' | 'carve' | 'json',
+  opts: ProfileOptions & { allowRawHtml?: false },
+  lossOptions: RenderCliLossOptions,
+): RenderResult {
+  switch (target) {
+    case 'json':
+      return { value: JSON.stringify(toAstJson(doc), null, 2), losses: [], totalLosses: 0, truncated: false }
+    case 'html':
+      // The only render option the CLI exposes; the rest of `opts` is parse
+      // and profile configuration, which the caller already applied.
+      return renderHtmlWithReport(doc, {
+        ...(opts.allowRawHtml === false ? { allowRawHtml: false } : {}),
+        maxRenderLosses: lossOptions.maxRenderLosses,
+      })
+    case 'markdown':
+      return renderMarkdownWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
+    case 'plain':
+      return renderPlainTextWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
+    case 'ansi':
+      return renderAnsiWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
+    case 'carve':
+      return renderCarveWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
+  }
+}
+
+/**
  * Render a document handed in as PART 12 JSON rather than as Carve source.
  *
  * The AST is the interchange format, so a tool that produced one - an editor, a
@@ -568,31 +705,7 @@ function renderFromJson(
 
   let result: RenderResult
   try {
-    switch (target) {
-      case 'json':
-        result = { value: JSON.stringify(toAstJson(doc), null, 2), losses: [], totalLosses: 0, truncated: false }
-        break
-      case 'html':
-        // The only render option the CLI exposes; the rest of `opts` is parse
-        // and profile configuration, which was already applied above.
-        result = renderHtmlWithReport(doc, {
-          ...(opts.allowRawHtml === false ? { allowRawHtml: false } : {}),
-          maxRenderLosses: lossOptions.maxRenderLosses,
-        })
-        break
-      case 'markdown':
-        result = renderMarkdownWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
-        break
-      case 'plain':
-        result = renderPlainTextWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
-        break
-      case 'ansi':
-        result = renderAnsiWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
-        break
-      case 'carve':
-        result = renderCarveWithReport(doc, { maxRenderLosses: lossOptions.maxRenderLosses })
-        break
-    }
+    result = renderDocumentTarget(doc, target, opts, lossOptions)
   } catch (e) {
     if (e instanceof ProfileViolationError) {
       io.writeErr(`carve render: ${e.message}\n`)
@@ -663,6 +776,8 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     'report-losses'?: string
     'allow-loss'?: string[]
     'max-render-losses'?: string
+    'include-root'?: string
+    'no-includes'?: boolean
     help?: boolean
   }
   let positionals: string[]
@@ -690,6 +805,8 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         'report-losses': { type: 'string' },
         'allow-loss': { type: 'string', multiple: true },
         'max-render-losses': { type: 'string' },
+        'include-root': { type: 'string' },
+        'no-includes': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -786,13 +903,15 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   }
 
   let src: string
+  let file = '<stdin>'
   if (positionals.length === 0) {
     src = await io.readStdin()
   } else {
+    file = positionals[0]!
     try {
-      src = io.readFile(positionals[0]!)
+      src = io.readFile(file)
     } catch {
-      io.writeErr(`carve render: cannot read ${positionals[0]}\n`)
+      io.writeErr(`carve render: cannot read ${file}\n`)
       return 2
     }
   }
@@ -823,6 +942,82 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   // below takes source, so this branch runs the renderers directly over the
   // decoded tree - and applies the profile itself, since nothing parsed here.
   if (values['from-json']) return renderFromJson(src, target, opts, lossOptions, io)
+
+  // Containment root: an explicit --include-root wins, otherwise a file input
+  // supplies its own directory. Never the process cwd - the root has to come
+  // from a path the caller actually named, or includes stay off. Stdin/string
+  // input has no path context, so it gets no default root and directives stay
+  // literal unless --include-root is passed.
+  const inputPath = positionals[0] !== undefined ? resolvePath(positionals[0]) : undefined
+  const includeRoot = values['include-root'] ?? (inputPath !== undefined ? dirname(inputPath) : undefined)
+  // The implicit root only engages for sources that actually carry a
+  // directive, so directive-free files keep the plain source render path.
+  //
+  // The `carve` TARGET IS EXCLUDED, which is not a performance shortcut: that
+  // target writes the document back as Carve, and expanding first would hand
+  // back a different document than the author wrote, with every child inlined.
+  // The writer preserves a directive verbatim for exactly this reason - a
+  // round trip has to return the document it was given. carve-rs excludes it
+  // the same way; this engine used to inline, so `render --carve` disagreed
+  // across engines on a document neither corpus covers.
+  const useIncludes =
+    !values['no-includes'] &&
+    !values.safe &&
+    includeRoot !== undefined &&
+    expandsForTarget(target) &&
+    (values['include-root'] !== undefined || src.includes('{{'))
+
+  // fileSystemResolver canonicalizes its root eagerly, so a root that is not a
+  // real directory throws. With the implicit root that is reachable without the
+  // user asking for includes at all (an injected CliIO, or a path whose parent
+  // was removed), so an unusable root degrades to the plain render path instead
+  // of failing the render. An explicit --include-root is a user request and
+  // still reports.
+  let includeResolver: ReturnType<typeof fileSystemResolver> | undefined
+  if (useIncludes) {
+    try {
+      includeResolver = fileSystemResolver(includeRoot!)
+    } catch {
+      if (values['include-root'] !== undefined) {
+        io.writeErr(`carve render: cannot use include root ${includeRoot}\n`)
+        return 2
+      }
+    }
+  }
+
+  if (includeResolver) {
+    const parsed = parse(src, { positions: true })
+    const expanded = expandIncludes(parsed, src, {
+      resolve: includeResolver,
+      // Absolute, so the resolver's parent-relative lookup starts from the
+      // input file's real directory instead of re-prefixing a relative path
+      // with the root.
+      ...(inputPath !== undefined ? { sourcePath: inputPath } : {}),
+    })
+    if (expanded.warnings.length) {
+      io.writeErr(formatIncludeWarnings(expanded.warnings, positionals[0] ?? '<stdin>') + '\n')
+    }
+    if (expanded.suppressedWarnings > 0) {
+      io.writeErr(`carve render: ${expanded.suppressedWarnings} additional include warning(s) suppressed\n`)
+    }
+    // The expanded tree takes the SAME renderer path as --from-json, so an
+    // expanded document still gets the loss report and the profile pass.
+    // Resolution is unconditional here because the `carve` target never
+    // reaches this branch (see `useIncludes` above).
+    let doc = resolve(expanded.doc)
+    if (opts.profile) doc = applyProfile(doc, opts.profile, opts.profileBaseHost ?? null).doc
+    let result: RenderResult
+    try {
+      result = renderDocumentTarget(doc, target, opts, lossOptions)
+    } catch (e) {
+      if (e instanceof ProfileViolationError) {
+        io.writeErr(`carve render: ${e.message}\n`)
+        return 2
+      }
+      throw e
+    }
+    return finishRender(result, positionals[0] ?? '<stdin>', lossOptions, io)
+  }
 
   let result: RenderResult
   try {
@@ -882,6 +1077,7 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
   if (sub === undefined) return runRender([], io)
   if (sub === 'render') return runRender(rest, io)
   if (sub === 'fmt') return runFmt(rest, io)
+  if (sub === 'flatten') return runFlatten(rest, io)
   if (sub === 'fix') return runFix(rest, io)
   if (sub === 'lint') return runLint(rest, io)
   if (sub === 'diff') return runDiff(rest, io)

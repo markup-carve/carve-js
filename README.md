@@ -81,6 +81,123 @@ render literally.
 It runs in a browser too, from a script tag or a module -
 [docs/browser.md](https://github.com/markup-carve/carve-js/blob/main/docs/browser.md).
 
+### Includes
+
+File inclusion is an opt-in processor pass. The core parser leaves `{{ path }}`
+literal unless you call `expandIncludes` with a resolver:
+
+```ts
+import { expandIncludes, parse, resolve, renderHtml } from '@markup-carve/carve'
+
+const source = 'Intro\n\n{{ chapter.crv @shift:1 }}'
+const expanded = expandIncludes(parse(source, { positions: true }), source, {
+  resolve(path, ctx) {
+    // Return the child source string, throw, or return null when unresolvable.
+    // `ctx.sourcePath` and `ctx.stack` let hosts resolve relative paths.
+    return files.get(path) ?? null
+  },
+})
+
+for (const warning of expanded.warnings) {
+  console.warn(`${warning.file ?? '<input>'}:${warning.line} ${warning.message}`)
+}
+const html = renderHtml(resolve(expanded.doc))
+```
+
+Each warning carries a `file` naming the document it arose in, so a host can
+route a diagnostic to the right editor buffer. A directive that failed to
+resolve is attributed to the document containing it, not to the target it
+names; a warning raised while expanding a child - a heading clamp, an id or
+footnote rename, a cycle found deeper in the chain - is attributed to that
+child. The value is the resolver's canonical id when it supplies one, and the
+`sourcePath` option for the top-level document. It is **absent** when the
+top-level document has no `sourcePath`: no placeholder path is invented.
+
+`line` / `column` / `start` / `end` are positions in that `file`'s own source,
+and so are the positions on the merged AST nodes: a node an include pulled in
+keeps its own file's coordinates and names that file in `pos.file`. A node from
+the document being parsed has no `pos.file`, so a tree with no includes is
+unchanged. Without it an included span would be ambiguous - a child's first
+paragraph and the parent's first paragraph both report line 1.
+
+On Node, `fileSystemResolver` is a ready-made resolver with canonical
+root-containment checks. It lives on the `./node` subpath rather than the main
+entry, because it needs `node:fs` and the browser bundle is built from that
+entry verbatim:
+
+```ts
+import { fileSystemResolver } from '@markup-carve/carve/node'
+
+const expanded = expandIncludes(doc, source, {
+  // Canonicalizes first, then rejects any target outside the root - symlink
+  // escapes and dot-dot alike. Absolute paths are denied by default, and no
+  // target over 4 MiB is read.
+  resolve: fileSystemResolver('/srv/docs'),
+})
+```
+
+A browser or WASM host supplies its own resolver instead, which is the
+arrangement the spec describes: the parser performs no file I/O and the host
+owns containment.
+
+`expanded.dependencies` lists every include target touched by the whole
+recursive expansion (`{ id, resolved }`, de-duplicated, in first-encounter
+order). `id` is the resolver's canonical id when it supplies one, otherwise the
+directive path. Editors and preview servers watch these paths to know when to
+re-render. Targets that failed to resolve - missing files, and paths denied by
+root containment - are reported with `resolved: false` rather than omitted, so
+a watcher still fires when a missing chapter is finally created.
+
+Supported directive options are `#section`, `@lines:N-M`, and
+`@shift:N` / `@shift:auto`. `#section` selects the heading subtree by explicit
+id or auto slug, `@lines` selects an inclusive physical line range before
+parsing, and `@shift` shifts included heading levels with clamping to
+`h1`...`h6`.
+
+`@shift:auto` derives the offset from the include site instead of stating it:
+the content is placed one level below the nearest preceding heading in the
+directive's own container or an enclosing one (a heading in a sibling container
+that has already closed does not count). The offset is
+`(context level + 1) - (minimum heading level in the included content)`, so the
+child's internal structure is preserved and a file written with an `h1` title
+slots in wherever it is included. Content with no headings is left alone.
+Heading ids and slugs never change, so cross-references into shifted headings
+keep resolving.
+
+`carve flatten` writes the document back as Carve with every include expanded in
+place - the deliberate opposite of `carve fmt`, which leaves directives alone so
+formatting returns the author's document. Flattening is for handing the document
+to something with no filesystem behind it: a web editor, a paste box, a
+colleague.
+
+```bash
+carve flatten book/main.crv > one-file.crv
+carve flatten --include-root ./book < main.crv
+```
+
+The output is canonical Carve, so formatting is normalized rather than
+preserved, and colliding explicit ids and footnote labels are renamed. The
+renames are written into the source, so the flattened file renders exactly like
+the expanded original.
+
+Resolvers are deliberately host-supplied. Do not enable includes for untrusted
+input unless the resolver canonicalizes paths, rejects root escapes, and applies
+the same parsing and sanitization policy as the parent document. A Node helper,
+`fileSystemResolver(root)`, enforces canonical root containment and rejects
+absolute include paths by default. Containment is checked on the canonical
+(symlink-resolved) path, so `../shared/glossary.crv` from `chapters/ch1.crv`
+resolves while symlinks, absolute paths, and dot-dot chains leaving the root do
+not. Relative paths resolve against the including file; the containment root
+stays the single top-level root for nested includes.
+
+The CLI exposes this on `carve render`. For file input the root defaults to the
+input file's directory, so `carve input.crv` already resolves includes beside
+it; pass `--include-root docs` to widen the root to a shared docs tree (or to
+narrow it). Stdin has no path context, so includes there stay literal unless
+`--include-root` is given.
+
+### Heading ids
+
 How the renderers derive heading ids, wrap sections and bound nesting depth
 is in [docs/rendering.md](https://github.com/markup-carve/carve-js/blob/main/docs/rendering.md).
 

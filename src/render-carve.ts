@@ -22,6 +22,7 @@ import {
   rawBracketRunCloses,
   symbolOpensAt,
 } from './parse.js'
+import { findDirectives } from './include-directive.js'
 import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 
 export { MAX_RENDER_DEPTH }
@@ -2159,6 +2160,110 @@ function renderBlockAtTop(block: BlockNode, ctx: CarveContext): string {
   }
 }
 
+/**
+ * Source text of an inline node that the core produces while parsing an
+ * include directive as plain text. The core never gives a directive its own
+ * node type: "{{ a #s @shift:1 }}" arrives as text plus tag and mention
+ * nodes, so recognizing one means reassembling that run first -- exactly as
+ * the expander does.
+ */
+function directiveRunText(node: InlineNode): string | null {
+  if (node.type === 'text') return node.value
+  if (node.type === 'mention') return `@${node.user}`
+  if (node.type === 'tag') return `#${node.name}`
+  // A quoted path arrives as one node per delimiter, carrying the author's own
+  // run in `value` and the curled glyph in `glyph`. The run is reassembled from
+  // `value`, so the writer sees - and re-emits - the straight-quoted form the
+  // author wrote.
+  if (node.type === 'smart_punctuation') return node.value
+  if (node.type === 'escaped_text') return `\\${node.value}`
+  return null
+}
+
+/**
+ * Per-node serializations that must be emitted VERBATIM because the node is
+ * covered, whole or in part, by a SHAPE-well-formed include directive.
+ *
+ * Without this the serializer escapes a directive like any other punctuation-
+ * bearing text ("\{\{ a \}\}"), which still renders as the same literal text
+ * today but is inert once a resolver is wired up -- formatting a document
+ * would silently delete every include.
+ *
+ * Preservation deliberately requires only the SHAPE (opens "{{", closes "}}",
+ * non-empty path), not a valid section or valid options. Escaping a directive
+ * whose option is merely misspelled ("{{ a.crv @bogus:1 }}") would freeze a
+ * one-character typo into permanent literal text and destroy the
+ * include-unknown-option warning that would have explained it. Section and
+ * option validity stay expansion-time diagnostics. A run that is not
+ * shape-well-formed ("{{ oops", "{{ }}") is left to the normal escaping path.
+ *
+ * A serializer cannot tell an authored literal "{{" from a directive, because
+ * "\{\{" and "{{" parse to the same text. That is accepted: spec I9 makes the
+ * directive inert inside code, which is where an author who needs a
+ * guaranteed literal puts it.
+ */
+/**
+ * Serialize one preserved directive.
+ *
+ * Verbatim, because `raw` is reassembled from each node's AUTHOR run: a quoted
+ * path reaches the writer as `smart_punctuation` nodes whose `value` is the
+ * `"` the author typed, not the `“` the parser resolved it to. So the source
+ * spelling is still in hand here and needs neither un-curling nor escaping.
+ *
+ * Escaping the quotes would be actively wrong: `\"` is not the directive
+ * grammar's quoted path, so a formatted document would stop resolving. The
+ * round trip is safe without it - the next parse curls the delimiters again
+ * for rendering while recognition keeps reading `value`.
+ */
+function emitDirective(raw: string): string {
+  return raw
+}
+
+function directiveOverrides(nodes: InlineNode[]): Map<number, string> {
+  const overrides = new Map<number, string>()
+  let i = 0
+  while (i < nodes.length) {
+    if (directiveRunText(nodes[i]!) === null) {
+      i++
+      continue
+    }
+    let end = i
+    while (end < nodes.length && directiveRunText(nodes[end]!) !== null) end++
+    const texts = nodes.slice(i, end).map((node) => directiveRunText(node)!)
+    const full = texts.join('')
+    // A control character would be stripped by escapeText but survives a
+    // verbatim emit, so such a run keeps the (already degenerate) old path.
+    // Fast path: a run with no "{{" cannot hold a directive, so the common
+    // (directive-free) document never pays for the scan.
+    const spans = !full.includes('{{') || DIRECTIVE_UNSAFE.test(full) ? [] : findDirectives(full)
+    if (spans.length) {
+      let offset = 0
+      for (let k = 0; k < texts.length; k++) {
+        const text = texts[k]!
+        const start = offset
+        offset += text.length
+        const covering = spans.filter((s) => s.start < offset && s.end > start)
+        if (covering.length === 0) continue
+        let out = ''
+        let cursor = start
+        for (const span of covering) {
+          if (span.start > cursor) out += escapeText(text.slice(cursor - start, span.start - start))
+          // The whole directive is emitted once, by the node where it STARTS.
+          // A later node that the same span merely runs THROUGH contributes
+          // nothing, which is what lets the emitted form differ in length
+          // from the source it replaces (a rebuilt quoted path does).
+          if (span.start >= start) out += emitDirective(span.raw)
+          cursor = Math.min(span.end, offset)
+        }
+        out += escapeText(text.slice(cursor - start))
+        overrides.set(i + k, out)
+      }
+    }
+    i = end
+  }
+  return overrides
+}
+
 function renderInlines(
   nodes: InlineNode[],
   ctx: CarveContext,
@@ -2186,8 +2291,9 @@ function renderInlines(
     let lineLength = 0
     /** The last up-to-two characters of the current output line. */
     let lineTail = ''
+    const overrides = directiveOverrides(nodes)
     nodes.forEach((node, idx) => {
-      let piece = renderInline(
+      let piece = overrides.get(idx) ?? renderInline(
         node,
         ctx,
         lastBoundary(nodes[idx - 1]),
@@ -3226,6 +3332,13 @@ function guardThematicBreakLines(body: string): string {
  * U+0085 - and those were the ones with a fixture, not the extent of it.
  */
 const UNWRITABLE_CONTROLS = /[\u0000\u000d]/g
+
+/**
+ * The controls `escapeText` strips. A verbatim directive emit bypasses that
+ * strip, so a run carrying one keeps the ordinary escaping path. Non-global
+ * copy: `UNWRITABLE_CONTROLS` carries /g, whose `test` is stateful.
+ */
+const DIRECTIVE_UNSAFE = new RegExp(UNWRITABLE_CONTROLS.source)
 
 function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = false): string {
   const mode = escapeModeHere()

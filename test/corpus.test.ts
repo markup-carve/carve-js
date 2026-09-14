@@ -569,6 +569,8 @@ const IMPLEMENTED = new Set([
   'an-attribute-line-below-a-list-item-interrupts-it',
   'an-attributed-cell-keeps-its-attributes-and-its-literal-marker',
   'an-engine-written-shape-says-what-it-is-called',
+  'a-column-0-line-after-a-description-hosted-note-is-a-document-sibling',
+  'include-directive-with-no-resolver-renders-literal',
   // markup-carve/carve#1386 - two documents. A marker-line colon opener is
   // demoted by LAZY FOLDING and by nothing else, so an opener that reaches its
   // container stays an opener whatever sits below it.
