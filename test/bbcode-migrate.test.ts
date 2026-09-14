@@ -155,6 +155,14 @@ describe('bbcodeToCarve — bounds', () => {
     )
   })
 
+  it('measures the bound in UTF-8 bytes like the other engines', () => {
+    const atLimit = `${'x'.repeat(BBCODE_MAX_INPUT_LENGTH - 4)}😀`
+    expect(bbcodeToCarve(atLimit)).toBe(`${atLimit}\n`)
+    expect(() => bbcodeToCarve(`${atLimit}x`)).toThrow(
+      `maximum length of ${BBCODE_MAX_INPUT_LENGTH} bytes (got ${BBCODE_MAX_INPUT_LENGTH + 1})`,
+    )
+  })
+
   it('converts an empty document to an empty document', () => {
     expect(bbcodeToCarve('')).toBe('\n')
   })
