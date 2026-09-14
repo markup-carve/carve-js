@@ -129,6 +129,42 @@ describe('carve migrate — HTML import', () => {
       message: expect.stringContaining('figure wrapping a table'),
     }))
   })
+
+  it('fails the loss check when opaque raw HTML is preserved byte-for-byte', async () => {
+    const t = makeIO({ stdin: '<div class="x" data-a="1"><span>raw</span></div>' })
+    const code = await run(
+      ['migrate', '--from', 'html', '--mode', 'roundtrip', '--report', 'report.json', '--check-loss'],
+      t.io,
+    )
+    const report = JSON.parse(t.files['report.json']!)
+    expect(code).toBe(1)
+    expect(report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'raw-preserved', fidelity: 'degraded' }),
+    ]))
+  })
+
+  it('reports an HTML resource-limit error with exit 2', async () => {
+    const t = makeIO({ stdin: '<div>'.repeat(300) + 'x' + '</div>'.repeat(300) })
+    const code = await run(['migrate', '--from', 'html', '--check-loss'], t.io)
+    expect(code).toBe(2)
+    expect(t.out).toBe('')
+    expect(t.err).toContain('carve migrate: HTML import depth limit exceeded')
+  })
+
+  it('reports an unexpected importer failure with exit 2', async () => {
+    const t = makeIO({ stdin: '<p>x</p>' })
+    t.io.readStdin = async () => null as unknown as string
+    expect(await run(['migrate', '--from', 'html'], t.io)).toBe(2)
+    expect(t.err).toContain('carve migrate:')
+  })
+
+  it('reports a report-write failure with exit 2', async () => {
+    const t = makeIO({ stdin: '<p>x</p>' })
+    t.io.writeFile = () => { throw new Error('disk full') }
+    expect(await run(['migrate', '--from', 'html', '--report', 'report.json', '--check-loss'], t.io)).toBe(2)
+    expect(t.out).toBe('')
+    expect(t.err).toBe('carve migrate: cannot write report.json\n')
+  })
 })
 
 describe('carve migrate — the other importers', () => {
@@ -179,19 +215,19 @@ describe('carve migrate — the other importers', () => {
     expect(t.err).toContain('html, markdown, djot or bbcode')
   })
 
-  /**
-   * The loss report belongs to the HTML importer alone, so a Markdown
-   * migration ignores its options instead of validating or honoring them.
-   */
-  it('ignores the HTML-only options for the other formats', async () => {
+  it('fails closed and reports unverified fidelity for the other formats', async () => {
     const t = makeIO({ stdin: '**bold**\n' })
     const code = await run(
       ['migrate', '--from', 'markdown', '--mode', 'nonsense', '--check-loss', '--report', 'report.json'],
       t.io,
     )
-    expect(code).toBe(0)
+    expect(code).toBe(1)
     expect(t.out).toBe('*bold*\n')
-    expect(t.files['report.json']).toBeUndefined()
+    expect(JSON.parse(t.files['report.json']!)).toMatchObject({
+      schemaVersion: 2,
+      sourceFormat: 'markdown',
+      diagnostics: [{ code: 'fidelity-unverified', fidelity: 'dropped', confidence: 'fallback' }],
+    })
   })
 })
 

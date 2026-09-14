@@ -7,6 +7,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** Migration reports advance to schema version 2: `carried` is renamed to
+  `preserved`, `normalized` distinguishes semantics-preserving rewrites, and
+  Markdown, Djot, and BBCode now emit a conservative dropped/fallback finding
+  because those paths do not yet expose construct-level fidelity. The
+  opaque `raw-preserved` fallback is now `degraded` rather than `preserved`, so
+  `--check-loss` fails when imported bytes cannot be structurally edited. The
+  diagnostic `code` type is widened for cross-importer codes, and consumers
+  that treated an empty diagnostics array as verified fidelity must now handle
+  the explicit fallback finding. Release this change as 0.2.0.
+- **BREAKING:** The migration CLI now writes version 2 reports for every importer, and
+  `--check-loss` exits 1 only when a report contains degraded or dropped content.
+
+### Added
+
+- `migrateBbcode()` exposes BBCode conversion through the shared migration
+  result envelope.
+
 ### Fixed
 
 - A footnote definition on a description marker line whose floor takes a nested
