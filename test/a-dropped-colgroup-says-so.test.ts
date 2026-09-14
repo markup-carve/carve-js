@@ -37,6 +37,8 @@ describe('a dropped colgroup says so', () => {
     expect(diagnostics(html)).toEqual([
       {
         code: 'element-dropped',
+        fidelity: 'dropped',
+        confidence: 'exact',
         message: MESSAGE,
         severity: 'warning',
         path: '/table[1]/colgroup[1]',
@@ -121,6 +123,8 @@ describe('a dropped colgroup says so', () => {
       expect(diagnostics(html)).toEqual([
         {
           code: 'element-dropped',
+          fidelity: 'dropped',
+          confidence: 'exact',
           message: MESSAGE,
           severity: 'warning',
           path: '/table[1]/colgroup[1]',

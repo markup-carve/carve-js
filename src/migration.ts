@@ -2,7 +2,6 @@ import { djotToCarve } from './djot-import.js'
 import { bbcodeToCarve } from './bbcode-migrate.js'
 import {
   htmlToCarve,
-  type HtmlImportDiagnosticCode,
   type HtmlImportAdapter,
   type HtmlImportMode,
   type HtmlImportOptions,
@@ -35,30 +34,6 @@ export interface MigrationResult {
   }
 }
 
-function fidelity(code: HtmlImportDiagnosticCode): MigrationFidelity {
-  if (code === 'element-dropped' || code === 'attribute-dropped' || code === 'structure-unspellable') {
-    return 'dropped'
-  }
-  if (
-    code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' || code === 'encoding-assumed' ||
-    code === 'raw-preserved'
-  ) return 'degraded'
-  if (code === 'diagnostics-truncated') return 'dropped'
-  if (code === 'attribute-preserved') return 'preserved'
-  return 'dropped'
-}
-
-function confidence(code: HtmlImportDiagnosticCode): MigrationConfidence {
-  if (code === 'encoding-assumed') return 'inferred'
-  if (code === 'diagnostics-truncated') return 'fallback'
-  if (
-    code === 'element-dropped' || code === 'attribute-dropped' || code === 'structure-unspellable' ||
-    code === 'element-unwrapped' || code === 'style-unmapped' || code === 'table-degraded' ||
-    code === 'attribute-preserved' || code === 'raw-preserved'
-  ) return 'exact'
-  return 'fallback'
-}
-
 export function migrateHtml(source: string, options: HtmlImportOptions = {}): MigrationResult {
   const result = htmlToCarve(source, options)
   return {
@@ -68,11 +43,13 @@ export function migrateHtml(source: string, options: HtmlImportOptions = {}): Mi
       sourceFormat: 'html',
       mode: result.report.mode,
       adapter: result.report.adapter,
-      diagnostics: result.report.diagnostics.map((diagnostic) => ({
-        ...diagnostic,
-        fidelity: fidelity(diagnostic.code),
-        confidence: confidence(diagnostic.code),
-      })),
+      // The importer STAMPS fidelity and confidence, so they are carried rather
+      // than recomputed here. This file used to hold a second copy of the
+      // table, which meant the plain import report - the one the shared
+      // fixtures compare - was missing a decision this engine had already made,
+      // and the two copies could disagree about a code without anything saying
+      // so.
+      diagnostics: result.report.diagnostics.map((diagnostic) => ({ ...diagnostic })),
     },
   }
 }

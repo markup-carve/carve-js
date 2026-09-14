@@ -34,6 +34,9 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // A directive with no resolver is ordinary text, which is what this engine
+  // produces whether or not it knows about includes at all (PART 9 section 19).
+  'include-directive-with-no-resolver-renders-literal',
   'a-floating-attribute-does-not-widen-a-list-item-s-content-column',
   'an-unclosed-bare-colon-fence-opens-a-div',
   'an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not',

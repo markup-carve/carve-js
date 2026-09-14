@@ -80,13 +80,72 @@ export const HTML_IMPORT_DIAGNOSTIC_CODES = [
 
 export type HtmlImportDiagnosticCode = (typeof HTML_IMPORT_DIAGNOSTIC_CODES)[number]
 
+/** How much of the source survived this decision (format-bridges, v2). */
+export type HtmlImportFidelity = 'preserved' | 'normalized' | 'degraded' | 'dropped'
+
+/** How sure the importer is that the decision was the right one. */
+export type HtmlImportConfidence = 'exact' | 'inferred' | 'fallback'
+
 export interface HtmlImportDiagnostic {
   code: HtmlImportDiagnosticCode
   message: string
   severity: 'info' | 'warning' | 'error'
+  /**
+   * Fidelity and confidence are a property of the CODE, so they are stamped
+   * here rather than recomputed by each consumer. The migration report used to
+   * derive them on its way out, which meant the plain import report - the one
+   * the shared fixtures compare - carried a decision the format defines and
+   * this engine knew.
+   */
+  fidelity: HtmlImportFidelity
+  confidence: HtmlImportConfidence
   path?: string
   line?: number
   column?: number
+}
+
+/**
+ * The fidelity of a diagnostic code, from the v2 contract.
+ *
+ * Ordered `preserved < normalized < degraded < dropped`, and the producer's
+ * answer is FINAL: a binding must not reclassify it, and it must never be
+ * inferred from the message text.
+ */
+export function diagnosticFidelity(code: HtmlImportDiagnosticCode): HtmlImportFidelity {
+  switch (code) {
+    // Nothing of the attribute was lost: it reached the output inside the bytes
+    // of an element kept whole.
+    case 'attribute-preserved':
+      return 'preserved'
+    // The bytes survive but structured editing does not.
+    case 'raw-preserved':
+    case 'element-unwrapped':
+    case 'style-unmapped':
+    case 'table-degraded':
+    case 'encoding-assumed':
+      return 'degraded'
+    // The cap hides findings that may include irreversible loss, so it reports
+    // the worst case rather than the state it could see.
+    case 'diagnostics-truncated':
+    case 'element-dropped':
+    case 'attribute-dropped':
+    case 'structure-unspellable':
+      return 'dropped'
+  }
+}
+
+/** The confidence of a diagnostic code, from the v2 contract. */
+export function diagnosticConfidence(code: HtmlImportDiagnosticCode): HtmlImportConfidence {
+  switch (code) {
+    // The importer assumed an encoding the source never declared.
+    case 'encoding-assumed':
+      return 'inferred'
+    // The report is a sample, so nothing about the omitted findings is known.
+    case 'diagnostics-truncated':
+      return 'fallback'
+    default:
+      return 'exact'
+  }
 }
 
 export interface HtmlImportOptions {
@@ -773,7 +832,18 @@ class Importer {
     node: P5Node,
   ): void {
     if (this.entries.length >= this.maxDiagnostics) throw new HtmlImportLimitError('diagnostics')
-    this.entries.push({ diagnostic: { code, message, severity, path }, at: this.positionOf(node), seq: this.entries.length })
+    this.entries.push({
+      diagnostic: {
+        code,
+        message,
+        severity,
+        fidelity: diagnosticFidelity(code),
+        confidence: diagnosticConfidence(code),
+        path,
+      },
+      at: this.positionOf(node),
+      seq: this.entries.length,
+    })
   }
 
   /**

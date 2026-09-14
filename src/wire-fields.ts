@@ -82,7 +82,7 @@ export const WIRE_FIELDS: Readonly<Record<string, readonly string[]>> = {
  */
 export const WIRE_RECORD_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "attrs": ["classes", "id", "keyValues", "order"],
-  "pos": ["endColumn", "endLine", "endOffset", "startColumn", "startLine", "startOffset"],
+  "pos": ["endColumn", "endLine", "endOffset", "file", "startColumn", "startLine", "startOffset"],
   "table.columns": ["align", "valign", "width"],
   "table.rowGroups": ["bodies", "footRows", "headRows"],
   "table.rowGroups.bodies": ["attrs", "bodyRows", "headRows", "rowHeadColumns"],
@@ -309,7 +309,7 @@ export const WIRE_VALUE_KINDS: Readonly<Record<string, Readonly<Record<string, s
   "math": { "attrs": "object", "content": "string", "display": "boolean", "pos": "object" },
   "mention": { "attrs": "object", "pos": "object", "user": "string" },
   "paragraph": { "attrs": "object", "blockImage": "const:true", "children": "array", "pos": "object" },
-  "pos": { "endColumn": "integer>=1", "endLine": "integer>=1", "endOffset": "integer>=0", "startColumn": "integer>=1", "startLine": "integer>=1", "startOffset": "integer>=0" },
+  "pos": { "endColumn": "integer>=1", "endLine": "integer>=1", "endOffset": "integer>=0", "file": "string", "startColumn": "integer>=1", "startLine": "integer>=1", "startOffset": "integer>=0" },
   "raw_block": { "attrs": "object", "content": "string", "format": "string", "pos": "object" },
   "raw_inline": { "attrs": "object", "content": "string", "format": "string", "pos": "object" },
   "smart_punctuation": { "attrs": "object", "glyph": "string", "kind": "string", "pos": "object", "value": "string" },
