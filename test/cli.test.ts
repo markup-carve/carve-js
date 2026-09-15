@@ -956,6 +956,55 @@ describe('carve render includes', () => {
     expect(t.err).toBe('')
   })
 
+  /**
+   * A configured root must BE absolute (markup-carve/carve#2011), which the
+   * resolver enforces. The rule constrains the root, not its derivation, so
+   * the front end expands its own argument and the convenience survives.
+   */
+  it('expands a relative --include-root itself, because the resolver requires an absolute one', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+    const previous = process.cwd()
+    process.chdir(root)
+    try {
+      expect(await run(['render', '--include-root', '.', input], t.io)).toBe(0)
+    } finally {
+      process.chdir(previous)
+    }
+    expect(t.out).toBe('<p>Included.</p>\n')
+    expect(t.err).toBe('')
+  })
+
+  /**
+   * The front-end expansion must not reopen the cwd: `resolve("")` answers
+   * with the process working directory, which is the one root section 19
+   * forbids, so a blank argument names no path to expand and is handed over
+   * for the resolver to refuse.
+   */
+  for (const spec of ['', '   ']) {
+    it(`refuses --include-root ${JSON.stringify(spec)} rather than expanding it to the working directory`, async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
+      writeFileSync(path.join(root, 'child.crv'), 'SHOULD-NOT-APPEAR', 'utf8')
+      // So the whitespace row cannot pass merely because the directory is
+      // absent: named with spaces it exists, and holds the target too.
+      mkdirSync(path.join(root, '   '), { recursive: true })
+      writeFileSync(path.join(root, '   ', 'child.crv'), 'SHOULD-NOT-APPEAR', 'utf8')
+      const input = path.join(root, 'main.crv')
+      const t = makeIO({ files: { [input]: '{{ child.crv }}' } })
+      const previous = process.cwd()
+      process.chdir(root)
+      try {
+        expect(await run(['render', '--include-root', spec, input], t.io)).toBe(2)
+      } finally {
+        process.chdir(previous)
+      }
+      expect(t.out).not.toContain('SHOULD-NOT-APPEAR')
+      expect(t.err).toContain('cannot use include root')
+    })
+  }
+
   it('defaults the include root to the input file directory when --include-root is omitted', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'carve-include-'))
     writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')

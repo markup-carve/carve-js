@@ -33,21 +33,28 @@ export const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024
 /**
  * Filesystem resolver with canonical root-containment checks for trusted hosts.
  *
- * Throws on a root that cannot be canonicalized, and on a blank or
- * whitespace-only one: a host with no root leaves inclusion disabled.
+ * Throws on a root that cannot be canonicalized, and on one that is not
+ * absolute: a host with no usable root leaves inclusion disabled.
  */
 export function fileSystemResolver(
   root: string,
   opts: FileSystemResolverOptions = {},
 ): IncludeResolver {
-  // PART 9 section 19: the root MUST NOT default to the process working
-  // directory, and `realpathSync('')` answers with exactly that. An unset
-  // configuration value is not a root, so it configures none at all. A
-  // whitespace-only value is the same unset value even though it is a legal
-  // directory name; such a directory stays reachable by its absolute path.
-  if (typeof root !== 'string' || root.trim() === '') {
+  // PART 9 section 19: a configured root MUST be absolute, and MUST NOT
+  // default to the process working directory. `realpathSync` resolves a
+  // relative spec against exactly that, so "." would root containment at the
+  // working directory and ".." at its parent - the forbidden value, by a route
+  // the default rule does not cover.
+  //
+  // Absoluteness SUBSUMES the blank and whitespace-only refusals this replaces
+  // (carve-js#1690): neither is absolute. That is the point rather than a
+  // simplification - "   " is a legal POSIX directory name, refused for being
+  // RELATIVE and not for being empty, and such a directory stays reachable by
+  // its absolute path. A front end may still expand its own relative argument
+  // before calling this; the rule constrains the root, not its derivation.
+  if (typeof root !== 'string' || !path.isAbsolute(root)) {
     throw new Error(
-      'The include containment root must be supplied explicitly: a blank value is not a root.',
+      'The include containment root must be an absolute path: a relative value is not a root.',
     )
   }
   const rootReal = realpathSync(root)

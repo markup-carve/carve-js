@@ -423,6 +423,19 @@ function formatIncludeWarnings(warnings: IncludeWarning[], file: string): string
  * The renames are written into the source, so the flattened file renders
  * exactly like the expanded original.
  */
+/**
+ * The containment root a front end hands to the resolver.
+ *
+ * Section 19 requires the root to BE absolute, not that nobody may derive one,
+ * so a relative `--include-root` is expanded here rather than refused. A blank
+ * or whitespace-only argument names no path to expand: `resolve("")` answers
+ * with the process working directory, the one root section 19 forbids, so it
+ * is handed over unchanged for the resolver to refuse.
+ */
+function absoluteRoot(spec: string): string {
+  return spec.trim() === '' ? spec : resolvePath(spec)
+}
+
 async function runFlatten(args: string[], io: CliIO): Promise<number> {
   let values: { 'include-root'?: string; help?: boolean }
   let positionals: string[]
@@ -467,7 +480,7 @@ async function runFlatten(args: string[], io: CliIO): Promise<number> {
 
   let resolver: ReturnType<typeof fileSystemResolver>
   try {
-    resolver = fileSystemResolver(root)
+    resolver = fileSystemResolver(absoluteRoot(root))
   } catch {
     io.writeErr(`carve flatten: cannot use include root ${root}\n`)
     return 2
@@ -976,7 +989,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
   let includeResolver: ReturnType<typeof fileSystemResolver> | undefined
   if (useIncludes) {
     try {
-      includeResolver = fileSystemResolver(includeRoot!)
+      includeResolver = fileSystemResolver(absoluteRoot(includeRoot!))
     } catch {
       if (values['include-root'] !== undefined) {
         io.writeErr(`carve render: cannot use include root ${includeRoot}\n`)
