@@ -4,11 +4,12 @@ import { carveToMarkdown } from '../src/index.js'
 /**
  * PART 11 section 8a, M1b, for the underscore.
  *
- * An escape is kept IF AND ONLY IF the character is adjacent on the emitted
- * line to an unescaped delimiter of the same character. `company_id` and
- * `_leading` are not, so they are written as the author typed them; `a__b` is,
- * because unescaping would merge the two into one run. The asterisk is exempt
- * under M1a and stays escaped everywhere.
+ * An escape is kept where the character is adjacent on the emitted line to an
+ * unescaped delimiter of the same character, and - for `_` - where another live
+ * `_` on that line could close the emphasis it could open. `company_id` and
+ * `_leading` are neither, so they are written as the author typed them; `a__b`
+ * is adjacent, and `*x*_y_` is a pair. The asterisk is exempt under M1a and
+ * stays escaped everywhere.
  */
 describe('markdown underscore escaping', () => {
   it.each(['company_id', 'a_b_c', 'snake_case_name', 'read_write_delete'])(
@@ -35,6 +36,28 @@ describe('markdown underscore escaping', () => {
   ])('keeps both escapes in %j, where unescaping would merge the runs', (source, expected) => {
     expect(carveToMarkdown(source).trim()).toBe(expected)
   })
+
+  it.each([
+    ['/x/_y_', '*x*\\_y\\_'],
+    ['/x/_y_ and company_id', '*x*\\_y\\_ and company_id'],
+  ])('escapes a pair of text underscores in %j, which the line would read as emphasis', (source, expected) => {
+    expect(carveToMarkdown(source).trim()).toBe(expected)
+  })
+
+  it('does not let an AUTHORED escape supply the other half of a pair', () => {
+    // `\\_` is an `escaped_text` node, so it is not a live underscore and
+    // cannot pair with the bare one after it.
+    expect(carveToMarkdown('a \\_b c_').trim()).toBe('a \\_b c_')
+  })
+
+  it.each(['x_ _y', 'foo_bar_ baz'])(
+    'leaves an underscore no second one can pair with bare in %j',
+    (source) => {
+      // The closer stands before the opener in the first, and the only run that
+      // could open in the second is intraword, which can neither open nor close.
+      expect(carveToMarkdown(source).trim()).toBe(source)
+    },
+  )
 
   it('still escapes an asterisk between word characters', () => {
     // `a*b*c` emphasises in CommonMark, so this one has to stay escaped.

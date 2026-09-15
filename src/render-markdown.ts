@@ -1256,6 +1256,50 @@ function sentinelCharacter(s: string): string {
  * in front of it is counted and an odd run disqualifies it. A neighbour AFTER
  * never can be: the character in front of it is the candidate itself.
  */
+/**
+ * Every live `_` on the line a reader could pair into emphasis, by CommonMark
+ * 6.2 read for the underscore: a run that both flanks can neither open nor
+ * close, which is what leaves `company_id` alone.
+ *
+ * ONE SCAN FOR THE WHOLE LINE, taken by the caller before it walks the
+ * candidates. Asking per candidate costs a walk of the line each time, and a
+ * memo keyed on the line only moves that cost into the comparison.
+ */
+function pairableUnderscores(line: string): Set<number> {
+  const open: number[] = []
+  const close: number[] = []
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] !== '_' || !liveAt(line, i)) continue
+    const before = lastCharacter(line.slice(Math.max(0, i - 2), i))
+    const after = firstCharacter(line.slice(i + 1, i + 3))
+    const beforeSpace = before === '' || FLANK_SPACE.test(before)
+    const afterSpace = after === '' || FLANK_SPACE.test(after)
+    const beforePunct = before !== '' && FLANK_PUNCT.test(before)
+    const afterPunct = after !== '' && FLANK_PUNCT.test(after)
+    const left = !afterSpace && (!afterPunct || beforeSpace || beforePunct)
+    const right = !beforeSpace && (!beforePunct || afterSpace || afterPunct)
+    if (left && (!right || beforePunct)) open.push(i)
+    if (right && (!left || afterPunct)) close.push(i)
+  }
+  // A pair needs an opener BEFORE a closer, so `x_ _y` has none: its closer
+  // stands first. The two bounds are what decides it.
+  const pairs = new Set<number>()
+  const firstOpen = open.length > 0 ? open[0]! : Infinity
+  const lastClose = close.length > 0 ? close[close.length - 1]! : -Infinity
+  for (const i of open) if (i < lastClose) pairs.add(i)
+  for (const i of close) if (i > firstOpen) pairs.add(i)
+
+  return pairs
+}
+
+/** Whether the character at `i` is not covered by an odd run of backslashes. */
+function liveAt(line: string, i: number): boolean {
+  let backslashes = 0
+  for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) backslashes++
+
+  return backslashes % 2 === 0
+}
+
 function adjacentToLiveDelimiter(line: string, i: number, ch: string): boolean {
   if (line[i + 1] === ch) return true
   if (line[i - 1] !== ch) return false
@@ -1299,6 +1343,7 @@ function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
   const character = sentinelCharacter
   const line = text.replace(RE_NARROWED_SENTINEL, character)
+  const pairs = line.includes('_') ? pairableUnderscores(line) : null
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
     const ch = character(s)
@@ -1314,7 +1359,8 @@ function resolveNarrowedEscapes(text: string): string {
       s === AUTHORED_KEPT ||
       (s in AUTHORED_CHARACTER
         ? opensAnAtxHeading(line, offset)
-        : adjacentToLiveDelimiter(line, offset, ch))
+        : adjacentToLiveDelimiter(line, offset, ch) ||
+          (ch === '_' && pairs !== null && pairs.has(offset)))
 
     return keep ? `\\${ch}` : ch
   })
