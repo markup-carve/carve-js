@@ -235,7 +235,8 @@ function renderInline(text: string, defs: Map<string, LinkDef>, opts: Options): 
     if (delimiter === '*' || delimiter === '/') {
       const close = text.indexOf(delimiter, i + 1)
       if (close <= i + 1 || /\s/.test(text[i + 1]!) || /\s/.test(text[close - 1]!) ||
-        (i > 0 && /[A-Za-z0-9]/.test(text[i - 1]!)) || /[A-Za-z0-9]/.test(text[close + 1] ?? '')) return undefined
+        (i > 0 && (/[A-Za-z0-9]/.test(text[i - 1]!) || text[i - 1] === delimiter)) ||
+        /[A-Za-z0-9]/.test(text[close + 1] ?? '')) return undefined
       const inner = renderInline(text.slice(i + 1, close), defs, opts)
       if (inner === undefined) return undefined
       const tag = delimiter === '*' ? 'strong' : 'em'
