@@ -51,12 +51,12 @@ describe('root 1: padding written as a `\\ ` escape', () => {
 })
 
 /**
- * The class is CommonMark 2.1's - Zs plus tab, line feed, form feed, carriage
- * return - not `\s`, which takes three characters CommonMark does not count.
- * Leaving those three INSIDE is the point: a run they pad is left-flanking, so
- * moving them would cost a move for nothing.
+ * The class is the Unicode `White_Space` property, because the READER decides
+ * whether a run flanks: pulldown-cmark counts U+000B, U+2028 and U+2029 as
+ * whitespace, so a run left beside one never opens (markup-carve/carve#2023). A
+ * zero-width no-break space is not whitespace and stays inside.
  */
-describe('the whitespace class is CommonMark 2.1, not `\\s`', () => {
+describe('the whitespace class is Unicode White_Space', () => {
   it('moves a Zs that is not a plain space', () => {
     expect(carveToMarkdown('a{* b*}c\n')).toBe('a **b**c\n')
   })
@@ -65,20 +65,20 @@ describe('the whitespace class is CommonMark 2.1, not `\\s`', () => {
     expect(carveToMarkdown('a{*b*}c\n')).toBe('a**b**c\n')
   })
 
-  it('leaves a zero-width no-break space inside, which `\\s` moved', () => {
+  it('leaves a zero-width no-break space inside, which is not whitespace', () => {
     expect(carveToMarkdown('a{*﻿b*}c\n')).toBe('a**﻿b**c\n')
   })
 
-  it('leaves a line separator inside, which `\\s` moved', () => {
-    expect(carveToMarkdown('a{* b*}c\n')).toBe('a** b**c\n')
+  it('moves a line separator, which the reader counts as whitespace', () => {
+    expect(carveToMarkdown('a{* b*}c\n')).toBe('a **b**c\n')
   })
 
-  it('leaves a paragraph separator inside, which `\\s` moved', () => {
-    expect(carveToMarkdown('a{* b*}c\n')).toBe('a** b**c\n')
+  it('moves a paragraph separator, which the reader counts as whitespace', () => {
+    expect(carveToMarkdown('a{* b*}c\n')).toBe('a **b**c\n')
   })
 
-  it('leaves a vertical tab inside, which CommonMark does not count either', () => {
-    expect(carveToMarkdown('a{*b*}c\n')).toBe('a**b**c\n')
+  it('moves a vertical tab, which the reader counts as whitespace', () => {
+    expect(carveToMarkdown('a{*b*}c\n')).toBe('a**b**c\n')
   })
 })
 
