@@ -285,13 +285,11 @@ function canonicalIdOf(resolved: NonNullable<ReturnType<IncludeResolver>>): stri
 function graph(vector: Vector): Record<string, unknown> {
   const calls: string[] = []
   let maxVisitedDepth = 0
-  let chargedBytes = 0
   const resolve: IncludeResolver = (request, ctx) => {
     calls.push(request)
     maxVisitedDepth = Math.max(maxVisitedDepth, ctx.depth + 1)
     const source = vector.files?.[request]
     if (source === undefined) return null
-    chargedBytes += Buffer.byteLength(source, 'utf8')
 
     return { source, id: request }
   }
@@ -311,7 +309,12 @@ function graph(vector: Vector): Record<string, unknown> {
   return {
     resolverCalls: calls,
     maxVisitedDepth,
-    chargedBytes,
+    // THE ENGINE'S OWN TOTAL, not a tally kept here. Summing what this
+    // resolver handed over answers `chargedBytes` from the adapter's side of
+    // the seam, so it reads 12/12/5 whatever the engine charges - and it did,
+    // while the engine was charging 7/8/0. A vector that cannot see the
+    // engine's accounting cannot pin it (carve-js#1699).
+    chargedBytes: result.chargedBytes,
     status: warning ? 'denied' : 'allowed',
     ...(warning === undefined ? {} : { denial: DENIAL_BY_RULE[warning.rule] }),
   }
