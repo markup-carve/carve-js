@@ -572,13 +572,13 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       }
       return '\\' + node.value
     case 'emphasis':
-      return `*${renderInlines(node.children, ctx)}*`
+      return padOutside(renderInlines(node.children, ctx), '*', 'em')
     case 'strong':
-      return `**${renderInlines(node.children, ctx)}**`
+      return padOutside(renderInlines(node.children, ctx), '**', 'strong')
     case 'underline':
       return `<u>${renderInlines(node.children, ctx)}</u>`
     case 'strike':
-      return `~~${renderInlines(node.children, ctx)}~~`
+      return padOutside(renderInlines(node.children, ctx), '~~', 'del')
     case 'subscript':
       // Subscript is NOT strikethrough; mirror super's inline-HTML fallback.
       return `<sub>${renderInlines(node.children, ctx)}</sub>`
@@ -1453,6 +1453,22 @@ function walkInlines(
         break
     }
   }
+}
+
+/**
+ * A delimiter run only opens emphasis while it is left-flanking, which a run
+ * followed by whitespace never is (CommonMark 6.2), so `** x**` reads back as
+ * literal text. The padding is content, so it moves outside the delimiters
+ * rather than being trimmed away.
+ */
+function padOutside(inner: string, delimiter: string, tag: string): string {
+  const match = /^(\s*)([\s\S]*?)(\s*)$/.exec(inner)
+  if (!match) return `${delimiter}${inner}${delimiter}`
+  const [, lead = '', core = '', trail = ''] = match
+  if (core !== '') return `${lead}${delimiter}${core}${delimiter}${trail}`
+  // Whitespace-only content has no delimiter form; every other inline this
+  // renderer cannot spell falls back to inline HTML, so this one does too.
+  return inner === '' ? '' : `<${tag}>${inner}</${tag}>`
 }
 
 /**

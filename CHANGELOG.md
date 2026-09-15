@@ -38,6 +38,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nested one (markup-carve/carve#1971).
 - `carve fmt` re-emits trailing list-item content with a 2-space continuation, matching the other engines (markup-carve/carve#1970).
 - In a stack of nested footnote definitions, a trailing line after a consumed definition is placed against each note's own marker column, so a line below the innermost note's content column falls to the reachable ancestor note instead of over-reaching into the innermost one (#1653, markup-carve/carve#1946).
+- The Markdown renderer moves emphasis padding outside the delimiters, so content that begins or ends with whitespace still reads as emphasis rather than literal text; content that is only whitespace falls back to inline HTML (#1683).
 
 ## [0.1.6] - 2026-09-07
 
