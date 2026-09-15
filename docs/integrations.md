@@ -10,7 +10,7 @@ what canonical form is.
 
 
 ```yaml
-- uses: markup-carve/carve-js@v0.1.2
+- uses: markup-carve/carve-js@0.1.6
   with:
     files: 'docs/**/*.crv'   # default: **/*.crv
 ```
@@ -28,7 +28,7 @@ Inputs: `files`, `fmt`, `lint`, `from-djot`, `portable`, `version`.
 ```yaml
 repos:
   - repo: https://github.com/markup-carve/carve-js
-    rev: v0.1.2
+    rev: 0.1.6
     hooks:
       - id: carve-fmt      # report; use carve-fmt-write to fix in place
       - id: carve-lint

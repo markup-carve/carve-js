@@ -35,14 +35,14 @@ Carve's blank-line-around-blocks rule:
 
 The default dialect is **CommonMark plus GFM, plus footnote references**, so a
 source construct none of those defines stays as written rather than becoming
-Carve markup. Seven flavour extensions are opt-in through the second argument:
+Carve markup. Seven flavor extensions are opt-in through the second argument:
 
 ```ts
 markdownToCarve('a ==hi== ^up^ $x$', { highlight: true, superscript: true, math: true })
 // => 'a =hi= {^up^} $`x`'
 ```
 
-| Source                | Flavour            | Flag              | Off (the default)         | On                    |
+| Source                | Flavor             | Flag              | Off (the default)         | On                    |
 | --------------------- | ------------------ | ----------------- | ------------------------- | --------------------- |
 | `==x==`               | Obsidian, Quarto   | `highlight`       | literal                   | `=x=`                 |
 | `^x^`                 | Pandoc             | `superscript`     | literal                   | `{^x^}`               |
@@ -63,7 +63,7 @@ them the way the source does, so nothing had to be rewritten for a CommonMark
 document to grow markup its author never saw. Escaping is what keeps them
 literal, which is why the "off" column shows a backslash.
 
-A handful of Carve constructs have no Markdown spelling in any flavour and are
+A handful of Carve constructs have no Markdown spelling in any flavor and are
 always escaped, with no flag: `` a $`x` `` and `` a $$`x` `` (math spans),
 `` a !`x` `` (a literal span), `a :term[x]` (an extension call), and a leading
 `^ ` on a paragraph (a caption, which binds to the block above it).
@@ -94,13 +94,13 @@ cat post.txt | carve migrate --from bbcode
 > [!NOTE]
 > Carve's highlight and subscript markers are **single** characters (`=x=`,
 > `,x,`); the doubled forms `==x==` and `,,x,,` are literal text in Carve (see
-> the corpus pair `74-two-char-delimiter-runs`). A bare `,x,` / `^x^` / `=x=`
+> the corpus pair `79-two-char-delimiter-runs`). A bare `,x,` / `^x^` / `=x=`
 > only renders at a word boundary, so the `<mark>`/`<sub>`/`<sup>` tags map to
 > the **bare markers** when they sit between non-alphanumeric neighbors (the
 > common, whitespace-separated case) and to the **forced brace forms** `{=x=}` /
 > `{,x,}` / `{^x^}` only when intraword (e.g. `H<sub>2</sub>O` → `H{,2,}O`),
 > where the brace form renders in every position (corpus
-> `67-superscript-and-subscript`).
+> `40-superscript-and-subscript`).
 
 It also rewrites **GFM tables** to Carve's native form: a header row followed by
 a `| --- |` delimiter row becomes `|=`-prefixed header cells, and the delimiter

@@ -595,21 +595,23 @@ carveToHtml('[docs](https://example.com)', { extensions: [externalLinks()] })
 ```
 
 Configurable `target`, `rel`, and `nofollow`. Relative and anchor links are
-left untouched. (Semantic spans like `:kbd[…]`, `:abbr[…]`, `:dfn[…]` are
+left untouched. (Semantic spans like `[Ctrl]{kbd}` and `[HTML]{abbr="…"}` are
 already core, no extension needed.)
 
-The complete built-in semantic registry is `abbr`, `cite`, `dfn`, `kbd`,
-`samp`, `var`, `time`, `code`, and `mark`. Each `:name[content]{attrs}` form
-remains an ordinary `inline_extension` AST node and renders as the same-named
-HTML element. Unknown names retain `<span class="ext-name">`; plain and ANSI
-render only the content. `:cite[…]` is not a bibliographic `[@key]` citation,
-and `:abbr[…]` is independent of automatic abbreviation definitions.
+Core reserves three semantic span names as compact span-attribute sugar:
+`[Ctrl]{kbd}`, `[HTML]{abbr="HyperText Markup Language"}`, and
+`[now]{time="…"}`. `abbr` and `time` values map to `title` and `datetime`.
+Non-semantic attributes ride the outermost semantic element. `samp`, `var`,
+`cite` and `dfn`, and combinations such as
+`[CSS]{dfn abbr="Cascading Style Sheets"}`, need `semanticSpan()` (below);
+`code` and `mark` are not semantic span names.
 
-The same registry is available as compact span-attribute sugar:
-`[Ctrl]{kbd}`, `[HTML]{abbr="HyperText Markup Language"}`, and combinations
-such as `[CSS]{dfn abbr="Cascading Style Sheets"}`. Non-semantic attributes
-remain on one outer span. `abbr`, `dfn`, and `time` values map to `title`,
-`title`, and `datetime`, respectively.
+A `:name[content]{attrs}` form is an ordinary `inline_extension` AST node.
+Without an extension renderer it renders as `<span class="ext-name">`;
+`semanticSpan()` renders the seven semantic names as their same-named element.
+Plain and ANSI render only the content. `:cite[…]` is not a bibliographic
+`[@key]` citation, and `:abbr[…]` is independent of automatic abbreviation
+definitions.
 
 ## headingPermalinks
 
@@ -620,8 +622,8 @@ carve-php's HeadingPermalinksExtension):
 import { carveToHtml, headingPermalinks } from '@markup-carve/carve'
 
 carveToHtml('# My Heading', { extensions: [headingPermalinks()] })
-// <section id="my-heading">
-//   <h1>My Heading <a href="#my-heading" class="permalink" aria-label="Permalink">¶</a></h1>
+// <section id="My-Heading">
+//   <h1>My Heading <a href="#My-Heading" class="permalink" aria-label="Permalink">¶</a></h1>
 // </section>
 ```
 
@@ -640,8 +642,16 @@ document's headings, ported from carve-php's TableOfContentsExtension:
 import { carveToHtml, tableOfContents } from '@markup-carve/carve'
 
 carveToHtml('# Intro\n\n## Details', { extensions: [tableOfContents()] })
-// <nav class="toc" aria-label="Table of contents"><ul><li><a href="#intro">Intro</a><ul><li><a href="#details">Details</a></li></ul></li></ul></nav>
-// <section id="intro"> … </section>
+// <nav class="toc" aria-label="Table of contents">
+// <ul>
+// <li><a href="#Intro">Intro</a>
+// <ul>
+// <li><a href="#Details">Details</a></li>
+// </ul>
+// </li>
+// </ul>
+// </nav>
+// <section id="Intro"> … </section>
 ```
 
 A `beforeRender` transform: it reads the resolved heading ids and inserts the

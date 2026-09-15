@@ -20,7 +20,7 @@ to fetch the spec corpus.
 
 ```
 carve-js/
-├── src/
+├── src/                    Main modules (a partial list)
 │   ├── ast.ts              Typed AST node definitions
 │   ├── parse.ts            Linear-time block + inline parser
 │   ├── render-html.ts      AST → canonical HTML renderer
@@ -30,7 +30,7 @@ carve-js/
 │   ├── djot-migrate.ts     Djot/Markdown collision warnings + autocorrect
 │   ├── djot-import.ts      Djot → Carve source transform
 │   ├── markdown-migrate.ts Markdown → Carve source transform
-│   ├── cli.ts              `carve` binary (render, fmt, fix, lint)
+│   ├── cli.ts              `carve` binary (render, fmt, flatten, fix, lint, diff, merge, portability, migrate)
 │   └── index.ts            Public API
 ├── test/                   Vitest suites + the spec corpus runner
 ├── spec/                   git submodule → markup-carve/carve
@@ -49,7 +49,7 @@ See the [reference-parser plan](https://github.com/markup-carve/carve#roadmap) i
 | M1   | Block parser: headings, paragraphs, lists, quotes, fences, tables, frontmatter, hr, admonitions, captions | ✅ Done |
 | M2   | Inline parser: emphasis (all 8 forms), links, images, code, autolinks, attributes, extensions, mentions, tags, smart typography, CriticMarkup | ✅ Done |
 | M3   | HTML renderer; full corpus green | ✅ Done |
-| M4   | npm publish; playground page in the docs site | Playground shipped; npm publish pending |
+| M4   | npm publish; playground page in the docs site | ✅ Done |
 
 ---
 
