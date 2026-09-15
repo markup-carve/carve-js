@@ -1213,7 +1213,13 @@ function renderList(node: List, ctx: CarveContext): string {
       }
       let content = trimNonNbsp(renderListItem(item, ctx, node.tight))
       const lines = content ? content.split('\n') : ['']
-      const first = lines.shift() ?? ''
+      // THE FIRST LINE CARRIES THE TAG TOO - only the loop below used to take it
+      // off. An item whose FIRST child goes to the marker column opens with the
+      // continuation marker, so the tag shipped as a literal private-use
+      // character and the item came back holding it (carve-js#1681). Nothing to
+      // strip it TO here: the item's own marker already owns this line, and
+      // `- +` is where §17 L3 puts the marker for an item with nothing before it.
+      const first = (lines.shift() ?? '').replace(markerColumnTag(), '')
       out += `${indent}${prefix}${first || '+'}\n`
       const continuation = ' '.repeat(continuationWidth)
       // An EMPTY continuation line stays empty. Indenting it produces a line of
@@ -1652,6 +1658,24 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
         parts.push('', rendered)
         previousEmitted = b
         return
+      }
+      // AN EMPTY LAST ITEM IN THE SUB-LIST ABOVE claims this column: the
+      // sub-list's marker column IS the hosting item's content column, and the
+      // `+` spelling the empty item takes the quote written there into itself
+      // (carve-js#1681). The blank line closes the sub-list and costs the item no
+      // paragraph, so the list stays tight.
+      //
+      // BOUNDED TO A QUOTE, and the bound is measured. Of the thirteen block
+      // kinds swept below an empty item only the quote is taken; a PARAGRAPH must
+      // not get the separator at all, since the blank line would part it and turn
+      // the tight item loose.
+      if (b.type === 'block_quote' && !separated && previousEmitted?.type === 'list') {
+        const last = previousEmitted.items[previousEmitted.items.length - 1]
+        if (last !== undefined && last.children.length === 0) {
+          parts.push('', rendered)
+          previousEmitted = b
+          return
+        }
       }
       parts.push(rendered)
       previousEmitted = b
