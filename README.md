@@ -123,6 +123,10 @@ the document being parsed has no `pos.file`, so a tree with no includes is
 unchanged. Without it an included span would be ambiguous - a child's first
 paragraph and the parent's first paragraph both report line 1.
 
+An inline include's leading and trailing text joins the host's text node, and
+that merged node keeps the host's span. Every other node the child contributes
+still names the child in `pos.file`.
+
 Pass the parent's `extensions` through as well. An extension that adds syntax
 applies only to the parse it is given, so a child read without them renders
 `[[Page]]` or `[@knuth]` as literal text while the same line in the parent does

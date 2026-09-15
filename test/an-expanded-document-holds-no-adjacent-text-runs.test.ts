@@ -46,7 +46,7 @@ describe('an expanded document holds no adjacent text runs', () => {
 
     expect(adjacentTextRuns(json)).toEqual([])
     const paragraph = (json['children'] as Array<Record<string, unknown>>)[0]!
-    expect(paragraph['children']).toEqual([{ type: 'text', value: 'Root inlined text tail.' }])
+    expect(paragraph['children']).toMatchObject([{ type: 'text', value: 'Root inlined text tail.' }])
   })
 
   const vectorDir = resolvePath(
