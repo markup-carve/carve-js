@@ -269,7 +269,7 @@ a host never has to know that order. Composing it by hand is what this
 replaces: `applyTransforms` is not public, and a pipeline missing it still
 renders, so an extension that contributes a transform (citations numbering its
 groups and appending the references list, a heading-level shift, default
-attributes) degrades quietly instead of failing.
+attributes) degrades silently instead of failing.
 
 Two obligations, because the seam begins after the parse:
 

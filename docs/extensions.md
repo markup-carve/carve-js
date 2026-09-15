@@ -238,7 +238,7 @@ silently different output.
 
 Under `aria` the control is a `<button type="button">` (Extensions §13.3).
 Without the `type` a `<button>` is a submit button, so a tab set inside a
-`<form>` submitted the form instead of switching panels:
+`<form>` would submit the form instead of switching panels:
 
 ```html
 <div class="tabs" role="tablist" aria-label="Tabs">
@@ -975,8 +975,8 @@ resolved document and return it.
 
 `beforeRender` also receives a `BeforeRenderContext`, because a hook runs before
 the render starts and so has nothing to inherit: without it a hook that renders
-output of its own rendered with defaults, and a `symbols` map or
-`allowRawHtml: false` reached the document but not the fragment a hook built
+output of its own would render with defaults, and a `symbols` map or
+`allowRawHtml: false` would reach the document but not the fragment a hook built
 from the same nodes. The context carries four things:
 
 | field | what it is |
@@ -1002,7 +1002,7 @@ const ext: CarveExtension = {
 ```
 
 A hook that ignores the context may still declare `beforeRender(doc)`: a
-function of fewer parameters is assignable, and it is called exactly as before.
+function of fewer parameters is assignable.
 The context is READ-ONLY - `options` is frozen, and is a different object from
 the one the renderer is handed - so a hook reads the caller's settings and
 cannot rewrite them. Read it, do not keep it.

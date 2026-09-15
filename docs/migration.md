@@ -200,7 +200,7 @@ carve fix --stdout doc.crv       # print the fix for one file, don't modify it
 
 With no files it reads stdin and writes the fixed result to stdout. Nested
 collisions compose (`**_x_**` fixes in one pass); only *crossing* collisions
-that are genuinely ambiguous (e.g. `**_x**_`) are reported on stderr for manual
+that are ambiguous (e.g. `**_x**_`) are reported on stderr for manual
 review. `--check` is a gate: it exits non-zero when a file would change or has
 manual-review collisions, so it drops into a pre-commit hook or CI step.
 
@@ -332,7 +332,7 @@ Two things to expect from the output:
 
 - **Carve's deliberate departures are divergences.** `/italic/`, `=mark=` and a
   quoted link title mean something else in Djot, so a document using them is
-  reported. That is the honest answer to the question being asked, not noise -
+  reported. That is the correct answer to the question being asked, not noise -
   but it does mean a Carve-flavored document is rarely portable, and the check
   is most useful on prose you intend to keep neutral.
 - **Only the first divergence is reported.** Once the engines disagree about a
