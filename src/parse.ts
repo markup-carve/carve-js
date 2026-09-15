@@ -11908,13 +11908,11 @@ interface EmphasisMemo {
   // Per delimiter, scan positions known to reach no closer. Not a single bound:
   // an opener inside a skipped plain brace group does not scan a suffix.
   failed: Map<string, Uint8Array>
-  // 0 unknown, -1 no group, otherwise the closing index + 1.
-  braceEnds: Int32Array | undefined
   lastBrace: number
 }
 
 function newEmphasisMemo(): EmphasisMemo {
-  return { failed: new Map(), braceEnds: undefined, lastBrace: -2 }
+  return { failed: new Map(), lastBrace: -2 }
 }
 
 function cachedFindEmphasisClose(
@@ -12219,9 +12217,9 @@ function findEmphasisClose(
         continue
       }
     }
-    // Brace groups are opaque too (markup-carve/carve#2027).
+    // Braced inlines are opaque too (E2a, markup-carve/carve#2027).
     if (ch === '{') {
-      const end = braceGroupEnd(text, j, memo)
+      const end = bracedInlineEnd(text, j, memo)
       if (end !== -1) {
         j = end
         continue
@@ -12241,37 +12239,25 @@ function findEmphasisClose(
   return -1
 }
 
-// The `}` balancing the `{` at `open`, or -1, scanned as carve-php's attribute
-// scan does. A `{` met unquoted inside the scan gets its answer cached too.
-function braceGroupEnd(text: string, open: number, memo: EmphasisMemo): number {
+// The braced inlines E2a names, as sticky copies of the matchers the main loop
+// uses, so the scan hides exactly the region the parser builds a node from.
+const BRACED_INLINE_STICKY = [
+  /\{([/*_^,~=])(?!\1\})([\s\S]+?)\1\}/y,
+  /\{\+((?:[^+]|\+(?!\}))+)\+\}/y,
+  /\{-((?:[^-]|-(?!\}))+)-\}/y,
+  /\{~([^}]*)~>([^}]*)~\}/y,
+  /\{#([^}]+)#\}/y,
+]
+
+// The last index of the braced inline opening at `open`, or -1.
+function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo): number {
   if (memo.lastBrace === -2) memo.lastBrace = text.lastIndexOf('}')
   if (memo.lastBrace < open) return -1
-  const ends = (memo.braceEnds ??= new Int32Array(text.length))
-  if (ends[open] !== 0) return ends[open] === -1 ? -1 : ends[open]! - 1
-  const stack = [open]
-  let quote = ''
-  for (let i = open + 1; i < text.length; i++) {
-    const ch = text[i]!
-    if (ch === '\n') break
-    if (ch === '\\' && i + 1 < text.length) {
-      i++
-      continue
-    }
-    if (quote !== '') {
-      if (ch === quote) quote = ''
-      continue
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch
-      continue
-    }
-    if (ch === '{') stack.push(i)
-    else if (ch === '}') {
-      ends[stack.pop()!] = i + 1
-      if (stack.length === 0) return i
-    }
+  for (const re of BRACED_INLINE_STICKY) {
+    re.lastIndex = open
+    const m = re.exec(text)
+    if (m) return open + m[0].length - 1
   }
-  for (const q of stack) ends[q] = -1
   return -1
 }
 
