@@ -16,10 +16,45 @@ export interface Directive {
   shift: number | 'auto'
 }
 
-export const DIRECTIVE_SCAN_RE =
-  /\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}/g
-export const DIRECTIVE_FULL_RE =
-  /^\{\{\s+(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))((?:\s+#[A-Za-z_][\w-]*)?)(.*?)\s+\}\}$/
+/**
+ * A quoted run: its opening quote through the first unescaped matching one.
+ * PART 4's `quoted_value` has both spellings, and each excludes only its own
+ * quote, the backslash and the newline -- so a `}}` between the quotes belongs
+ * to the run rather than closing the directive (spec I1, carve#2000).
+ */
+const DQUOTED_RUN = String.raw`"(?:\\.|[^"\\\n])*?"`
+const SQUOTED_RUN = String.raw`'(?:\\.|[^'\\\n])*?'`
+
+/**
+ * The option slot up to the closer, stepping OVER whole quoted runs.
+ *
+ * The two lookaheads are the exact negation of the runs beside them, so at any
+ * position either a run starts -- and only a run alternative is viable -- or
+ * none does, and only the single-character one is. No position is reachable
+ * two ways, so the lazy scan never backtracks across the alternation. Matching
+ * a run to its closing quote and only then hunting for the closer is the shape
+ * that does (carve-grammars#413); this one measures flat per byte.
+ */
+const QUOTE_AWARE_OPTIONS = String.raw`(?:${DQUOTED_RUN}|${SQUOTED_RUN}|(?!${DQUOTED_RUN})(?!${SQUOTED_RUN})[^\n])*?`
+
+const OPEN = String.raw`\{\{\s+`
+const PATH = String.raw`(?:"((?:\\.|[^"\\])*)"|\u201c([^\u201d]*)\u201d|([^#@}\s"\u201c]+))`
+const SECTION = String.raw`((?:\s+#[A-Za-z_][\w-]*)?)`
+const CLOSE = String.raw`\s+\}\}`
+const body = (options: string): string => `${OPEN}${PATH}${SECTION}(${options})${CLOSE}`
+
+const QUOTE_AWARE_BODY = body(QUOTE_AWARE_OPTIONS)
+/**
+ * The fallback reading, tried only where the quote-aware one finds no closer
+ * at all: an UNTERMINATED quote opens no run, so it must not pair with a quote
+ * that lies PAST the closer and leave the whole token unrecognized. Section 19
+ * forbids exactly one outcome -- literal text with no diagnostic -- and that
+ * is what dropping this branch would produce for `{{ a @k:"x }} said "hi"`.
+ */
+const FIRST_PAIR_BODY = body(String.raw`.*?`)
+
+export const DIRECTIVE_SCAN_RE = new RegExp(`(?:${QUOTE_AWARE_BODY})|(?:${FIRST_PAIR_BODY})`, 'g')
+export const DIRECTIVE_FULL_RE = new RegExp(`^(?:${QUOTE_AWARE_BODY})$`)
 const OPTION_RE = /^@([A-Za-z_][\w-]*):([^#@}\s]+)$/
 /** Loose directive shape: one whole-paragraph token, valid options or not. */
 export const DIRECTIVE_SHAPE_RE = /^\{\{[^{}]*\}\}$/
