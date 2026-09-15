@@ -1513,15 +1513,14 @@ function walkInlines(
 }
 
 /**
- * CommonMark's Unicode-whitespace class (2.1): Zs plus tab, line feed, form
- * feed and carriage return - not `\s`, which also takes U+FEFF, U+2028 and
- * U+2029, none of which CommonMark counts. U+E000 is in for the reason
- * `isFlankSpace` has it in the parser: it is the internal placeholder for an
- * escaped `\ `, and `normalize` only resolves it to a real nbsp at the very end
- * of the render - so a test written against `\s` saw no padding at all exactly
- * where the author had written the escape (carve-js#1688).
+ * The Unicode `White_Space` property, not CommonMark 2.1's narrower class: the
+ * READER decides whether a run flanks, and pulldown-cmark counts U+000B, U+2028
+ * and U+2029 as whitespace, so a run left beside one never opens
+ * (markup-carve/carve#2023). U+E000 is in because it is the internal placeholder
+ * for an escaped `\ `, which `normalize` only resolves to a real nbsp at the very
+ * end of the render (carve-js#1688).
  */
-const PAD_SPACE = /^([\p{Zs}\t\n\f\r\ue000]*)([\s\S]*?)([\p{Zs}\t\n\f\r\ue000]*)$/u
+const PAD_SPACE = /^([\p{White_Space}\ue000]*)([\s\S]*?)([\p{White_Space}\ue000]*)$/u
 
 /**
  * A delimiter run only opens emphasis while it is left-flanking, which a run
@@ -1559,7 +1558,7 @@ const DELIMITER_RUN: Record<string, { delimiter: string; tag: string }> = {
   strike: { delimiter: '~~', tag: 'del' },
 }
 
-const FLANK_SPACE = /[\p{Zs}\t\n\f\r\ue000]/u
+const FLANK_SPACE = /[\p{White_Space}\ue000]/u
 
 /**
  * CommonMark 0.31 punctuation: ASCII punctuation plus the Unicode P* and S*
