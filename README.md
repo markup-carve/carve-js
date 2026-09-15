@@ -123,6 +123,11 @@ the document being parsed has no `pos.file`, so a tree with no includes is
 unchanged. Without it an included span would be ambiguous - a child's first
 paragraph and the parent's first paragraph both report line 1.
 
+Pass the parent's `extensions` through as well. An extension that adds syntax
+applies only to the parse it is given, so a child read without them renders
+`[[Page]]` or `[@knuth]` as literal text while the same line in the parent does
+not. Extensions with only render or transform hooks need not be passed here.
+
 On Node, `fileSystemResolver` is a ready-made resolver with canonical
 root-containment checks. It lives on the `./node` subpath rather than the main
 entry, because it needs `node:fs` and the browser bundle is built from that
