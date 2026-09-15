@@ -49,9 +49,12 @@ function visit(node: Record<string, unknown> | null | undefined): void {
 /**
  * The merged list, or null when there was nothing adjacent to merge. Also run
  * by the include expansion pass, whose output `toAstJson` publishes unresolved.
+ * A run holding text from a file other than `host.file` spans its host pieces,
+ * first start to last end, rather than none (carve-js#1735).
  */
 export function mergeRun(
   nodes: Array<Record<string, unknown>>,
+  host?: { file: string | undefined },
 ): Array<Record<string, unknown>> | null {
   let adjacent = false
   for (let i = 1; i < nodes.length; i++) {
@@ -71,17 +74,42 @@ export function mergeRun(
   let run: Record<string, unknown> | null = null
   let parts: string[] = []
   let pos: unknown
+  let hostFirst: Record<string, unknown> | undefined
+  let hostLast: Record<string, unknown> | undefined
+  let foreign = false
+
+  const track = (piece: unknown): void => {
+    if (!host || !piece || typeof piece !== 'object') return
+    const span = piece as Record<string, unknown>
+    if (span['file'] !== host.file) {
+      foreign = true
+      return
+    }
+    hostFirst ??= span
+    hostLast = span
+  }
 
   const flush = (): void => {
     if (run === null) return
     if (parts.length > 1) {
       run['value'] = parts.join('')
-      run['pos'] = pos
+      run['pos'] =
+        foreign && hostFirst && hostLast
+          ? {
+              ...hostFirst,
+              endLine: hostLast['endLine'],
+              endColumn: hostLast['endColumn'],
+              endOffset: hostLast['endOffset'],
+            }
+          : pos
     }
     out.push(run)
     run = null
     parts = []
     pos = undefined
+    hostFirst = undefined
+    hostLast = undefined
+    foreign = false
   }
 
   for (const node of nodes) {
@@ -90,10 +118,12 @@ export function mergeRun(
         run = node
         parts = [String(node['value'] ?? '')]
         pos = node['pos']
+        track(node['pos'])
         continue
       }
       parts.push(String(node['value'] ?? ''))
       pos = joinPos(pos, node['pos'])
+      track(node['pos'])
       continue
     }
     flush()

@@ -792,7 +792,8 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
   out.push(...sliceRun(run, cursor, full.length))
   // The splice leaves the child's text beside the host's halves, and §1a holds
   // for this tree too: `toAstJson` publishes it without `resolve()`.
-  const merged = mergeRun(out as unknown as Array<Record<string, unknown>>)
+  const hostFile = run.find((node) => node.pos)?.pos?.file
+  const merged = mergeRun(out as unknown as Array<Record<string, unknown>>, { file: hostFile })
   return (merged as unknown as InlineNode[] | null) ?? out
 }
 
