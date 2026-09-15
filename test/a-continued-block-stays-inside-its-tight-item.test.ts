@@ -5,7 +5,7 @@ import { carveToHtml, carveToCarve, parse } from '../src/index.js'
  * A tight item continues a block at its MARKER column behind a `+` (PART 9
  * §17 L3), and the writer tags the lines that belong there. `renderList` took
  * the tag back off every CONTINUATION line and never off the item's FIRST one,
- * so an item whose first child is written at the marker column shipped a
+ * so an item whose first child was written at the marker column shipped a
  * literal U+E006:
  *
  *     - > q
@@ -15,6 +15,8 @@ import { carveToHtml, carveToCarve, parse } from '../src/index.js'
  *
  * came out as `- <U+E006>+`, which re-parses as an item holding that character
  * and leaves both quotes at the document level, the second one swallowing `Z`.
+ * PART 11 §7e since put the opening block on the marker line, so the tag no
+ * longer reaches the first line of these shapes at all.
  *
  * The second shape is the other side of the same column: the sub-list's marker
  * column IS the hosting item's content column, and an EMPTY last item's `+`
@@ -28,37 +30,37 @@ import { carveToHtml, carveToCarve, parse } from '../src/index.js'
 const NO_SENTINEL = /[\ue000-\uf8ff]/
 
 const cases: Array<[string, string, string]> = [
-  ['a quote below a quote, bullet item', '- > q\n\n  > b\nZ\n', '- +\n> q\n+\n> b\n> Z\n'],
-  ['a quote below a quote, ordered item', '1. > q\n\n   > b\nZ\n', '1. +\n> q\n+\n> b\n> Z\n'],
+  ['a quote below a quote, bullet item', '- > q\n\n  > b\nZ\n', '- > q\n+\n> b\n> Z\n'],
+  ['a quote below a quote, ordered item', '1. > q\n\n   > b\nZ\n', '1. > q\n+\n> b\n> Z\n'],
   [
     'a quote below a quote, item in a blockquote',
     '> - > q\n>\n>   > b\n> Z\n',
-    '> - +\n> > q\n> +\n> > b\n> > Z\n',
+    '> - > q\n> +\n> > b\n> > Z\n',
   ],
   [
     'a quote below a quote, item in a div',
     '::: h\n- > q\n\n  > b\nZ\n:::\n',
-    '::: h\n- +\n> q\n+\n> b\n> Z\n:::\n',
+    '::: h\n- > q\n+\n> b\n> Z\n:::\n',
   ],
   [
     'a quote below a quote whose only child is a heading',
     '- > ## H\n\n  > b\nZ\n',
-    '- +\n> ## H\n+\n> b\n> Z\n',
+    '- > ## H\n+\n> b\n> Z\n',
   ],
   [
     'a quote below a quote whose only child is a heading, item in a div',
     '::: h\n- > ## H\n\n  > b\nZ\n:::\n',
-    '::: h\n- +\n> ## H\n+\n> b\n> Z\n:::\n',
+    '::: h\n- > ## H\n+\n> b\n> Z\n:::\n',
   ],
   [
     'a table below a table',
     '- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n',
-    '- +\n|= a |\n+\n|= a |\n\nZ\n',
+    '- |= a |\n+\n|= a |\n\nZ\n',
   ],
   [
     'a table below a table, item in a div',
     '::: h\n- | a |\n  | - |\n\n  | a |\n  | - |\nZ\n:::\n',
-    '::: h\n- +\n|= a |\n+\n|= a |\n\nZ\n:::\n',
+    '::: h\n- |= a |\n+\n|= a |\n\nZ\n:::\n',
   ],
   [
     'a quote below an emptied sub-list item',

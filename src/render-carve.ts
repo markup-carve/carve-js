@@ -1637,7 +1637,11 @@ function renderListItemBody(item: ListItem, ctx: CarveContext, tight: boolean): 
           FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
           !opensWithAnAttributeLine(rendered))
       ) {
-        parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
+        // PART 11 §7e: a block that OPENS the item is written on the marker
+        // line, with the `+` on the line below it. The latch still goes up, so
+        // the block under it lands at the marker column behind its own marker.
+        if (parts.length === 0) parts.push(rendered)
+        else parts.push(atMarkerColumn('+'), atMarkerColumn(rendered))
         previousAtMarkerColumn = true
         previousEmitted = b
         return
