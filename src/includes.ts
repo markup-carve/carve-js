@@ -1034,3 +1034,194 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     dependencies: [...state.dependencies].map(([id, resolved]) => ({ id, resolved })),
   }
 }
+
+/**
+ * One include directive the expander would act on, located in the document.
+ */
+export interface DirectiveSite {
+  /** The directive token exactly as written. */
+  raw: string
+  /** The parsed directive: path, and any section, line range or shift. */
+  directive: Directive
+  /**
+   * True when the directive is a whole paragraph of its own, so it expands to
+   * BLOCKS; false for one inside a run of inline content.
+   */
+  block: boolean
+  /**
+   * Line and column of the inline node the token starts in - the same anchor
+   * {@link expandIncludes} attributes its warnings to, so a host can match a
+   * site against a warning it already has.
+   */
+  line: number
+  column: number
+  /**
+   * Offsets bounding the token itself, in the CODEPOINT unit `pos` uses -
+   * `[...source].slice(start, end).join('')` is `raw`. Both are zero when the
+   * document was parsed without positions.
+   */
+  start: number
+  end: number
+}
+
+/**
+ * Source offset of the character at `index` of the run's reassembled text.
+ *
+ * Each boundary is resolved against the node it falls in and that node's own
+ * position, never by measuring from the run's start: a run reassembles nodes
+ * that need not be adjacent in source, and a directive carrying a section or
+ * an option is split across several of them ("{{ a.crv " + tag + " }}").
+ *
+ * The count is in CODEPOINTS, because `pos` offsets are - so a host slices a
+ * site out of its buffer the same way it slices any other node out.
+ */
+function absoluteAt(run: RunNode[], index: number): number | undefined {
+  let cursor = 0
+  for (const node of run) {
+    const text = runNodeText(node)
+    const end = cursor + text.length
+    if (index < end) {
+      // A directive opens and closes with characters the core always parses as
+      // text, so a boundary can only fall in a text node (see sliceRun).
+      if (node.type !== 'text' || node.pos?.startOffset === undefined) return undefined
+      return node.pos.startOffset + [...text.slice(0, index - cursor)].length
+    }
+    cursor = end
+  }
+  return undefined
+}
+
+function siteSpan(run: RunNode[], from: number, to: number): Pick<DirectiveSite, 'line' | 'column' | 'start' | 'end'> {
+  const at = locate(runAnchor(run, from))
+  const start = absoluteAt(run, from)
+  // The last character of the token, not the position after it: there may be
+  // no node covering `to`, and a closing "}" is one codepoint either way.
+  const last = absoluteAt(run, to - 1)
+  if (start === undefined || last === undefined) return at
+  return { line: at.line, column: at.column, start, end: last + 1 }
+}
+
+function collectRun(run: RunNode[], sites: DirectiveSite[]): void {
+  const full = run.map(runNodeText).join('')
+  const re = new RegExp(DIRECTIVE_SCAN_RE.source, 'g')
+  for (let m = re.exec(full); m; m = re.exec(full)) {
+    const directive = parseDirective(m[0])
+    if (!directive) continue
+    sites.push({ raw: m[0], directive, block: false, ...siteSpan(run, m.index, m.index + m[0].length) })
+  }
+}
+
+function collectInlines(nodes: InlineNode[], sites: DirectiveSite[]): void {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]!
+    if (isRunNode(node)) {
+      let j = i
+      while (j < nodes.length && isRunNode(nodes[j]!)) j++
+      collectRun(nodes.slice(i, j) as RunNode[], sites)
+      i = j - 1
+      continue
+    }
+    switch (node.type) {
+      case 'emphasis':
+      case 'strong':
+      case 'underline':
+      case 'strike':
+      case 'superscript':
+      case 'subscript':
+      case 'highlight':
+      case 'link':
+      case 'span':
+      case 'insert':
+      case 'delete':
+        collectInlines(node.children, sites)
+        break
+      case 'inline_extension':
+        collectInlines(node.content, sites)
+        break
+      case 'inline_footnote':
+        if (node.inline) collectInlines(node.inline, sites)
+        break
+      case 'citation_group':
+        for (const item of node.items) {
+          if (item.prefix) collectInlines(item.prefix, sites)
+          if (item.locator) collectInlines(item.locator, sites)
+          if (item.suffix) collectInlines(item.suffix, sites)
+        }
+        break
+    }
+  }
+}
+
+function collectParagraph(block: Paragraph, sites: DirectiveSite[]): void {
+  const source = directiveSource(block.children)
+  if (source !== null) {
+    const directive = parseDirective(source)
+    if (directive) {
+      const run = block.children as RunNode[]
+      sites.push({ raw: source, directive, block: true, ...siteSpan(run, 0, source.length) })
+      return
+    }
+    // A whole-paragraph token that does not parse stays literal, and the
+    // expander does not scan it again as inline content either.
+    if (DIRECTIVE_SHAPE_RE.test(source.trim())) return
+  }
+  collectInlines(block.children, sites)
+}
+
+function collectBlocks(blocks: BlockNode[], sites: DirectiveSite[]): void {
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'paragraph':
+        collectParagraph(block, sites)
+        break
+      case 'block_quote':
+      case 'div':
+      case 'admonition':
+        collectBlocks(block.children, sites)
+        break
+      case 'list':
+        for (const item of block.items) collectBlocks(item.children, sites)
+        break
+      case 'definition_list':
+        for (const item of block.items) for (const def of item.definitions) collectBlocks(def, sites)
+        break
+      case 'figure':
+        if (block.target.type === 'block_quote') collectBlocks(block.target.children, sites)
+        else if (block.target.type === 'paragraph') collectInlines(block.target.children, sites)
+        if (block.caption) collectInlines(block.caption, sites)
+        break
+      case 'heading':
+        collectInlines(block.children, sites)
+        break
+      case 'table':
+        if (block.caption) collectInlines(block.caption, sites)
+        for (const row of block.rows) for (const cell of row.cells) collectInlines(cell.children, sites)
+        break
+    }
+  }
+}
+
+/**
+ * Locate the include directives {@link expandIncludes} would act on, in
+ * document order.
+ *
+ * The answer is the EXPANDER's rather than a scan's: this visits exactly the
+ * blocks and inline containers the expansion visits, so a `{{ ... }}` in a
+ * code block, in a raw block or in a link destination is absent here for the
+ * same reason it is never expanded, and a token whose options are malformed is
+ * absent because it stays literal text (spec I1). A host that matched source
+ * text with its own pattern would disagree with the engine about exactly those
+ * tokens - which is the question an editor has to answer before it offers
+ * go-to-definition on an include path.
+ *
+ * Parse with `positions: true` for `start`/`end` to be usable; without them
+ * every site reports the zero offsets the AST carries.
+ */
+export function findDirectiveSites(doc: Document): DirectiveSite[] {
+  const sites: DirectiveSite[] = []
+  collectBlocks(doc.children, sites)
+  // Footnote bodies are containers of their own to the expander (spec I8), and
+  // a directive in one expands like any other.
+  if (doc.footnoteDefs) for (const body of Object.values(doc.footnoteDefs)) collectBlocks(body, sites)
+  return sites
+}

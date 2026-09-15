@@ -151,6 +151,37 @@ re-render. Targets that failed to resolve - missing files, and paths denied by
 root containment - are reported with `resolved: false` rather than omitted, so
 a watcher still fires when a missing chapter is finally created.
 
+#### Finding the directives in a document
+
+An editor that offers go-to-definition on an include path has to decide which
+`{{ ... }}` under the cursor is a live directive and which is text - a token in
+a code block, in a code span or in a link destination is never expanded, and
+neither is one whose options are malformed. `findDirectiveSites` answers that
+with the expander's own traversal, so a host cannot disagree with the engine:
+
+```ts
+import { findDirectiveSites, parse } from '@markup-carve/carve'
+
+for (const site of findDirectiveSites(parse(source, { positions: true }))) {
+  // site.raw is the token, site.start/end bound it in `source`, and
+  // site.directive carries the parsed path, section, line range and shift.
+  // site.block is true when the directive is a paragraph of its own.
+  console.log(site.directive.path, site.raw, site.start)
+}
+```
+
+Parse with `positions: true` for the offsets to be usable. `start` and `end`
+count CODEPOINTS, the unit every `pos` on the tree uses, so a site is cut out
+of a buffer the same way any other node is - `[...source].slice(start, end)`,
+not `source.slice(start, end)`, which drifts by one per astral character ahead
+of the token. `line` and `column` locate the inline node the token starts in -
+the same anchor `expandIncludes` attributes its warnings to, so a site matches
+up with a warning about it.
+
+For a token a host already holds, `isDirectiveShape` and `parseDirective` answer
+without a document. The scan regexes stay internal: matching source text with a
+pattern is exactly what disagrees with the engine about a fenced token.
+
 Supported directive options are `#section`, `@lines:N-M`, and
 `@shift:N` / `@shift:auto`. `#section` selects the heading subtree by explicit
 id or auto slug, `@lines` selects an inclusive physical line range before
