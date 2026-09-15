@@ -30,11 +30,26 @@ export interface FileSystemResolverOptions {
 /** Default per-target read cap for {@link fileSystemResolver}: 4 MiB. */
 export const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024
 
-/** Filesystem resolver with canonical root-containment checks for trusted hosts. */
+/**
+ * Filesystem resolver with canonical root-containment checks for trusted hosts.
+ *
+ * Throws on a root that cannot be canonicalized, and on a blank or
+ * whitespace-only one: a host with no root leaves inclusion disabled.
+ */
 export function fileSystemResolver(
   root: string,
   opts: FileSystemResolverOptions = {},
 ): IncludeResolver {
+  // PART 9 section 19: the root MUST NOT default to the process working
+  // directory, and `realpathSync('')` answers with exactly that. An unset
+  // configuration value is not a root, so it configures none at all. A
+  // whitespace-only value is the same unset value even though it is a legal
+  // directory name; such a directory stays reachable by its absolute path.
+  if (typeof root !== 'string' || root.trim() === '') {
+    throw new Error(
+      'The include containment root must be supplied explicitly: a blank value is not a root.',
+    )
+  }
   const rootReal = realpathSync(root)
   /**
    * Canonicalize-then-contain: the candidate is resolved to its real path
