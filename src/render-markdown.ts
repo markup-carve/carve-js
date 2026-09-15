@@ -533,7 +533,9 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
   if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderMarkdown', MAX_RENDER_DEPTH)
   ctx.inlineDepth++
   try {
-    return nodes.map((node) => renderInline(node, ctx)).join('')
+    const parts = nodes.map((node) => renderInline(node, ctx))
+
+    return nodes.length > 1 ? reflankRuns(nodes, parts) : parts.join('')
   } finally {
     ctx.inlineDepth--
   }
@@ -572,13 +574,14 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       }
       return '\\' + node.value
     case 'emphasis':
-      return padOutside(renderInlines(node.children, ctx), '*', 'em')
     case 'strong':
-      return padOutside(renderInlines(node.children, ctx), '**', 'strong')
+    case 'strike': {
+      const run = DELIMITER_RUN[node.type]!
+
+      return padOutside(renderInlines(node.children, ctx), run.delimiter, run.tag)
+    }
     case 'underline':
       return `<u>${renderInlines(node.children, ctx)}</u>`
-    case 'strike':
-      return padOutside(renderInlines(node.children, ctx), '~~', 'del')
     case 'subscript':
       // Subscript is NOT strikethrough; mirror super's inline-HTML fallback.
       return `<sub>${renderInlines(node.children, ctx)}</sub>`
@@ -1489,6 +1492,121 @@ function padOutside(inner: string, delimiter: string, tag: string): string {
   // Whitespace-only content has no delimiter form; every other inline this
   // renderer cannot spell falls back to inline HTML, so this one does too.
   return inner === '' ? '' : `<${tag}>${inner}</${tag}>`
+}
+
+/**
+ * The three inlines this writer spells with a delimiter run, and the inline-HTML
+ * form each falls back to. Everything else is inline HTML already and carries no
+ * flanking question.
+ */
+const DELIMITER_RUN: Record<string, { delimiter: string; tag: string }> = {
+  emphasis: { delimiter: '*', tag: 'em' },
+  strong: { delimiter: '**', tag: 'strong' },
+  strike: { delimiter: '~~', tag: 'del' },
+}
+
+const FLANK_SPACE = /[\p{Zs}\t\n\f\r\ue000]/u
+
+/**
+ * CommonMark 0.31 punctuation: ASCII punctuation plus the Unicode P* and S*
+ * categories. The S* half is the reason to spell it rather than reuse an ASCII
+ * set - 0.30 left the symbol categories out, so a reader on either version
+ * agrees about `!` and disagrees about `©`, and taking the WIDER class is the
+ * answer that is right under both: it can only move a construct to inline HTML,
+ * which every reader reads the same way.
+ */
+const FLANK_PUNCT = /[\p{P}\p{S}]/u
+
+const lastCharacter = (s: string): string =>
+  /^[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s.slice(-2)) ? s.slice(-2) : s.slice(-1)
+
+const firstCharacter = (s: string): string =>
+  /^[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s.slice(0, 2)) ? s.slice(0, 2) : s.slice(0, 1)
+
+/**
+ * A sentinel stands for `_`, `#` or `[`, all three of them punctuation, and it
+ * is a private-use code point that no punctuation property matches. The flanking
+ * test therefore has to ask about the character the reader will see, not the
+ * carrier that is standing in for it until `resolveNarrowedEscapes` runs.
+ */
+const flankCharacter = (ch: string): string =>
+  ch !== '' && HAS_NARROWED_SENTINEL.test(ch) ? sentinelCharacter(ch) : ch
+
+/**
+ * One side of CommonMark 6.2, and it really is ONE side: left-flanking and
+ * right-flanking are the same test read in opposite directions. A run is
+ * left-flanking if the character INSIDE it is not whitespace and, when that
+ * character is punctuation, the character OUTSIDE is whitespace or punctuation;
+ * right-flanking swaps which end is inside. `padOutside` has already moved every
+ * space out of the run, so the inside character is never whitespace and only the
+ * punctuation clause is left to decide.
+ *
+ * No neighbour at all counts as whitespace: the enclosing text either starts or
+ * ends the line, or it is a delimiter, a bracket or a tag belonging to whatever
+ * encloses the run - punctuation in every case this writer can produce.
+ */
+function flanks(inside: string, outside: string): boolean {
+  const inner = flankCharacter(inside)
+  if (!FLANK_PUNCT.test(inner)) return true
+  const outer = flankCharacter(outside)
+
+  return outer === '' || FLANK_SPACE.test(outer) || FLANK_PUNCT.test(outer)
+}
+
+/**
+ * Take a rendered part back apart into the pieces `padOutside` built it from, or
+ * `null` when it is not a delimiter run - an empty render, or the inline-HTML
+ * form `padOutside` falls back to for whitespace-only content.
+ */
+function splitRun(part: string, delimiter: string): { lead: string; core: string; trail: string } | null {
+  const match = PAD_SPACE.exec(part)
+  if (!match) return null
+  const [, lead = '', body = '', trail = ''] = match
+  if (body.length <= delimiter.length * 2) return null
+  if (!body.startsWith(delimiter) || !body.endsWith(delimiter)) return null
+
+  return { lead, core: body.slice(delimiter.length, -delimiter.length), trail }
+}
+
+/**
+ * Whether a run can flank is a property of the SEAM, not of the emphasis node,
+ * so it cannot be answered where the run is built: the character that decides it
+ * belongs to the sibling on the other side. Here is the one place both
+ * neighbours are known, so a run that cannot open or cannot close where it
+ * stands is re-spelled as inline HTML - the same fallback every inline this
+ * writer cannot spell with delimiters already takes (carve-js#1705).
+ *
+ * The neighbour is read off the parts as they stand, so a part already re-spelled
+ * on this pass contributes its `>` or `<` rather than its delimiter. That only
+ * ever makes a later run MORE able to flank, so the pass needs no second round;
+ * a run decided against an earlier neighbour can at worst take inline HTML it
+ * would not have needed.
+ */
+function reflankRuns(nodes: InlineNode[], parts: string[]): string {
+  for (let i = 0; i < parts.length; i++) {
+    const run = DELIMITER_RUN[nodes[i]!.type]
+    if (!run) continue
+    const piece = splitRun(parts[i]!, run.delimiter)
+    if (!piece) continue
+    const before = piece.lead !== '' ? lastCharacter(piece.lead) : neighbourBefore(parts, i)
+    const after = piece.trail !== '' ? firstCharacter(piece.trail) : neighbourAfter(parts, i)
+    if (flanks(firstCharacter(piece.core), before) && flanks(lastCharacter(piece.core), after)) continue
+    parts[i] = `${piece.lead}<${run.tag}>${piece.core}</${run.tag}>${piece.trail}`
+  }
+
+  return parts.join('')
+}
+
+function neighbourBefore(parts: string[], i: number): string {
+  for (let j = i - 1; j >= 0; j--) if (parts[j] !== '') return lastCharacter(parts[j]!)
+
+  return ''
+}
+
+function neighbourAfter(parts: string[], i: number): string {
+  for (let j = i + 1; j < parts.length; j++) if (parts[j] !== '') return firstCharacter(parts[j]!)
+
+  return ''
 }
 
 /**
