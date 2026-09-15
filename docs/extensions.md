@@ -977,6 +977,10 @@ core processor leaves them as ordinary attributes (`<span samp="">x</span>`)
 and this extension is what turns them into elements. `[CSS]{dfn="Cascading
 Style Sheets"}` maps the value to `title`.
 
+The extension also renders the soft-deprecated `:name[…]` spelling for all
+seven names: `:kbd[K]` becomes `<kbd>K</kbd>`. Without it that spelling stays a
+generic `<span class="ext-kbd">K</span>`.
+
 ## Transform hooks: afterParse and beforeRender
 
 Every extension's `afterParse(doc)` runs before any extension's
