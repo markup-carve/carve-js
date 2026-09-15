@@ -2360,7 +2360,9 @@ function renderInlines(
       let piece = overrides.get(idx) ?? renderInline(
         node,
         ctx,
-        lastBoundary(nodes[idx - 1]),
+        // A span leaves no boundary character of its own, so the one it WROTE
+        // (its closer) is what the next opener sits against.
+        lastBoundary(nodes[idx - 1]) || lineTail.slice(-1),
         firstBoundary(nodes[idx + 1]),
         captionCanOpen,
         opensBacktickRun(nodes[idx + 1]),
@@ -2706,7 +2708,10 @@ function renderEmphasis(
   closeDelim: string = delim,
 ): string {
   const needsForced =
+    // The characters `bare_opener` refuses before a marker (CARVE-P3-013).
     /[A-Za-z0-9_]/.test(prevChar) ||
+    prevChar === delim ||
+    (prevChar === '/' && (delim === '/' || delim === '_')) ||
     /[A-Za-z0-9_]/.test(nextChar) ||
     content.startsWith(delim) ||
     content.endsWith(closeDelim) ||
