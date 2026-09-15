@@ -1649,9 +1649,14 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
     if (!piece) continue
+    const ch = piece.run.delimiter[0]!
     const before = piece.lead !== '' ? lastCharacter(piece.lead) : neighbourBefore(parts, i)
     const after = piece.trail !== '' ? firstCharacter(piece.trail) : neighbourAfter(parts, i)
-    if (flanks(firstCharacter(piece.core), before) && flanks(lastCharacter(piece.core), after)) continue
+    // The INSIDE character is the one past everything the merged run swallowed.
+    // A child's delimiter at the edge of the core is part of the run the reader
+    // lexes, not content beside it, so reading it as the inside character calls
+    // `a***x***b` unable to flank when it flanks perfectly well.
+    if (flanks(afterRunInCore(piece.core, ch), before) && flanks(beforeRunInCore(piece.core, ch), after)) continue
     parts[i] = spellAsHtml(piece)
   }
   for (let i = 0; i < parts.length; i++) {
