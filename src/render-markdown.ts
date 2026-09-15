@@ -1660,7 +1660,15 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
   }
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
-    if (piece && seamMergesRun(nodes, parts, i, piece)) parts[i] = spellAsHtml(piece)
+    if (!piece || !seamMergesRun(nodes, parts, i, piece)) continue
+    // ONE SEAM, ONE FALLBACK, AND IT IS THE RUN ON THE RIGHT that takes it
+    // (markup-carve/carve#2045). A tilde seam is decided from both sides and
+    // already reports against the right-hand strike, so only the asterisk seam,
+    // which looks right only, moves its fallback across.
+    const j = piece.run.delimiter[0] === '~' ? -1 : nextRendered(parts, i)
+    const next = j < 0 ? null : delimiterPiece(nodes, parts, j)
+    if (next && next.run.delimiter[0] === piece.run.delimiter[0]) parts[j] = spellAsHtml(next)
+    else parts[i] = spellAsHtml(piece)
   }
 
   return parts.join('')
