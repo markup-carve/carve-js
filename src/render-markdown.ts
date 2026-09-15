@@ -535,7 +535,7 @@ function renderInlines(nodes: InlineNode[], ctx: MarkdownContext): string {
   try {
     const parts = nodes.map((node) => renderInline(node, ctx))
 
-    return nodes.length > 1 ? reflankRuns(nodes, parts) : parts.join('')
+    return reflankRuns(nodes, parts)
   } finally {
     ctx.inlineDepth--
   }
@@ -1583,18 +1583,204 @@ function splitRun(part: string, delimiter: string): { lead: string; core: string
  * would not have needed.
  */
 function reflankRuns(nodes: InlineNode[], parts: string[]): string {
+  // Three passes, because each one wants to see the parts the one before it
+  // settled. A part re-spelled as inline HTML contributes a `<` or a `>` where
+  // it used to contribute a delimiter, which can only make a later run MORE able
+  // to flank and can only REMOVE a merge - so no pass has to run twice, and a
+  // later pass never undoes an earlier one.
   for (let i = 0; i < parts.length; i++) {
-    const run = DELIMITER_RUN[nodes[i]!.type]
-    if (!run) continue
-    const piece = splitRun(parts[i]!, run.delimiter)
+    const piece = delimiterPiece(nodes, parts, i)
+    if (piece && contentGrowsRun(piece)) parts[i] = spellAsHtml(piece)
+  }
+  for (let i = 0; i < parts.length; i++) {
+    const piece = delimiterPiece(nodes, parts, i)
     if (!piece) continue
     const before = piece.lead !== '' ? lastCharacter(piece.lead) : neighbourBefore(parts, i)
     const after = piece.trail !== '' ? firstCharacter(piece.trail) : neighbourAfter(parts, i)
     if (flanks(firstCharacter(piece.core), before) && flanks(lastCharacter(piece.core), after)) continue
-    parts[i] = `${piece.lead}<${run.tag}>${piece.core}</${run.tag}>${piece.trail}`
+    parts[i] = spellAsHtml(piece)
+  }
+  for (let i = 0; i < parts.length; i++) {
+    const piece = delimiterPiece(nodes, parts, i)
+    if (piece && seamMergesRun(nodes, parts, i, piece)) parts[i] = spellAsHtml(piece)
   }
 
   return parts.join('')
+}
+
+interface DelimiterPiece {
+  run: { delimiter: string; tag: string }
+  lead: string
+  core: string
+  trail: string
+}
+
+function delimiterPiece(nodes: InlineNode[], parts: string[], i: number): DelimiterPiece | null {
+  const run = DELIMITER_RUN[nodes[i]!.type]
+  if (!run) return null
+  const piece = splitRun(parts[i]!, run.delimiter)
+
+  return piece ? { run, ...piece } : null
+}
+
+const spellAsHtml = (piece: DelimiterPiece): string =>
+  `${piece.lead}<${piece.run.tag}>${piece.core}</${piece.run.tag}>${piece.trail}`
+
+const runAtStart = (s: string, ch: string): number => {
+  let n = 0
+  while (n < s.length && s[n] === ch) n++
+
+  return n
+}
+
+/**
+ * A backslash escape makes the character it covers a literal, and a literal
+ * breaks a delimiter run rather than lengthening it. The writer escapes every
+ * asterisk it means literally, so counting raw characters would read the `*` of
+ * `x\*` as part of a run and get the summed length wrong by one.
+ */
+const runAtEnd = (s: string, ch: string): number => {
+  let n = 0
+  while (n < s.length && s[s.length - 1 - n] === ch) n++
+  if (n === 0) return 0
+  let slashes = 0
+  while (n + slashes < s.length && s[s.length - 1 - n - slashes] === '\\') slashes++
+
+  return slashes % 2 === 1 ? n - 1 : n
+}
+
+/**
+ * CommonMark 6.2's rule of 3, as a permission rather than a prohibition: when a
+ * delimiter can both open and close, an opening run of `open` and a closing run
+ * of `close` may not match if their lengths sum to a multiple of three, unless
+ * both lengths are themselves multiples of three. A run this writer joins at a
+ * seam has content on both sides of it, so it can always both open and close and
+ * the clause always applies.
+ */
+function ruleOfThreeAllows(open: number, close: number): boolean {
+  if ((open + close) % 3 !== 0) return true
+
+  return open % 3 === 0 && close % 3 === 0
+}
+
+/**
+ * Whether the run the writer emitted is the run the READER lexes. Runs of the
+ * same character that touch are ONE run to the reader, of their summed length,
+ * and the length is what decides what that run can do - so adjacency is not the
+ * question, and no flanking test can answer it (carve-js#1706).
+ *
+ * This half is what the content contributes. The writer escapes an asterisk it
+ * means literally, so an asterisk at the edge of the core is a nested run's
+ * delimiter and `seamMergesRun` weighs it with the rule of 3. A tilde it does
+ * not escape, so a tilde at the edge of the core is a literal, and the reader
+ * takes the odd tilde off the run and leaves it OUTSIDE the strike - which is
+ * not where the writer put it. At the start of a line the same three-tilde run
+ * is not a delimiter at all but a fenced code block, and the rest of the
+ * document becomes its content.
+ */
+function contentGrowsRun(piece: DelimiterPiece): boolean {
+  const ch = piece.run.delimiter[0]!
+
+  return ch === '~' && (runAtStart(piece.core, ch) > 0 || runAtEnd(piece.core, ch) > 0)
+}
+
+/**
+ * And this half is what the SIBLING across the seam contributes.
+ *
+ * For an asterisk the only thing that can reach the run from outside is another
+ * run's delimiter, because a literal asterisk is escaped. Two delimiters that
+ * touch are one run of their summed length, and three questions decide whether
+ * the reader still resolves it the way the writer meant: the merged run has to
+ * be able to close for the left node and open for the right one, which is
+ * CommonMark 6.2 read against the neighbours the MERGED run has rather than the
+ * ones either half was built with; and the rule of 3 has to allow both matches.
+ * `*x*` against `*y*` sums to two and the rule of 3 refuses it; `**x**` against
+ * `*y*` sums to three and it is allowed; `*x~*` against `**y**` also sums to
+ * three and still fails, because a run whose inner character is `~` needs an
+ * outer character that is not alphanumeric.
+ *
+ * A tilde run is not governed by the rule of 3 at all - GFM strikethrough pairs
+ * tildes - and the one merged length that survives is four, two strikes' own
+ * delimiters meeting. Any other tilde reaching the run, from text or from a
+ * third strike, leaves a length whose surplus the reader places by its own
+ * pairing rule rather than by CommonMark, so the writer does not spell it.
+ */
+function seamMergesRun(
+  nodes: InlineNode[],
+  parts: string[],
+  i: number,
+  piece: DelimiterPiece,
+): boolean {
+  const ch = piece.run.delimiter[0]!
+  if (ch === '~') return tildeSeamMerges(nodes, parts, i, piece, -1) || tildeSeamMerges(nodes, parts, i, piece, 1)
+  if (piece.trail !== '') return false
+  const j = nextRendered(parts, i)
+  if (j < 0 || firstCharacter(parts[j]!) !== ch) return false
+  const next = delimiterPiece(nodes, parts, j)
+  if (!next || next.run.delimiter[0] !== ch || next.lead !== '') return true
+  const closing = runAtEnd(piece.core, ch) + piece.run.delimiter.length
+  const opening = next.run.delimiter.length + runAtStart(next.core, ch)
+  const inner = beforeRunInCore(piece.core, ch)
+  const outer = afterRunInCore(next.core, ch)
+  if (inner === '' || outer === '' || !mergedRunFlanks(inner, outer)) return true
+  const merged = closing + opening
+
+  return !(ruleOfThreeAllows(closing, merged) && ruleOfThreeAllows(merged, opening))
+}
+
+function tildeSeamMerges(
+  nodes: InlineNode[],
+  parts: string[],
+  i: number,
+  piece: DelimiterPiece,
+  direction: -1 | 1,
+): boolean {
+  if ((direction < 0 ? piece.lead : piece.trail) !== '') return false
+  const j = direction < 0 ? previousRendered(parts, i) : nextRendered(parts, i)
+  if (j < 0) return false
+  const edge = direction < 0 ? lastCharacter(parts[j]!) : firstCharacter(parts[j]!)
+  if (edge !== '~') return false
+  const other = delimiterPiece(nodes, parts, j)
+  if (!other || other.run.delimiter !== '~~') return true
+  if ((direction < 0 ? other.trail : other.lead) !== '') return true
+  const inner = direction < 0 ? afterRunInCore(piece.core, '~') : beforeRunInCore(piece.core, '~')
+  const outer = direction < 0 ? beforeRunInCore(other.core, '~') : afterRunInCore(other.core, '~')
+
+  return inner === '' || outer === '' || !mergedRunFlanks(inner, outer)
+}
+
+/**
+ * The character on the far side of everything the merged run swallowed. The
+ * delimiter's own neighbour is no use here: for `***x***` against `*y*` it is
+ * another asterisk, which is INSIDE the merged run, and reading it as the outer
+ * neighbour would call a run unable to flank that flanks perfectly well.
+ */
+const beforeRunInCore = (core: string, ch: string): string =>
+  lastCharacter(core.slice(0, core.length - runAtEnd(core, ch)))
+
+const afterRunInCore = (core: string, ch: string): string =>
+  firstCharacter(core.slice(runAtStart(core, ch)))
+
+/**
+ * CommonMark 6.2 read against the neighbours the MERGED run has. Each half was
+ * built against a neighbour that is no longer there: the character outside the
+ * merged run is the content of the sibling across the seam. The run has to be
+ * able to close for the node on its left and open for the node on its right,
+ * which is the same test in both directions.
+ */
+const mergedRunFlanks = (inner: string, outer: string): boolean =>
+  flanks(inner, outer) && flanks(outer, inner)
+
+function nextRendered(parts: string[], i: number): number {
+  for (let j = i + 1; j < parts.length; j++) if (parts[j] !== '') return j
+
+  return -1
+}
+
+function previousRendered(parts: string[], i: number): number {
+  for (let j = i - 1; j >= 0; j--) if (parts[j] !== '') return j
+
+  return -1
 }
 
 function neighbourBefore(parts: string[], i: number): string {
