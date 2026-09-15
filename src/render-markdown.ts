@@ -272,15 +272,15 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       // Escape the label the same way text is escaped (HTML + Markdown
       // metacharacters), not just strip controls: a label like `[<img …>]`
       // must not emit live HTML when the Markdown is re-rendered.
-      const labelLine = node.label ? `**${escapeText(node.label)}**\n\n` : ''
+      const labelLine = node.label ? wrapperLine(escapeText(node.label), '**', 'strong') : ''
       if (title !== '') {
-        return `**${title}**\n\n${labelLine}${body}`
+        return `${wrapperLine(title, '**', 'strong')}${labelLine}${body}`
       }
       return `${labelLine}${body}`
     }
     case 'div':
       return node.label
-        ? `**${escapeText(node.label)}**\n\n${renderBlocks(node.children, ctx)}`
+        ? `${wrapperLine(escapeText(node.label), '**', 'strong')}${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
     case 'line_block':
       return renderBlocks(node.children, ctx)
@@ -299,7 +299,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
         out += child.type === 'figure' ? renderPanelFigure(child, ctx) : renderBlock(child, ctx)
       }
       if (node.caption !== undefined) {
-        out += `**${trimNonNbsp(renderInlines(node.caption, ctx))}**\n\n`
+        out += wrapperLine(trimNonNbsp(renderInlines(node.caption, ctx)), '**', 'strong')
       }
       return out
     }
@@ -401,7 +401,7 @@ function renderListItem(item: ListItem, ctx: MarkdownContext): string {
 function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, trailingBlank: boolean): string {
   let out = ''
   for (const item of items) {
-    for (const term of item.terms) out += `**${renderInlines(term, ctx)}**\n`
+    for (const term of item.terms) out += wrapperLine(renderInlines(term, ctx), '**', 'strong', '\n')
     for (const def of item.definitions)
       out += `${withMarker(': ', containerContent(ctx, () => renderBlocks(def, ctx)))}\n`
   }
@@ -515,7 +515,7 @@ function renderPanelFigure(node: Figure, ctx: MarkdownContext): string {
   // its own paragraph (carve-php / carve-rs parity; the ticket's degradation
   // example). The single-newline glue is the standalone figure's shape, not
   // the panel's.
-  return `${target}\n\n*${trimNonNbsp(renderInlines(node.caption, ctx))}*\n\n`
+  return `${target}\n\n${wrapperLine(trimNonNbsp(renderInlines(node.caption, ctx)), '*', 'em')}`
 }
 
 function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
@@ -1456,19 +1456,54 @@ function walkInlines(
 }
 
 /**
+ * CommonMark's Unicode-whitespace class (2.1): Zs plus tab, line feed, form
+ * feed and carriage return - not `\s`, which also takes U+FEFF, U+2028 and
+ * U+2029, none of which CommonMark counts. U+E000 is in for the reason
+ * `isFlankSpace` has it in the parser: it is the internal placeholder for an
+ * escaped `\ `, and `normalize` only resolves it to a real nbsp at the very end
+ * of the render - so a test written against `\s` saw no padding at all exactly
+ * where the author had written the escape (carve-js#1688).
+ */
+const PAD_SPACE = /^([\p{Zs}\t\n\f\r\ue000]*)([\s\S]*?)([\p{Zs}\t\n\f\r\ue000]*)$/u
+
+/**
  * A delimiter run only opens emphasis while it is left-flanking, which a run
  * followed by whitespace never is (CommonMark 6.2), so `** x**` reads back as
  * literal text. The padding is content, so it moves outside the delimiters
  * rather than being trimmed away.
  */
 function padOutside(inner: string, delimiter: string, tag: string): string {
-  const match = /^(\s*)([\s\S]*?)(\s*)$/.exec(inner)
+  const match = PAD_SPACE.exec(inner)
   if (!match) return `${delimiter}${inner}${delimiter}`
-  const [, lead = '', core = '', trail = ''] = match
+  const [, lead = ''] = match
+  let [, , core = '', trail = ''] = match
+  // A hard break is spelled a backslash then a newline. Moving only the
+  // newline out leaves the backslash escaping the delimiter behind it, so
+  // `**t\**` reads as text with a stray `*`. The backslash belongs to the
+  // break and moves with it.
+  if (trail.startsWith('\n') && /(?:^|[^\\])(?:\\\\)*\\$/.test(core)) {
+    core = core.slice(0, -1)
+    trail = '\\' + trail
+  }
   if (core !== '') return `${lead}${delimiter}${core}${delimiter}${trail}`
   // Whitespace-only content has no delimiter form; every other inline this
   // renderer cannot spell falls back to inline HTML, so this one does too.
   return inner === '' ? '' : `<${tag}>${inner}</${tag}>`
+}
+
+/**
+ * One wrapper line - an admonition title, a container label, a definition term,
+ * a figure caption - with its block separator.
+ *
+ * These six sites built the delimiter run themselves, so none of them got the
+ * flanking repair the inline arms get, and a whitespace-only admonition title
+ * went out as `** **`: a THEMATIC BREAK in the reader, with the title gone
+ * (carve-js#1688). An empty run emits nothing rather than a bare separator.
+ */
+function wrapperLine(inner: string, delimiter: string, tag: string, suffix = '\n\n'): string {
+  const run = padOutside(inner, delimiter, tag)
+
+  return run === '' ? '' : `${run}${suffix}`
 }
 
 /**
