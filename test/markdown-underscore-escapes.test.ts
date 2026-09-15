@@ -44,6 +44,21 @@ describe('markdown underscore escaping', () => {
     expect(carveToMarkdown(source).trim()).toBe(expected)
   })
 
+  // M1b reads the inline content the underscore is emitted in, so a soft break
+  // keeps the pair and a blank line ends it (markup-carve/carve#2046).
+  it('keeps the pair across a soft break, which a reader pairs across', () => {
+    expect(carveToMarkdown('/x/_y\nz_ w\n')).toBe('*x*\\_y\nz\\_ w\n')
+  })
+
+  it.each([
+    'a _y\n\nz_ w\n',
+    '# a _y\n\nz_ w\n',
+    'a _y\n\n# z_ w\n',
+    '> a _y\n>\n> z_ w\n',
+  ])('leaves a pair split across a blank line bare in %j', (source) => {
+    expect(carveToMarkdown(source)).toBe(source)
+  })
+
   it('does not let an AUTHORED escape supply the other half of a pair', () => {
     // `\\_` is an `escaped_text` node, so it is not a live underscore and
     // cannot pair with the bare one after it.

@@ -1292,6 +1292,27 @@ function pairableUnderscores(line: string): Set<number> {
   return pairs
 }
 
+/**
+ * M1b's pair condition is asked over the inline content the underscore is
+ * emitted in, so a blank line ends the scan: a reader pairs emphasis across a
+ * soft break and never across a paragraph boundary (markup-carve/carve#2046).
+ */
+function pairableUnderscoresPerBlock(line: string): Set<number> {
+  const pairs = new Set<number>()
+  // A blank line inside a quote carries the marker, so the separator between
+  // two paragraphs there is `>` rather than nothing.
+  const boundary = /\n[ \t>]*\n/g
+  let start = 0
+  for (;;) {
+    const match = boundary.exec(line)
+    const end = match === null ? line.length : match.index
+    for (const i of pairableUnderscores(line.slice(start, end))) pairs.add(start + i)
+    if (match === null) return pairs
+    start = match.index + match[0].length
+    boundary.lastIndex = start
+  }
+}
+
 /** Whether the character at `i` is not covered by an odd run of backslashes. */
 function liveAt(line: string, i: number): boolean {
   let backslashes = 0
@@ -1343,7 +1364,7 @@ function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
   const character = sentinelCharacter
   const line = text.replace(RE_NARROWED_SENTINEL, character)
-  const pairs = line.includes('_') ? pairableUnderscores(line) : null
+  const pairs = line.includes('_') ? pairableUnderscoresPerBlock(line) : null
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
     const ch = character(s)
