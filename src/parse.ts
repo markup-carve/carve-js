@@ -10995,7 +10995,7 @@ function scanInlineInner(
   // flatten/traverse -- O(n^2) over a quote-dense run (and a catastrophic cliff
   // once the rope gets deep). A scalar keeps the smart-quote context check O(1).
   let bufLast = ''
-  const emphasisNoClose = new Map<string, number>()
+  const emphasisNoClose = newEmphasisMemo()
 
   // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
   // branches resolve the close bracket in O(1); see buildBracketMap.
@@ -11799,7 +11799,7 @@ function matchEmphasis(
   i: number,
   source: InlineSource,
   inFootnote = false,
-  noClose: Map<string, number> = new Map(),
+  noClose: EmphasisMemo = newEmphasisMemo(),
 ): EmphasisMatch | null {
   const c = text[i]!
 
@@ -11904,16 +11904,34 @@ function findClose(text: string, from: number, marker: string): number {
   return text.indexOf(marker, from)
 }
 
+interface EmphasisMemo {
+  // Per delimiter, scan positions known to reach no closer. Not a single bound:
+  // an opener inside a skipped plain brace group does not scan a suffix.
+  failed: Map<string, Uint8Array>
+  // 0 unknown, -1 no group, otherwise the closing index + 1.
+  braceEnds: Int32Array | undefined
+  lastBrace: number
+}
+
+function newEmphasisMemo(): EmphasisMemo {
+  return { failed: new Map(), braceEnds: undefined, lastBrace: -2 }
+}
+
 function cachedFindEmphasisClose(
   text: string,
   from: number,
   delim: string,
-  noClose: Map<string, number>,
+  memo: EmphasisMemo,
 ): number {
-  const firstNoClose = noClose.get(delim)
-  if (firstNoClose !== undefined && from >= firstNoClose) return -1
-  const close = findEmphasisClose(text, from, delim)
-  if (close === -1) noClose.set(delim, Math.min(firstNoClose ?? from, from))
+  const failed = memo.failed.get(delim)
+  if (failed !== undefined && failed[from] === 1) return -1
+  const visited: number[] = []
+  const close = findEmphasisClose(text, from, delim, memo, failed, visited)
+  if (close === -1) {
+    const marks = failed ?? new Uint8Array(text.length + 1)
+    for (const j of visited) marks[j] = 1
+    memo.failed.set(delim, marks)
+  }
   return close
 }
 
@@ -12167,9 +12185,17 @@ function pointAt(
   return { line, column, offset: source.baseOffset + offset }
 }
 
-function findEmphasisClose(text: string, from: number, delim: string): number {
-  let depth = 0
+function findEmphasisClose(
+  text: string,
+  from: number,
+  delim: string,
+  memo: EmphasisMemo = newEmphasisMemo(),
+  failed?: Uint8Array,
+  visited?: number[],
+): number {
   for (let j = from; j < text.length; j++) {
+    if (failed !== undefined && failed[j] === 1) return -1
+    visited?.push(j)
     const ch = text[j]!
     // Skip escapes
     if (ch === '\\' && j + 1 < text.length) {
@@ -12193,6 +12219,14 @@ function findEmphasisClose(text: string, from: number, delim: string): number {
         continue
       }
     }
+    // Brace groups are opaque too (markup-carve/carve#2027).
+    if (ch === '{') {
+      const end = braceGroupEnd(text, j, memo)
+      if (end !== -1) {
+        j = end
+        continue
+      }
+    }
     if (ch === delim) {
       // Closer must not be preceded by whitespace
       const prev = text[j - 1]
@@ -12201,10 +12235,43 @@ function findEmphasisClose(text: string, from: number, delim: string): number {
       // Word-boundary closer (spec §9): no bare delimiter closes when followed
       // by an alphanumeric. Applies to every delimiter, not just / and _.
       if (next && /[A-Za-z0-9]/.test(next)) continue
-      if (depth === 0) return j
-      depth--
+      return j
     }
   }
+  return -1
+}
+
+// The `}` balancing the `{` at `open`, or -1, scanned as carve-php's attribute
+// scan does. A `{` met unquoted inside the scan gets its answer cached too.
+function braceGroupEnd(text: string, open: number, memo: EmphasisMemo): number {
+  if (memo.lastBrace === -2) memo.lastBrace = text.lastIndexOf('}')
+  if (memo.lastBrace < open) return -1
+  const ends = (memo.braceEnds ??= new Int32Array(text.length))
+  if (ends[open] !== 0) return ends[open] === -1 ? -1 : ends[open]! - 1
+  const stack = [open]
+  let quote = ''
+  for (let i = open + 1; i < text.length; i++) {
+    const ch = text[i]!
+    if (ch === '\n') break
+    if (ch === '\\' && i + 1 < text.length) {
+      i++
+      continue
+    }
+    if (quote !== '') {
+      if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      continue
+    }
+    if (ch === '{') stack.push(i)
+    else if (ch === '}') {
+      ends[stack.pop()!] = i + 1
+      if (stack.length === 0) return i
+    }
+  }
+  for (const q of stack) ends[q] = -1
   return -1
 }
 
