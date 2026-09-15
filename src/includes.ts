@@ -11,8 +11,10 @@ import type {
   SmartPunctuation,
   EscapedText,
 } from './ast.js'
+import type { CarveExtension } from './extension.js'
 import { utf8ByteLength } from './abbr-budget.js'
-import { inlineText, slugify } from './heading-ids.js'
+import { inlineText, promoteBlockImages, slugify } from './heading-ids.js'
+import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
 import {
   DIRECTIVE_SCAN_RE,
@@ -87,6 +89,13 @@ export interface IncludeOptions {
   resolve?: (path: string, ctx: IncludeContext) => IncludeResolved | null
   /** Identity of the root document, passed to the first resolver call as context. */
   sourcePath?: string
+  /**
+   * Extensions the child is parsed with. Pass the set the PARENT was parsed
+   * with: an include is textual composition of one document, so the same text
+   * has to mean the same thing whichever file it sits in. Left out, an
+   * extension that adds syntax applies to the parent and not to the child.
+   */
+  extensions?: CarveExtension[]
   /** Maximum transitive include depth. Default 16. */
   maxDepth?: number
   /** Expanded child source byte budget. Default max(1 MB, 8 x root source bytes). */
@@ -515,6 +524,26 @@ function includeChild<T>(
   return merged
 }
 
+/**
+ * Read a child the way the entry point reads the root.
+ *
+ * The two structural passes are the ones `parse` in `index.ts` runs on top of
+ * the parser: a reference image plus its caption is a `figure` there and was a
+ * paragraph here, so the same lines rendered `^ Cap` as text once they arrived
+ * through a directive. `promoteCitationDefinitions` is the same divergence one
+ * extension further in - it needs the citation groups the extensions produce.
+ */
+function parseChild(source: string, state: State): Document {
+  const extensions = state.opts.extensions
+  const doc = parse(source, { positions: true, ...(extensions ? { extensions } : {}) })
+  promoteBlockImages(doc.children, true)
+  if (doc.footnoteDefs) {
+    for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
+  }
+  doc.children = promoteCitationDefinitions(doc.children)
+  return doc
+}
+
 function expandChild(
   d: Directive,
   state: State,
@@ -522,7 +551,7 @@ function expandChild(
 ): { doc: Document; file: string } | null {
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
-  const child = parse(resolved.source, { positions: true })
+  const child = parseChild(resolved.source, state)
   // Select before expanding: nested includes outside the wanted section must
   // not be resolved (no budget charge) and must not move section boundaries.
   if (d.section) {
