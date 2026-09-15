@@ -62,6 +62,56 @@ describe('a bare marker does not close inside a braced inline', () => {
   })
 })
 
+// E2a, markup-carve/carve#2046: a link or image destination, title included,
+// and an autolink are opaque too. The LABEL still is not.
+describe('a bare marker does not close inside a link destination or an autolink', () => {
+  it('answers the clause example for a link', () => {
+    expect(html('/see [x](http://a.b/c) now/')).toBe('<p><em>see <a href="http://a.b/c">x</a> now</em></p>')
+  })
+
+  it('answers the clause example for an autolink', () => {
+    expect(html('/see <http://a.b/c> now/')).toBe(
+      '<p><em>see <a href="http://a.b/c">http://a.b/c</a> now</em></p>',
+    )
+  })
+
+  it('leaves the strike unopened when its only closer is inside a destination', () => {
+    expect(html('~[a](b~) c')).toBe('<p>~<a href="b~">a</a> c</p>')
+  })
+
+  it('leaves it unopened when the closer is inside an autolink', () => {
+    expect(html('~<http://x/a~>')).toBe('<p>~<a href="http://x/a~">http://x/a~</a></p>')
+  })
+
+  it('hides an image destination', () => {
+    expect(html('~see ![a](b~) now~')).toBe('<p><s>see <img src="b~" alt="a"> now</s></p>')
+  })
+
+  it('hides a title, which the destination carries', () => {
+    expect(html('~see [a](b "t~") now~')).toBe('<p><s>see <a href="b" title="t~">a</a> now</s></p>')
+  })
+
+  it('does not hide the attribute block after the destination', () => {
+    expect(html('~[a](b){.c~} d~')).toBe('<p><s><a href="b">a</a>{.c</s>} d~</p>')
+  })
+
+  it('does not hide a tail whose destination holds whitespace, which is no link', () => {
+    expect(html('~[a](b c~) d~')).toBe('<p><s>[a](b c</s>) d~</p>')
+  })
+
+  it('does not hide a footnote reference\'s tail', () => {
+    expect(html('~[^n](b~) c~')).toBe('<p><s>[^n](b</s>) c~</p>')
+  })
+
+  it('does not hide a tail whose bracket is escaped', () => {
+    expect(html('~\\[a](b~) c~')).toBe('<p><s>[a](b</s>) c~</p>')
+  })
+
+  it('does not hide a parenthesis run with no label in front of it', () => {
+    expect(html('~a](b~) c')).toBe('<p><s>a](b</s>) c</p>')
+  })
+})
+
 describe('the braced-inline exclusion stays linear', () => {
   const render = (input: string) => void carveToHtml(input)
 
@@ -77,5 +127,17 @@ describe('the braced-inline exclusion stays linear', () => {
 
   perfIt('over openers inside one plain brace group', () => {
     expectScansLinearly(render, '~a ', { prefix: '{ ', suffix: '}' })
+  })
+
+  perfIt('over bracket-parenthesis pairs that open no link', () => {
+    expectBuiltInputScansLinearly(render, (n) => '~x' + ']('.repeat(n) + ')', {
+      label: 'label-less tails',
+    })
+  })
+
+  perfIt('over destinations nested inside one another', () => {
+    expectBuiltInputScansLinearly(render, (n) => '~' + '[x]('.repeat(n) + 'u' + ')'.repeat(n) + '~', {
+      label: 'nested destinations',
+    })
   })
 })
