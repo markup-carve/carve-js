@@ -184,7 +184,10 @@ Resolvers are deliberately host-supplied. Do not enable includes for untrusted
 input unless the resolver canonicalizes paths, rejects root escapes, and applies
 the same parsing and sanitization policy as the parent document. A Node helper,
 `fileSystemResolver(root)`, enforces canonical root containment and rejects
-absolute include paths by default. Containment is checked on the canonical
+absolute include paths by default. The root must be named explicitly: a blank or
+whitespace-only value is refused rather than canonicalized, because
+canonicalizing it would root containment at the process working directory, which
+the spec forbids. Containment is checked on the canonical
 (symlink-resolved) path, so `../shared/glossary.crv` from `chapters/ch1.crv`
 resolves while symlinks, absolute paths, and dot-dot chains leaving the root do
 not. Relative paths resolve against the including file; the containment root
