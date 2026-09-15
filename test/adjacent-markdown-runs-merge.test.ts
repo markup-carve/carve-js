@@ -40,19 +40,16 @@ describe('a tilde in the content is escaped before it can grow the run', () => {
 
 /**
  * The same fence, reached from the other side: two tildes of TEXT and a strike's
- * own two. The text tilde is escaped now, so the run cannot form; the seam pass
- * still re-spells on the OPENING side, where it reads the escaped tilde off the
- * end of the neighbouring part without looking at the backslash in front of it.
- * That is conservative rather than wrong - inline HTML where delimiters would
- * have done - and is filed as carve-js#1715.
+ * own two. The text tilde is escaped, so it breaks the run rather than growing
+ * it, and the strike beside it keeps its delimiters on both sides.
  */
 describe('a tilde in the text is escaped before it can grow the run', () => {
   it('does not open a code fence at the start of a line', () => {
-    expect(carveToMarkdown('~~{~x~}\n')).toBe('\\~\\~<del>x</del>\n')
+    expect(carveToMarkdown('~~{~x~}\n')).toBe('\\~\\~~~x~~\n')
   })
 
   it('escapes a single text tilde that reaches a strike', () => {
-    expect(carveToMarkdown('a~{~x~}\n')).toBe('a\\~<del>x</del>\n')
+    expect(carveToMarkdown('a~{~x~}\n')).toBe('a\\~~~x~~\n')
   })
 
   it('spells the strike with delimiters on the closing side', () => {
@@ -95,12 +92,12 @@ describe('a merged run the rule of 3 allows stays a delimiter run', () => {
     expect(carveToMarkdown('a {/{*x*}/}{/y/}\n')).toBe('a ***x****y*\n')
   })
 
-  it('keeps two strikes, whose four-tilde run splits two and two', () => {
-    expect(carveToMarkdown('a {~x~}{~y~}\n')).toBe('a ~~x~~~~y~~\n')
+  it('re-spells the right-hand strike, whose four tildes the readers split differently', () => {
+    expect(carveToMarkdown('a {~x~}{~y~}\n')).toBe('a ~~x~~<del>y</del>\n')
   })
 
-  it('keeps a chain of three strikes for the same reason', () => {
-    expect(carveToMarkdown('{~x~}{~y~}{~z~}\n')).toBe('~~x~~~~y~~~~z~~\n')
+  it('re-spells one strike of a chain of three, which breaks both seams', () => {
+    expect(carveToMarkdown('{~x~}{~y~}{~z~}\n')).toBe('~~x~~<del>y</del>~~z~~\n')
   })
 
   it('leaves a run a space separates from its neighbour alone', () => {
@@ -140,7 +137,7 @@ describe('the merged run is weighed against what the reader sees', () => {
     expect(carveToMarkdown('{/x~/}{*y*}\n')).toBe('<em>x\\~</em>**y**\n')
   })
 
-  it('applies that to a tilde seam as well', () => {
-    expect(carveToMarkdown('{~x!~}{~y~}\n')).toBe('<del>x!</del>~~y~~\n')
+  it('re-spells the right-hand side of a tilde seam whatever the content', () => {
+    expect(carveToMarkdown('{~x!~}{~y~}\n')).toBe('~~x!~~<del>y</del>\n')
   })
 })

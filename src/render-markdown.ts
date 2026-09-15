@@ -1707,11 +1707,10 @@ function contentGrowsRun(piece: DelimiterPiece): boolean {
  * three and still fails, because a run whose inner character is `~` needs an
  * outer character that is not alphanumeric.
  *
- * A tilde run is not governed by the rule of 3 at all - GFM strikethrough pairs
- * tildes - and the one merged length that survives is four, two strikes' own
- * delimiters meeting. Any other tilde reaching the run, from text or from a
- * third strike, leaves a length whose surplus the reader places by its own
- * pairing rule rather than by CommonMark, so the writer does not spell it.
+ * A tilde run is not governed by the rule of 3 at all, and the readers do not
+ * agree on it either: markdown-it pairs `~~` and splits a run of four, while
+ * pulldown-cmark matches the run and does not. So no merged length survives -
+ * any LIVE tilde reaching the run re-spells the strike as inline HTML.
  */
 function seamMergesRun(
   nodes: InlineNode[],
@@ -1746,15 +1745,17 @@ function tildeSeamMerges(
   if ((direction < 0 ? piece.lead : piece.trail) !== '') return false
   const j = direction < 0 ? previousRendered(parts, i) : nextRendered(parts, i)
   if (j < 0) return false
-  const edge = direction < 0 ? lastCharacter(parts[j]!) : firstCharacter(parts[j]!)
-  if (edge !== '~') return false
+  // A backslash in front of the neighbour's last tilde makes it a literal, which
+  // breaks the run rather than lengthening it; a tilde the neighbour PRESENTS
+  // first is never escaped, because the backslash would stand there instead.
+  if (direction < 0) return runAtEnd(parts[j]!, '~') > 0
+  if (firstCharacter(parts[j]!) !== '~') return false
+  // One seam needs one fallback, and the strike on the right takes it: it reaches
+  // the same seam from its own side, so leaving it there keeps the left node in
+  // delimiters.
   const other = delimiterPiece(nodes, parts, j)
-  if (!other || other.run.delimiter !== '~~') return true
-  if ((direction < 0 ? other.trail : other.lead) !== '') return true
-  const inner = direction < 0 ? afterRunInCore(piece.core, '~') : beforeRunInCore(piece.core, '~')
-  const outer = direction < 0 ? beforeRunInCore(other.core, '~') : afterRunInCore(other.core, '~')
 
-  return inner === '' || outer === '' || !mergedRunFlanks(inner, outer)
+  return !(other?.run.delimiter === '~~' && other.lead === '')
 }
 
 /**
