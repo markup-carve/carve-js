@@ -46,8 +46,11 @@ function visit(node: Record<string, unknown> | null | undefined): void {
   }
 }
 
-/** The merged list, or null when there was nothing adjacent to merge. */
-function mergeRun(
+/**
+ * The merged list, or null when there was nothing adjacent to merge. Also run
+ * by the include expansion pass, whose output `toAstJson` publishes unresolved.
+ */
+export function mergeRun(
   nodes: Array<Record<string, unknown>>,
 ): Array<Record<string, unknown>> | null {
   let adjacent = false

@@ -16,6 +16,7 @@ import { utf8ByteLength } from './abbr-budget.js'
 import { inlineText, promoteBlockImages, slugify } from './heading-ids.js'
 import { promoteCitationDefinitions } from './citations.js'
 import { parse, normalizeRefLabel } from './parse.js'
+import { mergeRun } from './coalesce-text-runs.js'
 import {
   DIRECTIVE_SCAN_RE,
   DIRECTIVE_SHAPE_RE,
@@ -789,7 +790,10 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
     cursor = span.end
   }
   out.push(...sliceRun(run, cursor, full.length))
-  return out
+  // The splice leaves the child's text beside the host's halves, and §1a holds
+  // for this tree too: `toAstJson` publishes it without `resolve()`.
+  const merged = mergeRun(out as unknown as Array<Record<string, unknown>>)
+  return (merged as unknown as InlineNode[] | null) ?? out
 }
 
 function expandInlines(nodes: InlineNode[], state: State): InlineNode[] {
