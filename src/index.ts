@@ -246,6 +246,8 @@ export { headingLevelShift, type HeadingLevelShiftOptions } from './heading-leve
 export {
   expandIncludes,
   expandsForTarget,
+  findDirectiveSites,
+  type DirectiveSite,
   type IncludeContext,
   type IncludeDependency,
   type IncludeOptions,
@@ -254,6 +256,11 @@ export {
   type IncludeResolver,
   type IncludeResolved,
 } from './includes.js'
+// Recognition only. `findDirectiveSites` above answers WHERE a live directive
+// is; these two answer whether a token a host already holds is one. The scan
+// regexes stay internal on purpose: a host matching source text with them
+// would disagree with the expander about a token in a code block (carve-js#1678).
+export { isDirectiveShape, parseDirective, type Directive } from './include-directive.js'
 export { headingReference, type HeadingReferenceOptions } from './heading-reference.js'
 export {
   defaultAttributes,
