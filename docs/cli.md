@@ -1,7 +1,7 @@
 # Command line
 
 
-The package installs a `carve` binary. Rendering is the default action — it
+The package installs a `carve` binary. Rendering is the default action: it
 reads a file or stdin and writes the rendered output to stdout. HTML is the
 default; pass a format flag for Markdown, plain text, or ANSI:
 
@@ -112,7 +112,7 @@ both readers. It renders with both engines and reports the first place they
 disagree, so it is a measurement rather than a heuristic; a first attempt that
 *reasoned* about the same question as a lint rule was withdrawn for
 unsoundness (carve-js#546). Carve's deliberate departures (`/italic/`, `=mark=`,
-quoted link titles) are genuine divergences and are reported as such. It needs
+quoted link titles) are divergences and are reported as such. It needs
 djot.js, which this package does not depend on - `npm install @djot/djot`
 alongside. See [Portability](migration.md#portability).
 
