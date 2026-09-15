@@ -1953,12 +1953,25 @@ function renderHostedBlocks(children: BlockNode[], ctx: CarveContext): string {
 /**
  * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
  * per-cell `<`/`>`/`~` alignment markers.
+ *
+ * A colspan cell is always written plain (`| < |`), so a header row can keep
+ * the native form when its span markers form a TRAILING run of COLSPANS after
+ * at least one real header cell: each `<` absorbs into the `|=` header on its
+ * left, and the row is still promoted by those `|=` markers
+ * (`|= Engine |= Timing | < |`). Everything else needs a delimiter row: a
+ * LEADING span has no `|=` anchor before it; a real cell AFTER a span
+ * (`|~ H | < | < |< K |`) would have to be written `|=< K`, read as an aligned
+ * header rather than the promoted data cell; and a trailing ROWSPAN (`^`) does
+ * not absorb left, so a native `| ^ |` in the first row is not a header cell
+ * and the row would fall out of `<thead>`.
  */
 function renderTable(node: Table, ctx: CarveContext): string {
   const rows: string[] = []
   const first = node.rows[0]
   const headerRow = first !== undefined && first.cells.length > 0 && first.cells.every((c) => c.header)
-  const needsDelimiter = headerRow && first.cells.some((c) => c.span !== undefined)
+  const firstSpan = headerRow ? first!.cells.findIndex((c) => c.span !== undefined) : -1
+  const trailingColspansOnly = firstSpan >= 1 && first!.cells.slice(firstSpan).every((c) => c.span === 'colspan')
+  const needsDelimiter = firstSpan >= 0 && !trailingColspansOnly
 
   node.rows.forEach((row, rowIndex) => {
     const cells: string[] = []
