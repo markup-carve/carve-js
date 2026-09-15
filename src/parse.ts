@@ -10332,11 +10332,11 @@ const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:
  * Returns the raw destination and where the scan stopped, or null when the
  * tail does not open with `(`.
  */
-function scanDestination(tail: string): { dest: string; end: number } | null {
-  if (tail[0] !== '(') return null
+function scanDestination(tail: string, open = 0): { dest: string; end: number } | null {
+  if (tail[open] !== '(') return null
   let dest = ''
   let depth = 0
-  let i = 1
+  let i = open + 1
   for (; i < tail.length; i++) {
     const c = tail[i]!
     if (c === '\\' && (tail[i + 1] === '(' || tail[i + 1] === ')' || tail[i + 1] === '\\')) {
@@ -11909,6 +11909,8 @@ interface EmphasisMemo {
   // an opener inside a skipped plain brace group does not scan a suffix.
   failed: Map<string, Uint8Array>
   lastBrace: number
+  // Each link or image destination's `(` mapped to its closing `)`, built once.
+  destinations?: Map<number, number>
 }
 
 function newEmphasisMemo(): EmphasisMemo {
@@ -12225,6 +12227,23 @@ function findEmphasisClose(
         continue
       }
     }
+    // A link or image destination, title included, and an autolink (E2a,
+    // markup-carve/carve#2046). The label is NOT opaque and stays as it is.
+    if (ch === '(' && text[j - 1] === ']') {
+      const end = linkDestinations(text, memo).get(j)
+      if (end !== undefined) {
+        j = end
+        continue
+      }
+    }
+    if (ch === '<') {
+      RE_AUTOLINK_STICKY.lastIndex = j
+      const m = RE_AUTOLINK_STICKY.exec(text)
+      if (m) {
+        j += m[0].length - 1
+        continue
+      }
+    }
     if (ch === delim) {
       // Closer must not be preceded by whitespace
       const prev = text[j - 1]
@@ -12259,6 +12278,42 @@ function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo): number
     if (m) return open + m[0].length - 1
   }
   return -1
+}
+
+// The autolink and link-tail matchers the main loop uses, as sticky copies, so
+// the scan hides exactly the region the parser builds a node from.
+const RE_AUTOLINK_STICKY = new RegExp(RE_AUTOLINK.source.replace(/^\^/, ''), 'yu')
+const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.replace(/^\^/, ''), 'y')
+
+// Only a bracket pair the parser can build a link or image from has a
+// destination: not a footnote reference `[^n]` nor an inline note `^[...]`. The
+// attribute block after the `)` is not part of what E2a hides.
+function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number> {
+  if (memo.destinations) return memo.destinations
+  const found = new Map<number, number>()
+  memo.destinations = found
+  if (!text.includes('](')) return found
+  const brackets = buildBracketMap(text)
+  // A destination inside a destination is already hidden by the one around it,
+  // and scanning it again is what makes a nest of them quadratic. Brackets come
+  // in ascending order, so the outermost of a nest is reached first.
+  let covered = -1
+  for (const key in brackets) {
+    const open = Number(key)
+    const close = brackets[open]!
+    if (close + 1 <= covered) continue
+    if (text[close + 1] !== '(' || text[open + 1] === '^' || text[open - 1] === '^') continue
+    const scanned = scanDestination(text, close + 1)
+    if (scanned === null || scanned.dest === '') continue
+    RE_LINK_REST_STICKY.lastIndex = scanned.end
+    const rest = RE_LINK_REST_STICKY.exec(text)
+    if (rest === null) continue
+    const title = rest[1] ?? rest[2]
+    const end = scanned.end + (title === undefined ? 0 : title.length + 3)
+    found.set(close + 1, end)
+    covered = end
+  }
+  return found
 }
 
 /**
