@@ -19,10 +19,10 @@
  * - `denial` for a filesystem refusal. carve-js's resolver refuses with `null`
  *   and carries no denial vocabulary, so the class is recovered by asking the
  *   ENGINE a second question - see {@link classifyRefusal}.
- * - `chargedBytes`. The expander's running total is internal, so it is summed
- *   from the sources the resolver actually handed back. That is the same
- *   quantity the corpus names, and it is decided entirely by WHICH targets the
- *   engine chose to resolve, which is the section 19 property under test.
+ * - `chargedBytes` used to be summed here from the sources the resolver handed
+ *   back. It is not any more: carve-js#1704 published the expander's own running
+ *   total and this adapter reads `result.chargedBytes`, which is the processor's
+ *   answer reported unchanged. See the comment at that site.
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import {
@@ -253,11 +253,29 @@ function resolverFor(
  * was only "this target is missing" turns into an allow; a refusal that is
  * containment refuses the same request again.
  *
+ * EVERY class comes back from that second question. An earlier form short-cut
+ * two of them here - `existsSync` on this adapter's own `path.resolve`, and a
+ * lexical dot-dot test against the root - and both answered `outside-root`
+ * without `fileSystemResolver` being consulted at all, so the vectors that took
+ * those branches measured `path.resolve` rather than this engine
+ * (carve-js#1709). The target already being on disk is still read here, but only
+ * to decide whether a probe has to be WRITTEN: the refusal itself is the
+ * engine's, asked for again with the target in place.
+ *
  * The one piece of path math left is where to put the probe file, and a wrong
  * answer there is LOUD rather than silent: the probe lands somewhere the
  * request does not name, the engine refuses again, and the vector reds with
- * `outside-root`. The probe never leaves the fixture directory.
+ * `outside-root`. The probe never leaves the fixture directory - a request that
+ * resolves outside it cannot be made to exist without writing somewhere the
+ * fixture does not own, so it throws by name rather than guessing a class.
  */
+/**
+ * Set by {@link classifyRefusal} on every run, read by the test that pins the
+ * seam. A class this adapter worked out for itself would leave it `false`, and
+ * the corpus declares `denial` to be the processor's own answer.
+ */
+let refusalAskedTheEngine = false
+
 function classifyRefusal(
   resolver: IncludeResolver,
   request: string,
@@ -268,12 +286,19 @@ function classifyRefusal(
   const parent = ctx.stack[ctx.stack.length - 1]
   const base = parent ? path.dirname(path.resolve(rootReal, parent)) : rootReal
   const candidate = path.isAbsolute(request) ? request : path.resolve(base, request)
-  // The target is already there and the engine still refused it, so the
-  // refusal is not about existence.
-  if (existsSync(candidate)) return 'outside-root'
-  if (path.relative(dir, candidate).startsWith('..')) return 'outside-root'
-  mkdirSync(path.dirname(candidate), { recursive: true })
-  writeFileSync(candidate, 'probe\n')
+  if (!existsSync(candidate)) {
+    const inside = path.relative(dir, candidate)
+    if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) {
+      throw new Error(
+        `include-security: cannot probe for ${JSON.stringify(request)} - it resolves to ` +
+          `${candidate}, outside the fixture tree, so the engine cannot be asked whether ` +
+          `the refusal was about existence. Classify this vector explicitly instead.`,
+      )
+    }
+    mkdirSync(path.dirname(candidate), { recursive: true })
+    writeFileSync(candidate, 'probe\n')
+  }
+  refusalAskedTheEngine = true
 
   return resolver(request, ctx) === null ? 'outside-root' : 'not-found'
 }
@@ -457,6 +482,77 @@ function actualFor(vector: Vector): Record<string, unknown> {
 
   return value
 }
+
+/**
+ * The seam, pinned. markup-carve/carve#2025 declares `denial` a PROCESSOR-side
+ * observable - the implementation's own refusal class, reported unchanged - so
+ * a filesystem vector whose class this adapter worked out from its own path
+ * math is green about `path.resolve` rather than about this engine
+ * (carve-js#1709).
+ *
+ * Driven per vector rather than as one sweep, so the row that stops asking is
+ * the row that goes red.
+ */
+describe('every filesystem denial class comes back from the engine', () => {
+  const asked = corpus.vectors.filter(
+    (vector) => vector.kind === 'filesystem' && typeof vector.expected['denial'] === 'string',
+  )
+
+  it('has filesystem vectors that assert a denial class at all', () => {
+    expect(asked.length).toBeGreaterThan(0)
+  })
+
+  for (const vector of asked) {
+    it(`${vector.name} asks the resolver for its class`, () => {
+      refusalAskedTheEngine = false
+      const actual = actualFor(vector)
+      // `no-root` is the one filesystem class with no engine to ask: the
+      // configuration seam refused to build a resolver at all, which IS the
+      // engine's answer and is asserted by `resolverCalls` being empty.
+      if (actual['denial'] === 'no-root') {
+        expect(actual['resolverCalls']).toEqual([])
+
+        return
+      }
+      expect(refusalAskedTheEngine).toBe(true)
+    })
+  }
+})
+
+/**
+ * The one shape the probe cannot answer, kept LOUD. A request that resolves
+ * outside the fixture tree cannot be made to exist without writing somewhere
+ * the fixture does not own, so there is no second question to ask the engine -
+ * and a class guessed here would be exactly the defect carve-js#1709 removed.
+ *
+ * The corpus has no such vector today, which is why this drives one by hand:
+ * a guard nothing reaches is a guard nobody can trust.
+ */
+/** A path that is outside every fixture tree and certainly not on disk. */
+function absentDirectory(): string {
+  const made = mkdtempSync(path.join(tmpdir(), 'carve-js-include-security-absent-'))
+  rmSync(made, { recursive: true, force: true })
+
+  return made
+}
+
+describe('a refusal the probe cannot reach the engine about is refused, not guessed', () => {
+  it('throws rather than answering from its own path math', () => {
+    expect(() =>
+      actualFor({
+        name: 'synthetic-absolute-outside-the-fixture-tree',
+        requirement: 'S2-contained-paths',
+        kind: 'filesystem',
+        tree: { 'root/main.crv': '' },
+        root: 'root',
+        from: 'root/main.crv',
+        request: path.join(absentDirectory(), 'x.crv'),
+        allowAbsolute: true,
+        expected: { status: 'denied', denial: 'outside-root' },
+      }),
+    ).toThrow(/cannot probe/)
+  })
+})
 
 describe('PART 9 section 19 include-security vectors', () => {
   for (const vector of corpus.vectors) {
