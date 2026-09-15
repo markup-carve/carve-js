@@ -1008,7 +1008,15 @@ function escapeText(text: string): string {
   // `_`, `#` and `[` are emitted as SENTINELS rather than as backslashes:
   // section 8a decides those three on the EMITTED LINE, which only normalize()
   // can see. `*` and everything else keep M1 here and unconditionally.
-  text = text.replace(/[\\`*_[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+  //
+  // `~` IS ONE OF THEM. GFM's strikethrough extension pairs a run of ONE OR
+  // TWO tildes, so a literal tilde in text is a Markdown metacharacter, and
+  // 8a narrows only `_`, `#`, `[` and `<` - M1d leaves every other one on M1.
+  // Unescaped, two literal tildes anywhere in one paragraph pair across
+  // whatever markup stands between them and the tags interleave
+  // (carve-js#1710); a single one pairs the same way for a reader that takes
+  // the one-tilde form, which pulldown-cmark does.
+  text = text.replace(/[\\`*_~[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
   // PART 11 section 8a M1e: a `<` is escaped only where the emitted line would
   // read it as markup - before an ASCII letter, `/`, `!` or `?`, the four
   // things that open raw HTML. Everything else is inert, and so is `>`
