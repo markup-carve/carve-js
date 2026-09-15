@@ -385,7 +385,7 @@ describe('the include-security corpus is answered as a contract, not a bag of fi
   })
 
   it('pins the vector count, so an addition cannot be skipped unnoticed', () => {
-    expect(corpus.vectors.length).toBe(23)
+    expect(corpus.vectors.length).toBe(25)
   })
 
   it('answers every requirement the corpus states', () => {
