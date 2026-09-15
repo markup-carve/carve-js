@@ -2,7 +2,8 @@
 /*
  * `carve` command-line tool.
  *
- * Currently one subcommand: `carve fix`, a thin wrapper over
+ * Subcommands: render (the default), fmt, flatten, fix, lint, diff, merge,
+ * portability and migrate. `carve fix` is a thin wrapper over
  * applyMigrationFixes that rewrites Djot/Markdown delimiter collisions to
  * their Carve equivalents (see src/djot-migrate.ts).
  *
