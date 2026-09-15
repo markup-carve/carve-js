@@ -1598,7 +1598,7 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
   // later pass never undoes an earlier one.
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
-    if (piece && contentGrowsRun(piece)) parts[i] = spellAsHtml(piece)
+    if (piece && contentGrowsRun(piece, nodes[i]!)) parts[i] = spellAsHtml(piece)
   }
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
@@ -1677,19 +1677,39 @@ function ruleOfThreeAllows(open: number, close: number): boolean {
  * and the length is what decides what that run can do - so adjacency is not the
  * question, and no flanking test can answer it (carve-js#1706).
  *
- * This half is what the content contributes. The writer escapes an asterisk it
- * means literally, so an asterisk at the edge of the core is a nested run's
- * delimiter and `seamMergesRun` weighs it with the rule of 3. A tilde it does
- * not escape, so a tilde at the edge of the core is a literal, and the reader
- * takes the odd tilde off the run and leaves it OUTSIDE the strike - which is
- * not where the writer put it. At the start of a line the same three-tilde run
- * is not a delimiter at all but a fenced code block, and the rest of the
- * document becomes its content.
+ * This half is what the CONTENT contributes: a child's own delimiter, or a
+ * literal the writer did not escape. The reader re-pairs the merged run by its
+ * own rule rather than by the nesting the document had, so the parent takes the
+ * inline-HTML spelling and the child keeps its delimiters. An ESCAPED character
+ * at the edge reaches nothing, because a backslash breaks a run rather than
+ * lengthening it.
  */
-function contentGrowsRun(piece: DelimiterPiece): boolean {
+function contentGrowsRun(piece: DelimiterPiece, node: InlineNode): boolean {
   const ch = piece.run.delimiter[0]!
+  if (runAtStart(piece.core, ch) === 0 && runAtEnd(piece.core, ch) === 0) return false
 
-  return ch === '~' && (runAtStart(piece.core, ch) > 0 || runAtEnd(piece.core, ch) > 0)
+  return !commutes(piece, node)
+}
+
+/**
+ * The round-trip normalization list, PART 11 section 10k: nested emphasis of
+ * DIFFERENT strengths, where the child spans the whole parent, may commute.
+ * `***x***` comes back with the emphasis outside either way, and the two
+ * nestings are the same document. EQUAL strengths do not commute - the runs
+ * collapse into one element of the wrong kind, which is a different document.
+ */
+function commutes(piece: DelimiterPiece, node: InlineNode): boolean {
+  if (piece.run.delimiter[0] !== '*') return false
+  // The padding text nodes are not content: `padOutside` has already moved them
+  // outside the delimiters, so the child still spans everything between them.
+  const kids = ((node as { children?: InlineNode[] }).children ?? []).filter(
+    (kid) => kid.type !== 'text' || /\S/.test((kid as { value?: string }).value ?? ''),
+  )
+  if (kids.length !== 1) return false
+  const child = DELIMITER_RUN[kids[0]!.type]
+  if (child?.delimiter[0] !== '*') return false
+
+  return child.delimiter.length !== piece.run.delimiter.length
 }
 
 /**
