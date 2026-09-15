@@ -576,8 +576,8 @@ export class Profile {
     p.description = 'Blog posts and articles. All formatting, no raw HTML.'
     p.denyBlock(['raw_block']).denyInline(['raw_inline'])
     p.featureReasons = {
-      raw_block: 'Raw HTML blocks are disabled to prevent XSS attacks. Use djot markup instead.',
-      raw_inline: 'Raw HTML is disabled to prevent XSS attacks. Use djot markup instead.',
+      raw_block: 'Raw HTML blocks are disabled to prevent XSS attacks. Use Carve markup instead.',
+      raw_inline: 'Raw HTML is disabled to prevent XSS attacks. Use Carve markup instead.',
     }
     return p
   }
