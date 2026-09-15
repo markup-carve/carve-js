@@ -140,6 +140,22 @@ export interface IncludeResult {
    * these paths changes. Empty when no resolver was supplied.
    */
   dependencies: IncludeDependency[]
+  /**
+   * Bytes charged against the byte budget, per occurrence rather than per
+   * distinct identity, and INCLUDING the target whose size broke it.
+   *
+   * PART 9 section 19 bounds the expanded OUTPUT and explicitly not the work
+   * done to produce it, since a target is resolved before its size is known -
+   * so a total that omitted the refused read could not tell "read nothing"
+   * from "read a target and refused it", which is what a host auditing a
+   * budget needs.
+   *
+   * A target refused BEFORE the budget check - non-text, or a cycle - is read
+   * and not charged. Those are not budget decisions, and what bounds the I/O
+   * a render performs is the separate resolver-call bound, which section 19
+   * states for exactly that purpose.
+   */
+  chargedBytes: number
 }
 
 
@@ -350,13 +366,24 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
     return null
   }
 
+  // CHARGED BEFORE THE COMPARISON, because by this line the resolver has run
+  // and `source` is in hand: `utf8ByteLength` is reading it. PART 9 section 19
+  // says the budget "does not bound the WORK a processor does to produce it,
+  // because a target is resolved before its size is known", so the read cannot
+  // be avoided at this seam and charging what was read is the honest total.
+  // Charging only what was ADMITTED cannot tell "read nothing" from "read a
+  // target and refused it".
+  //
+  // The refusal itself does not move: `state.spent` latches on the same
+  // directive either way, so every later one is still refused without being
+  // resolved, which is section 19's separate "refusal is terminal" rule.
   const bytes = utf8ByteLength(source)
-  if (state.usedBytes + bytes > state.maxBytes) {
+  state.usedBytes += bytes
+  if (state.usedBytes > state.maxBytes) {
     state.spent = 'include-budget'
     warn(state, 'include-budget', spentMessage('include-budget', d.path), node)
     return null
   }
-  state.usedBytes += bytes
   if (d.lines && d.lines.start > sourceLines(source).length) {
     warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
     return null
@@ -1032,6 +1059,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     warnings: state.warnings,
     suppressedWarnings: state.suppressedWarnings,
     dependencies: [...state.dependencies].map(([id, resolved]) => ({ id, resolved })),
+    chargedBytes: state.usedBytes,
   }
 }
 

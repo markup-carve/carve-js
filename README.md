@@ -139,6 +139,13 @@ const expanded = expandIncludes(doc, source, {
 })
 ```
 
+**The root itself must be absolute.** A relative one is refused and inclusion
+stays disabled, because every canonicalizer resolves a relative spec against
+the process working directory, and that is the one root the spec forbids
+defaulting to. A front end is free to expand its own relative argument first -
+the `carve` CLI does exactly that with `--include-root` - since what is
+required is that the root BE absolute, not that nobody may derive one.
+
 A browser or WASM host supplies its own resolver instead, which is the
 arrangement the spec describes: the parser performs no file I/O and the host
 owns containment.
@@ -150,6 +157,14 @@ directive path. Editors and preview servers watch these paths to know when to
 re-render. Targets that failed to resolve - missing files, and paths denied by
 root containment - are reported with `resolved: false` rather than omitted, so
 a watcher still fires when a missing chapter is finally created.
+
+`expanded.chargedBytes` is what the expansion charged against the byte budget,
+counted per occurrence rather than per distinct identity. It includes the
+target that broke the budget, which was necessarily read before its size could
+be known - so a host auditing a budget can tell "read nothing" from "read a
+target and refused it". A target refused before the budget check, for being
+non-text or a cycle, is not charged; the bound on how much I/O a render may
+perform is `maxResolverCalls`, not the byte budget.
 
 #### Finding the directives in a document
 
