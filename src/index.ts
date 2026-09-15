@@ -584,6 +584,111 @@ function applyTransforms(
   return out
 }
 
+/** A render target {@link renderDocument} can drive. */
+export type DocumentRenderTarget = 'html' | 'markdown' | 'plain' | 'ansi'
+
+/**
+ * Options for {@link renderDocument}: the render options of every string
+ * target, the profile options, the two resolution switches that live on
+ * `ParseOptions` because `parse()` is where a caller sets them, and the
+ * target to render to.
+ */
+export interface RenderDocumentOptions extends RenderOptions, ProfileOptions {
+  /** Which renderer to finish with. Default `'html'`. */
+  target?: DocumentRenderTarget
+  /** See `ParseOptions.lowercaseHeadingIds`; consumed by resolution. */
+  lowercaseHeadingIds?: boolean
+  /** See `ParseOptions.asciiHeadingIds`; consumed by resolution. */
+  asciiHeadingIds?: AsciiHeadingIdMode
+}
+
+/**
+ * Render a document the caller already holds through the same composition
+ * `carveToHtml` / `carveToMarkdown` / `carveToPlainText` / `carveToAnsi` use,
+ * entered one step later: resolution, the extension transforms (`afterParse`,
+ * `beforeRender`), the profile pass, then the renderer for `target`.
+ *
+ * This is the seam for a host that produced a tree rather than a string -
+ * `expandIncludes` for a preview with includes merged in, an AST patch, an
+ * editor session - and would otherwise have to reproduce that order by hand.
+ * Reproducing it is the failure this exists to prevent: the order is internal,
+ * a hand-composed pipeline that omits a step still renders, and what it omits
+ * (a `beforeRender` hook's numbering, a profile's link policy) shows up as
+ * output that looks right (markup-carve/carve-js#1677).
+ *
+ * TWO HOST OBLIGATIONS, because the seam starts after the parse and cannot
+ * undo either:
+ *
+ * - **Parse with the same `extensions` you pass here.** `matchInline` and
+ *   `matchBlock` are parse-stage: an extension that adds syntax has already
+ *   had its chance by the time a document reaches this function, and passing
+ *   it here only reaches its transform and renderer hooks.
+ * - **Parse with `positions: true`**, which is what the string entry points
+ *   force. Resolution reads a block image's own `startColumn` for the strict
+ *   column-0 figure rule and promotes when there is no position to consult,
+ *   so a positionless tree resolves to a different document.
+ *
+ * The document is transformed IN PLACE, exactly as the string entry points
+ * transform the tree they just parsed - a `beforeRender` hook that shifts
+ * heading levels shifts the caller's nodes. Invisible when the entry point
+ * owns a fresh parse, visible here, so a host re-rendering on every keystroke
+ * hands over a freshly produced tree (re-parse, re-expand) rather than one it
+ * has already rendered.
+ *
+ * A profile's `maxLength` is NOT enforced here: it is a pre-parse guard
+ * measured on source bytes (`carveToHtml` applies it before parsing) and
+ * there is no source at this seam. A host feeding untrusted input measures it
+ * before it parses; an include expansion has its own byte budget.
+ *
+ * `'carve'` is deliberately not a target. `carveToCarve` runs a DIFFERENT
+ * composition on purpose - no resolution, no transforms, no profile - because
+ * a formatter must write back what the author wrote, so routing it through
+ * this seam would bake render-time enrichment into source.
+ */
+export function renderDocument(doc: Document, opts: RenderDocumentOptions = {}): string {
+  const target = opts.target ?? 'html'
+  const targetIsHtml = target === 'html'
+  const exts: CarveExtension[] = opts.extensions ?? []
+  // Same condition as `carveToHtml`: with no transform and no profile able to
+  // insert new ids, resolution can seed the renderer's id namespace during the
+  // walk it already makes.
+  const documentIds = targetIsHtml && exts.length === 0 && opts.profile === undefined
+    ? new DocumentIdRegistry()
+    : undefined
+  let out = applyTransforms(
+    resolveDocument(doc, {
+      asciiHeadingIds: opts.asciiHeadingIds ?? false,
+      lowercaseHeadingIds: opts.lowercaseHeadingIds ?? false,
+    }, documentIds),
+    exts,
+    opts,
+    targetIsHtml,
+  )
+  out = runProfile(out, opts)
+  const ready = adoptBlockFootnoteDefs(out)
+  switch (target) {
+    case 'html':
+      return renderHtmlImpl(ready, opts, documentIds)
+    case 'markdown':
+      return renderMarkdownImpl(ready, opts)
+    case 'plain':
+      return renderPlainTextImpl(ready, opts)
+    case 'ansi':
+      return renderAnsiImpl(ready, opts)
+  }
+}
+
+/** {@link renderDocument} with a render-loss report. */
+export function renderDocumentWithReport(
+  doc: Document,
+  opts: RenderDocumentOptions & CheckedRenderOptions = {},
+): RenderResult {
+  return checkedRender(
+    (onRenderLoss) => renderDocument(doc, { ...opts, onRenderLoss }),
+    opts,
+  )
+}
+
 /**
  * Convenience: parse + resolve to the PART 12 exchange shape in one call.
  *
