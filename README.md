@@ -87,7 +87,7 @@ File inclusion is an opt-in processor pass. The core parser leaves `{{ path }}`
 literal unless you call `expandIncludes` with a resolver:
 
 ```ts
-import { expandIncludes, parse, resolve, renderHtml } from '@markup-carve/carve'
+import { expandIncludes, parse, renderDocument } from '@markup-carve/carve'
 
 const source = 'Intro\n\n{{ chapter.crv @shift:1 }}'
 const expanded = expandIncludes(parse(source, { positions: true }), source, {
@@ -101,7 +101,10 @@ const expanded = expandIncludes(parse(source, { positions: true }), source, {
 for (const warning of expanded.warnings) {
   console.warn(`${warning.file ?? '<input>'}:${warning.line} ${warning.message}`)
 }
-const html = renderHtml(resolve(expanded.doc))
+// Renders the expanded tree through the same composition `carveToHtml` uses -
+// resolution, extension transforms, profile, renderer. See "Rendering a
+// document you already hold" below.
+const html = renderDocument(expanded.doc)
 ```
 
 Each warning carries a `file` naming the document it arose in, so a host can
@@ -198,6 +201,48 @@ input file's directory, so `carve input.crv` already resolves includes beside
 it; pass `--include-root docs` to widen the root to a shared docs tree (or to
 narrow it). Stdin has no path context, so includes there stay literal unless
 `--include-root` is given.
+
+### Rendering a document you already hold
+
+`carveToHtml` and its siblings take source. A host that produced a *tree*
+instead - `expandIncludes` for a preview with the children merged in, an AST
+patch, an editor session, a decoded PART 12 payload - reaches the same
+composition with `renderDocument`:
+
+```ts
+import { renderDocument, renderDocumentWithReport } from '@markup-carve/carve'
+
+const html = renderDocument(doc, { extensions, target: 'html' })
+const report = renderDocumentWithReport(doc, { extensions, strictLosses: true })
+```
+
+It runs resolution, the extension transforms (`afterParse`, `beforeRender`),
+the profile pass and then the renderer for `target` (`'html'` by default, plus
+`'markdown'`, `'plain'`, `'ansi'`) - the same order, entered one step later, so
+a host never has to know that order. Composing it by hand is what this
+replaces: `applyTransforms` is not public, and a pipeline missing it still
+renders, so an extension that contributes a transform (citations numbering its
+groups and appending the references list, a heading-level shift, default
+attributes) degrades quietly instead of failing.
+
+Two obligations, because the seam begins after the parse:
+
+- **Parse with the same `extensions` you pass here.** `matchInline` and
+  `matchBlock` run at parse time; passing an extension here reaches only its
+  transform and renderer hooks.
+- **Parse with `positions: true`**, which the string entry points force.
+  Resolution reads a block image's own column for the strict column-0 figure
+  rule, so a positionless tree resolves to a different document.
+
+The document is transformed **in place**, as the string entry points transform
+the tree they just parsed. That is invisible when the entry point owns a fresh
+parse and visible here, so hand over a freshly produced tree - re-parse or
+re-expand - rather than one you already rendered.
+
+A profile's `maxLength` is not enforced here - it is a pre-parse guard on
+source bytes, and there is no source at this seam. `'carve'` is deliberately
+not a target: `carveToCarve` runs a different composition on purpose, because a
+formatter must write back what the author wrote.
 
 ### Heading ids
 
