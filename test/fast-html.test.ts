@@ -92,6 +92,8 @@ describe('borrowed HTML layout', () => {
       // paragraph. The borrowed layout collected it and emitted nothing, so the
       // line vanished.
       '[a]: /u  "T"\n',
+      // A marker right after a closer of the same marker does not open (CARVE-P3-013).
+      '/x//y/\n', '*x**y*\n',
     ]) expect(tryFastHtml(source, {}), source).toBeUndefined()
   })
 
@@ -132,6 +134,12 @@ describe('borrowed HTML layout', () => {
       documents.add(`${a}${sep}${b}\n`)
     }
     for (const source of documents) expect(carveToHtml(source), source).toBe(authoritative(source))
+  })
+
+  it('reads a marker right after a same-marker closer as text (carve-js#1742)', () => {
+    expect(carveToHtml('/x//y/\n')).toBe('<p><em>x</em>/y/</p>')
+    expect(carveToHtml('*x**y*\n')).toBe('<p><strong>x</strong>*y*</p>')
+    expect(carveToHtml('a /x//y/ b\n')).toBe('<p>a <em>x</em>/y/ b</p>')
   })
 
   it('pins the loose ordered list the corpus has no fixture for', () => {
