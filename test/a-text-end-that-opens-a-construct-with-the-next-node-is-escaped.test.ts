@@ -40,16 +40,18 @@ describe('the writer at a text node boundary', () => {
     expect(carveToCarve(carve)).toBe(carve)
   })
 
+  // `*b*` in the text needs its escape, so the node is written conservatively
+  // and the boundary rule is the only thing left deciding the last character.
   it.each([
-    ['a caret before a strong', 'xQ{*s*}\n', '^', 'x^*s*\n'],
-    ['a caret before a code span', 'xQ`c`\n', '^', 'x^`c`\n'],
-    ['a dollar before a link', 'xQ[n](u)\n', '$', 'x$[n](u)\n'],
-  ])('leaves %s bare', (_, template, value, written) => {
+    ['an escaped caret before a link', 'Q[n](u)\n', '*b* x{^', '\\*b* x{\\^[n](u)\n'],
+    ['a caret before a strong', 'Q{*s*}\n', '*b* x^', '\\*b* x^*s*\n'],
+    ['a dollar before a link', 'Q[n](u)\n', '*b* x$', '\\*b* x$[n](u)\n'],
+  ])('in a conservatively written text, writes %s', (_, template, value, written) => {
     expect(renderCarve(withText(template, value))).toBe(written)
   })
 
-  it('writes a caret already escaped in the text once', () => {
-    expect(carveToCarve('x\\^[n](u)\n')).toBe('x\\^[n](u)\n')
+  it('leaves a caret before an empty span bare, which opens no note', () => {
+    expect(carveToCarve('x ^[]{.c}\n')).toBe('x ^[]{.c}\n')
   })
 })
 
