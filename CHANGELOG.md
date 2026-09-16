@@ -17,6 +17,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `carve fmt` writes several shapes the way the other engines do (#1663, #1680, #1686, #1731, #1749; markup-carve/carve#1970): a tight item's opening block stays on the marker line, trailing item content continues at two spaces, a first line drops the marker-column tag, a comment below a sub-list keeps its column, and a span whose bare opener cannot open is braced.
 - The native `|=` header form survives a trailing colspan run (#1747) in the Carve writer and the HTML importer; a leading span or a real cell after a header span still uses the delimiter row.
 - A raw-HTML profile error names the Carve construct it refused (#1724) instead of the HTML it produced.
+- `renderCarve` throws `SourceUnspellableError` for an empty code span its open run cannot end at (#1789), and the HTML importer drops such a span with a `structure-unspellable` warning.
 
 ### Added
 
