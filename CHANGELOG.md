@@ -24,11 +24,17 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the explicit fallback finding. Release this change as 0.2.0.
 - **BREAKING:** The migration CLI now writes version 2 reports for every importer, and
   `--check-loss` exits 1 only when a report contains degraded or dropped content.
+- **The Markdown target spells emphasis and strike differently in several shapes** (#1692, #1707, #1711, #1730, #1732, #1737, #1738, #1740, #1752, #1753, #1754). Padding moves outside the delimiters; a run that cannot flank where it stands, or that merges with a neighbouring run, falls back to inline HTML, and of two abutting runs it is the second that takes the fallback (markup-carve/carve#2045); a nested child of the same strength takes it too, while one of a different strength keeps the delimiters; a literal tilde is escaped, and so is an underscore pair the emitted block would read as emphasis (markup-carve/carve#2043, markup-carve/carve#2046). Documents rendered to Markdown change bytes in these shapes; what a reader gets back does not.
+- **`carve fmt` writes several shapes the way the other engines do** (#1663, #1680, #1686, #1731, #1749). A tight item's opening block stays on the marker line, a comment below a sub-list keeps its column, a first line no longer carries the marker-column tag, trailing item content continues at two spaces, and a span whose bare opener cannot open against what precedes it is written in braces.
+- **The native `|=` header form survives a trailing colspan run** (#1747) in both the Carve writer and the HTML importer.
+- **A raw-HTML profile error names the Carve construct it refused** (#1724) instead of the HTML it produced.
 
 ### Added
 
 - `migrateBbcode()` exposes BBCode conversion through the shared migration
   result envelope.
+- **Include expansion** (#356, #1694, #1701, #1733). `expandIncludes()` resolves a document's include directives before rendering, `carve flatten` writes the expanded document, `findDirectiveSites()` reports where the live directives are, and a host can render a tree it already holds through its own extension pipeline. An included child is parsed with the caller's extensions.
+- **Importer fidelity diagnostics** (#1671). Every importer classifies each construct as preserved, normalized, degraded or dropped, with a confidence, through the shared migration result.
 
 ### Fixed
 
@@ -43,6 +49,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `carve fmt` re-emits trailing list-item content with a 2-space continuation, matching the other engines (markup-carve/carve#1970).
 - In a stack of nested footnote definitions, a trailing line after a consumed definition is placed against each note's own marker column, so a line below the innermost note's content column falls to the reachable ancestor note instead of over-reaching into the innermost one (#1653, markup-carve/carve#1946).
 - The Markdown renderer moves emphasis padding outside the delimiters, so content that begins or ends with whitespace still reads as emphasis rather than literal text; content that is only whitespace falls back to inline HTML (#1683).
+- **A bare delimiter pairs across only what PART 9 §9 E2a names** (#1726, #1729, #1746, #1751). Code spans, braced inlines, link destinations and autolinks are opaque; plain braces, attribute blocks and link labels are not (markup-carve/carve#2027, markup-carve/carve#2046).
+- **Include resolution refuses what it cannot contain** (#1690, #1702, #1703, #1704, #1714). A blank or relative containment root is refused, a directive closes at the first pair outside a quoted run, the byte budget is charged for what was read, and every filesystem denial class reaches the caller as a warning rather than an exception.
+- **An inline include leaves one text run and one span** (#1739, #1741), so a merged run carries the host's span and the surrounding text is not split.
+- **The Djot importer keeps Djot-only block markers and document structures** (#1669, #1670).
+- **The BBCode input limit is measured in UTF-8 bytes** (#1672).
 
 ## [0.1.6] - 2026-09-07
 
