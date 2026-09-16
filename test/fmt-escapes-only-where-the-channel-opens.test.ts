@@ -60,4 +60,13 @@ describe('fmt escapes only where the channel actually opens', () => {
     expect(out).toContain('\n^\tx')
     expect(carveToHtml(out)).toBe(carveToHtml(src))
   })
+
+  it('a caret before an escaped closing brace is written bare', () => {
+    // `\}` cannot close a `{^ ^}` run, so the brace's escape is enough (carve-js#1763).
+    const src = '{/{^{/x/}^}/}\n'
+    const out = carveToCarve(src)
+    expect(out).toBe('/{^{/x/^\\}/\\}\n')
+    expect(carveToHtml(out)).toBe(carveToHtml(src))
+    expect(carveToCarve(out)).toBe(out)
+  })
 })

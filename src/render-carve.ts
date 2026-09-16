@@ -3445,7 +3445,8 @@ function escapeText(text: string, captionCanOpen = false, bangOpensLiteral = fal
       // write the caret bare, and an escape that guards a channel the
       // character cannot open is exactly what corpus 304 refuses.
       const opensCaption = captionCanOpen && offset === 0 && next === ' '
-      const opensInline = next === '[' || (text[offset - 1] ?? '') === '{' || next === '}'
+      // Before a `}` the brace takes the escape, and `^\}` closes nothing (PART 11 §2).
+      const opensInline = next === '[' || (text[offset - 1] ?? '') === '{'
       return opensCaption || opensInline ? '\\^' : '^'
     })
   // The caption-opening caret is escaped in EVERY mode, not only when `^` is
