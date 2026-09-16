@@ -101,7 +101,6 @@ export function renderMarkdown(ast: Document, opts: MarkdownRenderOptions = {}):
     abbrBudget: budgetForDocument(ast),
     smartTypography: opts.smartTypography === false || opts.smartTypography === 'source' ? 'source' : 'glyph',
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
-    authoredHashes: 0,
   }
   const out = renderBlocks(ast.children, ctx)
   const footnotes = renderFootnoteDefs(ast, ctx)
@@ -124,21 +123,17 @@ interface MarkdownContext {
    * metacharacters that section 8 M1 requires escaping.
    */
   definedFootnotes: Set<string>
-  /**
-   * Authored hashes emitted since the enclosing block started, so a block that
-   * emitted none skips the M2b pass entirely rather than scanning its subtree.
-   */
-  authoredHashes: number
 }
 
 /**
- * The finished content of a container, trimmed and with PART 11 section 8b M2b
- * ANSWERED ON IT, ready for the caller to put its prefix in front.
+ * The finished content of a container, trimmed and with PART 11 section 8a M1f
+ * and section 8b M2b ANSWERED ON IT, ready for the caller to put its prefix in
+ * front.
  *
  * Every call site is a place the writer prefixes a container's lines, and that
  * is the whole of the list: the block quote marker, the list and task marker
  * with the alignment section 10 gives the lines under it, the footnote
- * definition marker, the definition marker. M2b measures on the EMITTED LINE
+ * definition marker, the definition marker. Both clauses measure on the EMITTED LINE
  * and a line's content position is after its container prefix
  * (markup-carve/carve#1330), so the question has to be settled here - after the
  * trim, which is part of the shape of the line, and before the prefix, which is
@@ -165,11 +160,11 @@ interface MarkdownContext {
  * matters for exactly the shape carve-js#701 fixed, where re-scanning a subtree
  * once per enclosing level is quadratic in the nesting depth.
  */
-function containerContent(ctx: MarkdownContext, render: () => string): string {
-  const before = ctx.authoredHashes
+function containerContent(render: () => string): string {
+  const before = hashesEmitted
   const content = trimNonNbsp(render())
-  if (ctx.authoredHashes === before) return content
-  ctx.authoredHashes = before
+  if (hashesEmitted === before) return content
+  hashesEmitted = before
 
   return decideAuthoredHashes(content)
 }
@@ -253,7 +248,7 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       return `${fence}${info}\n${content}\n${fence}\n\n`
     }
     case 'block_quote': {
-      const lines = containerContent(ctx, () => renderBlocks(node.children, ctx)).split('\n')
+      const lines = containerContent(() => renderBlocks(node.children, ctx)).split('\n')
       return `${lines.map((line) => withMarker('> ', line)).join('\n')}\n\n`
     }
     case 'list':
@@ -371,7 +366,7 @@ function renderList(node: List, ctx: MarkdownContext): string {
     } else {
       prefix = `${bullet} `
     }
-    const content = containerContent(ctx, () => renderListItem(item, ctx))
+    const content = containerContent(() => renderListItem(item, ctx))
     const lines = content.split('\n')
     // NESTING COMES FROM THE PARENT'S CONTINUATION PAD ALONE. This used to add
     // `'  '.repeat(listDepth - 1)` as well, and the enclosing item then padded
@@ -403,7 +398,7 @@ function renderDefinitionList(items: DefinitionItem[], ctx: MarkdownContext, tra
   for (const item of items) {
     for (const term of item.terms) out += wrapperLine(renderInlines(term, ctx), '**', 'strong', '\n')
     for (const def of item.definitions)
-      out += `${withMarker(': ', containerContent(ctx, () => renderBlocks(def, ctx)))}\n`
+      out += `${withMarker(': ', containerContent(() => renderBlocks(def, ctx)))}\n`
   }
   return trailingBlank ? `${out}\n` : out
 }
@@ -524,7 +519,7 @@ function renderFootnoteDefs(ast: Document, ctx: MarkdownContext): string {
   for (const [label, blocks] of footnoteDefsInSourceOrder(ast)) {
     // A label is author content, and it is reproduced verbatim in two places;
     // both escape, so a reference still matches its definition (carve-js#894).
-    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(ctx, () => outsideLink(() => renderBlocks(blocks, ctx))))}\n`
+    out += `${withMarker(`[^${escapeMdHtml(stripControls(label))}]: `, containerContent(() => outsideLink(() => renderBlocks(blocks, ctx))))}\n`
   }
   return out
 }
@@ -567,11 +562,7 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       // section 8a's argument about the two link grammars standing: an author
       // who meant `[a](b)` as text still gets it back.
       if (AUTHORED_INERT.has(node.value)) return node.value
-      if (node.value in AUTHORED_SENTINEL) {
-        ctx.authoredHashes++
-
-        return AUTHORED_SENTINEL[node.value]!
-      }
+      if (node.value in AUTHORED_SENTINEL) return positionalHash()
       return '\\' + node.value
     case 'emphasis':
     case 'strong':
@@ -1009,6 +1000,9 @@ function escapeText(text: string): string {
   // section 8a decides those three on the EMITTED LINE, which only normalize()
   // can see. `*` and everything else keep M1 here and unconditionally.
   //
+  // THE HASH TAKES M1f's CARRIER, not M1b's. Its test is positional rather
+  // than adjacency, and a container settles it at the prefix site.
+  //
   // `~` IS ONE OF THEM. GFM's strikethrough extension pairs a run of ONE OR
   // TWO tildes, so a literal tilde in text is a Markdown metacharacter, and
   // 8a narrows only `_`, `#`, `[` and `<` - M1d leaves every other one on M1.
@@ -1016,7 +1010,11 @@ function escapeText(text: string): string {
   // whatever markup stands between them and the tags interleave
   // (carve-js#1710); a single one pairs the same way for a reader that takes
   // the one-tilde form, which pulldown-cmark does.
-  text = text.replace(/[\\`*_~[\]#]/g, (ch) => NARROWED_SENTINEL[ch] ?? `\\${ch}`)
+  text = text.replace(/[\\`*_~[\]#]/g, (ch) => {
+    if (ch === '#') return positionalHash()
+
+    return NARROWED_SENTINEL[ch] ?? `\\${ch}`
+  })
   // PART 11 section 8a M1e: a `<` is escaped only where the emitted line would
   // read it as markup - before an ASCII letter, `/`, `!` or `?`, the four
   // things that open raw HTML. Everything else is inert, and so is `>`
@@ -1158,14 +1156,31 @@ let NARROWED_CHARACTER: Record<string, string> = {}
 const AUTHORED_INERT = new Set(['{', '}', '^', ',', '%', ':', '/', '@'])
 
 /**
- * PART 11 section 8b M2b: read as markup only at a line's CONTENT POSITION.
+ * PART 11 section 8a M1f and section 8b M2b: a `#` is read as markup only at a
+ * line's CONTENT POSITION, where it opens an ATX heading.
  *
  * A second sentinel family, extending the run above. Separate from
  * NARROWED_SENTINEL because the two are decided by DIFFERENT tests: M1b asks
- * about an adjacent delimiter of the same character, M2b asks where on the
- * line the character stands.
+ * about an adjacent delimiter of the same character, M1f and M2b ask where on
+ * the line the character stands.
  */
 let AUTHORED_SENTINEL: Record<string, string> = {}
+
+/**
+ * Hashes emitted since the enclosing container started, so a container that
+ * emitted none skips the position pass instead of scanning its subtree.
+ *
+ * Module state, like the carriers above, because every producer must be
+ * counted and `escapeText` has no context to reach for.
+ */
+let hashesEmitted = 0
+
+/** Emit a `#` as the undecided carrier, counted. */
+function positionalHash(): string {
+  hashesEmitted++
+
+  return AUTHORED_SENTINEL['#']!
+}
 
 /**
  * The same hash once M2b HAS decided to keep its escape.
@@ -1194,11 +1209,16 @@ let RE_UNDECIDED_HASH = /(?!)/g
 let HAS_UNDECIDED_HASH = /(?!)/
 
 /**
- * The carriers this document uses, one run of five.
+ * The carriers this document uses, one run of four.
  *
- * Slots, in order: the three section 8a narrowings - `_`, `#`, `[` - then M2b's
- * undecided hash and the same hash once M2b has decided to KEEP its escape. The
- * last two are one character apart on purpose; see AUTHORED_KEPT above.
+ * Slots, in order: section 8a M1b's two adjacency narrowings - `_` and `[` -
+ * then the undecided hash and the same hash once its position test has decided
+ * to KEEP the escape. The last two are one character apart on purpose; see
+ * AUTHORED_KEPT above.
+ *
+ * ONE HASH CARRIER SERVES BOTH SIDES. M1f and M2b ask the same positional
+ * question, so a `#` from a text node and one from an `escaped_text` node are
+ * decided alike and need no separate slot.
  *
  * The run is picked from code points the DOCUMENT does not contain, so no
  * authored character can be read as one and none has to be deleted to make that
@@ -1207,19 +1227,13 @@ let HAS_UNDECIDED_HASH = /(?!)/
  * a slot added on either side a renumbering on the other (see sentinel-run.ts).
  */
 const CARRIER_BASE = 0xe004
-const CARRIER_COUNT = 5
+const CARRIER_COUNT = 4
 
 function setCarriers(run: string[]): void {
-  const [underscore, hash, bracket, undecidedHash, keptHash] = run as [
-    string,
-    string,
-    string,
-    string,
-    string,
-  ]
+  const [underscore, bracket, undecidedHash, keptHash] = run as [string, string, string, string]
 
-  NARROWED_SENTINEL = { _: underscore, '#': hash, '[': bracket }
-  NARROWED_CHARACTER = { [underscore]: '_', [hash]: '#', [bracket]: '[' }
+  NARROWED_SENTINEL = { _: underscore, '[': bracket }
+  NARROWED_CHARACTER = { [underscore]: '_', [bracket]: '[' }
   AUTHORED_SENTINEL = { '#': undecidedHash }
   AUTHORED_KEPT = keptHash
   AUTHORED_CHARACTER = { [undecidedHash]: '#', [keptHash]: '#' }
@@ -1232,6 +1246,7 @@ function setCarriers(run: string[]): void {
 /** Pick this document's carriers. Called once, before anything is rendered. */
 function chooseCarriers(ast: Document): void {
   setCarriers(pickSentinelRun(occupiedPrivateUse(ast), CARRIER_BASE, CARRIER_COUNT))
+  hashesEmitted = 0
 }
 
 setCarriers(pickSentinelRun(new Set(), CARRIER_BASE, CARRIER_COUNT))

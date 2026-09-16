@@ -8,10 +8,13 @@ import type { BlockNode, Document, InlineNode } from '../src/ast.js'
  * ruling on markup-carve/carve#970, landed in markup-carve/carve#978).
  *
  *   M1a THE ASTERISK KEEPS M1 UNCONDITIONALLY.
- *   M1b `_`, `#` AND `[` ARE ESCAPED IF AND ONLY IF the character is ADJACENT
+ *   M1b `_` AND `[` ARE ESCAPED IF AND ONLY IF the character is ADJACENT
  *       ON THE EMITTED LINE to an UNESCAPED DELIMITER OF THE SAME CHARACTER.
  *   M1c A PARAGRAPH LINE MUST NOT BECOME A LIST.
  *   M1d NOTHING ELSE NARROWS.
+ *   M1f `#` IS ESCAPED WHERE THE EMITTED LINE WOULD OPEN AN ATX HEADING
+ *       (markup-carve/carve#2049). Its reading is POSITIONAL, so it is asked
+ *       the question M2b asks on the authored side, not M1b's.
  *
  * M1b IS AN IF-AND-ONLY-IF, NOT A FLOOR. An escape it drops is dropped and an
  * escape it keeps is kept, because a permissive reading of it yields three
@@ -76,14 +79,6 @@ describe("the Markdown target's escaping narrows on the line", () => {
   describe('M1b: adjacent, so unescaping would merge the runs and the escape stays', () => {
     it('keeps both escapes on a doubled underscore', () => {
       expect(md('a__b')).toBe('a\\_\\_b')
-    })
-
-    it('keeps both escapes on a doubled hash', () => {
-      // The sharp one for `#`: `## text` on a line of its own is an ATX
-      // heading to every reader this target answers to. Adjacency catches it
-      // without a rule about line position, because the two characters are
-      // each other's neighbour.
-      expect(md('a ## b')).toBe('a \\#\\# b')
     })
 
     it('keeps both escapes on a doubled bracket', () => {
@@ -166,6 +161,48 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
   })
 
+  describe('M1f: a hash from text is decided by where it stands', () => {
+    it('escapes the hash a paragraph continuation line would open with', () => {
+      expect(md('a\n   # heading')).toBe('a\n\\# heading')
+    })
+
+    it('escapes a lone hash the line ends on', () => {
+      expect(md('a\n   #')).toBe('a\n\\#')
+    })
+
+    it('escapes only the FIRST hash of the run', () => {
+      expect(md('a\n   ## b')).toBe('a\n\\## b')
+    })
+
+    it('leaves a closed heading\'s trailing run bare', () => {
+      // The trailing run stands nowhere near the content position, and the
+      // line it would close is a paragraph once the opener is escaped.
+      expect(md('a\n   ### b ###')).toBe('a\n\\### b ###')
+    })
+
+    it('leaves a mid-line hash bare', () => {
+      expect(md('a # b')).toBe('a # b')
+    })
+
+    it('leaves a run no space closes bare', () => {
+      expect(md('a\n   #b')).toBe('a\n#b')
+    })
+
+    it('escapes a run of six, the longest a heading can open with', () => {
+      expect(md('a\n   ###### b')).toBe('a\n\\###### b')
+    })
+
+    it('leaves a run of seven bare, since no flavour reads it as a heading', () => {
+      expect(md('a\n   ####### b')).toBe('a\n####### b')
+    })
+
+    it('measures the position past a container prefix', () => {
+      // The quote marker stands in front of the content, so the hash is at the
+      // line's content position even though it is not at column 0.
+      expect(md('> a\n>    # b')).toBe('> a\n> \\# b')
+    })
+  })
+
   describe('M2b: the hash is decided by where it stands', () => {
     it('drops the backslash where no heading could open', () => {
       expect(md('a \\#y b')).toBe('a #y b')
@@ -208,8 +245,8 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
 
     it('does not reach across a newline', () => {
-      // Two lines, each ending/starting with the character. They are not on
-      // one line, so neither is adjacent to the other.
+      // Two lines, each ending/starting with the character. Neither hash is at
+      // its own line's content position, so neither opens a heading.
       expect(md('x #\n\ny # z')).toBe('x #\n\ny # z')
     })
 
@@ -233,7 +270,12 @@ describe("the Markdown target's escaping narrows on the line", () => {
       // (carve-js#1281). The carriers are picked per document now, so an
       // authored character is never one of them: it steers nothing AND it
       // survives.
-      for (const [cp, ch] of [[0xe004, '_'], [0xe005, '#'], [0xe006, '[']] as const) {
+      for (const [cp, ch] of [
+        [0xe004, '_'],
+        [0xe005, '['],
+        [0xe006, '#'],
+        [0xe007, '#'],
+      ] as const) {
         const src = 'x' + String.fromCharCode(cp) + 'y'
         expect(src.charCodeAt(1)).toBe(cp)
         expect(md(src)).toBe(src)
