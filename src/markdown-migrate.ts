@@ -1991,6 +1991,8 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // so the migrated fence sits at its container's content column. See the
   // opener handler for how it is derived.
   let fenceStrip = 0
+  // The content column of the list item holding the open fence, 0 outside one.
+  let fenceCol = 0
   // Stack of enclosing list items' content columns (outermost first), so a
   // fence is re-based to the DEEPEST item that still contains it. A Markdown
   // fence indented to a list item's content stays in the item (strip nothing);
@@ -2101,6 +2103,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // inside an item as a fence at all.
       const openerIndent = columnWidth(open[1]!)
       fenceStrip = Math.max(0, openerIndent - contentCol)
+      fenceCol = contentCol
       // Whatever the opener's own indent was, what survives the strip is
       // exactly the content column, so the fence goes back there.
       out.push(containerPad + open[2]! + info)
@@ -2111,6 +2114,19 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // Inside a fence — a closer is a run of the same char at least as long as
     // the opener (indented by at most 3 spaces); a shorter inner run is code.
     if (inCode) {
+      // A fence cannot continue lazily, so a line left of its item's content
+      // ends the item and the fence with it (CommonMark 5.2).
+      if (trimmed !== '' && indentColumns(line) < fenceCol) {
+        out.push(' '.repeat(fenceCol) + fenceChar.repeat(fenceLen))
+        inCode = false
+        fenceChar = ''
+        fenceLen = 0
+        fenceStrip = 0
+        fenceCol = 0
+        prevType = 'code_fence'
+        i--
+        continue
+      }
       const dedented = stripColumns(line, fenceStrip)
       if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(line)) {
         inCode = false
