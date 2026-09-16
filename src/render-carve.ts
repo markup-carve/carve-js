@@ -2406,6 +2406,8 @@ function renderInlines(
         lineTail = out.slice(-2)
       }
 
+      refuseGluedName(node, nodes[idx - 1], out, piece)
+
       out += piece
       const lastNewline = piece.lastIndexOf('\n')
       if (lastNewline === -1) {
@@ -3978,6 +3980,20 @@ export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: I
       else merged.push(child)
     }
     list.splice(0, list.length, ...merged)
+  }
+}
+
+/**
+ * A mention or tag opens only after a non-word character and its name runs to
+ * the last name character, so one glued to a word has no spelling
+ * (carve-js#1807).
+ */
+function refuseGluedName(node: InlineNode, previous: InlineNode | undefined, written: string, piece: string): void {
+  if ((node.type === 'mention' || node.type === 'tag') && /[A-Za-z0-9_]$/.test(written)) {
+    throw new SourceUnspellableError(node.type, `a ${node.type} after a word character has no Carve source spelling`)
+  }
+  if ((previous?.type === 'mention' || previous?.type === 'tag') && /^\.?[A-Za-z0-9_-]/.test(piece)) {
+    throw new SourceUnspellableError(previous.type, `a ${previous.type} before a name character has no Carve source spelling`)
   }
 }
 
