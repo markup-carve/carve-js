@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { htmlToCarve, parse, renderCarve, renderHtml, type Document, type InlineNode } from '../src/index.js'
+import { carveToCarve, htmlToCarve, parse, renderCarve, renderHtml, type Document, type InlineNode } from '../src/index.js'
 
 /*
  * Two backtick runs that touch merge into one, so two adjacent code spans - or
@@ -45,10 +45,10 @@ const underN3 = (node: unknown): unknown => {
 
 describe('two touching backtick runs', () => {
   it.each([
-    ['two code spans', paragraph(code('a'), code('b')), '`a`{% %}`b`\n'],
-    ['a code span and a raw inline', paragraph(code('a'), raw('<b>')), '`a`{% %}`<b>`{=html}\n'],
-    ['three code spans', paragraph(code('a'), code('b'), code('c')), '`a`{% %}`b`{% %}`c`\n'],
-    ['code spans between text', paragraph(text('t'), code('a'), code('b'), text('z')), 't`a`{% %}`b`z\n'],
+    ['two code spans', paragraph(code('a'), code('b')), '`a`{%  %}`b`\n'],
+    ['a code span and a raw inline', paragraph(code('a'), raw('<b>')), '`a`{%  %}`<b>`{=html}\n'],
+    ['three code spans', paragraph(code('a'), code('b'), code('c')), '`a`{%  %}`b`{%  %}`c`\n'],
+    ['code spans between text', paragraph(text('t'), code('a'), code('b'), text('z')), 't`a`{%  %}`b`z\n'],
   ])('is written with a separator for %s', (_, document, carve) => {
     expect(renderCarve(document)).toBe(carve)
   })
@@ -72,9 +72,14 @@ describe('two touching backtick runs', () => {
     expect(renderCarve(paragraph(text('x`'), code('b')))).toBe('x\\``b`\n')
   })
 
+  it('is a fixed point of the formatter', () => {
+    const written = renderCarve(paragraph(code('a'), code('b')))
+    expect(carveToCarve(written)).toBe(written)
+  })
+
   it('imports adjacent code spans as two code spans', () => {
     const imported = htmlToCarve('<p><code>a</code><code>b</code></p>')
-    expect(imported.value).toBe('`a`{% %}`b`\n')
+    expect(imported.value).toBe('`a`{%  %}`b`\n')
     expect(renderHtml(parse(imported.value))).toBe('<p><code>a</code><code>b</code></p>')
   })
 })
