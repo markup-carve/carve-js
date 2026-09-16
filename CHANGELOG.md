@@ -9,62 +9,33 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- A mention or tag template that produces a denied URL now renders the inert
-  span instead of an anchor with an empty `href`. Social-link destinations
-  always apply this baseline denylist, including when general URL sanitization
-  is disabled.
-- The Carve writer keeps the native `|=` header form for a table whose header
-  spans trail its real header cells (`|= A |= B | < |`), instead of falling back
-  to a GFM delimiter row. A leading span or a real cell after a header span still
-  uses the delimiter row.
-- **BREAKING:** Migration reports advance to schema version 2: `carried` is renamed to
-  `preserved`, `normalized` distinguishes semantics-preserving rewrites, and
-  Markdown, Djot, and BBCode now emit a conservative dropped/fallback finding
-  because those paths do not yet expose construct-level fidelity. The
-  opaque `raw-preserved` fallback is now `degraded` rather than `preserved`, so
-  `--check-loss` fails when imported bytes cannot be structurally edited. The
-  diagnostic `code` type is widened for cross-importer codes, and consumers
-  that treated an empty diagnostics array as verified fidelity must now handle
-  the explicit fallback finding. Release this change as 0.2.0.
-- **BREAKING:** The migration CLI now writes version 2 reports for every importer, and
-  `--check-loss` exits 1 only when a report contains degraded or dropped content.
-- **The Markdown target spells emphasis and strike differently in several shapes** (#1692, #1707, #1711, #1730, #1732, #1737, #1738, #1740, #1752, #1753, #1754). Padding moves outside the delimiters; a run that cannot flank where it stands, or that merges with a neighbouring run, falls back to inline HTML, and of two abutting runs it is the second that takes the fallback (markup-carve/carve#2045); a nested child of the same strength takes it too, while one of a different strength keeps the delimiters; a literal tilde is escaped, and so is an underscore pair the emitted block would read as emphasis (markup-carve/carve#2043, markup-carve/carve#2046). Documents rendered to Markdown change bytes in these shapes; what a reader gets back does not.
-- **`carve fmt` writes several shapes the way the other engines do** (#1663, #1680, #1686, #1731, #1749). A tight item's opening block stays on the marker line, a comment below a sub-list keeps its column, a first line no longer carries the marker-column tag, trailing item content continues at two spaces, and a span whose bare opener cannot open against what precedes it is written in braces.
-- **The native `|=` header form survives a trailing colspan run** (#1747) in both the Carve writer and the HTML importer.
-- **A raw-HTML profile error names the Carve construct it refused** (#1724) instead of the HTML it produced.
+- **BREAKING:** Migration reports move to schema version 2 (#1671, #1673). `carried` is renamed `preserved`, `normalized` marks semantics-preserving rewrites, opaque `raw-preserved` content counts as `degraded`, and the diagnostic `code` type widens for cross-importer codes. Markdown, Djot and BBCode emit an explicit fallback finding, so an empty diagnostics array no longer means verified fidelity.
+- **BREAKING:** The migration CLI writes version 2 reports for every importer, and `--check-loss` exits 1 only when a report holds degraded or dropped content (#1671).
+- A missing include target's dependency id names where the file would be (#1781): `fileSystemResolver` answers `{ source: null, id }` with the canonical path instead of `null`, and a path escaping the root keeps its spelling.
+- A mention or tag URL that the denylist refuses renders the inert span (#1769) instead of an anchor with an empty `href`, even when general URL sanitization is off.
+- The Markdown target spells emphasis and strike differently in several shapes (#1683, #1692, #1707, #1711, #1718, #1730, #1732, #1737, #1738, #1740, #1752, #1753, #1754, #1760; markup-carve/carve#2043, markup-carve/carve#2045, markup-carve/carve#2046). Padding moves outside the delimiters and whitespace-only content falls back to inline HTML, as does a run that cannot flank or that merges with a neighbor (the second of two abutting runs, a nested child of the same strength), and a literal tilde or an underscore pair a reader would take as emphasis is escaped. Rendered bytes change; what a reader gets back does not.
+- `carve fmt` writes several shapes the way the other engines do (#1663, #1680, #1686, #1731, #1749; markup-carve/carve#1970): a tight item's opening block stays on the marker line, trailing item content continues at two spaces, a first line drops the marker-column tag, a comment below a sub-list keeps its column, and a span whose bare opener cannot open is braced.
+- The native `|=` header form survives a trailing colspan run (#1747) in the Carve writer and the HTML importer; a leading span or a real cell after a header span still uses the delimiter row.
+- A raw-HTML profile error names the Carve construct it refused (#1724) instead of the HTML it produced.
 
 ### Added
 
-- `resolveMention` and `resolveTag` map parsed social tokens through host
-  application data while keeping inert fallback and URL-scheme checks.
-- `migrateBbcode()` exposes BBCode conversion through the shared migration
-  result envelope.
-- **Include expansion** (#356, #1694, #1701, #1733). `expandIncludes()` resolves a document's include directives before rendering, `carve flatten` writes the expanded document, `findDirectiveSites()` reports where the live directives are, and a host can render a tree it already holds through its own extension pipeline. An included child is parsed with the caller's extensions.
-- **Importer fidelity diagnostics** (#1671). Every importer classifies each construct as preserved, normalized, degraded or dropped, with a confidence, through the shared migration result.
+- `resolveMention` and `resolveTag` (#1769) map social tokens through host data, keeping the inert fallback and URL-scheme checks.
+- `migrateBbcode()` (#1671) returns BBCode conversion in the shared migration result envelope.
+- Include expansion (#356, #1694, #1701, #1733). `expandIncludes()`, `carve flatten`, `findDirectiveSites()`, and rendering a tree the host already holds; an included child is parsed with the caller's extensions.
+- Importer fidelity diagnostics (#1671, #1673). Every importer classifies each construct as preserved, normalized, degraded or dropped, with a confidence.
 
 ### Fixed
 
-- A footnote definition on a description marker line whose floor takes a nested
-  opener no longer keeps a following column-0 line in the `dd`: the line is at
-  or below the description's base column, so it falls to a top-level sibling
-  paragraph, while a line at the description's own content column stays in the
-  `dd` (markup-carve/carve#1974).
-- A nested footnote definition keeps its authored column, so a trailing line
-  at or below that column belongs to the surviving outer note rather than the
-  nested one (markup-carve/carve#1971).
-- `carve fmt` re-emits trailing list-item content with a 2-space continuation, matching the other engines (markup-carve/carve#1970).
-- In a stack of nested footnote definitions, a trailing line after a consumed definition is placed against each note's own marker column, so a line below the innermost note's content column falls to the reachable ancestor note instead of over-reaching into the innermost one (#1653, markup-carve/carve#1946).
-- The Markdown renderer moves emphasis padding outside the delimiters, so content that begins or ends with whitespace still reads as emphasis rather than literal text; content that is only whitespace falls back to inline HTML (#1683).
-- **A bare delimiter pairs across only what PART 9 §9 E2a names** (#1726, #1729, #1746, #1751). Code spans, braced inlines, link destinations and autolinks are opaque; plain braces, attribute blocks and link labels are not (markup-carve/carve#2027, markup-carve/carve#2046).
-- **Include resolution refuses what it cannot contain** (#1690, #1702, #1703, #1704, #1714). A blank or relative containment root is refused, a directive closes at the first pair outside a quoted run, the byte budget is charged for what was read, and every filesystem denial class reaches the caller as a warning rather than an exception.
-- **An inline include leaves one text run and one span** (#1739, #1741), so a merged run carries the host's span and the surrounding text is not split.
-- **The Djot importer keeps Djot-only block markers and document structures** (#1669, #1670).
-- **The BBCode input limit is measured in UTF-8 bytes** (#1672).
-- **An unnumbered caption placeholder is escaped on the Markdown target** (#1767) where it would open a heading, as a tree from `parse()` alone leaves it.
-- **Host text cut around an inline include publishes only its own span** (#1764) instead of the span of the whole node it was cut from.
-- **The Carve writer no longer escapes a caret in front of an escaped closing brace** (#1763): `^\}` instead of `\^\}`.
-- **An emphasis ending in an empty code span is written with its braced closer** (#1773), so the open backtick run no longer swallows the closer.
-- **A heading's trailing hash run is escaped on the Markdown target** (#1779), so a CommonMark reader stops taking it for the ATX closing sequence.
+- Footnote bodies claim the right lines (#1653, #1664, #1666, #1667). A nested definition keeps its authored column, a trailing line falls to the reachable note, and a column-0 line after a description-hosted note is a top-level sibling (markup-carve/carve#1946, markup-carve/carve#1971, markup-carve/carve#1974).
+- A bare delimiter pairs across only what PART 9 §9 E2a names (#1726, #1729, #1746, #1751, #1762; markup-carve/carve#2027, markup-carve/carve#2046). Code spans, raw inlines, braced inlines, link destinations and autolinks are opaque; plain braces, attribute blocks and link labels are not.
+- An attribute block after an escaped character stays literal (#1771): `x\*{a}` renders `x*{a}` instead of dropping `{a}`.
+- Include resolution refuses what it cannot contain (#1690, #1702, #1703, #1704, #1714): a blank or relative root is refused, a directive closes at the first pair outside a quoted run, the byte budget counts what was read, and every filesystem denial reaches the caller as a warning.
+- An inline include leaves one text run and one span (#1739, #1741), and host text cut around it publishes only its own span (#1764).
+- The Djot importer keeps Djot-only block markers and document structures (#1669, #1670).
+- The BBCode input limit is measured in UTF-8 bytes (#1672).
+- A hash is escaped on the Markdown target where the line would open or close an ATX heading (#1768, #1779), including an unnumbered caption placeholder (#1767).
+- The Carve writer round-trips three more shapes (#1759, #1763, #1773): an emphasis wrapping a strong, a caret before an escaped closing brace, and an emphasis ending in an empty code span.
 
 ## [0.1.6] - 2026-09-07
 
