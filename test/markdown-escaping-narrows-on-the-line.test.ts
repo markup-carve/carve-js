@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToMarkdown, carveToAnsi, carveToPlainText } from '../src/index.js'
+import { carveToMarkdown, carveToAnsi, carveToPlainText, parse } from '../src/index.js'
 import { renderMarkdown } from '../src/render-markdown.js'
 import type { BlockNode, Document, InlineNode } from '../src/ast.js'
 
@@ -231,6 +231,25 @@ describe("the Markdown target's escaping narrows on the line", () => {
 
     it('leaves a run of seven alone, since no flavour reads it as a heading', () => {
       expect(md('\\#\\#\\#\\#\\#\\#\\# x')).toBe('####### x')
+    })
+  })
+
+  describe('M1f: an unnumbered caption placeholder is a hash like any other', () => {
+    // `parse` alone leaves the placeholder unnumbered (markup-carve/carve-js#1767).
+    const unresolved = (src: string) => renderMarkdown(parse(src)).trim()
+
+    it('escapes it where the caption line would open a heading', () => {
+      expect(unresolved('> a\n^ # b')).toBe('> a\n\n\\# b')
+      expect(unresolved('> a\n^ ## b')).toBe('> a\n\n\\## b')
+    })
+
+    it('leaves it bare where no heading could open', () => {
+      expect(unresolved('> a\n^ #b')).toBe('> a\n\n#b')
+      expect(unresolved('> a\n^ Figure # b')).toBe('> a\n\nFigure # b')
+    })
+
+    it('writes the number once resolution assigned one', () => {
+      expect(md('> a\n^ ## b')).toBe('> a\n\n1# b')
     })
   })
 
