@@ -778,6 +778,17 @@ const IMPLEMENTED = new Set([
   'a-wrapped-attribute-block-ends-at-its-quote-and-reaches-no-line-below-it',
   'a-trailing-line-after-a-consumed-definition-is-placed-by-column-reach',
   'a-nested-note-s-floor-is-two-columns-past-its-own-marker',
+  // ARRIVED WITH THIS PIN BUMP (spec 2dc81f83). Every row is byte-exact on this
+  // build before the entries were added. #1731 carries the tight item, #1737
+  // the underscore pair in text and #1751 the opaque link destination; the
+  // braced-inline closer, the pair across a break and the round-trip
+  // normalization needed no change here.
+  'a-bare-closer-does-not-reach-inside-a-braced-inline',
+  'a-bare-closer-does-not-reach-inside-a-link-destination',
+  'a-block-that-opens-a-tight-item-is-written-on-the-marker-line',
+  'an-underscore-pair-in-text-is-escaped-where-the-line-would-pair-it',
+  'an-underscore-pair-split-across-a-line-break-is-escaped',
+  'the-round-trip-comparison-normalizes-a-named-list',
 ])
 
 /**
