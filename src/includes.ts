@@ -85,9 +85,19 @@ export interface IncludeContext {
  */
 export type IncludeResolved = string | { source: string; id?: string }
 
+/**
+ * A target the resolver could not produce, named by where it would appear
+ * (spec I11). A host watches that path and rebuilds when the file arrives; the
+ * directive as written names nothing it can watch from a file below the root.
+ */
+export interface IncludeUnresolved {
+  source: null
+  id: string
+}
+
 export interface IncludeOptions {
   /** Resolve an include path to source text. Return null for an unresolvable path. */
-  resolve?: (path: string, ctx: IncludeContext) => IncludeResolved | null
+  resolve?: (path: string, ctx: IncludeContext) => IncludeResolved | IncludeUnresolved | null
   /** Identity of the root document, passed to the first resolver call as context. */
   sourcePath?: string
   /**
@@ -169,7 +179,10 @@ export interface IncludeResult {
 }
 
 
-export type IncludeResolver = (path: string, ctx: IncludeContext) => IncludeResolved | null
+export type IncludeResolver = (
+  path: string,
+  ctx: IncludeContext,
+) => IncludeResolved | IncludeUnresolved | null
 
 
 interface State {
@@ -357,6 +370,13 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
     // Covers missing files and containment denials alike: the resolver reports
     // both as null, and a host wants to re-check either if the tree changes.
     note(state, d.path, false)
+    warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved.`, node)
+    return null
+  }
+  // I11: the resolver named where the target would be without producing it.
+  if (typeof resolved === 'object' && (resolved as { source?: unknown }).source === null) {
+    const named = (resolved as { id?: unknown }).id
+    note(state, typeof named === 'string' && named !== '' ? named : d.path, false)
     warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved.`, node)
     return null
   }

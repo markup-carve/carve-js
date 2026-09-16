@@ -300,7 +300,16 @@ function classifyRefusal(
   }
   refusalAskedTheEngine = true
 
-  return resolver(request, ctx) === null ? 'outside-root' : 'not-found'
+  return produced(resolver(request, ctx)) ? 'not-found' : 'outside-root'
+}
+
+/**
+ * Whether the resolver PRODUCED source. A refusal that names where the target
+ * would be (I11) carries an id and no source, and answers the corpus exactly as
+ * `null` does.
+ */
+function produced(result: ReturnType<IncludeResolver>): boolean {
+  return result !== null && (typeof result === 'string' || result.source !== null)
 }
 
 function canonicalIdOf(resolved: NonNullable<ReturnType<IncludeResolver>>): string {
@@ -393,14 +402,14 @@ function run(vector: Vector): Record<string, unknown> {
     const allowlisted = (vector.allowedRemoteHosts?.length ?? 0) > 0
 
     return {
-      status: result !== null ? 'allowed' : allowlisted ? 'unsupported' : 'denied',
-      ...(result !== null || allowlisted ? {} : { denial: 'remote-not-allowed' }),
+      status: produced(result) ? 'allowed' : allowlisted ? 'unsupported' : 'denied',
+      ...(produced(result) || allowlisted ? {} : { denial: 'remote-not-allowed' }),
       remoteFetches: [],
     }
   }
 
-  return result !== null
-    ? { status: 'allowed', canonicalId: canonicalIdOf(result).replace(rootReal, '<ROOT>') }
+  return produced(result)
+    ? { status: 'allowed', canonicalId: canonicalIdOf(result!).replace(rootReal, '<ROOT>') }
     : { status: 'denied', denial: classifyRefusal(resolver, request, ctx, rootReal, dir) }
 }
 

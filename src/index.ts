@@ -261,6 +261,7 @@ export {
   type IncludeWarning,
   type IncludeResolver,
   type IncludeResolved,
+  type IncludeUnresolved,
 } from './includes.js'
 // Recognition only. `findDirectiveSites` above answers WHERE a live directive
 // is; these two answer whether a token a host already holds is one. The scan

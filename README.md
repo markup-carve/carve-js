@@ -165,7 +165,11 @@ order). `id` is the resolver's canonical id when it supplies one, otherwise the
 directive path. Editors and preview servers watch these paths to know when to
 re-render. Targets that failed to resolve - missing files, and paths denied by
 root containment - are reported with `resolved: false` rather than omitted, so
-a watcher still fires when a missing chapter is finally created.
+a watcher still fires when a missing chapter is finally created. A missing one
+is named by where it WOULD be, so `sub/frag.crv` asking for `missing.crv`
+reports the canonical `<root>/sub/missing.crv` and the watch lands on the file
+the author meant; a path denied by containment keeps the directive's spelling.
+A resolver of your own does the same by returning `{ source: null, id }`.
 
 `expanded.chargedBytes` is what the expansion charged against the byte budget,
 counted per occurrence rather than per distinct identity. It includes the
