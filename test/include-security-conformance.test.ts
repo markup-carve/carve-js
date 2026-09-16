@@ -117,6 +117,7 @@ const KNOWN_EXPECTED_KEYS: ReadonlySet<string> = new Set([
   'remoteFetches',
   'maxVisitedDepth',
   'chargedBytes',
+  'dependencies',
 ])
 
 /**
@@ -390,6 +391,9 @@ function run(vector: Vector): Record<string, unknown> {
   const ctx: IncludeContext = vector.from
     ? { stack: [realpathSync(path.join(dir, vector.from))], depth: 0 }
     : { stack: [], depth: 0 }
+  // Taken before `classifyRefusal`, whose probe writes the target into the
+  // tree and would turn a missing target into a resolved one.
+  const dependencies = dependenciesOf(resolver, request, ctx, rootReal)
   const result = resolver(request, ctx)
 
   if (vector.kind === 'remote') {
@@ -409,8 +413,25 @@ function run(vector: Vector): Record<string, unknown> {
   }
 
   return produced(result)
-    ? { status: 'allowed', canonicalId: canonicalIdOf(result!).replace(rootReal, '<ROOT>') }
-    : { status: 'denied', denial: classifyRefusal(resolver, request, ctx, rootReal, dir) }
+    ? { status: 'allowed', canonicalId: canonicalIdOf(result!).replace(rootReal, '<ROOT>'), dependencies }
+    : { status: 'denied', denial: classifyRefusal(resolver, request, ctx, rootReal, dir), dependencies }
+}
+
+/** The engine's own I11 set for one directive, with the root spelled `<ROOT>`. */
+function dependenciesOf(
+  resolver: IncludeResolver,
+  request: string,
+  ctx: IncludeContext,
+  rootReal: string,
+): Array<{ id: string; resolved: boolean }> {
+  const source = `{{ ${request} }}\n`
+  const sourcePath = ctx.stack[ctx.stack.length - 1]
+  const result = expandIncludes(parse(source), source, {
+    resolve: resolver,
+    ...(sourcePath === undefined ? {} : { sourcePath }),
+  })
+
+  return result.dependencies.map(({ id, resolved }) => ({ id: id.replace(rootReal, '<ROOT>'), resolved }))
 }
 
 describe('the include-security corpus is answered as a contract, not a bag of fields', () => {
@@ -419,7 +440,7 @@ describe('the include-security corpus is answered as a contract, not a bag of fi
   })
 
   it('pins the vector count, so an addition cannot be skipped unnoticed', () => {
-    expect(corpus.vectors.length).toBe(25)
+    expect(corpus.vectors.length).toBe(27)
   })
 
   it('answers every requirement the corpus states', () => {
