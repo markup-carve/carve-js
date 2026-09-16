@@ -77,6 +77,26 @@ export function fileSystemResolver(
     // an escape the way a `startsWith('..')` prefix test would.
     return rel.split(path.sep)[0] !== '..'
   }
+  /**
+   * The candidate's canonical spelling whether or not it is there: the longest
+   * prefix that exists is canonicalized, which resolves every symlink actually
+   * on disk, and the remaining segments are re-appended. A symlink can only
+   * live on the existing prefix, so the tail cannot hide one.
+   */
+  const canonicalCandidate = (candidate: string): string => {
+    const remainder: string[] = []
+    let prefix = path.resolve(candidate)
+    for (;;) {
+      try {
+        return path.join(realpathSync(prefix), ...remainder)
+      } catch {
+        const parent = path.dirname(prefix)
+        if (parent === prefix) return path.join(prefix, ...remainder)
+        remainder.unshift(path.basename(prefix))
+        prefix = parent
+      }
+    }
+  }
   return (includePath, ctx) => {
     if (!opts.allowAbsolute && path.isAbsolute(includePath)) return null
     // The stack carries the canonical (real) path of each ancestor, so a
@@ -89,7 +109,14 @@ export function fileSystemResolver(
     try {
       real = realpathSync(resolved)
     } catch {
-      return null
+      // I11: nothing is there, so the target is named by where it WOULD be,
+      // which is the path a host watches. One that would land outside the root
+      // is refused as any other escape is, and keeps the directive's spelling.
+      // So does a request that names no filesystem place at all: a URI scheme
+      // has no "where it would appear" for this resolver to point at.
+      if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(includePath)) return null
+      const wouldBe = canonicalCandidate(resolved)
+      return contains(wouldBe) ? { source: null, id: wouldBe } : null
     }
     if (!contains(real)) return null
     const maxFileBytes = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
