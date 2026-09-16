@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, htmlToAst, htmlToCarve, parse, renderCarve, renderHtml, type Document } from '../src/index.js'
 
 // A text node's last character and the next node's first can open a construct
-// neither holds: `^[` an inline note, `$` before a backtick run inline math
-// (carve-js#1795, markup-carve/carve-php#2061).
+// neither holds: `^[` an inline note, `:name[` an inline extension, `$` before
+// a backtick run inline math (carve-js#1795, carve-js#1808).
 
 // Replaces the placeholder text `Q` with `value`, building a tree no source spells.
 const withText = (template: string, value: string): Document => {
@@ -32,6 +32,10 @@ describe('the writer at a text node boundary', () => {
     ['a dollar before inline math', 'xQ$`m`\n', '$', 'x\\$$`m`\n'],
     ['a dollar before a raw inline', 'xQ`r`{=html}\n', '$', 'x\\$`r`{=html}\n'],
     ['a literal backslash then a caret before a link', 'xQ[n](u)\n', '\\^', 'x\\\\\\^[n](u)\n'],
+    ['an extension name before a link', 'x Q[n](u)\n', ':name', 'x \\:name[n](u)\n'],
+    ['an extension name before a span', 'xQ[n]{.k}\n', ':name', 'x\\:name[n]{.k}\n'],
+    ['an underscore-first extension name before a note reference', 'x Q[^1]\n\n[^1]: d\n', ':_a-1', 'x \\:_a-1[^1]\n\n[^1]: d\n'],
+    ['a literal backslash then an extension name before a link', 'x Q[n](u)\n', '\\:name', 'x \\\\\\:name[n](u)\n'],
   ])('escapes %s', (_, template, value, written) => {
     const doc = withText(template, value)
     const carve = renderCarve(doc)
@@ -50,6 +54,14 @@ describe('the writer at a text node boundary', () => {
     expect(renderCarve(withText(template, value))).toBe(written)
   })
 
+  // `*b*` forces the conservative form, so these rows see the rule itself.
+  it.each([
+    ['a digit-first name before a link', 'Q[n](u)\n', '*b* x :1', '\\*b* x :1[n](u)\n'],
+    ['an extension name before a strong', 'Q{*s*}\n', '*b* x :name', '\\*b* x :name{*s*}\n'],
+  ])('in a conservatively written text, leaves %s bare', (_, template, value, written) => {
+    expect(renderCarve(withText(template, value))).toBe(written)
+  })
+
   it('leaves a caret before an empty span bare, which opens no note', () => {
     expect(carveToCarve('x ^[]{.c}\n')).toBe('x ^[]{.c}\n')
   })
@@ -61,6 +73,8 @@ describe('the HTML importer at a text node boundary', () => {
     ['a caret before a span', '<p>x^<span class="k">n</span></p>', 'x\\^[n]{.k}\n'],
     ['a dollar before a code element', '<p>x$<code>c</code></p>', 'x\\$`c`\n'],
     ['a dollar before inline math', '<p>x$<span class="math inline">\\(m\\)</span></p>', 'x\\$$`m`\n'],
+    ['an extension name before a span', '<p>x :name<span class="k">n</span></p>', 'x \\:name[n]{.k}\n'],
+    ['an extension name before a link', '<p>x :name<a href="u">n</a></p>', 'x \\:name[n](u)\n'],
   ])('escapes %s', (_, html, carve) => {
     const written = htmlToCarve(html).value
     expect(written).toBe(carve)
