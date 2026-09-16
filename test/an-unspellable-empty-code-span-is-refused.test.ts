@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   carveToAstJson,
   carveToCarve,
+  htmlToAst,
   htmlToCarve,
   parse,
   renderCarve,
@@ -103,6 +104,7 @@ describe('the HTML importer and an empty code span', () => {
     ['<ul><li><code></code></li></ul>', '- ``\n'],
     ['<p><s><code></code></s>y</p>', '{~``~}y\n'],
     ['<table><tr><td>a</td><td>x<code></code></td></tr></table>', '| a | x`` |\n'],
+    ['<p><s>x<code></code> </s></p>', '{~x``~}\n'],
   ]
 
   it.each(written)('writes %s', (html, carve) => {
@@ -122,6 +124,7 @@ describe('the HTML importer and an empty code span', () => {
     ['<h1>x<code></code>y</h1>', '# xy\n'],
     ['<p><span class="k"><code></code></span></p>', '[]{.k}\n'],
     ['<table><tr><td>x<code></code></td><td>c</td></tr></table>', '| x | c |\n'],
+    ['<p>x<code></code><b>z</b></p>', 'x{*z*}\n'],
   ]
 
   it.each(dropped)('drops the span from %s', (html, carve) => {
@@ -140,6 +143,13 @@ describe('the HTML importer and an empty code span', () => {
   it('drops the attributes of an empty span it writes, and reports them', () => {
     expect(htmlToCarve('<p><s><code class="c"></code></s></p>').value).toBe('{~``~}\n')
     expect(codes('<p><s><code class="c"></code></s></p>')).toEqual(['attribute-dropped'])
+  })
+
+  it.each([
+    ['<p><s>x<code></code> </s></p>', '{"type":"code","value":""},{"type":"text","value":" "}'],
+    ['<p><s>x<code></code> y</s></p>', '{"type":"code","value":""},{"type":"text","value":" y"}'],
+  ])('leaves the AST of %s as it is', (html, run) => {
+    expect(JSON.stringify(htmlToAst(html).value.children)).toContain(run)
   })
 
   it('keeps the attributes of a span with content', () => {

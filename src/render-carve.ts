@@ -3392,7 +3392,7 @@ function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
  * run ends at the end of a block or at a braced closer (PART 3, UNCLOSED RUN);
  * anything else behind it is read into the span, and a label never closes.
  */
-export function emptyCodeSpansWhoseRunDoesNotEnd(root: object): object[] {
+export function emptyCodeSpansWhoseRunDoesNotEnd(root: object, isNothing: (item: object) => boolean = isEmptyText): object[] {
   const found: object[] = []
   const parents = new WeakMap<object, Parent>()
   const empties: Array<{ value: string; attrs?: unknown }> = []
@@ -3407,7 +3407,7 @@ export function emptyCodeSpansWhoseRunDoesNotEnd(root: object): object[] {
       }
       let lastContent = -1
       value.forEach((item, index) => {
-        if (!(item !== null && typeof item === 'object' && (item as InlineNode).type === 'text' && (item as { value: string }).value === '')) lastContent = index
+        if (!(item !== null && typeof item === 'object' && isNothing(item))) lastContent = index
       })
       value.forEach((item, index) => {
         if (item === null || typeof item !== 'object') return
@@ -3422,6 +3422,10 @@ export function emptyCodeSpansWhoseRunDoesNotEnd(root: object): object[] {
     if (!runEndsAtEmptyCodeSpan(code, parents)) found.push(code)
   }
   return found
+}
+
+function isEmptyText(item: object): boolean {
+  return (item as InlineNode).type === 'text' && (item as { value: string }).value === ''
 }
 
 /** The node holding an item, the list it sits in, and whether content follows it there. */

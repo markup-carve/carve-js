@@ -4002,7 +4002,11 @@ class Importer {
    * (carve-js#1789).
    */
   dropUnspellableEmptyCodeSpans(document: Document): void {
-    const dropped = new Set(emptyCodeSpansWhoseRunDoesNotEnd(document))
+    // Whitespace behind a kept span is trimmed rather than read into its run.
+    const blank = (item: object) => (item as InlineNode).type === 'text' && /^[ \t\r\n]*$/.test((item as { value: string }).value)
+    const dropped = new Set(emptyCodeSpansWhoseRunDoesNotEnd(document, blank))
+    const parents = new Map<object, [object, unknown[]]>()
+    const kept: object[] = []
     const stack: unknown[] = [document]
     while (stack.length > 0) {
       const node = stack.pop()
@@ -4011,8 +4015,21 @@ class Importer {
         for (let i = node.length - 1; i >= 0; i--) if (dropped.has(node[i])) node.splice(i, 1)
       }
       const origin = this.emptyCodeSpans.get(node)
-      if (origin !== undefined) this.dropEmptyCodeSpanAttrs(node as InlineNode, origin)
-      for (const value of Object.values(node)) stack.push(value)
+      if (origin !== undefined) {
+        this.dropEmptyCodeSpanAttrs(node as InlineNode, origin)
+        kept.push(node)
+      }
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) for (const item of value) if (item !== null && typeof item === 'object') parents.set(item, [node, value])
+        stack.push(value)
+      }
+    }
+    for (let current of kept) {
+      for (let link = parents.get(current); link !== undefined; current = link[0], link = parents.get(current)) {
+        const [parent, siblings] = link
+        siblings.splice(siblings.indexOf(current) + 1)
+        if ((parent as { type?: string }).type !== 'abbreviation') break
+      }
     }
     for (const code of dropped) {
       const origin = this.emptyCodeSpans.get(code)
