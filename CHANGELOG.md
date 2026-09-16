@@ -61,6 +61,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Djot importer keeps Djot-only block markers and document structures** (#1669, #1670).
 - **The BBCode input limit is measured in UTF-8 bytes** (#1672).
 - **An unnumbered caption placeholder is escaped on the Markdown target** (#1767) where it would open a heading, as a tree from `parse()` alone leaves it.
+- **Host text cut around an inline include publishes only its own span** (#1764) instead of the span of the whole node it was cut from.
 
 ## [0.1.6] - 2026-09-07
 

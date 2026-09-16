@@ -69,6 +69,72 @@ describe('a merged include run', () => {
   })
 })
 
+describe('a host half that merges with nothing', () => {
+  // PART 12 §4: a slice carries the part of the host span it covers (carve-js#1764).
+  const spans = (entry: string, files: Files) =>
+    (toAstJson(expanded(entry, files)).children[0] as unknown as { children: Array<Record<string, any>> }).children.map(
+      (node) => [node['value'] ?? node['type'], node['pos']?.startOffset, node['pos']?.endOffset],
+    )
+
+  it('narrows both halves around the include', () => {
+    expect(spans('Root {{ c.crv }} tail.\n', { 'c.crv': '*b*\n' })).toEqual([
+      ['Root ', 0, 5],
+      ['strong', 0, 3],
+      [' tail.', 16, 22],
+    ])
+  })
+
+  it('narrows a trailing half when the include leads the line', () => {
+    expect(spans('{{ c.crv }} tail.\n', { 'c.crv': '*b*\n' })).toEqual([
+      ['strong', 0, 3],
+      [' tail.', 11, 17],
+    ])
+  })
+
+  it('narrows a half cut from a later node of the run', () => {
+    // `@shift` parses as a mention, so ` }} tail.` is its own text node.
+    expect(spans('Root {{ c.crv @shift:1 }} tail.\n', { 'c.crv': '*b*\n' })).toEqual([
+      ['Root ', 0, 5],
+      ['strong', 0, 3],
+      [' tail.', 25, 31],
+    ])
+  })
+
+  it('counts the offsets and columns in codepoints', () => {
+    const tail = (toAstJson(expanded('😀 {{ c.crv }} ü😀.\n', { 'c.crv': '*b*\n' })).children[0] as unknown as {
+      children: Array<Record<string, unknown>>
+    }).children[2]!
+
+    expect(tail).toEqual({
+      type: 'text',
+      value: ' ü😀.',
+      pos: { startLine: 1, endLine: 1, startColumn: 14, endColumn: 18, startOffset: 13, endOffset: 17 },
+    })
+  })
+
+  it('publishes no span for a half of a node that crosses a line', () => {
+    const source = 'Root {{ c.crv }} tail.\n'
+    const doc = parse(source, { positions: true })
+    const text = (doc.children[0] as unknown as { children: Array<{ pos: Record<string, number> }> }).children[0]!
+    text.pos.endLine = 2
+    const out = expandIncludes(doc, source, { resolve: () => ({ source: '*b*\n', id: 'c.crv' }) }).doc
+    const halves = (toAstJson(out).children[0] as unknown as { children: Array<Record<string, unknown>> }).children
+
+    expect(halves[0]).toEqual({ type: 'text', value: 'Root ' })
+    expect(halves[2]).toEqual({ type: 'text', value: ' tail.' })
+  })
+})
+
+describe('a merged run beside a half that merges with nothing', () => {
+  it('keeps the extent of the whole run it was cut from', () => {
+    const doc = expanded('a {{ c.crv }} b {{ d.crv }} e\n', { 'c.crv': 'x\n', 'd.crv': '*y*\n' })
+    const children = (toAstJson(doc).children[0] as unknown as { children: Array<Record<string, any>> }).children
+
+    expect([children[0]!['value'], children[0]!['pos'].startOffset, children[0]!['pos'].endOffset]).toEqual(['a x b ', 0, 29])
+    expect([children[2]!['value'], children[2]!['pos'].startOffset, children[2]!['pos'].endOffset]).toEqual([' e', 27, 29])
+  })
+})
+
 describe('a merged run from one file', () => {
   it('still publishes no span where its pieces are not contiguous', () => {
     const at = (startOffset: number, endOffset: number) => ({
