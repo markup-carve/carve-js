@@ -4082,9 +4082,10 @@ function boundaryEscapeAt(written: string, piece: string): number {
  * Two runs that touch merge into one, whatever their lengths, so two adjacent
  * code spans - or a code span and a raw inline - have no other spelling. An
  * empty delimited comment renders nothing and compares equal to nothing (PART
- * 11 section 10k N3, ruling carve-js#1818).
+ * 11 section 10k N3, ruling carve-js#1818). Its padding is the one the comment
+ * writer gives an empty comment, so the separator survives a format pass.
  */
-const EMPTY_COMMENT = '{% %}'
+const EMPTY_COMMENT = '{%  %}'
 
 /** Whether a separator belongs between what is written and the next piece. */
 function separatesBacktickRuns(written: string, piece: string): boolean {
