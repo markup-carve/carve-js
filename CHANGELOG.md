@@ -18,7 +18,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The native `|=` header form survives a trailing colspan run (#1747) in the Carve writer and the HTML importer; a leading span or a real cell after a header span still uses the delimiter row.
 - A raw-HTML profile error names the Carve construct it refused (#1724) instead of the HTML it produced.
 - `renderCarve` throws `SourceUnspellableError` for an empty code span its open run cannot end at (#1789), and the HTML importer drops such a span with a `structure-unspellable` warning.
-- `renderCarve` throws `SourceUnspellableError` for a hard break inside a table cell (#1797), and the HTML importer drops a `<br>` in a cell with a `structure-unspellable` warning instead of writing a row that reads back as a paragraph.
+- A hard break inside a table cell is written as one space (#1797, #1803; markup-carve/carve#2067) instead of ending the row, and the HTML importer reports the flattened `<br>` as `structure-unspellable`.
 
 ### Added
 

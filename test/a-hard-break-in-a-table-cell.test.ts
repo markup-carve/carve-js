@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, htmlToAst, htmlToCarve, parse, renderCarve, SourceUnspellableError } from '../src/index.js'
+import { carveToCarve, htmlToAst, htmlToCarve, parse, renderCarve } from '../src/index.js'
 
 // A table row is one line and a hard break is a backslash plus a newline, so a
-// break inside a cell has no Carve spelling. The writer refuses it and the HTML
-// importer drops it with a report (carve-js#1797).
+// break inside a cell has no Carve spelling. It flattens to one space; the HTML
+// importer reports it and the writer has no channel to (markup-carve/carve#2067).
 
 describe('the HTML importer and a <br> in a table cell', () => {
   it.each([
@@ -42,10 +42,17 @@ describe('the HTML importer and a <br> in a table cell', () => {
 
 describe('the writer and a hard break in a table cell', () => {
   it.each([
-    ['directly in the cell', '<table><tr><td>x<br>y</td></tr></table>'],
-    ['inside a strong in the cell', '<table><tr><td><strong>x<br>y</strong></td></tr></table>'],
-  ])('refuses one %s', (_, html) => {
-    expect(() => renderCarve(htmlToAst(html).value)).toThrow(SourceUnspellableError)
+    ['directly in the cell', '<table><tr><td>x<br>y</td><td>c</td></tr></table>', '| x y | c |\n'],
+    ['inside a strong in the cell', '<table><tr><td><strong>x<br>y</strong></td></tr></table>', '| *x y* |\n'],
+    ['at the end of the cell', '<table><tr><td>x<br></td><td>c</td></tr></table>', '| x | c |\n'],
+    ['after a space', '<table><tr><td>x <br>y</td></tr></table>', '| x y |\n'],
+    ['after text that needs one escape', '<table><tr><td>a (b) *c*<br>y</td></tr></table>', '| a (b) \\*c* y |\n'],
+  ])('writes one %s as the importer does', (_, html, carve) => {
+    const tree = htmlToAst(html).value
+    const before = JSON.stringify(tree)
+    expect(renderCarve(tree)).toBe(carve)
+    expect(renderCarve(tree)).toBe(htmlToCarve(html).value)
+    expect(JSON.stringify(tree)).toBe(before)
   })
 
   it('writes a break outside a table', () => {
