@@ -36,6 +36,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The BBCode input limit is measured in UTF-8 bytes (#1672).
 - A hash is escaped on the Markdown target where the line would open or close an ATX heading (#1768, #1779), including an unnumbered caption placeholder (#1767).
 - The Carve writer round-trips three more shapes (#1759, #1763, #1773): an emphasis wrapping a strong, a caret before an escaped closing brace, and an emphasis ending in an empty code span.
+- An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
 
 ## [0.1.6] - 2026-09-07
 
