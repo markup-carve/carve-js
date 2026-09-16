@@ -45,6 +45,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Carve writer escapes a caret before a node written with `[`, and a dollar before a backtick run or inline math (#1795). A caret before an imported link no longer reads back as an inline note.
 - The Carve writer escapes the colon of a text-final `:name` before a node written with `[` (#1808), so it no longer reads back as an inline extension.
 - The Markdown importer writes a link with an empty destination as its text and an image as its plain alt text (#1800, #1811), since Carve reads `[x]()` as literal text. A title keeps a span, a reference to an empty-destination definition is unwrapped and the definition dropped, and spaces around an inline destination are no longer percent-encoded.
+- The Markdown importer keeps a lazy continuation line in its block quote and escapes a continuation line shaped like a link definition (#1812), which Carve would otherwise read as a definition and drop.
 - An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
 
 ## [0.1.6] - 2026-09-07
