@@ -10710,8 +10710,6 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
   // Ran off the end without a closing `}`: RE_SPAN_TAIL would fail too.
   return true
 }
-const RE_CRITIC_INS = /^\{\+((?:[^+]|\+(?!\}))+)\+\}/
-const RE_CRITIC_DEL = /^\{-((?:[^-]|-(?!\}))+)-\}/
 const RE_CRITIC_SUB = /^\{~([^}]*)~>([^}]*)~\}/
 const RE_CRITIC_CMT = /^\{#([^}]+)#\}/
 // A BRACED HYPHEN PAIR IS AN EN DASH (markup-carve/carve#1447). The bare run
@@ -10719,7 +10717,40 @@ const RE_CRITIC_CMT = /^\{#([^}]+)#\}/
 // MEANT a dash in that position had no way to say so. This is that way, and it
 // cost nothing: the string it took was an empty `<del>`.
 const RE_BRACED_EN_DASH = /^\{--\}/
-const RE_FORCED_EMPHASIS = /^\{([/*_^,~=])(?!\1\})([\s\S]+?)\1\}/
+/**
+ * Where a braced inline opened at `open` closes, or -1.
+ *
+ * The scan skips verbatim spans, whose closer is searched for across the rest
+ * of the BLOCK (PART 3 UNCLOSED RUN, ruling markup-carve/carve#2079), so a
+ * closer a code span holds is code and the brace pair closes later or not at
+ * all.
+ */
+function bracedPairEnd(text: string, open: number, closer: string): number {
+  for (let j = open + 2; j < text.length; j++) {
+    const ch = text[j]!
+    // An escaped backtick opens no span. Every other escape is left alone, so
+    // an escaped closer still closes the pair, as it did before this search
+    // looked at code spans at all.
+    if (ch === '\\' && text[j + 1] === '`') {
+      j++
+      continue
+    }
+    if (ch === '`') {
+      const span = verbatimSpanEnd(text, j)
+      // An unclosed run ends at this pair's closer instead of running to the
+      // end of the block (markup-carve/carve#2056), so the pair still closes.
+      if (!span.closed) {
+        const end = text.indexOf(closer, j)
+        return end === -1 ? -1 : end + closer.length
+      }
+      j = span.end - 1
+      continue
+    }
+    if (ch === closer[0] && text.startsWith(closer, j)) return j === open + 2 ? -1 : j + closer.length
+  }
+
+  return -1
+}
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
   '/': 'emphasis',
   '*': 'strong',
@@ -11722,18 +11753,18 @@ function scanInlineInner(
         i += sub[0].length
         continue
       }
-      const ins = insSuf && insSuf[i] ? RE_CRITIC_INS.exec(rest) : null
-      if (ins) {
+      const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? bracedPairEnd(text, i, '+}') : -1
+      if (ins !== -1) {
         flush()
-        out.push(withPos({ type: 'insert', children: scanInline(ins[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, i + ins[0].length))
-        i += ins[0].length
+        out.push(withPos({ type: 'insert', children: scanInline(text.slice(i + 2, ins - 2), shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, ins))
+        i = ins
         continue
       }
-      const del = delSuf && delSuf[i] ? RE_CRITIC_DEL.exec(rest) : null
-      if (del) {
+      const del = delSuf && delSuf[i] && text[i + 1] === '-' ? bracedPairEnd(text, i, '-}') : -1
+      if (del !== -1) {
         flush()
-        out.push(withPos({ type: 'delete', children: scanInline(del[1]!, shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, i + del[0].length))
-        i += del[0].length
+        out.push(withPos({ type: 'delete', children: scanInline(text.slice(i + 2, del - 2), shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, del))
+        i = del
         continue
       }
       if (hasBrace && RE_BRACED_EN_DASH.test(rest)) {
@@ -11765,11 +11796,14 @@ function scanInlineInner(
       }
       // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
       // bare delimiter, but with no word-boundary condition.
-      const forced = hasBrace ? RE_FORCED_EMPHASIS.exec(rest) : null
-      if (forced) {
+      const delim = text[i + 1]
+      const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined
+        ? bracedPairEnd(text, i, `${delim}}`)
+        : -1
+      if (forced !== -1) {
         flush()
-        out.push(withPos({ type: FORCED_TYPE[forced[1]!]!, children: scanInline(forced[2]!, shiftSource(source, text, i + 2), inFootnote) } as Emphasis, source, text, i, i + forced[0].length))
-        i += forced[0].length
+        out.push(withPos({ type: FORCED_TYPE[delim!]!, children: scanInline(text.slice(i + 2, forced - 2), shiftSource(source, text, i + 2), inFootnote) } as Emphasis, source, text, i, forced))
+        i = forced
         continue
       }
       // Inline attribute block — attaches to preceding node. It must be GLUED:
@@ -12361,9 +12395,6 @@ function findEmphasisClose(
 // The braced inlines E2a names, as sticky copies of the matchers the main loop
 // uses, so the scan hides exactly the region the parser builds a node from.
 const BRACED_INLINE_STICKY = [
-  /\{([/*_^,~=])(?!\1\})([\s\S]+?)\1\}/y,
-  /\{\+((?:[^+]|\+(?!\}))+)\+\}/y,
-  /\{-((?:[^-]|-(?!\}))+)-\}/y,
   /\{~([^}]*)~>([^}]*)~\}/y,
   /\{#([^}]+)#\}/y,
 ]
@@ -12372,6 +12403,13 @@ const BRACED_INLINE_STICKY = [
 function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo): number {
   if (memo.lastBrace === -2) memo.lastBrace = text.lastIndexOf('}')
   if (memo.lastBrace < open) return -1
+  // The pairs whose closer the parser searches for across the block are asked
+  // the same question here, so the scan hides the region the parser builds.
+  const marker = text[open + 1]
+  if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
+    const end = bracedPairEnd(text, open, `${marker}}`)
+    if (end !== -1) return end - 1
+  }
   for (const re of BRACED_INLINE_STICKY) {
     re.lastIndex = open
     const m = re.exec(text)
