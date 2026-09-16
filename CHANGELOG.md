@@ -64,6 +64,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Host text cut around an inline include publishes only its own span** (#1764) instead of the span of the whole node it was cut from.
 - **The Carve writer no longer escapes a caret in front of an escaped closing brace** (#1763): `^\}` instead of `\^\}`.
 - **An emphasis ending in an empty code span is written with its braced closer** (#1773), so the open backtick run no longer swallows the closer.
+- **A heading's trailing hash run is escaped on the Markdown target** (#1779), so a CommonMark reader stops taking it for the ATX closing sequence.
 
 ## [0.1.6] - 2026-09-07
 
