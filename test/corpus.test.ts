@@ -789,6 +789,8 @@ const IMPLEMENTED = new Set([
   'an-underscore-pair-in-text-is-escaped-where-the-line-would-pair-it',
   'an-underscore-pair-split-across-a-line-break-is-escaped',
   'the-round-trip-comparison-normalizes-a-named-list',
+  'an-empty-link-destination-is-not-a-link',
+  'a-quote-is-an-ordinary-link-destination-character',
 ])
 
 /**
