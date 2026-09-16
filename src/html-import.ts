@@ -10,6 +10,7 @@ import type {
   ListItem,
   Math,
   Paragraph,
+  Table,
   TableBodyGroup,
   TableCell,
   TableRow,
@@ -717,6 +718,8 @@ class Importer {
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
   /** The element each inline node came from, for `unwrapUnspellable`. */
   private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
+  /** The `<tr>` each row came from, for `dropUnspellableRow`. */
+  private readonly rowOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** The element each hard break came from, for `dropHardBreaksInTableCells`. */
   private readonly hardBreaks = new WeakMap<object, { node: P5Node; path: string }>()
   /**
@@ -2720,7 +2723,10 @@ class Importer {
       if (invented) {
         this.add('table-degraded', 'Filled a row that is shorter than the spans reaching into it, with a cell the source did not have', 'warning', `${path}/tr[${r + 1}]`, tr[r])
       }
-      rows.push({ type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) })
+      const built: TableRow = { type: 'table_row', cells, ...(rowAttrs[r] ? { attrs: rowAttrs[r] } : {}) }
+      const source = tr[r]
+      if (source !== undefined) this.rowOrigins.set(built, { node: source, path: `${path}/tr[${r + 1}]` })
+      rows.push(built)
       carried = [...carried.map((entry) => ({ ...entry, rows: entry.rows - 1 })).filter((entry) => entry.rows > 0), ...opened]
     })
     return rows
@@ -3998,6 +4004,48 @@ class Importer {
    * Unwraps the node a writer refusal names and reports the loss. False when
    * the node is not in the tree or came from no element.
    */
+  /**
+   * Drops the row a writer refusal names, and the table with it when no row
+   * survives. False when the row is not in the tree.
+   */
+  dropUnspellableRow(document: Document, target: object): boolean {
+    const origin = this.rowOrigins.get(target)
+    if (origin === undefined) return false
+    const stack: unknown[] = [document]
+    while (stack.length > 0) {
+      const node = stack.pop()
+      if (node === null || typeof node !== 'object') continue
+      if (Array.isArray(node)) {
+        const table = node.find(
+          (child): child is Table =>
+            child !== null && typeof child === 'object' && (child as BlockNode).type === 'table' && (child as Table).rows.includes(target as TableRow),
+        )
+        if (table !== undefined) {
+          table.rows.splice(table.rows.indexOf(target as TableRow), 1)
+          this.add(
+            'structure-unspellable',
+            'Dropped a row whose every cell is empty: Carve reads such a row as text',
+            'warning',
+            origin.path,
+            origin.node,
+          )
+          if (table.rows.length === 0) {
+            node.splice(node.indexOf(table), 1)
+            // A caption with no row left has nowhere to sit: a lone `^` line
+            // reads as a paragraph, not as a table's caption.
+            if (table.caption !== undefined) {
+              this.add('element-dropped', 'Dropped a caption whose table has no row left', 'warning', origin.path, origin.node)
+            }
+          }
+          return true
+        }
+      }
+      for (const value of Object.values(node)) stack.push(value)
+    }
+
+    return false
+  }
+
   unwrapUnspellable(document: Document, target: object): boolean {
     const origin = this.inlineOrigins.get(target)
     if (origin === undefined) return false
@@ -4918,7 +4966,11 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
       const carve = renderCarve(value)
       return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
     } catch (error) {
-      if (!(error instanceof SourceUnspellableError) || error.node === undefined || !importer.unwrapUnspellable(value, error.node)) throw error
+      if (!(error instanceof SourceUnspellableError) || error.node === undefined) throw error
+      const dropped = error.nodeType === 'table_row'
+        ? importer.dropUnspellableRow(value, error.node)
+        : importer.unwrapUnspellable(value, error.node)
+      if (!dropped) throw error
     }
   }
 }

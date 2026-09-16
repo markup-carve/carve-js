@@ -1985,6 +1985,15 @@ function renderTable(node: Table, ctx: CarveContext): string {
       const asHeader = !(needsDelimiter && rowIndex === 0)
       cells.push(renderTableCell(cell, ctx, asHeader))
     }
+    // A row whose every cell is blank is not a table row (markup-carve/carve#1954),
+    // so no source spells one and the writer refuses the tree (carve-js#1822).
+    if (cells.every((cell) => cell === ' ' || cell === '= ')) {
+      throw new SourceUnspellableError(
+        'table_row',
+        'a table row whose every cell is blank has no Carve source spelling',
+        row,
+      )
+    }
     rows.push(renderTableRow(cells, renderAttrs(row.attrs)))
   })
   if (needsDelimiter) {
