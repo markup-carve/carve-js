@@ -2479,6 +2479,15 @@ function renderInlineBody(
   node = normalizeLegacyInline(node)
 
   const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
+  const emphasisOf = (delim: string, children: InlineNode[]): string => {
+    const content = renderInlines(children, ctx)
+    // An empty code span is written as an unclosed run, which swallows a bare
+    // closer; only the braced one ends it.
+    const last = children[children.length - 1]
+    return last?.type === 'code' && last.value === ''
+      ? renderForcedEmphasis(delim, content)
+      : renderEmphasis(delim, content, prevChar, nextChar)
+  }
   switch (node.type) {
     case 'text':
       return escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
@@ -2487,7 +2496,7 @@ function renderInlineBody(
       // minimal/conservative decision applies - the node IS the decision.
       return '\\' + node.value
     case 'emphasis':
-      return withAttrs(renderEmphasis('/', renderInlines(node.children, ctx), prevChar, nextChar))
+      return withAttrs(emphasisOf('/', node.children))
     case 'strong': {
       // The combined bold-italic form is a single production, and the nested
       // spelling parses to the SAME strong-wrapping-emphasis tree - so the
@@ -2501,18 +2510,18 @@ function renderInlineBody(
         const content = renderInlines(inner.children, ctx)
         return withAttrs(`/*${content}*/`)
       }
-      return withAttrs(renderEmphasis('*', renderInlines(node.children, ctx), prevChar, nextChar))
+      return withAttrs(emphasisOf('*', node.children))
     }
     case 'underline':
-      return withAttrs(renderEmphasis('_', renderInlines(node.children, ctx), prevChar, nextChar))
+      return withAttrs(emphasisOf('_', node.children))
     case 'strike':
-      return withAttrs(renderEmphasis('~', renderInlines(node.children, ctx), prevChar, nextChar))
+      return withAttrs(emphasisOf('~', node.children))
     case 'superscript':
       return withAttrs(renderForcedEmphasis('^', renderInlines(node.children, ctx)))
     case 'subscript':
       return withAttrs(renderForcedEmphasis(',', renderInlines(node.children, ctx)))
     case 'highlight':
-      return withAttrs(renderEmphasis('=', renderInlines(node.children, ctx), prevChar, nextChar))
+      return withAttrs(emphasisOf('=', node.children))
     case 'code':
       // The unclosed spelling is offered only when NOTHING is written after the
       // span. An attribute block is written after it, so a code span carrying
