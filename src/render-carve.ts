@@ -123,6 +123,7 @@ interface CarveContext {
  * @throws {SourceUnspellableError} when a node's content has no Carve spelling.
  */
 export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): string {
+  ast = withCellHardBreaksFlattened(ast)
   // PART 11 section 4: emit the minimal-escape form when dropping the candidate
   // escapes changes nothing, and fall back to the conservative form when it
   // does. The check is the parser's, not a table's, so the writer cannot drift
@@ -2043,9 +2044,6 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
   const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
-  if (holdsHardBreak(cell.children)) {
-    throw new SourceUnspellableError('hard_break', 'a table row is one line, so a hard break inside a cell has no Carve source spelling')
-  }
   return padCell(prefix, escapeSpanMarkerPayload(renderInlines(cell.children, ctx), cell.attrs))
 }
 
@@ -3878,6 +3876,86 @@ function holdsHardBreak(nodes: readonly unknown[]): boolean {
     if ((node as { type?: unknown }).type === 'hard_break') return true
     return Object.values(node).some((value) => Array.isArray(value) && holdsHardBreak(value))
   })
+}
+
+/**
+ * The tree to write: a copy with every table cell's hard breaks flattened when
+ * it has any, so every later pass sees the same nodes (markup-carve/carve#2067).
+ */
+function withCellHardBreaksFlattened(ast: Document): Document {
+  const cells: TableCell[] = []
+  const stack: unknown[] = [ast]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === null || typeof node !== 'object') continue
+    if ((node as { type?: unknown }).type === 'table_cell') {
+      if (holdsHardBreak((node as TableCell).children)) cells.push(node as TableCell)
+      continue
+    }
+    for (const value of Object.values(node)) stack.push(value)
+  }
+  if (cells.length === 0) return ast
+  const copy = structuredClone(ast)
+  stack.push(copy)
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === null || typeof node !== 'object') continue
+    if ((node as { type?: unknown }).type === 'table_cell') {
+      flattenHardBreaks((node as TableCell).children)
+      continue
+    }
+    for (const value of Object.values(node)) stack.push(value)
+  }
+  return copy
+}
+
+/**
+ * Replaces each hard break with one space where content sits on both sides,
+ * and with nothing elsewhere (PART 11 §1b, markup-carve/carve#2067). Mutates.
+ */
+export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: InlineNode) => void = () => {}): void {
+  // 'start' before any content, 'space' after whitespace, 'word' after content.
+  let before: 'start' | 'space' | 'word' = 'start'
+  let pending: { list: InlineNode[]; index: number } | undefined
+  const edited = new Set<InlineNode[]>()
+  const walk = (list: InlineNode[]): void => {
+    list.forEach((child, index) => {
+      if (child === null || typeof child !== 'object') return
+      if (child.type === 'hard_break') {
+        onBreak(child)
+        list[index] = { type: 'text', value: '' }
+        edited.add(list)
+        if (before === 'word') pending ??= { list, index }
+        return
+      }
+      if (child.type === 'text') {
+        if (child.value === '') return
+        if (pending && !/^[ \t\n]/.test(child.value)) (pending.list[pending.index] as { value: string }).value = ' '
+        pending = undefined
+        before = /[ \t\n]$/.test(child.value) ? 'space' : 'word'
+        return
+      }
+      const nested = Object.values(child).filter((value): value is InlineNode[] => Array.isArray(value))
+      if (nested.length > 0) {
+        nested.forEach(walk)
+        return
+      }
+      if (pending) (pending.list[pending.index] as { value: string }).value = ' '
+      pending = undefined
+      before = 'word'
+    })
+  }
+  walk(children)
+  for (const list of edited) {
+    const merged: InlineNode[] = []
+    for (const child of list) {
+      const last = merged.at(-1)
+      if (child.type === 'text' && child.value === '') continue
+      if (child.type === 'text' && last?.type === 'text') last.value += child.value
+      else merged.push(child)
+    }
+    list.splice(0, list.length, ...merged)
+  }
 }
 
 function opensAcrossBoundary(written: string, piece: string): boolean {

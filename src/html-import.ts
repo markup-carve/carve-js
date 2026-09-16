@@ -17,7 +17,7 @@ import type {
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
-import { emptyCodeSpansWhoseRunDoesNotEnd, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
+import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import { mergeAttrs } from './parse.js'
 import {
   DANGEROUS_URL_SCHEMES,
@@ -3990,9 +3990,8 @@ class Importer {
    * limit is the importer's own: these diagnostics are not a second budget.
    */
   /**
-   * A table row is one line, so a hard break in a cell has no Carve spelling.
-   * The break is dropped and reported, and a space keeps the words on either
-   * side apart (carve-js#1797).
+   * A table row is one line, so a hard break in a cell flattens to one space
+   * and the loss is reported (markup-carve/carve#2067).
    */
   dropHardBreaksInTableCells(document: Document): void {
     const stack: unknown[] = [document]
@@ -4000,64 +3999,20 @@ class Importer {
       const node = stack.pop()
       if (node === null || typeof node !== 'object') continue
       if ((node as { type?: unknown }).type === 'table_cell') {
-        this.dropCellHardBreaks((node as TableCell).children)
+        flattenHardBreaks((node as TableCell).children, (hardBreak) => {
+          const origin = this.hardBreaks.get(hardBreak)
+          if (origin === undefined) return
+          this.add(
+            'structure-unspellable',
+            'Flattened a <br> in a table cell to a space: a table row is one line, so a hard break has no Carve spelling there',
+            'warning',
+            origin.path,
+            origin.node,
+          )
+        })
         continue
       }
       for (const value of Object.values(node)) stack.push(value)
-    }
-  }
-
-  private dropCellHardBreaks(children: InlineNode[]): void {
-    // 'start' before any content, 'space' after whitespace, 'word' after content.
-    let before: 'start' | 'space' | 'word' = 'start'
-    let pending: { list: InlineNode[]; index: number } | undefined
-    const edited = new Set<InlineNode[]>()
-    const walk = (list: InlineNode[]): void => {
-      list.forEach((child, index) => {
-        if (child === null || typeof child !== 'object') return
-        if (child.type === 'hard_break') {
-          const origin = this.hardBreaks.get(child)
-          if (origin) {
-            this.add(
-              'structure-unspellable',
-              'Dropped a <br> in a table cell: a table row is one line, so a hard break has no Carve spelling there',
-              'warning',
-              origin.path,
-              origin.node,
-            )
-          }
-          list[index] = { type: 'text', value: '' }
-          edited.add(list)
-          if (before === 'word') pending ??= { list, index }
-          return
-        }
-        if (child.type === 'text') {
-          if (child.value === '') return
-          if (pending && !/^[ \t\n]/.test(child.value)) (pending.list[pending.index] as { value: string }).value = ' '
-          pending = undefined
-          before = /[ \t\n]$/.test(child.value) ? 'space' : 'word'
-          return
-        }
-        const nested = Object.values(child).filter((value): value is InlineNode[] => Array.isArray(value))
-        if (nested.length > 0) {
-          nested.forEach(walk)
-          return
-        }
-        if (pending) (pending.list[pending.index] as { value: string }).value = ' '
-        pending = undefined
-        before = 'word'
-      })
-    }
-    walk(children)
-    for (const list of edited) {
-      const merged: InlineNode[] = []
-      for (const child of list) {
-        const last = merged.at(-1)
-        if (child.type === 'text' && child.value === '') continue
-        if (child.type === 'text' && last?.type === 'text') last.value += child.value
-        else merged.push(child)
-      }
-      list.splice(0, list.length, ...merged)
     }
   }
 
