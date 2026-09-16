@@ -17,7 +17,7 @@ import type {
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
-import { isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
+import { emptyCodeSpansWhoseRunDoesNotEnd, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import { mergeAttrs } from './parse.js'
 import {
   DANGEROUS_URL_SCHEMES,
@@ -722,6 +722,8 @@ class Importer {
   }
   /** Where the import built a structure only a serializer loses (§16). */
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
+  /** The element each empty code span came from, for `dropUnspellableEmptyCodeSpans`. */
+  private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
   /**
    * Where a figure's own attribute is DISPLACED by its target's (§16, ruling
    * markup-carve/carve#1721).
@@ -3568,7 +3570,11 @@ class Importer {
     if (tag === 'mark') return [{ type: 'highlight', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sub') return [{ type: 'subscript', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'sup') return [{ type: 'superscript', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'code') return [{ type: 'code', value: this.text(node), ...(attrs ? { attrs } : {}) }]
+    if (tag === 'code') {
+      const code: InlineNode = { type: 'code', value: this.text(node), ...(attrs ? { attrs } : {}) }
+      if (code.value === '') this.emptyCodeSpans.set(code, { node, path })
+      return [code]
+    }
     if (tag === 'a') {
       // A DESTINATION CARVE CANNOT CARRY IS NOT A DESTINATION
       // (`spec/docs/html-import.md`). Carve spells a link's destination in one
@@ -3989,6 +3995,53 @@ class Importer {
    * The rendering changes in both cases, so the severity is `warning`, and the
    * limit is the importer's own: these diagnostics are not a second budget.
    */
+  /**
+   * An empty code span survives only where its open run ends (PART 3, UNCLOSED
+   * RUN). Elsewhere the writer refuses it, so the span is dropped and the loss
+   * reported; one that survives loses its attributes, which need a closing run
+   * (carve-js#1789).
+   */
+  dropUnspellableEmptyCodeSpans(document: Document): void {
+    const dropped = new Set(emptyCodeSpansWhoseRunDoesNotEnd(document))
+    const stack: unknown[] = [document]
+    while (stack.length > 0) {
+      const node = stack.pop()
+      if (node === null || typeof node !== 'object') continue
+      if (Array.isArray(node)) {
+        for (let i = node.length - 1; i >= 0; i--) if (dropped.has(node[i])) node.splice(i, 1)
+      }
+      const origin = this.emptyCodeSpans.get(node)
+      if (origin !== undefined) this.dropEmptyCodeSpanAttrs(node as InlineNode, origin)
+      for (const value of Object.values(node)) stack.push(value)
+    }
+    for (const code of dropped) {
+      const origin = this.emptyCodeSpans.get(code)
+      if (origin === undefined) continue
+      this.dropEmptyCodeSpanAttrs(code as InlineNode, origin)
+      this.add(
+        'structure-unspellable',
+        'Dropped an empty <code>: its backtick run is closed by the end of a block or by a forced span, and here the run would read what follows it as code instead',
+        'warning',
+        origin.path,
+        origin.node,
+      )
+    }
+  }
+
+  private dropEmptyCodeSpanAttrs(code: InlineNode, origin: { node: P5Node; path: string }): void {
+    if (code.attrs === undefined) return
+    const names = this.attrNames(code.attrs)
+    delete code.attrs
+    if (names.length === 0) return
+    this.add(
+      'attribute-dropped',
+      `Dropped ${names.join(', ')} on <code>: an empty code span has no closing run to attach attributes to`,
+      'warning',
+      origin.path,
+      origin.node,
+    )
+  }
+
   reportSerializationLosses(document: Document): void {
     for (const { node, path, message } of this.unspellable) {
       this.add('structure-unspellable', message, 'warning', path, node)
@@ -4779,6 +4832,7 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
   // The loss belongs to serialization, not to the import: a consumer that keeps
   // the AST `htmlToAst` returns keeps the figure wrapper and loses nothing. So
   // the importer records where it built one and only this function reports it.
+  importer.dropUnspellableEmptyCodeSpans(value)
   importer.reportSerializationLosses(value)
   return { value: renderCarve(value), report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
 }

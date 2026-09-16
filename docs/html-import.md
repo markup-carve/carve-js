@@ -35,7 +35,7 @@ out.
 ## What the importer does not model
 
 
-Three decisions are deliberate, so a diagnostic naming them is the whole answer
+Four decisions are deliberate, so a diagnostic naming them is the whole answer
 rather than a placeholder for a mapping still to come:
 
 - **MathML is read for the TeX it already carries, never converted.** A
@@ -63,6 +63,15 @@ rather than a placeholder for a mapping still to come:
   `cite`, `dfn` - import as `[text]{kbd}` and friends. These two are not among
   them: each already has its own syntax (`=text=` and a code span), so importing
   them as span attributes as well would give one input two spellings.
+- **An empty `<code>` is written only where its backtick run ends.** A code
+  span with nothing in it is a run nothing closes, and the run ends at the end
+  of a block, at the braced closer of an emphasis, or at the end of a table
+  row. Anywhere else it would read what follows as code, so the span is
+  dropped with a `structure-unspellable` warning: `<p>x<code></code>y</p>`
+  imports as `xy`. Where the run does end, the span is written and the
+  emphasis around it takes the braced closer, so `<p><s><code></code></s></p>`
+  imports as ```{~``~}```. An empty span has no closing run for an attribute
+  block to follow, so its attributes are reported as `attribute-dropped`.
 
 `migrate` reaches the other importers too - `--from markdown` (or `md`),
 `--from djot`, and `--from bbcode` - which need no report because they parse
