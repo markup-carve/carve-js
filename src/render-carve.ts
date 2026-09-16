@@ -559,6 +559,7 @@ function renderWithEscapes(ast: Document, mode: 'minimal' | 'conservative'): str
 function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string {
   const previous = escapeMode
   escapeMode = mode
+  writtenBraced = new WeakSet()
   // "Already written on a description line" is true of THIS PASS, not of the
   // document. renderCarve runs this function twice and picks between the two
   // forms (PART 11 §4), so a set that survives the first pass tells the second
@@ -2489,7 +2490,7 @@ function renderInlineBody(
   // before dispatch so the switch below only ever sees current types.
   node = normalizeLegacyInline(node)
 
-  const withAttrs = (body: string) => `${body}${renderAttrs(node.attrs)}`
+  const withAttrs = (body: string) => `${bracedOnce(node, body)}${renderAttrs(node.attrs)}`
   const emphasisOf = (delim: string, children: InlineNode[]): string => {
     const content = renderInlines(children, ctx)
     // An empty code span is written as an unclosed run, which swallows a bare
@@ -2590,9 +2591,9 @@ function renderInlineBody(
     case 'hard_break':
       return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
     case 'insert':
-      return `{+${renderInlines(node.children, ctx)}+}${renderAttrs(node.attrs)}`
+      return withAttrs(`{+${renderInlines(node.children, ctx)}+}`)
     case 'delete':
-      return `{-${renderInlines(node.children, ctx)}-}${renderAttrs(node.attrs)}`
+      return withAttrs(`{-${renderInlines(node.children, ctx)}-}`)
     case 'substitution':
       return `{~${escapeCriticText(node.oldText)}~>${escapeCriticText(node.newText)}~}`
     case 'critic_comment':
@@ -3373,6 +3374,26 @@ function occurrenceIsRelaxed(call: number, offset: number, continuesRun: boolean
  * that could drift from it (carve-js#741).
  */
 let redundantIds = new WeakSet<object>()
+
+/** The inline nodes this pass wrote with a braced opener. */
+let writtenBraced = new WeakSet<object>()
+
+const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
+
+/**
+ * Records a braced emphasis, and refuses one whose direct child of the same
+ * kind is braced too: E3 keeps that inner `{*` literal (markup-carve/carve#2066).
+ */
+function bracedOnce(node: InlineNode, body: string): string {
+  if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
+  const children = (node as { children?: InlineNode[] }).children ?? []
+  const inner = children.find((child) => child.type === node.type && writtenBraced.has(child))
+  if (inner !== undefined) {
+    throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
+  }
+  writtenBraced.add(node)
+  return body
+}
 
 let unspellableEmptyCodeSpans = new WeakSet<object>()
 

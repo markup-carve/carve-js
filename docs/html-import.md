@@ -35,7 +35,7 @@ out.
 ## What the importer does not model
 
 
-Five decisions are deliberate, so a diagnostic naming them is the whole answer
+Six decisions are deliberate, so a diagnostic naming them is the whole answer
 rather than a placeholder for a mapping still to come:
 
 - **MathML is read for the TeX it already carries, never converted.** A
@@ -78,6 +78,11 @@ rather than a placeholder for a mapping still to come:
   `structure-unspellable` warning: `<td>x<br>y</td>` imports as `| x y |`.
   `htmlToAst` keeps the break, and `renderCarve` writes the same space for a
   tree that holds one.
+- **A span nested directly in a span of the same kind can lose a level.**
+  Carve cannot open a braced span inside a braced span of the same kind, so
+  where both levels need braces the inner element is unwrapped with a
+  `structure-unspellable` warning: `<sup><sup>x</sup></sup>` imports as
+  `{^x^}`. Where one level can be written bare, as in `a{**x**}b`, both stay.
 
 `migrate` reaches the other importers too - `--from markdown` (or `md`),
 `--from djot`, and `--from bbcode` - which need no report because they parse

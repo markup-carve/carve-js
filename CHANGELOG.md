@@ -19,6 +19,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A raw-HTML profile error names the Carve construct it refused (#1724) instead of the HTML it produced.
 - `renderCarve` throws `SourceUnspellableError` for an empty code span its open run cannot end at (#1789), and the HTML importer drops such a span with a `structure-unspellable` warning.
 - A hard break inside a table cell is written as one space (#1797, #1803; markup-carve/carve#2067) instead of ending the row, and the HTML importer reports the flattened `<br>` as `structure-unspellable`.
+- `renderCarve` throws `SourceUnspellableError` for a braced span directly inside a braced span of the same kind (#1804; markup-carve/carve#2066), and the HTML importer unwraps the inner element with a `structure-unspellable` warning.
 
 ### Added
 
