@@ -2585,9 +2585,12 @@ function renderInlineBody(
       // `mailto:`); fall back to the href for nodes without `text`.
       return withAttrs(`<${escapeAutolinkHref(node.text ?? (node.href.startsWith('mailto:') ? node.href.slice(7) : node.href))}>`)
     case 'mention':
-      return `@${escapeName(node.user)}`
     case 'tag':
-      return `#${escapeName(node.name)}`
+      // An attribute block after a mention or tag stays text (carve-php#2083).
+      if (renderAttrs(node.attrs) !== '') {
+        throw new SourceUnspellableError(node.type, `a ${node.type} carrying attributes has no Carve source spelling`)
+      }
+      return node.type === 'mention' ? `@${escapeName(node.user)}` : `#${escapeName(node.name)}`
     case 'inline_extension':
       return withAttrs(`:${escapeIdentifier(node.name)}[${renderInlines(node.content, ctx)}]`)
     case 'abbreviation':
