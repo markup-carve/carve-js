@@ -1294,22 +1294,153 @@ function pairableUnderscores(line: string): Set<number> {
 
 /**
  * M1b's pair condition is asked over the inline content the underscore is
- * emitted in, so a blank line ends the scan: a reader pairs emphasis across a
- * soft break and never across a paragraph boundary (markup-carve/carve#2046).
+ * emitted in - a paragraph, heading or table cell - so the scan is taken per
+ * block (markup-carve/carve#2046, markup-carve/carve-js#1755).
  */
 function pairableUnderscoresPerBlock(line: string): Set<number> {
   const pairs = new Set<number>()
-  // A blank line inside a quote carries the marker, so the separator between
-  // two paragraphs there is `>` rather than nothing.
-  const boundary = /\n[ \t>]*\n/g
-  let start = 0
+  for (const block of inlineBlocks(line)) {
+    // The ranges are joined by one space, which is what a line or cell
+    // boundary is to the reader, and the offsets are mapped back.
+    const chars: string[] = []
+    const origin: number[] = []
+    for (const [start, end] of block) {
+      if (chars.length > 0) {
+        chars.push(' ')
+        origin.push(-1)
+      }
+      for (let i = start; i < end; i++) {
+        chars.push(line[i]!)
+        origin.push(i)
+      }
+    }
+    for (const i of pairableUnderscores(chars.join(''))) {
+      const at = origin[i]!
+      if (at >= 0) pairs.add(at)
+    }
+  }
+
+  return pairs
+}
+
+/**
+ * The emitted document cut into the blocks M1b reads, each as the content
+ * ranges of its lines: a blank line ends a block, a new list item starts one,
+ * and every table cell is one of its own.
+ *
+ * A HEADING NEEDS NO CASE OF ITS OWN HERE, which carve-rs's port of this does
+ * carry. This writer separates a heading from the block below it with a blank
+ * line in every container except a tight list item, where the item marker is
+ * the separator - so both rules above already cut there, and a heading case
+ * would be a branch that cannot fire. Measured over the 1707-document corpus
+ * and four inline matrices: removing it moves no byte.
+ */
+function inlineBlocks(line: string): Array<Array<[number, number]>> {
+  const blocks: Array<Array<[number, number]>> = []
+  let current: Array<[number, number]> = []
+  const flush = () => {
+    if (current.length > 0) {
+      blocks.push(current)
+      current = []
+    }
+  }
+
+  let lineStart = 0
+  while (lineStart <= line.length) {
+    const newline = line.indexOf('\n', lineStart)
+    const lineEnd = newline === -1 ? line.length : newline
+    const content = Math.min(contentPosition(line, lineStart), lineEnd)
+    const body = line.slice(content, lineEnd)
+    if (/^ *$/.test(body)) {
+      flush()
+    } else if (body.startsWith('|')) {
+      flush()
+      let cell = content + 1
+      for (let i = cell; i < lineEnd; i++) {
+        if (line[i] === '\\') {
+          i++
+          continue
+        }
+        if (line[i] === '|') {
+          blocks.push([[cell, i]])
+          cell = i + 1
+        }
+      }
+      if (cell < lineEnd) blocks.push([[cell, lineEnd]])
+    } else if (startsAListItem(line, lineStart)) {
+      flush()
+      current.push([content, lineEnd])
+    } else {
+      current.push([content, lineEnd])
+    }
+    lineStart = lineEnd + 1
+  }
+  flush()
+
+  return blocks
+}
+
+/** Where a line's own content begins, past every container prefix in front. */
+function contentPosition(line: string, lineStart: number): number {
+  let at = lineStart
   for (;;) {
-    const match = boundary.exec(line)
-    const end = match === null ? line.length : match.index
-    for (const i of pairableUnderscores(line.slice(start, end))) pairs.add(start + i)
-    if (match === null) return pairs
-    start = match.index + match[0].length
-    boundary.lastIndex = start
+    while (line[at] === ' ') at++
+    const end = containerPrefixEnd(line, at)
+    if (end === null) return at
+    at = end
+  }
+}
+
+/** One container prefix at `at`, and where it ends. See {@link contentPosition}. */
+function containerPrefixEnd(line: string, at: number): number | null {
+  const ch = line[at]
+  if (ch === undefined) return null
+
+  // A quote marker takes ONE following space, the separator this writer emits.
+  // A blank quote line is written bare (`>`), so the space is optional.
+  if (ch === '>') return line[at + 1] === ' ' ? at + 2 : at + 1
+
+  // A bullet. The task box after it - `- [ ] ` - needs no case of its own: it
+  // is bracketed by spaces, so no candidate can stand beside it, and whether it
+  // counts as prefix or as content changes no answer. Measured over the corpus
+  // and four matrices, reading it as content moves no byte.
+  if ((ch === '-' || ch === '*' || ch === '+') && line[at + 1] === ' ') return at + 2
+
+  // An ordered marker: digits, then the authored delimiter, then the separator.
+  // A number no writer emits is not a marker, so the digit run is bounded.
+  if (ch >= '0' && ch <= '9') {
+    let end = at
+    while (end - at < 9 && line[end] !== undefined && line[end]! >= '0' && line[end]! <= '9') end++
+    if ((line[end] === '.' || line[end] === ')') && line[end + 1] === ' ') return end + 2
+
+    return null
+  }
+
+  // A footnote definition's label, which this writer emits as `[^id]: `. An
+  // abbreviation definition (`*[X]: `) is NOT one: its body is not a container.
+  if (ch === '[' && line[at + 1] === '^') {
+    let end = at + 2
+    while (end < line.length && line[end] !== '\n' && line[end] !== ']') end++
+    if (line[end] === ']' && line[end + 1] === ':' && line[end + 2] === ' ') return end + 3
+  }
+
+  return null
+}
+
+/** Whether the line opens a list item, past any quote markers in front of it. */
+function startsAListItem(line: string, lineStart: number): boolean {
+  let at = lineStart
+  for (;;) {
+    while (line[at] === ' ') at++
+    if (line[at] === undefined) return false
+    if (line[at] === '>') {
+      const end = containerPrefixEnd(line, at)
+      if (end === null) return false
+      at = end
+      continue
+    }
+
+    return containerPrefixEnd(line, at) !== null
   }
 }
 
@@ -1767,28 +1898,39 @@ function contentGrowsRun(piece: DelimiterPiece, node: InlineNode): boolean {
   const ch = piece.run.delimiter[0]!
   if (runAtStart(piece.core, ch) === 0 && runAtEnd(piece.core, ch) === 0) return false
 
-  return !commutes(piece, node)
+  return !edgeChildNests(piece, node)
 }
 
 /**
- * The round-trip normalization list, PART 11 section 10k: nested emphasis of
- * DIFFERENT strengths, where the child spans the whole parent, may commute.
- * `***x***` comes back with the emphasis outside either way, and the two
- * nestings are the same document. EQUAL strengths do not commute - the runs
- * collapse into one element of the wrong kind, which is a different document.
+ * Whether every run the CONTENT adds at an edge belongs to a nested child of a
+ * different strength, which the reader re-pairs as the nesting the document
+ * has: `*italic **bold***` comes back as an emphasis holding a strong.
+ *
+ * EQUAL strengths do not nest - the runs collapse into one element of the wrong
+ * kind - and a run that is not a child's delimiter at all, a literal the writer
+ * did not escape, reaches the reader as part of the writer's own run. Both take
+ * the inline-HTML spelling instead.
+ *
+ * `***x***`, where the child spans the whole parent, is the case PART 11
+ * section 10k's round-trip normalization list already allowed: the emphasis
+ * comes back outside either way, and the two nestings are the same document.
  */
-function commutes(piece: DelimiterPiece, node: InlineNode): boolean {
+function edgeChildNests(piece: DelimiterPiece, node: InlineNode): boolean {
   if (piece.run.delimiter[0] !== '*') return false
   // The padding text nodes are not content: `padOutside` has already moved them
-  // outside the delimiters, so the child still spans everything between them.
+  // outside the delimiters, so a child at an edge of the core is still the node
+  // whose delimiter stands there.
   const kids = ((node as { children?: InlineNode[] }).children ?? []).filter(
     (kid) => kid.type !== 'text' || /\S/.test((kid as { value?: string }).value ?? ''),
   )
-  if (kids.length !== 1) return false
-  const child = DELIMITER_RUN[kids[0]!.type]
-  if (child?.delimiter[0] !== '*') return false
+  const nests = (kid: InlineNode | undefined): boolean => {
+    const child = DELIMITER_RUN[kid?.type ?? '']
 
-  return child.delimiter.length !== piece.run.delimiter.length
+    return child?.delimiter[0] === '*' && child.delimiter.length !== piece.run.delimiter.length
+  }
+  if (runAtStart(piece.core, '*') > 0 && !nests(kids[0])) return false
+
+  return runAtEnd(piece.core, '*') === 0 || nests(kids[kids.length - 1])
 }
 
 /**

@@ -33,4 +33,35 @@ describe('a nested run of the same character is re-spelled', () => {
   it('does not count an escaped edge character as reaching the run', () => {
     expect(carveToMarkdown('{/x\\*/}\n')).toBe('*x\\**\n')
   })
+
+  // markup-carve/carve-js#1744: a child of a DIFFERENT strength at an edge
+  // nests, so the run stays and the engines write the same bytes. The ruling
+  // recorded on markup-carve/carve-js#1736 picks the plain spelling.
+  it('keeps the run when a strong closes an emphasis', () => {
+    expect(carveToMarkdown('{/italic *bold*/}\n')).toBe('*italic **bold***\n')
+  })
+
+  it('keeps the run when an emphasis closes a strong', () => {
+    expect(carveToMarkdown('{*bold /italic/*}\n')).toBe('**bold *italic***\n')
+  })
+
+  it('keeps the run when the child opens the content instead', () => {
+    expect(carveToMarkdown('{/*bold* italic/}\n')).toBe('***bold** italic*\n')
+  })
+
+  it('keeps it intraword, where the run has an alphanumeric outside it', () => {
+    expect(carveToMarkdown('a{/x *y*/}b\n')).toBe('a*x **y***b\n')
+  })
+
+  it('re-spells an equal-strength child that opens the content', () => {
+    expect(carveToMarkdown('/{/x/} tail/\n')).toBe('<em>*x* tail</em>\n')
+  })
+
+  it('re-spells an equal-strength child that closes it', () => {
+    expect(carveToMarkdown('/head {/x/}/\n')).toBe('<em>head *x*</em>\n')
+  })
+
+  it('re-spells a literal the writer did not escape at the edge', () => {
+    expect(carveToMarkdown('{//**x//}\n')).toBe('<em>*\\*\\*x*</em>\n')
+  })
 })

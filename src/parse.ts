@@ -12219,6 +12219,17 @@ function findEmphasisClose(
         continue
       }
     }
+    // A raw inline's format token is opaque as itself, not as a braced
+    // highlight: the main loop builds it together with the code span in front
+    // of it, so a closer after it stays reachable (E2a, carve-js#1745).
+    if (ch === '{' && text[j - 1] === '`') {
+      RE_RAW_INLINE_STICKY.lastIndex = j
+      const m = RE_RAW_INLINE_STICKY.exec(text)
+      if (m) {
+        j += m[0].length - 1
+        continue
+      }
+    }
     // Braced inlines are opaque too (E2a, markup-carve/carve#2027).
     if (ch === '{') {
       const end = bracedInlineEnd(text, j, memo)
@@ -12280,9 +12291,11 @@ function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo): number
   return -1
 }
 
-// The autolink and link-tail matchers the main loop uses, as sticky copies, so
-// the scan hides exactly the region the parser builds a node from.
+// The autolink, raw-inline format and link-tail matchers the main loop uses, as
+// sticky copies, so the scan hides exactly the region the parser builds a node
+// from.
 const RE_AUTOLINK_STICKY = new RegExp(RE_AUTOLINK.source.replace(/^\^/, ''), 'yu')
+const RE_RAW_INLINE_STICKY = new RegExp(RE_RAW_INLINE.source.replace(/^\^/, ''), 'y')
 const RE_LINK_REST_STICKY = new RegExp(RE_LINK_REST.source.replace(/^\^/, ''), 'y')
 
 // Only a bracket pair the parser can build a link or image from has a

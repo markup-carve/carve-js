@@ -2717,7 +2717,11 @@ function renderEmphasis(
     content.endsWith(closeDelim) ||
     content.startsWith(' ') ||
     content.endsWith(' ') ||
-    content === ''
+    content === '' ||
+    // `/*` opens `bold_italic` and `*/` closes it, so a bare emphasis whose
+    // content has both would read back as a strong wrapping an emphasis - the
+    // other nesting (carve-js#1758).
+    (delim === '/' && content.startsWith('*') && content.endsWith('*'))
   return needsForced
     ? `{${delim}${content}${closeDelim}}`
     : `${delim}${content}${closeDelim}`
