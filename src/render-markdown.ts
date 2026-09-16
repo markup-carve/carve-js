@@ -751,7 +751,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
       return `[${crossrefText}](${markdownFragmentDestination(crossrefId)})`
     }
     case 'caption_number':
-      return node.n === undefined ? '#' : String(node.n)
+      // An unnumbered placeholder is a literal `#`, and M1f decides it like one.
+      return node.n === undefined ? positionalHash() : String(node.n)
     case 'citation_group':
       // Tier-2 ext node; the core renderer has no numbering, so emit the source.
       return stripControls(node.raw)
