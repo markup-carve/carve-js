@@ -7,6 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-17
+
 ### Changed
 
 - **BREAKING:** Migration reports move to schema version 2 (#1671, #1673). `carried` is renamed `preserved`, `normalized` marks semantics-preserving rewrites, opaque `raw-preserved` content counts as `degraded`, and the diagnostic `code` type widens for cross-importer codes. Markdown, Djot and BBCode emit an explicit fallback finding, so an empty diagnostics array no longer means verified fidelity.
@@ -19,8 +21,19 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A raw-HTML profile error names the Carve construct it refused (#1724) instead of the HTML it produced.
 - `renderCarve` throws `SourceUnspellableError` for an empty code span its open run cannot end at (#1789), and the HTML importer drops such a span with a `structure-unspellable` warning.
 - A hard break inside a table cell is written as one space (#1797, #1803; markup-carve/carve#2067) instead of ending the row, and the HTML importer reports the flattened `<br>` as `structure-unspellable`.
-- `renderCarve` throws `SourceUnspellableError` for a braced span inside a braced span of the same kind (#1804, #1817; markup-carve/carve#2066), and the HTML importer unwraps the inner element with a `structure-unspellable` warning. A span inside a bare span of its kind is now written braced instead of closing the outer span.
+- `renderCarve` throws `SourceUnspellableError` for a span inside a span of the same kind with no braced span of another kind between them (#1804, #1817, #1831, #1841, #1849; markup-carve/carve#2066, markup-carve/carve#2078, markup-carve/carve#2091), and the HTML importer unwraps the inner element with a `structure-unspellable` warning. A braced span starts a scope of its own, so `/a {*b /c/*}/` keeps all three levels and the HTML importer writes `<p>a<em>b<strong>c<em>d</em></strong></em>e</p>` as `a{/b{*c{/d/}*}/}e` with no report.
 - `renderCarve` throws `SourceUnspellableError` for a mention or tag glued to a word character on either side (#1807), which no parse builds.
+- `renderCarve` throws `SourceUnspellableError` for a mention or tag carrying attributes (#1820; markup-carve/carve-php#2083) instead of dropping them.
+- `renderCarve` throws `SourceUnspellableError` for a mention or tag whose name the grammar rejects (#1851; markup-carve/carve-php#2159): a space, an apostrophe, an outer or doubled dot, or a non-ASCII letter. It used to delete those characters and write a different name.
+- `renderCarve` throws `SourceUnspellableError` for a table row whose every cell is blank (#1822), and the HTML importer drops the row with a `structure-unspellable` warning; a table, and its caption, goes only when no row survives.
+- An opener of an emphasis kind that is already open is content, in the forced `{X X}` form as in the bare one (#1831; markup-carve/carve#2078): `*a {*b*} c*` and `{*a *b* c*}` no longer nest.
+- A code span's closer is searched for across the rest of the block (#1828; markup-carve/carve#2079), so a forced or editorial closer inside the span is code.
+- **BREAKING:** A `substitution` carries its two halves as `old` and `new`, arrays of inline nodes, in place of the `oldText` and `newText` strings (#1827; markup-carve/carve#2083). `{~/old/~>/new/~}` emphasizes both halves, each half takes part in resolution and carries positions, and an ingest refuses the old fields.
+- A `{~ ~}` pair is a substitution only at a top-level `~>` (#1827; markup-carve/carve#2083); an arrow inside code, math, an inline literal, a comment or an escape leaves a forced strike.
+- An emphasis kind open outside a braced span is open again inside it (#1841; markup-carve/carve#2091): a closer inside a braced pair cannot close an outer one, and `*a {/b *c* d/} e*` keeps its inner strong.
+- An unclosed code span, math run or inline literal ended at a forced or editorial closer keeps its line break inside a line block (#1842; markup-carve/carve#2089).
+- The HTML import report lists an element's own row before the rows for its attributes (#1839), the order markup-carve/carve-php#1737 settled.
+- The Carve writer adds no escape inside an editorial comment's text, whose content is literal, and refuses one holding a closing brace (#1847).
 
 ### Added
 
@@ -48,6 +61,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Markdown importer writes a link with an empty destination as its text and an image as its plain alt text (#1800, #1811), since Carve reads `[x]()` as literal text. A title keeps a span, a reference to an empty-destination definition is unwrapped and the definition dropped, and spaces around an inline destination are no longer percent-encoded.
 - The Markdown importer keeps a lazy continuation line in its block quote and escapes a continuation line shaped like a link definition (#1812), which Carve would otherwise read as a definition and drop.
 - An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
+- Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
+- The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
 ## [0.1.6] - 2026-09-07
 
@@ -1467,7 +1482,8 @@ implementations are byte-matched against.
   zero-width Unicode control characters stripped from text and code content (§26)
 - Uniform nesting depth cap of 200
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.6...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.7...HEAD
+[0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
 [0.1.6]: https://github.com/markup-carve/carve-js/compare/0.1.5...0.1.6
 [0.1.5]: https://github.com/markup-carve/carve-js/compare/0.1.4...0.1.5
 [0.1.4]: https://github.com/markup-carve/carve-js/compare/0.1.3...0.1.4
