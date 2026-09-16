@@ -17,6 +17,7 @@ import type {
 } from './ast.js'
 import { CANONICAL_ADMONITION_KINDS } from './ast.js'
 import { DocumentIdRegistry } from './document-ids.js'
+import { SourceUnspellableError } from './source-unspellable-error.js'
 import { emptyCodeSpansWhoseRunDoesNotEnd, flattenHardBreaks, isAttrIdentifier, isContainerKind, renderCarve } from './render-carve.js'
 import { mergeAttrs } from './parse.js'
 import {
@@ -714,6 +715,8 @@ class Importer {
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
   /** The element each empty code span came from, for `dropUnspellableEmptyCodeSpans`. */
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
+  /** The element each inline node came from, for `unwrapUnspellable`. */
+  private readonly inlineOrigins = new WeakMap<object, { node: P5Node; path: string }>()
   /** The element each hard break came from, for `dropHardBreaksInTableCells`. */
   private readonly hardBreaks = new WeakMap<object, { node: P5Node; path: string }>()
   /**
@@ -3425,7 +3428,9 @@ class Importer {
     // fires and no gate below this one can see it.
     let previousWasBlock = false
     nodes.forEach((node, index) => {
-      const produced = this.inline(node, paths?.[index] ?? this.childPath(parentPath, node, index), depth)
+      const path = paths?.[index] ?? this.childPath(parentPath, node, index)
+      const produced = this.inline(node, path, depth)
+      for (const item of produced) if (!this.inlineOrigins.has(item)) this.inlineOrigins.set(item, { node, path })
       const atBoundary = previousWasBlock || isFlattenedBlock(node)
       if (atBoundary && needsSeparator(out, produced)) out.push({ type: 'text', value: ' ' })
       out.push(...produced)
@@ -3989,6 +3994,41 @@ class Importer {
    * The rendering changes in both cases, so the severity is `warning`, and the
    * limit is the importer's own: these diagnostics are not a second budget.
    */
+  /**
+   * Unwraps the node a writer refusal names and reports the loss. False when
+   * the node is not in the tree or came from no element.
+   */
+  unwrapUnspellable(document: Document, target: object): boolean {
+    const origin = this.inlineOrigins.get(target)
+    if (origin === undefined) return false
+    const stack: unknown[] = [document]
+    while (stack.length > 0) {
+      const node = stack.pop()
+      if (node === null || typeof node !== 'object') continue
+      if (Array.isArray(node)) {
+        const index = node.indexOf(target)
+        if (index !== -1) {
+          node.splice(index, 1, ...((target as { children?: InlineNode[] }).children ?? []))
+          const tag = (origin.node as { tagName?: string }).tagName ?? 'element'
+          this.add(
+            'structure-unspellable',
+            `Unwrapped <${tag}> inside a span of the same kind: two braced spans of one kind cannot nest in Carve`,
+            'warning',
+            origin.path,
+            origin.node,
+          )
+          const attrs = (target as InlineNode).attrs
+          if (attrs !== undefined && this.attrNames(attrs).length > 0) {
+            this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <${tag}>: the element was unwrapped`, 'warning', origin.path, origin.node)
+          }
+          return true
+        }
+      }
+      for (const value of Object.values(node)) stack.push(value)
+    }
+    return false
+  }
+
   /**
    * A table row is one line, so a hard break in a cell flattens to one space
    * and the loss is reported (markup-carve/carve#2067).
@@ -4873,5 +4913,12 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
   importer.dropUnspellableEmptyCodeSpans(value)
   importer.dropHardBreaksInTableCells(value)
   importer.reportSerializationLosses(value)
-  return { value: renderCarve(value), report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
+  for (;;) {
+    try {
+      const carve = renderCarve(value)
+      return { value: carve, report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
+    } catch (error) {
+      if (!(error instanceof SourceUnspellableError) || error.node === undefined || !importer.unwrapUnspellable(value, error.node)) throw error
+    }
+  }
 }
