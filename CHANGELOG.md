@@ -40,6 +40,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A hash is escaped on the Markdown target where the line would open or close an ATX heading (#1768, #1779), including an unnumbered caption placeholder (#1767).
 - The Carve writer round-trips three more shapes (#1759, #1763, #1773): an emphasis wrapping a strong, a caret before an escaped closing brace, and an emphasis ending in an empty code span.
 - The HTML importer keeps a space after an element that ends in a `<br>` (markup-carve/carve-rs#1706), as carve-php and carve-rs do: `<p>a <strong>x<br></strong> b</p>` no longer loses the space before `b`.
+- The Carve writer escapes a caret before a node written with `[`, and a dollar before a backtick run or inline math (#1795). A caret before an imported link no longer reads back as an inline note.
 - An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
 
 ## [0.1.6] - 2026-09-07

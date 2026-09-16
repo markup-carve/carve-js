@@ -2396,6 +2396,15 @@ function renderInlines(
         piece = '\\\n'
       }
 
+      // The last character written can open a construct with the next node's
+      // first: `^[` an inline note, `$` plus a backtick run or `$` math. The
+      // escape belongs to the previous node, so its form decides (PART 11 §2b).
+      if (opensAcrossBoundary(out, piece) && escapeModeOf(nodes[idx - 1]) === 'conservative') {
+        out = `${out.slice(0, -1)}\\${out.slice(-1)}`
+        lineLength += 1
+        lineTail = out.slice(-2)
+      }
+
       out += piece
       const lastNewline = piece.lastIndexOf('\n')
       if (lastNewline === -1) {
@@ -3248,6 +3257,17 @@ let askedUnits: Set<object> | null = null
  */
 let escapeUnit: object | null = null
 
+/** The form another node's escapes take. */
+function escapeModeOf(unit: object | undefined): 'minimal' | 'conservative' {
+  const previous = escapeUnit
+  escapeUnit = unit ?? null
+  try {
+    return escapeModeHere()
+  } finally {
+    escapeUnit = previous
+  }
+}
+
 /** Which form the character being written now takes (PART 11 §2b). */
 function escapeModeHere(): 'minimal' | 'conservative' {
   if (askedUnits !== null && escapeUnit !== null) askedUnits.add(escapeUnit)
@@ -3858,6 +3878,14 @@ function holdsHardBreak(nodes: readonly unknown[]): boolean {
     if ((node as { type?: unknown }).type === 'hard_break') return true
     return Object.values(node).some((value) => Array.isArray(value) && holdsHardBreak(value))
   })
+}
+
+function opensAcrossBoundary(written: string, piece: string): boolean {
+  const last = written.at(-1)
+  const next = piece[0]
+  if (last === undefined || next === undefined || precededByOddBackslashRun(written, written.length - 1)) return false
+
+  return (last === '^' && next === '[') || (last === '$' && (next === '`' || next === '$'))
 }
 
 /**
