@@ -131,6 +131,7 @@ export function renderCarve(ast: Document, _opts: CarveRenderOptions = {}): stri
   // passes below agree on them.
   sentinels = pickSentinelRun(occupiedPrivateUse(ast), SENTINEL_BASE, SENTINEL_COUNT)
   redundantIds = findRedundantHeadingIds(ast)
+  unspellableEmptyCodeSpans = findUnspellableEmptyCodeSpans(ast)
   // The two "written in place" sets are NOT reset here: they are per-PASS, and
   // renderWithEscapes owns them. Resetting them here as well would be the same
   // rule in two places, and the pass-scoped one is the one that has to hold.
@@ -2523,6 +2524,12 @@ function renderInlineBody(
     case 'highlight':
       return withAttrs(emphasisOf('=', node.children))
     case 'code':
+      if (node.value === '' && unspellableEmptyCodeSpans.has(node)) {
+        throw new SourceUnspellableError(
+          'code',
+          'an empty code span has no Carve source spelling where its open run does not end',
+        )
+      }
       // The unclosed spelling is offered only when NOTHING is written after the
       // span. An attribute block is written after it, so a code span carrying
       // one keeps the closed form (and `raw_inline` and `literal_inline`, which
@@ -3345,6 +3352,103 @@ function occurrenceIsRelaxed(call: number, offset: number, continuesRun: boolean
  * that could drift from it (carve-js#741).
  */
 let redundantIds = new WeakSet<object>()
+
+let unspellableEmptyCodeSpans = new WeakSet<object>()
+
+const BRACED_INLINE_TYPES = new Set([
+  'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete',
+])
+
+const LABEL_INLINE_TYPES = new Set([
+  'link', 'image', 'span', 'inline_extension', 'inline_footnote', 'footnote_ref', 'heading_ref', 'citation_group',
+  'citation',
+])
+
+/**
+ * The empty code spans the writer refuses: attributes need a closing run the
+ * span has not got, and elsewhere the open run must end where the span does
+ * (carve-js#1789).
+ */
+function findUnspellableEmptyCodeSpans(root: object): WeakSet<object> {
+  const found = new WeakSet<object>()
+  let anyEmpty = false
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === null || typeof node !== 'object') continue
+    const typed = node as { type?: unknown; value?: unknown; attrs?: InlineNode['attrs'] }
+    if (typed.type === 'code' && typed.value === '') {
+      anyEmpty = true
+      if (renderAttrs(typed.attrs) !== '') found.add(node)
+    }
+    for (const value of Object.values(node)) stack.push(value)
+  }
+  if (anyEmpty) for (const code of emptyCodeSpansWhoseRunDoesNotEnd(root)) found.add(code)
+  return found
+}
+
+/**
+ * The empty code spans whose open run does not end where the span does. The
+ * run ends at the end of a block or at a braced closer (PART 3, UNCLOSED RUN);
+ * anything else behind it is read into the span, and a label never closes.
+ */
+export function emptyCodeSpansWhoseRunDoesNotEnd(root: object): object[] {
+  const found: object[] = []
+  const parents = new WeakMap<object, Parent>()
+  const empties: Array<{ value: string; attrs?: unknown }> = []
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === null || typeof node !== 'object') continue
+    for (const value of Object.values(node)) {
+      if (!Array.isArray(value)) {
+        if (value !== null && typeof value === 'object') stack.push(value)
+        continue
+      }
+      let lastContent = -1
+      value.forEach((item, index) => {
+        if (!(item !== null && typeof item === 'object' && (item as InlineNode).type === 'text' && (item as { value: string }).value === '')) lastContent = index
+      })
+      value.forEach((item, index) => {
+        if (item === null || typeof item !== 'object') return
+        parents.set(item, [node, value, index < lastContent])
+        stack.push(item)
+      })
+    }
+    const typed = node as { type?: unknown; value?: unknown }
+    if (typed.type === 'code' && typed.value === '') empties.push(node as { value: string })
+  }
+  for (const code of empties) {
+    if (!runEndsAtEmptyCodeSpan(code, parents)) found.push(code)
+  }
+  return found
+}
+
+/** The node holding an item, the list it sits in, and whether content follows it there. */
+type Parent = [object, unknown[], boolean]
+
+function runEndsAtEmptyCodeSpan(code: object, parents: WeakMap<object, Parent>): boolean {
+  let current: object = code
+  let closed = false
+  for (let link = parents.get(current); link !== undefined; current = link[0], link = parents.get(current)) {
+    const [parent, , followed] = link
+    if (!closed && followed) return false
+    const type = (parent as { type?: string }).type ?? ''
+    if (type === 'table_cell') {
+      // Cells are split after the run is read, so only the last cell's run
+      // ends with its line, braced closer or not.
+      const row = parents.get(parent)
+      return row === undefined || row[1][row[1].length - 1] === parent
+    }
+    if (BRACED_INLINE_TYPES.has(type)) {
+      closed = true
+      continue
+    }
+    if (LABEL_INLINE_TYPES.has(type)) return false
+    if (type !== 'abbreviation') return true
+  }
+  return true
+}
 
 /**
  * Hoisted definitions keyed by the SOURCE LINE they were written on, and the
