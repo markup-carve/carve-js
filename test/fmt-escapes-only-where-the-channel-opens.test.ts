@@ -65,7 +65,9 @@ describe('fmt escapes only where the channel actually opens', () => {
     // `\}` cannot close a `{^ ^}` run, so the brace's escape is enough (carve-js#1763).
     const src = '{/{^{/x/}^}/}\n'
     const out = carveToCarve(src)
-    expect(out).toBe('/{^{/x/^\\}/\\}\n')
+    // The trailing brace needs no escape since carve-js#1831: a `{^` inside an
+    // open superscript is content, so nothing there can open a run.
+    expect(out).toBe('/{^{/x/^\\}/}\n')
     expect(carveToHtml(out)).toBe(carveToHtml(src))
     expect(carveToCarve(out)).toBe(out)
   })

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml, carveToMarkdown } from '../src/index.js'
+import { carveToHtml, carveToMarkdown, htmlToAst, renderHtml, renderMarkdown } from '../src/index.js'
+
+// Same-kind nesting has no Carve source since carve-js#1831, so the trees that
+// have it come in through the HTML importer.
+const markdownOf = (html: string) => renderMarkdown(htmlToAst(html).value)
 
 /**
  * carve-js#1717. A parent and its only child that spell their delimiters with
@@ -13,12 +17,12 @@ import { carveToHtml, carveToMarkdown } from '../src/index.js'
  */
 describe('a nested run of the same character is re-spelled', () => {
   it('separates emphasis inside emphasis, which four asterisks read as one strong', () => {
-    expect(carveToMarkdown('/{/x/}/\n')).toBe('<em>*x*</em>\n')
-    expect(carveToHtml('/{/x/}/\n')).toBe('<p><em><em>x</em></em></p>')
+    expect(markdownOf('<p><em><em>x</em></em></p>')).toBe('<em>*x*</em>\n')
+    expect(renderHtml(htmlToAst('<p><em><em>x</em></em></p>').value)).toBe('<p><em><em>x</em></em></p>')
   })
 
   it('separates strong inside strong, which eight asterisks spell only by luck', () => {
-    expect(carveToMarkdown('*{*x*}*\n')).toBe('<strong>**x**</strong>\n')
+    expect(markdownOf('<p><strong><strong>x</strong></strong></p>')).toBe('<strong>**x**</strong>\n')
   })
 
   it('leaves a bold-italic alone, whose two strengths commute', () => {
@@ -54,14 +58,14 @@ describe('a nested run of the same character is re-spelled', () => {
   })
 
   it('re-spells an equal-strength child that opens the content', () => {
-    expect(carveToMarkdown('/{/x/} tail/\n')).toBe('<em>*x* tail</em>\n')
+    expect(markdownOf('<p><em><em>x</em> tail</em></p>')).toBe('<em>*x* tail</em>\n')
   })
 
   it('re-spells an equal-strength child that closes it', () => {
-    expect(carveToMarkdown('/head {/x/}/\n')).toBe('<em>head *x*</em>\n')
+    expect(markdownOf('<p><em>head <em>x</em></em></p>')).toBe('<em>head *x*</em>\n')
   })
 
   it('re-spells a literal the writer did not escape at the edge', () => {
-    expect(carveToMarkdown('{//**x//}\n')).toBe('<em>*\\*\\*x*</em>\n')
+    expect(markdownOf('<p><em><em>**x</em></em></p>')).toBe('<em>*\\*\\*x*</em>\n')
   })
 })

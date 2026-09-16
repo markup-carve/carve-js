@@ -560,7 +560,7 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
   const previous = escapeMode
   escapeMode = mode
   writtenBraced = new WeakSet()
-  bracedByParent = new WeakSet()
+  openEmphasisKinds.clear()
   // "Already written on a description line" is true of THIS PASS, not of the
   // document. renderCarve runs this function twice and picks between the two
   // forms (PART 11 §4), so a set that survives the first pass tells the second
@@ -2512,20 +2512,32 @@ function renderInlineBody(
 
   const withAttrs = (body: string) => `${bracedOnce(node, body)}${renderAttrs(node.attrs)}`
   const emphasisOf = (delim: string, children: InlineNode[]): string => {
-    // E3 pushes no second level of one kind while one is open, so a bare span
-    // inside a bare span of its kind would close it; the inner one takes
-    // braces (carve-js#1817).
-    if (!neighborsForceBraces(delim, prevChar, nextChar)) {
-      for (const inner of nearestOfType(children, node.type)) bracedByParent.add(inner)
-    }
     const content = renderInlines(children, ctx)
     // An empty code span is written as an unclosed run, which swallows a bare
     // closer; only the braced one ends it.
     const last = children[children.length - 1]
-    return (last?.type === 'code' && last.value === '') || bracedByParent.has(node)
+    return last?.type === 'code' && last.value === ''
       ? renderForcedEmphasis(delim, content)
       : renderEmphasis(delim, content, prevChar, nextChar)
   }
+  // E3 pushes no second level of one kind while one is open, and the forced
+  // form is on the same stack, so a span of a kind already open has no
+  // spelling at all (markup-carve/carve#2078).
+  if (EMPHASIS_KINDS.has(node.type)) {
+    if (openEmphasisKinds.has(node.type)) {
+      throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
+    }
+    openEmphasisKinds.add(node.type)
+    try {
+      return renderInlineDispatch()
+    } finally {
+      openEmphasisKinds.delete(node.type)
+    }
+  }
+
+  return renderInlineDispatch()
+
+  function renderInlineDispatch(): string {
   switch (node.type) {
     case 'text':
       return escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
@@ -2653,6 +2665,7 @@ function renderInlineBody(
       const t: never = node
       throw new Error(`renderCarve: unknown inline ${(t as { type: string }).type}`)
     }
+  }
   }
 }
 
@@ -3430,8 +3443,14 @@ let redundantIds = new WeakSet<object>()
 /** The inline nodes this pass wrote with a braced opener. */
 let writtenBraced = new WeakSet<object>()
 
-/** Spans this pass writes braced because a bare parent of the same kind holds them. */
-let bracedByParent = new WeakSet<object>()
+/** The emphasis kinds open around the node being written. */
+const openEmphasisKinds = new Set<string>()
+
+/**
+ * The seven kinds E3 puts on one stack: a second level of a kind has no
+ * spelling, braced or bare (markup-carve/carve#2078).
+ */
+const EMPHASIS_KINDS = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript'])
 
 const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
 

@@ -11081,19 +11081,40 @@ function anchorRangeAt(ranges: readonly AnchorRange[], offset: number): AnchorRa
 // call site). Over the cap the run stays literal text instead of recursing.
 let inlineDepth = 0
 
+/**
+ * The emphasis kinds open around the run being scanned.
+ *
+ * E3 pushes no second level of a kind while one is open, and PART 9 section 9
+ * puts the forced `{X X}` forms on the same stack as the bare ones, so an
+ * opener of an open kind is content either way (markup-carve/carve#2078). Only
+ * the emphasis arms pass it on: a link label or a table cell starts from
+ * nothing.
+ */
+const NO_OPEN_KINDS: ReadonlySet<string> = new Set()
+let openKinds: ReadonlySet<string> = NO_OPEN_KINDS
+
+/** `openKinds` with `delim` added. */
+function withOpenKind(delim: string): ReadonlySet<string> {
+  return new Set([...openKinds, delim])
+}
+
 function scanInline(
   text: string,
   source: InlineSource = inlineSource(),
   inFootnote = false,
   captionContext = false,
+  kinds: ReadonlySet<string> = NO_OPEN_KINDS,
 ): InlineNode[] {
   if (inlineDepth >= MAX_NESTING_DEPTH) {
     return [withPos({ type: 'text', value: text } as Text, source, text, 0, text.length)]
   }
   inlineDepth++
+  const outer = openKinds
+  openKinds = kinds
   try {
     return scanInlineInner(text, source, inFootnote, captionContext)
   } finally {
+    openKinds = outer
     inlineDepth--
   }
 }
@@ -11797,12 +11818,12 @@ function scanInlineInner(
       // Forced intraword emphasis `{X…X}` (§22) — emits the same node as the
       // bare delimiter, but with no word-boundary condition.
       const delim = text[i + 1]
-      const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined
+      const forced = hasBrace && delim !== undefined && FORCED_TYPE[delim] !== undefined && !openKinds.has(delim)
         ? bracedPairEnd(text, i, `${delim}}`)
         : -1
       if (forced !== -1) {
         flush()
-        out.push(withPos({ type: FORCED_TYPE[delim!]!, children: scanInline(text.slice(i + 2, forced - 2), shiftSource(source, text, i + 2), inFootnote) } as Emphasis, source, text, i, forced))
+        out.push(withPos({ type: FORCED_TYPE[delim!]!, children: scanInline(text.slice(i + 2, forced - 2), shiftSource(source, text, i + 2), inFootnote, false, withOpenKind(delim!)) } as Emphasis, source, text, i, forced))
         i = forced
         continue
       }
@@ -11948,7 +11969,7 @@ function matchEmphasis(
           searchPos = close + 1
           continue
         }
-        const children = scanInline(inner, shiftSource(source, text, start), inFootnote)
+        const children = scanInline(inner, shiftSource(source, text, start), inFootnote, false, new Set([...openKinds, '/', '*']))
         return {
           // `boldItalic` records that the author used the combined form. The
           // nested spelling `*/x/*` yields the same tree, so the writer needs the
@@ -11992,6 +12013,8 @@ function matchEmphasis(
       // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
       // uniformly with `//x//` and `__x__`. Applies to all five.
       if (after === delim || before === delim) continue
+      // E3: a second opener of an open kind is content.
+      if (openKinds.has(delim)) continue
       // Word-boundary opener (spec §9): every bare delimiter can't open after
       // an alphanumeric or `_`, keeping paths/identifiers/numbers literal
       // (a/b/c, foo*bar*baz, snake_case, x = 5, key=value, 1,2,3). Use the
@@ -12013,7 +12036,7 @@ function matchEmphasis(
       if (close !== -1) {
         const inner = text.slice(i + 1, close)
         return {
-          node: { type, children: scanInline(inner, shiftSource(source, text, i + 1), inFootnote) },
+          node: { type, children: scanInline(inner, shiftSource(source, text, i + 1), inFootnote, false, withOpenKind(delim)) },
           end: close + 1,
         }
       }
@@ -12355,7 +12378,7 @@ function findEmphasisClose(
     }
     // Braced inlines are opaque too (E2a, markup-carve/carve#2027).
     if (ch === '{') {
-      const end = bracedInlineEnd(text, j, memo)
+      const end = bracedInlineEnd(text, j, memo, delim)
       if (end !== -1) {
         j = end
         continue
@@ -12394,18 +12417,32 @@ function findEmphasisClose(
 
 // The braced inlines E2a names, as sticky copies of the matchers the main loop
 // uses, so the scan hides exactly the region the parser builds a node from.
+const RE_CRITIC_SUB_STICKY = /^\{~([^}]*)~>([^}]*)~\}/
+
 const BRACED_INLINE_STICKY = [
   /\{~([^}]*)~>([^}]*)~\}/y,
   /\{#([^}]+)#\}/y,
 ]
 
 // The last index of the braced inline opening at `open`, or -1.
-function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo): number {
+function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo, scanning?: string): number {
   if (memo.lastBrace === -2) memo.lastBrace = text.lastIndexOf('}')
   if (memo.lastBrace < open) return -1
   // The pairs whose closer the parser searches for across the block are asked
   // the same question here, so the scan hides the region the parser builds.
   const marker = text[open + 1]
+  // A forced opener of an open kind is not a span, so it hides nothing. The
+  // kind whose closer this scan is looking for counts as open: the span it
+  // belongs to is open across its own content. A substitution is a construct
+  // of its own rather than a second strike, so it stays opaque.
+  if (
+    marker !== undefined &&
+    FORCED_TYPE[marker] !== undefined &&
+    (openKinds.has(marker) || marker === scanning) &&
+    !(marker === '~' && RE_CRITIC_SUB_STICKY.test(text.slice(open)))
+  ) {
+    return -1
+  }
   if (marker !== undefined && (FORCED_TYPE[marker] !== undefined || marker === '+' || marker === '-')) {
     const end = bracedPairEnd(text, open, `${marker}}`)
     if (end !== -1) return end - 1
