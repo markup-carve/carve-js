@@ -8,6 +8,11 @@ import {
   escapeVerbatimDelimiter,
   HANDLED_MARKDOWN,
 } from './carve-escape.js'
+import {
+  removeEmptyDestinationDefinitions,
+  unwrapEmptyDestinations,
+  useEmptyDestinationReferences,
+} from './markdown-empty-destination.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -928,19 +933,14 @@ function convertInline(
   // are already protected, so a multi-line span keeps its own spacing.
   line = line.replace(/ {2,}\n/g, '\\\n')
 
-  // An empty destination is a link in CommonMark and literal text in Carve
-  // (markup-carve/carve#2069), so the link keeps only its text and the image
-  // its alt, as the HTML importer does for an empty `href`.
-  line = line.replace(
-    /!?\[((?:[^[\]\n]|\[[^\]\n]*\])*)\]\([ \t]*(?:<>)?[ \t]*(?:"[^"\n]*"|'[^'\n]*')?[ \t]*\)/g,
-    (_m, text: string) => text,
-  )
+  line = unwrapEmptyDestinations(line, protectedSpans, protect, decodeHtmlEntitiesRaw)
 
   // Normalize a `(dest "title")` part: Carve's link parser closes the
   // destination at the first `)`, so balanced parens in the URL are
   // percent-encoded (Titan_(moon) -> Titan_%28moon%29).
   const encodeDest = (paren: string): string => {
-    const inner = paren.slice(1, -1)
+    // Spaces and tabs around a destination are not part of it (CommonMark 6.3).
+    const inner = paren.slice(1, -1).replace(/^[ \t]+|[ \t]+$/g, '')
     // Split on the White_Space property, not `\S`: `\S` treats a BOM as the
     // whitespace that separates destination from title, and it is an ordinary
     // destination character, so the halves were cut in the wrong place and each
@@ -1948,12 +1948,22 @@ export function markdownToCarve(
   markdown: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
 ): string {
+  try {
+    return convertMarkdown(markdown, dialect)
+  } finally {
+    useEmptyDestinationReferences(null)
+  }
+}
+
+function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   const allLines = markdown
     .replace(/\0/g, '\ufffd')
     .replace(/\r\n?/g, '\n')
     .split('\n')
   const { frontmatter, bodyStart } = splitFrontmatter(allLines)
-  const lines = allLines.slice(bodyStart)
+  const removed = removeEmptyDestinationDefinitions(allLines.slice(bodyStart), decodeHtmlEntitiesRaw)
+  useEmptyDestinationReferences(removed.references)
+  const lines = removed.lines
   const out: string[] = []
   let inCode = false
   let fenceChar = ''
