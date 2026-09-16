@@ -253,6 +253,44 @@ describe("the Markdown target's escaping narrows on the line", () => {
     })
   })
 
+  describe('M1f: a heading line escapes its trailing hash run', () => {
+    // Corpus 84-single-line-headings-6 through -10 (markup-carve/carve#2056).
+    it('escapes the first hash of the run, whatever its length', () => {
+      expect(md('# a ##')).toBe('# a \\##')
+      expect(md('# a #')).toBe('# a \\#')
+      expect(md('# a #######')).toBe('# a \\#######')
+    })
+
+    it('escapes only the TRAILING run', () => {
+      expect(md('# a ### b ###')).toBe('# a ### b \\###')
+    })
+
+    it('escapes it after a tab too, where the two readers disagree', () => {
+      expect(md('# a\t##')).toBe('# a\t\\##')
+    })
+
+    it('reaches a heading a container encloses', () => {
+      expect(md('> - a\n>\n>   ### b ###')).toBe('> - a\n>\n>   ### b \\###')
+    })
+
+    it('leaves a run no space or tab precedes', () => {
+      expect(md('# a##')).toBe('# a##')
+    })
+
+    it('leaves a run the line does not end on', () => {
+      // A closing sequence has to be the last thing on the line.
+      expect(md('# a ## b')).toBe('# a ## b')
+    })
+
+    it('leaves it where the heading writes an id after it', () => {
+      expect(md('# a ## {#x}\n\n[](</#x>)')).toContain('# a ## {#x}')
+    })
+
+    it('leaves a paragraph line alone', () => {
+      expect(md('a ##')).toBe('a ##')
+    })
+  })
+
   describe('the test is over the LINE, not over the node', () => {
     it('sees a neighbour the parser put in a different text node', () => {
       // `a__b` is three text nodes to this parser (`a`, `_`, `_b`), so at

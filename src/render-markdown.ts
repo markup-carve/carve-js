@@ -230,7 +230,8 @@ function renderBlock(node: BlockNode, ctx: MarkdownContext): string {
       const text = trimNonNbsp(renderInlines(node.children, ctx).replace(/[ \t\r]*\n[ \t\r]*/g, ' '))
       const id = node.attrs?.id
       const suffix = id && ctx.referencedHeadingIds.has(id) ? ` {#${id}}` : ''
-      return `${withMarker(`${'#'.repeat(node.level)} `, `${text}${suffix}`)}\n\n`
+      const line = escapeTrailingAtxRun(`${text}${suffix}`)
+      return `${withMarker(`${'#'.repeat(node.level)} `, line)}\n\n`
     }
     case 'paragraph':
       return `${protectParagraphListMarkers(renderInlines(node.children, ctx))}\n\n`
@@ -1545,6 +1546,22 @@ function decideAuthoredHashes(text: string): string {
   return text.replace(RE_UNDECIDED_HASH, (_s, offset: number) =>
     opensAnAtxHeading(line, offset) ? AUTHORED_KEPT : '#',
   )
+}
+
+/**
+ * Escape the first hash of a heading line's trailing run (PART 11 section 8a
+ * M1f). After a space or tab, a reader takes that run as the ATX closing
+ * sequence and drops it.
+ */
+function escapeTrailingAtxRun(line: string): string {
+  const undecided = AUTHORED_SENTINEL['#']!
+  let i = line.length
+  while (i > 0 && (line[i - 1] === undecided || line[i - 1] === AUTHORED_KEPT)) i--
+  if (i === line.length) return line
+  const before = line[i - 1]
+  if (before !== ' ' && before !== '\t') return line
+
+  return line.slice(0, i) + AUTHORED_KEPT + line.slice(i + 1)
 }
 
 /**
