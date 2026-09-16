@@ -686,8 +686,41 @@ function renameChildHeadingIds(child: Document, state: State): void {
   }
 }
 
-function textFrom(value: string, like: Text): Text {
-  return { ...like, value }
+/**
+ * A slice of `like` starting `from` code units in, with the part of its span the
+ * slice covers (PART 12 §4). A span crossing a line has no column arithmetic,
+ * so that slice publishes none.
+ */
+function textFrom(value: string, like: Text, from: number): Text {
+  const pos = like.pos
+  if (
+    !pos ||
+    pos.startLine !== pos.endLine ||
+    pos.startOffset === undefined ||
+    pos.startColumn === undefined
+  ) {
+    const { pos: _dropped, ...rest } = like
+    return { ...rest, value }
+  }
+  const before = codepoints(like.value.slice(0, from))
+  const length = codepoints(value)
+  return {
+    ...like,
+    value,
+    pos: {
+      ...pos,
+      startColumn: pos.startColumn + before,
+      endColumn: pos.startColumn + before + length,
+      startOffset: pos.startOffset + before,
+      endOffset: pos.startOffset + before + length,
+    },
+  }
+}
+
+function codepoints(s: string): number {
+  let n = 0
+  for (const _ of s) n++
+  return n
 }
 
 type RunNode = Text | Mention | Tag | SmartPunctuation | EscapedText
@@ -739,9 +772,10 @@ function sliceRun(run: RunNode[], from: number, to: number): InlineNode[] {
       out.push(node)
       continue
     }
-    const value = text.slice(Math.max(from, start) - start, Math.min(to, end) - start)
+    const sliceFrom = Math.max(from, start) - start
+    const value = text.slice(sliceFrom, Math.min(to, end) - start)
     if (value === text) out.push(node)
-    else if (value !== '') out.push(textFrom(value, node))
+    else if (value !== '') out.push(textFrom(value, node, sliceFrom))
   }
   return out
 }
@@ -792,8 +826,14 @@ function expandRun(run: RunNode[], state: State): InlineNode[] {
   out.push(...sliceRun(run, cursor, full.length))
   // The splice leaves the child's text beside the host's halves, and §1a holds
   // for this tree too: `toAstJson` publishes it without `resolve()`.
-  const hostFile = run.find((node) => node.pos)?.pos?.file
-  const merged = mergeRun(out as unknown as Array<Record<string, unknown>>, { file: hostFile })
+  const placed = run.filter((node) => node.pos)
+  const first = placed[0]?.pos
+  const last = placed[placed.length - 1]?.pos
+  const span =
+    first && last
+      ? { ...first, endLine: last.endLine, endColumn: last.endColumn, endOffset: last.endOffset }
+      : undefined
+  const merged = mergeRun(out as unknown as Array<Record<string, unknown>>, { file: first?.file, span })
   return (merged as unknown as InlineNode[] | null) ?? out
 }
 
