@@ -2395,11 +2395,13 @@ function renderInlines(
         piece = '\\\n'
       }
 
-      // The last character written can open a construct with the next node's
-      // first: `^[` an inline note, `$` plus a backtick run or `$` math. The
-      // escape belongs to the previous node, so its form decides (PART 11 §2b).
-      if (opensAcrossBoundary(out, piece) && escapeModeOf(nodes[idx - 1]) === 'conservative') {
-        out = `${out.slice(0, -1)}\\${out.slice(-1)}`
+      // The end of what is written can open a construct with the next node's
+      // start: `^[` an inline note, `:name[` an inline extension, `$` plus a
+      // backtick run or `$` math. The escape belongs to the previous node, so
+      // its form decides (PART 11 §2b).
+      const escapeAt = boundaryEscapeAt(out, piece)
+      if (escapeAt !== -1 && escapeModeOf(nodes[idx - 1]) === 'conservative') {
+        out = `${out.slice(0, escapeAt)}\\${out.slice(escapeAt)}`
         lineLength += 1
         lineTail = out.slice(-2)
       }
@@ -3979,12 +3981,17 @@ export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: I
   }
 }
 
-function opensAcrossBoundary(written: string, piece: string): boolean {
+/** Where a backslash keeps the written end and the next piece apart, or -1. */
+function boundaryEscapeAt(written: string, piece: string): number {
   const last = written.at(-1)
   const next = piece[0]
-  if (last === undefined || next === undefined || precededByOddBackslashRun(written, written.length - 1)) return false
+  if (last === undefined || next === undefined) return -1
+  const at = next === '[' ? written.search(/:[A-Za-z_][A-Za-z0-9_-]*$/) : -1
+  if (at !== -1 && !precededByOddBackslashRun(written, at)) return at
+  if (precededByOddBackslashRun(written, written.length - 1)) return -1
+  const opens = (last === '^' && next === '[') || (last === '$' && (next === '`' || next === '$'))
 
-  return (last === '^' && next === '[') || (last === '$' && (next === '`' || next === '$'))
+  return opens ? written.length - 1 : -1
 }
 
 /**
