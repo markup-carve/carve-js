@@ -560,6 +560,7 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
   const previous = escapeMode
   escapeMode = mode
   writtenBraced = new WeakSet()
+  bracedByParent = new WeakSet()
   // "Already written on a description line" is true of THIS PASS, not of the
   // document. renderCarve runs this function twice and picks between the two
   // forms (PART 11 §4), so a set that survives the first pass tells the second
@@ -2496,11 +2497,17 @@ function renderInlineBody(
 
   const withAttrs = (body: string) => `${bracedOnce(node, body)}${renderAttrs(node.attrs)}`
   const emphasisOf = (delim: string, children: InlineNode[]): string => {
+    // E3 pushes no second level of one kind while one is open, so a bare span
+    // inside a bare span of its kind would close it; the inner one takes
+    // braces (carve-js#1817).
+    if (!neighborsForceBraces(delim, prevChar, nextChar)) {
+      for (const inner of nearestOfType(children, node.type)) bracedByParent.add(inner)
+    }
     const content = renderInlines(children, ctx)
     // An empty code span is written as an unclosed run, which swallows a bare
     // closer; only the braced one ends it.
     const last = children[children.length - 1]
-    return last?.type === 'code' && last.value === ''
+    return (last?.type === 'code' && last.value === '') || bracedByParent.has(node)
       ? renderForcedEmphasis(delim, content)
       : renderEmphasis(delim, content, prevChar, nextChar)
   }
@@ -2727,6 +2734,33 @@ function renderMath(display: boolean, content: string): string {
 
 // Superscript and subscript have no bare delimiter form -- always emit the
 // braced `{^x^}` / `{,x,}` form.
+/** The nodes of a type in these inlines, not looking inside one once found. */
+function nearestOfType(nodes: readonly InlineNode[], type: string): InlineNode[] {
+  const found: InlineNode[] = []
+  const walk = (list: readonly unknown[]): void => {
+    for (const item of list) {
+      if (item === null || typeof item !== 'object') continue
+      if ((item as { type?: unknown }).type === type) {
+        found.push(item as InlineNode)
+        continue
+      }
+      for (const value of Object.values(item)) if (Array.isArray(value)) walk(value)
+    }
+  }
+  walk(nodes)
+  return found
+}
+
+/** Whether the characters around a span refuse a bare opener or closer (CARVE-P3-013). */
+function neighborsForceBraces(delim: string, prevChar: string, nextChar: string): boolean {
+  return (
+    /[A-Za-z0-9_]/.test(prevChar) ||
+    prevChar === delim ||
+    (prevChar === '/' && (delim === '/' || delim === '_')) ||
+    /[A-Za-z0-9_]/.test(nextChar)
+  )
+}
+
 function renderForcedEmphasis(delim: string, content: string): string {
   return `{${delim}${content}${delim}}`
 }
@@ -2739,11 +2773,7 @@ function renderEmphasis(
   closeDelim: string = delim,
 ): string {
   const needsForced =
-    // The characters `bare_opener` refuses before a marker (CARVE-P3-013).
-    /[A-Za-z0-9_]/.test(prevChar) ||
-    prevChar === delim ||
-    (prevChar === '/' && (delim === '/' || delim === '_')) ||
-    /[A-Za-z0-9_]/.test(nextChar) ||
+    neighborsForceBraces(delim, prevChar, nextChar) ||
     content.startsWith(delim) ||
     content.endsWith(closeDelim) ||
     content.startsWith(' ') ||
@@ -3382,6 +3412,9 @@ let redundantIds = new WeakSet<object>()
 /** The inline nodes this pass wrote with a braced opener. */
 let writtenBraced = new WeakSet<object>()
 
+/** Spans this pass writes braced because a bare parent of the same kind holds them. */
+let bracedByParent = new WeakSet<object>()
+
 const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
 
 /**
@@ -3391,7 +3424,7 @@ const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'h
 function bracedOnce(node: InlineNode, body: string): string {
   if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
   const children = (node as { children?: InlineNode[] }).children ?? []
-  const inner = children.find((child) => child.type === node.type && writtenBraced.has(child))
+  const inner = nearestOfType(children, node.type).find((child) => writtenBraced.has(child))
   if (inner !== undefined) {
     throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
   }
