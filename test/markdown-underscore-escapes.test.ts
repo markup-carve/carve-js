@@ -59,6 +59,39 @@ describe('markdown underscore escaping', () => {
     expect(carveToMarkdown(source)).toBe(source)
   })
 
+  // M1b's unit is the paragraph, heading or table cell, so a boundary with no
+  // blank line at it still ends the scan (markup-carve/carve-js#1755).
+  it.each([
+    ['two cells of one row', '| a _y | z_ w |\n| --- | --- |\n| p | q |\n', '| a _y | z_ w |\n| --- | --- |\n| p | q |\n'],
+    ['two rows of one column', '| a _y | c |\n| --- | --- |\n| z_ w | q |\n', '| a _y | c |\n| --- | --- |\n| z_ w | q |\n'],
+    ['two items of a tight list', '- a _y\n- z_ w\n', '- a _y\n- z_ w\n'],
+    ['two items of an ordered list', '1. a _y\n2. z_ w\n', '1. a _y\n2. z_ w\n'],
+    ['two items of a task list', '- [ ] a _y\n- [x] z_ w\n', '- [ ] a _y\n- [x] z_ w\n'],
+    ['two items inside a quote', '> - a _y\n> - z_ w\n', '> - a _y\n> - z_ w\n'],
+    ['a heading and the line under it', '# a _y\nz_ w\n', '# a _y\n\nz_ w\n'],
+    ['two footnote definitions', '[^n]: a _y\n[^m]: z_ w\n', '[^n]: a _y\n[^m]: z_ w\n'],
+  ])('leaves a pair split across %s bare', (_name, source, expected) => {
+    expect(carveToMarkdown(source)).toBe(expected)
+  })
+
+  it.each([
+    ['inside one cell', '| /x/_y_ | c |\n| --- | --- |\n| p | q |\n', '| *x*\\_y\\_ | c |\n| --- | --- |\n| p | q |\n'],
+    ['inside one item, across a soft break', '- /x/_y\n  z_ w\n', '- *x*\\_y\n  z\\_ w\n'],
+    [
+      'across an escaped pipe, which does not end a cell',
+      '| /x/_y \\| z_ w | c |\n| --- | --- |\n| p | q |\n',
+      '| *x*\\_y \\| z\\_ w | c |\n| --- | --- |\n| p | q |\n',
+    ],
+  ])('still escapes a pair %s', (_name, source, expected) => {
+    expect(carveToMarkdown(source)).toBe(expected)
+  })
+
+  it('writes a loose list tight, and the item boundary still ends the scan', () => {
+    // The writer collapses the blank line, so the boundary the pre-#1755 scan
+    // relied on is not in its own output. The item marker is.
+    expect(carveToMarkdown('- a _y\n\n- z_ w\n')).toBe('- a _y\n- z_ w\n')
+  })
+
   it('does not let an AUTHORED escape supply the other half of a pair', () => {
     // `\\_` is an `escaped_text` node, so it is not a live underscore and
     // cannot pair with the bare one after it.
