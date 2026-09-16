@@ -2079,7 +2079,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     // string is normalized to its first such token — keeping `c++`/`text/html`
     // intact and reducing an extended info (```js title="x") to ```js (still a
     // code block). The charset matches RE_FENCE in parse.ts, including `/`.
-    const open = !inCode ? RE_MD_FENCE_LINE.exec(line) : null
+    const open = !inCode ? RE_MD_FENCE_LINE.exec(held) : null
     if (open && fenceRunIsAFence(open[2]!, open[3]!)) {
       if (prevType !== 'blank' && out.length > 0) out.push('')
       inCode = true
@@ -2101,7 +2101,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       // column, less than the item's own two, so nothing was stripped and the
       // tab went through to Carve, which does not read a tab-indented fence
       // inside an item as a fence at all.
-      const openerIndent = columnWidth(open[1]!)
+      const openerIndent = contentCol + columnWidth(open[1]!)
       fenceStrip = Math.max(0, openerIndent - contentCol)
       fenceCol = contentCol
       // Whatever the opener's own indent was, what survives the strip is
@@ -2128,13 +2128,17 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         continue
       }
       const dedented = stripColumns(line, fenceStrip)
-      if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(line)) {
+      if (new RegExp(`^\\s{0,3}(${fenceChar}{${fenceLen},})\\s*$`).test(stripColumns(line, fenceCol))) {
         inCode = false
         fenceChar = ''
         fenceLen = 0
         fenceStrip = 0
         out.push(dedented)
-        if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') out.push('')
+        // A blank line before a line that returns to an enclosing item would
+        // make that item loose.
+        const next = lines[i + 1]
+        const nextIndent = next === undefined ? 0 : indentColumns(next)
+        if (next !== undefined && next.trim() !== '' && !(nextIndent > 0 && nextIndent < fenceCol)) out.push('')
         prevType = 'code_fence'
       } else {
         out.push(dedented)
