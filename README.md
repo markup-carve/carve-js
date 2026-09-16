@@ -299,6 +299,25 @@ source bytes, and there is no source at this seam. `'carve'` is deliberately
 not a target: `carveToCarve` runs a different composition on purpose, because a
 formatter must write back what the author wrote.
 
+### Mention and tag resolvers
+
+`mentionUrl` and `tagUrl` remain available for route templates. For application
+lookups, configure `resolveMention` or `resolveTag` instead:
+
+```ts
+carveToHtml(source, {
+  socialContext: currentTenant,
+  resolveMention: ({ name, context }) => (context as AppContext).users.get(name)?.url ?? null,
+  resolveTag: ({ name, context }) => (context as AppContext).tags.get(name)?.url ?? null,
+})
+```
+
+A resolver is authoritative for its kind. Returning `null`, throwing, or
+returning a denied URL produces the ordinary inert span and never falls back to
+the corresponding template. The callback receives the exact parsed name,
+read-only attributes, the node kind, and the opaque `socialContext`. Its result
+is a complete destination and is not encoded again.
+
 ### Heading ids
 
 How the renderers derive heading ids, wrap sections and bound nesting depth

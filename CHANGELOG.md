@@ -9,6 +9,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A mention or tag template that produces a denied URL now renders the inert
+  span instead of an anchor with an empty `href`. Social-link destinations
+  always apply this baseline denylist, including when general URL sanitization
+  is disabled.
 - The Carve writer keeps the native `|=` header form for a table whose header
   spans trail its real header cells (`|= A |= B | < |`), instead of falling back
   to a GFM delimiter row. A leading span or a real cell after a header span still
@@ -31,6 +35,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `resolveMention` and `resolveTag` map parsed social tokens through host
+  application data while keeping inert fallback and URL-scheme checks.
 - `migrateBbcode()` exposes BBCode conversion through the shared migration
   result envelope.
 - **Include expansion** (#356, #1694, #1701, #1733). `expandIncludes()` resolves a document's include directives before rendering, `carve flatten` writes the expanded document, `findDirectiveSites()` reports where the live directives are, and a host can render a tree it already holds through its own extension pipeline. An included child is parsed with the caller's extensions.
