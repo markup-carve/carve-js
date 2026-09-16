@@ -1767,28 +1767,39 @@ function contentGrowsRun(piece: DelimiterPiece, node: InlineNode): boolean {
   const ch = piece.run.delimiter[0]!
   if (runAtStart(piece.core, ch) === 0 && runAtEnd(piece.core, ch) === 0) return false
 
-  return !commutes(piece, node)
+  return !edgeChildNests(piece, node)
 }
 
 /**
- * The round-trip normalization list, PART 11 section 10k: nested emphasis of
- * DIFFERENT strengths, where the child spans the whole parent, may commute.
- * `***x***` comes back with the emphasis outside either way, and the two
- * nestings are the same document. EQUAL strengths do not commute - the runs
- * collapse into one element of the wrong kind, which is a different document.
+ * Whether every run the CONTENT adds at an edge belongs to a nested child of a
+ * different strength, which the reader re-pairs as the nesting the document
+ * has: `*italic **bold***` comes back as an emphasis holding a strong.
+ *
+ * EQUAL strengths do not nest - the runs collapse into one element of the wrong
+ * kind - and a run that is not a child's delimiter at all, a literal the writer
+ * did not escape, reaches the reader as part of the writer's own run. Both take
+ * the inline-HTML spelling instead.
+ *
+ * `***x***`, where the child spans the whole parent, is the case PART 11
+ * section 10k's round-trip normalization list already allowed: the emphasis
+ * comes back outside either way, and the two nestings are the same document.
  */
-function commutes(piece: DelimiterPiece, node: InlineNode): boolean {
+function edgeChildNests(piece: DelimiterPiece, node: InlineNode): boolean {
   if (piece.run.delimiter[0] !== '*') return false
   // The padding text nodes are not content: `padOutside` has already moved them
-  // outside the delimiters, so the child still spans everything between them.
+  // outside the delimiters, so a child at an edge of the core is still the node
+  // whose delimiter stands there.
   const kids = ((node as { children?: InlineNode[] }).children ?? []).filter(
     (kid) => kid.type !== 'text' || /\S/.test((kid as { value?: string }).value ?? ''),
   )
-  if (kids.length !== 1) return false
-  const child = DELIMITER_RUN[kids[0]!.type]
-  if (child?.delimiter[0] !== '*') return false
+  const nests = (kid: InlineNode | undefined): boolean => {
+    const child = DELIMITER_RUN[kid?.type ?? '']
 
-  return child.delimiter.length !== piece.run.delimiter.length
+    return child?.delimiter[0] === '*' && child.delimiter.length !== piece.run.delimiter.length
+  }
+  if (runAtStart(piece.core, '*') > 0 && !nests(kids[0])) return false
+
+  return runAtEnd(piece.core, '*') === 0 || nests(kids[kids.length - 1])
 }
 
 /**
