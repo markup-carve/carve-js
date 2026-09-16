@@ -18,6 +18,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The native `|=` header form survives a trailing colspan run (#1747) in the Carve writer and the HTML importer; a leading span or a real cell after a header span still uses the delimiter row.
 - A raw-HTML profile error names the Carve construct it refused (#1724) instead of the HTML it produced.
 - `renderCarve` throws `SourceUnspellableError` for an empty code span its open run cannot end at (#1789), and the HTML importer drops such a span with a `structure-unspellable` warning.
+- `renderCarve` throws `SourceUnspellableError` for a hard break inside a table cell (#1797), and the HTML importer drops a `<br>` in a cell with a `structure-unspellable` warning instead of writing a row that reads back as a paragraph.
 
 ### Added
 
@@ -38,6 +39,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The BBCode input limit is measured in UTF-8 bytes (#1672).
 - A hash is escaped on the Markdown target where the line would open or close an ATX heading (#1768, #1779), including an unnumbered caption placeholder (#1767).
 - The Carve writer round-trips three more shapes (#1759, #1763, #1773): an emphasis wrapping a strong, a caret before an escaped closing brace, and an emphasis ending in an empty code span.
+- The HTML importer keeps a space after an element that ends in a `<br>` (markup-carve/carve-rs#1706), as carve-php and carve-rs do: `<p>a <strong>x<br></strong> b</p>` no longer loses the space before `b`.
 - An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
 
 ## [0.1.6] - 2026-09-07

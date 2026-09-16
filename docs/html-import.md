@@ -35,7 +35,7 @@ out.
 ## What the importer does not model
 
 
-Four decisions are deliberate, so a diagnostic naming them is the whole answer
+Five decisions are deliberate, so a diagnostic naming them is the whole answer
 rather than a placeholder for a mapping still to come:
 
 - **MathML is read for the TeX it already carries, never converted.** A
@@ -72,6 +72,12 @@ rather than a placeholder for a mapping still to come:
   emphasis around it takes the braced closer, so `<p><s><code></code></s></p>`
   imports as ```{~``~}```. An empty span has no closing run for an attribute
   block to follow, so its attributes are reported as `attribute-dropped`.
+- **A `<br>` in a table cell is dropped.** A table row is one line and a hard
+  break ends the line, so Carve has no spelling for one inside a cell. The
+  break is dropped with a `structure-unspellable` warning, and a space keeps
+  the words on either side apart: `<td>x<br>y</td>` imports as `| x y |`.
+  `htmlToAst` keeps the break, and `renderCarve` refuses a tree that holds one
+  in a cell with `SourceUnspellableError`.
 
 `migrate` reaches the other importers too - `--from markdown` (or `md`),
 `--from djot`, and `--from bbcode` - which need no report because they parse

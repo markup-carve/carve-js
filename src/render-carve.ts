@@ -2043,6 +2043,9 @@ function renderTableCell(cell: TableCell, ctx: CarveContext, markHeader = true):
   // attributed header cell round-tripped into `<td class="x">=h</td>` and
   // `toHtml(fmt(x)) != toHtml(x)` (spec §5 T10, corpus 319).
   const prefix = `${cell.header && markHeader ? '=' : ''}${align}${inheritedHorizontal}${valign}${attrs}`
+  if (holdsHardBreak(cell.children)) {
+    throw new SourceUnspellableError('hard_break', 'a table row is one line, so a hard break inside a cell has no Carve source spelling')
+  }
   return padCell(prefix, escapeSpanMarkerPayload(renderInlines(cell.children, ctx), cell.attrs))
 }
 
@@ -3847,6 +3850,14 @@ function escapeCrossrefTarget(text: string): string {
 
 function escapeCriticText(text: string): string {
   return text.replace(/[\\{}]/g, '\\$&')
+}
+
+function holdsHardBreak(nodes: readonly unknown[]): boolean {
+  return nodes.some((node) => {
+    if (node === null || typeof node !== 'object') return false
+    if ((node as { type?: unknown }).type === 'hard_break') return true
+    return Object.values(node).some((value) => Array.isArray(value) && holdsHardBreak(value))
+  })
 }
 
 /**
