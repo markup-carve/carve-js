@@ -10444,11 +10444,53 @@ function verbatimSpanEnd(text: string, i: number): { end: number; closed: boolea
  * places and all four agreed with each other and with nothing else.
  */
 export function rawBracketRunCloses(text: string): boolean {
-  return buildBracketMap(`[${text}]`)[0] === text.length + 1
+  return buildBracketMap(`[${text}]`)(0) === text.length + 1
 }
 
-function buildBracketMap(s: string): Record<number, number> {
-  const map: Record<number, number> = {}
+/** The start of the last maximal backtick run of each length. */
+function lastBacktickRunStarts(s: string): Map<number, number> {
+  const last = new Map<number, number>()
+  for (let k = 0; k < s.length; k++) {
+    if (s[k] !== '`') continue
+    let m = 1
+    while (s[k + m] === '`') m++
+    last.set(m, k)
+    k += m - 1
+  }
+  return last
+}
+
+/** The balancing `]` of the `[` at an offset, or undefined. */
+type BracketClose = (open: number) => number | undefined
+
+/**
+ * How many characters the per-bracket scans below may walk in one text, as a
+ * multiple of its length. A DoS guard: past it an unanswered `[` stays
+ * literal, the way carve-php caps its own scan.
+ */
+const BRACKET_RESCAN_BUDGET = 8
+
+/**
+ * Each `[`'s balancing `]`, scanned from the `[` itself (CARVE-P3-001): escape
+ * aware, and blind to brackets inside a verbatim span or a delimited comment.
+ *
+ * One pass from the start of the text answers every `[` outside a closed
+ * verbatim span. A `[` inside one is reached only when something else used the
+ * span's opening run up, and from that `[` the run is not there, so it is
+ * scanned from itself (carve-js#1815).
+ */
+function buildBracketMap(s: string): BracketClose {
+  const lastRunStart = s.includes('`') ? lastBacktickRunStarts(s) : new Map<number, number>()
+  const closedRunEnd = (j: number, openLen: number): number | undefined =>
+    (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
+  const opaqueEnd = (j: number): number | undefined => {
+    if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#')) return undefined
+    const close = s.indexOf(`${s[j + 1]}}`, j + 2)
+    return close === -1 ? undefined : close + 2
+  }
+  const map = new Map<number, number>()
+  // Closed verbatim spans the pass skipped, as [content start, end].
+  const spans: Array<[number, number]> = []
   const stack: number[] = []
   for (let j = 0; j < s.length; j++) {
     const ch = s[j]
@@ -10456,42 +10498,84 @@ function buildBracketMap(s: string): Record<number, number> {
       j++
       continue
     }
-    // A `[` or `]` inside a verbatim span is literal text, not a bracket — skip
-    // the whole span (to its end when unclosed) so it never enters the map.
+    // A `[` or `]` inside a verbatim span is literal text. An unclosed run
+    // swallows every later `]` for a label opened before it.
     if (ch === '`') {
-      j = verbatimSpanEnd(s, j).end - 1
+      let openLen = 1
+      while (s[j + openLen] === '`') openLen++
+      const spanEnd = closedRunEnd(j, openLen)
+      if (spanEnd !== undefined) {
+        spans.push([j + openLen, spanEnd])
+        j = spanEnd - 1
+      } else {
+        stack.length = 0
+        j += openLen - 1
+      }
       continue
     }
-    // A delimited comment is opaque to inline structure: brackets in its
-    // discarded content cannot close a link label around it. An unclosed `{%`
-    // is literal, so only skip when the first `%}` really exists.
-    if (ch === '{' && s[j + 1] === '%') {
-      const close = s.indexOf('%}', j + 2)
-      if (close !== -1) {
-        j = close + 1
-        continue
-      }
-    }
-    // Likewise an editorial comment: its content is LITERAL (PART 9
-    // editorial_comment), so a `]` inside is text and no escape can spell it
-    // otherwise. Without this, `[{#a]b#}](u)` ended the label at the comment's
-    // `]` and the link never formed, with no way for the author to fix it
-    // (carve#403). An unclosed `{#` is not a comment, so it is left alone.
-    if (ch === '{' && s[j + 1] === '#') {
-      const close = s.indexOf('#}', j + 2)
-      if (close !== -1) {
-        j = close + 1
-        continue
-      }
+    // A delimited or editorial comment is opaque: its content is discarded or
+    // literal, so a `]` inside cannot close a label (carve#403). An unclosed
+    // opener is not a comment and is left alone.
+    const commentEnd = opaqueEnd(j)
+    if (commentEnd !== undefined) {
+      j = commentEnd - 1
+      continue
     }
     if (ch === '[') {
       stack.push(j)
     } else if (ch === ']') {
       const open = stack.pop()
-      if (open !== undefined) map[open] = j
+      if (open !== undefined) map.set(open, j)
     }
   }
-  return map
+  let budget = BRACKET_RESCAN_BUDGET * s.length + 64
+  const scanFrom = (open: number): number | undefined => {
+    let depth = 1
+    for (let j = open + 1; j < s.length; j++) {
+      if (--budget < 0) return undefined
+      const ch = s[j]
+      if (ch === '\\') {
+        j++
+        continue
+      }
+      if (ch === '`') {
+        let openLen = 1
+        while (s[j + openLen] === '`') openLen++
+        const spanEnd = closedRunEnd(j, openLen)
+        if (spanEnd === undefined) return undefined
+        budget -= spanEnd - j
+        j = spanEnd - 1
+        continue
+      }
+      const commentEnd = opaqueEnd(j)
+      if (commentEnd !== undefined) {
+        budget -= commentEnd - j
+        j = commentEnd - 1
+        continue
+      }
+      if (ch === '[') depth++
+      else if (ch === ']' && --depth === 0) return j
+    }
+    return undefined
+  }
+  const insideSpan = (open: number): boolean => {
+    let lo = 0
+    let hi = spans.length - 1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      const [contentStart, spanEnd] = spans[mid]!
+      if (open < contentStart) hi = mid - 1
+      else if (open >= spanEnd) lo = mid + 1
+      else return true
+    }
+    return false
+  }
+  return (open) => {
+    if (s[open] !== '[') return undefined
+    const direct = map.get(open)
+    if (direct !== undefined) return direct
+    return insideSpan(open) ? scanFrom(open) : undefined
+  }
 }
 
 // Suffix-existence tables used to skip the inline tail regexes when their
@@ -11004,7 +11088,7 @@ function scanInlineInner(
 
   // Precompute each `[`'s balancing `]` once (O(n)) so the link/image/span
   // branches resolve the close bracket in O(1); see buildBracketMap.
-  const bracketClose = text.includes('[') ? buildBracketMap(text) : {}
+  const bracketClose: BracketClose = text.includes('[') ? buildBracketMap(text) : () => undefined
 
   // Suffix tables so a tail regex is only run when its mandatory close
   // delimiter still lies ahead; otherwise the regex would backtrack to EOF and
@@ -11320,7 +11404,7 @@ function scanInlineInner(
     // close `]` is found by balance, not a [^\]]* regex that would mis-split
     // a nested bracket (e.g. `![a [b] c](/u)`). Alt is raw text, not inline.
     if (c === '!' && text[i + 1] === '[') {
-      const closeAbs = bracketClose[i + 1]
+      const closeAbs = bracketClose(i + 1)
       const close = closeAbs === undefined ? -1 : closeAbs - i
       if (close > 1) {
         const alt = rest.slice(2, close)
@@ -11391,7 +11475,7 @@ function scanInlineInner(
     // Empty or whitespace-only content is literal. Content is inline-only,
     // parsed with footnote recognition disabled.
     if (!inFootnote && c === '^' && text[i + 1] === '[') {
-      const close = bracketClose[i + 1]
+      const close = bracketClose(i + 1)
       if (close !== undefined && trimStructural(text.slice(i + 2, close)) !== '') {
         flush()
         const inner = text.slice(i + 2, close)
@@ -11408,7 +11492,7 @@ function scanInlineInner(
     // mis-split at the first inner `]`. The (url) / [ref] / {attrs} tail is
     // then parsed by the same sub-patterns the old fast-path regexes used.
     if (c === '[') {
-      const closeAbs = bracketClose[i]
+      const closeAbs = bracketClose(i)
       const close = closeAbs === undefined ? -1 : closeAbs - i
       if (close > 0) {
         const innerText = rest.slice(1, close)
@@ -12316,9 +12400,9 @@ function linkDestinations(text: string, memo: EmphasisMemo): Map<number, number>
   // and scanning it again is what makes a nest of them quadratic. Brackets come
   // in ascending order, so the outermost of a nest is reached first.
   let covered = -1
-  for (const key in brackets) {
-    const open = Number(key)
-    const close = brackets[open]!
+  for (let open = text.indexOf('['); open !== -1; open = text.indexOf('[', open + 1)) {
+    const close = brackets(open)
+    if (close === undefined) continue
     if (close + 1 <= covered) continue
     if (text[close + 1] !== '(' || text[open + 1] === '^' || text[open - 1] === '^') continue
     const scanned = scanDestination(text, close + 1)

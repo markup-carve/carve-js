@@ -35,6 +35,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Footnote bodies claim the right lines (#1653, #1664, #1666, #1667). A nested definition keeps its authored column, a trailing line falls to the reachable note, and a column-0 line after a description-hosted note is a top-level sibling (markup-carve/carve#1946, markup-carve/carve#1971, markup-carve/carve#1974).
 - A bare delimiter pairs across only what PART 9 §9 E2a names (#1726, #1729, #1746, #1751, #1762; markup-carve/carve#2027, markup-carve/carve#2046). Code spans, raw inlines, braced inlines, link destinations and autolinks are opaque; plain braces, attribute blocks and link labels are not.
 - An attribute block after an escaped character stays literal (#1771): `x\*{a}` renders `x*{a}` instead of dropping `{a}`.
+- A link, image or span after a backtick an earlier construct used up is read (#1815), where the paragraph's later brackets used to stay literal.
 - Include resolution refuses what it cannot contain (#1690, #1702, #1703, #1704, #1714): a blank or relative root is refused, a directive closes at the first pair outside a quoted run, the byte budget counts what was read, and every filesystem denial reaches the caller as a warning.
 - An inline include leaves one text run and one span (#1739, #1741), and host text cut around it publishes only its own span (#1764).
 - The Djot importer keeps Djot-only block markers and document structures (#1669, #1670).
