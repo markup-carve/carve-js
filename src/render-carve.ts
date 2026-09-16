@@ -2396,6 +2396,14 @@ function renderInlines(
         piece = '\\\n'
       }
 
+      // The last character written can open a construct with the next node's
+      // first: `^[` an inline note, `$` plus a backtick run or `$` math.
+      if (opensAcrossBoundary(out, piece)) {
+        out = `${out.slice(0, -1)}\\${out.slice(-1)}`
+        lineLength += 1
+        lineTail = out.slice(-2)
+      }
+
       out += piece
       const lastNewline = piece.lastIndexOf('\n')
       if (lastNewline === -1) {
@@ -3858,6 +3866,14 @@ function holdsHardBreak(nodes: readonly unknown[]): boolean {
     if ((node as { type?: unknown }).type === 'hard_break') return true
     return Object.values(node).some((value) => Array.isArray(value) && holdsHardBreak(value))
   })
+}
+
+function opensAcrossBoundary(written: string, piece: string): boolean {
+  const last = written.at(-1)
+  const next = piece[0]
+  if (last === undefined || next === undefined || precededByOddBackslashRun(written, written.length - 1)) return false
+
+  return (last === '^' && next === '[') || (last === '$' && (next === '`' || next === '$'))
 }
 
 /**
