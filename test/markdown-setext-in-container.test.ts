@@ -181,7 +181,7 @@ describe('markdownToCarve — what is not a setext heading in a container', () =
 
   it('leaves the first line of a fenced code block a list item holds', () => {
     // CommonMark reads: <ul>\n<li>\n<pre><code>===\n</code></pre>\n</li>\n</ul>
-    expect(markdownToCarve('- ```\n  ===\n  ```\n')).toBe('- ```\n  ===\n\n  ```\n')
+    expect(markdownToCarve('- ```\n  ===\n  ```\n')).toBe('- ```\n  ===\n  ```\n')
     expect(markdownToCarve('- > ```\n  > ===\n  > ```\n')).toBe('- > ```\n  > ===\n  > ```\n')
   })
 

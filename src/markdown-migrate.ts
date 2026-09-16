@@ -1678,6 +1678,59 @@ function collectIndentedCode(lines: readonly string[], start: number, contentCol
   return { lines: out, end }
 }
 
+/**
+ * A Markdown info string reduced to the one token a Carve fence takes, or
+ * nothing when a backtick in its first word stops it being an info string.
+ */
+function fenceInfo(rest: string): string {
+  const firstInfoWord = rest.trim().split(/[ \t]/, 1)[0] ?? ''
+  return firstInfoWord.includes('`') ? '' : (rest.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? '')
+}
+
+/**
+ * A fence on a list item's own first line, with its body and its closer.
+ *
+ * The body is code, so it is written byte for byte at the item's content
+ * column. The fence ends at its closer, or before the first non-blank line
+ * left of that column, which ends the item.
+ */
+function collectItemFence(
+  lines: readonly string[],
+  start: number,
+  prefix: string,
+  run: string,
+  info: string,
+): { lines: string[]; end: number; verbatimFrom: number } {
+  const contentCol = prefix.length
+  const pad = ' '.repeat(contentCol)
+  const out = [prefix + run + info]
+  const closer = new RegExp(`^ {0,3}${run[0] === '`' ? '`' : '~'}{${run.length},}[ \t]*$`)
+  let end = start + 1
+  let blanks: string[] = []
+  while (end < lines.length) {
+    const line = lines[end]!
+    if (line.trim() === '') {
+      blanks.push('')
+      end++
+      continue
+    }
+    if (indentColumns(line) < contentCol) {
+      end -= blanks.length
+      blanks = []
+      break
+    }
+    out.push(...blanks)
+    blanks = []
+    const body = stripColumns(line, contentCol)
+    out.push(pad + body)
+    end++
+    if (closer.test(body)) break
+  }
+  end -= blanks.length
+
+  return { lines: out, end, verbatimFrom: 1 }
+}
+
 function collectListInlineRun(
   lines: readonly string[],
   start: number,
@@ -1685,10 +1738,15 @@ function collectListInlineRun(
 ): {
   lines: string[]
   end: number
+  verbatimFrom?: number
 } {
   const first = lines[start]!
   const marker = first.match(RE_LIST_MARKER)
   if (!marker) return { lines: [convertInline(first, dialect)], end: start + 1 }
+  const fence = RE_MD_FENCE_LINE.exec(first.slice(marker[0].length))
+  if (fence && fenceRunIsAFence(fence[2]!, fence[3]!)) {
+    return collectItemFence(lines, start, marker[0], fence[2]!, fenceInfo(fence[3]!))
+  }
 
   const contentCol = marker[0].length
   const run: PrefixedInlineLine[] = [{ prefix: marker[0], text: first.slice(marker[0].length) }]
@@ -2085,10 +2143,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
       inCode = true
       fenceChar = open[2]![0]!
       fenceLen = open[2]!.length
-      const firstInfoWord = open[3]!.trim().split(/[ \t]/, 1)[0] ?? ''
-      const info = firstInfoWord.includes('`')
-        ? ''
-        : (open[3]!.match(/[A-Za-z0-9_+#/.-]+/)?.[0] ?? '')
+      const info = fenceInfo(open[3]!)
       // Re-base the fence to its container's content column: strip only the
       // indentation ABOVE that column. At document level the column is 0, so a
       // 1-3 space Markdown fence dedents fully; inside a list item the fence's
@@ -2281,7 +2336,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     if (prevType === 'list' && indent >= 1) {
       if (isList) {
         const run = collectListInlineRun(lines, i, dialect)
-        out.push(...run.lines.map((l) => l.replace(/^(\s*)\+(\s)/, '$1-$2')))
+        out.push(...run.lines.map((l, k) => (k >= (run.verbatimFrom ?? Infinity) ? l : l.replace(/^(\s*)\+(\s)/, '$1-$2'))))
         i = run.end - 1
         prevType = 'list'
         continue
@@ -2387,7 +2442,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
     }
     if (isList) {
       const run = collectListInlineRun(lines, i, dialect)
-      out.push(...run.lines.map((l) => l.replace(/^(\s*)\+(\s)/, '$1-$2')))
+      out.push(...run.lines.map((l, k) => (k >= (run.verbatimFrom ?? Infinity) ? l : l.replace(/^(\s*)\+(\s)/, '$1-$2'))))
       i = run.end - 1
       prevType = 'list'
       continue
