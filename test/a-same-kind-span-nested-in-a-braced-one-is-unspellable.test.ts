@@ -42,11 +42,10 @@ describe('a braced span directly inside a braced span of the same kind', () => {
 
   it('decides from the tree as it is now, not as an earlier render saw it', () => {
     const tree = htmlToAst('<p><strong><b>x<br></b></strong></p>').value
-    expect(renderCarve(tree)).toBe('*{*x\\\n*}*\n')
-    const paragraph = tree.children[0] as { children: Array<{ children: Array<{ children: unknown[] }> }> }
-    paragraph.children[0]!.children[0]!.children.pop()
-    paragraph.children.unshift({ type: 'text', value: 'a' } as never)
-    expect(renderCarve(tree)).toBe('a{**x**}\n')
+    expect(() => renderCarve(tree)).toThrow(SourceUnspellableError)
+    const paragraph = tree.children[0] as { children: Array<{ children: unknown[] }> }
+    paragraph.children[0]!.children = [{ type: 'text', value: 'x' }]
+    expect(renderCarve(tree)).toBe('*x*\n')
   })
 
   it('reports the attributes the unwrapped level carried', () => {
@@ -56,15 +55,23 @@ describe('a braced span directly inside a braced span of the same kind', () => {
   })
 })
 
-describe('a same-kind nesting one level can spell bare', () => {
+describe('a same-kind nesting has no bare spelling either', () => {
+  // E3 puts the bare and the forced form on one stack (carve-js#1831), so the
+  // spellings this block used to check are gone; the inner level is unwrapped.
   it.each([
-    ['a bare inner strong', '<p>a<strong><b>x</b></strong>b</p>', 'a{**x**}b\n'],
-    ['a bare outer strong', '<p><strong><b>x<br></b></strong></p>', '*{*x\\\n*}*\n'],
-    ['two kinds, both braced', '<p>a<s><del>x</del></s>b</p>', 'a{~{-x-}~}b\n'],
-  ])('is written and reads back for %s', (_, html, carve) => {
-    const tree: Document = htmlToAst(html).value
+    ['a bare inner strong', '<p>a<strong><b>x</b></strong>b</p>', 'a{*x*}b\n'],
+    ['a bare outer strong', '<p><strong><b>x<br></b></strong></p>', '{*x\\\n*}\n'],
+  ])('is unwrapped for %s', (_, html, carve) => {
     const result = htmlToCarve(html)
     expect(result.value).toBe(carve)
+    expect(result.report.diagnostics.map((d) => d.code)).toEqual(['structure-unspellable'])
+  })
+
+  it('is written and reads back for two kinds, both braced', () => {
+    const html = '<p>a<s><del>x</del></s>b</p>'
+    const tree: Document = htmlToAst(html).value
+    const result = htmlToCarve(html)
+    expect(result.value).toBe('a{~{-x-}~}b\n')
     expect(result.report.diagnostics).toEqual([])
     expect(carveToHtml(result.value)).toBe(renderHtml(tree))
   })

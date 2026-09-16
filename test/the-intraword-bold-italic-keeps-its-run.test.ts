@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToMarkdown } from '../src/index.js'
+import { carveToMarkdown, htmlToAst, renderMarkdown } from '../src/index.js'
 
 /**
  * carve-js#1736. The flanking pass read the CHILD'S delimiter at the edge of
@@ -31,7 +31,9 @@ describe('the intraword bold-italic keeps its run', () => {
     expect(carveToMarkdown(`${source}\n`)).toBe(`${expected}\n`)
   })
 
+  // Same-kind nesting has no Carve source since carve-js#1831, so the tree
+  // comes in through the HTML importer.
   it('leaves a same-strength nesting on its inline-HTML form', () => {
-    expect(carveToMarkdown('a /{/x/}/ b\n')).toBe('a <em>*x*</em> b\n')
+    expect(renderMarkdown(htmlToAst('<p>a <em><em>x</em></em> b</p>').value)).toBe('a <em>*x*</em> b\n')
   })
 })

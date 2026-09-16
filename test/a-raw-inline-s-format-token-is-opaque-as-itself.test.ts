@@ -21,19 +21,21 @@ describe("a raw inline's format token is opaque as itself", () => {
     expect(carveToHtml('=a `b`{=html} c=')).toBe('<p><mark>a b c</mark></p>')
   })
 
+  // Since carve-js#1831 a `{=` inside an open highlight is content (E3), so
+  // the brace no longer opens anything and the closer is the `=` after `c`.
   it('leaves a token-shaped brace with no code span in front a highlight', () => {
-    expect(carveToHtml('=a {=html} c= d=}')).toBe('<p>=a <mark>html} c= d</mark></p>')
+    expect(carveToHtml('=a {=html} c= d=}')).toBe('<p><mark>a {=html} c</mark> d=}</p>')
   })
 
-  it('hides a braced highlight that is not a format token', () => {
-    expect(carveToHtml('=a {=b=} c= d=}')).toBe('<p><mark>a <mark>b</mark> c</mark> d=}</p>')
+  it('reads a braced highlight of the open kind as content', () => {
+    expect(carveToHtml('=a {=b=} c= d=}')).toBe('<p><mark>a {=b</mark>} c= d=}</p>')
   })
 
   it('reads a format name that cannot open a token as a highlight', () => {
-    expect(carveToHtml('=a `b`{=1x} c= d=}')).toBe('<p>=a <code>b</code><mark>1x} c= d</mark></p>')
+    expect(carveToHtml('=a `b`{=1x} c= d=}')).toBe('<p><mark>a <code>b</code>{=1x} c</mark> d=}</p>')
   })
 
   it('reads an unterminated token as a highlight', () => {
-    expect(carveToHtml('=a `b`{=html c= d=}')).toBe('<p>=a <code>b</code><mark>html c= d</mark></p>')
+    expect(carveToHtml('=a `b`{=html c= d=}')).toBe('<p><mark>a <code>b</code>{=html c</mark> d=}</p>')
   })
 })
