@@ -62,6 +62,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The BBCode input limit is measured in UTF-8 bytes** (#1672).
 - **An unnumbered caption placeholder is escaped on the Markdown target** (#1767) where it would open a heading, as a tree from `parse()` alone leaves it.
 - **Host text cut around an inline include publishes only its own span** (#1764) instead of the span of the whole node it was cut from.
+- **The Carve writer no longer escapes a caret in front of an escaped closing brace** (#1763): `^\}` instead of `\^\}`.
 
 ## [0.1.6] - 2026-09-07
 
