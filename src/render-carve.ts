@@ -2726,6 +2726,9 @@ function renderEmphasis(
     content.endsWith(closeDelim) ||
     content.startsWith(' ') ||
     content.endsWith(' ') ||
+    // A trailing hard break puts the closer at the start of the next line,
+    // where only the braced closer closes (carve-js#1786).
+    content.endsWith('\n') ||
     content === '' ||
     // `/*` opens `bold_italic` and `*/` closes it, so a bare emphasis whose
     // content has both would read back as a strong wrapping an emphasis - the
