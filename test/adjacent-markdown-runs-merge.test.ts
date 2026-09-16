@@ -57,17 +57,19 @@ describe('a tilde in the text is escaped before it can grow the run', () => {
   })
 })
 
+// The ruling on markup-carve/carve#2045: the run on the RIGHT takes the fallback,
+// whichever marker the seam is made of.
 describe('two runs of the same length cannot both resolve', () => {
-  it('re-spells the left of two adjacent emphases', () => {
-    expect(carveToMarkdown('a {/x/}{/y/}\n')).toBe('a <em>x</em>*y*\n')
+  it('re-spells the right of two adjacent emphases', () => {
+    expect(carveToMarkdown('a {/x/}{/y/}\n')).toBe('a *x*<em>y</em>\n')
   })
 
-  it('re-spells the left of two adjacent strongs', () => {
-    expect(carveToMarkdown('a {*x*}{*y*}\n')).toBe('a <strong>x</strong>**y**\n')
+  it('re-spells the right of two adjacent strongs', () => {
+    expect(carveToMarkdown('a {*x*}{*y*}\n')).toBe('a **x**<strong>y</strong>\n')
   })
 
-  it('walks a chain of three, leaving the last one spelled', () => {
-    expect(carveToMarkdown('{/x/}{/y/}{/z/}\n')).toBe('<em>x</em><em>y</em>*z*\n')
+  it('walks a chain of three, leaving the outer two spelled', () => {
+    expect(carveToMarkdown('{/x/}{/y/}{/z/}\n')).toBe('*x*<em>y</em>*z*\n')
   })
 })
 
@@ -130,11 +132,11 @@ describe('a merged run the rule of 3 allows stays a delimiter run', () => {
  */
 describe('the merged run is weighed against what the reader sees', () => {
   it('does not count an escaped asterisk as part of the run', () => {
-    expect(carveToMarkdown('{/x*/}{/~y/}\n')).toBe('<em>x\\*</em>*\\~y*\n')
+    expect(carveToMarkdown('{/x*/}{/~y/}\n')).toBe('*x\\**<em>\\~y</em>\n')
   })
 
   it('reads the merged run\'s flanking against the sibling\'s content', () => {
-    expect(carveToMarkdown('{/x~/}{*y*}\n')).toBe('<em>x\\~</em>**y**\n')
+    expect(carveToMarkdown('{/x~/}{*y*}\n')).toBe('*x\\~*<strong>y</strong>\n')
   })
 
   it('re-spells the right-hand side of a tilde seam whatever the content', () => {

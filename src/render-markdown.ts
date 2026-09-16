@@ -1292,6 +1292,27 @@ function pairableUnderscores(line: string): Set<number> {
   return pairs
 }
 
+/**
+ * M1b's pair condition is asked over the inline content the underscore is
+ * emitted in, so a blank line ends the scan: a reader pairs emphasis across a
+ * soft break and never across a paragraph boundary (markup-carve/carve#2046).
+ */
+function pairableUnderscoresPerBlock(line: string): Set<number> {
+  const pairs = new Set<number>()
+  // A blank line inside a quote carries the marker, so the separator between
+  // two paragraphs there is `>` rather than nothing.
+  const boundary = /\n[ \t>]*\n/g
+  let start = 0
+  for (;;) {
+    const match = boundary.exec(line)
+    const end = match === null ? line.length : match.index
+    for (const i of pairableUnderscores(line.slice(start, end))) pairs.add(start + i)
+    if (match === null) return pairs
+    start = match.index + match[0].length
+    boundary.lastIndex = start
+  }
+}
+
 /** Whether the character at `i` is not covered by an odd run of backslashes. */
 function liveAt(line: string, i: number): boolean {
   let backslashes = 0
@@ -1343,7 +1364,7 @@ function resolveNarrowedEscapes(text: string): string {
   if (!HAS_NARROWED_SENTINEL.test(text)) return text
   const character = sentinelCharacter
   const line = text.replace(RE_NARROWED_SENTINEL, character)
-  const pairs = line.includes('_') ? pairableUnderscores(line) : null
+  const pairs = line.includes('_') ? pairableUnderscoresPerBlock(line) : null
 
   return text.replace(RE_NARROWED_SENTINEL, (s, offset: number) => {
     const ch = character(s)
@@ -1660,7 +1681,15 @@ function reflankRuns(nodes: InlineNode[], parts: string[]): string {
   }
   for (let i = 0; i < parts.length; i++) {
     const piece = delimiterPiece(nodes, parts, i)
-    if (piece && seamMergesRun(nodes, parts, i, piece)) parts[i] = spellAsHtml(piece)
+    if (!piece || !seamMergesRun(nodes, parts, i, piece)) continue
+    // ONE SEAM, ONE FALLBACK, AND IT IS THE RUN ON THE RIGHT that takes it
+    // (markup-carve/carve#2045). A tilde seam is decided from both sides and
+    // already reports against the right-hand strike, so only the asterisk seam,
+    // which looks right only, moves its fallback across.
+    const j = piece.run.delimiter[0] === '~' ? -1 : nextRendered(parts, i)
+    const next = j < 0 ? null : delimiterPiece(nodes, parts, j)
+    if (next && next.run.delimiter[0] === piece.run.delimiter[0]) parts[j] = spellAsHtml(next)
+    else parts[i] = spellAsHtml(piece)
   }
 
   return parts.join('')
@@ -1738,28 +1767,39 @@ function contentGrowsRun(piece: DelimiterPiece, node: InlineNode): boolean {
   const ch = piece.run.delimiter[0]!
   if (runAtStart(piece.core, ch) === 0 && runAtEnd(piece.core, ch) === 0) return false
 
-  return !commutes(piece, node)
+  return !edgeChildNests(piece, node)
 }
 
 /**
- * The round-trip normalization list, PART 11 section 10k: nested emphasis of
- * DIFFERENT strengths, where the child spans the whole parent, may commute.
- * `***x***` comes back with the emphasis outside either way, and the two
- * nestings are the same document. EQUAL strengths do not commute - the runs
- * collapse into one element of the wrong kind, which is a different document.
+ * Whether every run the CONTENT adds at an edge belongs to a nested child of a
+ * different strength, which the reader re-pairs as the nesting the document
+ * has: `*italic **bold***` comes back as an emphasis holding a strong.
+ *
+ * EQUAL strengths do not nest - the runs collapse into one element of the wrong
+ * kind - and a run that is not a child's delimiter at all, a literal the writer
+ * did not escape, reaches the reader as part of the writer's own run. Both take
+ * the inline-HTML spelling instead.
+ *
+ * `***x***`, where the child spans the whole parent, is the case PART 11
+ * section 10k's round-trip normalization list already allowed: the emphasis
+ * comes back outside either way, and the two nestings are the same document.
  */
-function commutes(piece: DelimiterPiece, node: InlineNode): boolean {
+function edgeChildNests(piece: DelimiterPiece, node: InlineNode): boolean {
   if (piece.run.delimiter[0] !== '*') return false
   // The padding text nodes are not content: `padOutside` has already moved them
-  // outside the delimiters, so the child still spans everything between them.
+  // outside the delimiters, so a child at an edge of the core is still the node
+  // whose delimiter stands there.
   const kids = ((node as { children?: InlineNode[] }).children ?? []).filter(
     (kid) => kid.type !== 'text' || /\S/.test((kid as { value?: string }).value ?? ''),
   )
-  if (kids.length !== 1) return false
-  const child = DELIMITER_RUN[kids[0]!.type]
-  if (child?.delimiter[0] !== '*') return false
+  const nests = (kid: InlineNode | undefined): boolean => {
+    const child = DELIMITER_RUN[kid?.type ?? '']
 
-  return child.delimiter.length !== piece.run.delimiter.length
+    return child?.delimiter[0] === '*' && child.delimiter.length !== piece.run.delimiter.length
+  }
+  if (runAtStart(piece.core, '*') > 0 && !nests(kids[0])) return false
+
+  return runAtEnd(piece.core, '*') === 0 || nests(kids[kids.length - 1])
 }
 
 /**
