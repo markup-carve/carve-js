@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as lib from '../src/index.js'
+import type { SocialLinkResolver } from '../src/index.js'
 import {
   autolink,
   carveToAnsi,
@@ -72,6 +73,17 @@ const featureRunners: Record<string, (source: string, render: Render) => string>
       mentionUrl: '/users/{name}',
       tagUrl: '/topics/{name}',
     }),
+  /*
+   * The spec's runner declares this feature unimplemented, so there is no
+   * upstream spelling to match yet and the map comes from the manifest
+   * description. `@unsafe` resolves to a denied scheme, which renders inert.
+   */
+  'social-link-resolvers': (source, render) =>
+    render(source, {
+      resolveMention: ({ name }) =>
+        name === 'alice' ? '/people/42' : name === 'unsafe' ? 'javascript:alert(1)' : null,
+      resolveTag: ({ name }) => (name === 'release' ? '/collections/stable' : null),
+    } satisfies { resolveMention: SocialLinkResolver; resolveTag: SocialLinkResolver }),
   'symbol-map': (source, render) =>
     render(source, {
       symbols: {
