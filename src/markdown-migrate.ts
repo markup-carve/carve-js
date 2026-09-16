@@ -928,6 +928,14 @@ function convertInline(
   // are already protected, so a multi-line span keeps its own spacing.
   line = line.replace(/ {2,}\n/g, '\\\n')
 
+  // An empty destination is a link in CommonMark and literal text in Carve
+  // (markup-carve/carve#2069), so the link keeps only its text and the image
+  // its alt, as the HTML importer does for an empty `href`.
+  line = line.replace(
+    /!?\[((?:[^[\]\n]|\[[^\]\n]*\])*)\]\([ \t]*(?:<>)?[ \t]*(?:"[^"\n]*"|'[^'\n]*')?[ \t]*\)/g,
+    (_m, text: string) => text,
+  )
+
   // Normalize a `(dest "title")` part: Carve's link parser closes the
   // destination at the first `)`, so balanced parens in the URL are
   // percent-encoded (Titan_(moon) -> Titan_%28moon%29).
