@@ -10710,7 +10710,6 @@ function spanAttrProvablyInvalid(text: string, brace: number): boolean {
   // Ran off the end without a closing `}`: RE_SPAN_TAIL would fail too.
   return true
 }
-const RE_CRITIC_SUB = /^\{~([^}]*)~>([^}]*)~\}/
 const RE_CRITIC_CMT = /^\{#([^}]+)#\}/
 // A BRACED HYPHEN PAIR IS AN EN DASH (markup-carve/carve#1447). The bare run
 // carries a flanking guard, so `x --verbose y` stays literal and an author who
@@ -10725,6 +10724,44 @@ const RE_BRACED_EN_DASH = /^\{--\}/
  * closer a code span holds is code and the brace pair closes later or not at
  * all.
  */
+/**
+ * A substitution opening at `open`: where the pair ends and where its `~>`
+ * sits, or null for a strike or no pair at all.
+ *
+ * Only a top-level `~>` splits the pair. Verbatim content (a code span, which
+ * math and an inline literal are prefixes of), a comment and an escape are
+ * skipped (markup-carve/carve#2083).
+ */
+function substitutionAt(text: string, open: number): { end: number; arrow: number } | null {
+  if (text[open + 1] !== '~') return null
+  const end = bracedPairEnd(text, open, '~}')
+  if (end === -1) return null
+  const to = end - 2
+  for (let j = open + 2; j < to; j++) {
+    const ch = text[j]!
+    if (ch === '\\') {
+      j++
+      continue
+    }
+    if (ch === '`') {
+      const span = verbatimSpanEnd(text, j)
+      if (!span.closed) return null
+      j = span.end - 1
+      continue
+    }
+    if (ch === '{' && (text[j + 1] === '%' || text[j + 1] === '#')) {
+      const close = text.indexOf(`${text[j + 1]}}`, j + 2)
+      if (close !== -1 && close < to) {
+        j = close + 1
+        continue
+      }
+    }
+    if (ch === '~' && text[j + 1] === '>') return { end, arrow: j }
+  }
+
+  return null
+}
+
 function bracedPairEnd(text: string, open: number, closer: string): number {
   for (let j = open + 2; j < text.length; j++) {
     const ch = text[j]!
@@ -11759,19 +11796,19 @@ function scanInlineInner(
       // would otherwise force a backtrack to EOF at every `{` (quadratic on
       // runs like `{+`×n or `{~`×n). O(1) suffix lookups; output-identical.
       const hasBrace = !!(rbraceSuf && rbraceSuf[i])
-      const sub = hasBrace ? RE_CRITIC_SUB.exec(rest) : null
+      const sub = hasBrace ? substitutionAt(text, i) : null
       if (sub) {
         flush()
         out.push(
           withPos(
-            { type: 'substitution', oldText: sub[1]!, newText: sub[2]! } as CriticSubstitute,
+            { type: 'substitution', oldText: text.slice(i + 2, sub.arrow), newText: text.slice(sub.arrow + 2, sub.end - 2) } as CriticSubstitute,
             source,
             text,
             i,
-            i + sub[0].length,
+            sub.end,
           ),
         )
-        i += sub[0].length
+        i = sub.end
         continue
       }
       const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? bracedPairEnd(text, i, '+}') : -1
@@ -12417,12 +12454,7 @@ function findEmphasisClose(
 
 // The braced inlines E2a names, as sticky copies of the matchers the main loop
 // uses, so the scan hides exactly the region the parser builds a node from.
-const RE_CRITIC_SUB_STICKY = /^\{~([^}]*)~>([^}]*)~\}/
-
-const BRACED_INLINE_STICKY = [
-  /\{~([^}]*)~>([^}]*)~\}/y,
-  /\{#([^}]+)#\}/y,
-]
+const BRACED_INLINE_STICKY = [/\{#([^}]+)#\}/y]
 
 // The last index of the braced inline opening at `open`, or -1.
 function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo, scanning?: string): number {
@@ -12439,7 +12471,7 @@ function bracedInlineEnd(text: string, open: number, memo: EmphasisMemo, scannin
     marker !== undefined &&
     FORCED_TYPE[marker] !== undefined &&
     (openKinds.has(marker) || marker === scanning) &&
-    !(marker === '~' && RE_CRITIC_SUB_STICKY.test(text.slice(open)))
+    !(marker === '~' && substitutionAt(text, open) !== null)
   ) {
     return -1
   }
