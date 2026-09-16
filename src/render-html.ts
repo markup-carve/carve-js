@@ -33,6 +33,7 @@ import type {
   ExtensionRenderContext,
   StaticRenderers,
 } from './extension.js'
+
 import { AbbrBudget, budgetForDocument, utf8ByteLength } from './abbr-budget.js'
 import { collectDocumentIds, type DocumentIdRegistry } from './document-ids.js'
 import { stripBidiControls } from './bidi-controls.js'
@@ -43,6 +44,23 @@ import { MAX_RENDER_DEPTH, RenderDepthError } from './render-depth.js'
 import { rawFormatDropped, type RenderLossSinkOptions } from './render-loss.js'
 import { isUnresolvedReference, referenceSourceText } from './unresolved-reference.js'
 import { collapseLoneImageParagraphs, inlineText } from './heading-ids.js'
+
+export type SocialLinkKind = 'mention' | 'tag'
+
+export type SocialLinkAttrs = Readonly<Omit<Attrs, 'classes' | 'keyValues' | 'order'> & {
+  readonly classes?: readonly string[]
+  readonly keyValues?: Readonly<Record<string, string>>
+  readonly order?: readonly string[]
+}>
+
+export interface SocialLinkResolverInput {
+  readonly kind: SocialLinkKind
+  readonly name: string
+  readonly attrs: SocialLinkAttrs | undefined
+  readonly context: unknown
+}
+
+export type SocialLinkResolver = (input: SocialLinkResolverInput) => string | null | undefined
 
 // Per-render abbreviation-expansion budget (DoS guard). Set at the top of
 // renderHtml() and reset to null when it returns, so it never leaks across
@@ -89,6 +107,10 @@ export interface RenderOptions extends RenderLossSinkOptions {
   renderers?: StaticRenderers
   mentionUrl?: string
   tagUrl?: string
+  resolveMention?: SocialLinkResolver
+  resolveTag?: SocialLinkResolver
+  /** Opaque host value passed unchanged to social-link resolvers. */
+  socialContext?: unknown
   /** Symbol shortcode -> trusted raw output map. `:name:` with no entry renders literally. */
   symbols?: Record<string, string>
   /**
@@ -286,6 +308,47 @@ export function sanitizeUrl(url: string, opts: RenderOptions): string {
   // Default: denylist of dangerous schemes.
   const denied = opts.deniedUrlSchemes ?? DANGEROUS_URL_SCHEMES
   return denied.some((d) => d.toLowerCase() === s) ? '' : url
+}
+
+function socialDestination(
+  kind: SocialLinkKind,
+  name: string,
+  attrs: Attrs | undefined,
+  opts: RenderOptions,
+): string | null {
+  const resolver = kind === 'mention' ? opts.resolveMention : opts.resolveTag
+  let destination: string | null | undefined
+  if (resolver) {
+    try {
+      const resolverAttrs = attrs ? freezeSocialAttrs(attrs) : undefined
+      destination = resolver({ kind, name, attrs: resolverAttrs, context: opts.socialContext })
+    } catch {
+      return null
+    }
+  } else {
+    const template = kind === 'mention' ? opts.mentionUrl : opts.tagUrl
+    if (!template) return null
+    const encoded = encodeURIComponent(name)
+    destination = template.replaceAll('{name}', encoded)
+    if (kind === 'mention') destination = destination.replaceAll('{user}', encoded)
+    else destination = destination.replaceAll('{tag}', encoded)
+  }
+  if (!destination) return null
+  // Social destinations always pass the core denylist, even when a host
+  // weakens or disables its general URL policy. The host policy may then make
+  // that baseline stricter, but never weaker.
+  if (!sanitizeUrl(destination, {})) return null
+  const sanitized = sanitizeUrl(destination, opts)
+  return sanitized || null
+}
+
+function freezeSocialAttrs(attrs: Attrs): SocialLinkAttrs {
+  return Object.freeze({
+    ...(attrs.id === undefined ? {} : { id: attrs.id }),
+    ...(attrs.classes === undefined ? {} : { classes: Object.freeze([...attrs.classes]) }),
+    ...(attrs.keyValues === undefined ? {} : { keyValues: Object.freeze({ ...attrs.keyValues }) }),
+    ...(attrs.order === undefined ? {} : { order: Object.freeze([...attrs.order]) }),
+  })
 }
 
 /** HTML-injection sink attributes that are unsafe regardless of value. Event
@@ -2162,27 +2225,16 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     }
     case 'mention': {
       const text = `@${escapeHtml(node.user)}`
-      if (insideLink || !opts.mentionUrl)
+      const href = insideLink ? null : socialDestination('mention', node.user, node.attrs, opts)
+      if (!href)
         return `<span${renderLeadingBaseClassAttrs(node.attrs, 'mention')}><strong>${text}</strong></span>`
-      // Canonical placeholder is `{name}` (matching tags and carve-php);
-      // `{user}` stays as a legacy alias.
-      const enc = encodeURIComponent(node.user)
-      const href = sanitizeUrl(
-        opts.mentionUrl.replaceAll('{name}', enc).replaceAll('{user}', enc),
-        opts,
-      )
       return `<a${renderSocialLinkAttrs(node.attrs, 'mention', href)}>${text}</a>`
     }
     case 'tag': {
       const text = `#${escapeHtml(node.name)}`
-      if (insideLink || !opts.tagUrl)
+      const href = insideLink ? null : socialDestination('tag', node.name, node.attrs, opts)
+      if (!href)
         return `<span${renderLeadingBaseClassAttrs(node.attrs, 'tag')}><strong>${text}</strong></span>`
-      const href = sanitizeUrl(
-        opts.tagUrl
-          .replaceAll('{name}', encodeURIComponent(node.name))
-          .replaceAll('{tag}', encodeURIComponent(node.name)),
-        opts,
-      )
       return `<a${renderSocialLinkAttrs(node.attrs, 'tag', href)}>${text}</a>`
     }
     case 'inline_extension': {

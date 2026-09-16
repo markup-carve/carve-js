@@ -134,7 +134,13 @@ export {
   type RenderTarget,
 } from './render-loss.js'
 export { SourceUnspellableError } from './source-unspellable-error.js'
-export type { RenderOptions } from './render-html.js'
+export type {
+  RenderOptions,
+  SocialLinkAttrs,
+  SocialLinkKind,
+  SocialLinkResolver,
+  SocialLinkResolverInput,
+} from './render-html.js'
 export type { MarkdownRenderOptions } from './render-markdown.js'
 export type { CarveRenderOptions } from './render-carve.js'
 export type { PlainTextRenderOptions } from './render-plain.js'

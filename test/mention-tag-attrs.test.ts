@@ -100,6 +100,25 @@ describe('mention/tag HTML attributes', () => {
     ).toBe('<p><a class="mention user" href="/u/alice" data-role="lead" id="x">@alice</a></p>')
   })
 
+  it('passes a frozen attribute snapshot to a mention resolver', () => {
+    const attrs: Attrs = {
+      id: 'x',
+      classes: ['user'],
+      keyValues: { 'data-role': 'lead' },
+      order: ['#id', '.class', 'data-role'],
+    }
+    let received: unknown
+    expect(html(mention(attrs), {
+      resolveMention(input) {
+        received = input.attrs
+        return '/people/42'
+      },
+    })).toBe('<p><a class="mention user" href="/people/42" id="x" data-role="lead">@alice</a></p>')
+    expect(received).toEqual(attrs)
+    expect(Object.isFrozen(received)).toBe(true)
+    expect(Object.isFrozen((received as { classes: string[] }).classes)).toBe(true)
+  })
+
   it('renders tag span attrs with merged class first', () => {
     expect(html(tag({ id: 'x', order: ['#id'] }))).toBe(
       '<p><span class="tag" id="x"><strong>#release</strong></span></p>',
