@@ -337,17 +337,16 @@ function textEdge(node: InlineNode | undefined, side: 'start' | 'end'): boolean 
 }
 
 /**
- * A line's leading whitespace, dropped after every hard break.
+ * A line's leading whitespace, dropped after a hard break.
  *
- * Applies at EVERY level rather than only at a block's edges: a break inside a
- * `<strong>` still ends a line, and the text that follows it may sit in the
- * same element or in the parent, so the test asks what the previous node ENDS
- * with rather than what it is.
+ * Only text DIRECTLY after the break starts the line. After a break that ends
+ * a `<strong>`, the closer is written first on the new line, so a space behind
+ * it is mid-line content and stays.
  */
 function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
   const out: InlineNode[] = []
   for (const node of nodes) {
-    if (node.type === 'text' && endsWithHardBreak(out.at(-1))) {
+    if (node.type === 'text' && out.at(-1)?.type === 'hard_break') {
       const value = node.value.replace(/^[ 	]+/, '')
       if (value === '') continue
       out.push({ ...node, value })
@@ -357,15 +356,6 @@ function dropSpaceAfterHardBreak(nodes: InlineNode[]): InlineNode[] {
   }
 
   return out
-}
-
-function endsWithHardBreak(node: InlineNode | undefined): boolean {
-  if (node === undefined) return false
-  if (node.type === 'hard_break') return true
-  const children = (node as { children?: InlineNode[] }).children
-  if (children === undefined || children.length === 0) return false
-
-  return endsWithHardBreak(children.at(-1))
 }
 
 /**
@@ -724,6 +714,8 @@ class Importer {
   private readonly unspellable: Array<{ node: P5Node; path: string; message: string }> = []
   /** The element each empty code span came from, for `dropUnspellableEmptyCodeSpans`. */
   private readonly emptyCodeSpans = new WeakMap<object, { node: P5Node; path: string }>()
+  /** The element each hard break came from, for `dropHardBreaksInTableCells`. */
+  private readonly hardBreaks = new WeakMap<object, { node: P5Node; path: string }>()
   /**
    * Where a figure's own attribute is DISPLACED by its target's (§16, ruling
    * markup-carve/carve#1721).
@@ -3623,7 +3615,9 @@ class Importer {
       // element is lost here and has to say so - the alternative is the silence
       // that carve#1210 exists to kill.
       if (attrs) this.add('attribute-dropped', `Dropped ${this.attrNames(attrs).join(', ')} on <br>: a hard break has no attribute slot`, 'warning', path, node)
-      return [{ type: 'hard_break' }]
+      const hardBreak: InlineNode = { type: 'hard_break' }
+      this.hardBreaks.set(hardBreak, { node, path })
+      return [hardBreak]
     }
     // The synthetic element the adapter footnote pass leaves at each
     // reference site (adapterFootnotes); never present in real HTML input.
@@ -3995,6 +3989,78 @@ class Importer {
    * The rendering changes in both cases, so the severity is `warning`, and the
    * limit is the importer's own: these diagnostics are not a second budget.
    */
+  /**
+   * A table row is one line, so a hard break in a cell has no Carve spelling.
+   * The break is dropped and reported, and a space keeps the words on either
+   * side apart (carve-js#1797).
+   */
+  dropHardBreaksInTableCells(document: Document): void {
+    const stack: unknown[] = [document]
+    while (stack.length > 0) {
+      const node = stack.pop()
+      if (node === null || typeof node !== 'object') continue
+      if ((node as { type?: unknown }).type === 'table_cell') {
+        this.dropCellHardBreaks((node as TableCell).children)
+        continue
+      }
+      for (const value of Object.values(node)) stack.push(value)
+    }
+  }
+
+  private dropCellHardBreaks(children: InlineNode[]): void {
+    // 'start' before any content, 'space' after whitespace, 'word' after content.
+    let before: 'start' | 'space' | 'word' = 'start'
+    let pending: { list: InlineNode[]; index: number } | undefined
+    const edited = new Set<InlineNode[]>()
+    const walk = (list: InlineNode[]): void => {
+      list.forEach((child, index) => {
+        if (child === null || typeof child !== 'object') return
+        if (child.type === 'hard_break') {
+          const origin = this.hardBreaks.get(child)
+          if (origin) {
+            this.add(
+              'structure-unspellable',
+              'Dropped a <br> in a table cell: a table row is one line, so a hard break has no Carve spelling there',
+              'warning',
+              origin.path,
+              origin.node,
+            )
+          }
+          list[index] = { type: 'text', value: '' }
+          edited.add(list)
+          if (before === 'word') pending ??= { list, index }
+          return
+        }
+        if (child.type === 'text') {
+          if (child.value === '') return
+          if (pending && !/^[ \t\n]/.test(child.value)) (pending.list[pending.index] as { value: string }).value = ' '
+          pending = undefined
+          before = /[ \t\n]$/.test(child.value) ? 'space' : 'word'
+          return
+        }
+        const nested = Object.values(child).filter((value): value is InlineNode[] => Array.isArray(value))
+        if (nested.length > 0) {
+          nested.forEach(walk)
+          return
+        }
+        if (pending) (pending.list[pending.index] as { value: string }).value = ' '
+        pending = undefined
+        before = 'word'
+      })
+    }
+    walk(children)
+    for (const list of edited) {
+      const merged: InlineNode[] = []
+      for (const child of list) {
+        const last = merged.at(-1)
+        if (child.type === 'text' && child.value === '') continue
+        if (child.type === 'text' && last?.type === 'text') last.value += child.value
+        else merged.push(child)
+      }
+      list.splice(0, list.length, ...merged)
+    }
+  }
+
   /**
    * An empty code span survives only where its open run ends (PART 3, UNCLOSED
    * RUN). Elsewhere the writer refuses it, so the span is dropped and the loss
@@ -4850,6 +4916,7 @@ export function htmlToCarve(html: string, options: HtmlImportOptions = {}): Html
   // the AST `htmlToAst` returns keeps the figure wrapper and loses nothing. So
   // the importer records where it built one and only this function reports it.
   importer.dropUnspellableEmptyCodeSpans(value)
+  importer.dropHardBreaksInTableCells(value)
   importer.reportSerializationLosses(value)
   return { value: renderCarve(value), report: { mode: importer.mode, adapter: importer.adapter, diagnostics: importer.diagnostics } }
 }
