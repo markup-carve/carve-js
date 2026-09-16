@@ -85,6 +85,21 @@ export interface IncludeContext {
  */
 export type IncludeResolved = string | { source: string; id?: string }
 
+/** Why a resolver refused an include target, when it can classify the refusal. */
+export type IncludeDenial = 'outside-root' | 'not-found' | 'no-root' | 'denied' | 'unresolved'
+
+const INCLUDE_DENIALS = new Set<IncludeDenial>([
+  'outside-root',
+  'not-found',
+  'no-root',
+  'denied',
+  'unresolved',
+])
+
+function isIncludeDenial(value: unknown): value is IncludeDenial {
+  return typeof value === 'string' && INCLUDE_DENIALS.has(value as IncludeDenial)
+}
+
 /**
  * A target the resolver could not produce, named by where it would appear
  * (spec I11). A host watches that path and rebuilds when the file arrives; the
@@ -93,6 +108,8 @@ export type IncludeResolved = string | { source: string; id?: string }
 export interface IncludeUnresolved {
   source: null
   id: string
+  /** Portable refusal class for operator-facing dependency reports. */
+  denial?: IncludeDenial
 }
 
 export interface IncludeOptions {
@@ -142,6 +159,8 @@ export interface IncludeDependency {
   id: string
   /** True when the resolver produced source text for this target. */
   resolved: boolean
+  /** Why the resolver refused, when it supplied a class. */
+  denial?: IncludeDenial
 }
 
 export interface IncludeResult {
@@ -219,7 +238,7 @@ interface State {
   docs: Document[]
   usedHeadingIds: Set<string>
   /** Include targets in first-encounter order; value is the resolved flag. */
-  dependencies: Map<string, boolean>
+  dependencies: Map<string, { resolved: boolean; denial?: IncludeDenial }>
   /**
    * Spec I8 context level C for `@shift:auto`: the level of the nearest
    * preceding heading in the directive's own block container or an enclosing
@@ -307,8 +326,15 @@ function childContext(state: State): IncludeContext {
  * encounter fixes the order, and a later successful read upgrades an entry
  * that was first seen unresolved.
  */
-function note(state: State, id: string, resolved: boolean): void {
-  if (resolved || !state.dependencies.has(id)) state.dependencies.set(id, resolved)
+function note(state: State, id: string, resolved: boolean, denial?: IncludeDenial): void {
+  const current = state.dependencies.get(id)
+  if (resolved) {
+    state.dependencies.set(id, { resolved: true })
+  } else if (current === undefined) {
+    state.dependencies.set(id, denial === undefined ? { resolved: false } : { resolved: false, denial })
+  } else if (!current.resolved && current.denial === undefined && denial !== undefined) {
+    current.denial = denial
+  }
 }
 
 function spentMessage(rule: 'include-budget' | 'include-call-limit', path: string): string {
@@ -376,7 +402,13 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
   // I11: the resolver named where the target would be without producing it.
   if (typeof resolved === 'object' && (resolved as { source?: unknown }).source === null) {
     const named = (resolved as { id?: unknown }).id
-    note(state, typeof named === 'string' && named !== '' ? named : d.path, false)
+    const denial = (resolved as { denial?: unknown }).denial
+    note(
+      state,
+      typeof named === 'string' && named !== '' ? named : d.path,
+      false,
+      isIncludeDenial(denial) ? denial : undefined,
+    )
     warn(state, 'include-unresolved', `Include "${d.path}" could not be resolved.`, node)
     return null
   }
@@ -1152,7 +1184,7 @@ export function expandIncludes(doc: Document, source: string, options: IncludeOp
     doc,
     warnings: state.warnings,
     suppressedWarnings: state.suppressedWarnings,
-    dependencies: [...state.dependencies].map(([id, resolved]) => ({ id, resolved })),
+    dependencies: [...state.dependencies].map(([id, dependency]) => ({ id, ...dependency })),
     chargedBytes: state.usedBytes,
   }
 }

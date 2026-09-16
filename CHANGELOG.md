@@ -20,6 +20,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `carve --report-includes FILE` (#1774) writes the complete include dependency list as JSON; resolvers can classify refusals with `IncludeUnresolved.denial`. The Node filesystem resolver now returns that unresolved object instead of `null` for denied targets.
 - `resolveMention` and `resolveTag` (#1769) map social tokens through host data, keeping the inert fallback and URL-scheme checks.
 - `migrateBbcode()` (#1671) returns BBCode conversion in the shared migration result envelope.
 - Include expansion (#356, #1694, #1701, #1733). `expandIncludes()`, `carve flatten`, `findDirectiveSites()`, and rendering a tree the host already holds; an included child is parsed with the caller's extensions.

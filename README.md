@@ -170,6 +170,26 @@ is named by where it WOULD be, so `sub/frag.crv` asking for `missing.crv`
 reports the canonical `<root>/sub/missing.crv` and the watch lands on the file
 the author meant; a path denied by containment keeps the directive's spelling.
 A resolver of your own does the same by returning `{ source: null, id }`.
+It may also return `{ source: null, id, denial }`, where `denial` is one of
+`outside-root`, `not-found`, `no-root`, `denied`, or `unresolved`.
+
+The CLI publishes the same list with `--report-includes FILE`; use `-` to write
+it to stderr. The file is written even when no resolver runs, with an empty
+array, so a subprocess host can distinguish an empty dependency set from a
+missing report:
+
+```bash
+carve --report-includes deps.json book/main.crv > main.html
+```
+
+```json
+{"dependencies":[{"id":"/book/intro.crv","resolved":true},{"id":"gone.crv","resolved":false,"denial":"not-found"}]}
+```
+
+`denial` is present when the resolver classified the refusal. It is omitted for
+successful reads and engine-side refusals such as a spent expansion budget.
+When `-` is used, the JSON is one line among any other diagnostics written to
+stderr.
 
 `expanded.chargedBytes` is what the expansion charged against the byte budget,
 counted per occurrence rather than per distinct identity. It includes the
