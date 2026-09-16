@@ -277,6 +277,14 @@ describe('expandIncludes', () => {
     ])
   })
 
+  it('does not publish an unknown resolver denial class', () => {
+    const source = '{{ child }}'
+    const result = expandIncludes(parse(source, { positions: true }), source, {
+      resolve: () => ({ source: null, id: 'child', denial: 'private-policy' }) as never,
+    })
+    expect(result.dependencies).toEqual([{ id: 'child', resolved: false }])
+  })
+
   it('reports the same file included twice only once', () => {
     const result = expand('{{ child }}\n\n{{ child }}', { child: 'Body.' })
     expect(result.warnings).toEqual([])
@@ -322,7 +330,7 @@ describe('expandIncludes', () => {
       expect(result.warnings.map((w) => w.rule)).toEqual(['include-unresolved'])
       expect(result.dependencies).toEqual([
         { id: realpathSync(join(root, 'ok.crv')), resolved: true },
-        { id: '../secret.crv', resolved: false },
+        { id: '../secret.crv', resolved: false, denial: 'outside-root' },
       ])
     } finally {
       rmSync(base, { recursive: true, force: true })
@@ -363,8 +371,16 @@ describe('expandIncludes', () => {
       // never forms in source and cannot exercise containment.
       const resolver = fileSystemResolver(root)
       const ctx = { stack: [], depth: 0 }
-      expect(resolver('../../../secret.crv', ctx)).toBeNull()
-      expect(resolver('../../..' + '/etc/passwd', ctx)).toBeNull()
+      expect(resolver('../../../secret.crv', ctx)).toEqual({
+        source: null,
+        id: '../../../secret.crv',
+        denial: 'outside-root',
+      })
+      expect(resolver('../../..' + '/etc/passwd', ctx)).toEqual({
+        source: null,
+        id: '../../../etc/passwd',
+        denial: 'outside-root',
+      })
       // The sibling-directory case stays allowed through the same resolver.
       mkdirSync(join(root, 'chapters'), { recursive: true })
       mkdirSync(join(root, 'shared'), { recursive: true })
@@ -1200,9 +1216,28 @@ describe('expandIncludes resource bounds', () => {
     try {
       writeFileSync(join(root, 'big.crv'), 'x'.repeat(64), 'utf8')
       const ctx = { stack: [], depth: 0 }
-      expect(fileSystemResolver(root, { maxFileBytes: 32 })('big.crv', ctx)).toBeNull()
-      expect(fileSystemResolver(root, { maxFileBytes: Infinity })('big.crv', ctx)).not.toBeNull()
-      expect(fileSystemResolver(root)('big.crv', ctx)).not.toBeNull()
+      expect(fileSystemResolver(root, { maxFileBytes: 32 })('big.crv', ctx)).toEqual({
+        source: null,
+        id: join(root, 'big.crv'),
+        denial: 'denied',
+      })
+      expect(fileSystemResolver(root, { maxFileBytes: Infinity })('big.crv', ctx)).toMatchObject({
+        source: expect.any(String),
+      })
+      expect(fileSystemResolver(root)('big.crv', ctx)).toMatchObject({ source: expect.any(String) })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('classifies a filesystem target that cannot be read as denied', () => {
+    const root = mkdtempSync(join(tmpdir(), 'carve-unreadable-'))
+    try {
+      expect(fileSystemResolver(root)('.', { stack: [], depth: 0 })).toEqual({
+        source: null,
+        id: root,
+        denial: 'denied',
+      })
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

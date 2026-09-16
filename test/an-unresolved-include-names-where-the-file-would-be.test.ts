@@ -49,7 +49,7 @@ describe('an unresolved include names where the file would be', () => {
 
     expect(result.dependencies).toEqual([
       { id: '<TMP>/sub/frag.crv', resolved: true },
-      { id: '<TMP>/sub/missing.crv', resolved: false },
+      { id: '<TMP>/sub/missing.crv', resolved: false, denial: 'not-found' },
     ])
   })
 
@@ -69,7 +69,7 @@ describe('an unresolved include names where the file would be', () => {
 
     expect(result.dependencies).toEqual([
       { id: '<TMP>/root/sub/frag.crv', resolved: true },
-      { id: '../../secret.crv', resolved: false },
+      { id: '../../secret.crv', resolved: false, denial: 'outside-root' },
     ])
   })
 
@@ -82,7 +82,7 @@ describe('an unresolved include names where the file would be', () => {
 
     expect(result.dependencies).toEqual([
       { id: '<TMP>/root/sub/frag.crv', resolved: true },
-      { id: '../../gone.crv', resolved: false },
+      { id: '../../gone.crv', resolved: false, denial: 'outside-root' },
     ])
   })
 })

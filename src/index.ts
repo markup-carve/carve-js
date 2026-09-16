@@ -255,6 +255,7 @@ export {
   findDirectiveSites,
   type DirectiveSite,
   type IncludeContext,
+  type IncludeDenial,
   type IncludeDependency,
   type IncludeOptions,
   type IncludeResult,

@@ -1126,4 +1126,56 @@ describe('carve render includes', () => {
     expect(t.out).toContain('{{ child.crv }}')
     expect(t.err).toBe('')
   })
+
+  it('writes the complete dependency list with refusal classes', async () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'carve-include-report-'))
+    const root = path.join(base, 'book')
+    mkdirSync(root)
+    writeFileSync(path.join(root, 'child.crv'), 'Included.', 'utf8')
+    writeFileSync(path.join(base, 'secret.crv'), 'TOP SECRET', 'utf8')
+    const input = path.join(root, 'main.crv')
+    const t = makeIO({
+      files: {
+        [input]: '{{ child.crv }}\n\n{{ missing.crv }}\n\n{{ ../secret.crv }}\n',
+      },
+    })
+
+    expect(await run([
+      'render', '--include-root', root, '--report-includes', 'deps.json', input,
+    ], t.io)).toBe(0)
+    expect(JSON.parse(t.files['deps.json']!)).toEqual({
+      dependencies: [
+        { id: path.join(root, 'child.crv'), resolved: true },
+        { id: path.join(root, 'missing.crv'), resolved: false, denial: 'not-found' },
+        { id: '../secret.crv', resolved: false, denial: 'outside-root' },
+      ],
+    })
+    expect(t.out).not.toContain('TOP SECRET')
+  })
+
+  it('writes an empty dependency list when no resolver runs', async () => {
+    const t = makeIO({ stdin: '{{ child.crv }}\n' })
+    expect(await run(['render', '--report-includes', 'deps.json'], t.io)).toBe(0)
+    expect(t.files['deps.json']).toBe('{"dependencies":[]}\n')
+  })
+
+  it('writes the dependency list to stderr for a dash', async () => {
+    const t = makeIO({ stdin: 'No includes.\n' })
+    expect(await run(['render', '--report-includes', '-'], t.io)).toBe(0)
+    expect(t.err).toBe('{"dependencies":[]}\n')
+  })
+
+  it('reports a dependency-report write failure before rendered output', async () => {
+    const t = makeIO({ stdin: 'No includes.\n' })
+    t.io.writeFile = () => { throw new Error('disk full') }
+    expect(await run(['render', '--report-includes', 'deps.json'], t.io)).toBe(2)
+    expect(t.out).toBe('')
+    expect(t.err).toBe('carve render: cannot write include-dependency report deps.json\n')
+  })
+
+  it('documents --report-includes in help', async () => {
+    const t = makeIO()
+    expect(await run(['render', '--help'], t.io)).toBe(0)
+    expect(t.out).toContain('--report-includes FILE')
+  })
 })

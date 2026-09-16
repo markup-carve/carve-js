@@ -54,6 +54,7 @@ import {
   resolve,
   expandIncludes,
   expandsForTarget,
+  type IncludeDependency,
   type IncludeWarning,
   type Document,
   type MigrationWarning,
@@ -124,6 +125,8 @@ The 'render' subcommand is optional: \`carve --ansi file\` works the same.
                    input file's directory; pass this to widen it to a docs
                    root or narrow it. Required to enable includes on stdin.
     --no-includes   leave include directives literal. --safe implies this.
+    --report-includes FILE
+                   Write the JSON include-dependency list (use - for stderr).
 
   input options:
     --from-json    read an encoded AST instead of Carve source, and render it
@@ -654,6 +657,7 @@ function renderFromJson(
   target: 'html' | 'markdown' | 'plain' | 'ansi' | 'carve' | 'json',
   opts: ProfileOptions & { allowRawHtml?: false },
   lossOptions: RenderCliLossOptions,
+  reportIncludes: string | undefined,
   io: CliIO,
 ): number {
   // A profile's maxLength bounds UNTRUSTED INPUT, and on this path the untrusted
@@ -727,6 +731,7 @@ function renderFromJson(
     }
     throw e
   }
+  if (!writeIncludeReport(reportIncludes, [], io)) return 2
   return finishRender(result, '<encoded-ast>', lossOptions, io)
 }
 
@@ -768,6 +773,26 @@ function finishRender(result: RenderResult, file: string, opts: RenderCliLossOpt
   return 0
 }
 
+function writeIncludeReport(
+  destination: string | undefined,
+  dependencies: IncludeDependency[],
+  io: CliIO,
+): boolean {
+  if (destination === undefined) return true
+  const report = JSON.stringify({ dependencies }) + '\n'
+  if (destination === '-') {
+    io.writeErr(report)
+    return true
+  }
+  try {
+    io.writeFile(destination, report)
+    return true
+  } catch {
+    io.writeErr(`carve render: cannot write include-dependency report ${destination}\n`)
+    return false
+  }
+}
+
 async function runRender(args: string[], io: CliIO): Promise<number> {
   let values: {
     html?: boolean
@@ -792,6 +817,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     'max-render-losses'?: string
     'include-root'?: string
     'no-includes'?: boolean
+    'report-includes'?: string
     help?: boolean
   }
   let positionals: string[]
@@ -821,6 +847,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
         'max-render-losses': { type: 'string' },
         'include-root': { type: 'string' },
         'no-includes': { type: 'boolean' },
+        'report-includes': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
       },
       allowPositionals: true,
@@ -949,13 +976,15 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       return 1
     }
 
-    return 0
+    return writeIncludeReport(values['report-includes'], [], io) ? 0 : 2
   }
 
   // --from-json reads an encoded AST instead of Carve source. The render path
   // below takes source, so this branch runs the renderers directly over the
   // decoded tree - and applies the profile itself, since nothing parsed here.
-  if (values['from-json']) return renderFromJson(src, target, opts, lossOptions, io)
+  if (values['from-json']) {
+    return renderFromJson(src, target, opts, lossOptions, values['report-includes'], io)
+  }
 
   // Containment root: an explicit --include-root wins, otherwise a file input
   // supplies its own directory. Never the process cwd - the root has to come
@@ -1030,6 +1059,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
       }
       throw e
     }
+    if (!writeIncludeReport(values['report-includes'], expanded.dependencies, io)) return 2
     return finishRender(result, positionals[0] ?? '<stdin>', lossOptions, io)
   }
 
@@ -1071,6 +1101,7 @@ async function runRender(args: string[], io: CliIO): Promise<number> {
     }
     throw e
   }
+  if (!writeIncludeReport(values['report-includes'], [], io)) return 2
   return finishRender(result, positionals[0] ?? '<stdin>', lossOptions, io)
 }
 

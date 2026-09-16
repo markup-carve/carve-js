@@ -98,7 +98,9 @@ export function fileSystemResolver(
     }
   }
   return (includePath, ctx) => {
-    if (!opts.allowAbsolute && path.isAbsolute(includePath)) return null
+    if (!opts.allowAbsolute && path.isAbsolute(includePath)) {
+      return { source: null, id: includePath, denial: 'denied' }
+    }
     // The stack carries the canonical (real) path of each ancestor, so a
     // nested relative include resolves against its actual parent directory,
     // not the root.
@@ -108,25 +110,39 @@ export function fileSystemResolver(
     let real: string
     try {
       real = realpathSync(resolved)
-    } catch {
+    } catch (error) {
       // I11: nothing is there, so the target is named by where it WOULD be,
       // which is the path a host watches. One that would land outside the root
       // is refused as any other escape is, and keeps the directive's spelling.
       // So does a request that names no filesystem place at all: a URI scheme
       // has no "where it would appear" for this resolver to point at.
-      if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(includePath)) return null
+      if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(includePath)) {
+        return { source: null, id: includePath, denial: 'denied' }
+      }
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return { source: null, id: resolved, denial: 'denied' }
+      }
       const wouldBe = canonicalCandidate(resolved)
-      return contains(wouldBe) ? { source: null, id: wouldBe } : null
+      return contains(wouldBe)
+        ? { source: null, id: wouldBe, denial: 'not-found' }
+        : { source: null, id: includePath, denial: 'outside-root' }
     }
-    if (!contains(real)) return null
+    if (!contains(real)) return { source: null, id: includePath, denial: 'outside-root' }
     const maxFileBytes = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
     if (Number.isFinite(maxFileBytes)) {
       try {
-        if (statSync(real).size > maxFileBytes) return null
+        if (statSync(real).size > maxFileBytes) {
+          return { source: null, id: real, denial: 'denied' }
+        }
       } catch {
-        return null
+        return { source: null, id: real, denial: 'denied' }
       }
     }
-    return { source: readFileSync(real, 'utf8'), id: real }
+    try {
+      return { source: readFileSync(real, 'utf8'), id: real }
+    } catch {
+      return { source: null, id: real, denial: 'denied' }
+    }
   }
 }
