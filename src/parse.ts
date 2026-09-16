@@ -10302,6 +10302,11 @@ const RE_INLINE_ATTR = /^\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\}
 // (carve-js#537).
 const ATTR_INERT_PREV = new Set([
   'text',
+  // `escaped_char` carries no attributes tail in the grammar, and neither does
+  // the text run around it, so a block after one matches no production and is
+  // literal. Attaching it to `escaped_text`, whose renderer emits nothing, made
+  // the source characters vanish (carve-js#1766).
+  'escaped_text',
   'soft_break',
   'hard_break',
   'mention',
