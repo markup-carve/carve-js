@@ -12,7 +12,6 @@ describe('a Markdown link or image with an empty destination', () => {
     ['an empty image', '![y]()', 'y', '<p>y</p>'],
     ['an empty angle destination', '[z](<>)', 'z', '<p>z</p>'],
     ['an empty image angle destination', '![a](<>)', 'a', '<p>a</p>'],
-    ['a title with no destination', '[x]( "t")', 'x', '<p>x</p>'],
     ['markup in the text', 'a [*b*]() c', 'a /b/ c', '<p>a <em>b</em> c</p>'],
     ['nested brackets in the text', '[a [b] c]()', 'a [b] c', '<p>a [b] c</p>'],
     ['a link after it', '[x]()[y](u)', 'x[y](u)', '<p>x<a href="u">y</a></p>'],

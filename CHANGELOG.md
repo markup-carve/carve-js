@@ -44,7 +44,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The HTML importer keeps a space after an element that ends in a `<br>` (markup-carve/carve-rs#1706), as carve-php and carve-rs do: `<p>a <strong>x<br></strong> b</p>` no longer loses the space before `b`.
 - The Carve writer escapes a caret before a node written with `[`, and a dollar before a backtick run or inline math (#1795). A caret before an imported link no longer reads back as an inline note.
 - The Carve writer escapes the colon of a text-final `:name` before a node written with `[` (#1808), so it no longer reads back as an inline extension.
-- The Markdown importer writes a link or image with an empty destination as its text or alt (#1800), since Carve reads `[x]()` as literal text.
+- The Markdown importer writes a link with an empty destination as its text and an image as its plain alt text (#1800, #1811), since Carve reads `[x]()` as literal text. A title keeps a span, a reference to an empty-destination definition is unwrapped and the definition dropped, and spaces around an inline destination are no longer percent-encoded.
 - An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
 
 ## [0.1.6] - 2026-09-07
