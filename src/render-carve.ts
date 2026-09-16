@@ -2409,6 +2409,12 @@ function renderInlines(
 
       refuseGluedName(node, nodes[idx - 1], out, piece)
 
+      if (separatesBacktickRuns(out, piece)) {
+        out += EMPTY_COMMENT
+        lineLength += EMPTY_COMMENT.length
+        lineTail = (lineTail + EMPTY_COMMENT).slice(-2)
+      }
+
       out += piece
       const lastNewline = piece.lastIndexOf('\n')
       if (lastNewline === -1) {
@@ -4061,6 +4067,25 @@ function boundaryEscapeAt(written: string, piece: string): number {
  * way out, so the channel never opens and escaping the `!` would be exactly the
  * guard corpus 304 refuses.
  */
+/**
+ * The separator between a written backtick run and one that follows it.
+ *
+ * Two runs that touch merge into one, whatever their lengths, so two adjacent
+ * code spans - or a code span and a raw inline - have no other spelling. An
+ * empty delimited comment renders nothing and compares equal to nothing (PART
+ * 11 section 10k N3, ruling carve-js#1818).
+ */
+const EMPTY_COMMENT = '{% %}'
+
+/** Whether a separator belongs between what is written and the next piece. */
+function separatesBacktickRuns(written: string, piece: string): boolean {
+  return (
+    written.endsWith('`') &&
+    piece.startsWith('`') &&
+    !precededByOddBackslashRun(written, written.length - 1)
+  )
+}
+
 function opensBacktickRun(node: InlineNode | undefined): boolean {
   if (node?.type === 'code') return node.value !== ''
   if (node?.type === 'raw_inline') return node.content !== ''
