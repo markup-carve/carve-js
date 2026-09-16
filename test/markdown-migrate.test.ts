@@ -886,8 +886,12 @@ describe('markdownToCarve — code protection edge cases', () => {
 })
 
 describe('markdownToCarve — more block spacing', () => {
-  it('inserts a blank line between a blockquote and following text', () => {
-    expect(conv('> quote\ntext')).toBe('> quote\n\ntext')
+  it('keeps a lazy continuation line in the blockquote (CommonMark 5.1)', () => {
+    expect(conv('> quote\ntext')).toBe('> quote\ntext')
+  })
+
+  it('inserts a blank line between a blockquote and a following block', () => {
+    expect(conv('> quote\n# Title')).toBe('> quote\n\n# Title')
   })
 
   it('dedents a 1-3 space indented heading to column 1', () => {

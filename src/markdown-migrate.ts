@@ -914,6 +914,9 @@ function convertInline(
     return `\x00P${protectedSpans.length - 1}\x00`
   }
   let line = protectCodeSpans(input, protect)
+  // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
+  // Carve one, so a continuation line shaped like one is escaped (carve-js#1812).
+  line = line.replace(/\n([ \t]*)\[(?=[^^\]\n][^\]\n]*\]:)/g, '\n$1\\[')
 
   // A backslash escape (`\*`, `\_`, `\\`, …) makes the next punctuation char
   // literal in both Markdown and Carve, so protect the pair verbatim.
@@ -1569,6 +1572,13 @@ function blockquotePrefix(line: string): { prefix: string; text: string } | null
   return { prefix, text: rest }
 }
 
+/** Whether a quote line leaves a paragraph open for a lazy line to continue. */
+function quoteParagraphIsOpen(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed === '' || isMarkdownFenceLine(text)) return false
+  return !/^#{1,6}(?:\s|$)/.test(trimmed) && !RE_MD_THEMATIC.test(text) && !isStandardTableRow(text)
+}
+
 /**
  * Collect a run of block-quote lines and convert their inlines.
  *
@@ -1591,9 +1601,18 @@ function collectBlockquoteInlineRun(
     stripColumns(line, contentCol).replace(/^[ \t]{1,3}(?=>)/, '')
   const run: PrefixedInlineLine[] = []
   let end = start
+  let inFence = false
   while (end < lines.length) {
     const parsed = blockquotePrefix(strip(lines[end]!))
+    // A line with no marker lazily continues the quote's open paragraph
+    // (CommonMark 5.1), unless it would start a block of its own.
+    if (!parsed && run.length > 0 && !inFence && quoteParagraphIsOpen(run.at(-1)!.text) && isParagraphRunLine(lines, end, 'text')) {
+      run.push({ prefix: '', text: strip(lines[end]!) })
+      end++
+      continue
+    }
     if (!parsed || parsed.text.trim() === '') break
+    if (isMarkdownFenceLine(parsed.text)) inFence = !inFence
     // What the quote holds is measured with the marker stripped, so an HTML
     // block opening mid-quote ends the inline run and the caller re-enters on
     // that line as a block.
