@@ -79,7 +79,10 @@ function normalize(value: unknown): unknown {
     const out: unknown[] = []
     for (const item of value.map(normalize)) {
       const previous = out.at(-1) as { type?: string; value?: string } | undefined
-      const next = item as { type?: string; value?: string } | null
+      const next = item as { type?: string; value?: string; delimited?: boolean; block?: boolean; content?: string } | null
+      // §10k N3: an empty delimited comment compares equal to nothing, which is
+      // what lets a writer separate two touching backtick runs.
+      if (next?.type === 'comment' && next.delimited === true && next.block === false && next.content === '') continue
       if (previous?.type === 'text' && next?.type === 'text') {
         out[out.length - 1] = { type: 'text', value: previous.value! + next.value! }
         continue
