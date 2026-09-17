@@ -4,7 +4,7 @@ import { carveToHtml } from '../src/index.js'
 // A `{~ ~}` pair is a substitution only when it holds a top-level `~>`. The
 // search skips a code span (and the math and inline literal built on one), a
 // comment and an escape; a pair with no such arrow is a forced strike
-// (markup-carve/carve#2083). The halves are still written as text here.
+// (markup-carve/carve#2083). Both halves are inline content (carve-js#1827).
 
 const html = (source: string) => carveToHtml(source).trim()
 
@@ -18,10 +18,10 @@ describe('a substitution arrow', () => {
   })
 
   it.each([
-    ['after a math span that holds one', '{~$`a~>b`~>c~}', '<p><del>$`a~&gt;b`</del><ins>c</ins></p>'],
-    ['after an inline literal that holds one', '{~!`a~>b`~>c~}', '<p><del>!`a~&gt;b`</del><ins>c</ins></p>'],
-    ['after an editorial comment that holds one', '{~a{# ~> #}b~>c~}', '<p><del>a{# ~&gt; #}b</del><ins>c</ins></p>'],
-    ['after a delimited comment that holds one', '{~a{% ~> %}b~>c~}', '<p><del>a{% ~&gt; %}b</del><ins>c</ins></p>'],
+    ['after a math span that holds one', '{~$`a~>b`~>c~}', '<p><del><span class="math inline" role="math">\\(a~&gt;b\\)</span></del><ins>c</ins></p>'],
+    ['after an inline literal that holds one', '{~!`a~>b`~>c~}', '<p><del>a~&gt;b</del><ins>c</ins></p>'],
+    ['after an editorial comment that holds one', '{~a{# ~> #}b~>c~}', '<p><del>a<span class="critic-comment"> ~&gt; </span>b</del><ins>c</ins></p>'],
+    ['after a delimited comment that holds one', '{~a{% ~> %}b~>c~}', '<p><del>ab</del><ins>c</ins></p>'],
     ['with a brace in a half', '{~a}~>b~}', '<p><del>a}</del><ins>b</ins></p>'],
     ['with an empty old half', '{~~>b~}', '<p><del></del><ins>b</ins></p>'],
   ])('splits the pair at the top-level one %s', (_, source, expected) => {

@@ -2641,7 +2641,7 @@ function renderInlineBody(
     case 'delete':
       return withAttrs(`{-${renderInlines(node.children, ctx)}-}`)
     case 'substitution':
-      return `{~${escapeCriticText(node.oldText)}~>${escapeCriticText(node.newText)}~}`
+      return withAttrs(`{~${renderInlines(node.old, ctx)}~>${renderInlines(node.new, ctx)}~}`)
     case 'critic_comment':
       return `{#${escapeCriticText(node.text)}#}`
     case 'heading_ref':

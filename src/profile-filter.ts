@@ -146,6 +146,10 @@ function childArrays(node: NodeLike): ChildArray[] {
     case 'citation_group':
       push(node['items'], false)
       break
+    case 'substitution':
+      push(node['old'], false)
+      push(node['new'], false)
+      break
     case 'citation':
       if (node['prefix']) push(node['prefix'], false)
       if (node['locator']) push(node['locator'], false)
@@ -949,12 +953,10 @@ function extractTextContent(node: NodeLike): string {
       return (node['abbr'] as string) ?? ''
     case 'comment':
       return ''
-    // These keep their text in FIELDS rather than children, so the generic
-    // child walk below returns '' and the node is deleted - losing visible
-    // words. A substitution lost BOTH the old wording and the new one under
-    // any profile that disallowed it (carve#419).
-    case 'substitution':
-      return ((node['oldText'] as string) ?? '') + ((node['newText'] as string) ?? '')
+    // A critic comment keeps its text in a FIELD rather than in children, so
+    // the generic child walk below returns '' and the node is deleted - losing
+    // visible words (carve#419). A substitution carries both halves as inline
+    // content, so the walk finds them.
     case 'critic_comment':
       return (node['text'] as string) ?? ''
     // A citation group renders from its items; `raw` is the author's source
@@ -982,6 +984,7 @@ function extractTextContent(node: NodeLike): string {
 
 // Inline container types whose child text concatenates with no separator.
 const INLINE_CONCAT = new Set([
+  'substitution',
   'emphasis',
   'strong',
   'underline',

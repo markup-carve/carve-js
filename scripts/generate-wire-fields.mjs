@@ -51,6 +51,28 @@ export function wireFieldsSource(schema) {
   if (definitionListDef && definitionListDef.properties.loose === undefined) {
     definitionListDef.properties.loose = { const: true };
   }
+  // PART 12's `substitution` halves, the same arrangement again: carve#2083
+  // ruled the node carries `old` and `new` inline arrays instead of the
+  // `oldText` and `newText` strings, and the engines change before the schema
+  // does (markup-carve/carve#2095). Mirrored exactly, so the artifact is
+  // byte-identical to what the real schema produces once the pin reaches it
+  // and this overlay is deleted.
+  const substitutionDef = defOf("substitution");
+  if (substitutionDef && substitutionDef.properties.old === undefined) {
+    delete substitutionDef.properties.oldText;
+    delete substitutionDef.properties.newText;
+    substitutionDef.required = ["type", "old", "new"];
+    substitutionDef.properties.old = {
+      type: "array",
+      description: "The deleted half, as inline content.",
+      items: { $ref: "#/$defs/inlineNode" },
+    };
+    substitutionDef.properties.new = {
+      type: "array",
+      description: "The inserted half, as inline content.",
+      items: { $ref: "#/$defs/inlineNode" },
+    };
+  }
   const defs = schema.$defs ?? {};
   /** type name -> sorted property names */
   const byType = new Map();
