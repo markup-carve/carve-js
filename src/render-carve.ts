@@ -560,7 +560,8 @@ function renderOnePass(ast: Document, mode: 'minimal' | 'conservative'): string 
   const previous = escapeMode
   escapeMode = mode
   writtenBraced = new WeakSet()
-  openEmphasisKinds.clear()
+  openEmphasisKinds = new Set()
+  bracedForScope = new WeakSet()
   // "Already written on a description line" is true of THIS PASS, not of the
   // document. renderCarve runs this function twice and picks between the two
   // forms (PART 11 §4), so a set that survives the first pass tells the second
@@ -2516,7 +2517,7 @@ function renderInlineBody(
     // An empty code span is written as an unclosed run, which swallows a bare
     // closer; only the braced one ends it.
     const last = children[children.length - 1]
-    return last?.type === 'code' && last.value === ''
+    return (last?.type === 'code' && last.value === '') || bracedForScope.has(node)
       ? renderForcedEmphasis(delim, content)
       : renderEmphasis(delim, content, prevChar, nextChar)
   }
@@ -2527,11 +2528,15 @@ function renderInlineBody(
     if (openEmphasisKinds.has(node.type)) {
       throw new SourceUnspellableError(node.type, `a ${node.type} inside a ${node.type} has no Carve source spelling`, node)
     }
-    openEmphasisKinds.add(node.type)
+    const outer = openEmphasisKinds
+    const children = (node as { children?: InlineNode[] }).children ?? []
+    const scoped = node.type === 'superscript' || node.type === 'subscript' || holdsOpenKind(children, outer)
+    if (scoped) bracedForScope.add(node)
+    openEmphasisKinds = scoped ? new Set([node.type]) : new Set([...outer, node.type])
     try {
       return renderInlineDispatch()
     } finally {
-      openEmphasisKinds.delete(node.type)
+      openEmphasisKinds = outer
     }
   }
 
@@ -2556,7 +2561,7 @@ function renderInlineBody(
       // the documented form was being rewritten into an undocumented one
       // (carve#375). `boldItalic` carries the answer (PART 11 section 6).
       const inner = node.children[0]
-      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis') {
+      if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis' && !bracedForScope.has(node)) {
         const content = renderInlines(inner.children, ctx)
         return withAttrs(`/*${content}*/`)
       }
@@ -3444,7 +3449,32 @@ let redundantIds = new WeakSet<object>()
 let writtenBraced = new WeakSet<object>()
 
 /** The emphasis kinds open around the node being written. */
-const openEmphasisKinds = new Set<string>()
+let openEmphasisKinds = new Set<string>()
+
+/** Spans written braced so their content starts a scope of its own. */
+let bracedForScope = new WeakSet<object>()
+
+/**
+ * Whether a descendant has a kind in `kinds`. A braced inline starts its own
+ * E3 scope (markup-carve/carve#2091), so such a span is written braced and
+ * the descendant nests inside it.
+ */
+function holdsOpenKind(nodes: readonly InlineNode[], kinds: ReadonlySet<string>): boolean {
+  const stack: unknown[] = [...nodes]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (node === null || typeof node !== 'object') continue
+    if (Array.isArray(node)) {
+      stack.push(...node)
+      continue
+    }
+    const record = node as { type?: string }
+    if (record.type !== undefined && kinds.has(record.type)) return true
+    for (const value of Object.values(node)) if (typeof value === 'object') stack.push(value)
+  }
+
+  return false
+}
 
 /**
  * The seven kinds E3 puts on one stack: a second level of a kind has no

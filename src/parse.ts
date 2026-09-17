@@ -10762,31 +10762,76 @@ function substitutionAt(text: string, open: number): { end: number; arrow: numbe
   return null
 }
 
-function bracedPairEnd(text: string, open: number, closer: string): number {
-  for (let j = open + 2; j < text.length; j++) {
-    const ch = text[j]!
-    // An escaped backtick opens no span. Every other escape is left alone, so
-    // an escaped closer still closes the pair, as it did before this search
-    // looked at code spans at all.
-    if (ch === '\\' && text[j + 1] === '`') {
-      j++
-      continue
-    }
-    if (ch === '`') {
-      const span = verbatimSpanEnd(text, j)
-      // An unclosed run ends at this pair's closer instead of running to the
-      // end of the block (markup-carve/carve#2056), so the pair still closes.
-      if (!span.closed) {
-        const end = text.indexOf(closer, j)
-        return end === -1 ? -1 : end + closer.length
-      }
-      j = span.end - 1
-      continue
-    }
-    if (ch === closer[0] && text.startsWith(closer, j)) return j === open + 2 ? -1 : j + closer.length
-  }
+/** The markers a braced pair opens with, each a scope of its own (#1841). */
+const PAIR_MARKERS = '/*_^,~=+-'
 
-  return -1
+let pairEndText: string | undefined
+let pairEndTable: Array<Int32Array | undefined> = []
+
+/**
+ * For each marker the text opens a pair with, where a scan for its closer
+ * starting at each position stops: the closer's index, or -1. Built right to
+ * left in one pass, so the end of a nested pair is known before any scan that
+ * has to skip it, and a document of nested pairs costs a pass per level rather
+ * than a pass per pair.
+ */
+function pairEndTables(text: string): Array<Int32Array | undefined> {
+  if (text === pairEndText) return pairEndTable
+  const n = text.length
+  const markers: number[] = []
+  for (let m = 0; m < PAIR_MARKERS.length; m++) {
+    if (text.includes(`{${PAIR_MARKERS[m]}`) && text.includes(`${PAIR_MARKERS[m]}}`)) markers.push(m)
+  }
+  const tables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
+  const raws: Int32Array[] = []
+  for (const m of markers) {
+    tables[m] = new Int32Array(n + 2).fill(-1)
+    raws[m] = new Int32Array(n + 2).fill(-1)
+  }
+  const ends = new Int32Array(n + 2).fill(-1)
+  const hasTick = text.includes('`')
+  for (let j = n - 1; j >= 0; j--) {
+    const ch = text[j]!
+    const next = text[j + 1]
+    const nextId = next === undefined ? -1 : PAIR_MARKERS.indexOf(next)
+    // Where the pair opening here ends, if it closes at all.
+    if (ch === '{' && nextId !== -1 && tables[nextId] !== undefined) {
+      const stop = tables[nextId]![j + 2]!
+      ends[j] = stop === -1 ? -1 : stop + 2
+    }
+    const span = hasTick && ch === '`' ? verbatimSpanEnd(text, j) : undefined
+    for (const m of markers) {
+      const table = tables[m]!
+      const raw = raws[m]!
+      const isCloser = next === '}' && ch === PAIR_MARKERS[m]
+      raw[j] = isCloser ? j : raw[j + 1]!
+      let stop: number
+      if (hasTick && ch === '\\' && next === '`') stop = table[j + 2]!
+      else if (span !== undefined) {
+        // An unclosed run ends at the pair's closer instead of running to the
+        // end of the block (markup-carve/carve#2056).
+        stop = span.closed ? table[span.end]! : raw[j]!
+      } else if (isCloser) stop = j
+      else if (ch === '{' && nextId !== -1 && nextId !== m && ends[j] !== -1) {
+        // A braced pair of another kind is its own scope, so a closer inside
+        // it cannot close this one (markup-carve/carve#2091). One of this
+        // kind is content under E3 and hides nothing.
+        stop = table[ends[j]!]!
+      } else stop = table[j + 1]!
+      table[j] = stop
+    }
+  }
+  pairEndText = text
+  pairEndTable = tables
+
+  return tables
+}
+
+/** Where a braced inline opened at `open` closes (exclusive), or -1. */
+function bracedPairEnd(text: string, open: number, closer: string): number {
+  const stop = pairEndTables(text)[PAIR_MARKERS.indexOf(closer[0]!)]?.[open + 2] ?? -1
+
+  return stop === -1 || stop === open + 2 ? -1 : stop + closer.length
 }
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
   '/': 'emphasis',
@@ -11123,9 +11168,10 @@ let inlineDepth = 0
  *
  * E3 pushes no second level of a kind while one is open, and PART 9 section 9
  * puts the forced `{X X}` forms on the same stack as the bare ones, so an
- * opener of an open kind is content either way (markup-carve/carve#2078). Only
- * the emphasis arms pass it on: a link label or a table cell starts from
- * nothing.
+ * opener of an open kind is content either way (markup-carve/carve#2078). A
+ * bare span passes the set on; a braced span starts a scope holding only its
+ * own kind (markup-carve/carve#2091), and a link label or a table cell starts
+ * from nothing.
  */
 const NO_OPEN_KINDS: ReadonlySet<string> = new Set()
 let openKinds: ReadonlySet<string> = NO_OPEN_KINDS
@@ -11860,7 +11906,7 @@ function scanInlineInner(
         : -1
       if (forced !== -1) {
         flush()
-        out.push(withPos({ type: FORCED_TYPE[delim!]!, children: scanInline(text.slice(i + 2, forced - 2), shiftSource(source, text, i + 2), inFootnote, false, withOpenKind(delim!)) } as Emphasis, source, text, i, forced))
+        out.push(withPos({ type: FORCED_TYPE[delim!]!, children: scanInline(text.slice(i + 2, forced - 2), shiftSource(source, text, i + 2), inFootnote, false, new Set([delim!])) } as Emphasis, source, text, i, forced))
         i = forced
         continue
       }
