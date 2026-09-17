@@ -2643,7 +2643,13 @@ function renderInlineBody(
     case 'substitution':
       return withAttrs(`{~${renderInlines(node.old, ctx)}~>${renderInlines(node.new, ctx)}~}`)
     case 'critic_comment':
-      return `{#${escapeCriticText(node.text)}#}`
+      // The content is literal (PART 3 EDITORIAL COMMENT CONTENT IS LITERAL),
+      // so an escape reaches the reader as a backslash. A `}` has no spelling
+      // at all: the content production takes none (carve-js#1847).
+      if (node.text.includes('}')) {
+        throw new SourceUnspellableError('critic_comment', 'an editorial comment holding a closing brace has no Carve source spelling')
+      }
+      return `{#${node.text}#}`
     case 'heading_ref':
       return `</#${escapeCrossrefTarget(node.target)}>`
     case 'caption_number':
@@ -3989,10 +3995,6 @@ function escapeAutolinkHref(text: string): string {
 
 function escapeCrossrefTarget(text: string): string {
   return text.replace(/[\\>]/g, '\\$&')
-}
-
-function escapeCriticText(text: string): string {
-  return text.replace(/[\\{}]/g, '\\$&')
 }
 
 function holdsHardBreak(nodes: readonly unknown[]): boolean {
