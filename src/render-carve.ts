@@ -2777,7 +2777,7 @@ function renderMath(display: boolean, content: string): string {
 // Superscript and subscript have no bare delimiter form -- always emit the
 // braced `{^x^}` / `{,x,}` form.
 /** The nodes of a type in these inlines, not looking inside one once found. */
-function nearestOfType(nodes: readonly InlineNode[], type: string): InlineNode[] {
+function nearestOfType(nodes: readonly InlineNode[], type: string, scopes?: WeakSet<object>): InlineNode[] {
   const found: InlineNode[] = []
   const walk = (list: readonly unknown[]): void => {
     for (const item of list) {
@@ -2786,6 +2786,9 @@ function nearestOfType(nodes: readonly InlineNode[], type: string): InlineNode[]
         found.push(item as InlineNode)
         continue
       }
+      // A braced span of another kind starts its own scope (carve#2091), so
+      // nothing below it shares a level with the span above.
+      if (scopes?.has(item)) continue
       for (const value of Object.values(item)) if (Array.isArray(value)) walk(value)
     }
   }
@@ -3491,13 +3494,14 @@ const EMPHASIS_KINDS = new Set(['emphasis', 'strong', 'underline', 'strike', 'hi
 const BRACEABLE_TYPES = new Set(['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete'])
 
 /**
- * Records a braced emphasis, and refuses one whose direct child of the same
- * kind is braced too: E3 keeps that inner `{*` literal (markup-carve/carve#2066).
+ * Records a braced emphasis, and refuses one holding a braced span of the same
+ * kind with no braced span of another kind between them: E3 keeps that inner
+ * `{*` literal (markup-carve/carve#2066, carve#2091).
  */
 function bracedOnce(node: InlineNode, body: string): string {
   if (!BRACEABLE_TYPES.has(node.type) || !body.startsWith('{')) return body
   const children = (node as { children?: InlineNode[] }).children ?? []
-  const inner = nearestOfType(children, node.type).find((child) => writtenBraced.has(child))
+  const inner = nearestOfType(children, node.type, writtenBraced).find((child) => writtenBraced.has(child))
   if (inner !== undefined) {
     throw new SourceUnspellableError(node.type, 'a braced span directly inside a braced span of the same kind has no Carve source spelling', inner)
   }
