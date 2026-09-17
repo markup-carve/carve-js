@@ -2622,7 +2622,7 @@ function renderInlineBody(
       if (renderAttrs(node.attrs) !== '') {
         throw new SourceUnspellableError(node.type, `a ${node.type} carrying attributes has no Carve source spelling`)
       }
-      return node.type === 'mention' ? `@${escapeName(node.user)}` : `#${escapeName(node.name)}`
+      return node.type === 'mention' ? `@${spellableName(node.user, 'mention')}` : `#${spellableName(node.name, 'tag')}`
     case 'inline_extension':
       return withAttrs(`:${escapeIdentifier(node.name)}[${renderInlines(node.content, ctx)}]`)
     case 'abbreviation':
@@ -3921,8 +3921,15 @@ function escapeSymbolName(text: string): string {
   return text.replace(/[^\w+-]/g, '')
 }
 
-function escapeName(text: string): string {
-  return text.replace(/[^\w.-]/g, '').replace(/^\.+|\.+$/g, '')
+/**
+ * A name has no escape, so one the parser would not read whole has no
+ * spelling (ruling markup-carve/carve-php#2159).
+ */
+function spellableName(name: string, nodeType: 'mention' | 'tag'): string {
+  if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/.test(name)) {
+    throw new SourceUnspellableError(nodeType, `a ${nodeType} whose name the grammar rejects has no Carve source spelling`)
+  }
+  return name
 }
 
 function escapeFormat(text: string): string {
