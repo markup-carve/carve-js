@@ -19,60 +19,6 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function wireFieldsSource(schema) {
-  // PART 9 §21a is implemented ahead of the spec-corpus pin by design: its
-  // corpus cases are not merged yet, and this change must not move the
-  // submodule. Mirror only the already-normative optional wire field so the
-  // generated validator can accept trees produced by this engine. Delete this
-  // compatibility overlay once the pinned schema contains the property.
-  schema = structuredClone(schema);
-  const defOf = (type) =>
-    Object.values(schema.$defs ?? {}).find(
-      (def) => def?.properties?.type?.const === type,
-    );
-  const commentDef = defOf("comment");
-  if (commentDef && commentDef.properties.delimited === undefined) {
-    commentDef.properties.delimited = { type: "boolean" };
-  }
-  // PART 12 §8's `definition_list.loose`, the same arrangement one property
-  // later. The field is already NORMATIVE - spec `cfb8d7bf`
-  // (markup-carve/carve#1634) added it, and this engine's parser, HTML renderer
-  // and writer already implement the L7 rule it publishes
-  // (markup-carve/carve-js#1404, #1407) - but the pin still names a schema
-  // without it, so an ingest would refuse a tree this engine's own encoder
-  // produced, which section 9(a) forbids.
-  //
-  // MIRRORED EXACTLY, `const: true` and all, so the generated artifact is
-  // byte-identical to what the real schema produces once the pin reaches it and
-  // this overlay is deleted. A `{type: "boolean"}` stand-in would be easier to
-  // write and would make the deletion a behavior change: `valueKind` reads a
-  // bare `const` as no kind at all, so the stand-in would publish a value check
-  // the schema does not ask for.
-  const definitionListDef = defOf("definition_list");
-  if (definitionListDef && definitionListDef.properties.loose === undefined) {
-    definitionListDef.properties.loose = { const: true };
-  }
-  // PART 12's `substitution` halves, the same arrangement again: carve#2083
-  // ruled the node carries `old` and `new` inline arrays instead of the
-  // `oldText` and `newText` strings, and the engines change before the schema
-  // does (markup-carve/carve#2095). Mirrored exactly, so the artifact is
-  // byte-identical to what the real schema produces once the pin reaches it
-  // and this overlay is deleted.
-  const substitutionDef = defOf("substitution");
-  if (substitutionDef && substitutionDef.properties.old === undefined) {
-    delete substitutionDef.properties.oldText;
-    delete substitutionDef.properties.newText;
-    substitutionDef.required = ["type", "old", "new"];
-    substitutionDef.properties.old = {
-      type: "array",
-      description: "The deleted half, as inline content.",
-      items: { $ref: "#/$defs/inlineNode" },
-    };
-    substitutionDef.properties.new = {
-      type: "array",
-      description: "The inserted half, as inline content.",
-      items: { $ref: "#/$defs/inlineNode" },
-    };
-  }
   const defs = schema.$defs ?? {};
   /** type name -> sorted property names */
   const byType = new Map();
