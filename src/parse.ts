@@ -5023,23 +5023,30 @@ function parseLineBlock(lexer: Lexer): LineBlock {
     // breaks were always placed from line geometry and still are - and the only
     // way to know WHICH boundary a surviving break sits on is the line the
     // inline parser put it on.
-    const parsed = parseInline(
-      joined,
-      lexer.abbrDefs,
-      lexer.linkDefs,
-      lexer.hasDocumentOffsets
-        ? inlineSource({
-            baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
-            startLine: firstLineNumber,
-            startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
-            lineAnchors: lines.map((line) => ({
-              offset: lexer.lineOffset(line.lineIndex),
-              column: lexer.lineStartColumn(line.lineIndex),
-              line: lexer.lineNumber(line.lineIndex),
-            })),
-          })
-        : inlineSource({ anchored: false }),
-    )
+    const outerLineBlock = inLineBlock
+    inLineBlock = true
+    let parsed: InlineNode[]
+    try {
+      parsed = parseInline(
+        joined,
+        lexer.abbrDefs,
+        lexer.linkDefs,
+        lexer.hasDocumentOffsets
+          ? inlineSource({
+              baseOffset: lexer.lineOffset(lines[0]!.lineIndex),
+              startLine: firstLineNumber,
+              startColumn: lexer.lineStartColumn(lines[0]!.lineIndex),
+              lineAnchors: lines.map((line) => ({
+                offset: lexer.lineOffset(line.lineIndex),
+                column: lexer.lineStartColumn(line.lineIndex),
+                line: lexer.lineNumber(line.lineIndex),
+              })),
+            })
+          : inlineSource({ anchored: false }),
+      )
+    } finally {
+      inLineBlock = outerLineBlock
+    }
     if (terminalCommentGuard) {
       const removeGuard = (nodes: InlineNode[]): boolean => {
         for (let index = 0; index < nodes.length; index++) {
@@ -11181,6 +11188,18 @@ function withOpenKind(delim: string): ReadonlySet<string> {
   return new Set([...openKinds, delim])
 }
 
+/** Whether the inline text being scanned is a line block's stanza. */
+let inLineBlock = false
+
+/**
+ * An unclosed run's content with the trailing whitespace its end drops. In a
+ * line block a line break is content and is kept (markup-carve/carve#2089); a
+ * stanza's own end leaves nothing there to keep.
+ */
+function trimUnclosedRun(content: string): string {
+  return inLineBlock ? content : content.replace(/[ \t\n\r]+$/, '')
+}
+
 function scanInline(
   text: string,
   source: InlineSource = inlineSource(),
@@ -11474,7 +11493,7 @@ function scanInlineInner(
         // only to a closed span).
         // PART 7's four characters (the run may cross a line, so `\n` and `\r`
         // are in). `\s` ate a trailing vertical tab out of the span's content.
-        const value = text.slice(i + openLen).replace(/[ \t\n\r]+$/, '')
+        const value = trimUnclosedRun(text.slice(i + openLen))
         out.push(withPos({ type: 'code', value }, source, text, i, text.length))
         i = text.length
         continue
@@ -11509,7 +11528,7 @@ function scanInlineInner(
           flush()
           const content = closed
             ? stripVerbatimPadding(text.slice(tick + openLen, innerEnd))
-            : text.slice(tick + openLen).replace(/[ \t\n\r]+$/, '')
+            : trimUnclosedRun(text.slice(tick + openLen))
           const len = end - i
           out.push(withPos({ type: 'math', display, content } as Math, source, text, i, i + len))
           i += len
@@ -11529,7 +11548,7 @@ function scanInlineInner(
       flush()
       const content = closed
         ? stripVerbatimPadding(text.slice(i + 1 + openLen, end - openLen))
-        : text.slice(i + 1 + openLen).replace(/[ \t\n\r]+$/, '')
+        : trimUnclosedRun(text.slice(i + 1 + openLen))
       out.push(withPos({ type: 'literal_inline', content } as LiteralInline, source, text, i, end))
       i = end
       continue
