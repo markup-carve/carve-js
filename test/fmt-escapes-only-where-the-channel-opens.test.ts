@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToCarve, carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml, renderCarve, renderHtml, type Document } from '../src/index.js'
 
 /*
  * Two escapes this writer wrote for channels the character cannot open, both
@@ -61,14 +61,16 @@ describe('fmt escapes only where the channel actually opens', () => {
     expect(carveToHtml(out)).toBe(carveToHtml(src))
   })
 
-  it('a caret before an escaped closing brace is written bare', () => {
-    // `\}` cannot close a `{^ ^}` run, so the brace's escape is enough (carve-js#1763).
-    const src = '{/{^{/x/}^}/}\n'
-    const out = carveToCarve(src)
-    // The trailing brace needs no escape since carve-js#1831: a `{^` inside an
-    // open superscript is content, so nothing there can open a run.
-    expect(out).toBe('/{^{/x/^\\}/}\n')
-    expect(carveToHtml(out)).toBe(carveToHtml(src))
+  it('a caret before a closing brace is written bare', () => {
+    // carve-js#1763. Built as a tree: since carve-js#1841 a braced `{^ ^}` is a
+    // scope, so the source this used to start from now nests the emphasis.
+    const tree = {
+      type: 'document',
+      children: [{ type: 'paragraph', children: [{ type: 'emphasis', children: [{ type: 'text', value: '{^{/x' }] }, { type: 'text', value: '^}/}' }] }],
+    } as unknown as Document
+    const out = renderCarve(tree)
+    expect(out).toBe('/{^{/x/^}/}\n')
+    expect(carveToHtml(out)).toBe(renderHtml(tree))
     expect(carveToCarve(out)).toBe(out)
   })
 })
