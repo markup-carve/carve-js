@@ -66,7 +66,7 @@ describe('the HTML importer', () => {
   it('reports the caption of a table no row survives in', () => {
     const imported = htmlToCarve('<table><caption>c</caption><tr><td></td></tr></table>')
     expect(imported.value).toBe('\n')
-    expect(imported.report.diagnostics.map((d) => d.code)).toStrictEqual(['structure-unspellable', 'element-dropped'])
+    expect(imported.report.diagnostics.map((d) => d.code)).toStrictEqual(['element-dropped', 'structure-unspellable'])
   })
 
   it('keeps a caption whose table still has a row', () => {

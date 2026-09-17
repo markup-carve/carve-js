@@ -708,8 +708,11 @@ class Importer {
 
   /** The report, in the order docs/html-import.md states. */
   get diagnostics(): HtmlImportDiagnostic[] {
+    // An element's own row comes before its other rows, so a reader learns the
+    // element is gone before its attributes are (carve-php#1737).
+    const rank = (entry: { diagnostic: HtmlImportDiagnostic }) => (entry.diagnostic.code.startsWith('element-') ? 0 : 1)
     return [...this.entries]
-      .sort((a, b) => a.at - b.at || a.seq - b.seq)
+      .sort((a, b) => a.at - b.at || rank(a) - rank(b) || a.seq - b.seq)
       .map((entry) => entry.diagnostic)
   }
   /** Where the import built a structure only a serializer loses (§16). */
