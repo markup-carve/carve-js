@@ -922,6 +922,10 @@ function expandInlines(nodes: InlineNode[], state: State): InlineNode[] {
         case 'inline_footnote':
           if (node.inline) node.inline = expandInlines(node.inline, state)
           break
+        case 'substitution':
+          node.old = expandInlines(node.old, state)
+          node.new = expandInlines(node.new, state)
+          break
         case 'citation_group':
           for (const item of node.items) {
             if (item.prefix) item.prefix = expandInlines(item.prefix, state)
@@ -962,6 +966,10 @@ function renameInlines(nodes: InlineNode[], footnotes: Map<string, string>, head
     if ('children' in node && Array.isArray(node.children)) renameInlines(node.children, footnotes, headings)
     if (node.type === 'inline_extension') renameInlines(node.content, footnotes, headings)
     if (node.type === 'inline_footnote' && node.inline) renameInlines(node.inline, footnotes, headings)
+    if (node.type === 'substitution') {
+      renameInlines(node.old, footnotes, headings)
+      renameInlines(node.new, footnotes, headings)
+    }
     if (node.type === 'citation_group') {
       for (const item of node.items) {
         if (item.prefix) renameInlines(item.prefix, footnotes, headings)
@@ -1294,6 +1302,10 @@ function collectInlines(nodes: InlineNode[], sites: DirectiveSite[]): void {
         break
       case 'inline_footnote':
         if (node.inline) collectInlines(node.inline, sites)
+        break
+      case 'substitution':
+        collectInlines(node.old, sites)
+        collectInlines(node.new, sites)
         break
       case 'citation_group':
         for (const item of node.items) {

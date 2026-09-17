@@ -156,8 +156,8 @@ describe('ANSI/plain renderers strip terminal escapes', () => {
             { type: 'footnote_ref', id: `fn${osc('ID')}` },
             {
               type: 'substitution',
-              oldText: `old${osc('OLD')}`,
-              newText: `new${osc('NEW')}`,
+              old: [{ type: 'text', value: `old${osc('OLD')}` }],
+              new: [{ type: 'text', value: `new${osc('NEW')}` }],
             },
           ],
         },

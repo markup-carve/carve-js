@@ -921,8 +921,10 @@ export interface CriticDelete extends BaseNode {
 
 export interface CriticSubstitute extends BaseNode {
   type: 'substitution'
-  oldText: string
-  newText: string
+  /** The deleted half, as inline content (markup-carve/carve#2083). */
+  old: InlineNode[]
+  /** The inserted half. */
+  new: InlineNode[]
 }
 
 export interface CriticComment extends BaseNode {

@@ -613,10 +613,10 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
     case 'delete':
       return style(renderInlines(node.children, ctx), STRIKE + '\x1b[31m')
     case 'substitution':
-      // Show BOTH sides; dropping oldText loses content.
+      // Show BOTH sides; dropping the old half loses content.
       return (
-        style(stripControls(node.oldText), STRIKE + '\x1b[31m') +
-        style(stripControls(node.newText), FG_GREEN + UNDERLINE)
+        style(renderInlines(node.old, ctx), STRIKE + '\x1b[31m') +
+        style(renderInlines(node.new, ctx), FG_GREEN + UNDERLINE)
       )
       // A critic comment is VISIBLE content: the HTML target renders it as
       // `<span class="critic-comment"> note </span>`, so dropping it here made two

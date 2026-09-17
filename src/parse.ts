@@ -11866,7 +11866,11 @@ function scanInlineInner(
         flush()
         out.push(
           withPos(
-            { type: 'substitution', oldText: text.slice(i + 2, sub.arrow), newText: text.slice(sub.arrow + 2, sub.end - 2) } as CriticSubstitute,
+            {
+              type: 'substitution',
+              old: scanInline(text.slice(i + 2, sub.arrow), shiftSource(source, text, i + 2), inFootnote),
+              new: scanInline(text.slice(sub.arrow + 2, sub.end - 2), shiftSource(source, text, sub.arrow + 2), inFootnote),
+            } as CriticSubstitute,
             source,
             text,
             i,
@@ -12651,6 +12655,11 @@ function applyAbbreviations(
           defs,
         )
       }
+      // A substitution's halves are inline content too (carve-js#1827).
+      if (node.type === 'substitution') {
+        node.old = applyAbbreviations(node.old, defs)
+        node.new = applyAbbreviations(node.new, defs)
+      }
       // An inline_extension keeps its inlines under `content`, not `children`,
       // so the generic recursion above never reached them and `:kbd[HTML]`
       // silently dropped an expansion that `*HTML*` and `[HTML](/u)` got.
@@ -12725,6 +12734,11 @@ function applyLinkDefs(
         anyInline,
         defs,
       )
+    }
+    // A substitution's halves are inline content too (carve-js#1827).
+    if (node.type === 'substitution') {
+      node.old = applyLinkDefs(node.old, defs)
+      node.new = applyLinkDefs(node.new, defs)
     }
     if (node.type === 'link' && node.ref !== undefined) {
       // Normalization does not make a multiline label syntactically valid.

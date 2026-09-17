@@ -490,7 +490,7 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       return '\n'
     case 'substitution':
       // Keep both sides (old struck like critic-delete, then new).
-      return `~${stripControls(node.oldText)}~${stripControls(node.newText)}`
+      return `~${renderInlines(node.old, ctx)}~${renderInlines(node.new, ctx)}`
       // A critic comment is VISIBLE content: the HTML target renders it as
       // `<span class="critic-comment"> note </span>`, so dropping it here made two
       // targets of one engine disagree about whether the document says it.

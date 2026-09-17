@@ -2286,7 +2286,7 @@ function renderInlineNode(node: InlineNode, opts: RenderOptions): string {
     case 'delete':
       return `<del${renderAttrs(node.attrs)}>${renderInlines(node.children, opts)}</del>`
     case 'substitution':
-      return `<del>${escapeHtml(node.oldText)}</del><ins>${escapeHtml(node.newText)}</ins>`
+      return `<del>${renderInlines(node.old, opts)}</del><ins>${renderInlines(node.new, opts)}</ins>`
     case 'critic_comment':
       return `<span class="critic-comment">${escapeHtml(node.text)}</span>`
     case 'heading_ref':

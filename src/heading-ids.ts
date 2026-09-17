@@ -175,6 +175,10 @@ export function unwrapNestedAnchors(nodes: InlineNode[], insideLink: boolean): I
         break
       case 'inline_footnote':
         if (n.inline) n.inline = unwrapNestedAnchors(n.inline, false)
+        break
+      case 'substitution':
+        n.old = unwrapNestedAnchors(n.old, false)
+        n.new = unwrapNestedAnchors(n.new, false)
         out.push(n)
         break
       case 'emphasis':
@@ -466,7 +470,7 @@ export function inlineText(nodes: InlineNode[]): string {
         out += inlineText(n.content)
         break
       case 'substitution':
-        out += n.newText
+        out += inlineText(n.new)
         break
       case 'abbreviation':
         out += n.abbr
@@ -701,6 +705,10 @@ function resolveHeadingIdsImpl(
           // A `footnote_ref` has no body of its own - it points at a definition.
           if (n.inline) resolveRefs(n.inline)
           break
+        case 'substitution':
+          resolveRefs(n.old)
+          resolveRefs(n.new)
+          break
         default:
           break
       }
@@ -749,6 +757,10 @@ function resolveHeadingIdsImpl(
           break
         case 'inline_footnote':
           if (n.inline) flattenNestedCrossrefs(n.inline)
+          break
+        case 'substitution':
+          flattenNestedCrossrefs(n.old)
+          flattenNestedCrossrefs(n.new)
           break
         default:
           break
@@ -870,6 +882,10 @@ function resolveHeadingIdsImpl(
           break
         case 'inline_footnote':
           if (n.inline) resolveCrossrefs(n.inline)
+          break
+        case 'substitution':
+          resolveCrossrefs(n.old)
+          resolveCrossrefs(n.new)
           break
         default:
           break

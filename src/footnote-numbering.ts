@@ -128,6 +128,11 @@ function visitInlineTree(
       (n as { content?: InlineNode[] }).content
     if (Array.isArray(kids))
       visitInlineTree(kids, fn, depth + 1, discarded || isUnresolvedReference(n))
+    // A substitution's halves are inline content (carve-js#1827).
+    if (n.type === 'substitution') {
+      visitInlineTree(n.old, fn, depth + 1, discarded)
+      visitInlineTree(n.new, fn, depth + 1, discarded)
+    }
   }
 }
 

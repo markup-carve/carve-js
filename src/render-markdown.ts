@@ -710,8 +710,8 @@ function renderInline(node: InlineNode, ctx: MarkdownContext): string {
     case 'delete':
       return `<del>${renderInlines(node.children, ctx)}</del>`
     case 'substitution':
-      // Emit BOTH sides like the HTML renderer; dropping oldText loses content.
-      return `<del>${escapeText(node.oldText)}</del><ins>${escapeText(node.newText)}</ins>`
+      // Emit BOTH sides like the HTML renderer; dropping the old half loses content.
+      return `<del>${renderInlines(node.old, ctx)}</del><ins>${renderInlines(node.new, ctx)}</ins>`
     case 'critic_comment':
       // Visible content: the HTML target renders it as
       // `<span class="critic-comment"> note </span>`, so dropping it here made two
@@ -1690,6 +1690,10 @@ function walkInlines(
         // A note body renders in the endnotes, outside any anchor, so a
         // reference in it IS a reference in the output.
         if (node.inline) walkInlines(node.inline, visit, depth + 1, false)
+        break
+      case 'substitution':
+        walkInlines(node.old, visit, depth + 1, insideLink)
+        walkInlines(node.new, visit, depth + 1, insideLink)
         break
       default:
         break
