@@ -4050,6 +4050,12 @@ function withCellHardBreaksFlattened(ast: Document): Document {
 /**
  * Replaces each hard break with one space where content sits on both sides,
  * and with nothing elsewhere (PART 11 §1b, markup-carve/carve#2067). Mutates.
+ *
+ * Only the CELL's own edge drops the space, because only the cell's trim would
+ * eat it. An inline construct's markers are content: a break inside one always
+ * has the construct's closer after it, so `<s>x<br></s>` keeps its space. Taking
+ * the construct's edge for the cell's emptied `{+ +}` to `{++}`, an empty brace
+ * pair the reader takes as literal text rather than the `<ins>` it was for.
  */
 export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: InlineNode) => void = () => {}): void {
   // 'start' before any content, 'space' after whitespace, 'word' after content.
@@ -4075,7 +4081,13 @@ export function flattenHardBreaks(children: InlineNode[], onBreak: (hardBreak: I
       }
       const nested = Object.values(child).filter((value): value is InlineNode[] => Array.isArray(value))
       if (nested.length > 0) {
-        nested.forEach(walk)
+        for (const list of nested) {
+          before = 'word'
+          walk(list)
+          if (pending) (pending.list[pending.index] as { value: string }).value = ' '
+          pending = undefined
+        }
+        before = 'word'
         return
       }
       if (pending) (pending.list[pending.index] as { value: string }).value = ' '
