@@ -61,6 +61,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Markdown importer writes a link with an empty destination as its text and an image as its plain alt text (#1800, #1811), since Carve reads `[x]()` as literal text. A title keeps a span, a reference to an empty-destination definition is unwrapped and the definition dropped, and spaces around an inline destination are no longer percent-encoded.
 - The Markdown importer keeps a lazy continuation line in its block quote and escapes a continuation line shaped like a link definition (#1812), which Carve would otherwise read as a definition and drop.
 - An emphasis ending in a hard break keeps its closer (#1786) in the Carve writer and the HTML importer.
+- A hard break at the edge of an inline construct in a table cell keeps its space (#1856; markup-carve/carve#2067, markup-carve/carve-php#2172). Only a break that is a direct child at the cell's edge writes nothing, so `<td><ins><br></ins></td>` is written `{+ +}` rather than the empty brace pair `{++}`, which reads back as literal text.
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
