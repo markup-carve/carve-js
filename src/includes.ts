@@ -6,6 +6,7 @@ import type {
   InlineNode,
   Mention,
   Paragraph,
+  Position,
   Tag,
   Text,
   SmartPunctuation,
@@ -302,6 +303,62 @@ function sliceLines(source: string, range: { start: number; end: number }): stri
   return sourceLines(source).slice(range.start - 1, range.end).join('\n')
 }
 
+/** Where a `@lines` slice sits in the file it was cut from. */
+interface SliceBase {
+  /** Line breaks preceding the slice, counted as the lexer counts them. */
+  line: number
+  /** Codepoints preceding the slice. */
+  offset: number
+}
+
+/**
+ * The part of `source` that `sliceLines` cut away ahead of the range.
+ *
+ * Reconstructed from the same `\n` split the slice uses, so it is the raw
+ * prefix byte for byte: a `\r` stays inside its line and every separator is
+ * restored. Line breaks are then counted the way the lexer does (`\r\n`, a
+ * lone `\r` and `\n` all end a line) and offsets in codepoints, because that
+ * is the space the positions being rebased are measured in.
+ */
+function sliceBase(source: string, range: { start: number; end: number }): SliceBase {
+  const before = sourceLines(source).slice(0, range.start - 1)
+  if (before.length === 0) return { line: 0, offset: 0 }
+  const prefix = `${before.join('\n')}\n`
+  return { line: prefix.match(/\r\n|[\r\n]/g)?.length ?? 0, offset: codepoints(prefix) }
+}
+
+/**
+ * Put a sliced child's positions back into the coordinates of the file they
+ * were cut from (spec PART 9 section 19: an included node keeps the
+ * coordinates of its own file, and `pos.file` names that file).
+ *
+ * Columns are untouched because the slice cuts whole lines. Runs before any
+ * warning the child raises, so `IncludeWarning.line` / `start` / `end` read
+ * the rebased positions rather than needing a second correction.
+ */
+function rebaseSlicedChild(child: Document, base: SliceBase): void {
+  if (base.line === 0 && base.offset === 0) return
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    const pos = (value as { pos?: Position }).pos
+    if (pos) {
+      pos.startLine += base.line
+      pos.endLine += base.line
+      if (pos.startOffset !== undefined) pos.startOffset += base.offset
+      if (pos.endOffset !== undefined) pos.endOffset += base.offset
+    }
+    for (const [key, inner] of Object.entries(value)) {
+      if (key !== 'pos') visit(inner)
+    }
+  }
+  visit(child.children)
+  if (child.footnoteDefs) visit(Object.values(child.footnoteDefs))
+}
+
 function runAnchor(run: RunNode[], offset: number): Text {
   let cursor = 0
   for (const node of run) {
@@ -343,7 +400,11 @@ function spentMessage(rule: 'include-budget' | 'include-call-limit', path: strin
     : `Include byte budget exceeded by "${path}".`
 }
 
-function resolveChild(d: Directive, state: State, node: Text): { source: string; id: string } | null {
+function resolveChild(
+  d: Directive,
+  state: State,
+  node: Text,
+): { source: string; id: string; base: SliceBase } | null {
   if (!state.opts.resolve) return null
   if (d.section && d.lines) {
     warn(state, 'include-selection-conflict', `Include "${d.path}" cannot use both #section and @lines.`, node)
@@ -450,7 +511,8 @@ function resolveChild(d: Directive, state: State, node: Text): { source: string;
     warn(state, 'include-lines-out-of-range', `Include line range for "${d.path}" starts past end of file.`, node)
     return null
   }
-  return { source: d.lines ? sliceLines(source, d.lines) : source, id }
+  if (!d.lines) return { source, id, base: { line: 0, offset: 0 } }
+  return { source: sliceLines(source, d.lines), id, base: sliceBase(source, d.lines) }
 }
 
 function headingId(h: Heading): string {
@@ -605,6 +667,9 @@ function expandChild(
   const resolved = resolveChild(d, state, node)
   if (resolved === null) return null
   const child = parseChild(resolved.source, state)
+  // Before anything reads a position: selection, renames, nested expansion and
+  // every warning below measure against the child's own file, not the slice.
+  rebaseSlicedChild(child, resolved.base)
   // Select before expanding: nested includes outside the wanted section must
   // not be resolved (no budget charge) and must not move section boundaries.
   if (d.section) {
