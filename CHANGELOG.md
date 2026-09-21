@@ -7,6 +7,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-21
+
+### Fixed
+
+- A node pulled in by a sliced include (`{{ child.crv @lines:N-M }}`) reports positions in its own file's coordinates (#1862), as `docs/includes.md` requires, instead of coordinates measured inside the slice under the whole file's id. Warnings raised inside the child move with it.
+
 ## [0.1.7] - 2026-09-18
 
 ### Changed
@@ -1483,7 +1489,8 @@ implementations are byte-matched against.
   zero-width Unicode control characters stripped from text and code content (§26)
 - Uniform nesting depth cap of 200
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.7...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.8...HEAD
+[0.1.8]: https://github.com/markup-carve/carve-js/compare/0.1.7...0.1.8
 [0.1.7]: https://github.com/markup-carve/carve-js/compare/0.1.6...0.1.7
 [0.1.6]: https://github.com/markup-carve/carve-js/compare/0.1.5...0.1.6
 [0.1.5]: https://github.com/markup-carve/carve-js/compare/0.1.4...0.1.5
