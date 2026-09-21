@@ -1698,7 +1698,16 @@ export function stripContainerPrefixesKeepIndent(raw: string, afterTerm = false)
     prev = line
     line = line
       .replace(/^[ \t]*>(?: |$)/, '') // blockquote (NBSP and U+FEFF are content)
-      .replace(/^[ \t]*(?:[-*]|\d+[.)])[ \t]+(?:\[[ xX\-_>?]\][ \t]+)?/, '') // list/task (NBSP and U+FEFF are content)
+      // THE MARKER SEPARATOR IS A SPACE, in the list marker and in the task box
+      // alike: `unordered_item` and `ordered_item` spell it `space`, as does
+      // `task_marker`, and `space = ' '`. A tab does not satisfy it, so
+      // `-<TAB>x` opens no item. Spelled `[ \t]+` here, this strip handed the
+      // definition collector an item's content view of a line the block parser
+      // reads as a paragraph, so `-<TAB>[t]: /t` both printed and resolved
+      // (markup-carve/carve-js#1870). `RE_PREPASS_MARKER` beside it always
+      // spelled the separator this way. The leading run keeps its tab: there a
+      // tab is indentation, which is the one place PART 7 makes it syntax.
+      .replace(/^[ \t]*(?:[-*]|\d+[.)]) +(?:\[[ xX\-_>?]\] +)?/, '') // list/task (NBSP and U+FEFF are content)
     if (afterTerm) line = line.replace(RE_DESCRIPTION_PREFIX, '')
   } while (line !== prev)
   return line
