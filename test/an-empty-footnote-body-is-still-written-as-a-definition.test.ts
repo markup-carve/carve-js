@@ -86,9 +86,13 @@ describe('an empty footnote body is written in a form that still defines', () =>
 
   it('CONTROL: the link-reference and abbreviation writers were measured, and are safe', () => {
     // Each was named as having "its own empty-value case". Measured, neither
-    // does: `[a]: {x}` is not a definition at all, so nothing is emptied, and
-    // an abbreviation keeps `{x}` as its expansion text.
-    expect(parse('[a]: {x}\n\n[a][]\n').children.every((c) => c.type !== 'link_reference_definition')).toBe(true)
+    // does: `{x}` with no space before it is the link definition's DESTINATION,
+    // so nothing is emptied, and an abbreviation keeps `{x}` as its expansion
+    // text. (This read `{x}` as a trailing attribute block and the line as no
+    // definition at all until markup-carve/carve-js#1868.)
+    expect(
+      parse('[a]: {x}\n\n[a][]\n').children.filter((c) => c.type === 'link_reference_definition'),
+    ).toMatchObject([{ href: '{x}' }])
     for (const s of ['[a]: {x}\n\n[a][]\n', '*[T]: {x}\n\nT\n', '[a]: /u\n\n[a][]\n', '*[T]: e\n\nT\n']) {
       expect(carveToHtml(carveToCarve(s)), s).toBe(carveToHtml(s))
     }

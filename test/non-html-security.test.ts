@@ -26,10 +26,10 @@ describe('Markdown renderer is safe-by-default', () => {
   })
 
   it('percent-encodes markdown destination breakout characters', () => {
-    // A `)` reaching a destination via a reference definition (URL runs to
-    // end-of-line, not `)`-delimited) is percent-encoded so it cannot break
-    // out of the `(...)` in Markdown output.
-    expect(md('[x][r]\n\n[r]: https://e.com/a)b')).toBe('[x](https://e.com/a%29b)')
+    // A `)` reaches a destination only escaped, in a definition as in an inline
+    // tail (`destination_escape`; markup-carve/carve-js#1868). It is
+    // percent-encoded so it cannot break out of the `(...)` in Markdown output.
+    expect(md('[x][r]\n\n[r]: https://e.com/a\\)b')).toBe('[x](https://e.com/a%29b)')
   })
 
   it('keeps safe autolink destinations unchanged', () => {
