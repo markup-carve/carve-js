@@ -69,6 +69,7 @@ import { isCarveWhitespace, trimNonNbsp } from './trim-non-nbsp.js'
 import { ownValue } from './own-property.js'
 import { markAboveContentColumn } from './paragraph-indent.js'
 import { normalizeRefLabel } from './label-key.js'
+import { linkDestinationValue, scanDestination } from './link-destination.js'
 export { normalizeRefLabel } from './label-key.js'
 
 export interface ParseOptions {
@@ -393,100 +394,54 @@ export interface LinkDef {
   attrs?: Attrs
 }
 
-/**
- * Split a TRAILING attribute block off a definition line (carve#604).
- */
-function splitTrailingAttrBlock(line: string): [string, string | null] {
-  // `[ \t]+$`, not `\s+$`: this is a LINE's trailing padding, so PART 7's four
-  // characters and nothing else (a `\n` cannot occur in a line). With `\s` a
-  // trailing vertical tab was invisible to the anchor, so `[a]: /u {.c}<VT>`
-  // attached the block and `[a]: /u {.c}<SOH>` did not.
-  const end = line.replace(/[ \t]+$/, '')
-  if (!end.endsWith('}')) return [line, null]
-  let quote: string | null = null
-  let open = -1
-  for (let i = 0; i < end.length; i++) {
-    const c = end[i]!
-    if (quote) {
-      if (c === '\\') i++
-      else if (c === quote) quote = null
-      continue
-    }
-    if (c === '"' || c === "'") {
-      quote = c
-      continue
-    }
-    if (c === '{') {
-      if (open === -1) open = i
-      continue
-    }
-    if (c === '}' && open !== -1 && i === end.length - 1) {
-      // THE SLOT IS EXACTLY ONE SPACE (carve#912). `reference_definition` ends
-      // `[space, attributes], newline` - a bare `space` - and this accepted any
-      // run: it tested ONE character for `\s` and then stripped the whole run
-      // with `/\s+$/`. So `[a]: /u<SP><SP>{.c}` attached the block here, as it
-      // did in all three engines and in the executable spec.
-      //
-      // Both ends are checked, deliberately. Testing only the character before
-      // the brace accepts `<TAB><SP>{`, and testing only the one before that
-      // accepts `<SP><TAB>{`; a rule about a RUN written as a rule about one
-      // end has been shipped in this org in three languages on one day. The
-      // character before the space must exist and must not itself be padding.
-      const pad = end[open - 1]
-      const before = end[open - 2]
-      if (pad !== ' ' || before === undefined || before === ' ' || before === '\t') {
-        return [line, null]
-      }
-      // And the INTERIOR is space-only too (markup-carve/carve#906): this is an
-      // `inline_attributes` block, whose every whitespace slot the grammar
-      // spells `space`. Rejecting HERE rather than at `parseAttrs` keeps the
-      // braces on the line, so the definition is simply not recognized and the
-      // line falls through to a paragraph - dropping them at the parse step
-      // would delete the block from the output instead of showing it.
-      const inner = end.slice(open + 1, end.length - 1)
-      if (inlineAttrPayloadHasTab(inner)) return [line, null]
-
-      if (!isValidInlineAttrPayload(inner) || isEmptyAttrs(parseAttrs(inner))) {
-        return [line, null]
-      }
-
-      // The INTERIOR, which is what `parseAttrs` takes everywhere else - the
-      // inline scanner hands it the payload between the braces. This handed it
-      // the braced text, and the two disagreed about the same block: an unquoted
-      // value is a `\S+` run, so `{k=v}` VALIDATED as `k=v` and PARSED as
-      // `k=v}`, publishing `k="v}"`. One string for both readings is the same
-      // point the clause makes about `{#}`.
-      return [end.slice(0, open - 1), inner]
-    }
-  }
-  return [line, null]
-}
-
-const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
-
 export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\p{Cf}\\p{Cc}'
 
+/**
+ * `reference_definition`, whole: label, destination, optional title, optional
+ * trailing attribute block, anchored at the line ending.
+ *
+ * The block is matched here rather than scanned off the line first (carve#604,
+ * reverted by markup-carve/carve-js#1868). A scan that walks the line from its
+ * start cannot tell a brace or a quote in the DESTINATION from one opening the
+ * block, so `[a]: /u{x} {.c}` and `[a]: it's {.c}` both fell through to prose.
+ * Matched as `\{.*\}` after exactly one space and validated below, they read
+ * as the production has them. With no space the braces are destination
+ * (`[a]: /u{.c}`).
+ */
 const RE_LINK_DEF =
-  /^[ \t]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?[ \t]*$/u
+  /^[ \t]*\[(?!@)([^\]]+)\]: \p{White_Space}*(\P{White_Space}+)(?: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'))?(?: (\{.*\}))?[ \t]*$/u
+
+/** A reference definition read off one line. */
+interface LinkDefMatch {
+  label: string
+  href: string
+  title: string | undefined
+  attrText: string | null
+}
 
 /**
- * Whether `line` is a reference definition - the WHOLE production, trailing
- * attribute block included.
- *
- * `RE_LINK_DEF` cannot answer this on its own any more. The trailing attribute
- * block is taken off the line BEFORE the pattern runs (carve#604), so with the
- * pattern anchored at end of line a bare `RE_LINK_DEF.test(line)` says no to
- * `[a]: /u {.c}` - a definition by every reading, and one the corpus pins as
- * interrupting the paragraph above it.
- *
- * Nine predicates around this file asked that question with a bare `.test`,
- * every one of them meaning the whole production, and they were correct only
- * because the unanchored pattern happened to swallow the braces along with
- * everything else. One producer, so the anchor cannot come apart from the
- * split again.
+ * The production's own test, and the only spelling of it. Every predicate here
+ * that asks "is this line a definition" reads this, so narrowing the rule
+ * changes all of them at once.
  */
+function matchLinkDef(line: string): LinkDefMatch | null {
+  const m = RE_LINK_DEF.exec(line)
+  if (m === null) return null
+  const href = linkDestinationValue(m[2]!)
+  if (href === null) return null
+  // An invalid block is not `attributes`, so it is leftover content and the
+  // anchor disposes of the line (CARVE-P3-006).
+  let attrText: string | null = null
+  if (m[5] !== undefined) {
+    attrText = m[5].slice(1, -1)
+    if (!isValidInlineAttrPayload(attrText) || isEmptyAttrs(parseAttrs(attrText))) return null
+  }
+
+  return { label: m[1]!, href, title: m[3] ?? m[4], attrText }
+}
+
 function isLinkDefLine(line: string): boolean {
-  return RE_LINK_DEF.test(splitTrailingAttrBlock(line)[0])
+  return matchLinkDef(line) !== null
 }
 const RE_FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +([^]+)$/
 
@@ -2728,7 +2683,7 @@ function collectLinkDefs(lexer: Lexer) {
       hasBlockMatchers &&
       !probingLazyParagraph &&
       ((composed.peeled.some((one) => !one.quote) &&
-        RE_LINK_DEF.test(splitTrailingAttrBlock(line)[0])) ||
+        isLinkDefLine(line)) ||
         RE_FENCE.test(line) ||
         RE_RAW_FENCE.test(line))
     const probed: boolean | 'unknown' = matcherProbeCandidate
@@ -2979,9 +2934,7 @@ function collectLinkDefs(lexer: Lexer) {
     // `composed.column` is where the definition really sits, and on a marker
     // line that is the column the marker just handed out.
     const notAtContentColumn = !atAnOpenContentColumn
-    // The trailing attribute block comes off BEFORE the regex runs: the
-    // pattern's `.*$` tail would otherwise swallow it (carve#604).
-    const [defLine, defAttrText] = splitTrailingAttrBlock(line)
+    const matched = matchLinkDef(line)
     // NO OPEN PARAGRAPH, NO LAZY LINE (PART 0). Once the block parser would
     // fold this marker into the paragraph above, its definition-shaped content
     // is visible text and cannot also define a reference.
@@ -2991,31 +2944,24 @@ function collectLinkDefs(lexer: Lexer) {
       (divs[divs.length - 1]?.host === 'list' &&
         composed.column > divs[divs.length - 1]!.scope.contentCol) ||
       (collectsNothing && composed.peeled.some((one) => !one.quote))
-    const m = declines ? null : RE_LINK_DEF.exec(defLine)
     // A DECLINE IS RECORDED, not just acted on. Everything above is this pass
     // reading the line as something other than a definition; the block parser
     // reaches its own reading and, where that one says "definition", removes
     // the line on the strength of a collection that never happened. Recording
     // the decline is what lets the strip ask instead of assume.
-    if (declines && RE_LINK_DEF.test(defLine)) {
+    if (declines && matched !== null) {
       lexer.declinedLinkDefLines.add(lexer.lineNumber(idx))
     }
-    if (m) {
-      const def: LinkDef = { href: m[2]! }
-      const title = m[3] ?? m[4]
-      if (title !== undefined) def.title = unescapeAttrValue(title)
-      if (defAttrText) {
-        const parsed = parseAttrs(defAttrText)
-        if (parsed.id !== undefined || parsed.classes?.length || parsed.keyValues) {
-          def.attrs = parsed
-        }
-      }
+    if (!declines && matched !== null) {
+      const def: LinkDef = { href: matched.href }
+      if (matched.title !== undefined) def.title = unescapeAttrValue(matched.title)
+      if (matched.attrText !== null) def.attrs = parseAttrs(matched.attrText)
       // Link definitions use the shared, case-sensitive ASCII-whitespace key.
       // The raw spelling stays on the winning definition for the canonical
       // writer. Implicit heading references remain a separate, looser path.
       def.line = idx
-      def.rawLabel = m[1]!
-      lexer.linkDefs.set(normalizeRefLabel(m[1]!), def)
+      def.rawLabel = matched.label
+      lexer.linkDefs.set(normalizeRefLabel(matched.label), def)
       continue
     }
   }
@@ -10326,45 +10272,6 @@ const ATTR_INERT_PREV = new Set([
 ])
 
 const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
-
-/**
- * Read a destination out of a link or image tail, starting at the `(`.
- *
- * A parenthesis inside a destination is balanced against the one that closes
- * the tail, so `[a](x(y)z)` is a whole link rather than a truncated one. This
- * is what djot and CommonMark both do, and URLs that carry parentheses -
- * Wikipedia and MDN produce them constantly - are the reason they do.
- *
- * The scan ends at whitespace, which begins a title, or at a `)` with no
- * opener left to match. A destination that needs either of those characters
- * literally escapes it; `\(`, `\)` and `\\` are the only escapes here, so a
- * backslash in front of anything else stays a literal backslash and URLs full
- * of them are unaffected.
- *
- * Returns the raw destination and where the scan stopped, or null when the
- * tail does not open with `(`.
- */
-function scanDestination(tail: string, open = 0): { dest: string; end: number } | null {
-  if (tail[open] !== '(') return null
-  let dest = ''
-  let depth = 0
-  let i = open + 1
-  for (; i < tail.length; i++) {
-    const c = tail[i]!
-    if (c === '\\' && (tail[i + 1] === '(' || tail[i + 1] === ')' || tail[i + 1] === '\\')) {
-      dest += tail[i + 1]
-      i++
-      continue
-    }
-    if (c === '(') depth++
-    else if (c === ')') {
-      if (depth === 0) break
-      depth--
-    } else if (RE_DESTINATION_WHITESPACE.test(c)) break
-    dest += c
-  }
-  return { dest, end: i }
-}
 
 /**
  * The whole tail of a link or image: `(destination)`, optionally with a title

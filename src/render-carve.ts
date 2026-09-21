@@ -1064,7 +1064,10 @@ function renderBlockBody(
       if (definitionsWrittenInPlace.has(node as unknown as object)) return ''
       const title = node.title === undefined ? '' : ` "${escapeQuoted(node.title)}"`
       const attrs = renderAttrs(node.attrs)
-      return `[${node.label}]: ${node.href}${title}${attrs === '' ? '' : ` ${attrs}`}`
+      // The href is re-escaped the way the inline tail's is: the reader
+      // resolves `\(`, `\)` and `\\`, so writing the resolved value bare would
+      // hand back a line whose parentheses no longer balance.
+      return `[${node.label}]: ${escapeDestinationEscapes(node.href)}${title}${attrs === '' ? '' : ` ${attrs}`}`
     }
     case 'citation_definition': {
       // PART 12 §18 gave the bibliography line a node for the same reason §10

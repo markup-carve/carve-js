@@ -2,6 +2,7 @@ import { slugify, headingIdSlugOpts } from './heading-ids.js'
 import { escapeAttrValue, escapeHtml, sanitizeUrl, type RenderOptions } from './render-html.js'
 import type { ParseOptions } from './parse.js'
 import { normalizeRefLabel } from './label-key.js'
+import { linkDestinationValue } from './link-destination.js'
 
 type Options = ParseOptions & RenderOptions & { profile?: unknown }
 type LinkDef = { href: string; title?: string }
@@ -117,7 +118,13 @@ function collectDefs(lines: string[], observe: boolean): { defs: Map<string, Lin
     if (!match || match[1]!.startsWith('@')) return undefined
     if (i > 0 && lines[i - 1]!.trim() !== '') return undefined
     if (i + 1 < lines.length && lines[i + 1]!.trim() !== '') return undefined
-    defs.set(normalizeRefLabel(match[1]!), { href: match[2]!, ...(match[3] === undefined ? {} : { title: match[3] }) })
+    // The run still has to BE a `link_destination`: it admits a parenthesis
+    // only balanced or escaped, and it carries the three escapes. Read here by
+    // the production's own reader rather than by the pattern above, which
+    // collected `[a]: a(b` with the lone parenthesis in the href.
+    const href = linkDestinationValue(match[2]!)
+    if (href === null) return undefined
+    defs.set(normalizeRefLabel(match[1]!), { href, ...(match[3] === undefined ? {} : { title: match[3] }) })
     definitionLines?.push(i)
   }
   return { defs, ...(definitionLines ? { definitionLines } : {}) }
