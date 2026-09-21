@@ -65,6 +65,7 @@
     "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "test:watch": "vitest",
     "test:includes": "vitest run test/include-conformance.test.ts",
+    "ledger:render": "UPDATE_RENDER_LEDGER=1 vitest run test/corpus-render-ledger.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
