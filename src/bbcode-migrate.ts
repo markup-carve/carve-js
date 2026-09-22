@@ -156,6 +156,14 @@ function escapePlainBbcodeText(bbcode: string): string {
     escapeAttributeBlockOpener(escapeVerbatimDelimiter(escapeLiteralBackslashes(text))),
     HANDLED_PLAIN,
   )
+  // BBCode has no block syntax either, so a line-initial `#`, `*`/`-`, `1.` or
+  // `>` in a post's own text is one the author typed, not a heading, list or
+  // quote (markup-carve/carve-js#1893). Run last, so the single backslash it
+  // inserts is not itself doubled by the backslash pass above. Code and url/img
+  // bodies are still behind their stash placeholders here, so this never
+  // touches a literal `[code]` body - the same guard #1386 relies on for
+  // `[noparse]`.
+  text = escapeLineInitialBlockOpeners(text)
 
   return text.replace(
     new RegExp(`${open}(\\d+)${close}`, 'gu'),
