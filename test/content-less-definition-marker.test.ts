@@ -1,20 +1,16 @@
 /*
- * A CONTENT-LESS TERM marker line closes the open item and stays paragraph text
- * (carve-js#731).
+ * A CONTENT-LESS TERM marker line is text, and it folds into the open term or
+ * definition body (#1891).
  *
- * `::` with nothing after it but whitespace is not a marker - the term pattern
- * requires content - so the line is prose and a BOUNDARY: the
- * term-continuation loop and the definition-body loop each break on it.
+ * `::` with nothing after it but whitespace is not a marker, since the term
+ * pattern requires content, and PART 2's empty-marker rule makes `::` and `:: `
+ * one line. Below a body's column only a block opener ends it (CARVE-P2-017),
+ * and this opens none. carve-js#731 read the line as a boundary instead, to
+ * match carve-php and carve-rs; the spec's ruling on #1891 reversed that.
  *
- * THE DESCRIPTION MARKER ANSWERS DIFFERENTLY, and that is the ruling rather
- * than an inconsistency: `:` plus whitespace is a plain line under the open
- * term, which folds it as a soft break and drops its trailing run
- * (markup-carve/carve#1830). It is pinned in
- * `a-colon-followed-by-only-whitespace-is-not-a-description.test.ts`; the row
- * below keeps it out of THIS rule's way.
- *
- * A bare `::`, with no trailing space, folds as well - which is why the pattern
- * requires at least one space and leaves that line alone.
+ * The description marker `:` plus whitespace folds the same way
+ * (markup-carve/carve#1830), pinned in
+ * `a-colon-followed-by-only-whitespace-is-not-a-description.test.ts`.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -23,17 +19,15 @@ import { carveToHtml } from '../src/index.js'
 const flat = (html: string): string => html.replace(/\s+/g, ' ').trim()
 
 describe('a content-less term marker line', () => {
-  it('closes an open term', () => {
-    expect(flat(carveToHtml(':: t\n:: \nx\n'))).toBe('<dl> <dt>t</dt> </dl> <p>:: x</p>')
+  it('folds into an open term', () => {
+    expect(flat(carveToHtml(':: t\n:: \nx\n'))).toBe('<dl> <dt>t :: x</dt> </dl>')
   })
 
-  it('closes an open definition', () => {
-    expect(flat(carveToHtml(':: t\n:  d\n:: \nx\n'))).toBe(
-      '<dl> <dt>t</dt> <dd>d</dd> </dl> <p>:: x</p>',
-    )
+  it('folds into an open definition', () => {
+    expect(flat(carveToHtml(':: t\n:  d\n:: \nx\n'))).toBe('<dl> <dt>t</dt> <dd>d :: x</dd> </dl>')
   })
 
-  it('does not close on a content-less DESCRIPTION marker, which folds instead', () => {
+  it('folds a content-less DESCRIPTION marker too', () => {
     expect(flat(carveToHtml(':: t\n:  \nx\n'))).toBe('<dl> <dt>t : x</dt> </dl>')
   })
 
@@ -48,17 +42,12 @@ describe('a content-less term marker line', () => {
     expect(flat(carveToHtml(':: t\n::\t\nx\n'))).toBe('<dl> <dt>t :: x</dt> </dl>')
   })
 
-  /**
-   * ONCE THE SEPARATOR IS THERE, any trailing whitespace makes the line
-   * content-less and it closes - a tab after the space included.
-   */
-  it('closes on a space then a tab', () => {
-    expect(flat(carveToHtml(':: t\n:: \t\nx\n'))).toBe('<dl> <dt>t</dt> </dl> <p>:: x</p>')
+  // Any trailing run folds the same way, a tab after the space included.
+  it('folds on a space then a tab', () => {
+    expect(flat(carveToHtml(':: t\n:: \t\nx\n'))).toBe('<dl> <dt>t :: x</dt> </dl>')
   })
 
-  it('leaves a bare :: alone', () => {
-    // No trailing space. All three engines already agreed on this line, so the
-    // pattern requires at least one space rather than matching the marker alone.
+  it('folds a bare :: the same way', () => {
     const html = flat(carveToHtml(':: t\n::\nx\n'))
     expect(html).toBe('<dl> <dt>t :: x</dt> </dl>')
   })
