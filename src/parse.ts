@@ -10760,11 +10760,22 @@ function pairEndTables(text: string): Array<Int32Array | undefined> {
     for (const m of markers) {
       const table = tables[m]!
       const raw = raws[m]!
+      // AN ESCAPE HIDES THE CHARACTER AFTER IT, so a closer written there
+      // closes nothing and the scan resumes past it. Only an escaped backtick
+      // was skipped before, which left `{*a\*}` closing on its escaped
+      // delimiter and publishing the backslash as a hard break
+      // (markup-carve/carve-js#1897). `raw` is the closer an UNCLOSED verbatim
+      // run ends at, and a backslash inside one is content rather than an
+      // escape, so it keeps counting that closer.
+      if (ch === '\\') {
+        raw[j] = raw[j + 1]!
+        table[j] = table[j + 2]!
+        continue
+      }
       const isCloser = next === '}' && ch === PAIR_MARKERS[m]
       raw[j] = isCloser ? j : raw[j + 1]!
       let stop: number
-      if (hasTick && ch === '\\' && next === '`') stop = table[j + 2]!
-      else if (span !== undefined) {
+      if (span !== undefined) {
         // An unclosed run ends at the pair's closer instead of running to the
         // end of the block (markup-carve/carve#2056).
         stop = span.closed ? table[span.end]! : raw[j]!
