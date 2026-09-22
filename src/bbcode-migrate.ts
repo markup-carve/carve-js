@@ -66,6 +66,14 @@ const STASH_KEY_LENGTH = 2
 const STASH_KEY_CODE = 0xe010
 
 /**
+ * Preferred code point for the mark the link and image passes put in front of
+ * each link they write, so the formatting pass can tell those from a link the
+ * post's own brackets formed once a tag beside them turned literal. It is
+ * stripped again before the formatting pass returns.
+ */
+const WRITTEN_LINK_KEY = 0xe020
+
+/**
  * Thrown when the post leaves no private-use run for the stash key.
  *
  * REFUSING, NOT CONVERTING ANYWAY. The importer stashes spans behind a key and
@@ -314,17 +322,17 @@ function stashLiteralRuns(text: string): { text: string; restore: (out: string) 
   }
 }
 
-function convertLinks(text: string): string {
+function convertLinks(text: string, written: string): string {
   return text
-    .replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, '[$2]($1)')
-    .replace(/\[url\]([\s\S]*?)\[\/url\]/gi, '<$1>')
-    .replace(/\[email\]([\s\S]*?)\[\/email\]/gi, '<mailto:$1>')
+    .replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, `${written}[$2]($1)`)
+    .replace(/\[url\]([\s\S]*?)\[\/url\]/gi, `${written}<$1>`)
+    .replace(/\[email\]([\s\S]*?)\[\/email\]/gi, `${written}<mailto:$1>`)
 }
 
-function convertImages(text: string): string {
+function convertImages(text: string, written: string): string {
   return text
-    .replace(/\[img\]([\s\S]*?)\[\/img\]/gi, '![]($1)')
-    .replace(/\[img=[^\]]*\]([\s\S]*?)\[\/img\]/gi, '![]($1)')
+    .replace(/\[img\]([\s\S]*?)\[\/img\]/gi, `${written}![]($1)`)
+    .replace(/\[img=[^\]]*\]([\s\S]*?)\[\/img\]/gi, `${written}![]($1)`)
 }
 
 const MARK_DELIMS: Record<string, string> = { b: '*', i: '/', u: '_', s: '~' }
@@ -533,7 +541,7 @@ const REPAIR_ROUNDS = 16
  * A written pair that closes early was closed by a literal delimiter inside
  * it, and that delimiter is the one escaped.
  */
-function repairUnwrittenConstructs(written: Written): string {
+function repairUnwrittenConstructs(written: Written, linkMark: string): string {
   let { text, marks } = written
   for (let round = 0; round < REPAIR_ROUNDS; round++) {
     const { copy, origin } = asLaterPassesLeaveIt(text)
@@ -550,11 +558,14 @@ function repairUnwrittenConstructs(written: Written): string {
           const writtenEnd = pairs.get(at)
           if (writtenEnd === undefined) escapeAt.add(at)
           else if (end !== undefined && end < writtenEnd) escapeAt.add(end - 1)
-        } else if ((UNWRITTEN.has(node.type) || ((node.type === 'link' || node.type === 'image') && node.ref !== undefined)) && at !== undefined) {
-          // The earlier link pass writes only inline links; a reference link
-          // came from the post's own brackets, and as an unresolved one it
-          // shows its label raw, backslashes and all.
+        } else if (UNWRITTEN.has(node.type) && at !== undefined) {
           escapeAt.add(at)
+        } else if ((node.type === 'link' || node.type === 'image' || node.type === 'autolink') && at !== undefined) {
+          // The link and image passes mark what they write; any other link
+          // was formed by the post's own brackets once a tag beside them
+          // turned literal (`[x[b](y)`), or is a reference link, which as an
+          // unresolved one shows its label raw.
+          if (linkMark === '' || text[at - 1] !== linkMark) escapeAt.add(node.type === 'image' ? at + 1 : at)
         }
         visit(node.children)
       }
@@ -636,13 +647,14 @@ function codepointIndex(text: string): number[] {
   return index
 }
 
-function convertMarks(text: string): string {
-  return repairUnwrittenConstructs(writeMarks(flattenSameKind(parseMarks(text)), '', ''))
+function convertMarks(text: string, written: string): string {
+  const repaired = repairUnwrittenConstructs(writeMarks(flattenSameKind(parseMarks(text)), '', ''), written)
+  return written === '' ? repaired : repaired.split(written).join('')
 }
 
-function convertBasicFormatting(text: string): string {
+function convertBasicFormatting(text: string, written: string): string {
   return (
-    convertMarks(text)
+    convertMarks(text, written)
       // Size, colour and font have no Carve equivalent: the tags go, the text
       // stays. Dropping the content would lose the post.
       .replace(/\[size=[^\]]*\]([\s\S]*?)\[\/size\]/gi, '$1')
@@ -1094,9 +1106,18 @@ export function bbcodeToCarve(bbcode: string): string {
   text = escapePlainBbcodeText(text)
   const literal = stashLiteralRuns(text)
   text = literal.text
-  text = convertLinks(text)
-  text = convertImages(text)
-  text = convertBasicFormatting(text)
+  // Only a post with a link or image to convert needs the mark. The allocator's
+  // last-resort fallback is a code point the post holds, and the mark is
+  // stripped again, so every authored copy of it would go with it.
+  let written = ''
+  if (/\[(?:url|email|img)\b/i.test(text)) {
+    const occupied = occupiedPrivateUse(text)
+    ;[written] = pickSentinelRun(occupied, WRITTEN_LINK_KEY, 1) as [string]
+    if (occupied.has(written.charCodeAt(0))) throw new BbcodeSentinelSpaceExhaustedError()
+  }
+  text = convertLinks(text, written)
+  text = convertImages(text, written)
+  text = convertBasicFormatting(text, written)
   text = convertCode(text)
   text = convertQuotes(text)
   text = convertLists(text)
