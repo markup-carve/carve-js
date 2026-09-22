@@ -24,7 +24,7 @@ describe('a code span opened inside a braced pair', () => {
     ['a deletion with no span', '{-y-}', '<p><del>y</del></p>'],
     ['an empty pair is literal', '{**}', '<p>{**}</p>'],
     ['a braced hyphen pair is still an en dash', 'a {--}(p) b, x{--}y', '<p>a –(p) b, x–y</p>'],
-    ['an escaped closer closing the pair', '{*a\\*}b*}', '<p><strong>a<br>\n</strong>b*}</p>'],
+    ['an escaped closer as content, the pair closing later', '{*a\\*}b*}', '<p><strong>a*}b</strong></p>'],
     ['an escaped backtick opening no span', '{*a\\`b*}', '<p><strong>a`b</strong></p>'],
     ['an escaped backtick where a later run could close one', '{+\\`a\\*}{*\\`*}\\`', '<p>{+`a*}<strong>`</strong>`</p>'],
   ])('keeps %s', (_, source, expected) => {
