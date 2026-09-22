@@ -105,10 +105,11 @@ describe('an import keeps the meaning the HTML held', () => {
       expect(htmlToCarve('<p>x<ins></ins>y</p>').value).toBe('xy\n')
     })
 
-    it('reports the drop, because an element left the document', () => {
-      const report = htmlToCarve('<p><ins></ins></p>').report
-      expect(report.diagnostics.map((row) => row.code)).toEqual(['element-dropped'])
-      expect(report.diagnostics[0]?.path).toBe('/p[1]/ins[1]')
+    it('drops it without a row, because it held nothing a reader sees', () => {
+      // Ruling markup-carve/carve-rs#1719, which supersedes the row this
+      // test used to pin.
+      expect(htmlToCarve('<p><ins></ins></p>').report.diagnostics).toEqual([])
+      expect(htmlToCarve('<p><del></del></p>').report.diagnostics).toEqual([])
     })
 
     it('leaves a NON-empty one exactly as it was', () => {
