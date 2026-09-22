@@ -213,13 +213,13 @@ function escapedBlockOpener(rest: string): string | null {
   if (rest.startsWith('%%')) return escapeOpenerRun(rest, 2)
   if (/^[-*][ \t]/.test(rest)) return escapeOpenerRun(rest, 1)
 
-  // An ordered marker is reached by its DELIMITER, with or without the digits
-  // in front of it, so the escape goes on the delimiter rather than the line.
-  const ordered = /^(\d{1,9}[.)]|\.)[ \t]/.exec(rest)
+  // An ordered marker is reached by its DELIMITER, with or without a value in
+  // front of it, so the escape goes on the delimiter rather than the line.
+  const ordered = /^(\d{1,9}[.)]|[A-Za-z][.)]|\.)[ \t]/.exec(rest)
   if (ordered) {
-    const digits = ordered[1]!.length - 1
+    const prefixLength = ordered[1]!.length - 1
 
-    return `${rest.slice(0, digits)}${escapeOpenerRun(rest.slice(digits), 1)}`
+    return `${rest.slice(0, prefixLength)}${escapeOpenerRun(rest.slice(prefixLength), 1)}`
   }
 
   if (/^>([ \t]|$)/.test(rest)) return escapeOpenerRun(rest, 1)
@@ -227,6 +227,7 @@ function escapedBlockOpener(rest: string): string | null {
     return escapeOpenerRun(rest, openerRunLength(rest, '#'))
   }
   if (/^:{3,}/.test(rest)) return escapeOpenerRun(rest, 1)
+  if (/^::[ \t]/.test(rest)) return escapeOpenerRun(rest, 1)
   if (/^\|.*\|/.test(rest)) return escapeOpenerRun(rest, 1)
   // A link reference, footnote or abbreviation definition. `[b]x[/b]` is not
   // one of these, and the pinned `[noparse]` output keeps it unescaped.

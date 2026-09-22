@@ -815,7 +815,16 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '276-a-fence-opened-on-a-list-marker-line-body-below-the-content-column-7',
+    {
+      reason: 'The closer lookahead continues past a below-column line (carve-js#1880).',
+      html:
+        '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
+    },
+  ],
+])
 
 
 

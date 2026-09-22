@@ -76,12 +76,10 @@ describe('a fence opened on a list marker line', () => {
   })
 
   it('holds for a fence opened on a CONTINUATION line', () => {
-    // The fence is open when `y` arrives, so `y` ends the item; only then does
-    // §10 I4 decide what the leftover fence means - it has no closer inside the
-    // truncated item, so it does not interrupt the open paragraph and degrades
-    // to inline verbatim.
+    // §10 I4 searches past the below-column line, so the opener remains a block
+    // when the item is parsed from its collected lines.
     expect(carveToHtml('- a\n  ```\n  b\n y\n  ```\n')).toBe(
-      '<ul>\n  <li>a\n<code>\nb</code></li>\n</ul>\n<p>y\n<code></code></p>',
+      '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
     )
   })
 
