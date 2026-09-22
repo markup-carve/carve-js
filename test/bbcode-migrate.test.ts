@@ -92,8 +92,9 @@ describe('bbcodeToCarve — text that is literal in BBCode', () => {
     )
   })
 
-  it('leaves a numeric character reference decodable', () => {
-    expect(bbcodeToCarve('a &#8212; b')).toBe('a &#8212; b\n')
+  it('keeps a numeric character reference as the text it is', () => {
+    // Carve has no character references: unescaped, `#8212` reads as a hashtag.
+    expect(bbcodeToCarve('a &#8212; b')).toBe('a &\\#8212; b\n')
   })
 
   it('does not let the list marker be escaped as an emphasis pair', () => {
