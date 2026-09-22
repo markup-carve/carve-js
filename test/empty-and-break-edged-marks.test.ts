@@ -51,6 +51,13 @@ describe('a mark whose content starts with a line break', () => {
     expect(carveToHtml(renderCarve(tree))).toBe(renderHtml(tree))
   })
 
+  it.each(MARKS)('braces a %s edged by a tab, which the grammar counts as ws', (type) => {
+    for (const value of ['\tx', 'x\t']) {
+      const out = renderCarve(paragraph({ type, children: [{ type: 'text', value }] }))
+      expect(out).toMatch(/^a \{/)
+    }
+  })
+
   it('keeps it inside a bold-italic', () => {
     const tree = paragraph({
       type: 'strong',

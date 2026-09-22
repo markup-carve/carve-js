@@ -2837,13 +2837,10 @@ function renderEmphasis(
     neighborsForceBraces(delim, prevChar, nextChar) ||
     content.startsWith(delim) ||
     content.endsWith(closeDelim) ||
-    content.startsWith(' ') ||
-    content.endsWith(' ') ||
-    // A trailing hard break puts the closer at the start of the next line,
-    // where only the braced closer closes (carve-js#1786); a leading line break
-    // leaves a bare opener at the end of its line, where it opens nothing.
-    content.endsWith('\n') ||
-    content.startsWith('\n') ||
+    // A bare opener may not be followed, nor a closer preceded, by `ws`
+    // (space, tab, newline; grammar GUARD NOTATION). A trailing hard break
+    // also puts the closer at the start of the next line (carve-js#1786).
+    /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
     // `/*` opens `bold_italic` and `*/` closes it, so a bare emphasis whose
     // content has both would read back as a strong wrapping an emphasis - the
     // other nesting (carve-js#1758).
