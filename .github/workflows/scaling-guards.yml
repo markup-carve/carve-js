@@ -1,0 +1,159 @@
+name: Scaling guards
+
+# THE SLOWEST JOB IN THIS REPOSITORY, AND THE ONE A PULL REQUEST LEAST NEEDS.
+# Measured over the 30 days to 2026-09-22: 124 pull-request runs of CI, average
+# wall clock 7m59s, and `scaling guards` averaged 8m21s of it while no other job
+# passed 4m11s. It was the critical path on every one of those runs, so keeping
+# it on the pull-request path cost roughly four minutes of waiting per review,
+# paid 124 times, to gate a class of regression that is not what a review
+# catches: these tests measure ASYMPTOTICS, and the ratios they assert move when
+# an algorithm changes shape, not when a line moves.
+#
+# So it runs where it is still honest and no longer blocking:
+#
+# - ON EVERY PUSH TO MAIN. This is the part that keeps the guard a guard rather
+#   than a nightly curiosity. A merge that changes the shape of an inline scan
+#   goes red within one run, and the run names the merge - which is more useful
+#   than a pull-request check, because a red main names one commit while a red
+#   PR check names a branch that may never land.
+# - NIGHTLY. Catches what no push does: a dependency, a Node release or a
+#   runner-image change moving the ratios with no commit of ours behind it.
+# - ON DEMAND, so a pull request that IS about performance can still be measured
+#   before it merges:
+#   `gh workflow run scaling-guards.yml -R markup-carve/carve-js --ref <branch>`.
+#   A perf stack should do exactly that.
+#
+# `scaling guards` was a required status check on `main` until this file existed.
+# It was removed from that list in the same change - a required check that no
+# pull request can ever report is a branch nothing can merge into.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 04:30 UTC. Before the 05:00 drift jobs in this repository and in carve, so
+    # a nightly failure here is already filed when those run.
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The verdict step opens, updates and closes one tracking issue.
+  issues: write
+  actions: read
+
+# A manual dispatch must not queue behind the nightly run, and a newer dispatch
+# supersedes an older one. Scheduled and push evidence is allowed to finish.
+concurrency:
+  group: scaling-guards-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+
+jobs:
+  perf:
+    name: scaling guards
+    runs-on: ubuntu-latest
+
+    # The suite is 8 to 9 minutes when healthy. This bounds a hang to about
+    # twice that rather than to the six hours a job is otherwise allowed.
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Skipped in the everyday suite: these are the only tests whose outcome
+      # depends on what else the machine is doing, and vitest runs files
+      # concurrently, so in the default run they measure each other. Here they
+      # get a runner to themselves, with file parallelism off.
+      - name: Scaling guards
+        run: npm run test:perf
+
+      # A JOB NO PULL REQUEST GATES HAS TO REACH A PERSON BY ITSELF. Without
+      # this step the change would trade four minutes of review time for a guard
+      # that goes red into an Actions tab nobody opens, which is how a check
+      # stops being one. Modelled on the verdict step in markup-carve/carve's
+      # ast-conformance workflow: one ticket, EDITED by each later red run and
+      # CLOSED by the first green one, matched on a body marker rather than on a
+      # title so a rename cannot fork it.
+      - name: File the verdict where someone reads it
+        if: ${{ !cancelled() && github.event_name != 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+          HEAD_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          MARKER="<!-- scaling-guards-verdict ref=$REF_NAME -->"
+
+          # Listed rather than searched: the search index lags a fresh issue by
+          # long enough to file a duplicate.
+          issue="$(gh api "repos/$REPO/issues?state=open&per_page=100" --paginate \
+            | jq -r --arg m "$MARKER" \
+                '.[] | select(.pull_request == null) | select((.body // "") | contains($m)) | .number' \
+            | head -n1)"
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            echo "Scaling guards are green on $HEAD_SHA."
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --repo "$REPO" --body \
+                "Green again: run $RUN_URL on \`$HEAD_SHA\`. Closing. The next red run files a fresh ticket rather than reopening this one, so a closed ticket always means the last run passed."
+              gh issue close "$issue" --repo "$REPO"
+              echo "Closed #$issue."
+            fi
+            echo "Scaling guards green on \`$HEAD_SHA\`. Nothing filed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "$MARKER"
+            echo
+            echo "\`npm run test:perf\` is failing on \`$REF_NAME\`. These tests do not run on"
+            echo "pull requests, so a branch can show a green CI run while this is red."
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| run | $RUN_URL |"
+            echo "| commit | \`$HEAD_SHA\` |"
+            echo "| trigger | \`$EVENT_NAME\` |"
+            echo
+            echo "### Before acting on this"
+            echo
+            echo "These are the only tests here whose outcome depends on what else the"
+            echo "machine is doing, so read the reported RATIO rather than an absolute time,"
+            echo "and reproduce with \`npm run test:perf\` locally on an idle machine before"
+            echo "concluding the algorithm moved. A ratio near its threshold on one run is"
+            echo "not yet a regression; one several times over it is."
+            echo
+            echo "To measure a candidate fix before it merges:"
+            echo "\`gh workflow run scaling-guards.yml -R $REPO --ref <branch>\`."
+            echo
+            echo "This ticket is filed and maintained by the workflow. It is EDITED by each"
+            echo "later red run and CLOSED by the first green one. Closing it by hand does"
+            echo "not silence it: the next red run files a new one."
+          } > /tmp/scaling-guards-verdict.md
+
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --repo "$REPO" --body-file /tmp/scaling-guards-verdict.md
+            echo "Updated #$issue."
+          else
+            url="$(gh issue create --repo "$REPO" \
+              --title "Scaling guards are failing on $REF_NAME" \
+              --label bug --label area:tooling \
+              --body-file /tmp/scaling-guards-verdict.md)"
+            echo "Filed $url."
+          fi
