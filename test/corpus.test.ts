@@ -796,6 +796,29 @@ const IMPLEMENTED = new Set([
   'a-run-of-asterisks-inside-a-combined-token-is-content',
   'glued-attribute-blocks-on-an-inline-element-merge',
   'footnote-references-take-an-attribute-run-editorial-substitution-and-comment-take-none',
+  // ARRIVED WITH THIS PIN BUMP (spec 1cbd2c3). The fence/colon-fence closer
+  // lookahead now reused between the container collector and the container's
+  // own body parse (#1907), and the caption placeholder token no longer
+  // requires a following space/colon/dot (also #1907), cover the fence and
+  // colon-opener categories and the caption category below. Every other
+  // category here needed no engine change: this build already reads it the
+  // ruled way.
+  'a-bare-colon-opener-in-a-description-body-is-an-opener',
+  'a-bare-colon-run-interrupts-a-paragraph-whether-or-not-a-line-follows-it',
+  'a-caption-s-placeholder-is-any-that-does-not-begin-a-tag',
+  'a-closer-below-the-container-s-column-does-not-count',
+  'a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in',
+  'a-code-span-closes-only-on-a-run-of-its-own-length-whatever-the-length',
+  'a-comment-inside-a-forced-span-or-the-combined-token-ends-at-its-closer',
+  'a-definition-body-s-open-code-fence-ends-at-a-line-below-its-column',
+  'a-delimiter-after-an-underscore-or-slash-opens-only-when-that-one-pairs',
+  'a-form-feed-or-a-no-break-space-is-content-wherever-whitespace-is-tested',
+  'a-quote-after-a-bare-delimiter-follows-what-that-delimiter-does',
+  'a-quote-after-an-escaped-quote-closes',
+  'an-empty-term-marker-in-a-description-body-is-text',
+  'an-item-s-fence-is-read-once-whatever-block-it-follows',
+  'an-unresolved-reference-s-literal-source-is-html-escaped-like-any-other-text',
+  'any-character-is-content-of-the-combined-bold-italic-token',
 ])
 
 /**
@@ -815,16 +838,7 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  [
-    '276-a-fence-opened-on-a-list-marker-line-body-below-the-content-column-7',
-    {
-      reason: 'The closer lookahead continues past a below-column line (carve-js#1880).',
-      html:
-        '<ul>\n  <li>a\n    <pre><code>b\n</code></pre>\n  </li>\n</ul>\n<p>y\n<code></code></p>',
-    },
-  ],
-])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
 
 
 
