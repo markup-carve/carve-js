@@ -566,6 +566,10 @@ function repairUnwrittenConstructs(written: Written, linkMark: string): string {
           const writtenEnd = pairs.get(at)
           if (writtenEnd === undefined) escapeAt.add(at)
           else if (end !== undefined && end < writtenEnd) escapeAt.add(end - 1)
+          // A literal `{...}` right after a written pair's closer attaches as
+          // an attribute block: this pass never writes one, so any found here
+          // came from the post's own text (markup-carve/carve-js#1898).
+          else if (node.attrs !== undefined) escapeAt.add(writtenEnd)
         } else if (UNWRITTEN.has(node.type) && at !== undefined) {
           escapeAt.add(at)
         } else if ((node.type === 'link' || node.type === 'image' || node.type === 'autolink') && at !== undefined) {
