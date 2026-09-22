@@ -23,7 +23,9 @@ const RE_DESTINATION_WHITESPACE = /\p{White_Space}/u
  * of them are unaffected.
  *
  * Returns the raw destination and where the scan stopped, or null when the
- * tail does not open with the parenthesis.
+ * tail does not open with the parenthesis, or when whitespace arrives with a
+ * `(` still open: `balanced_parens` admits no whitespace, so that run is no
+ * destination at all (markup-carve/carve-js#1872).
  */
 export function scanDestination(tail: string, open = 0): { dest: string; end: number } | null {
   if (tail[open] !== '(') return null
@@ -41,7 +43,10 @@ export function scanDestination(tail: string, open = 0): { dest: string; end: nu
     else if (c === ')') {
       if (depth === 0) break
       depth--
-    } else if (RE_DESTINATION_WHITESPACE.test(c)) break
+    } else if (RE_DESTINATION_WHITESPACE.test(c)) {
+      if (depth > 0) return null
+      break
+    }
     dest += c
   }
   return { dest, end: i }

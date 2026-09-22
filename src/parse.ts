@@ -6345,8 +6345,15 @@ function isBlockImageLine(line: string): boolean {
   // A trailing attr block must be a valid, non-empty payload; a digit-first /
   // invalid one (`{2=v}`) is literal (§14), so the line is NOT a bare block
   // image -- it falls back to a paragraph (inline image + literal braces).
+  // The regex is a gate on the line's shape, not a second spelling of
+  // `link_destination`: it let `(` through as the destination of
+  // `![a](( ")")` and kept the backslash of `![a](/i\(x)`, both of which the
+  // inline tail already reads the other way (markup-carve/carve-js#1872). A
+  // run it captures that the production refuses falls through to a paragraph,
+  // where that tail reads it.
   return (
     m !== null &&
+    linkDestinationValue(m[2]!) !== null &&
     (m[5] === undefined || (isValidInlineAttrPayload(m[5]) && !isEmptyAttrs(parseAttrs(m[5]))))
   )
 }
@@ -6375,7 +6382,9 @@ function parseBlockImage(lexer: Lexer): Image | Figure {
   const imageLineIndex = lexer.pos
   const line = lexer.consume()
   const m = RE_BARE_IMAGE.exec(line)!
-  const img: Image = { type: 'image', src: m[2]!, alt: m[1]! }
+  // `isBlockImageLine` has already read the run as a destination, so the
+  // escapes are resolved here as they are on the inline tail.
+  const img: Image = { type: 'image', src: linkDestinationValue(m[2]!)!, alt: m[1]! }
   const title = m[3] ?? m[4]
   if (title !== undefined) img.title = title
   if (m[5]) img.attrs = parseAttrs(m[5])
