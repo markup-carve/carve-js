@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bbcodeToCarve, carveToHtml, parse } from '../src/index.js'
+import { BbcodeSentinelSpaceExhaustedError, bbcodeToCarve, carveToHtml, parse } from '../src/index.js'
 import { expectScansLinearly, perfIt } from './helpers/scaling.js'
 
 const html = (bbcode: string) => carveToHtml(bbcodeToCarve(bbcode)).trim()
@@ -85,7 +85,8 @@ describe('a generated post renders exactly as its tags say', () => {
   }
   let seed = 1
   const rnd = (n: number) => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    // Math.imul keeps the low bits exact, so carve-php's generator draws the same posts.
+    seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff
     return seed % n
   }
 
@@ -98,6 +99,23 @@ describe('a generated post renders exactly as its tags say', () => {
       if (imported(post) !== reference(post)) wrong.push(post)
     }
     expect(wrong).toEqual([])
+  })
+})
+
+describe('the mark on a written link', () => {
+  it('keeps an authored copy of the preferred mark', () => {
+    expect(bbcodeToCarve('a \ue020 [url=http://x]y[/url] b')).toBe('a \ue020 [y](http://x) b\n')
+  })
+
+  it('refuses a post that leaves no private-use code point free for it', () => {
+    // Two code points are left free, and the literal-run stash takes them for
+    // the code tag, so the earlier allocations succeed and only this one has
+    // nowhere to go. Falling back would strip the post's own U+E020.
+    let most = ''
+    for (let code = 0xe000; code <= 0xf8ff; code++) if (code !== 0xe010 && code !== 0xe011) most += String.fromCharCode(code)
+    expect(() => bbcodeToCarve(`${most} [code]x[/code] [url=http://x]y[/url]`)).toThrow(BbcodeSentinelSpaceExhaustedError)
+    // A post with no link to mark needs no mark.
+    expect(() => bbcodeToCarve(`${most} [code]x[/code]`)).not.toThrow()
   })
 })
 
