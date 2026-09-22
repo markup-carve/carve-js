@@ -10287,6 +10287,11 @@ const ATTR_INERT_PREV = new Set([
   // inline attribute carriers. Attaching a block here consumes source that no
   // renderer has an element on which to emit.
   'smart_punctuation',
+  // Editorial substitution and comment have no attribute slot (carve#2138,
+  // CARVE-P3-017 names only addition and deletion). Attaching here dropped the
+  // block at render, the author's `{.k}` vanishing without trace.
+  'substitution',
+  'critic_comment',
 ])
 
 const RE_LINK_REST = /^(?: "((?:[^"\\]|\\.)*)"| '((?:[^'\\]|\\.)*)')?\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+)\})?/
