@@ -12042,8 +12042,9 @@ function matchEmphasis(
     if (c === delim) {
       const after = text[i + 1]
       const before = text[i - 1]
-      // Opener must be followed by a non-space character.
-      if (!after || after === ' ' || after === '\n') continue
+      // Opener must be followed by a non-whitespace character (CARVE-P3-013;
+      // a tab counts, PART 7).
+      if (!after || isCarveWhitespace(after)) continue
       // No same-type nesting (spec §4.2): a bare delimiter adjacent to the
       // same delimiter (before OR after) does not open, so a doubled
       // delimiter is literal text. `**x**`, `~~x~~`, `==x==` stay literal,
@@ -12438,9 +12439,9 @@ function findEmphasisClose(
       }
     }
     if (ch === delim) {
-      // Closer must not be preceded by whitespace
+      // Closer must not be preceded by whitespace (CARVE-P3-013).
       const prev = text[j - 1]
-      if (prev === ' ' || prev === '\n' || prev === undefined) continue
+      if (prev === undefined || isCarveWhitespace(prev)) continue
       const next = text[j + 1]
       // Word-boundary closer (spec §9): no bare delimiter closes when followed
       // by an alphanumeric. Applies to every delimiter, not just / and _.
