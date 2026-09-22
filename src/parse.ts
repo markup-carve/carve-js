@@ -710,6 +710,17 @@ class Lexer {
    */
   itemLazyLines: Set<number> = new Set()
   /**
+   * §10 I4's answer for a code fence a container collector read after an open
+   * paragraph, keyed by document line.
+   *
+   * The collector searches for the closer past a below-column line (CARVE-P0-014)
+   * and ends the container there when the fence opens, so the container's own
+   * parse no longer holds the closer and would answer again the other way
+   * (markup-carve/carve-js#1880). A nested collector writes after its parent, so
+   * the innermost container's answer is the one kept.
+   */
+  fenceAnswers: Map<number, boolean> = new Map()
+  /**
    * EVERY line a block quote admitted as lazy continuation text.
    *
    * `quoteLazyMarkerLines` above records one SHAPE; this records the FACT, for
@@ -1040,6 +1051,7 @@ function nestedSubLexer(
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
   sub.itemLazyLines = parent.itemLazyLines
+  sub.fenceAnswers = parent.fenceAnswers
   sub.quoteLazyLines = parent.quoteLazyLines
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
@@ -4273,15 +4285,43 @@ function itemFenceHasCloser(
   fromIndex: number,
   contentCol: number,
   memo: QuotedFenceCloserMemo,
+  endsContainer: (line: string, afterBlank: boolean) => boolean,
+): boolean {
+  const answer = itemFenceCloserAhead(lexer, marker, fromIndex, contentCol, memo, endsContainer)
+  lexer.fenceAnswers.set(lexer.lineNumber(fromIndex), answer)
+
+  return answer
+}
+
+/**
+ * The search itself. It runs past a line below the column, which is not the
+ * closer (carve#2145) but does not end the container while a paragraph is open,
+ * and stops where the container has ended: a line after which nothing is still
+ * this fence's to close. The memo stays sound because that line does not
+ * depend on which opener asked.
+ */
+function itemFenceCloserAhead(
+  lexer: Lexer,
+  marker: string,
+  fromIndex: number,
+  contentCol: number,
+  memo: QuotedFenceCloserMemo,
+  endsContainer: (line: string, afterBlank: boolean) => boolean,
 ): boolean {
   const char = marker[0]!
   const start = fromIndex + 1
   if (fenceCloserMemoRefutes(memo, char, marker.length, start)) return false
   const closeRe = fenceCloseRe(marker)
   let maxRun = 0
+  let afterBlank = false
   for (let i = start; i < lexer.lines.length; i++) {
     const line = lexer.lines[i]!
-    if (isBlankLine(line)) continue
+    if (isBlankLine(line)) {
+      afterBlank = true
+      continue
+    }
+    if (endsContainer(line, afterBlank)) break
+    afterBlank = false
     if (indentColumns(line, contentCol) < contentCol) continue
     const dedented = sliceColumns(line, contentCol, true)
     if (closeRe.test(dedented)) return true
@@ -5401,6 +5441,14 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       attrRun: null,
     }
     const defFenceMemo: QuotedFenceCloserMemo = new Map()
+    // Where a body fence's closer search stops: the next entry, or a line below
+    // the body's column after a blank, which is where the collector below ends
+    // the body.
+    const bodyEndsAt = (line: string, afterBlank: boolean): boolean =>
+      RE_DEFLIST_TERM.test(line) ||
+      RE_DEFLIST_DEF.test(line) ||
+      RE_DEFLIST_MARKER_EMPTY.test(line) ||
+      (afterBlank && indentColumns(line, contentCol) < contentCol)
     /**
      * Feed one collected body line to the S4 tracker.
      *
@@ -5428,7 +5476,7 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         (marker) =>
           atLineIndex === undefined
             ? true
-            : itemFenceHasCloser(lexer, marker, atLineIndex, openerCol, defFenceMemo),
+            : itemFenceHasCloser(lexer, marker, atLineIndex, openerCol, defFenceMemo, bodyEndsAt),
         atContentColumn,
       )
     }
@@ -8031,6 +8079,11 @@ function parseList(lexer: Lexer): List {
     // both. Nothing precedes the lead, so no closer lookahead applies: the
     // fence opens unconditionally, exactly as it does at the top of a quote.
     const itemFenceMemo: QuotedFenceCloserMemo = new Map()
+    // Where a body fence's closer search stops: a sibling or outer marker, or a
+    // line below the column after a blank (carve#1379). Neither is this item's.
+    const itemEndsAt = (line: string, afterBlank: boolean): boolean =>
+      (isListMarkerLine(line) && indentColumns(line) <= baseIndent) ||
+      (afterBlank && indentColumns(line, contentCol) < contentCol)
     const itemCommentMemo: ItemCommentCloserMemo = { index: null }
     const leadFence = RE_FENCE.exec(content) ?? RE_RAW_FENCE.exec(content)
     if (leadFence) {
@@ -8240,7 +8293,8 @@ function parseList(lexer: Lexer): List {
         trackItemLazyState(
           dedented,
           lazyState,
-          (marker) => itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol, itemFenceMemo),
+          (marker) =>
+            itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol, itemFenceMemo, itemEndsAt),
           true,
           (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
         )
@@ -9473,6 +9527,7 @@ function splitTableRow(line: string): string[] {
  * negative cache (noFenceCloserFrom) keeps "many unclosed fences" input linear.
  */
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
+  if (lexer.fenceAnswers.get(lexer.lineNumber(lexer.pos)) === true) return true
   const char = marker[0]!
   const start = lexer.pos + 1
   if (fenceCloserMemoRefutes(lexer.fenceCloserMemo, char, marker.length, start)) return false

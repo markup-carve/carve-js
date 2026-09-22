@@ -815,7 +815,25 @@ const IMPLEMENTED = new Set([
  *    stale - the pin moved and the fixture was rewritten - fails and has to be
  *    deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  [
+    '276-a-fence-opened-on-a-list-marker-line-body-below-the-content-column-7',
+    {
+      reason:
+        'markup-carve/carve#2141 reads the fence by the one I4 answer that ended the item at ` y`, so it is a code block (markup-carve/carve-js#1880)',
+      html: [
+        '<ul>',
+        '  <li>a',
+        '    <pre><code>b',
+        '</code></pre>',
+        '  </li>',
+        '</ul>',
+        '<p>y',
+        '<code></code></p>',
+      ].join('\n'),
+    },
+  ],
+])
 
 
 
