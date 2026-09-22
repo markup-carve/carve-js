@@ -344,14 +344,12 @@ const RE_QUOTE_BLOCK_OPEN = /^(:{3,}) +>[ \t]*$/
 // Groups: 2 label (bracketed).
 const RE_DIV_OPEN = /^(:{3,}) *(\[[^\]]*\])?[ \t]*$/
 const RE_DEFLIST_TERM = /^::(?!:) [ \t]*(?=[^ \t])(.+)$/
-const RE_DEFLIST_MARKER_EMPTY = /^::(?!:) [ \t]*$/
 
 // MARKER REQUIRES CONTENT ignores TRAILING WHITESPACE, and NO TRAILING
 // WHITESPACE spells whitespace `' ' | '\t'` here - so a body of nothing but
 // tabs is a trailing run and opens no description. `: <TAB>` folds into the
-// term, the way `:` + tab already does without the space, and the way the term
-// marker's own RE_DEFLIST_MARKER_EMPTY already reads `[ \t]*$`
-// (markup-carve/carve#1836).
+// term, the way `:` + tab already does without the space, and the way an empty
+// term marker `:: ` folds (markup-carve/carve#1836).
 //
 // The separator run is SPACES ONLY, so a body may still START with a tab:
 // `: <TAB>text` opens with the tab as content, and a vertical tab or a no-break
@@ -5702,8 +5700,9 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
         break
       }
       // A new term/definition marker ends this definition (the outer loop
-      // picks it up).
-      if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln) || RE_DEFLIST_MARKER_EMPTY.test(ln)) break
+      // picks it up). An empty term marker is not one: `::` and `:: ` are the
+      // same line, a term with no content, so it folds (#1891).
+      if (RE_DEFLIST_TERM.test(ln) || RE_DEFLIST_DEF.test(ln)) break
       const below = ln.replace(/^[ \t]+/, '')
       const atDocumentColumn = below === ln
       if (
@@ -5802,7 +5801,6 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
           isBlankLine(next) ||
           RE_DEFLIST_TERM.test(nextEntry) ||
           RE_DEFLIST_DEF.test(nextEntry) ||
-          RE_DEFLIST_MARKER_EMPTY.test(nextEntry) ||
           endsHeadingOrQuote(lexer)
         )
           break

@@ -90,18 +90,11 @@ describe('a colon followed by only whitespace is not a description', () => {
     expect(carveToHtml(': \n\nflush\n')).toBe('<p>:</p>\n<p>flush</p>')
   })
 
-  /**
-   * THE TERM MARKER IS NOT AFFECTED. `::` plus whitespace still closes the list
-   * and emits its own paragraph - carve-php reads it that way and no clause here
-   * moves it, so narrowing the content-less pattern must not reach it.
-   */
-  it('leaves a content-less TERM marker closing the list', () => {
-    expect(carveToHtml(':: t\n:: \n\nflush\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n</dl>\n<p>::</p>\n<p>flush</p>',
-    )
-    expect(carveToHtml(':: t\n::  \n\nflush\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n</dl>\n<p>::</p>\n<p>flush</p>',
-    )
+  // The term marker plus whitespace folds the same way, like a bare `::`
+  // (#1891).
+  it('folds a content-less TERM marker into the term', () => {
+    expect(carveToHtml(':: t\n:: \n\nflush\n')).toBe('<dl>\n  <dt>t\n::</dt>\n</dl>\n<p>flush</p>')
+    expect(carveToHtml(':: t\n::  \n\nflush\n')).toBe('<dl>\n  <dt>t\n::</dt>\n</dl>\n<p>flush</p>')
   })
 
   it('folds a bare double colon into the term, as before', () => {
