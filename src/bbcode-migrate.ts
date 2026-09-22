@@ -24,6 +24,8 @@ import {
   escapeVerbatimDelimiter,
   HANDLED_PLAIN,
 } from './carve-escape.js'
+import { parse } from './parse.js'
+import { CANONICAL_INLINE_TYPES } from './profile.js'
 import { occupiedPrivateUse, pickSentinelRun } from './sentinel-run.js'
 
 /**
@@ -357,9 +359,10 @@ function parseMarks(text: string): MarkPiece[] {
       stack.push(node)
     } else if (top.kind === kind) {
       stack.pop()
-    } else {
-      top.children.push(whole)
     }
+    // A close tag that matches no open one is dropped here rather than by
+    // cleanup(): left in, it would be the content of the tag around it, and
+    // that tag written as a pair around nothing once cleanup() took it.
   }
   stack[stack.length - 1]!.children.push(text.slice(from))
   for (const node of stack.slice(1)) node.unclosed = true
@@ -434,24 +437,31 @@ function hasContent(node: MarkNode): boolean {
  * would brace, takes the braced form, as does a `/` around content that would
  * read back as bold-italic.
  */
-function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): string {
+/** Written text, with the span of every formatting pair the writer put there itself. */
+interface Written {
+  text: string
+  /** Each written pair as [start, end) of the whole mark, in UTF-16 indices. */
+  marks: Array<[number, number]>
+}
+
+function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): Written {
   // Chunks rather than one growing string, so escaping the character before an
   // opener rewrites only the text chunk holding it.
-  const parts: string[] = []
+  const parts: Written[] = []
   let last = prev
   let textPart = -1
   let escapeBrace = false
   const nexts = nextChars(pieces)
-  const push = (chunk: string) => {
+  const push = (chunk: Written) => {
     parts.push(chunk)
-    last = chunk[chunk.length - 1]!
+    last = chunk.text[chunk.text.length - 1]!
   }
   pieces.forEach((piece, index) => {
     if (typeof piece === 'string') {
       if (piece === '') return
       // A `{` before a bare opener and a `}` after its closer would read as the
       // braced form, eating both braces; the writer escapes the `}`.
-      push(escapeBrace && piece.startsWith('}') ? `\\${piece}` : piece)
+      push({ text: escapeBrace && piece.startsWith('}') ? `\\${piece}` : piece, marks: [] })
       escapeBrace = false
       textPart = parts.length - 1
       return
@@ -459,16 +469,17 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): strin
     const delim = MARK_DELIMS[piece.kind]!
     // The parent's own delimiters are not text: a child at its edge has no
     // neighbor there, which is how the writer spells `/_x_/`.
-    const body = writeMarks(piece.children, '', '')
+    const inner = writeMarks(piece.children, '', '')
+    const body = inner.text
     if (body === '') return
     // The post's own text was escaped while the tags were still tags, so a
     // literal delimiter now touching an opener was never seen: escape it.
     if (textPart >= 0 && textPart === parts.length - 1 && '*/_~='.includes(last)) {
-      const chunk = parts[textPart]!
+      const chunk = parts[textPart]!.text
       // Already escaped only behind an ODD run of backslashes.
       let run = 0
       while (chunk[chunk.length - 2 - run] === '\\') run++
-      if (run % 2 === 0) parts[textPart] = `${chunk.slice(0, -1)}\\${last}`
+      if (run % 2 === 0) parts[textPart] = { text: `${chunk.slice(0, -1)}\\${last}`, marks: [] }
     }
     const before = last
     const next = nexts[index] || outerNext
@@ -478,18 +489,155 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): strin
       word.test(before) ||
       before === delim ||
       (before === '/' && (delim === '/' || delim === '_')) ||
+      // `#_x_` is a hashtag, `@_x_` a mention, `:_x_:` a symbol.
+      (delim === '_' && (before === '#' || before === '@' || before === ':')) ||
       word.test(next) ||
       body.startsWith(delim) ||
       body.endsWith(delim) ||
       (delim === '/' && body.startsWith('*') && body.endsWith('*'))
-    push(braced ? `{${delim}${body}${delim}}` : `${delim}${body}${delim}`)
+    const open = braced ? `{${delim}` : delim
+    const close = braced ? `${delim}}` : delim
+    const text = open + body + close
+    const marks: Array<[number, number]> = [[0, text.length]]
+    for (const [from, to] of inner.marks) marks.push([open.length + from, open.length + to])
+    push({ text, marks })
     escapeBrace = !braced && before === '{'
   })
-  return parts.join('')
+  let text = ''
+  const marks: Array<[number, number]> = []
+  for (const part of parts) {
+    for (const [from, to] of part.marks) marks.push([text.length + from, text.length + to])
+    text += part.text
+  }
+  return { text, marks }
+}
+
+const FORMATTING = new Set(['strong', 'emphasis', 'underline', 'strike'])
+// Inline constructs bbcode has no way to ask for at this stage. Links, images
+// and autolinks were converted before it, and the rest is prose; `tag` is the
+// hashtag extension's node.
+const UNWRITTEN = new Set(
+  [...CANONICAL_INLINE_TYPES, 'tag'].filter(
+    (type) => !FORMATTING.has(type) && !['text', 'soft_break', 'hard_break', 'escaped_text', 'link', 'image', 'autolink'].includes(type),
+  ),
+)
+const REPAIR_ROUNDS = 16
+
+/**
+ * The post's text was escaped while the tags were still tags, so once they
+ * are delimiters a literal character can combine with them, or with text that
+ * a dropped tag brought together, into a construct nobody wrote: `#[/i]x`
+ * reads as the hashtag `#x`, and `~}[s]x[/s]` as a strikethrough of `}`.
+ * Rather than predict every such construct, parse the result and escape the
+ * first character of each one that is not a written pair, until none is left.
+ * A written pair that closes early was closed by a literal delimiter inside
+ * it, and that delimiter is the one escaped.
+ */
+function repairUnwrittenConstructs(written: Written): string {
+  let { text, marks } = written
+  for (let round = 0; round < REPAIR_ROUNDS; round++) {
+    const { copy, origin } = asLaterPassesLeaveIt(text)
+    const cp = codepointIndex(copy)
+    // Codepoint offset in the copy -> UTF-16 index in `text`.
+    const index = (offset: number) => origin[cp[offset] ?? copy.length]!
+    const pairs = new Map<number, number>(marks)
+    const escapeAt = new Set<number>()
+    const visit = (nodes: Array<Record<string, any>> | undefined) => {
+      for (const node of nodes ?? []) {
+        const at = node.pos ? index(node.pos.startOffset) : undefined
+        const end = node.pos ? index(node.pos.endOffset - 1) + 1 : undefined
+        if (FORMATTING.has(node.type) && at !== undefined) {
+          const writtenEnd = pairs.get(at)
+          if (writtenEnd === undefined) escapeAt.add(at)
+          else if (end !== undefined && end < writtenEnd) escapeAt.add(end - 1)
+        } else if ((UNWRITTEN.has(node.type) || ((node.type === 'link' || node.type === 'image') && node.ref !== undefined)) && at !== undefined) {
+          // The earlier link pass writes only inline links; a reference link
+          // came from the post's own brackets, and as an unresolved one it
+          // shows its label raw, backslashes and all.
+          escapeAt.add(at)
+        }
+        visit(node.children)
+      }
+    }
+    visit(parse(copy).children as never)
+    if (escapeAt.size === 0) break
+    const cuts = [...escapeAt].sort((a, b) => a - b)
+    let out = ''
+    let copied = 0
+    for (const at of cuts) {
+      out += `${text.slice(copied, at)}\\`
+      copied = at
+    }
+    text = out + text.slice(copied)
+    // Each offset moves by the number of escapes inserted before it.
+    const shift = (k: number) => {
+      let lo = 0
+      let hi = cuts.length
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (cuts[mid]! < k) lo = mid + 1
+        else hi = mid
+      }
+      return k + lo
+    }
+    marks = marks.map(([from, to]) => [shift(from), shift(to)])
+  }
+  return text
+}
+
+// Block tags a later pass turns into structure; `sup` and `sub` become a braced
+// span, which is just as closed to its neighbors.
+const LATER_BLOCK_TAGS = /^(?:\*|quote|list|code|c|icode|sup|sub|center|left|right|youtube|table|tr|td|th|noparse)$/i
+
+/**
+ * The text as the later passes will leave it around inline content, so the
+ * repair parse sees the neighbors the reader will: a close tag or a valued
+ * open tag is deleted by cleanup(), which joins the text either side of it,
+ * and a block tag becomes structure, which separates it. A formatting tag left
+ * unclosed, or one this pass does not know, stays the literal text it is.
+ * `origin` maps each UTF-16 index of the copy, and one past its end, back to
+ * `text`.
+ */
+function asLaterPassesLeaveIt(text: string): { copy: string; origin: number[] } {
+  let copy = ''
+  const origin: number[] = []
+  let from = 0
+  const keep = (to: number) => {
+    for (let k = from; k < to; k++) origin.push(k)
+    copy += text.slice(from, to)
+  }
+  for (const m of text.matchAll(/\[(\/?)(\*|[a-z][a-z0-9]*)(=[^\]\n]*)?\]/gi)) {
+    const at = m.index!
+    if (text[at - 1] === '\\') continue
+    const [whole, slash, name, value] = m as unknown as [string, string, string, string | undefined]
+    const removed = slash !== '' || value !== undefined
+    if (!removed && !LATER_BLOCK_TAGS.test(name)) continue
+    keep(at)
+    if (!removed) {
+      for (let k = 0; k < whole.length; k++) origin.push(at + k)
+      copy += '\u0001'.repeat(whole.length)
+    }
+    from = at + whole.length
+  }
+  keep(text.length)
+  origin.push(text.length)
+  return { copy, origin }
+}
+
+/** UTF-16 index of each codepoint offset, plus one past the end. */
+function codepointIndex(text: string): number[] {
+  const index: number[] = []
+  for (let k = 0; k < text.length; k++) {
+    index.push(k)
+    const code = text.charCodeAt(k)
+    if (code >= 0xd800 && code <= 0xdbff && k + 1 < text.length) k++
+  }
+  index.push(text.length)
+  return index
 }
 
 function convertMarks(text: string): string {
-  return writeMarks(flattenSameKind(parseMarks(text)), '', '')
+  return repairUnwrittenConstructs(writeMarks(flattenSameKind(parseMarks(text)), '', ''))
 }
 
 function convertBasicFormatting(text: string): string {
