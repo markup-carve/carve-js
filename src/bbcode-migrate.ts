@@ -435,19 +435,25 @@ function hasContent(node: MarkNode): boolean {
  * read back as bold-italic.
  */
 function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): string {
-  let out = ''
+  // Chunks rather than one growing string, so escaping the character before an
+  // opener rewrites only the text chunk holding it.
+  const parts: string[] = []
+  let last = prev
+  let textPart = -1
   let escapeBrace = false
-  let endsInText = false
   const nexts = nextChars(pieces)
+  const push = (chunk: string) => {
+    parts.push(chunk)
+    last = chunk[chunk.length - 1]!
+  }
   pieces.forEach((piece, index) => {
     if (typeof piece === 'string') {
+      if (piece === '') return
       // A `{` before a bare opener and a `}` after its closer would read as the
       // braced form, eating both braces; the writer escapes the `}`.
-      out += escapeBrace && piece.startsWith('}') ? `\\${piece}` : piece
-      if (piece !== '') {
-        escapeBrace = false
-        endsInText = true
-      }
+      push(escapeBrace && piece.startsWith('}') ? `\\${piece}` : piece)
+      escapeBrace = false
+      textPart = parts.length - 1
       return
     }
     const delim = MARK_DELIMS[piece.kind]!
@@ -457,10 +463,14 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): strin
     if (body === '') return
     // The post's own text was escaped while the tags were still tags, so a
     // literal delimiter now touching an opener was never seen: escape it.
-    if (endsInText && /[*/_~=]$/.test(out) && !/\\[*/_~=]$/.test(out)) {
-      out = `${out.slice(0, -1)}\\${out[out.length - 1]}`
+    if (textPart >= 0 && textPart === parts.length - 1 && '*/_~='.includes(last)) {
+      const chunk = parts[textPart]!
+      // Already escaped only behind an ODD run of backslashes.
+      let run = 0
+      while (chunk[chunk.length - 2 - run] === '\\') run++
+      if (run % 2 === 0) parts[textPart] = `${chunk.slice(0, -1)}\\${last}`
     }
-    const before = out === '' ? prev : out[out.length - 1]!
+    const before = last
     const next = nexts[index] || outerNext
     const word = /[A-Za-z0-9_]/
     const braced =
@@ -472,11 +482,10 @@ function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): strin
       body.startsWith(delim) ||
       body.endsWith(delim) ||
       (delim === '/' && body.startsWith('*') && body.endsWith('*'))
-    out += braced ? `{${delim}${body}${delim}}` : `${delim}${body}${delim}`
+    push(braced ? `{${delim}${body}${delim}}` : `${delim}${body}${delim}`)
     escapeBrace = !braced && before === '{'
-    endsInText = false
   })
-  return out
+  return parts.join('')
 }
 
 function convertMarks(text: string): string {

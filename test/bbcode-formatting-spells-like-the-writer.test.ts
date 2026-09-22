@@ -35,6 +35,7 @@ describe('a bbcode formatting tag is spelled the way the Carve writer would', ()
     ['a [b]a[b]x[/b] b', '<p>a [b]a<strong>x</strong> b</p>'],
     ['a{[i]x[/i]} b', '<p>a{<em>x</em>} b</p>'],
     ['*[b]_[/b]', '<p>*<strong>_</strong></p>'],
+    ['a \\*[b]x[/b] b', '<p>a \\*<strong>x</strong> b</p>'],
     ['a ~[b]x[/b]~ b', '<p>a ~<strong>x</strong>~ b</p>'],
     ['a {[b]x[/b]} b', '<p>a {<strong>x</strong>} b</p>'],
     ['a [b]x[/b][b]y[/b]z b', '<p>a <strong>x</strong><strong>y</strong>z b</p>'],
@@ -56,6 +57,10 @@ describe('a bbcode formatting tag is spelled the way the Carve writer would', ()
 
   perfIt('converts a run of empty tags in linear time', () => {
     expectScansLinearly((input) => bbcodeToCarve(input), '[b][/b]', { smallRepeats: 8000 })
+  })
+
+  perfIt('escapes a run of literal delimiters in linear time', () => {
+    expectScansLinearly((input) => bbcodeToCarve(input), '*[b]x[/b] ', { smallRepeats: 5000 })
   })
 
   perfIt('converts a run of unclosed tags in linear time', () => {
