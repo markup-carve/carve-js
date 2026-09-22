@@ -2529,7 +2529,7 @@ function renderInlineBody(
     // An empty code span is written as an unclosed run, which swallows a bare
     // closer; only the braced one ends it.
     const last = children[children.length - 1]
-    return (last?.type === 'code' && last.value === '') || bracedForScope.has(node)
+    return (last?.type === 'code' && last.value === '') || holdsUnboundedComment(children) || bracedForScope.has(node)
       ? renderForcedEmphasis(delim, content)
       : renderEmphasis(delim, content, prevChar, nextChar)
   }
@@ -3496,6 +3496,23 @@ function holdsOpenKind(nodes: readonly InlineNode[], kinds: ReadonlySet<string>)
     for (const value of Object.values(node)) if (typeof value === 'object') stack.push(value)
   }
 
+  return false
+}
+
+/** A bare emphasis closer cannot bound a `%%` comment. */
+function holdsUnboundedComment(nodes: readonly InlineNode[]): boolean {
+  for (const [index, node] of nodes.entries()) {
+    if (
+      node.type === 'comment' &&
+      node.delimited !== true &&
+      !nodes.slice(index + 1).some((later) => later.type === 'soft_break' || later.type === 'hard_break')
+    ) {
+      return true
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value) && holdsUnboundedComment(value as InlineNode[])) return true
+    }
+  }
   return false
 }
 

@@ -775,6 +775,11 @@ class Lexer {
   // by `closerIndex`. See `CloserIndex`.
   fenceCloserIndex: CloserIndex | undefined = undefined
 
+  /** Container-scoped §10 fence lookahead answers, keyed by source line. */
+  fenceLookaheadAnswers: Map<string, boolean> = new Map()
+  /** This lexer reads a container body whose collector supplied those answers. */
+  usesContainerFenceLookahead = false
+
   // EVERY line carrying a `%` run, keyed by run length and ascending, built
   // once by `commentRunLines`. `fenceCloserIndex` keeps only the LAST line of
   // each width, which answers "is there one ahead" and cannot answer "is there
@@ -1038,6 +1043,8 @@ function nestedSubLexer(
   sub.literalLazyLinkDefLines = parent.literalLazyLinkDefLines
   sub.quoteLazyMarkerLines = parent.quoteLazyMarkerLines
   sub.itemLazyLines = parent.itemLazyLines
+  sub.fenceLookaheadAnswers = parent.fenceLookaheadAnswers
+  sub.usesContainerFenceLookahead = true
   sub.quoteLazyLines = parent.quoteLazyLines
   sub.declinedLinkDefLines = parent.declinedLinkDefLines
   sub.footnoteDefs = parent.footnoteDefs
@@ -5439,10 +5446,19 @@ function parseDefinitionList(lexer: Lexer): DefinitionList {
       trackItemLazyState(
         content,
         lazyState,
-        (marker) =>
-          atLineIndex === undefined
-            ? true
-            : itemFenceHasCloser(lexer, marker, atLineIndex, openerCol, defFenceMemo, bodyEndsAt),
+        (marker) => {
+          if (atLineIndex === undefined) return true
+          const answer = itemFenceHasCloser(
+            lexer,
+            marker,
+            atLineIndex,
+            openerCol,
+            defFenceMemo,
+            bodyEndsAt,
+          )
+          lexer.fenceLookaheadAnswers.set(`${lexer.lineNumber(atLineIndex)}:${marker}`, answer)
+          return answer
+        },
         atContentColumn,
       )
     }
@@ -8004,6 +8020,7 @@ function parseList(lexer: Lexer): List {
     // the join, so only an indented ordered marker triggers the split.
     let firstBlockIdx = -1
     let bodyHasContentColumnLine = false
+    let bodyHasBelowColumnLine = false
     let pendingBlanks = 0
     let pendingBlankLineNumbers: number[] = []
     // Indices in `nested` that hold a `+`-injected blank separator. These keep
@@ -8201,7 +8218,8 @@ function parseList(lexer: Lexer): List {
         // quote-lazy MARKER line never reaches the content-column arm, not even
         // inside an open fence, where the gate above hands the line back.
         !lexer.quoteLazyMarkerLines.has(lexer.lineNumber(lexer.pos))) {
-        bodyHasContentColumnLine = true
+        const placed = sliceColumns(l, contentCol, true)
+        if (!RE_ADMONITION_CLOSE.test(placed)) bodyHasContentColumnLine = true
         for (let k = 0; k < pendingBlanks; k++) {
           nested.push('')
           nestedLineNumbers.push(pendingBlankLineNumbers[k]!)
@@ -8259,8 +8277,21 @@ function parseList(lexer: Lexer): List {
         trackItemLazyState(
           dedented,
           lazyState,
-          (marker) =>
-            itemFenceHasCloser(lexer, marker, fenceLineIndex, contentCol, itemFenceMemo, itemEndsAt),
+          (marker) => {
+            const answer = itemFenceHasCloser(
+              lexer,
+              marker,
+              fenceLineIndex,
+              contentCol,
+              itemFenceMemo,
+              itemEndsAt,
+            )
+            lexer.fenceLookaheadAnswers.set(
+              `${lexer.lineNumber(fenceLineIndex)}:${marker}`,
+              answer,
+            )
+            return answer
+          },
           true,
           (fence) => itemCommentHasCloser(lexer, fence, fenceLineIndex, contentCol, itemCommentMemo),
         )
@@ -8291,6 +8322,7 @@ function parseList(lexer: Lexer): List {
               RE_ORDERED.test(l) ||
               extractItemAttr(l) !== null)))
       ) {
+        bodyHasBelowColumnLine = true
         let lazyLine = l
         if (lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos))) {
           lazyLine = l.replace(/^[ \t]+/, '')
@@ -8726,7 +8758,7 @@ function parseList(lexer: Lexer): List {
     // indented ordered sub-list, however, is parsed as its own block stream so
     // it nests instead of folding into the lead paragraph.
     const literalBelowColumnColonFence =
-      leadOpensColonFence && nested.length > 0 && !bodyHasContentColumnLine
+      leadOpensColonFence && bodyHasBelowColumnLine && !bodyHasContentColumnLine
     const itemLead = literalBelowColumnColonFence ? ` ${content}` : content
     const keepStreamWhole =
       firstBlockIdx === -1 || leadIsMarker || (leadOpensColonFence && !literalBelowColumnColonFence)
@@ -9493,6 +9525,10 @@ function splitTableRow(line: string): string[] {
  * negative cache (noFenceCloserFrom) keeps "many unclosed fences" input linear.
  */
 function fenceHasCloser(lexer: Lexer, marker: string): boolean {
+  if (lexer.usesContainerFenceLookahead) {
+    const inherited = lexer.fenceLookaheadAnswers.get(`${lexer.lineNumber(lexer.pos)}:${marker}`)
+    if (inherited !== undefined) return inherited
+  }
   const char = marker[0]!
   const start = lexer.pos + 1
   if (fenceCloserMemoRefutes(lexer.fenceCloserMemo, char, marker.length, start)) return false
@@ -10801,6 +10837,25 @@ function bracedPairEnd(text: string, open: number, closer: string): number {
 
   return stop === -1 || stop === open + 2 ? -1 : stop + closer.length
 }
+
+/**
+ * Critic insertion/deletion pairs do not close on a delimiter escaped inside
+ * an unclosed verbatim run. The forced-emphasis family deliberately does.
+ */
+function criticPairEnd(text: string, open: number, closer: '+}' | '-}'): number {
+  const end = bracedPairEnd(text, open, closer)
+  if (end === -1) return -1
+  const close = end - 2
+  if (text[close - 1] !== '\\') return end
+
+  for (let tick = text.indexOf('`', open + 2); tick !== -1 && tick < close; tick = text.indexOf('`', tick + 1)) {
+    if (tick > open + 2 && text[tick - 1] === '\\') continue
+    const span = verbatimSpanEnd(text.slice(0, close), tick)
+    if (!span.closed) return -1
+    tick = span.end - 1
+  }
+  return end
+}
 const FORCED_TYPE: Record<string, Emphasis['type']> = {
   '/': 'emphasis',
   '*': 'strong',
@@ -11841,14 +11896,14 @@ function scanInlineInner(
         i = sub.end
         continue
       }
-      const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? bracedPairEnd(text, i, '+}') : -1
+      const ins = insSuf && insSuf[i] && text[i + 1] === '+' ? criticPairEnd(text, i, '+}') : -1
       if (ins !== -1) {
         flush()
         out.push(withPos({ type: 'insert', children: scanInline(text.slice(i + 2, ins - 2), shiftSource(source, text, i + 2), inFootnote) } as CriticInsert, source, text, i, ins))
         i = ins
         continue
       }
-      const del = delSuf && delSuf[i] && text[i + 1] === '-' ? bracedPairEnd(text, i, '-}') : -1
+      const del = delSuf && delSuf[i] && text[i + 1] === '-' ? criticPairEnd(text, i, '-}') : -1
       if (del !== -1) {
         flush()
         out.push(withPos({ type: 'delete', children: scanInline(text.slice(i + 2, del - 2), shiftSource(source, text, i + 2), inFootnote) } as CriticDelete, source, text, i, del))
@@ -11943,9 +11998,10 @@ function scanInlineInner(
       }
     }
     // Tag
-    if (c === '#' && (i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!))) {
+    if (c === '#') {
       const m = RE_TAG.exec(rest)
-      if (m) {
+      const tagBoundary = i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!)
+      if (m && tagBoundary) {
         flush()
         out.push(withPos({ type: 'tag', name: m[1]! } as Tag, source, text, i, i + m[0].length))
         i += m[0].length
@@ -11953,7 +12009,7 @@ function scanInlineInner(
       }
       // Bare `#` (not a tag) in a caption = number placeholder, first only.
       // `\#` never reaches here (the escape branch consumes it as literal).
-      if (captionContext && !captionNumberEmitted) {
+      if (!m && captionContext && !captionNumberEmitted) {
         flush()
         out.push(withPos({ type: 'caption_number' } as CaptionNumber, source, text, i, i + 1))
         captionNumberEmitted = true
@@ -12422,6 +12478,18 @@ function findEmphasisClose(
       const span = verbatimSpanEnd(text, j)
       if (!span.closed) return -1
       j = span.end - 1
+      continue
+    }
+    // An unbounded comment consumes the rest of its line before the delimiter
+    // stack can claim a closer there. A later line can still close the span.
+    if (
+      ch === '%' &&
+      text[j + 1] === '%' &&
+      (j === 0 || /[ \t\n]/.test(text[j - 1]!))
+    ) {
+      const newline = text.indexOf('\n', j + 2)
+      if (newline === -1) return -1
+      j = newline
       continue
     }
     // Comment contents are transparent to the surrounding emphasis structure.
