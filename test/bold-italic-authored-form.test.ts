@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToCarve, carveToHtml, parse } from '../src/index.js'
+import { carveToCarve, carveToHtml, parse, renderCarve, renderHtml } from '../src/index.js'
 
 /**
  * The combined bold-italic form is a single production, and the nested spelling
@@ -80,5 +80,45 @@ describe('the authored bold-italic spelling survives a format', () => {
 
     expect(emphasis.pos).toBeDefined()
     expect(src.slice(emphasis.pos.startOffset, emphasis.pos.endOffset)).toContain('bold italic')
+  })
+})
+
+describe('a flagged tree whose content cannot hug the combined delimiters', () => {
+  // A hand-built or imported tree can set `boldItalic` on content that `/*...*/`
+  // cannot spell: the grammar needs a content character against each delimiter.
+  const flagged = (children: unknown[]) => ({
+    type: 'document',
+    children: [{
+      type: 'paragraph',
+      children: [
+        { type: 'text', value: 'a ' },
+        { type: 'strong', boldItalic: true, children: [{ type: 'emphasis', children }] },
+        { type: 'text', value: ' b' },
+      ],
+    }],
+  })
+  const cases: Array<[string, unknown[]]> = [
+    ['empty', []],
+    ['leading space', [{ type: 'text', value: ' x' }]],
+    ['trailing space', [{ type: 'text', value: 'x ' }]],
+    ['leading tab', [{ type: 'text', value: '\tx' }]],
+    ['leading soft break', [{ type: 'soft_break' }, { type: 'text', value: 'x' }]],
+  ]
+
+  it.each(cases)('writes %s content as the nested spelling', (_, children) => {
+    const tree = flagged(children)
+    const strong = tree.children[0].children[1] as { boldItalic?: true }
+    const withFlag = renderCarve(tree as never)
+    delete strong.boldItalic
+    expect(withFlag).toBe(renderCarve(tree as never))
+  })
+
+  it.each(cases.slice(1, 4))('keeps the document for %s content', (_, children) => {
+    const tree = flagged(children) as never
+    expect(carveToHtml(renderCarve(tree))).toBe(renderHtml(tree))
+  })
+
+  it('still writes the combined form when the content hugs it', () => {
+    expect(renderCarve(flagged([{ type: 'text', value: ' x' }]) as never)).toBe('a /* x*/ b\n')
   })
 })

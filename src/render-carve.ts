@@ -2566,7 +2566,11 @@ function renderInlineBody(
       const inner = node.children[0]
       if (node.boldItalic === true && node.children.length === 1 && inner?.type === 'emphasis' && !bracedForScope.has(node)) {
         const content = renderInlines(inner.children, ctx)
-        return withAttrs(`/*${content}*/`)
+        // `/*` needs content that hugs it: `/* x*/` or `/**/` reparses as an
+        // emphasis holding literal stars, so fall back to the nested spelling.
+        if (content !== '' && !/^[ \t\r\n]|[ \t\r\n]$/.test(content)) {
+          return withAttrs(`/*${content}*/`)
+        }
       }
       return withAttrs(emphasisOf('*', node.children))
     }
