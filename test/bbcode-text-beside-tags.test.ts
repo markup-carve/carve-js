@@ -16,6 +16,20 @@ describe('text beside a converted formatting tag stays text', () => {
     ['q [u][*x*[u]*** q', '<p>q [u][*x*[u]*** q</p>'],
     ['q [i][/u][/i] q', '<p>q  q</p>'],
     ['q <[/b]/#h> q', '<p>q &lt;/#h&gt; q</p>'],
+    // A literal brace run right after a written pair's closer attaches as an
+    // attribute block, which this pass never writes (markup-carve/carve-js#1898).
+    ['q [b]x[/b]{a} q', '<p>q <strong>x</strong>{a} q</p>'],
+    ['q [i]x[/i]{.c} q', '<p>q <em>x</em>{.c} q</p>'],
+    ['q [u]x[/u]{#i} q', '<p>q <u>x</u>{#i} q</p>'],
+    ['q [s]x[/s]{a b} q', '<p>q <s>x</s>{a b} q</p>'],
+    ['q [b]x[/b]{a}b q', '<p>q <strong>x</strong>{a}b q</p>'],
+    // The attrs attach to the innermost pair, not an outer one.
+    ['q a{[b]x[/b]{a}} b q', '<p>q a{<strong>x</strong>{a}} b q</p>'],
+    ['q [b][i]x[/i]{a}[/b] q', '<p>q <strong><em>x</em>{a}</strong> q</p>'],
+    // A space before the brace, or an empty pair, is not an attribute block
+    // and needs no escape.
+    ['q [b]x[/b] {a} q', '<p>q <strong>x</strong> {a} q</p>'],
+    ['q [b]x[/b]{} q', '<p>q <strong>x</strong>{} q</p>'],
   ])('%j', (bbcode, expected) => {
     expect(html(bbcode)).toBe(expected)
   })

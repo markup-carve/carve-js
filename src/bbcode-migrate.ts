@@ -156,6 +156,14 @@ function escapePlainBbcodeText(bbcode: string): string {
     escapeAttributeBlockOpener(escapeVerbatimDelimiter(escapeLiteralBackslashes(text))),
     HANDLED_PLAIN,
   )
+  // BBCode has no block syntax either, so a line-initial `#`, `*`/`-`, `1.` or
+  // `>` in a post's own text is one the author typed, not a heading, list or
+  // quote (markup-carve/carve-js#1893). Run last, so the single backslash it
+  // inserts is not itself doubled by the backslash pass above. Code and url/img
+  // bodies are still behind their stash placeholders here, so this never
+  // touches a literal `[code]` body - the same guard #1386 relies on for
+  // `[noparse]`.
+  text = escapeLineInitialBlockOpeners(text)
 
   return text.replace(
     new RegExp(`${open}(\\d+)${close}`, 'gu'),
@@ -205,13 +213,13 @@ function escapedBlockOpener(rest: string): string | null {
   if (rest.startsWith('%%')) return escapeOpenerRun(rest, 2)
   if (/^[-*][ \t]/.test(rest)) return escapeOpenerRun(rest, 1)
 
-  // An ordered marker is reached by its DELIMITER, with or without the digits
-  // in front of it, so the escape goes on the delimiter rather than the line.
-  const ordered = /^(\d{1,9}[.)]|\.)[ \t]/.exec(rest)
+  // An ordered marker is reached by its DELIMITER, with or without a value in
+  // front of it, so the escape goes on the delimiter rather than the line.
+  const ordered = /^(\d{1,9}[.)]|[A-Za-z][.)]|\.)[ \t]/.exec(rest)
   if (ordered) {
-    const digits = ordered[1]!.length - 1
+    const prefixLength = ordered[1]!.length - 1
 
-    return `${rest.slice(0, digits)}${escapeOpenerRun(rest.slice(digits), 1)}`
+    return `${rest.slice(0, prefixLength)}${escapeOpenerRun(rest.slice(prefixLength), 1)}`
   }
 
   if (/^>([ \t]|$)/.test(rest)) return escapeOpenerRun(rest, 1)
@@ -219,6 +227,7 @@ function escapedBlockOpener(rest: string): string | null {
     return escapeOpenerRun(rest, openerRunLength(rest, '#'))
   }
   if (/^:{3,}/.test(rest)) return escapeOpenerRun(rest, 1)
+  if (/^::[ \t]/.test(rest)) return escapeOpenerRun(rest, 1)
   if (/^\|.*\|/.test(rest)) return escapeOpenerRun(rest, 1)
   // A link reference, footnote or abbreviation definition. `[b]x[/b]` is not
   // one of these, and the pinned `[noparse]` output keeps it unescaped.
@@ -558,6 +567,10 @@ function repairUnwrittenConstructs(written: Written, linkMark: string): string {
           const writtenEnd = pairs.get(at)
           if (writtenEnd === undefined) escapeAt.add(at)
           else if (end !== undefined && end < writtenEnd) escapeAt.add(end - 1)
+          // A literal `{...}` right after a written pair's closer attaches as
+          // an attribute block: this pass never writes one, so any found here
+          // came from the post's own text (markup-carve/carve-js#1898).
+          else if (node.attrs !== undefined) escapeAt.add(writtenEnd)
         } else if (UNWRITTEN.has(node.type) && at !== undefined) {
           escapeAt.add(at)
         } else if ((node.type === 'link' || node.type === 'image' || node.type === 'autolink') && at !== undefined) {
