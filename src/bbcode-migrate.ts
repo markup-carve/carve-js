@@ -325,13 +325,167 @@ function convertImages(text: string): string {
     .replace(/\[img=[^\]]*\]([\s\S]*?)\[\/img\]/gi, '![]($1)')
 }
 
+const MARK_DELIMS: Record<string, string> = { b: '*', i: '/', u: '_', s: '~' }
+const MARK_TAG = /\[(\/?)(b|i|u|s)\]/gi
+
+type MarkPiece = string | MarkNode
+interface MarkNode {
+  kind: string
+  open: string
+  children: MarkPiece[]
+  /** Never closed, so its tag is literal text and its content is not marked. */
+  unclosed?: true
+}
+
+/**
+ * The formatting tags as a tree. A close tag that does not match the innermost
+ * open one, and an open tag never closed, stay literal text.
+ */
+function parseMarks(text: string): MarkPiece[] {
+  const root: MarkNode = { kind: '', open: '', children: [] }
+  const stack: MarkNode[] = [root]
+  let from = 0
+  for (const m of text.matchAll(MARK_TAG)) {
+    const [whole, slash, tag] = m as unknown as [string, string, string]
+    const kind = tag.toLowerCase()
+    const top = stack[stack.length - 1]!
+    top.children.push(text.slice(from, m.index))
+    from = m.index! + whole.length
+    if (slash === '') {
+      const node: MarkNode = { kind, open: whole, children: [] }
+      top.children.push(node)
+      stack.push(node)
+    } else if (top.kind === kind) {
+      stack.pop()
+    } else {
+      top.children.push(whole)
+    }
+  }
+  stack[stack.length - 1]!.children.push(text.slice(from))
+  for (const node of stack.slice(1)) node.unclosed = true
+  return root.children
+}
+
+/**
+ * An unclosed tag becomes its literal text followed by its content. Carve has
+ * no second level of one kind (E3), so a tag inside an open tag of its own kind
+ * adds nothing and is replaced by its content. Done after parsing,
+ * so an outer tag left unclosed does not take a closed inner pair with it, and
+ * iteratively, because nesting depth is the author's. With four kinds the tree
+ * left behind is at most four deep, which is what keeps the writer's recursion
+ * bounded.
+ */
+function flattenSameKind(pieces: MarkPiece[]): MarkPiece[] {
+  const root: MarkPiece[] = []
+  const frames: Array<{ src: MarkPiece[]; i: number; out: MarkPiece[]; open: ReadonlySet<string> }> = [
+    { src: pieces, i: 0, out: root, open: new Set() },
+  ]
+  while (frames.length > 0) {
+    const frame = frames[frames.length - 1]!
+    if (frame.i >= frame.src.length) {
+      frames.pop()
+      continue
+    }
+    const piece = frame.src[frame.i++]!
+    if (typeof piece === 'string') {
+      frame.out.push(piece)
+    } else if (piece.unclosed) {
+      frame.out.push(piece.open)
+      frames.push({ src: piece.children, i: 0, out: frame.out, open: frame.open })
+    } else if (frame.open.has(piece.kind)) {
+      frames.push({ src: piece.children, i: 0, out: frame.out, open: frame.open })
+    } else {
+      const node: MarkNode = { kind: piece.kind, open: piece.open, children: [] }
+      frame.out.push(node)
+      frames.push({ src: piece.children, i: 0, out: node.children, open: new Set([...frame.open, piece.kind]) })
+    }
+  }
+  return root
+}
+
+/**
+ * For each piece, the first character written after it, or '' when nothing
+ * is. One pass from the right, so a run of empty tags costs nothing per tag.
+ */
+function nextChars(pieces: MarkPiece[]): string[] {
+  const next: string[] = new Array(pieces.length)
+  let after = ''
+  for (let k = pieces.length - 1; k >= 0; k--) {
+    next[k] = after
+    const piece = pieces[k]!
+    if (typeof piece === 'string') {
+      if (piece !== '') after = piece[0]!
+    } else if (hasContent(piece)) {
+      after = '{'
+    }
+  }
+  return next
+}
+
+// The tree is at most four deep, so this recursion is bounded.
+function hasContent(node: MarkNode): boolean {
+  return node.children.some((c) => (typeof c === 'string' ? c !== '' : hasContent(c)))
+}
+
+/**
+ * Write the tree the way the Carve writer would. An empty tag holds nothing a
+ * reader sees and has no spelling, so it goes (ruling markup-carve/carve-rs#1719).
+ * A bare pair the CARVE-P3-013 guards would not read back, or that the writer
+ * would brace, takes the braced form, as does a `/` around content that would
+ * read back as bold-italic.
+ */
+function writeMarks(pieces: MarkPiece[], outerNext: string, prev: string): string {
+  let out = ''
+  let escapeBrace = false
+  let endsInText = false
+  const nexts = nextChars(pieces)
+  pieces.forEach((piece, index) => {
+    if (typeof piece === 'string') {
+      // A `{` before a bare opener and a `}` after its closer would read as the
+      // braced form, eating both braces; the writer escapes the `}`.
+      out += escapeBrace && piece.startsWith('}') ? `\\${piece}` : piece
+      if (piece !== '') {
+        escapeBrace = false
+        endsInText = true
+      }
+      return
+    }
+    const delim = MARK_DELIMS[piece.kind]!
+    // The parent's own delimiters are not text: a child at its edge has no
+    // neighbor there, which is how the writer spells `/_x_/`.
+    const body = writeMarks(piece.children, '', '')
+    if (body === '') return
+    // The post's own text was escaped while the tags were still tags, so a
+    // literal delimiter now touching an opener was never seen: escape it.
+    if (endsInText && /[*/_~=]$/.test(out) && !/\\[*/_~=]$/.test(out)) {
+      out = `${out.slice(0, -1)}\\${out[out.length - 1]}`
+    }
+    const before = out === '' ? prev : out[out.length - 1]!
+    const next = nexts[index] || outerNext
+    const word = /[A-Za-z0-9_]/
+    const braced =
+      /^[ \t\r\n]|[ \t\r\n]$/.test(body) ||
+      word.test(before) ||
+      before === delim ||
+      (before === '/' && (delim === '/' || delim === '_')) ||
+      word.test(next) ||
+      body.startsWith(delim) ||
+      body.endsWith(delim) ||
+      (delim === '/' && body.startsWith('*') && body.endsWith('*'))
+    out += braced ? `{${delim}${body}${delim}}` : `${delim}${body}${delim}`
+    escapeBrace = !braced && before === '{'
+    endsInText = false
+  })
+  return out
+}
+
+function convertMarks(text: string): string {
+  return writeMarks(flattenSameKind(parseMarks(text)), '', '')
+}
+
 function convertBasicFormatting(text: string): string {
   return (
-    text
-      .replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '*$1*')
-      .replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '/$1/')
-      .replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '_$1_')
-      .replace(/\[s\]([\s\S]*?)\[\/s\]/gi, '~$1~')
+    convertMarks(text)
       // Size, colour and font have no Carve equivalent: the tags go, the text
       // stays. Dropping the content would lose the post.
       .replace(/\[size=[^\]]*\]([\s\S]*?)\[\/size\]/gi, '$1')
