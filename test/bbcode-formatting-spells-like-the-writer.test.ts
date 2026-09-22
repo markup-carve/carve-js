@@ -11,6 +11,10 @@ describe('a bbcode formatting tag is spelled the way the Carve writer would', ()
     expect(carve(`a [${tag}][/${tag}] b`)).toBe('a  b\n')
   })
 
+  it.each(['sup', 'sub'])('drops an empty [%s]', (tag) => {
+    expect(carve(`a [${tag}][/${tag}] b`)).toBe('a  b\n')
+  })
+
   it('drops a tag left empty by an empty inner tag', () => {
     expect(carve('a [b][i][/i][/b] b')).toBe('a  b\n')
   })

@@ -918,9 +918,10 @@ function convertOther(text: string): string {
         '![YouTube Video](https://www.youtube.com/watch?v=$1)',
       )
       // Forced brace form: a BBCode sup/sub is often intraword
-      // (E=mc[sup]2[/sup]), where a bare `^2^` would be literal in Carve.
-      .replace(/\[sup\]([\s\S]*?)\[\/sup\]/gi, '{^$1^}')
-      .replace(/\[sub\]([\s\S]*?)\[\/sub\]/gi, '{,$1,}')
+      // (E=mc[sup]2[/sup]), where a bare `^2^` would be literal in Carve. An
+      // empty one has no spelling and goes (ruling markup-carve/carve-rs#1719).
+      .replace(/\[sup\]([\s\S]*?)\[\/sup\]/gi, (_whole, body: string) => (body === '' ? '' : `{^${body}^}`))
+      .replace(/\[sub\]([\s\S]*?)\[\/sub\]/gi, (_whole, body: string) => (body === '' ? '' : `{,${body},}`))
   )
 }
 
