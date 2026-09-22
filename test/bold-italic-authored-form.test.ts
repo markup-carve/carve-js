@@ -98,7 +98,6 @@ describe('a flagged tree whose content cannot hug the combined delimiters', () =
     }],
   })
   const cases: Array<[string, unknown[]]> = [
-    ['empty', []],
     ['leading space', [{ type: 'text', value: ' x' }]],
     ['trailing space', [{ type: 'text', value: 'x ' }]],
     ['leading tab', [{ type: 'text', value: '\tx' }]],
@@ -113,7 +112,7 @@ describe('a flagged tree whose content cannot hug the combined delimiters', () =
     expect(withFlag).toBe(renderCarve(tree as never))
   })
 
-  it.each(cases.slice(1, 4))('keeps the document for %s content', (_, children) => {
+  it.each(cases)('keeps the document for %s content', (_, children) => {
     const tree = flagged(children) as never
     expect(carveToHtml(renderCarve(tree))).toBe(renderHtml(tree))
   })

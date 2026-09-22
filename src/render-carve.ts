@@ -2515,8 +2515,17 @@ function renderInlineBody(
   node = normalizeLegacyInline(node)
 
   const withAttrs = (body: string) => `${bracedOnce(node, body)}${renderAttrs(node.attrs)}`
-  const emphasisOf = (delim: string, children: InlineNode[]): string => {
+  // An empty brace pair is not a construct, and `{--}` is the braced en dash
+  // (markup-carve/carve#1608), so an empty mark has no spelling.
+  const marked = (children: InlineNode[]): string => {
     const content = renderInlines(children, ctx)
+    if (content === '') {
+      throw new SourceUnspellableError(node.type, `an empty ${node.type} has no Carve source spelling`, node)
+    }
+    return content
+  }
+  const emphasisOf = (delim: string, children: InlineNode[]): string => {
+    const content = marked(children)
     // An empty code span is written as an unclosed run, which swallows a bare
     // closer; only the braced one ends it.
     const last = children[children.length - 1]
@@ -2579,9 +2588,9 @@ function renderInlineBody(
     case 'strike':
       return withAttrs(emphasisOf('~', node.children))
     case 'superscript':
-      return withAttrs(renderForcedEmphasis('^', renderInlines(node.children, ctx)))
+      return withAttrs(renderForcedEmphasis('^', marked(node.children)))
     case 'subscript':
-      return withAttrs(renderForcedEmphasis(',', renderInlines(node.children, ctx)))
+      return withAttrs(renderForcedEmphasis(',', marked(node.children)))
     case 'highlight':
       return withAttrs(emphasisOf('=', node.children))
     case 'code':
@@ -2644,9 +2653,9 @@ function renderInlineBody(
     case 'hard_break':
       return ctx.lineBlockDepth > 0 ? '\n' : '\\\n'
     case 'insert':
-      return withAttrs(`{+${renderInlines(node.children, ctx)}+}`)
+      return withAttrs(`{+${marked(node.children)}+}`)
     case 'delete':
-      return withAttrs(`{-${renderInlines(node.children, ctx)}-}`)
+      return withAttrs(`{-${marked(node.children)}-}`)
     case 'substitution':
       return withAttrs(`{~${renderInlines(node.old, ctx)}~>${renderInlines(node.new, ctx)}~}`)
     case 'critic_comment':
@@ -2828,12 +2837,10 @@ function renderEmphasis(
     neighborsForceBraces(delim, prevChar, nextChar) ||
     content.startsWith(delim) ||
     content.endsWith(closeDelim) ||
-    content.startsWith(' ') ||
-    content.endsWith(' ') ||
-    // A trailing hard break puts the closer at the start of the next line,
-    // where only the braced closer closes (carve-js#1786).
-    content.endsWith('\n') ||
-    content === '' ||
+    // A bare opener may not be followed, nor a closer preceded, by `ws`
+    // (space, tab, newline; grammar GUARD NOTATION). A trailing hard break
+    // also puts the closer at the start of the next line (carve-js#1786).
+    /^[ \t\r\n]|[ \t\r\n]$/.test(content) ||
     // `/*` opens `bold_italic` and `*/` closes it, so a bare emphasis whose
     // content has both would read back as a strong wrapping an emphasis - the
     // other nesting (carve-js#1758).

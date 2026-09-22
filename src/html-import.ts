@@ -213,6 +213,7 @@ interface P5Node {
   parentNode?: P5Node
 }
 
+const EMPTY_DROPPED_MARKS = new Set(['del', 'ins', 'em', 'i', 'strong', 'b', 's', 'strike', 'u', 'mark', 'sub', 'sup'])
 const ACTIVE = new Set(['script', 'style', 'template', 'noscript'])
 const BLOCK = new Set([
   'address', 'article', 'aside', 'blockquote', 'details', 'div', 'dl', 'fieldset',
@@ -3533,8 +3534,14 @@ class Importer {
     }
     const children = this.inlines(node.childNodes ?? [], path, depth + 1)
     const attrs = this.attrs(node, path)
-    if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
-    if (tag === 'strong' || tag === 'b') return [{ type: 'strong', children, ...(attrs ? { attrs } : {}) }]
+    // An element the HTML left empty holds nothing a reader sees, so it is
+    // dropped without a row (ruling markup-carve/carve-rs#1719): an empty brace
+    // pair reads back as literal text, and `{--}` as the braced en dash. Its
+    // attributes can still matter (an `id` is a link target), and an empty span
+    // is spellable, so they move onto one.
+    if (EMPTY_DROPPED_MARKS.has(tag) && children.length === 0) {
+      return attrs ? [{ type: 'span', children: [], attrs }] : []
+    }
     /*
      * `<del>` and `<ins>` are HTML's change-tracking PAIR and Carve spells that
      * pair `{-x-}` / `{+x+}`, which render back as `<del>` and `<ins>`.
@@ -3546,29 +3553,8 @@ class Importer {
      * without moving `<del>` would have made that asymmetry worse: the
      * insertion of an edit surviving as an edit and the deletion beside it not.
      */
-    /*
-     * AN EMPTY ONE HAS NOTHING TO MARK, and inventing a brace pair for it
-     * put text in the document the HTML never held (markup-carve/carve#1608).
-     * `<ins></ins>` was written as an empty brace pair, which is not a
-     * construct at all: it renders as the four literal characters. `<del>`
-     * was worse than literal - its empty pair is the braced en dash, so the
-     * import rendered a GLYPH for an element that held nothing.
-     *
-     * So the element is dropped, which keeps the text right because there was
-     * none, and the drop is REPORTED - it is an element that left the
-     * document, which is what `element-dropped` is for. Dropping in silence
-     * is the other engine's half of this shape and is filed there.
-     */
-    if ((tag === 'del' || tag === 'ins') && children.length === 0) {
-      this.add(
-        'element-dropped',
-        `Dropped an empty <${tag}>: Carve spells the pair around its content, and an empty brace pair is not a construct`,
-        'warning',
-        path,
-        node,
-      )
-      return []
-    }
+    if (tag === 'em' || tag === 'i') return [{ type: 'emphasis', children, ...(attrs ? { attrs } : {}) }]
+    if (tag === 'strong' || tag === 'b') return [{ type: 'strong', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'del') return [{ type: 'delete', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 'ins') return [{ type: 'insert', children, ...(attrs ? { attrs } : {}) }]
     if (tag === 's' || tag === 'strike') return [{ type: 'strike', children, ...(attrs ? { attrs } : {}) }]
