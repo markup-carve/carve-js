@@ -13,6 +13,7 @@ import {
   unwrapEmptyDestinations,
   useEmptyDestinationReferences,
 } from './markdown-empty-destination.js'
+import { escapeSpanMarkerPayload, padCell } from './render-carve.js'
 
 /**
  * A code-fence opener or closer, read the way CommonMark reads one.
@@ -1220,6 +1221,24 @@ function splitTableRow(row: string): string[] {
   return cells.map((c) => c.trim())
 }
 
+/**
+ * One table row in the spelling `carve fmt` writes, each cell through the
+ * formatter's own cell writer: padding collapsed, and a lone `<` or `^` escaped
+ * so it stays text rather than becoming a span marker.
+ */
+function writeTableRow(
+  cells: readonly string[],
+  prefixes: readonly string[],
+  dialect: MarkdownDialect,
+): string {
+  let row = ''
+  for (let c = 0; c < cells.length; c++) {
+    const cell = convertInline(unescapePipesInCodeSpans(cells[c]!), dialect)
+    row += '|' + padCell(prefixes[c] ?? '', escapeSpanMarkerPayload(cell))
+  }
+  return row + '|'
+}
+
 function unescapePipesInCodeSpans(row: string): string {
   return protectCodeSpans(row, (span) => span.replace(/\\\|/g, '|'))
 }
@@ -1455,18 +1474,32 @@ function restorePrefixedInlineRun(
     start = end
   }
 
-  return run.map((part, idx) => {
+  const out: string[] = []
+  for (let idx = 0; idx < run.length; idx++) {
+    const part = run[idx]!
     const line = converted[idx] ?? ''
-    if (inTable[idx]) return part.prefix + line
+    if (inTable[idx]) {
+      // The same rows the document-level table branch writes: a native `|=`
+      // header in place of the header and delimiter rows, then each body row
+      // rebuilt, so a table a container holds is canonical too.
+      const { marker, body } = held[idx]!
+      if (idx === 0 || !inTable[idx - 1] || container[idx - 1] !== container[idx]) {
+        const headers = splitTableRow(held[idx + 1]!.body.trim()).map((cell) => `=${alignMarker(cell)}`)
+        out.push(part.prefix + marker + writeTableRow(splitTableRow(body.trim()), headers, dialect))
+        idx++ // consume the delimiter row
+        continue
+      }
+      out.push(part.prefix + marker + writeTableRow(splitTableRow(body.trim()), [], dialect))
+      continue
+    }
     const quoted = peelQuoteMarkers(line)
 
-    return (
+    out.push(
       part.prefix +
-      (isStandardTableRow(quoted.body)
-        ? quoted.marker + keepPipeRowLiteral(quoted.body)
-        : line)
+        (isStandardTableRow(quoted.body) ? quoted.marker + keepPipeRowLiteral(quoted.body) : line),
     )
-  })
+  }
+  return out
 }
 
 /**
@@ -2064,6 +2097,7 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
   // contained one is answered again by `restorePrefixedInlineRun` against what
   // its container holds, marker peeled.
   const inGfmTable = gfmTableRowLines(lines)
+  let inTableBody = false
   // was the previous line blank? A dedented line only leaves a list item when a
   // blank precedes it; without a blank it is lazy paragraph continuation and
   // the item stays open (CommonMark).
@@ -2282,12 +2316,11 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
         // header; a mismatch (e.g. `a | b` over `---`) is not a table, so leave
         // it for the setext/thematic-break handling below.
         if (aligns.length === headerCells.length) {
-          let header = ''
-          for (let c = 0; c < headerCells.length; c++) {
-            const cell = convertInline(unescapePipesInCodeSpans(headerCells[c]!), dialect)
-            header += `|=${aligns[c] ?? ''} ${cell} `
-          }
-          header += '|'
+          const header = writeTableRow(
+            headerCells,
+            aligns.map((align) => `=${align}`),
+            dialect,
+          )
           if (prevType !== 'blank' && out.length > 0) out.push('')
           // At the container's content column, so the converted header keeps
           // the item that holds it. Written at column 0 it left the item while
@@ -2295,10 +2328,19 @@ function convertMarkdown(markdown: string, dialect: MarkdownDialect): string {
           out.push(containerPad + header)
           i++ // consume the delimiter row
           prevType = 'text'
+          inTableBody = true
           continue
         }
       }
     }
+
+    // A body row of the table above. Rebuilt rather than passed through, so its
+    // padding matches the formatter's and a pipeless row stays in the table.
+    if (inTableBody && inGfmTable[i] && trimmed !== '') {
+      out.push(containerPad + writeTableRow(splitTableRow(trimmed), [], dialect))
+      continue
+    }
+    inTableBody = false
 
     const isBlank = trimmed === ''
     const isHeading = /^#{1,6}\s/.test(trimmed)
